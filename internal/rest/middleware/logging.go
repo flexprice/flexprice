@@ -1,69 +1,74 @@
 package middleware
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-// LoggingMiddleware returns a gin middleware that logs HTTP requests using our standard logger
+// LoggingMiddleware returns a gin middleware that logs HTTP requests using our
+// standard logger. It binds the request context via WithContext so every log
+// line carries trace_id and span_id — enabling native trace-log correlation in
+// SigNoz. The binding happens after c.Next() so the otelgin span (created by
+// TracingMiddleware, which is registered after LoggingMiddleware) is already
+// in the context when the post-request logging fires.
 func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Start timer
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
-		// Process request
+		// Run the full handler + downstream middleware chain.
+		// otelgin (registered after this middleware) creates the OTel span during
+		// c.Next() and attaches it to c.Request.Context(). By the time we return
+		// here, the span exists in context and WithContext can extract TraceId/SpanId.
 		c.Next()
 
-		// Skip logging for health check endpoint
+		// Skip noisy health-check polling from load balancers.
 		if path == "/health" {
 			return
 		}
 
-		// Calculate latency
 		latency := time.Since(start)
+		statusCode := c.Writer.Status()
 
 		fields := []interface{}{
-			"status", c.Writer.Status(),
 			"method", c.Request.Method,
 			"path", path,
 			"query", raw,
+			"status", statusCode,
 			"latency_ms", latency.Milliseconds(),
 		}
 
-		if requestID, ok := c.Request.Context().Value(types.CtxRequestID).(string); ok && requestID != "" {
-			fields = append(fields, "request_id", requestID)
-		}
-
-		// Add error if any
 		if len(c.Errors) > 0 {
 			fields = append(fields, "errors", c.Errors.String())
 		}
 
-		// Add tenant and user info if available
-		if tenantID := c.GetString("tenant_id"); tenantID != "" {
-			fields = append(fields, "tenant_id", tenantID)
-		}
-		if userID := c.GetString("user_id"); userID != "" {
-			fields = append(fields, "user_id", userID)
-		}
-		if environmentID := c.GetString("environment_id"); environmentID != "" {
-			fields = append(fields, "environment_id", environmentID)
+		// otelgin's deferred context-restore fires when it returns, which happens
+		// BEFORE we reach this post-phase. So c.Request.Context() no longer holds
+		// the OTel span. SpanEnrichmentMiddleware (post-phase executes before otelgin's
+		// defer) captured both the string IDs and the span-carrying context for us.
+		// Use the saved span context (still has span) so:
+		//  1. WithContext injects trace_id/span_id as string fields.
+		//  2. otelCtxCore injects ctx into otelzap so the OTLP log record's
+		//     record-level TraceId/SpanId are set — SigNoz uses these for the
+		//     Span Details "Logs" tab native trace-log correlation.
+		spanCtx := c.Request.Context() // fallback: no span, but has request_id etc.
+		if v, ok := c.Get(ginKeySpanCtx); ok {
+			if savedCtx, ok := v.(context.Context); ok {
+				spanCtx = savedCtx
+			}
 		}
 
-		// Log based on status code
-		statusCode := c.Writer.Status()
 		switch {
 		case statusCode >= 500:
-			log.Errorw("HTTP_REQUEST_ERROR", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_ERROR", fields...)
 		case statusCode >= 400:
-			log.Errorw("HTTP_REQUEST_WARNING", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_WARNING", fields...)
 		default:
-			log.Infow("HTTP_REQUEST_INFO", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_INFO", fields...)
 		}
 	}
 }

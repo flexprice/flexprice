@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -93,7 +94,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 	// Get or create Svix application
 	appID, err := h.svixClient.GetOrCreateApplication(c.Request.Context(), tenantID, environmentID)
 	if err != nil {
-		h.logger.Errorw("failed to get/create Svix application",
+		h.logger.Error(c.Request.Context(), "failed to get/create Svix application",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -105,7 +106,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 	// Get dashboard URL
 	url, err := h.svixClient.GetDashboardURL(c.Request.Context(), appID)
 	if err != nil {
-		h.logger.Errorw("failed to get Svix dashboard URL",
+		h.logger.Error(c.Request.Context(), "failed to get Svix dashboard URL",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -149,7 +150,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL")
+		h.logger.Info(c.Request.Context(), "missing tenant_id or environment_id in webhook URL")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "tenant_id and environment_id are required",
 		})
@@ -159,7 +160,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to read request body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Failed to read request body",
 		})
@@ -169,7 +170,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Get Stripe signature from headers
 	signature := c.GetHeader("Stripe-Signature")
 	if signature == "" {
-		h.logger.Errorw("missing Stripe-Signature header")
+		h.logger.Error(c.Request.Context(), "missing Stripe-Signature header", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Missing Stripe-Signature header",
 		})
@@ -184,7 +185,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Stripe integration", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get Stripe integration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Stripe integration not available",
 		})
@@ -194,7 +195,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Get Stripe client and configuration
 	_, stripeConfig, err := stripeIntegration.Client.GetStripeClient(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Stripe client and configuration",
+		h.logger.Error(c.Request.Context(), "failed to get Stripe client and configuration",
 			"error", err,
 			"environment_id", environmentID,
 		)
@@ -206,7 +207,8 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 
 	// Verify webhook secret is configured
 	if stripeConfig.WebhookSecret == "" {
-		h.logger.Errorw("webhook secret not configured for Stripe connection",
+		h.logger.Error(c.Request.Context(), "webhook secret not configured for Stripe connection",
+			"error", err,
 			"environment_id", environmentID,
 		)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -216,7 +218,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Debugw("processing webhook",
+	h.logger.Debug(c.Request.Context(), "processing webhook",
 		"environment_id", environmentID,
 		"tenant_id", tenantID,
 		"payload_length", len(body),
@@ -225,7 +227,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Parse and verify the webhook event using new integration
 	event, err := stripeIntegration.PaymentSvc.ParseWebhookEvent(body, signature, stripeConfig.WebhookSecret)
 	if err != nil {
-		h.logger.Errorw("failed to parse/verify Stripe webhook event", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to parse/verify Stripe webhook event", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Failed to verify webhook signature or parse event",
 		})
@@ -246,7 +248,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	// Handle the webhook event using new integration
 	err = stripeIntegration.WebhookHandler.HandleWebhookEvent(ctx, event, environmentID, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle webhook event", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to handle webhook event", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to process webhook event",
 		})
@@ -271,7 +273,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -280,7 +282,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		return
 	}
 
@@ -289,16 +291,16 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	timestamp := c.GetHeader("X-HubSpot-Request-Timestamp")
 
 	if signature == "" {
-		h.logger.Errorw("missing X-HubSpot-Signature-v3 header")
+		h.logger.Error(context.Background(), "missing X-HubSpot-Signature-v3 header", "error", err)
 		return
 	}
 
 	if timestamp == "" {
-		h.logger.Errorw("missing X-HubSpot-Request-Timestamp header")
+		h.logger.Error(context.Background(), "missing X-HubSpot-Request-Timestamp header", "error", err)
 		return
 	}
 
-	h.logger.Infow("received HubSpot webhook",
+	h.logger.Info(context.Background(), "received HubSpot webhook",
 		"signature_length", len(signature),
 		"timestamp", timestamp,
 		"tenant_id", tenantID,
@@ -312,14 +314,14 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Get HubSpot integration
 	hubspotIntegration, err := h.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get HubSpot integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get HubSpot integration", "error", err)
 		return
 	}
 
 	// Get HubSpot configuration
 	hubspotConfig, err := hubspotIntegration.Client.GetHubSpotConfig(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get HubSpot configuration",
+		h.logger.Error(context.Background(), "failed to get HubSpot configuration",
 			"error", err,
 			"environment_id", environmentID)
 		return
@@ -327,7 +329,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 
 	// Verify webhook secret is configured
 	if hubspotConfig.ClientSecret == "" {
-		h.logger.Errorw("client secret not configured for HubSpot connection",
+		h.logger.Info(context.Background(), "client secret not configured for HubSpot connection",
 			"environment_id", environmentID)
 		return
 	}
@@ -335,14 +337,14 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Validate timestamp (reject if older than 5 minutes)
 	timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
-		h.logger.Errorw("invalid timestamp format", "timestamp", timestamp, "error", err)
+		h.logger.Error(context.Background(), "invalid timestamp format", "timestamp", timestamp, "error", err)
 		return
 	}
 
 	currentTime := time.Now().UnixMilli()
 	maxAllowedTimestamp := int64(300000) // 5 minutes in milliseconds
 	if currentTime-timestampInt > maxAllowedTimestamp {
-		h.logger.Warnw("timestamp too old, rejecting webhook",
+		h.logger.Info(context.Background(), "timestamp too old, rejecting webhook",
 			"timestamp", timestampInt,
 			"current_time", currentTime,
 			"age_ms", currentTime-timestampInt)
@@ -361,7 +363,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	}
 	fullURL := scheme + "://" + c.Request.Host + c.Request.URL.String()
 
-	h.logger.Debugw("verifying v3 signature",
+	h.logger.Debug(context.Background(), "verifying v3 signature",
 		"method", c.Request.Method,
 		"full_url", fullURL,
 		"timestamp", timestamp)
@@ -377,12 +379,12 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	)
 
 	if !signatureValid {
-		h.logger.Errorw("invalid webhook signature - rejecting")
+		h.logger.Info(context.Background(), "invalid webhook signature - rejecting")
 		return
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Infow("processing HubSpot webhook",
+	h.logger.Info(context.Background(), "processing HubSpot webhook",
 		"environment_id", environmentID,
 		"tenant_id", tenantID,
 		"payload_length", len(body))
@@ -390,7 +392,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Parse webhook payload
 	events, err := hubspotIntegration.WebhookHandler.ParseWebhookPayload(body)
 	if err != nil {
-		h.logger.Errorw("failed to parse HubSpot webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse HubSpot webhook payload", "error", err)
 		return
 	}
 
@@ -408,11 +410,11 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Handle the webhook events
 	err = hubspotIntegration.WebhookHandler.HandleWebhookEvent(ctx, events, environmentID, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle HubSpot webhook event", "error", err)
+		h.logger.Error(context.Background(), "failed to handle HubSpot webhook event", "error", err)
 		return
 	}
 
-	h.logger.Infow("successfully processed HubSpot webhook",
+	h.logger.Info(context.Background(), "successfully processed HubSpot webhook",
 		"environment_id", environmentID,
 		"event_count", len(events))
 }
@@ -430,7 +432,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -439,7 +441,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		return
 	}
 
@@ -448,7 +450,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 
 	// Log all headers for debugging (only in case of missing signature)
 	if signature == "" {
-		h.logger.Warnw("missing X-Razorpay-Signature header - webhook test ping or signature not configured",
+		h.logger.Info(context.Background(), "missing X-Razorpay-Signature header - webhook test ping or signature not configured",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"has_body", len(body) > 0,
@@ -468,19 +470,19 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Get Razorpay integration
 	razorpayIntegration, err := h.integrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Razorpay integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get Razorpay integration", "error", err)
 		return
 	}
 
 	// Verify webhook signature
 	err = razorpayIntegration.Client.VerifyWebhookSignature(ctx, body, signature)
 	if err != nil {
-		h.logger.Errorw("failed to verify Razorpay webhook signature", "error", err)
+		h.logger.Error(context.Background(), "failed to verify Razorpay webhook signature", "error", err)
 		return
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Infow("processing Razorpay webhook",
+	h.logger.Info(context.Background(), "processing Razorpay webhook",
 		"environment_id", environmentID,
 		"tenant_id", tenantID,
 		"event_id", eventID,
@@ -490,7 +492,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	var event razorpaywebhook.RazorpayWebhookEvent
 	err = json.Unmarshal(body, &event)
 	if err != nil {
-		h.logger.Errorw("failed to parse Razorpay webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse Razorpay webhook payload", "error", err)
 		return
 	}
 
@@ -508,11 +510,11 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Handle the webhook event
 	err = razorpayIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle Razorpay webhook event", "error", err)
+		h.logger.Error(context.Background(), "failed to handle Razorpay webhook event", "error", err)
 		return
 	}
 
-	h.logger.Infow("successfully processed Razorpay webhook",
+	h.logger.Info(context.Background(), "successfully processed Razorpay webhook",
 		"environment_id", environmentID,
 		"event_id", eventID,
 		"event_type", event.Event)
@@ -531,7 +533,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -540,7 +542,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		return
 	}
 
@@ -552,7 +554,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Get Chargebee integration
 	chargebeeIntegration, err := h.integrationFactory.GetChargebeeIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Chargebee integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get Chargebee integration", "error", err)
 		return
 	}
 
@@ -563,7 +565,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Get connection to check if webhook auth is configured
 	conn, err := chargebeeIntegration.Client.GetConnection(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Chargebee connection", "error", err)
+		h.logger.Error(context.Background(), "failed to get Chargebee connection", "error", err)
 		return
 	}
 
@@ -574,7 +576,8 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 
 	// Case 1: Auth configured in FlexPrice but webhook request has no auth
 	if hasWebhookAuthConfigured && !hasAuth {
-		h.logger.Errorw("webhook auth is configured but request has no Basic Auth credentials",
+		h.logger.Error(context.Background(), "webhook auth is configured but request has no Basic Auth credentials",
+			"error", err,
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -584,7 +587,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 
 	// Case 2: Auth NOT configured in FlexPrice but webhook request has auth
 	if !hasWebhookAuthConfigured && hasAuth {
-		h.logger.Errorw("webhook request has Basic Auth but no credentials configured in FlexPrice",
+		h.logger.Info(context.Background(), "webhook request has Basic Auth but no credentials configured in FlexPrice",
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -595,17 +598,17 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		// Case 3: Both sides have auth - verify it
 		err = chargebeeIntegration.Client.VerifyWebhookBasicAuth(ctx, username, password)
 		if err != nil {
-			h.logger.Errorw("Chargebee webhook basic auth verification failed",
+			h.logger.Error(context.Background(), "Chargebee webhook basic auth verification failed",
 				"error", err,
 				"remote_addr", c.ClientIP())
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		h.logger.Debugw("Chargebee webhook basic auth verified",
+		h.logger.Debug(context.Background(), "Chargebee webhook basic auth verified",
 			"remote_addr", c.ClientIP())
 	} else {
 		// Case 4: Neither side has auth - allow but warn
-		h.logger.Infow("Chargebee webhook processing without authentication",
+		h.logger.Info(context.Background(), "Chargebee webhook processing without authentication",
 			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -615,14 +618,14 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Parse webhook event
 	var event chargebeewebhook.ChargebeeWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Errorw("failed to parse Chargebee webhook event",
+		h.logger.Error(context.Background(), "failed to parse Chargebee webhook event",
 			"error", err,
 			"environment_id", environmentID)
 		return
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Infow("processing Chargebee webhook",
+	h.logger.Info(context.Background(), "processing Chargebee webhook",
 		"environment_id", environmentID,
 		"event_id", event.ID,
 		"event_type", event.EventType,
@@ -631,14 +634,14 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Handle the event
 	err = chargebeeIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID)
 	if err != nil {
-		h.logger.Errorw("error processing Chargebee webhook event",
+		h.logger.Error(context.Background(), "error processing Chargebee webhook event",
 			"error", err,
 			"event_id", event.ID,
 			"event_type", event.EventType)
 		return
 	}
 
-	h.logger.Infow("successfully processed Chargebee webhook",
+	h.logger.Info(context.Background(), "successfully processed Chargebee webhook",
 		"environment_id", environmentID,
 		"event_id", event.ID,
 		"event_type", event.EventType)
@@ -657,7 +660,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -666,7 +669,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		return
 	}
 
@@ -674,7 +677,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	signature := c.GetHeader("intuit-signature")
 
 	// Log webhook receipt (without sensitive data)
-	h.logger.Debugw("received QuickBooks webhook",
+	h.logger.Debug(context.Background(), "received QuickBooks webhook",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"has_signature", signature != "",
@@ -688,7 +691,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Get QuickBooks integration
 	qbIntegration, err := h.integrationFactory.GetQuickBooksIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get QuickBooks integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get QuickBooks integration", "error", err)
 		return
 	}
 
@@ -696,18 +699,18 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	if signature != "" {
 		err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
 		if err != nil {
-			h.logger.Errorw("failed to verify QuickBooks webhook signature",
-				"error", err,
+			h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
 				"tenant_id", tenantID,
+				"error", err,
 				"environment_id", environmentID)
 			// Don't return 401 - QuickBooks expects 200
 			return
 		}
-		h.logger.Debugw("QuickBooks webhook signature verified",
+		h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	} else {
-		h.logger.Warnw("QuickBooks webhook received without signature",
+		h.logger.Info(context.Background(), "QuickBooks webhook received without signature",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"note", "Consider configuring webhook verifier token for security")
@@ -722,14 +725,14 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Handle the webhook event
 	err = qbIntegration.WebhookHandler.HandleWebhook(ctx, body, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle QuickBooks webhook event",
+		h.logger.Error(context.Background(), "failed to handle QuickBooks webhook event",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
 	}
 
-	h.logger.Infow("successfully processed QuickBooks webhook",
+	h.logger.Info(context.Background(), "successfully processed QuickBooks webhook",
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 }
@@ -739,7 +742,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(c.Request.Context(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		c.JSON(http.StatusOK, gin.H{
@@ -751,7 +754,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to read request body", "error", err)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -769,7 +772,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Get Nomod integration
 	nomodIntegration, err := h.integrationFactory.GetNomodIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Nomod integration", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get Nomod integration", "error", err)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -779,7 +782,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Get connection to check if webhook secret is configured
 	conn, err := nomodIntegration.Client.GetConnection(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Nomod connection", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get Nomod connection", "error", err)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -795,7 +798,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Verify webhook authentication if webhook secret is configured
 	if hasWebhookSecretConfigured {
 		if !hasAPIKey {
-			h.logger.Errorw("webhook secret configured but X-API-KEY header not provided",
+			h.logger.Info(c.Request.Context(), "webhook secret configured but X-API-KEY header not provided",
 				"remote_addr", c.ClientIP(),
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
@@ -808,7 +811,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 		// Verify the API key
 		err = nomodIntegration.Client.VerifyWebhookAuth(ctx, providedAPIKey)
 		if err != nil {
-			h.logger.Errorw("Nomod webhook authentication failed",
+			h.logger.Error(c.Request.Context(), "Nomod webhook authentication failed",
 				"error", err,
 				"remote_addr", c.ClientIP())
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -816,27 +819,27 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 			})
 			return
 		}
-		h.logger.Debugw("Nomod webhook authentication successful",
+		h.logger.Debug(c.Request.Context(), "Nomod webhook authentication successful",
 			"remote_addr", c.ClientIP())
 	} else {
-		h.logger.Debugw("Nomod webhook processing without authentication",
+		h.logger.Debug(c.Request.Context(), "Nomod webhook processing without authentication",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Infow("processing Nomod webhook",
+	h.logger.Info(c.Request.Context(), "processing Nomod webhook",
 		"environment_id", environmentID,
 		"tenant_id", tenantID)
 
 	// Parse webhook payload
 	var payload nomodwebhook.NomodWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		h.logger.Errorw("failed to parse Nomod webhook payload", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to parse Nomod webhook payload", "error", err)
 		return
 	}
 
-	h.logger.Infow("parsed Nomod webhook payload",
+	h.logger.Info(c.Request.Context(), "parsed Nomod webhook payload",
 		"charge_id", payload.ID,
 		"has_invoice_id", payload.InvoiceID != nil,
 		"has_payment_link_id", payload.PaymentLinkID != nil)
@@ -852,7 +855,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	// Handle the event
 	err = nomodIntegration.WebhookHandler.HandleWebhookEvent(ctx, &payload, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle Nomod webhook event",
+		h.logger.Error(c.Request.Context(), "failed to handle Nomod webhook event",
 			"error", err,
 			"charge_id", payload.ID,
 			"environment_id", environmentID)
@@ -862,7 +865,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("successfully processed Nomod webhook",
+	h.logger.Info(c.Request.Context(), "successfully processed Nomod webhook",
 		"charge_id", payload.ID,
 		"environment_id", environmentID)
 
@@ -884,7 +887,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -893,7 +896,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Read the raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		return
 	}
 
@@ -906,21 +909,21 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	var event moyasarwebhook.MoyasarWebhookEvent
 	err = json.Unmarshal(body, &event)
 	if err != nil {
-		h.logger.Errorw("failed to parse Moyasar webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse Moyasar webhook payload", "error", err)
 		return
 	}
 
 	// Get Moyasar integration
 	moyasarIntegration, err := h.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Moyasar integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get Moyasar integration", "error", err)
 		return
 	}
 
 	// Get connection to check if webhook secret is configured
 	conn, err := moyasarIntegration.Client.GetConnection(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Moyasar connection", "error", err)
+		h.logger.Error(context.Background(), "failed to get Moyasar connection", "error", err)
 		return
 	}
 
@@ -933,7 +936,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	if hasWebhookSecretConfigured {
 		// Webhook secret is configured - verification is REQUIRED
 		if event.SecretToken == "" {
-			h.logger.Errorw("Moyasar webhook secret configured but secret_token missing in payload - rejecting request",
+			h.logger.Info(context.Background(), "Moyasar webhook secret configured but secret_token missing in payload - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
 				"event_id", event.ID,
@@ -944,16 +947,16 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		// Get the decrypted Moyasar config to access the webhook secret
 		moyasarConfig, err := moyasarIntegration.Client.GetDecryptedMoyasarConfig(conn)
 		if err != nil {
-			h.logger.Errorw("failed to get decrypted Moyasar config",
-				"error", err,
+			h.logger.Error(context.Background(), "failed to get decrypted Moyasar config",
 				"tenant_id", tenantID,
+				"error", err,
 				"environment_id", environmentID)
 			return
 		}
 
 		// Verify the secret_token matches our configured (decrypted) webhook_secret
 		if event.SecretToken != moyasarConfig.WebhookSecret {
-			h.logger.Errorw("Moyasar webhook secret_token verification failed - rejecting request",
+			h.logger.Info(context.Background(), "Moyasar webhook secret_token verification failed - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
 				"event_id", event.ID,
@@ -961,13 +964,13 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			return
 		}
 
-		h.logger.Infow("Moyasar webhook secret_token verified successfully",
+		h.logger.Info(context.Background(), "Moyasar webhook secret_token verified successfully",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"event_id", event.ID)
 	} else {
 		// No webhook secret configured - allow with warning
-		h.logger.Warnw("Moyasar webhook received without secret verification",
+		h.logger.Info(context.Background(), "Moyasar webhook received without secret verification",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"event_id", event.ID,
@@ -975,7 +978,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	}
 
 	// Log webhook processing (without sensitive data)
-	h.logger.Infow("processing Moyasar webhook",
+	h.logger.Info(context.Background(), "processing Moyasar webhook",
 		"environment_id", environmentID,
 		"tenant_id", tenantID,
 		"event_type", event.Type,
@@ -996,14 +999,14 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Handle the webhook event
 	err = moyasarIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle Moyasar webhook event",
+		h.logger.Error(context.Background(), "failed to handle Moyasar webhook event",
 			"error", err,
 			"event_type", event.Type,
 			"environment_id", environmentID)
 		return
 	}
 
-	h.logger.Infow("successfully processed Moyasar webhook",
+	h.logger.Info(context.Background(), "successfully processed Moyasar webhook",
 		"environment_id", environmentID,
 		"event_type", event.Type)
 }
@@ -1013,7 +1016,7 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in Zoho webhook URL",
+		h.logger.Info(c.Request.Context(), "missing tenant_id or environment_id in Zoho webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -1024,7 +1027,7 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read Zoho webhook body", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to read Zoho webhook body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
 		return
 	}
@@ -1035,7 +1038,7 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 
 	zohoIntegration, err := h.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil || zohoIntegration == nil {
-		h.logger.Errorw("Zoho Books integration not available for webhook",
+		h.logger.Error(c.Request.Context(), "Zoho Books integration not available for webhook",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -1045,7 +1048,7 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 
 	conn, webhookSecretPlain, err := zohoIntegration.Client.GetZohoBooksWebhookConfig(ctx)
 	if err != nil || conn == nil {
-		h.logger.Errorw("Zoho Books webhook config unavailable",
+		h.logger.Error(c.Request.Context(), "Zoho Books webhook config unavailable",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -1067,19 +1070,21 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 		if errors.Is(err, zohowebhook.ErrInvalidWebhookSignature) ||
 			errors.Is(err, zohowebhook.ErrWebhookSecretNotConfigured) {
 			if errors.Is(err, zohowebhook.ErrWebhookSecretNotConfigured) {
-				h.logger.Errorw("Zoho webhook secret not configured",
+				h.logger.Error(c.Request.Context(), "Zoho webhook secret not configured",
+					"error", err,
 					"tenant_id", tenantID,
 					"environment_id", environmentID)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Webhook secret is not configured"})
 				return
 			}
-			h.logger.Errorw("Zoho webhook signature verification failed",
+			h.logger.Error(c.Request.Context(), "Zoho webhook signature verification failed",
 				"tenant_id", tenantID,
+				"error", err,
 				"environment_id", environmentID)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid webhook signature"})
 			return
 		}
-		h.logger.Errorw("Zoho webhook processing failed",
+		h.logger.Error(c.Request.Context(), "Zoho webhook processing failed",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -1110,7 +1115,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	environmentID := c.Param("environment_id")
 
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -1119,7 +1124,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	// Read the raw request body (must be preserved for signature verification)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read request body", "error", err)
+		h.logger.Error(context.Background(), "failed to read request body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		handled = true
 		return
@@ -1133,7 +1138,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	// Get Paddle integration
 	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Paddle integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get Paddle integration", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
 		handled = true
 		return
@@ -1141,7 +1146,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 
 	signature := c.GetHeader("Paddle-Signature")
 	if err := paddleIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
-		h.logger.Errorw("Paddle webhook signature verification failed",
+		h.logger.Error(context.Background(), "Paddle webhook signature verification failed",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -1153,11 +1158,11 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 	// Parse event_type from payload
 	var payload paddleWebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		h.logger.Errorw("failed to parse Paddle webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse Paddle webhook payload", "error", err)
 		return
 	}
 
-	h.logger.Infow("processing Paddle webhook", "event_type", payload.EventType)
+	h.logger.Info(context.Background(), "processing Paddle webhook", "event_type", payload.EventType)
 
 	serviceDeps := &paddlewebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,
@@ -1171,9 +1176,11 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 
 	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps)
 	if err != nil {
-		h.logger.Errorw("failed to handle Paddle webhook event",
+		h.logger.Error(context.Background(), "failed to handle Paddle webhook event",
 			"error", err,
 			"event_type", payload.EventType)
+		c.JSON(http.StatusInternalServerError, gin.H{})
+		handled = true
 	}
 }
 func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
@@ -1188,13 +1195,13 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
 	if tenantID == "" || environmentID == "" {
-		h.logger.Errorw("missing tenant_id or environment_id in Whop webhook URL")
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in Whop webhook URL")
 		return
 	}
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Errorw("failed to read Whop webhook body", "error", err)
+		h.logger.Error(context.Background(), "failed to read Whop webhook body", "error", err)
 		return
 	}
 
@@ -1203,18 +1210,18 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	var event whopwebhook.WhopWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Errorw("failed to parse Whop webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
 		return
 	}
 
-	h.logger.Infow("received Whop webhook",
+	h.logger.Info(context.Background(), "received Whop webhook",
 		"type", event.Type,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Whop integration", "error", err)
+		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
 		return
 	}
 
@@ -1229,7 +1236,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	}
 
 	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
-		h.logger.Errorw("failed to handle Whop webhook event",
+		h.logger.Error(context.Background(), "failed to handle Whop webhook event",
 			"error", err,
 			"type", event.Type)
 	}

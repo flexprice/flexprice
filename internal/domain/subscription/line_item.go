@@ -38,13 +38,14 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
-	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
-	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
-	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
-	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
-	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal       `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
+	CommitmentType          types.CommitmentType   `db:"commitment_type" json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	CommitmentTrueUpEnabled bool                   `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
+	CommitmentWindowed      bool                   `db:"commitment_windowed" json:"commitment_windowed"`
+	CommitmentDuration      *types.BillingPeriod   `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 
@@ -82,16 +83,43 @@ func (li *SubscriptionLineItem) IsOneTime() bool {
 	return li.BillingPeriod == types.BILLING_PERIOD_ONETIME
 }
 
-// HasCommitment returns true if the line item has commitment configured
+// HasCommitmentTimeBuckets returns true when per-bucket commitments are configured.
+func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
+	return len(li.CommitmentTimeBuckets) > 0
+}
+
+// HasCommitment returns true if the line item has a top-level commitment configured
 func (li *SubscriptionLineItem) HasCommitment() bool {
 	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)
 	hasQuantityCommitment := li.CommitmentQuantity != nil && li.CommitmentQuantity.GreaterThan(decimal.Zero)
 	return hasAmountCommitment || hasQuantityCommitment
 }
 
+// HasAnyCommitment returns true if the line item has a top-level commitment OR
+// per-bucket commitments. Per-bucket commitments bill through the windowed path
+// even when there is no top-level commitment (out-of-bucket usage is then billed
+// at base rate), so commitment-application gates must use this.
+func (li *SubscriptionLineItem) HasAnyCommitment() bool {
+	return li.HasCommitment() || li.HasCommitmentTimeBuckets()
+}
+
 // GetCommitmentType returns the commitment type for the line item
 func (li *SubscriptionLineItem) GetCommitmentType() types.CommitmentType {
 	return li.CommitmentType
+}
+
+// HasTrueUpEnabled returns true if the line item has true-up enabled at the line item level or
+// on any of its commitment time buckets.
+func (li *SubscriptionLineItem) HasTrueUpEnabled() bool {
+	if li.CommitmentTrueUpEnabled {
+		return true
+	}
+	for _, b := range li.CommitmentTimeBuckets {
+		if b.TrueUpEnabled {
+			return true
+		}
+	}
+	return false
 }
 
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems
@@ -189,6 +217,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
 		CommitmentDuration:      commitmentDuration,
+		CommitmentTimeBuckets:   e.CommitmentTimeBuckets,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

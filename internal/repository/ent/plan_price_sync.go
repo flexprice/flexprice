@@ -137,7 +137,7 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 		userID,
 	)
 	if qerr != nil {
-		r.log.Errorw("failed to execute termination query for plan line items",
+		r.log.Error(context.Background(), "failed to execute termination query for plan line items",
 			"plan_id", planID,
 			"limit", limit,
 			"error", qerr)
@@ -153,7 +153,7 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		r.log.Errorw("failed to get rows affected for terminated line items",
+		r.log.Error(context.Background(), "failed to get rows affected for terminated line items",
 			"plan_id", planID,
 			"limit", limit,
 			"error", err)
@@ -270,7 +270,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 			limit,
 		)
 	if qerr != nil {
-		r.log.Errorw("failed to query plan line items to terminate",
+		r.log.Error(context.Background(), "failed to query plan line items to terminate",
 			"plan_id", planID,
 			"limit", limit,
 			"error", qerr)
@@ -288,7 +288,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 	for rows.Next() {
 		var d planpricesync.PlanLineItemTerminationDelta
 		if scanErr := rows.Scan(&d.LineItemID, &d.SubscriptionID, &d.PriceID, &d.TargetEndDate); scanErr != nil {
-			r.log.Errorw("failed to scan termination delta row",
+			r.log.Error(context.Background(), "failed to scan termination delta row",
 				"plan_id", planID,
 				"limit", limit,
 				"error", scanErr)
@@ -300,7 +300,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 		items = append(items, d)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
-		r.log.Errorw("failed to iterate termination delta rows",
+		r.log.Error(context.Background(), "failed to iterate termination delta rows",
 			"plan_id", planID,
 			"limit", limit,
 			"error", rowsErr)
@@ -470,7 +470,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		args...,
 	)
 	if qerr != nil {
-		r.log.Errorw("failed to query plan line items to create",
+		r.log.Error(context.Background(), "failed to query plan line items to create",
 			"plan_id", planID,
 			"limit", limit,
 			"error", qerr)
@@ -488,7 +488,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 	for rows.Next() {
 		var subID, priceID, customerID string
 		if scanErr := rows.Scan(&subID, &priceID, &customerID); scanErr != nil {
-			r.log.Errorw("failed to scan creation delta row",
+			r.log.Error(context.Background(), "failed to scan creation delta row",
 				"plan_id", planID,
 				"limit", limit,
 				"error", scanErr)
@@ -504,7 +504,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		})
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
-		r.log.Errorw("failed to iterate creation delta rows",
+		r.log.Error(context.Background(), "failed to iterate creation delta rows",
 			"plan_id", planID,
 			"limit", limit,
 			"error", rowsErr)
@@ -596,7 +596,7 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 
 	rows, qerr := r.client.Reader(ctx).QueryContext(ctx, query, args...)
 	if qerr != nil {
-		r.log.Errorw("failed to query last subscription ID in batch",
+		r.log.Error(context.Background(), "failed to query last subscription ID in batch",
 			"plan_id", planID,
 			"limit", limit,
 			"error", qerr)
@@ -613,7 +613,7 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 	var batchLastSubID string
 	if rows.Next() {
 		if scanErr := rows.Scan(&batchLastSubID); scanErr != nil {
-			r.log.Errorw("failed to scan last subscription ID",
+			r.log.Error(context.Background(), "failed to scan last subscription ID",
 				"plan_id", planID,
 				"limit", limit,
 				"error", scanErr)
@@ -626,7 +626,7 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
-		r.log.Errorw("failed to iterate rows for last subscription ID",
+		r.log.Error(context.Background(), "failed to iterate rows for last subscription ID",
 			"plan_id", planID,
 			"limit", limit,
 			"error", rowsErr)

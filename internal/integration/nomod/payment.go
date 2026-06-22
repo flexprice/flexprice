@@ -62,7 +62,7 @@ type CreatePaymentLinkResp struct {
 // CreatePaymentLink creates a payment link in Nomod
 // This creates a standalone payment link without requiring invoice sync
 func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymentLinkReq, customerService interfaces.CustomerService, invoiceService interfaces.InvoiceService) (*CreatePaymentLinkResp, error) {
-	s.logger.Infow("creating payment link in Nomod",
+	s.logger.Info(ctx, "creating payment link in Nomod",
 		"invoice_id", req.InvoiceID,
 		"customer_id", req.CustomerID,
 		"amount", req.Amount,
@@ -134,7 +134,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 			if paymentURL, ok := nomodInvoiceMapping.Metadata["nomod_payment_url"].(string); ok && paymentURL != "" {
 				nomodInvoiceID := nomodInvoiceMapping.ProviderEntityID
 
-				s.logger.Infow("invoice already synced to Nomod, returning stored payment URL",
+				s.logger.Info(ctx, "invoice already synced to Nomod, returning stored payment URL",
 					"flexprice_invoice_id", req.InvoiceID,
 					"nomod_invoice_id", nomodInvoiceID,
 					"payment_url", paymentURL)
@@ -161,7 +161,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 			}
 
 			// If no payment URL in metadata, log and continue to create separate payment link
-			s.logger.Debugw("invoice synced to Nomod but no payment URL found in metadata",
+			s.logger.Debug(ctx, "invoice synced to Nomod but no payment URL found in metadata",
 				"flexprice_invoice_id", req.InvoiceID,
 				"nomod_invoice_id", nomodInvoiceMapping.ProviderEntityID)
 		}
@@ -254,7 +254,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 		paymentLinkReq.FailureURL = &req.FailureURL
 	}
 
-	s.logger.Infow("creating standalone payment link in Nomod",
+	s.logger.Info(ctx, "creating standalone payment link in Nomod",
 		"invoice_id", req.InvoiceID,
 		"nomod_customer_id", nomodCustomerID,
 		"line_items_count", len(lineItems),
@@ -264,7 +264,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 	// Create payment link via Nomod API
 	nomodPaymentLink, err := s.client.CreatePaymentLink(ctx, paymentLinkReq)
 	if err != nil {
-		s.logger.Errorw("failed to create payment link in Nomod",
+		s.logger.Error(ctx, "failed to create payment link in Nomod",
 			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, ierr.WithError(err).
@@ -272,7 +272,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("successfully created standalone payment link in Nomod",
+	s.logger.Info(ctx, "successfully created standalone payment link in Nomod",
 		"invoice_id", req.InvoiceID,
 		"nomod_payment_link_id", nomodPaymentLink.ID,
 		"payment_url", nomodPaymentLink.URL)
@@ -280,7 +280,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 	// Parse amount with error handling - critical for payment links
 	amount, err := decimal.NewFromString(nomodPaymentLink.Amount)
 	if err != nil {
-		s.logger.Errorw("failed to parse payment link amount from Nomod",
+		s.logger.Error(ctx, "failed to parse payment link amount from Nomod",
 			"error", err,
 			"invoice_id", req.InvoiceID,
 			"nomod_amount", nomodPaymentLink.Amount,

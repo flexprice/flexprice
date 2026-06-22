@@ -9,7 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -161,7 +161,7 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 
 	// Update the subscription
 	if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
-		s.logger.Errorw("failed to update subscription period",
+		s.logger.Error(ctx, "failed to update subscription period",
 			"subscription_id", sub.ID,
 			"new_period_start", input.PeriodStart,
 			"new_period_end", input.PeriodEnd,
@@ -169,7 +169,7 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 		return nil, err
 	}
 
-	s.logger.Infow("updated subscription period",
+	s.logger.Info(ctx, "updated subscription period",
 		"subscription_id", sub.ID,
 		"new_period_start", input.PeriodStart,
 		"new_period_end", input.PeriodEnd)
@@ -241,7 +241,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 			900+rand.Intn(300), // adding a random delay between 900 and 1200 seconds
 		)
 		if err != nil {
-			s.logger.Errorw("failed to trigger invoice workflow",
+			s.logger.Error(ctx, "failed to trigger invoice workflow",
 				"invoice_id", invoiceID,
 				"error", err)
 			output.FailedCount++
@@ -250,7 +250,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 			continue
 		}
 
-		s.logger.Infow("triggered invoice workflow",
+		s.logger.Info(ctx, "triggered invoice workflow",
 			"invoice_id", invoiceID)
 		output.TriggeredCount++
 	}
@@ -284,7 +284,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 	if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(input.Period.End) {
 		shouldCancel = true
 		cancelledAt = sub.CancelAt
-		s.logger.Infow("subscription should be cancelled at period end",
+		s.logger.Info(ctx, "subscription should be cancelled at period end",
 			"subscription_id", sub.ID,
 			"period_end", input.Period.End,
 			"cancel_at", *sub.CancelAt)
@@ -294,7 +294,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 	if sub.EndDate != nil && input.Period.End.Equal(*sub.EndDate) {
 		shouldCancel = true
 		cancelledAt = sub.EndDate
-		s.logger.Infow("subscription reached end date",
+		s.logger.Info(ctx, "subscription reached end date",
 			"subscription_id", sub.ID,
 			"period_end", input.Period.End,
 			"end_date", *sub.EndDate)
@@ -304,6 +304,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 	if shouldCancel {
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
+		subscriptionService := service.NewSubscriptionService(s.serviceParams)
 
 		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Update subscription
@@ -311,11 +312,9 @@ func (s *BillingActivities) CheckCancellationActivity(
 				return err
 			}
 
-			subscriptionService := service.NewSubscriptionService(s.serviceParams)
-
 			// Update the cancellation schedule status to executed
 			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
-				s.logger.Errorw("failed to mark cancellation schedule as executed",
+				s.logger.Error(ctx, "failed to mark cancellation schedule as executed",
 					"subscription_id", sub.ID,
 					"error", err)
 				// Don't fail the transaction, just log the error
@@ -329,13 +328,15 @@ func (s *BillingActivities) CheckCancellationActivity(
 			return nil
 		})
 		if err != nil {
-			s.logger.Errorw("failed to cancel subscription",
+			s.logger.Error(ctx, "failed to cancel subscription",
 				"subscription_id", sub.ID,
 				"error", err)
 			return nil, err
 		}
 
-		s.logger.Infow("subscription cancelled successfully",
+		subscriptionService.PublishCancellationEvents(ctx, sub)
+
+		s.logger.Info(ctx, "subscription cancelled successfully",
 			"subscription_id", sub.ID,
 			"cancelled_at", *cancelledAt)
 	}
@@ -363,7 +364,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 	// Get the subscription
 	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
 	if err != nil {
-		s.logger.Errorw("failed to get subscription",
+		s.logger.Error(ctx, "failed to get subscription",
 			"subscription_id", input.SubscriptionID,
 			"error", err)
 		return nil, err
@@ -371,7 +372,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 
 	// Only process if subscription is active
 	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		s.logger.Infow("subscription not active, skipping plan change processing",
+		s.logger.Info(ctx, "subscription not active, skipping plan change processing",
 			"subscription_id", sub.ID,
 			"status", sub.SubscriptionStatus)
 		return &subscriptionModels.ProcessPendingPlanChangesActivityOutput{
@@ -387,7 +388,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 		types.SubscriptionScheduleChangeTypePlanChange,
 	)
 	if err != nil {
-		s.logger.Errorw("failed to check for pending plan change",
+		s.logger.Error(ctx, "failed to check for pending plan change",
 			"subscription_id", sub.ID,
 			"error", err)
 		return nil, err
@@ -395,7 +396,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 
 	// No pending schedule, nothing to do
 	if schedule == nil {
-		s.logger.Infow("no pending plan change found",
+		s.logger.Info(ctx, "no pending plan change found",
 			"subscription_id", sub.ID)
 		return &subscriptionModels.ProcessPendingPlanChangesActivityOutput{
 			Success:    true,
@@ -405,7 +406,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 
 	// Guard: Check if schedule is due (scheduled_at <= now)
 	if schedule.ScheduledAt.After(time.Now()) {
-		s.logger.Infow("schedule not yet due, skipping execution",
+		s.logger.Info(ctx, "schedule not yet due, skipping execution",
 			"schedule_id", schedule.ID,
 			"subscription_id", sub.ID,
 			"scheduled_at", schedule.ScheduledAt,
@@ -416,7 +417,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 		}, nil
 	}
 
-	s.logger.Infow("found pending plan change schedule, executing",
+	s.logger.Info(ctx, "found pending plan change schedule, executing",
 		"schedule_id", schedule.ID,
 		"subscription_id", sub.ID,
 		"scheduled_at", schedule.ScheduledAt)
@@ -428,14 +429,14 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 	// Execute the scheduled plan change
 	err = s.executeScheduledPlanChange(ctx, schedule, changeService, subscriptionService)
 	if err != nil {
-		s.logger.Errorw("failed to execute scheduled plan change",
+		s.logger.Error(ctx, "failed to execute scheduled plan change",
 			"schedule_id", schedule.ID,
 			"subscription_id", sub.ID,
 			"error", err)
 		return nil, err
 	}
 
-	s.logger.Infow("successfully executed plan change at period end",
+	s.logger.Info(ctx, "successfully executed plan change at period end",
 		"schedule_id", schedule.ID,
 		"subscription_id", sub.ID)
 
@@ -477,7 +478,8 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ExecutedAt = lo.ToPtr(time.Now().UTC())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
-			s.logger.Errorw("failed to update schedule status to failed",
+			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"original_error", err,
@@ -493,7 +495,8 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ExecutedAt = lo.ToPtr(time.Now().UTC())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
-			s.logger.Errorw("failed to update schedule status to failed",
+			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"update_error", updateErr)
@@ -507,7 +510,8 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ExecutedAt = lo.ToPtr(time.Now().UTC())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
-			s.logger.Errorw("failed to update schedule status to failed",
+			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"update_error", updateErr)
@@ -527,11 +531,11 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		EffectiveDate:     response.EffectiveDate,
 	}
 	if err := schedule.SetPlanChangeResult(result); err != nil {
-		s.logger.Errorw("failed to set plan change result", "error", err)
+		s.logger.Error(ctx, "failed to set plan change result", "error", err)
 	}
 
 	if err := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); err != nil {
-		s.logger.Errorw("failed to update schedule status", "error", err)
+		s.logger.Error(ctx, "failed to update schedule status", "error", err)
 		return err
 	}
 

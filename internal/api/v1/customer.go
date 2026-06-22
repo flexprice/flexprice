@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -449,7 +449,7 @@ func (h *CustomerHandler) GetUpcomingCreditGrantApplications(c *gin.Context) {
 
 	resp, err := h.service.GetUpcomingCreditGrantApplications(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get upcoming credit grant applications", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get upcoming credit grant applications", "error", err)
 		c.Error(err)
 		return
 	}

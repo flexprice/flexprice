@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -25,7 +25,7 @@ func NewInvoiceSyncActivities(params service.ServiceParams, logger *logger.Logge
 
 // SyncInvoiceToRazorpay syncs an invoice to Razorpay via the service layer.
 func (a *InvoiceSyncActivities) SyncInvoiceToRazorpay(ctx context.Context, input models.RazorpayInvoiceSyncWorkflowInput) error {
-	a.logger.Infow("syncing invoice to Razorpay",
+	a.logger.Info(ctx, "syncing invoice to Razorpay",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -35,14 +35,14 @@ func (a *InvoiceSyncActivities) SyncInvoiceToRazorpay(ctx context.Context, input
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
 	if err := a.invoiceService.SyncInvoiceToRazorpayIfEnabled(ctx, input.InvoiceID); err != nil {
-		a.logger.Errorw("failed to sync invoice to Razorpay",
+		a.logger.Error(ctx, "failed to sync invoice to Razorpay",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Razorpay",
+	a.logger.Info(ctx, "successfully synced invoice to Razorpay",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID)
 

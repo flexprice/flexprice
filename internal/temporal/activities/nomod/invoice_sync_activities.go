@@ -39,7 +39,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 	ctx context.Context,
 	input models.NomodInvoiceSyncWorkflowInput,
 ) error {
-	a.logger.Infow("syncing invoice to Nomod",
+	a.logger.Info(ctx, "syncing invoice to Nomod",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -53,7 +53,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 	nomodIntegration, err := a.integrationFactory.GetNomodIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("Nomod connection not configured",
+			a.logger.Debug(ctx, "Nomod connection not configured",
 				"invoice_id", input.InvoiceID,
 				"customer_id", input.CustomerID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
@@ -63,7 +63,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Nomod integration",
+		a.logger.Error(ctx, "failed to get Nomod integration",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
@@ -77,13 +77,13 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 
 	_, err = nomodIntegration.InvoiceSyncSvc.SyncInvoiceToNomod(ctx, syncReq, a.customerService)
 	if err != nil {
-		a.logger.Errorw("failed to sync invoice to Nomod",
+		a.logger.Error(ctx, "failed to sync invoice to Nomod",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Nomod",
+	a.logger.Info(ctx, "successfully synced invoice to Nomod",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID)
 

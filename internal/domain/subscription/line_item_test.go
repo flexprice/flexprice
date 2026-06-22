@@ -10,8 +10,8 @@ import (
 
 func TestGetPeriodStart(t *testing.T) {
 	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	mid  := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
-	end  := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 
 	li := &subscription.SubscriptionLineItem{StartDate: mid}
 	assert.Equal(t, mid, li.GetPeriodStart(base)) // StartDate > default → use StartDate
@@ -20,11 +20,11 @@ func TestGetPeriodStart(t *testing.T) {
 
 func TestGetPeriodEnd(t *testing.T) {
 	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	mid  := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
-	end  := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 
 	li := &subscription.SubscriptionLineItem{EndDate: mid}
-	assert.Equal(t, mid,  li.GetPeriodEnd(end))  // li.EndDate (Jan15) < end (Feb1) → use EndDate
+	assert.Equal(t, mid, li.GetPeriodEnd(end))   // li.EndDate (Jan15) < end (Feb1) → use EndDate
 	assert.Equal(t, base, li.GetPeriodEnd(base)) // defaultPeriodEnd (Jan1) < li.EndDate (Jan15) → clamp to default
 
 	liNoEnd := &subscription.SubscriptionLineItem{}
@@ -33,8 +33,8 @@ func TestGetPeriodEnd(t *testing.T) {
 
 func TestGetPeriod(t *testing.T) {
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	mid   := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
-	end   := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 
 	li := &subscription.SubscriptionLineItem{StartDate: mid}
 	s, e := li.GetPeriod(start, end)

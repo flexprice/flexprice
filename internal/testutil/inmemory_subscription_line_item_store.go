@@ -302,7 +302,8 @@ func (s *InMemorySubscriptionLineItemStore) GetDistinctCustomerIDsWithCommitment
 	seen := make(map[string]struct{})
 	var customerIDs []string
 	for _, item := range items {
-		if !item.CommitmentTrueUpEnabled {
+		// HasTrueUpEnabled() covers bucket-level true-up too (mirrors the ent SQL).
+		if !item.HasTrueUpEnabled() {
 			continue
 		}
 		if _, ok := seen[item.CustomerID]; ok {

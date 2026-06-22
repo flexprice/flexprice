@@ -64,13 +64,13 @@ func (r *costsheetRepository) Create(ctx context.Context, costsheet *domainCosts
 	err := createQuery.Exec(ctx)
 
 	if err != nil {
-		r.logger.Errorw("Failed to create costsheet", "error", err, "costsheet_id", costsheet.ID)
+		r.logger.Error(ctx, "Failed to create costsheet", "error", err, "costsheet_id", costsheet.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to create costsheet").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("Created costsheet", "costsheet_id", costsheet.ID, "name", costsheet.Name)
+	r.logger.Info(ctx, "Created costsheet", "costsheet_id", costsheet.ID, "name", costsheet.Name)
 	return nil
 }
 
@@ -84,7 +84,7 @@ func (r *costsheetRepository) GetByID(ctx context.Context, id string) (*domainCo
 				WithReportableDetails(map[string]any{"id": id}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Errorw("Failed to get costsheet by ID", "error", err, "costsheet_id", id)
+		r.logger.Error(ctx, "Failed to get costsheet by ID", "error", err, "costsheet_id", id)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet").
 			Mark(ierr.ErrDatabase)
@@ -105,7 +105,7 @@ func (r *costsheetRepository) GetByTenantAndEnvironment(ctx context.Context, ten
 		All(ctx)
 
 	if err != nil {
-		r.logger.Errorw("Failed to get costsheet records by tenant and environment",
+		r.logger.Error(ctx, "Failed to get costsheet records by tenant and environment",
 			"error", err, "tenant_id", tenantID, "environment_id", environmentID)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet records").
@@ -197,7 +197,7 @@ func (r *costsheetRepository) List(ctx context.Context, filter *domainCostsheet.
 
 	entCostsheets, err := query.All(ctx)
 	if err != nil {
-		r.logger.Errorw("Failed to list costsheet records", "error", err)
+		r.logger.Error(ctx, "Failed to list costsheet records", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet records").
 			Mark(ierr.ErrDatabase)
@@ -257,7 +257,7 @@ func (r *costsheetRepository) Count(ctx context.Context, filter *domainCostsheet
 
 	count, err := query.Count(ctx)
 	if err != nil {
-		r.logger.Errorw("Failed to count costsheet records", "error", err)
+		r.logger.Error(ctx, "Failed to count costsheet records", "error", err)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count costsheet records").
 			Mark(ierr.ErrDatabase)
@@ -296,13 +296,13 @@ func (r *costsheetRepository) Update(ctx context.Context, costsheet *domainCosts
 				WithReportableDetails(map[string]any{"id": costsheet.ID}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Errorw("Failed to update costsheet", "error", err, "costsheet_id", costsheet.ID)
+		r.logger.Error(ctx, "Failed to update costsheet", "error", err, "costsheet_id", costsheet.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to update costsheet").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("Updated costsheet", "costsheet_id", costsheet.ID, "name", costsheet.Name)
+	r.logger.Info(ctx, "Updated costsheet", "costsheet_id", costsheet.ID, "name", costsheet.Name)
 	return nil
 }
 
@@ -320,13 +320,13 @@ func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 				WithReportableDetails(map[string]any{"id": id}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Errorw("Failed to delete costsheet", "error", err, "costsheet_id", id)
+		r.logger.Error(ctx, "Failed to delete costsheet", "error", err, "costsheet_id", id)
 		return ierr.WithError(err).
 			WithHint("Failed to delete costsheet").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("Deleted costsheet", "costsheet_id", id)
+	r.logger.Info(ctx, "Deleted costsheet", "costsheet_id", id)
 	return nil
 }
 
@@ -352,7 +352,7 @@ func (r *costsheetRepository) GetByName(ctx context.Context, tenantID, environme
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Errorw("Failed to get costsheet by name",
+		r.logger.Error(ctx, "Failed to get costsheet by name",
 			"error", err, "name", name, "tenant_id", tenantID, "environment_id", environmentID)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet by name").
@@ -384,7 +384,7 @@ func (r *costsheetRepository) GetByLookupKey(ctx context.Context, tenantID, envi
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Errorw("Failed to get costsheet by lookup key",
+		r.logger.Error(ctx, "Failed to get costsheet by lookup key",
 			"error", err, "lookup_key", lookupKey, "tenant_id", tenantID, "environment_id", environmentID)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet by lookup key").
@@ -406,7 +406,7 @@ func (r *costsheetRepository) ListByStatus(ctx context.Context, tenantID, enviro
 		All(ctx)
 
 	if err != nil {
-		r.logger.Errorw("Failed to get costsheet records by status",
+		r.logger.Error(ctx, "Failed to get costsheet records by status",
 			"error", err, "tenant_id", tenantID, "environment_id", environmentID, "status", status)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve costsheet records by status").

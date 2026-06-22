@@ -40,7 +40,7 @@ func NewPaymentService(
 
 // CreatePaymentLink creates a Razorpay payment link
 func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePaymentLinkRequest, customerService interfaces.CustomerService, invoiceService interfaces.InvoiceService) (*RazorpayPaymentLinkResponse, error) {
-	s.logger.Infow("creating razorpay payment link",
+	s.logger.Info(ctx, "creating razorpay payment link",
 		"invoice_id", req.InvoiceID,
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
@@ -115,7 +115,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 			if paymentURL, ok := razorpayInvoiceMapping.Metadata["razorpay_payment_url"].(string); ok && paymentURL != "" {
 				razorpayInvoiceID := razorpayInvoiceMapping.ProviderEntityID
 
-				s.logger.Infow("invoice already synced to Razorpay, returning stored payment URL",
+				s.logger.Info(ctx, "invoice already synced to Razorpay, returning stored payment URL",
 					"flexprice_invoice_id", req.InvoiceID,
 					"razorpay_invoice_id", razorpayInvoiceID,
 					"payment_url", paymentURL)
@@ -134,7 +134,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 			}
 
 			// If no payment URL in metadata, log and continue to create separate payment link
-			s.logger.Debugw("invoice synced to Razorpay but no payment URL found in metadata",
+			s.logger.Debug(ctx, "invoice synced to Razorpay but no payment URL found in metadata",
 				"flexprice_invoice_id", req.InvoiceID,
 				"razorpay_invoice_id", razorpayInvoiceMapping.ProviderEntityID)
 		}
@@ -191,7 +191,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 			notes[itemName] = fmt.Sprintf("%s %s", item.Amount.StringFixed(2), strings.ToUpper(item.Currency))
 		}
 
-		s.logger.Infow("added line items to notes",
+		s.logger.Info(ctx, "added line items to notes",
 			"invoice_id", req.InvoiceID,
 			"line_items_count", len(invoiceResp.LineItems))
 	}
@@ -243,7 +243,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		descriptionWithLineItems = fmt.Sprintf("%s | Payment | %s", customerName, invoiceNumber)
 	}
 
-	s.logger.Infow("formatted payment description",
+	s.logger.Info(ctx, "formatted payment description",
 		"invoice_id", req.InvoiceID,
 		"description", descriptionWithLineItems)
 
@@ -278,16 +278,16 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	if req.SuccessURL != "" {
 		paymentLinkData["callback_url"] = req.SuccessURL
 		paymentLinkData["callback_method"] = "get" // Only "get" is supported by Razorpay payment links
-		s.logger.Infow("callback URL configured for payment link",
+		s.logger.Info(ctx, "callback URL configured for payment link",
 			"invoice_id", req.InvoiceID,
 			"callback_url", req.SuccessURL)
 	} else {
-		s.logger.Warnw("no callback URL provided - customer will not be redirected after payment",
+		s.logger.Info(ctx, "no callback URL provided - customer will not be redirected after payment",
 			"invoice_id", req.InvoiceID)
 	}
 	// Note: CancelURL is not supported by Razorpay - callback_url is used for both success and cancel
 
-	s.logger.Infow("creating payment link in Razorpay",
+	s.logger.Info(ctx, "creating payment link in Razorpay",
 		"invoice_id", req.InvoiceID,
 		"customer_id", req.CustomerID,
 		"razorpay_customer_id", razorpayCustomerID,
@@ -297,7 +297,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	// Create payment link in Razorpay using wrapper function
 	razorpayPaymentLink, err := s.client.CreatePaymentLink(ctx, paymentLinkData)
 	if err != nil {
-		s.logger.Errorw("failed to create Razorpay payment link",
+		s.logger.Error(ctx, "failed to create Razorpay payment link",
 			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, err
@@ -306,7 +306,8 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	// Safely extract response fields with type assertions
 	paymentLinkID, ok := razorpayPaymentLink["id"].(string)
 	if !ok || paymentLinkID == "" {
-		s.logger.Errorw("missing payment link id in Razorpay response",
+		s.logger.Error(ctx, "missing payment link id in Razorpay response",
+			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, ierr.NewError("razorpay payment link id missing in response").
 			WithHint("Check Razorpay CreatePaymentLink response payload").
@@ -315,7 +316,8 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 
 	paymentLinkURL, ok := razorpayPaymentLink["short_url"].(string)
 	if !ok || paymentLinkURL == "" {
-		s.logger.Errorw("missing payment link URL in Razorpay response",
+		s.logger.Error(ctx, "missing payment link URL in Razorpay response",
+			"error", err,
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 		return nil, ierr.NewError("razorpay payment link URL missing in response").
@@ -327,7 +329,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	if !ok {
 		// Default to "created" if status is missing
 		status = "created"
-		s.logger.Warnw("missing status in Razorpay payment link response, using default",
+		s.logger.Info(ctx, "missing status in Razorpay payment link response, using default",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 	}
@@ -339,7 +341,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	} else {
 		// Fallback to current time if created_at is missing
 		createdAt = time.Now().Unix()
-		s.logger.Warnw("missing created_at in Razorpay payment link response, using current time",
+		s.logger.Info(ctx, "missing created_at in Razorpay payment link response, using current time",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 	}
@@ -354,7 +356,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		PaymentID:  req.PaymentID,
 	}
 
-	s.logger.Infow("successfully created razorpay payment link",
+	s.logger.Info(ctx, "successfully created razorpay payment link",
 		"payment_id", response.PaymentID,
 		"payment_link_id", paymentLinkID,
 		"payment_url", paymentLinkURL,
@@ -368,14 +370,14 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 
 // ReconcilePaymentWithInvoice updates the invoice payment status and amounts when a payment succeeds
 func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymentID string, paymentAmount decimal.Decimal, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	s.logger.Infow("starting payment reconciliation with invoice",
+	s.logger.Info(ctx, "starting payment reconciliation with invoice",
 		"payment_id", paymentID,
 		"payment_amount", paymentAmount.String())
 
 	// Get the payment record
 	payment, err := paymentService.GetPayment(ctx, paymentID)
 	if err != nil {
-		s.logger.Errorw("failed to get payment record for reconciliation",
+		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"error", err,
 			"payment_id", paymentID)
 		return err
@@ -390,7 +392,7 @@ func (s *PaymentService) reconcileInvoice(ctx context.Context, invoiceID string,
 	// Get the invoice
 	invoiceResp, err := invoiceService.GetInvoice(ctx, invoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get invoice for reconciliation",
+		s.logger.Error(ctx, "failed to get invoice for reconciliation",
 			"error", err,
 			"invoice_id", invoiceID)
 		return err
@@ -411,7 +413,7 @@ func (s *PaymentService) reconcileInvoice(ctx context.Context, invoiceID string,
 		newPaymentStatus = types.PaymentStatusPending
 	}
 
-	s.logger.Infow("calculated new amounts for reconciliation",
+	s.logger.Info(ctx, "calculated new amounts for reconciliation",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount.String(),
 		"new_amount_paid", newAmountPaid.String(),
@@ -421,13 +423,13 @@ func (s *PaymentService) reconcileInvoice(ctx context.Context, invoiceID string,
 	// Update invoice
 	err = invoiceService.ReconcilePaymentStatus(ctx, invoiceID, newPaymentStatus, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to update invoice payment status",
+		s.logger.Error(ctx, "failed to update invoice payment status",
 			"error", err,
 			"invoice_id", invoiceID)
 		return err
 	}
 
-	s.logger.Infow("successfully reconciled invoice",
+	s.logger.Info(ctx, "successfully reconciled invoice",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount.String(),
 		"new_payment_status", newPaymentStatus)
@@ -448,7 +450,7 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 	description := lo.FromPtrOr(extractStringFromMap(payment, "description"), "")
 	orderID := lo.FromPtrOr(extractStringFromMap(payment, "order_id"), "")
 
-	s.logger.Infow("no FlexPrice payment ID found, processing as external Razorpay payment",
+	s.logger.Info(ctx, "no FlexPrice payment ID found, processing as external Razorpay payment",
 		"razorpay_payment_id", razorpayPaymentID,
 		"razorpay_invoice_id", razorpayInvoiceID,
 		"order_id", orderID,
@@ -460,7 +462,7 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 	// in the description as "Invoice #inv_xxx". Extract it as a fallback.
 	if razorpayInvoiceID == "" && strings.HasPrefix(description, "Invoice #") {
 		razorpayInvoiceID = strings.TrimPrefix(description, "Invoice #")
-		s.logger.Infow("extracted Razorpay invoice ID from payment description",
+		s.logger.Info(ctx, "extracted Razorpay invoice ID from payment description",
 			"razorpay_payment_id", razorpayPaymentID,
 			"razorpay_invoice_id", razorpayInvoiceID,
 			"order_id", orderID,
@@ -469,7 +471,7 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 
 	// Check if invoice ID exists (payment must be linked to an invoice)
 	if razorpayInvoiceID == "" {
-		s.logger.Infow("no Razorpay invoice ID found in external payment, skipping",
+		s.logger.Info(ctx, "no Razorpay invoice ID found in external payment, skipping",
 			"razorpay_payment_id", razorpayPaymentID,
 			"order_id", orderID,
 			"description", description)
@@ -479,14 +481,14 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 	// Check if invoice sync is enabled for this connection
 	conn, err := s.client.GetConnection(ctx)
 	if err != nil {
-		s.logger.Errorw("failed to get connection for invoice sync check, skipping external payment",
+		s.logger.Error(ctx, "failed to get connection for invoice sync check, skipping external payment",
 			"error", err,
 			"razorpay_payment_id", razorpayPaymentID)
 		return nil
 	}
 
 	if !conn.IsInvoiceOutboundEnabled() {
-		s.logger.Infow("invoice outbound sync disabled, skipping external payment",
+		s.logger.Info(ctx, "invoice outbound sync disabled, skipping external payment",
 			"razorpay_payment_id", razorpayPaymentID,
 			"razorpay_invoice_id", razorpayInvoiceID,
 			"connection_id", conn.ID)
@@ -495,7 +497,7 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 
 	// Process external Razorpay payment
 	if err := s.ProcessExternalRazorpayPayment(ctx, payment, razorpayInvoiceID, paymentService, invoiceService); err != nil {
-		s.logger.Errorw("failed to process external Razorpay payment",
+		s.logger.Error(ctx, "failed to process external Razorpay payment",
 			"error", err,
 			"razorpay_payment_id", razorpayPaymentID,
 			"razorpay_invoice_id", razorpayInvoiceID)
@@ -504,7 +506,7 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully processed external Razorpay payment",
+	s.logger.Info(ctx, "successfully processed external Razorpay payment",
 		"razorpay_payment_id", razorpayPaymentID,
 		"razorpay_invoice_id", razorpayInvoiceID)
 	return nil
@@ -520,19 +522,19 @@ func (s *PaymentService) ProcessExternalRazorpayPayment(
 ) error {
 	razorpayPaymentID := lo.FromPtrOr(extractStringFromMap(payment, "id"), "")
 
-	s.logger.Infow("processing external Razorpay payment",
+	s.logger.Info(ctx, "processing external Razorpay payment",
 		"razorpay_payment_id", razorpayPaymentID,
 		"razorpay_invoice_id", razorpayInvoiceID)
 
 	// Step 1: Check if payment already exists (idempotency check)
 	exists, err := s.PaymentExistsByGatewayPaymentID(ctx, razorpayPaymentID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to check if payment exists",
+		s.logger.Error(ctx, "failed to check if payment exists",
 			"error", err,
 			"razorpay_payment_id", razorpayPaymentID)
 		// Continue processing on error
 	} else if exists {
-		s.logger.Infow("payment already exists for this Razorpay payment, skipping",
+		s.logger.Info(ctx, "payment already exists for this Razorpay payment, skipping",
 			"razorpay_payment_id", razorpayPaymentID,
 			"razorpay_invoice_id", razorpayInvoiceID)
 		return nil
@@ -542,13 +544,13 @@ func (s *PaymentService) ProcessExternalRazorpayPayment(
 
 	flexpriceInvoiceID, err := s.invoiceSyncSvc.GetFlexPriceInvoiceID(ctx, razorpayInvoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get FlexPrice invoice ID",
+		s.logger.Error(ctx, "failed to get FlexPrice invoice ID",
 			"error", err,
 			"razorpay_invoice_id", razorpayInvoiceID)
 		return err
 	}
 
-	s.logger.Infow("found FlexPrice invoice for external payment",
+	s.logger.Info(ctx, "found FlexPrice invoice for external payment",
 		"razorpay_payment_id", razorpayPaymentID,
 		"razorpay_invoice_id", razorpayInvoiceID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
@@ -556,7 +558,7 @@ func (s *PaymentService) ProcessExternalRazorpayPayment(
 	// Step 3: Create external payment record
 	err = s.createExternalPaymentRecord(ctx, payment, flexpriceInvoiceID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"razorpay_payment_id", razorpayPaymentID)
 		return err
@@ -566,14 +568,14 @@ func (s *PaymentService) ProcessExternalRazorpayPayment(
 	amount := extractAmountFromPayment(payment)
 	err = s.reconcileInvoice(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice with external payment",
+		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
 			"error", err,
 			"invoice_id", flexpriceInvoiceID,
 			"amount", amount.String())
 		return err
 	}
 
-	s.logger.Infow("successfully processed external Razorpay payment",
+	s.logger.Info(ctx, "successfully processed external Razorpay payment",
 		"razorpay_payment_id", razorpayPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"amount", amount.String())
@@ -595,7 +597,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	email := lo.FromPtrOr(extractStringFromMap(payment, "email"), "")
 	contact := lo.FromPtrOr(extractStringFromMap(payment, "contact"), "")
 
-	s.logger.Infow("creating external payment record",
+	s.logger.Info(ctx, "creating external payment record",
 		"razorpay_payment_id", razorpayPaymentID,
 		"invoice_id", invoiceID,
 		"amount", amount.String(),
@@ -630,7 +632,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	paymentResp, err := paymentService.CreatePayment(ctx, createReq)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"razorpay_payment_id", razorpayPaymentID,
 			"invoice_id", invoiceID)
@@ -647,14 +649,14 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	_, err = paymentService.UpdatePayment(ctx, paymentResp.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update external payment status",
+		s.logger.Error(ctx, "failed to update external payment status",
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"razorpay_payment_id", razorpayPaymentID)
 		return err
 	}
 
-	s.logger.Infow("successfully created external payment record",
+	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"razorpay_payment_id", razorpayPaymentID,
 		"invoice_id", invoiceID,

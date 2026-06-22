@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -56,7 +56,7 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request. For user: type and email required. For service_account: type and roles required.").
 			Mark(ierr.ErrValidation))
@@ -65,7 +65,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	resp, err := h.userService.CreateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to create user", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to create user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -75,12 +75,12 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 // @Summary Update current user
 // @ID updateUser
-// @Description Update the current authenticated user. Only metadata updates are supported.
+// @Description Update the current authenticated user. Supports name and metadata updates.
 // @Tags Users
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.UpdateUserRequest true "Update current user request (metadata only)"
+// @Param request body dto.UpdateUserRequest true "Update user request"
 // @Success 200 {object} dto.UpdateUserResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -88,16 +88,16 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid request. Provide metadata object.").
+			WithHint("Invalid request body").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.userService.UpdateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to update user", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to update user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -139,10 +139,67 @@ func (h *UserHandler) QueryUsers(c *gin.Context) {
 
 	users, err := h.userService.ListUsersByFilter(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Errorw("failed to list service accounts", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to list service accounts", "error", err)
 		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, users)
+}
+
+// @Summary Update service account
+// @ID updateServiceAccount
+// @Description Update a service account by ID (name only).
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Service Account ID"
+// @Param request body dto.UpdateServiceAccountRequest true "Update service account request"
+// @Success 200 {object} dto.UpdateServiceAccountResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/{id} [put]
+func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
+	id := c.Param("id")
+	var req dto.UpdateServiceAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.userService.UpdateServiceAccount(c.Request.Context(), id, &req)
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "failed to update service account", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Delete service account
+// @ID deleteServiceAccount
+// @Description Soft-delete (archive) a service account by ID.
+// @Tags Users
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Service Account ID"
+// @Success 204 "No content"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/{id} [delete]
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.userService.DeleteUser(c.Request.Context(), id); err != nil {
+		h.logger.Error(c.Request.Context(), "failed to delete user", "error", err)
+		c.Error(err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

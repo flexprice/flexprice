@@ -92,6 +92,19 @@ func matchRecord(r *events.MeterUsage, p *events.MeterUsageQueryParams) bool {
 	if p.AggregationType == types.AggregationCountUnique && r.UniqueHash == "" {
 		return false
 	}
+	if len(p.Sources) > 0 && !containsString(p.Sources, r.Source) {
+		return false
+	}
+	if len(p.PropertyFilters) > 0 {
+		for key, allowed := range p.PropertyFilters {
+			if len(allowed) == 0 {
+				continue
+			}
+			if !containsString(allowed, propertyValue(r.Properties, key)) {
+				return false
+			}
+		}
+	}
 	return true
 }
 
@@ -437,7 +450,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		return aggregateScalar(recs, types.AggregationMax)
 	}
 
-	hasGroupBy := params.GroupByProperty != ""
+	dims := parseInMemoryGroupBy(params.GroupBy)
 
 	// Bucket records by window first.
 	byBucket := make(map[time.Time][]*events.MeterUsage)
@@ -447,45 +460,283 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 	}
 
 	type entry struct {
-		bucket time.Time
-		group  string
-		value  decimal.Decimal
+		bucket     time.Time
+		groupKey   string
+		value      decimal.Decimal
+		eventCount uint64
 	}
 	entries := make([]entry, 0)
 
-	if hasGroupBy {
+	if len(dims) > 0 {
+		// Build a deterministic per-(bucket, combo) entry. We don't surface the
+		// combo dim values on UsageResult — billing's CalculateCostFromUsageResults
+		// only reads Value, and per-row group identity isn't consumed downstream.
+		// groupKey is just used here for stable sort order within a bucket.
 		for bucket, recs := range byBucket {
-			byGroup := make(map[string][]*events.MeterUsage)
+			byCombo := make(map[string][]*events.MeterUsage)
 			for _, r := range recs {
-				gk := propertyValue(r.Properties, params.GroupByProperty)
-				byGroup[gk] = append(byGroup[gk], r)
+				var parts []string
+				for _, d := range dims {
+					if d.isSource {
+						parts = append(parts, "s="+r.Source)
+					} else {
+						parts = append(parts, d.propName+"="+propertyValue(r.Properties, d.propName))
+					}
+				}
+				k := strings.Join(parts, "|")
+				byCombo[k] = append(byCombo[k], r)
 			}
-			for gk, grecs := range byGroup {
-				entries = append(entries, entry{bucket: bucket, group: gk, value: aggFn(grecs)})
+			for k, crecs := range byCombo {
+				entries = append(entries, entry{
+					bucket:     bucket,
+					groupKey:   k,
+					value:      aggFn(crecs),
+					eventCount: uint64(distinctIDCount(crecs)),
+				})
 			}
 		}
 		sort.Slice(entries, func(i, j int) bool {
 			if !entries[i].bucket.Equal(entries[j].bucket) {
 				return entries[i].bucket.Before(entries[j].bucket)
 			}
-			return entries[i].group < entries[j].group
+			return entries[i].groupKey < entries[j].groupKey
 		})
 	} else {
 		for bucket, recs := range byBucket {
-			entries = append(entries, entry{bucket: bucket, value: aggFn(recs)})
+			entries = append(entries, entry{
+				bucket:     bucket,
+				value:      aggFn(recs),
+				eventCount: uint64(distinctIDCount(recs)),
+			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].bucket.Before(entries[j].bucket) })
 	}
 
 	for _, e := range entries {
 		result.Value = result.Value.Add(e.value)
-		ur := events.UsageResult{WindowSize: e.bucket, Value: e.value}
-		if hasGroupBy {
-			ur.GroupKey = e.group
-		}
-		result.Results = append(result.Results, ur)
+		result.EventCount += e.eventCount
+		// Legacy group_key is intentionally dropped; per-group rows still
+		// carry their own Value, which is what billing consumes.
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: e.bucket,
+			Value:      e.value,
+			EventCount: e.eventCount,
+		})
 	}
 	return result, nil
+}
+
+// GetUsageForBucketedMetersDetailed mirrors the SQL pattern:
+//   - aggregate per (combo) → one MeterUsageDetailedResult per combo
+//     with TotalUsage / EventCount / MaxUsage already rolled up across buckets,
+//   - then per-bucket Points filtered to that combo.
+//
+// When GroupBy is empty, returns nil so the caller falls back to
+// GetUsageForBucketedMeters.
+func (s *InMemoryMeterUsageStore) GetUsageForBucketedMetersDetailed(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageDetailedResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dims := parseInMemoryGroupBy(params.GroupBy)
+	if len(dims) == 0 {
+		return nil, nil
+	}
+
+	matched := make([]*events.MeterUsage, 0)
+	for _, r := range s.records {
+		if matchRecord(r, params) {
+			matched = append(matched, r)
+		}
+	}
+
+	aggFn := func(recs []*events.MeterUsage) decimal.Decimal {
+		if params.AggregationType == types.AggregationSum {
+			return aggregateScalar(recs, types.AggregationSum)
+		}
+		return aggregateScalar(recs, types.AggregationMax)
+	}
+
+	// Group matched records by (bucket, combo) — the inner CTE in SQL.
+	type comboKey struct {
+		source string
+		props  string
+	}
+	dimCombo := func(r *events.MeterUsage) (comboKey, string, map[string]string) {
+		ck := comboKey{}
+		propMap := make(map[string]string)
+		var parts []string
+		for _, d := range dims {
+			if d.isSource {
+				ck.source = r.Source
+			} else {
+				v := propertyValue(r.Properties, d.propName)
+				propMap[d.propName] = v
+				parts = append(parts, d.propName+"="+v)
+			}
+		}
+		ck.props = strings.Join(parts, "|")
+		return ck, ck.source, propMap
+	}
+
+	type bucketCell struct {
+		value      decimal.Decimal
+		eventCount uint64
+	}
+	type comboState struct {
+		source string
+		props  map[string]string
+		// per-bucket cells in chronological order
+		buckets []time.Time
+		cells   map[time.Time]*bucketCell
+		total   decimal.Decimal
+		eventTC uint64
+	}
+	combos := make(map[comboKey]*comboState)
+
+	byBucket := make(map[time.Time][]*events.MeterUsage)
+	for _, r := range matched {
+		bk := truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor)
+		byBucket[bk] = append(byBucket[bk], r)
+	}
+	for bucket, recs := range byBucket {
+		byComboBucket := make(map[comboKey][]*events.MeterUsage)
+		for _, r := range recs {
+			ck, _, _ := dimCombo(r)
+			byComboBucket[ck] = append(byComboBucket[ck], r)
+		}
+		for ck, crecs := range byComboBucket {
+			cs, ok := combos[ck]
+			if !ok {
+				_, src, props := dimCombo(crecs[0])
+				cs = &comboState{
+					source: src,
+					props:  props,
+					cells:  make(map[time.Time]*bucketCell),
+				}
+				combos[ck] = cs
+			}
+			v := aggFn(crecs)
+			ec := uint64(distinctIDCount(crecs))
+			cs.cells[bucket] = &bucketCell{value: v, eventCount: ec}
+			cs.buckets = append(cs.buckets, bucket)
+			cs.total = cs.total.Add(v)
+			cs.eventTC += ec
+		}
+	}
+
+	// Materialize sorted by source then props, then per-combo buckets sorted by time.
+	keys := make([]comboKey, 0, len(combos))
+	for k := range combos {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].source != keys[j].source {
+			return keys[i].source < keys[j].source
+		}
+		return keys[i].props < keys[j].props
+	})
+
+	results := make([]*events.MeterUsageDetailedResult, 0, len(keys))
+	for _, k := range keys {
+		cs := combos[k]
+		// cs.props keeps empty values so the combo key groups events that
+		// share missing-property semantics; the result Properties map must
+		// drop empties to match the SQL repo's scan behavior and feature-side
+		// parity.
+		visibleProps := make(map[string]string, len(cs.props))
+		for pk, pv := range cs.props {
+			if pv != "" {
+				visibleProps[pk] = pv
+			}
+		}
+		res := &events.MeterUsageDetailedResult{
+			MeterID:    params.MeterID,
+			Source:     cs.source,
+			Properties: visibleProps,
+			TotalUsage: cs.total,
+			EventCount: cs.eventTC,
+		}
+		if params.AggregationType != types.AggregationSum {
+			res.MaxUsage = cs.total
+		}
+		if params.WindowSize != "" {
+			sort.Slice(cs.buckets, func(i, j int) bool { return cs.buckets[i].Before(cs.buckets[j]) })
+			pts := make([]events.MeterUsageDetailedPoint, 0, len(cs.buckets))
+			for _, bk := range cs.buckets {
+				cell := cs.cells[bk]
+				p := events.MeterUsageDetailedPoint{
+					WindowStart: bk,
+					TotalUsage:  cell.value,
+					EventCount:  cell.eventCount,
+				}
+				if params.AggregationType != types.AggregationSum {
+					p.MaxUsage = cell.value
+				}
+				pts = append(pts, p)
+			}
+			res.Points = pts
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+// inMemoryGroupByDim is the in-memory mirror of the SQL builder's
+// BucketedGroupByDim. Defined locally to avoid the testutil → clickhouse
+// repo import that would create a cycle.
+type inMemoryGroupByDim struct {
+	isSource bool
+	propName string
+}
+
+// parseInMemoryGroupBy mirrors clickhouse.bucketedGroupByDims: honors
+// "source" and "properties.X" entries, drops anything else (feature_id,
+// meter_id, unrecognized values), dedupes.
+func parseInMemoryGroupBy(groupBy []string) []inMemoryGroupByDim {
+	if len(groupBy) == 0 {
+		return nil
+	}
+	out := make([]inMemoryGroupByDim, 0, len(groupBy))
+	seen := make(map[string]struct{}, len(groupBy))
+	for _, g := range groupBy {
+		switch {
+		case g == "source":
+			if _, ok := seen["source"]; ok {
+				continue
+			}
+			seen["source"] = struct{}{}
+			out = append(out, inMemoryGroupByDim{isSource: true})
+		case strings.HasPrefix(g, "properties."):
+			propName := strings.TrimPrefix(g, "properties.")
+			if propName == "" {
+				continue
+			}
+			key := "p:" + propName
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, inMemoryGroupByDim{propName: propName})
+		}
+	}
+	return out
+}
+
+// propsString produces a deterministic serialization for entry.props sorting.
+func propsString(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+m[k])
+	}
+	return strings.Join(out, "|")
 }
 
 // ---------------------------------------------------------------------------
@@ -584,15 +835,17 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 
 	results := make([]*events.MeterUsageDetailedResult, 0, len(byKey))
 	for _, g := range byKey {
+		eventCount := uint64(distinctIDCount(g.records))
+		countUnique := uint64(distinctUniqueHashCount(g.records))
 		res := &events.MeterUsageDetailedResult{
 			MeterID:          g.meterID,
 			Source:           g.source,
 			Properties:       g.properties,
-			TotalUsage:       aggregateScalar(g.records, types.AggregationSum),
+			TotalUsage:       primaryAggregationValue(g.records, params.AggregationTypes, eventCount, countUnique),
 			MaxUsage:         aggregateScalar(g.records, types.AggregationMax),
 			LatestUsage:      aggregateScalar(g.records, types.AggregationLatest),
-			CountUniqueUsage: uint64(distinctUniqueHashCount(g.records)),
-			EventCount:       uint64(distinctIDCount(g.records)),
+			CountUniqueUsage: countUnique,
+			EventCount:       eventCount,
 		}
 
 		// When source isn't a group dimension, ClickHouse returns groupUniqArray(source)
@@ -611,7 +864,7 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 		}
 
 		if params.WindowSize != "" {
-			res.Points = computeDetailedPoints(g.records, params.WindowSize, params.BillingAnchor)
+			res.Points = computeDetailedPoints(g.records, params.WindowSize, params.BillingAnchor, params.AggregationTypes)
 		}
 
 		results = append(results, res)
@@ -631,23 +884,52 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 	return results, nil
 }
 
-// computeDetailedPoints buckets a group's records by WindowSize and computes
-// all five aggregations per bucket (mirroring buildConditionalAggregationColumns).
-func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, anchor *time.Time) []events.MeterUsageDetailedPoint {
+// computeDetailedPoints buckets a group's records by WindowSize and mirrors
+// buildMeterUsageAggregationColumns: total_usage holds the primary aggregation
+// result, per-type columns retain their independent values.
+func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, anchor *time.Time, aggTypes []types.AggregationType) []events.MeterUsageDetailedPoint {
 	buckets := bucketRecords(records, ws, anchor)
 	points := make([]events.MeterUsageDetailedPoint, 0, len(buckets))
 	for _, b := range buckets {
+		eventCount := uint64(distinctIDCount(b.records))
+		countUnique := uint64(distinctUniqueHashCount(b.records))
 		points = append(points, events.MeterUsageDetailedPoint{
 			WindowStart:      b.start,
-			TotalUsage:       aggregateScalar(b.records, types.AggregationSum),
+			TotalUsage:       primaryAggregationValue(b.records, aggTypes, eventCount, countUnique),
 			MaxUsage:         aggregateScalar(b.records, types.AggregationMax),
 			LatestUsage:      aggregateScalar(b.records, types.AggregationLatest),
-			CountUniqueUsage: uint64(distinctUniqueHashCount(b.records)),
-			EventCount:       uint64(distinctIDCount(b.records)),
+			CountUniqueUsage: countUnique,
+			EventCount:       eventCount,
 		})
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 	return points
+}
+
+// primaryAggregationValue returns the value that buildMeterUsageAggregationColumns
+// would put in total_usage for these records and requested aggregation types.
+// Priority matches the repo function: SUM → COUNT → COUNT_UNIQUE → MAX → AVG → LATEST.
+func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.AggregationType, eventCount, countUnique uint64) decimal.Decimal {
+	aggSet := make(map[types.AggregationType]bool, len(aggTypes))
+	for _, t := range aggTypes {
+		aggSet[t] = true
+	}
+	switch {
+	case aggSet[types.AggregationSum]:
+		return aggregateScalar(records, types.AggregationSum)
+	case aggSet[types.AggregationCount]:
+		return decimal.NewFromInt(int64(eventCount))
+	case aggSet[types.AggregationCountUnique]:
+		return decimal.NewFromInt(int64(countUnique))
+	case aggSet[types.AggregationMax]:
+		return aggregateScalar(records, types.AggregationMax)
+	case aggSet[types.AggregationAvg]:
+		return aggregateScalar(records, types.AggregationAvg)
+	case aggSet[types.AggregationLatest]:
+		return aggregateScalar(records, types.AggregationLatest)
+	default:
+		return decimal.Zero
+	}
 }
 
 func propertiesString(p map[string]string) string {
@@ -698,6 +980,27 @@ func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, st
 		end = len(filtered)
 	}
 	return filtered[offset:end], nil
+}
+
+// GetByEventID returns the meter_usage record for a single event, or nil if not found.
+func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, r := range s.records {
+		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ID == eventID {
+			// Return minimal copy with only the fields needed for debug response
+			return &events.MeterUsage{
+				Event: events.Event{
+					ID:                 eventID,
+					ExternalCustomerID: r.ExternalCustomerID,
+				},
+				MeterID:  r.MeterID,
+				QtyTotal: r.QtyTotal,
+			}, nil
+		}
+	}
+	return nil, nil
 }
 
 // Ensure interface compliance

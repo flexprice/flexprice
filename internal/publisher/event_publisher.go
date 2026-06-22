@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"go.uber.org/zap"
 )
 
 // EventPublisher handles event publishing across multiple destinations
@@ -32,6 +31,7 @@ func NewEventPublisher(
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	kafkaProducer *kafka.Producer,
+	secondaryProducer *kafka.SecondaryProducer,
 	dynamoClient *dynamodb.Client,
 ) (EventPublisher, error) {
 	publisher := &eventPublisher{
@@ -44,7 +44,14 @@ func NewEventPublisher(
 		if kafkaProducer == nil {
 			return nil, fmt.Errorf("kafka producer is not initialized but it is one of the publish destinations")
 		}
-		publisher.kafkaPublisher = kafka.NewEventPublisher(kafkaProducer, cfg, logger)
+		// kafkaProducer (local) and secondaryProducer (optional second cluster) are both
+		// fx-provided. The kafka event publisher fans out to every write-enabled cluster
+		// (AWS→GCP migration, GCP-CUTOVER-STEPWISE.md).
+		kafkaPublisher, err := kafka.NewEventPublisher(kafkaProducer, secondaryProducer, cfg, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize kafka event publisher: %w", err)
+		}
+		publisher.kafkaPublisher = kafkaPublisher
 	}
 
 	if cfg.Event.PublishDestination == types.PublishToDynamoDB || cfg.Event.PublishDestination == types.PublishToAll {
@@ -66,9 +73,9 @@ func (s *eventPublisher) Publish(ctx context.Context, event *events.Event) error
 	defer s.mu.RUnlock()
 
 	s.logger.With(
-		zap.String("event_id", event.ID),
-		zap.String("event_name", event.EventName),
-		zap.String("destination", string(s.config.PublishDestination)),
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"destination", string(s.config.PublishDestination),
 	).Debug("publishing event")
 
 	switch s.config.PublishDestination {

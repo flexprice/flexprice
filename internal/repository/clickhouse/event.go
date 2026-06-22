@@ -304,9 +304,10 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 				value = decimal.NewFromUint64(countValue)
 			case types.AggregationMax, types.AggregationSum:
 				if params.BucketSize != "" {
+					groupByProperty := events.FirstGroupByProperty(params.GroupBy)
 					hasGroupBy := params.AggregationType == types.AggregationMax &&
-						params.GroupByProperty != "" &&
-						validateGroupByProperty(params.GroupByProperty) == nil
+						groupByProperty != "" &&
+						validateGroupByProperty(groupByProperty) == nil
 
 					bucketTotal, bucketValue, bucketTime, groupKey, err := scanBucketedRow(rows, hasGroupBy)
 					if err != nil {
@@ -447,7 +448,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 
 	query, queryParams := qb.Build()
 
-	r.logger.Debugw("executing filter groups query",
+	r.logger.Debug(ctx, "executing filter groups query",
 		"aggregation_type", params.AggregationType,
 		"event_name", params.UsageParams.EventName,
 		"filter_groups", len(params.FilterGroups),
@@ -660,7 +661,7 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	r.logger.Debugw("executing get events query",
+	r.logger.Debug(ctx, "executing get events query",
 		"query", baseQuery,
 		"args", args)
 
@@ -799,7 +800,7 @@ func (r *EventRepository) FindUnprocessedEvents(ctx context.Context, params *eve
 		query += " LIMIT 100"
 	}
 
-	r.logger.Debugw("executing find unprocessed events query",
+	r.logger.Debug(ctx, "executing find unprocessed events query",
 		"query", query,
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
@@ -931,7 +932,7 @@ func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Cont
 		query += " LIMIT 100"
 	}
 
-	r.logger.Debugw("executing find unprocessed events query",
+	r.logger.Debug(ctx, "executing find unprocessed events query",
 		"query", query,
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
@@ -1034,7 +1035,7 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 	}
 	query += " ORDER BY event_name"
 
-	r.logger.Debugw("executing get distinct event names query",
+	r.logger.Debug(ctx, "executing get distinct event names query",
 		"external_customer_id_count", len(externalCustomerIDs),
 		"start_time", startTime,
 		"end_time", endTime)
@@ -1070,7 +1071,7 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("retrieved distinct event names",
+	r.logger.Debug(ctx, "retrieved distinct event names",
 		"external_customer_id_count", len(externalCustomerIDs),
 		"event_count", len(eventNames))
 
@@ -1119,7 +1120,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 
 		rows, err := r.store.GetConn().Query(ctx, windowedQuery, args...)
 		if err != nil {
-			r.logger.Errorw("failed to get windowed event count",
+			r.logger.Error(ctx, "failed to get windowed event count",
 				"error", err,
 				"start_time", startTime,
 				"end_time", endTime,
@@ -1135,7 +1136,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 		for rows.Next() {
 			var point events.EventCountPoint
 			if err := rows.Scan(&point.Timestamp, &point.EventCount); err != nil {
-				r.logger.Errorw("failed to scan windowed event count",
+				r.logger.Error(ctx, "failed to scan windowed event count",
 					"error", err)
 				SetSpanError(span, err)
 				return nil, ierr.WithError(err).
@@ -1181,7 +1182,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 		var totalCount uint64
 		err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&totalCount)
 		if err != nil {
-			r.logger.Errorw("failed to get total event count",
+			r.logger.Error(ctx, "failed to get total event count",
 				"error", err,
 				"start_time", startTime,
 				"end_time", endTime)
@@ -1306,7 +1307,7 @@ func (r *EventRepository) GetDistinctExternalCustomerIDs(ctx context.Context, st
 		args = append(args, endTime)
 	}
 
-	r.logger.Debugw("executing get distinct external customer ids query",
+	r.logger.Debug(ctx, "executing get distinct external customer ids query",
 		"start_time", startTime,
 		"end_time", endTime)
 

@@ -12,7 +12,7 @@ Billing is **scheduled and event-driven**:
 
 Billing threads multiple engines:
 
-1. **Subscription-period evaluation** selects applicable price components (seat, tiered meter, addons, commitments) — anchored in **`internal/service/billing.go`** (and specialized files like billing meter usage splits).
+1. **Subscription-period evaluation** selects applicable price components (seat, tiered meter, addons, commitments) — anchored in **`internal/ee/service/billing.go`** (and specialized files like billing meter usage splits).
 2. **Usage retrieval** leverages ClickHouse analytics repositories + feature trackers previously populated (`event-processing` pipeline).
 3. **Proration & tax** calculators (`domain/proration` + tax services).
 4. **Invoice materialization**: line items aggregated, persisted via Ent invoice repositories (**`BillingService`** + **`InvoiceService`** interplay).
@@ -22,7 +22,7 @@ Temporal workflows encapsulate risky multi-step arcs (billing runs, integrations
 
 ## Modules touched
 
-- Core: `internal/service/billing*.go`, `subscription.go`, `invoice.go`, `payment*.go`
+- Core: `internal/ee/service/billing*.go`, `subscription.go`, `invoice.go`, `payment*.go`
 - Temporal: workflows under `internal/temporal/workflows/subscription`, `invoice`, `cron`
 - Domain: pricing, entitlement, invoice, wallet, coupons, addons
 - Integrations when external sync required post-billing milestones

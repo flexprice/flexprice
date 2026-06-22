@@ -484,7 +484,7 @@ func TestInMemoryPriceUnitStore_DeepCopy(t *testing.T) {
 		Code:           "COPY_TEST",
 		Symbol:         "C",
 		BaseCurrency:   "USD",
-		ConversionRate: decimal.NewFromFloat(0.01),		
+		ConversionRate: decimal.NewFromFloat(0.01),
 		EnvironmentID:  "test-env",
 		Metadata:       map[string]string{"key1": "value1", "key2": "value2"},
 		BaseModel: types.BaseModel{

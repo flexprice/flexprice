@@ -51,7 +51,7 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 		}
 		for _, t := range taxesResp.Taxes {
 			if t.IsDefaultTax {
-				s.logger.Debugw("resolved default tax for item", "tax_id", t.TaxID, "tax_name", t.TaxName)
+				s.logger.Debug(ctx, "resolved default tax for item", "tax_id", t.TaxID, "tax_name", t.TaxName)
 				return &ItemTaxResolution{TaxID: t.TaxID, IsTaxable: true}, nil
 			}
 		}
@@ -66,12 +66,12 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 	}
 	for _, e := range exemptions {
 		if e.TaxExemptionCode == FLEXPRICE_STANDARD_EXEMPTION {
-			s.logger.Debugw("using existing tax exemption for item", "tax_exemption_id", e.TaxExemptionID)
+			s.logger.Debug(ctx, "using existing tax exemption for item", "tax_exemption_id", e.TaxExemptionID)
 			return &ItemTaxResolution{TaxExemptionID: e.TaxExemptionID, IsTaxable: false}, nil
 		}
 	}
 
-	s.logger.Infow("creating FLEXPRICE_STANDARD_EXEMPTION in Zoho Books")
+	s.logger.Info(ctx, "creating FLEXPRICE_STANDARD_EXEMPTION in Zoho Books")
 	created, err := s.client.CreateTaxExemption(ctx, &CreateTaxExemptionRequest{
 		TaxExemptionCode: FLEXPRICE_STANDARD_EXEMPTION,
 		Description:      "Standard tax exemption for FlexPrice items",
@@ -87,7 +87,7 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 			WithHint("failed to create FLEXPRICE_STANDARD_EXEMPTION in Zoho Books").
 			Mark(ierr.ErrInternal)
 	}
-	s.logger.Infow("created FLEXPRICE_STANDARD_EXEMPTION", "tax_exemption_id", created.TaxExemptionID)
+	s.logger.Info(ctx, "created FLEXPRICE_STANDARD_EXEMPTION", "tax_exemption_id", created.TaxExemptionID)
 	return &ItemTaxResolution{TaxExemptionID: created.TaxExemptionID, IsTaxable: false}, nil
 }
 

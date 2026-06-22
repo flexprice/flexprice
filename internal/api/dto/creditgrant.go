@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/errors"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
@@ -450,23 +449,8 @@ func (r *CancelFutureSubscriptionGrantsRequest) Validate() error {
 		return err
 	}
 
-	// EffectiveDate is optional - if not provided, it defaults to now in the implementation
-	// Only validate if it's provided
-	if r.EffectiveDate != nil && !r.EffectiveDate.IsZero() {
-		// Allow dates that are at or within 1 minute of the current time
-		// This accounts for timing differences between date calculation and validation,
-		now := time.Now().UTC()
-		tolerance := 1 * time.Minute
-		if r.EffectiveDate.Before(now.Add(-tolerance)) {
-			return errors.NewError("effective_date must be at or after the current time (within tolerance)").
-				WithHint("Please provide a valid effective date that is not too far in the past").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date": r.EffectiveDate,
-					"current_time":   now,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
+	// EffectiveDate is optional; when omitted, DeleteCreditGrant defaults to now.
+	// Past dates are valid (e.g. backdated immediate subscription cancellation).
 
 	return nil
 }

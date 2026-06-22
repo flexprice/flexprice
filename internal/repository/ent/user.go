@@ -28,7 +28,7 @@ func NewUserRepository(client postgres.IClient, logger *logger.Logger) domainUse
 
 // Create creates a new user
 func (r *userRepository) Create(ctx context.Context, user *domainUser.User) error {
-	r.logger.Debugw("creating user", "user_id", user.ID, "email", user.Email, "tenant_id", user.TenantID)
+	r.logger.Debug(ctx, "creating user", "user_id", user.ID, "email", user.Email, "tenant_id", user.TenantID)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "user", "create", map[string]interface{}{
@@ -54,6 +54,9 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 	// Set email only if it's not empty (service accounts have no email)
 	if user.Email != "" {
 		builder.SetEmail(user.Email)
+	}
+	if user.Name != "" {
+		builder.SetName(user.Name)
 	}
 	if user.Metadata != nil {
 		builder.SetMetadata(user.Metadata)
@@ -104,6 +107,12 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 	if user.Metadata != nil {
 		updateQuery = updateQuery.SetMetadata(user.Metadata)
 	}
+	if user.Name != "" {
+		updateQuery = updateQuery.SetName(user.Name)
+	}
+	if user.Status != "" {
+		updateQuery = updateQuery.SetStatus(string(user.Status))
+	}
 
 	if _, err := updateQuery.Save(ctx); err != nil {
 		SetSpanError(span, err)
@@ -124,6 +133,58 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 				"tenant_id": tenantID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+// Delete soft-deletes a user by setting status to archived
+func (r *userRepository) Delete(ctx context.Context, id string) error {
+	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
+	if !ok {
+		return ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "user", "delete", map[string]interface{}{
+		"user_id":   id,
+		"tenant_id": tenantID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	affected, err := client.User.Update().
+		Where(
+			entUser.ID(id),
+			entUser.TenantID(tenantID),
+			entUser.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(time.Now().UTC()).
+		Save(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to archive user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   id,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		return ierr.NewError("user not found").
+			WithHint("User not found or already archived").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   id,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	SetSpanSuccess(span)

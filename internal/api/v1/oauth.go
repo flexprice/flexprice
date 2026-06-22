@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -110,7 +110,7 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("initiated OAuth flow",
+	h.logger.Info(c.Request.Context(), "initiated OAuth flow",
 		"session_id", sessionID,
 		"provider", provider,
 		"tenant_id", tenantID)
@@ -161,7 +161,7 @@ func (h *OAuthHandler) CompleteOAuth(c *gin.Context) {
 	// Validate CSRF state (constant-time comparison when lengths match)
 	if len(session.CSRFState) != len(req.State) ||
 		subtle.ConstantTimeCompare([]byte(session.CSRFState), []byte(req.State)) != 1 {
-		h.logger.Warnw("CSRF state mismatch detected",
+		h.logger.Info(c.Request.Context(), "CSRF state mismatch detected",
 			"session_id", req.SessionID,
 			"provider", session.Provider,
 			"expected_state_length", len(session.CSRFState),
@@ -176,7 +176,7 @@ func (h *OAuthHandler) CompleteOAuth(c *gin.Context) {
 		return
 	}
 
-	h.logger.Debugw("CSRF state validated successfully",
+	h.logger.Debug(c.Request.Context(), "CSRF state validated successfully",
 		"session_id", req.SessionID,
 		"provider", session.Provider)
 
@@ -205,14 +205,14 @@ func (h *OAuthHandler) CompleteOAuth(c *gin.Context) {
 	// Delete OAuth session from cache (cleanup - success case)
 	if err := h.oauthService.DeleteOAuthSession(ctx, req.SessionID); err != nil {
 		// Log but don't fail - connection was created successfully
-		h.logger.Warnw("failed to delete OAuth session after successful connection",
+		h.logger.Info(c.Request.Context(), "failed to delete OAuth session after successful connection",
 			"session_id", req.SessionID,
 			"provider", provider,
 			"connection_id", connectionID,
 			"error", err)
 	}
 
-	h.logger.Infow("completed OAuth flow",
+	h.logger.Info(c.Request.Context(), "completed OAuth flow",
 		"session_id", req.SessionID,
 		"provider", provider,
 		"connection_id", connectionID)

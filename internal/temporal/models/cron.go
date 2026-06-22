@@ -72,6 +72,19 @@ type OutboundWebhookStaleRetryWorkflowResult struct {
 	Failed    int `json:"failed"`
 }
 
+// ===================== Paddle Invoice Pull Sync =====================
+
+// PaddleInvoicePullSyncCronInput is the input for PaddleInvoicePullSyncCronWorkflow.
+// No fields required — the activity fetches all qualifying invoices itself.
+type PaddleInvoicePullSyncCronInput struct{}
+
+// PaddleInvoicePullSyncCronResult captures fan-out metrics.
+type PaddleInvoicePullSyncCronResult struct {
+	Total     int `json:"total"`
+	Triggered int `json:"triggered"`
+	Failed    int `json:"failed"`
+}
+
 // ===================== Auto invoice threshold billing =====================
 
 // AutoInvoiceThresholdBillingWorkflowInput is the input for AutoInvoiceThresholdBillingWorkflow.

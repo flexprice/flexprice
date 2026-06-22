@@ -12,9 +12,9 @@ import (
 	dto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	domainTenant "github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -166,6 +166,7 @@ func TestTenantStatusMiddleware(t *testing.T) {
 
 	testCases := []struct {
 		name               string
+		skip               string
 		method             string
 		tenantID           string
 		caller             callerCtx

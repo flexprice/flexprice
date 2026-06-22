@@ -22,7 +22,7 @@ Controlled by **`FLEXPRICE_DEPLOYMENT_MODE`** registrations in `cmd/server/main.
   1. **Poison/DLQ** (Kafka-backed if `kafka.topic_dlq`, else ephemeral gochannel).
   2. Recover panics → correlation IDs → Retry (max retries & backoff coded in router).
   3. Per-handler **`middleware.NewThrottle`** for primary handler(s) guards overload.
-4. Consumers transform incoming messages and persist through **`events.Repository`** ClickHouse-backed implementation (`internal/service/event_consumption.go`).
+4. Consumers transform incoming messages and persist through **`events.Repository`** ClickHouse-backed implementation (`internal/ee/service/event_consumption.go`).
 5. **Post-processing pathway** historically toggled/instrumented separately (`events_post_processing` topics + config blocks). Review yaml + service `EventPostProcessingService` registrations when auditing.
 
 ### Additional trackers (parallel registrations)
@@ -39,7 +39,7 @@ Registered alongside ingestion in **`registerRouterHandlers`** when `includeProc
 ## Modules touched
 
 - API: `internal/api/v1/events*.go`
-- Services: `internal/service/event.go`, `event_consumption.go`, `feature_usage_tracking.go`, `costsheet_usage_tracking.go`, `meter_usage_tracking.go`, `raw_event_consumption.go`, `wallet_balance_alert.go`
+- Services: `internal/ee/service/event.go`, `event_consumption.go`, `feature_usage_tracking.go`, `costsheet_usage_tracking.go`, `meter_usage_tracking.go`, `raw_event_consumption.go`, `wallet_balance_alert.go`
 - Messaging: `internal/pubsub/**`, `internal/kafka/**`
 - Storage: ClickHouse repos under `internal/repository/clickhouse`
 

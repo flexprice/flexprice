@@ -69,7 +69,7 @@ func (r *alertLogsRepository) applyFilters(query *ent.AlertLogsQuery, filter *ty
 func (r *alertLogsRepository) Create(ctx context.Context, al *domainAlertLogs.AlertLog) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating alert log",
+	r.log.Debug(ctx, "creating alert log",
 		"alert_log_id", al.ID,
 		"tenant_id", al.TenantID,
 		"entity_type", al.EntityType,
@@ -191,7 +191,7 @@ func (r *alertLogsRepository) Get(ctx context.Context, id string) (*domainAlertL
 
 func (r *alertLogsRepository) List(ctx context.Context, filter *types.AlertLogFilter) ([]*domainAlertLogs.AlertLog, error) {
 	client := r.client.Reader(ctx)
-	r.log.Debugw("listing alert logs",
+	r.log.Debug(ctx, "listing alert logs",
 		"tenant_id", types.GetTenantID(ctx),
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset(),

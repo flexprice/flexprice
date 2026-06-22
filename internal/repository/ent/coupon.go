@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -36,7 +37,7 @@ func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cach
 func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating coupon",
+	r.log.Debug(ctx, "creating coupon",
 		"coupon_id", c.ID,
 		"tenant_id", c.TenantID,
 		"name", c.Name,
@@ -76,6 +77,9 @@ func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) e
 		SetNillableDurationInPeriods(c.DurationInPeriods)
 
 	// Handle optional fields
+	if code := strings.ToLower(strings.TrimSpace(lo.FromPtr(c.CouponCode))); code != "" {
+		createQuery = createQuery.SetCouponCode(code)
+	}
 	if c.Rules != nil {
 		createQuery = createQuery.SetRules(*c.Rules)
 	}
@@ -90,9 +94,10 @@ func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) e
 
 		if ent.IsConstraintError(err) {
 			return ierr.WithError(err).
-				WithHint("A coupon with this name already exists").
+				WithHint("A published coupon with this code already exists in this environment").
 				WithReportableDetails(map[string]any{
-					"name": c.Name,
+					"name":        c.Name,
+					"coupon_code": c.CouponCode,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
@@ -119,7 +124,7 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting coupon", "coupon_id", id)
+	r.log.Debug(ctx, "getting coupon", "coupon_id", id)
 
 	c, err := client.Coupon.Query().
 		Where(
@@ -151,10 +156,49 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 	return coupon, nil
 }
 
+func (r *couponRepository) GetByCode(ctx context.Context, code string) (*domainCoupon.Coupon, error) {
+	span := StartRepositorySpan(ctx, "coupon", "get_by_code", map[string]interface{}{
+		"coupon_code": code,
+	})
+	defer FinishSpan(span)
+
+	normalised := strings.ToLower(strings.TrimSpace(code))
+	if normalised == "" {
+		return nil, ierr.NewError("coupon_code is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	c, err := client.Coupon.Query().
+		Where(
+			coupon.CouponCode(normalised),
+			coupon.TenantID(types.GetTenantID(ctx)),
+			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+			coupon.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Coupon with code '%s' was not found", code).
+				WithReportableDetails(map[string]any{"coupon_code": code}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get coupon by code").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCoupon.FromEnt(c), nil
+}
+
 func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating coupon",
+	r.log.Debug(ctx, "updating coupon",
 		"coupon_id", c.ID,
 		"tenant_id", c.TenantID,
 		"name", c.Name,
@@ -177,6 +221,13 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
+	if c.CouponCode != nil {
+		if *c.CouponCode == "" {
+			updateQuery = updateQuery.ClearCouponCode()
+		} else {
+			updateQuery = updateQuery.SetCouponCode(strings.ToLower(strings.TrimSpace(*c.CouponCode)))
+		}
+	}
 	if c.Metadata != nil {
 		updateQuery = updateQuery.SetMetadata(*c.Metadata)
 	}
@@ -214,7 +265,7 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 func (r *couponRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting coupon",
+	r.log.Debug(ctx, "deleting coupon",
 		"coupon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -261,7 +312,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("incrementing coupon redemptions",
+	r.log.Debug(ctx, "incrementing coupon redemptions",
 		"coupon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -443,6 +494,10 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(coupon.IDIn(f.CouponIDs...))
 	}
 
+	if len(f.CouponCodes) > 0 {
+		query = query.Where(coupon.CouponCodeIn(f.CouponCodes...))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CouponQuery, predicate.Coupon](
 			query,
@@ -483,7 +538,7 @@ func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Co
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
 	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "key", cacheKey)
+	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
 func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
@@ -495,7 +550,7 @@ func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoup
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return coupon
 		}
 	}
@@ -513,5 +568,5 @@ func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon
 
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

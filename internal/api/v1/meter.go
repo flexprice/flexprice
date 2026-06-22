@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -25,7 +25,7 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.CreateMeterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -34,7 +34,7 @@ func (h *MeterHandler) CreateMeter(c *gin.Context) {
 
 	meter, err := h.service.CreateMeter(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to create meter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create meter", "error", err)
 		c.Error(err)
 		return
 	}
@@ -46,7 +46,7 @@ func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 	ctx := c.Request.Context()
 	var filter types.MeterFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -59,7 +59,7 @@ func (h *MeterHandler) GetAllMeters(c *gin.Context) {
 
 	response, err := h.service.GetMeters(ctx, &filter)
 	if err != nil {
-		h.log.Error("Failed to get meters", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get meters", "error", err)
 		c.Error(err)
 		return
 	}
@@ -72,7 +72,7 @@ func (h *MeterHandler) GetMeter(c *gin.Context) {
 	ctx := c.Request.Context()
 	meter, err := h.service.GetMeter(ctx, id)
 	if err != nil {
-		h.log.Error("Failed to get meter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get meter", "error", err)
 		c.Error(err)
 		return
 	}
@@ -83,7 +83,7 @@ func (h *MeterHandler) DisableMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
 	if err := h.service.DisableMeter(ctx, id); err != nil {
-		h.log.Error("Failed to disable meter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to disable meter", "error", err)
 		c.Error(err)
 		return
 	}
@@ -94,7 +94,7 @@ func (h *MeterHandler) DeleteMeter(c *gin.Context) {
 	id := c.Param("id")
 	ctx := c.Request.Context()
 	if err := h.service.DisableMeter(ctx, id); err != nil {
-		h.log.Error("Failed to delete meter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete meter", "error", err)
 		c.Error(err)
 		return
 	}
@@ -113,7 +113,7 @@ func (h *MeterHandler) UpdateMeter(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.UpdateMeterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request payload").
 			Mark(ierr.ErrValidation))
@@ -129,7 +129,7 @@ func (h *MeterHandler) UpdateMeter(c *gin.Context) {
 
 	meter, err := h.service.UpdateMeter(ctx, id, req.Filters)
 	if err != nil {
-		h.log.Error("Failed to update meter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update meter", "error", err)
 		c.Error(err)
 		return
 	}

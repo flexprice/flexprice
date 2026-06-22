@@ -124,7 +124,8 @@ func (f *flexpriceAuth) ValidateToken(ctx context.Context, token string) (*auth.
 		tenantID = types.DefaultTenantID
 	}
 
-	return &auth.Claims{UserID: userID, TenantID: tenantID}, nil
+	envID, _ := claims["environment_id"].(string)
+	return &auth.Claims{UserID: userID, TenantID: tenantID, EnvironmentID: envID}, nil
 }
 
 func (f *flexpriceAuth) generateToken(userID, tenantID string) (string, error) {
@@ -140,6 +141,38 @@ func (f *flexpriceAuth) generateToken(userID, tenantID string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(f.AuthConfig.Secret))
+}
+
+// GenerateDevToken creates a short-lived JWT for internal developer testing.
+// Uses the flexprice claim schema: { user_id, tenant_id, environment_id }.
+// email is accepted for interface compatibility but not embedded in the token.
+func (f *flexpriceAuth) GenerateDevToken(tenantID, environmentID, userID, _ string, expiryHours int) (string, time.Time, error) {
+	if tenantID == "" {
+		return "", time.Time{}, ierr.NewError("tenantID is required").
+			WithHint("Provide a tenant ID to generate a dev token").
+			Mark(ierr.ErrValidation)
+	}
+
+	expiresAt := time.Now().Add(time.Duration(expiryHours) * time.Hour)
+
+	claims := jwt.MapClaims{
+		"tenant_id": tenantID,
+		"user_id":   userID,
+		"exp":       expiresAt.Unix(),
+		"iat":       time.Now().Unix(),
+	}
+	if environmentID != "" {
+		claims["environment_id"] = environmentID
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(f.AuthConfig.Secret))
+	if err != nil {
+		return "", time.Time{}, ierr.WithError(err).
+			WithHint("Failed to sign dev token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, expiresAt, nil
 }
 
 func (f *flexpriceAuth) AssignUserToTenant(ctx context.Context, userID string, tenantID string) error {

@@ -71,13 +71,13 @@ type TransformedNewRow struct {
 
 // OutputRow is the final output format.
 type OutputRow struct {
-	FeatureName        string
-	EventName          string
-	AggregationType    string
-	AggregationField   string
-	PricePerUnit       string
-	IsNew              bool // true = new feature not in old CSV
-	HasPricingChanged  bool // true = existed in old CSV but price changed in new CSV
+	FeatureName       string
+	EventName         string
+	AggregationType   string
+	AggregationField  string
+	PricePerUnit      string
+	IsNew             bool // true = new feature not in old CSV
+	HasPricingChanged bool // true = existed in old CSV but price changed in new CSV
 }
 
 // ============================================================================
@@ -318,12 +318,12 @@ func buildOutput(oldRows []OldRow, oldRowMap map[string]OldRow, newRowMap map[st
 
 		outRow := OutputRow{
 			FeatureName:       old.FeatureName,      // PRESERVED exactly
-			EventName:         old.EventName,         // PRESERVED exactly
-			AggregationType:   old.AggregationType,   // PRESERVED exactly
-			AggregationField:  old.AggregationField,  // PRESERVED exactly
-			PricePerUnit:      roundedPrice,           // Rounded to fit DB
-			IsNew:             false,                  // Exists in old CSV
-			HasPricingChanged: false,                  // Default: no change
+			EventName:         old.EventName,        // PRESERVED exactly
+			AggregationType:   old.AggregationType,  // PRESERVED exactly
+			AggregationField:  old.AggregationField, // PRESERVED exactly
+			PricePerUnit:      roundedPrice,         // Rounded to fit DB
+			IsNew:             false,                // Exists in old CSV
+			HasPricingChanged: false,                // Default: no change
 		}
 
 		// Check if there's a matching entry in the new CSV

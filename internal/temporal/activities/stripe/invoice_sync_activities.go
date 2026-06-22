@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -25,7 +25,7 @@ func NewInvoiceSyncActivities(params service.ServiceParams, logger *logger.Logge
 
 // SyncInvoiceToStripe syncs an invoice to Stripe via the service layer.
 func (a *InvoiceSyncActivities) SyncInvoiceToStripe(ctx context.Context, input models.StripeInvoiceSyncWorkflowInput) error {
-	a.logger.Infow("syncing invoice to Stripe",
+	a.logger.Info(ctx, "syncing invoice to Stripe",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -35,14 +35,14 @@ func (a *InvoiceSyncActivities) SyncInvoiceToStripe(ctx context.Context, input m
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
 	if err := a.invoiceService.SyncInvoiceToStripeIfEnabled(ctx, input.InvoiceID, input.CollectionMethod); err != nil {
-		a.logger.Errorw("failed to sync invoice to Stripe",
+		a.logger.Error(ctx, "failed to sync invoice to Stripe",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Stripe",
+	a.logger.Info(ctx, "successfully synced invoice to Stripe",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID)
 

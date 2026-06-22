@@ -1,4 +1,12 @@
 {
+  "super_admin": {
+    "name": "Super Admin",
+    "description": "Full access to all resources.",
+    "permissions": {
+      "*": ["*"]
+    }
+  },
+  
   "event_ingestor": {
     "name": "Event Ingestor",
     "description": "Limited to ingesting events and batch events. Use for services that only send events.",

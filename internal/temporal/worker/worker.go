@@ -62,7 +62,7 @@ func (wm *temporalWorkerManagerImpl) GetOrCreateWorker(taskQueue types.TemporalT
 	}
 
 	wm.workers[taskQueue] = workerInstance
-	wm.logger.Info("Created worker", "task_queue", taskQueue.String())
+	wm.logger.Info(context.Background(), "Created worker", "task_queue", taskQueue.String())
 	return workerInstance, nil
 }
 
@@ -103,7 +103,7 @@ func (wm *temporalWorkerManagerImpl) StopWorker(taskQueue types.TemporalTaskQueu
 			return err
 		}
 		delete(wm.workers, taskQueue)
-		wm.logger.Info("Stopped worker", "task_queue", taskQueue.String())
+		wm.logger.Info(context.Background(), "Stopped worker", "task_queue", taskQueue.String())
 	}
 	return nil
 }
@@ -117,9 +117,9 @@ func (wm *temporalWorkerManagerImpl) StopAllWorkers() error {
 	for taskQueue, w := range wm.workers {
 		if err := w.Stop(context.Background()); err != nil {
 			lastErr = err
-			wm.logger.Error("Failed to stop worker", "task_queue", taskQueue.String(), "error", err)
+			wm.logger.Error(context.Background(), "Failed to stop worker", "task_queue", taskQueue.String(), "error", err)
 		}
-		wm.logger.Info("Stopped worker", "task_queue", taskQueue.String())
+		wm.logger.Info(context.Background(), "Stopped worker", "task_queue", taskQueue.String())
 	}
 	wm.workers = make(map[types.TemporalTaskQueue]*temporalWorkerImpl)
 	return lastErr
@@ -148,11 +148,11 @@ func (w *temporalWorkerImpl) Start(ctx context.Context) error {
 
 	// Start the worker in background and immediately return
 	if err := w.worker.Start(); err != nil {
-		w.logger.Error("Worker failed", "task_queue", w.taskQueue.String(), "error", err)
+		w.logger.Error(ctx, "Worker failed", "task_queue", w.taskQueue.String(), "error", err)
 	}
 
 	w.started = true
-	w.logger.Info("Worker started", "task_queue", w.taskQueue.String())
+	w.logger.Info(ctx, "Worker started", "task_queue", w.taskQueue.String())
 	return nil
 }
 
@@ -167,7 +167,7 @@ func (w *temporalWorkerImpl) Stop(ctx context.Context) error {
 
 	w.worker.Stop()
 	w.started = false
-	w.logger.Info("Stopped worker", "task_queue", w.taskQueue.String())
+	w.logger.Info(ctx, "Stopped worker", "task_queue", w.taskQueue.String())
 	return nil
 }
 
@@ -186,7 +186,7 @@ func (w *temporalWorkerImpl) RegisterWorkflow(workflow interface{}) error {
 			Mark(errors.ErrValidation)
 	}
 	w.worker.RegisterWorkflow(workflow)
-	w.logger.Info("Registered workflow", "task_queue", w.taskQueue.String())
+	w.logger.Info(context.Background(), "Registered workflow", "task_queue", w.taskQueue.String())
 	return nil
 }
 
@@ -198,6 +198,6 @@ func (w *temporalWorkerImpl) RegisterActivity(activity interface{}) error {
 			Mark(errors.ErrValidation)
 	}
 	w.worker.RegisterActivity(activity)
-	w.logger.Info("Registered activity", "task_queue", w.taskQueue.String())
+	w.logger.Info(context.Background(), "Registered activity", "task_queue", w.taskQueue.String())
 	return nil
 }

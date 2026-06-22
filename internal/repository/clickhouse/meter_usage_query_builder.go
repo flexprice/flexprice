@@ -12,6 +12,77 @@ import (
 // validMeterUsageGroupByPattern matches safe property names (alphanumeric, underscores, dots).
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
+// BucketedGroupByDim describes one group_by dimension supported by the bucketed
+// query: "source" and "properties.X" only. Public so the repo's scan code can
+// read the alias / property name without re-parsing the input.
+type BucketedGroupByDim struct {
+	// kind: "source" or "property"
+	kind string
+	// PropertyName: the JSON property name when kind=="property", "" when kind=="source"
+	PropertyName string
+	// sql is the column expression used inside the inner CTE
+	sql string
+	// alias is the column alias used in the SELECT and the outer GROUP BY/ORDER BY
+	alias string
+}
+
+// IsSource reports whether this dim is the "source" axis.
+func (d BucketedGroupByDim) IsSource() bool { return d.kind == "source" }
+
+// IsProperty reports whether this dim is a property axis.
+func (d BucketedGroupByDim) IsProperty() bool { return d.kind == "property" }
+
+// Alias is the output column alias for the dim (used by the scanner).
+func (d BucketedGroupByDim) Alias() string { return d.alias }
+
+// bucketedGroupByDims parses the GroupBy list into the dimensions
+// BuildBucketedQuery / BuildBucketedAggregateQuery know how to emit.
+// feature_id / meter_id are silently dropped (implicit at the meter level);
+// unknown entries and invalid property names are also dropped. Duplicate names
+// are deduped. Empty input → nil → caller takes the non-grouped path.
+func bucketedGroupByDims(groupBy []string) []BucketedGroupByDim {
+	if len(groupBy) == 0 {
+		return nil
+	}
+	out := make([]BucketedGroupByDim, 0, len(groupBy))
+	seen := make(map[string]struct{}, len(groupBy))
+	for _, g := range groupBy {
+		switch {
+		case g == "source":
+			if _, ok := seen["source"]; ok {
+				continue
+			}
+			seen["source"] = struct{}{}
+			out = append(out, BucketedGroupByDim{
+				kind:  "source",
+				sql:   "source",
+				alias: "grp_source",
+			})
+		case strings.HasPrefix(g, "properties."):
+			propName := strings.TrimPrefix(g, "properties.")
+			if propName == "" || !validMeterUsageGroupByPattern.MatchString(propName) {
+				continue
+			}
+			key := "p:" + propName
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			alias := "prop_" + strings.ReplaceAll(propName, ".", "_")
+			out = append(out, BucketedGroupByDim{
+				kind:         "property",
+				PropertyName: propName,
+				sql:          fmt.Sprintf("JSONExtractString(properties, '%s')", propName),
+				alias:        alias,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // MeterUsageQueryBuilder constructs SQL queries for the meter_usage table.
 // It encapsulates WHERE clause construction, FINAL handling, and window grouping
 // so that aggregators only need to specify their aggregation expression.
@@ -106,7 +177,62 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		conditions = append(conditions, "unique_hash != ''")
 	}
 
+	// Source filter
+	if clause, addArgs := buildSourceFilterClause(params.Sources); clause != "" {
+		conditions = append(conditions, clause)
+		args = append(args, addArgs...)
+	}
+
+	// Property filters
+	if clauses, addArgs := buildPropertyFilterClauses(params.PropertyFilters); len(clauses) > 0 {
+		conditions = append(conditions, clauses...)
+		args = append(args, addArgs...)
+	}
+
 	return strings.Join(conditions, " AND "), args
+}
+
+// buildSourceFilterClause builds the "source IN (?, ?, …)" fragment.
+// Returns ("", nil) when sources is empty.
+func buildSourceFilterClause(sources []string) (string, []interface{}) {
+	if len(sources) == 0 {
+		return "", nil
+	}
+	placeholders := make([]string, len(sources))
+	args := make([]interface{}, 0, len(sources))
+	for i, src := range sources {
+		placeholders[i] = "?"
+		args = append(args, src)
+	}
+	return fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ", ")), args
+}
+
+// buildPropertyFilterClauses builds JSONExtractString filter fragments. First clause
+// is "properties != ”" so the JSON extracts work; remaining clauses are per-property
+// equality (one value) or IN (multi-value). Returns (nil, nil) for empty filters.
+func buildPropertyFilterClauses(filters map[string][]string) ([]string, []interface{}) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	clauses := make([]string, 0, len(filters))
+	args := make([]interface{}, 0, len(filters))
+	for property, values := range filters {
+		if len(values) == 1 {
+			clauses = append(clauses, "JSONExtractString(properties, ?) = ?")
+			args = append(args, property, values[0])
+		} else if len(values) > 1 {
+			placeholders := make([]string, len(values))
+			for i := range values {
+				placeholders[i] = "?"
+			}
+			clauses = append(clauses, fmt.Sprintf("JSONExtractString(properties, ?) IN (%s)", strings.Join(placeholders, ",")))
+			args = append(args, property)
+			for _, v := range values {
+				args = append(args, v)
+			}
+		}
+	}
+	return clauses, args
 }
 
 // BuildFinalClause returns FINAL keyword and SETTINGS for ReplacingMergeTree dedup
@@ -147,29 +273,44 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		tableRef = "meter_usage " + finalClause
 	}
 
-	// With GroupBy: 3-level aggregation
-	if params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty) {
-		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", params.GroupByProperty)
+	// With GroupBy (billing per-KRN, source, properties.*): per-(bucket, dim
+	// combo) rows. Same shape downstream consumers used to get from the legacy
+	// group_key path — multiple Values per WindowSize, which
+	// CalculateCostFromUsageResults prices independently and
+	// aggregateUsageResultsByWindow rolls up. Analytics callers go through
+	// BuildBucketedAggregateQuery instead for per-combo totals + separate
+	// Points; this method is for billing and the legacy path.
+	if dims := bucketedGroupByDims(params.GroupBy); len(dims) > 0 {
+		selectExprs := make([]string, 0, len(dims))
+		aliases := make([]string, 0, len(dims))
+		for _, d := range dims {
+			selectExprs = append(selectExprs, fmt.Sprintf("%s as %s", d.sql, d.alias))
+			aliases = append(aliases, d.alias)
+		}
+		dimSelects := strings.Join(selectExprs, ",\n\t\t\t\t\t")
+		dimGroupBy := strings.Join(aliases, ", ")
 
 		query := fmt.Sprintf(`
 			WITH per_group AS (
 				SELECT
 					%s as bucket_start,
-					%s as group_key,
-					%s(qty_total) as group_value
+					%s,
+					%s(qty_total) as group_value,
+					COUNT(DISTINCT id) as group_event_count
 				FROM %s
 				WHERE %s
-				GROUP BY bucket_start, group_key
+				GROUP BY bucket_start, %s
 			)
 			SELECT
 				(SELECT sum(group_value) FROM per_group) as total,
+				(SELECT sum(group_event_count) FROM per_group) as total_event_count,
 				bucket_start as timestamp,
 				group_value as value,
-				group_key
+				group_event_count as event_count
 			FROM per_group
-			ORDER BY bucket_start, group_key
+			ORDER BY bucket_start, %s
 			%s
-		`, bucketWindow, groupByExpr, aggFunc, tableRef, where, settings)
+		`, bucketWindow, dimSelects, aggFunc, tableRef, where, dimGroupBy, dimGroupBy, settings)
 
 		return query, args
 	}
@@ -179,7 +320,8 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		WITH %s AS (
 			SELECT
 				%s as bucket_start,
-				%s(qty_total) as %s
+				%s(qty_total) as %s,
+				COUNT(DISTINCT id) as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start
@@ -187,8 +329,10 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		)
 		SELECT
 			(SELECT sum(%s) FROM %s) as total,
+			(SELECT sum(bucket_event_count) FROM %s) as total_event_count,
 			bucket_start as timestamp,
-			%s as value
+			%s as value,
+			bucket_event_count as event_count
 		FROM %s
 		ORDER BY bucket_start
 		%s
@@ -197,9 +341,132 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		bucketWindow, aggFunc, bucketColumnName,
 		tableRef, where,
 		bucketColumnName, bucketTableName,
+		bucketTableName,
 		bucketColumnName,
 		bucketTableName,
 		settings)
+
+	return query, args
+}
+
+// BuildBucketedAggregateQuery returns a per-combo aggregate query for the
+// bucketed-meter analytics path with GroupBy (subset of {"source",
+// "properties.X"}). Two-level CTE — inner per-(bucket, combo), outer per-combo —
+// so ClickHouse does the bucket→total roll-up and we ship one row per combo
+// instead of bucket × combo rows. Mirrors feature_usage's getMaxBucketTotals.
+//
+// Output columns (in order):
+//
+//	<dim aliases (one per GroupBy entry)>, group_total, group_event_count
+//
+// Returns ("", nil) when params.GroupBy yields no valid dims — caller should
+// fall back to BuildBucketedQuery in that case.
+func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.MeterUsageQueryParams) (string, []interface{}, []BucketedGroupByDim) {
+	dims := bucketedGroupByDims(params.GroupBy)
+	if len(dims) == 0 {
+		return "", nil, nil
+	}
+
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	where, args := qb.BuildWhereClause(params)
+	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
+
+	aggFunc := "MAX"
+	if params.AggregationType == types.AggregationSum {
+		aggFunc = "SUM"
+	}
+	tableRef := "meter_usage"
+	if finalClause != "" {
+		tableRef = "meter_usage " + finalClause
+	}
+
+	selectExprs := make([]string, 0, len(dims))
+	aliases := make([]string, 0, len(dims))
+	for _, d := range dims {
+		selectExprs = append(selectExprs, fmt.Sprintf("%s as %s", d.sql, d.alias))
+		aliases = append(aliases, d.alias)
+	}
+	dimSelects := strings.Join(selectExprs, ",\n\t\t\t\t\t")
+	dimAliases := strings.Join(aliases, ", ")
+
+	query := fmt.Sprintf(`
+		WITH per_group_bucket AS (
+			SELECT
+				%s as bucket_start,
+				%s,
+				%s(qty_total) as bucket_value,
+				COUNT(DISTINCT id) as bucket_event_count
+			FROM %s
+			WHERE %s
+			GROUP BY bucket_start, %s
+		)
+		SELECT
+			%s,
+			sum(bucket_value) as group_total,
+			sum(bucket_event_count) as group_event_count
+		FROM per_group_bucket
+		GROUP BY %s
+		ORDER BY %s
+		%s
+	`,
+		bucketWindow, dimSelects, aggFunc, tableRef, where, dimAliases,
+		dimAliases, dimAliases, dimAliases, settings)
+
+	return query, args, dims
+}
+
+// BuildBucketedPointsQuery returns a per-bucket time-series query narrowed to
+// a single (source, properties) combo. Mirrors feature_usage's
+// getAnalyticsPoints — invoked once per row returned by
+// BuildBucketedAggregateQuery to populate that result's Points slice.
+//
+// comboSource is "" when "source" is not in GroupBy; comboProps maps each
+// property dim's name → its concrete value for this combo (empty map allowed).
+//
+// Output columns: bucket_start, bucket_value, bucket_event_count.
+func (qb *MeterUsageQueryBuilder) BuildBucketedPointsQuery(
+	params *events.MeterUsageQueryParams,
+	dims []BucketedGroupByDim,
+	comboSource string,
+	comboProps map[string]string,
+) (string, []interface{}) {
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	where, args := qb.BuildWhereClause(params)
+	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
+
+	aggFunc := "MAX"
+	if params.AggregationType == types.AggregationSum {
+		aggFunc = "SUM"
+	}
+	tableRef := "meter_usage"
+	if finalClause != "" {
+		tableRef = "meter_usage " + finalClause
+	}
+
+	// Append combo equality predicates so this query returns only the rows
+	// that contributed to one specific aggregate row.
+	extraWhere := where
+	for _, d := range dims {
+		if d.IsSource() {
+			extraWhere += " AND source = ?"
+			args = append(args, comboSource)
+		} else if d.IsProperty() {
+			extraWhere += " AND JSONExtractString(properties, ?) = ?"
+			args = append(args, d.PropertyName, comboProps[d.PropertyName])
+		}
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s as bucket_start,
+			%s(qty_total) as bucket_value,
+			COUNT(DISTINCT id) as bucket_event_count
+		FROM %s
+		WHERE %s
+		GROUP BY bucket_start
+		ORDER BY bucket_start
+		%s
+	`, bucketWindow, aggFunc, tableRef, extraWhere, settings)
 
 	return query, args
 }
@@ -251,34 +518,15 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedWhereClause(params *events.MeterU
 	}
 
 	// Source filter
-	if len(params.Sources) > 0 {
-		placeholders := make([]string, len(params.Sources))
-		for i, src := range params.Sources {
-			placeholders[i] = "?"
-			args = append(args, src)
-		}
-		conditions = append(conditions, fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ", ")))
+	if clause, addArgs := buildSourceFilterClause(params.Sources); clause != "" {
+		conditions = append(conditions, clause)
+		args = append(args, addArgs...)
 	}
 
-	// Property filters — guarded with properties != '' for tenants with empty properties
-	if len(params.PropertyFilters) > 0 {
-		conditions = append(conditions, "properties != ''")
-		for property, values := range params.PropertyFilters {
-			if len(values) == 1 {
-				conditions = append(conditions, "JSONExtractString(properties, ?) = ?")
-				args = append(args, property, values[0])
-			} else if len(values) > 1 {
-				placeholders := make([]string, len(values))
-				for i := range values {
-					placeholders[i] = "?"
-				}
-				conditions = append(conditions, fmt.Sprintf("JSONExtractString(properties, ?) IN (%s)", strings.Join(placeholders, ",")))
-				args = append(args, property)
-				for _, v := range values {
-					args = append(args, v)
-				}
-			}
-		}
+	// Property filters
+	if clauses, addArgs := buildPropertyFilterClauses(params.PropertyFilters); len(clauses) > 0 {
+		conditions = append(conditions, clauses...)
+		args = append(args, addArgs...)
 	}
 
 	return strings.Join(conditions, " AND "), args
@@ -341,7 +589,7 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		return "", nil
 	}
 
-	aggColumns := buildConditionalAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
 	// Start with the base WHERE from the detailed params

@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -157,7 +157,7 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 			Type: string(req.Type),
 		})
 		if err != nil {
-			h.log.Error("failed to create target environment for clone", "error", err)
+			h.log.Error(c.Request.Context(), "failed to create target environment for clone", "error", err)
 			c.Error(err)
 			return
 		}
@@ -166,7 +166,7 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 
 	ts := temporalservice.GetGlobalTemporalService()
 	if ts == nil {
-		h.log.Error("temporal service not available")
+		h.log.Info(c.Request.Context(), "temporal service not available")
 		c.Error(ierr.NewError("temporal service not available").
 			WithHint("Workflow engine is not configured").
 			Mark(ierr.ErrSystem))
@@ -184,7 +184,7 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 		},
 	)
 	if err != nil {
-		h.log.Error("failed to start environment clone workflow", "error", err, "source_env", sourceEnvID, "target_env", targetEnvID)
+		h.log.Error(c.Request.Context(), "failed to start environment clone workflow", "error", err, "source_env", sourceEnvID, "target_env", targetEnvID)
 		c.Error(err)
 		return
 	}

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,7 +31,7 @@ func NewCreditGrantCronHandler(creditGrantService service.CreditGrantService, lo
 //
 // Deprecated: use the Temporal server schedule.
 func (h *CreditGrantCronHandler) ProcessScheduledCreditGrantApplications(c *gin.Context) {
-	h.logger.Infow("starting credit grant scheduled applications cron job - %s", time.Now().UTC().Format(time.RFC3339))
+	h.logger.Info(c.Request.Context(), "starting credit grant scheduled applications cron job - %s", time.Now().UTC().Format(time.RFC3339))
 
 	resp, err := h.creditGrantService.ProcessScheduledCreditGrantApplications(c.Request.Context())
 	if err != nil {

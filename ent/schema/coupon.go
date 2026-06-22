@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -97,6 +98,13 @@ func (Coupon) Fields() []ent.Field {
 		field.JSON("metadata", map[string]string{}).
 			Optional().
 			Comment("Additional metadata for coupon"),
+		field.String("coupon_code").
+			SchemaType(map[string]string{
+				"postgres": "varchar(100)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Human-readable coupon code (e.g. SUMMER20). Stored lowercase. Unique per tenant+environment when published."),
 	}
 }
 
@@ -114,5 +122,9 @@ func (Coupon) Edges() []ent.Edge {
 func (Coupon) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id"),
+		index.Fields("tenant_id", "environment_id", "coupon_code").
+			Unique().
+			Annotations(entsql.IndexWhere("coupon_code IS NOT NULL AND coupon_code != '' AND status = 'published'")).
+			StorageKey("idx_coupon_tenant_environment_coupon_code_unique"),
 	}
 }

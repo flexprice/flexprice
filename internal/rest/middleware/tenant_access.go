@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -17,14 +17,14 @@ func TenantStatusMiddleware(tenantService service.TenantService, logger *logger.
 	return func(c *gin.Context) {
 		tenantID := types.GetTenantID(c.Request.Context())
 		if tenantID == "" {
-			logger.Errorw("tenant id not found", "tenant_id", tenantID)
+			logger.Info(c.Request.Context(), "tenant id not found", "tenant_id", tenantID)
 			c.Next()
 			return
 		}
 
 		status, err := tenantService.GetTenantInternalStatus(c.Request.Context(), tenantID)
 		if err != nil {
-			logger.Errorw("tenant status: failed to load tenant", "tenant_id", tenantID, "error", err)
+			logger.Error(c.Request.Context(), "tenant status: failed to load tenant", "tenant_id", tenantID, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to verify tenant access",
 			})

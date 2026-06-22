@@ -301,7 +301,7 @@ func (r *CostSheetUsageRepository) GetUsageByCostSheetID(ctx context.Context, co
 		GROUP BY feature_id, meter_id, price_id
 	`
 
-	r.logger.Debugw("executing cost sheet usage query",
+	r.logger.Debug(ctx, "executing cost sheet usage query",
 		"cost_sheet_id", costSheetID,
 		"external_customer_id", externalCustomerID,
 		"environment_id", environmentID,
@@ -359,7 +359,7 @@ func (r *CostSheetUsageRepository) GetUsageByCostSheetID(ctx context.Context, co
 	}
 
 	SetSpanSuccess(span)
-	r.logger.Debugw("optimized costsheet usage query completed",
+	r.logger.Debug(ctx, "optimized costsheet usage query completed",
 		"costsheet_id", costSheetID,
 		"feature_count", len(results))
 
@@ -713,7 +713,7 @@ func (r *CostSheetUsageRepository) getSumBucketAnalytics(ctx context.Context, co
 
 		// Temporary: Use standard analytics for SUM bucket features
 		// This will be correct for totals but won't apply proper bucket logic
-		r.logger.Warnw("SUM bucket feature detected but full bucket logic not yet implemented, using standard aggregation",
+		r.logger.Info(ctx, "SUM bucket feature detected but full bucket logic not yet implemented, using standard aggregation",
 			"feature_id", featureID,
 			"bucket_size", featureInfo.BucketSize,
 		)

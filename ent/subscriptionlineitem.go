@@ -93,6 +93,8 @@ type SubscriptionLineItem struct {
 	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
 	// CommitmentDuration holds the value of the "commitment_duration" field.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// CommitmentTimeBuckets holds the value of the "commitment_time_buckets" field.
+	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionLineItemQuery when eager-loading is set.
 	Edges        SubscriptionLineItemEdges `json:"edges"`
@@ -137,7 +139,7 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case subscriptionlineitem.FieldCommitmentAmount, subscriptionlineitem.FieldCommitmentQuantity, subscriptionlineitem.FieldCommitmentOverageFactor:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case subscriptionlineitem.FieldMetadata:
+		case subscriptionlineitem.FieldMetadata, subscriptionlineitem.FieldCommitmentTimeBuckets:
 			values[i] = new([]byte)
 		case subscriptionlineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
@@ -405,6 +407,14 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 				sli.CommitmentDuration = new(types.BillingPeriod)
 				*sli.CommitmentDuration = types.BillingPeriod(value.String)
 			}
+		case subscriptionlineitem.FieldCommitmentTimeBuckets:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_time_buckets", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &sli.CommitmentTimeBuckets); err != nil {
+					return fmt.Errorf("unmarshal field commitment_time_buckets: %w", err)
+				}
+			}
 		default:
 			sli.selectValues.Set(columns[i], values[i])
 		}
@@ -592,6 +602,9 @@ func (sli *SubscriptionLineItem) String() string {
 		builder.WriteString("commitment_duration=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("commitment_time_buckets=")
+	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentTimeBuckets))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -31,4 +31,3 @@ func (input *NomodInvoiceSyncWorkflowInput) Validate() error {
 	}
 	return nil
 }
-

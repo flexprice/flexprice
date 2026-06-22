@@ -2,9 +2,10 @@ package cron
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,7 +37,7 @@ func (h *SubscriptionHandler) UpdateBillingPeriods(c *gin.Context) {
 	ctx := c.Request.Context()
 	response, err := h.subscriptionService.UpdateBillingPeriods(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to update billing periods",
+		h.logger.Error(c.Request.Context(), "failed to update billing periods",
 			"error", err)
 
 		c.Error(err)
@@ -53,7 +54,7 @@ func (h *SubscriptionHandler) ProcessTrialEndDue(c *gin.Context) {
 	ctx := c.Request.Context()
 	response, err := h.subscriptionService.ProcessTrialEndDue(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to process trial end due subscriptions",
+		h.logger.Error(c.Request.Context(), "failed to process trial end due subscriptions",
 			"error", err)
 		c.Error(err)
 		return
@@ -66,16 +67,16 @@ func (h *SubscriptionHandler) ProcessTrialEndDue(c *gin.Context) {
 //
 // Deprecated: use the Temporal server schedule instead of this HTTP trigger.
 func (h *SubscriptionHandler) ProcessAutoCancellationSubscriptions(c *gin.Context) {
-	h.logger.Infow("starting auto-cancellation processing cron job")
+	h.logger.Info(c.Request.Context(), "starting auto-cancellation processing cron job")
 
 	if err := h.subscriptionService.ProcessAutoCancellationSubscriptions(c.Request.Context()); err != nil {
-		h.logger.Errorw("failed to process auto-cancellation subscriptions",
+		h.logger.Error(c.Request.Context(), "failed to process auto-cancellation subscriptions",
 			"error", err)
 		c.Error(err)
 		return
 	}
 
-	h.logger.Infow("completed auto-cancellation processing cron job")
+	h.logger.Info(c.Request.Context(), "completed auto-cancellation processing cron job")
 	c.JSON(http.StatusOK, gin.H{"status": "completed"})
 }
 
@@ -84,15 +85,15 @@ func (h *SubscriptionHandler) ProcessAutoCancellationSubscriptions(c *gin.Contex
 //
 // Deprecated: use the Temporal server schedule instead of this HTTP trigger.
 func (h *SubscriptionHandler) ProcessSubscriptionRenewalDueAlerts(c *gin.Context) {
-	h.logger.Infow("starting subscription renewal due alerts cron job")
+	h.logger.Info(c.Request.Context(), "starting subscription renewal due alerts cron job")
 
-	if err := h.subscriptionService.ProcessSubscriptionRenewalDueAlert(c.Request.Context()); err != nil {
-		h.logger.Errorw("failed to process subscription renewal due alerts",
+	if err := h.subscriptionService.ProcessSubscriptionRenewalDueAlert(c.Request.Context(), time.Now()); err != nil {
+		h.logger.Error(c.Request.Context(), "failed to process subscription renewal due alerts",
 			"error", err)
 		c.Error(err)
 		return
 	}
 
-	h.logger.Infow("completed subscription renewal due alerts cron job")
+	h.logger.Info(c.Request.Context(), "completed subscription renewal due alerts cron job")
 	c.JSON(http.StatusOK, gin.H{"status": "completed"})
 }

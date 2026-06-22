@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -38,7 +38,7 @@ func NewSubscriptionHandler(service service.SubscriptionService, log *logger.Log
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	var req dto.CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -47,7 +47,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 
 	resp, err := h.service.CreateSubscription(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -77,7 +77,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 
 	resp, err := h.service.GetSubscription(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -109,7 +109,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 
 	var req dto.UpdateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -118,7 +118,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 
 	resp, err := h.service.UpdateSubscription(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -153,7 +153,7 @@ func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 
 	resp, err := h.service.GetSubscriptionV2(c.Request.Context(), id, expand)
 	if err != nil {
-		h.log.Error("Failed to get subscription v2", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get subscription v2", "error", err)
 		c.Error(err)
 		return
 	}
@@ -164,7 +164,7 @@ func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 	var filter types.SubscriptionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -173,7 +173,7 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 
 	resp, err := h.service.ListSubscriptions(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list subscriptions", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list subscriptions", "error", err)
 		c.Error(err)
 		return
 	}
@@ -197,7 +197,7 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 func (h *SubscriptionHandler) QuerySubscriptionLineItems(c *gin.Context) {
 	var filter types.SubscriptionLineItemFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -206,7 +206,7 @@ func (h *SubscriptionHandler) QuerySubscriptionLineItems(c *gin.Context) {
 
 	resp, err := h.service.ListSubscriptionLineItems(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list subscription line items", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list subscription line items", "error", err)
 		c.Error(err)
 		return
 	}
@@ -238,7 +238,7 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 
 	var req dto.CancelSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -248,7 +248,7 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	// Always use the enhanced cancellation method with proration support
 	response, err := h.service.CancelSubscription(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error("Failed to cancel subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to cancel subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -280,7 +280,7 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 
 	var req dto.ActivateDraftSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -289,7 +289,7 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 
 	resp, err := h.service.ActivateDraftSubscription(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to activate draft subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to activate draft subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -312,7 +312,7 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 	var req dto.GetUsageBySubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -321,7 +321,7 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 
 	resp, err := h.service.GetFeatureUsageBySubscription(c.Request.Context(), &req)
 	if err != nil {
-		h.log.Error("Failed to get usage", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get usage", "error", err)
 		c.Error(err)
 		return
 	}
@@ -344,7 +344,7 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 func (h *SubscriptionHandler) QuerySubscriptions(c *gin.Context) {
 	var filter types.SubscriptionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -352,7 +352,7 @@ func (h *SubscriptionHandler) QuerySubscriptions(c *gin.Context) {
 	}
 
 	if err := filter.Validate(); err != nil {
-		h.log.Error("Invalid filter parameters", "error", err)
+		h.log.Error(c.Request.Context(), "Invalid filter parameters", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Please provide valid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -361,7 +361,7 @@ func (h *SubscriptionHandler) QuerySubscriptions(c *gin.Context) {
 
 	resp, err := h.service.ListSubscriptions(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list subscriptions", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list subscriptions", "error", err)
 		c.Error(err)
 		return
 	}
@@ -384,7 +384,7 @@ func (h *SubscriptionHandler) QuerySubscriptions(c *gin.Context) {
 func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 	var req dto.AddAddonRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -393,7 +393,7 @@ func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 
 	resp, err := h.service.AddAddonToSubscription(c.Request.Context(), req.SubscriptionID, &req.AddAddonToSubscriptionRequest)
 	if err != nil {
-		h.log.Error("Failed to add addon to subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to add addon to subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -416,7 +416,7 @@ func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 	var req dto.RemoveAddonRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -424,7 +424,7 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 	}
 
 	if err := h.service.RemoveAddonFromSubscription(c.Request.Context(), &req); err != nil {
-		h.log.Error("Failed to remove addon from subscription", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to remove addon from subscription", "error", err)
 		c.Error(err)
 		return
 	}
@@ -458,7 +458,7 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 	// Call the service method with structured response
 	var req dto.GetSubscriptionEntitlementsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -466,7 +466,7 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 	}
 	response, err := h.service.GetAggregatedSubscriptionEntitlements(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error("Failed to get subscription entitlements", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get subscription entitlements", "error", err)
 		c.Error(err)
 		return
 	}
@@ -499,7 +499,7 @@ func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 
 	var req dto.CreateSubscriptionLineItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -508,7 +508,7 @@ func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 
 	resp, err := h.service.AddSubscriptionLineItem(c.Request.Context(), subscriptionID, req)
 	if err != nil {
-		h.log.Error("Failed to add subscription line item", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to add subscription line item", "error", err)
 		c.Error(err)
 		return
 	}
@@ -540,7 +540,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 
 	var req dto.UpdateSubscriptionLineItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -549,7 +549,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 
 	resp, err := h.service.UpdateSubscriptionLineItem(c.Request.Context(), lineItemID, req)
 	if err != nil {
-		h.log.Error("Failed to update subscription line item", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update subscription line item", "error", err)
 		c.Error(err)
 		return
 	}
@@ -581,7 +581,7 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 
 	var req dto.DeleteSubscriptionLineItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -590,7 +590,7 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 
 	resp, err := h.service.DeleteSubscriptionLineItem(c.Request.Context(), lineItemID, req)
 	if err != nil {
-		h.log.Error("Failed to delete subscription line item", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete subscription line item", "error", err)
 		c.Error(err)
 		return
 	}
@@ -626,7 +626,7 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 
 	resp, err := h.service.GetUpcomingCreditGrantApplications(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to get upcoming credit grant applications", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get upcoming credit grant applications", "error", err)
 		c.Error(err)
 		return
 	}
@@ -657,7 +657,7 @@ func (h *SubscriptionHandler) GetActiveAddonAssociations(c *gin.Context) {
 
 	resp, err := h.service.GetActiveAddonAssociations(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get active addon associations", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get active addon associations", "error", err)
 		c.Error(err)
 		return
 	}
@@ -677,7 +677,7 @@ func (h *SubscriptionHandler) TriggerSubscriptionWorkflow(c *gin.Context) {
 	// Call the service method to trigger the workflow
 	response, err := h.service.TriggerSubscriptionWorkflow(c.Request.Context(), subscriptionID)
 	if err != nil {
-		h.log.Error("Failed to trigger subscription workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger subscription workflow", "error", err)
 		c.Error(err)
 		return
 	}
@@ -696,7 +696,7 @@ func (h *SubscriptionHandler) TriggerSubscriptionDraftAndComputeWorkflow(c *gin.
 
 	response, err := h.service.TriggerSubscriptionDraftAndComputeWorkflow(c.Request.Context(), subscriptionID)
 	if err != nil {
-		h.log.Error("Failed to trigger draft-and-compute subscription invoice workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger draft-and-compute subscription invoice workflow", "error", err)
 		c.Error(err)
 		return
 	}

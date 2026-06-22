@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -115,6 +116,39 @@ func (s *inMemoryMappingService) DeleteEntityIntegrationMapping(ctx context.Cont
 
 func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
 	return nil, nil
+}
+
+func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.SuccessResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      req.EntityID,
+		EntityType:    req.EntityType,
+		ProviderTypes: []string{req.ProviderType},
+	}
+	mappings, err := s.repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no entity integration mapping found to delink").
+			WithHint("No active mapping exists for the given entity and provider").
+			Mark(ierr.ErrNotFound)
+	}
+
+	for _, mapping := range mappings {
+		if err := s.repo.Delete(ctx, mapping); err != nil {
+			return nil, err
+		}
+	}
+
+	return &apidto.SuccessResponse{
+		Message: "Integration mapping delinked successfully",
+	}, nil
 }
 
 func toTestMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
@@ -405,6 +439,55 @@ func TestEnsureCustomerSynced_AlreadyMapped(t *testing.T) {
 
 	// The critical assertion: CreateCustomer must NOT have been called.
 	assert.False(t, mockClient.createCustomerCalled, "CreateCustomer must NOT be called when customer is already mapped")
+}
+
+// TestDelinkIntegrationMapping_ArchivesExistingMappings verifies that delinking an
+// entity→provider mapping removes every matching mapping and reports the archived count.
+func TestDelinkIntegrationMapping_ArchivesExistingMappings(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	const customerID = "cust_to_delink"
+
+	// Seed a mapping for the customer → Paddle.
+	seedMapping(ctx, t, mappingStore, customerID, types.IntegrationEntityTypeCustomer, "ctm_existing", nil)
+
+	resp, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     customerID,
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Integration mapping delinked successfully", resp.Message)
+
+	// The mapping must no longer be returned by a published-only query.
+	remaining, err := mappingStore.List(ctx, &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      customerID,
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, remaining, "delinked mapping should not remain active")
+}
+
+// TestDelinkIntegrationMapping_NotFound verifies that delinking when no mapping exists
+// returns a not-found error rather than a success with zero archived.
+func TestDelinkIntegrationMapping_NotFound(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	_, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     "cust_missing",
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.Error(t, err)
+	assert.True(t, ierr.IsNotFound(err), "expected a not-found error")
 }
 
 // TestEnsureSubscriptionSynced_AlreadyMapped verifies that when a subscription→Paddle mapping
@@ -862,7 +945,7 @@ func (m *mockSubscriptionService) ListSubscriptionLineItems(ctx context.Context,
 func (m *mockSubscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	return nil
 }
-func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
+func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, _ time.Time) error {
 	return nil
 }
 func (m *mockSubscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*apidto.AutoInvoiceThresholdBillingResult, error) {
@@ -916,12 +999,14 @@ func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx cont
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+}
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
 
-// TestProcessSubscriptionActivatedWebhook_IncompleteToActive verifies that an incomplete subscription
-// (with no trial) is activated via ActivateIncompleteSubscription and that the mapping is created.
-func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
+// TestProcessSubscriptionActivatedWebhook_IncompleteNoOp verifies that an incomplete subscription
+// is treated as a no-op (not activated automatically) and that the mapping is still created.
+func TestProcessSubscriptionActivatedWebhook_IncompleteNoOp(t *testing.T) {
 	ctx := buildTestContext()
 
 	const flexSubID = "sub_incomplete_to_active"
@@ -961,8 +1046,13 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
 	err := svc.ProcessSubscriptionActivatedWebhook(ctx, paddlenotification_data, mockSubSvc)
 	require.NoError(t, err)
 
-	// ActivateIncompleteSubscription must have been called.
-	assert.True(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must be called for incomplete sub without trial")
+	// ActivateIncompleteSubscription must NOT have been called — incomplete subs are no-op.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called for incomplete sub")
+
+	// Subscription must remain incomplete.
+	updatedSub, err := subStore.Get(ctx, flexSubID)
+	require.NoError(t, err)
+	assert.Equal(t, types.SubscriptionStatusIncomplete, updatedSub.SubscriptionStatus)
 
 	// Mapping must have been created.
 	filter := &types.EntityIntegrationMappingFilter{
@@ -976,14 +1066,12 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
 	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
 
 	// Subscription metadata must contain the paddle_subscription_id.
-	updatedSub, err := subStore.Get(ctx, flexSubID)
-	require.NoError(t, err)
 	assert.Equal(t, paddleSubID, updatedSub.Metadata[paddle.MetaKeyPaddleSubscriptionID])
 }
 
-// TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing verifies that an incomplete subscription
-// with a future TrialEnd is transitioned to trialing without calling ActivateIncompleteSubscription.
-func TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing(t *testing.T) {
+// TestProcessSubscriptionActivatedWebhook_IncompleteWithTrialNoOp verifies that an incomplete
+// subscription with a future TrialEnd is still treated as a no-op (not transitioned to trialing).
+func TestProcessSubscriptionActivatedWebhook_IncompleteWithTrialNoOp(t *testing.T) {
 	ctx := buildTestContext()
 
 	const flexSubID = "sub_incomplete_to_trialing"
@@ -1023,13 +1111,13 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing(t *testing.T) 
 	err := svc.ProcessSubscriptionActivatedWebhook(ctx, data, mockSubSvc)
 	require.NoError(t, err)
 
-	// ActivateIncompleteSubscription must NOT have been called — we only set trialing directly.
-	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called when trial end is in the future")
+	// ActivateIncompleteSubscription must NOT have been called — incomplete subs are no-op.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called for incomplete sub")
 
-	// Subscription must now be trialing.
+	// Subscription must remain incomplete.
 	updatedSub, err := subStore.Get(ctx, flexSubID)
 	require.NoError(t, err)
-	assert.Equal(t, types.SubscriptionStatusTrialing, updatedSub.SubscriptionStatus)
+	assert.Equal(t, types.SubscriptionStatusIncomplete, updatedSub.SubscriptionStatus)
 
 	// Mapping must have been created.
 	filter := &types.EntityIntegrationMappingFilter{

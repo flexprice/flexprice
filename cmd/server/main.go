@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -25,8 +26,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/sentry"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -34,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/queries"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -42,10 +42,10 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
-	ee "github.com/flexprice/flexprice/internal/ee/service"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/security"
-	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
 	"github.com/nedpals/supabase-go"
 )
@@ -95,7 +95,7 @@ func main() {
 			s3.NewService,
 
 			// Monitoring
-			sentry.NewSentryService,
+			tracing.NewService,
 			pyroscope.NewPyroscopeService,
 
 			// Cache
@@ -119,6 +119,7 @@ func main() {
 
 			// Producers and Consumers
 			kafka.NewProducer,
+			kafka.NewSecondaryProducer,
 			kafka.NewConsumer,
 
 			// Event Publisher
@@ -137,6 +138,7 @@ func main() {
 			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
 			repository.NewUsageBenchmarkRepository,
+			repository.NewAnalyticsBenchmarkRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -256,6 +258,7 @@ func main() {
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
 			service.NewCouponService,
+			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
@@ -270,15 +273,6 @@ func main() {
 			service.NewDashboardService,
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
-
-			// Enterprise (ee) services
-			ee.NewEnterpriseParams,
-			ee.NewCreditNoteService,
-			ee.NewCreditGrantService,
-			ee.NewWalletService,
-			ee.NewPrepaidCreditsService,
-			ee.NewBillingTimezoneService,
-			ee.NewInvoiceGracePeriodService,
 		),
 	)
 
@@ -297,8 +291,9 @@ func main() {
 			provideRouter,
 		),
 		fx.Invoke(
-			sentry.RegisterHooks,
+			tracing.RegisterHooks,
 			pyroscope.RegisterHooks,
+			initIntegrationFactory,
 			startServer,
 		),
 	)
@@ -342,6 +337,7 @@ func provideHandlers(
 	svixClient *svix.Client,
 	taxService service.TaxService,
 	couponService service.CouponService,
+	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
@@ -364,9 +360,10 @@ func provideHandlers(
 	meterUsageService service.MeterUsageService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
+	usageBenchmarkService service.UsageBenchmarkService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, usageBenchmarkService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -403,7 +400,7 @@ func provideHandlers(
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
-		Coupon:                   v1.NewCouponHandler(couponService, logger),
+		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
@@ -440,6 +437,10 @@ func provideRouter(
 	)
 }
 
+func initIntegrationFactory(factory *integration.Factory, paymentService interfaces.PaymentService, invoiceService service.InvoiceService) {
+	factory.SetServices(paymentService, invoiceService)
+}
+
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {
 	if cfg == nil || cfg.Auth.Supabase.BaseURL == "" || cfg.Auth.Supabase.ServiceKey == "" {
 		return nil
@@ -452,7 +453,7 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 }
 
 func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
-	log.Info("Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
+	log.Info(context.Background(), "Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
 
 	// Use default options and merge with config
 	options := models.DefaultClientOptions()
@@ -470,11 +471,11 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 	// Create temporal client directly
 	temporalClient, err := client.NewTemporalClient(options, log)
 	if err != nil {
-		log.Error("Failed to create Temporal client", "error", err)
+		log.Error(context.Background(), "Failed to create Temporal client", "error", err)
 		return nil, fmt.Errorf("failed to create temporal client: %w", err)
 	}
 
-	log.Info("Temporal client created successfully")
+	log.Info(context.Background(), "Temporal client created successfully")
 	return temporalClient, nil
 }
 
@@ -482,14 +483,14 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 	return worker.NewTemporalWorkerManager(temporalClient, log)
 }
 
-func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
-	// Initialize the global Temporal service instance with Sentry
-	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, sentryService, cfg)
+func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
+	// Initialize the global Temporal service instance with tracing
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, tracingSvc, cfg)
 
 	// Get the global instance and start it
 	service := temporalservice.GetGlobalTemporalService()
 	if err := service.Start(context.Background()); err != nil {
-		log.Error("Failed to start global Temporal service", "error", err)
+		log.Error(context.Background(), "Failed to start global Temporal service", "error", err)
 		return nil
 	}
 
@@ -530,7 +531,7 @@ func startServer(
 	switch mode {
 	case types.ModeLocal:
 		if consumer == nil {
-			log.Fatal("Kafka consumer required for local mode")
+			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
 		startAPIServer(lc, r, cfg, log)
 
@@ -554,7 +555,7 @@ func startServer(
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
 		if consumer == nil {
-			log.Fatal("Kafka consumer required for consumer mode")
+			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
 		}
 
 		// Register all handlers and start router once
@@ -605,10 +606,10 @@ func startAPIServer(
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {
-	log.Info("Registering API server start hook")
+	log.Info(context.Background(), "Registering API server start hook")
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			log.Info("Starting API server...")
+			log.Info(ctx, "Starting API server...")
 			go func() {
 				if err := r.Run(cfg.Server.Address); err != nil {
 					log.Fatalf("Failed to start server: %v", err)
@@ -617,7 +618,7 @@ func startAPIServer(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Info("Shutting down server...")
+			log.Info(ctx, "Shutting down server...")
 			log.Shutdown(ctx)
 			return nil
 		},
@@ -656,6 +657,7 @@ func registerRouterHandlers(
 		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 		rawEventConsumptionSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)
+		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		usageBenchmarkSvc.RegisterHandler(router, cfg)
 	}
 }
@@ -667,7 +669,7 @@ func startRouter(
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
+			logger.Info(ctx, "starting message router")
 			go func() {
 				if err := router.Run(); err != nil {
 					logger.Errorw("message router failed", "error", err)
@@ -676,7 +678,7 @@ func startRouter(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
+			logger.Info(ctx, "stopping message router")
 			return router.Close()
 		},
 	})

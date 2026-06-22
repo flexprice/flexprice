@@ -34,7 +34,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	ctx context.Context,
 	input models.HubSpotInvoiceSyncWorkflowInput,
 ) error {
-	a.logger.Infow("syncing invoice to HubSpot",
+	a.logger.Info(ctx, "syncing invoice to HubSpot",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -48,7 +48,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("HubSpot connection not configured",
+			a.logger.Debug(ctx, "HubSpot connection not configured",
 				"invoice_id", input.InvoiceID,
 				"customer_id", input.CustomerID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
@@ -58,7 +58,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get HubSpot integration",
+		a.logger.Error(ctx, "failed to get HubSpot integration",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
@@ -68,14 +68,14 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	// Get HubSpot contact ID for the customer
 	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactID(ctx, input.CustomerID)
 	if err != nil {
-		a.logger.Warnw("customer not synced to HubSpot",
+		a.logger.Info(context.Background(), "customer not synced to HubSpot",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
 		return err
 	}
 
-	a.logger.Infow("found HubSpot contact for customer",
+	a.logger.Info(ctx, "found HubSpot contact for customer",
 		"customer_id", input.CustomerID,
 		"hubspot_contact_id", hubspotContactID,
 		"invoice_id", input.InvoiceID)
@@ -83,14 +83,14 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	// Perform the sync using the existing service
 	err = hubspotIntegration.InvoiceSyncSvc.SyncInvoiceToHubSpot(ctx, input.InvoiceID, hubspotContactID)
 	if err != nil {
-		a.logger.Errorw("failed to sync invoice to HubSpot",
+		a.logger.Error(ctx, "failed to sync invoice to HubSpot",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"hubspot_contact_id", hubspotContactID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to HubSpot",
+	a.logger.Info(ctx, "successfully synced invoice to HubSpot",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"hubspot_contact_id", hubspotContactID)

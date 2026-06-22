@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -102,7 +102,7 @@ func (h *AlertLogsHandler) QueryAlertLogs(c *gin.Context) {
 			for customerID := range customerIDs {
 				customer, err := h.customerService.GetCustomer(c.Request.Context(), customerID)
 				if err != nil {
-					h.log.Warnw("failed to fetch customer for expand", "customer_id", customerID, "error", err)
+					h.log.Info(c.Request.Context(), "failed to fetch customer for expand", "customer_id", customerID, "error", err)
 					continue
 				}
 				customerMap[customerID] = customer
@@ -115,7 +115,7 @@ func (h *AlertLogsHandler) QueryAlertLogs(c *gin.Context) {
 			for walletID := range walletIDs {
 				wallet, err := h.walletService.GetWalletByID(c.Request.Context(), walletID)
 				if err != nil {
-					h.log.Warnw("failed to fetch wallet for expand", "wallet_id", walletID, "error", err)
+					h.log.Info(c.Request.Context(), "failed to fetch wallet for expand", "wallet_id", walletID, "error", err)
 					continue
 				}
 				walletMap[walletID] = wallet
@@ -128,7 +128,7 @@ func (h *AlertLogsHandler) QueryAlertLogs(c *gin.Context) {
 			for featureID := range featureIDs {
 				feature, err := h.featureService.GetFeature(c.Request.Context(), featureID)
 				if err != nil {
-					h.log.Warnw("failed to fetch feature for expand", "feature_id", featureID, "error", err)
+					h.log.Info(c.Request.Context(), "failed to fetch feature for expand", "feature_id", featureID, "error", err)
 					continue
 				}
 				featureMap[featureID] = feature

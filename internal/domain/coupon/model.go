@@ -24,6 +24,7 @@ type Coupon struct {
 	Cadence           types.CouponCadence     `json:"cadence" db:"cadence"`
 	DurationInPeriods *int                    `json:"duration_in_periods" db:"duration_in_periods"`
 	Currency          string                  `json:"currency" db:"currency"`
+	CouponCode        *string                 `json:"coupon_code,omitempty" db:"coupon_code"`
 	Metadata          *map[string]string      `json:"metadata" db:"metadata"`
 	EnvironmentID     string                  `json:"environment_id" db:"environment_id"`
 	types.BaseModel
@@ -114,6 +115,7 @@ func FromEnt(e *ent.Coupon) *Coupon {
 		Cadence:           types.CouponCadence(e.Cadence),
 		DurationInPeriods: e.DurationInPeriods,
 		Currency:          lo.FromPtrOr(e.Currency, ""),
+		CouponCode:        e.CouponCode,
 		EnvironmentID:     e.EnvironmentID,
 		Metadata:          &e.Metadata,
 		BaseModel: types.BaseModel{

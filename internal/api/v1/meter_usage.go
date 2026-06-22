@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -46,7 +46,7 @@ func (h *MeterUsageHandler) QueryUsage(c *gin.Context) {
 
 	result, err := h.meterUsageService.GetUsage(ctx, params)
 	if err != nil {
-		h.log.ErrorwCtx(ctx, "failed to query meter usage",
+		h.log.Error(ctx, "failed to query meter usage",
 			"error", err,
 			"meter_id", req.MeterID,
 		)
@@ -79,7 +79,7 @@ func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 
 	results, err := h.meterUsageService.GetUsageMultiMeter(ctx, params)
 	if err != nil {
-		h.log.ErrorwCtx(ctx, "failed to query meter usage analytics",
+		h.log.Error(ctx, "failed to query meter usage analytics",
 			"error", err,
 			"meter_ids", req.MeterIDs,
 		)
@@ -112,7 +112,7 @@ func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
 
 	response, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
 	if err != nil {
-		h.log.ErrorwCtx(ctx, "failed to query detailed meter usage analytics",
+		h.log.Error(ctx, "failed to query detailed meter usage analytics",
 			"error", err,
 			"meter_ids", req.MeterIDs,
 		)

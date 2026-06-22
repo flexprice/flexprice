@@ -9,6 +9,7 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -86,7 +87,8 @@ func (c *Client) GetPaddleConfig(ctx context.Context) (*PaddleConfig, error) {
 	}
 
 	if config.APIKey == "" {
-		c.logger.Errorw("missing Paddle API key",
+		c.logger.Error(ctx, "missing Paddle API key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Paddle API key").
@@ -121,13 +123,13 @@ func (c *Client) GetDecryptedPaddleConfig(conn *connection.Connection) (*PaddleC
 // decryptConnectionMetadata decrypts the connection encrypted secret data
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
 	if conn.ProviderType != types.SecretProviderPaddle || conn.EncryptedSecretData.Paddle == nil {
-		c.logger.Warnw("no paddle metadata found", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no paddle metadata found", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	apiKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.APIKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Paddle API key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Paddle API key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Paddle API key").Mark(ierr.ErrInternal)
 	}
 
@@ -135,7 +137,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	if conn.EncryptedSecretData.Paddle.WebhookSecret != "" {
 		webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.WebhookSecret)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt Paddle webhook secret", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt Paddle webhook secret", "connection_id", conn.ID, "error", err)
 		}
 	}
 
@@ -143,7 +145,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	if conn.EncryptedSecretData.Paddle.ClientSideToken != "" {
 		clientSideToken, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.ClientSideToken)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt Paddle client_side_token", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt Paddle client_side_token", "connection_id", conn.ID, "error", err)
 		}
 	}
 
@@ -169,16 +171,18 @@ func (c *Client) GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, 
 	baseURL := paddle.ProductionBaseURL
 	if isSandboxAPIKey(config.APIKey) {
 		baseURL = SandboxBaseURL
-		c.logger.Debugw("using Paddle sandbox API",
+		c.logger.Debug(ctx, "using Paddle sandbox API",
 			"base_url", baseURL)
 	}
 
 	client, err := paddle.New(
 		config.APIKey,
 		paddle.WithBaseURL(baseURL),
+		// Instrument outbound Paddle API calls for SigNoz External API Monitoring.
+		paddle.WithClient(httpclient.NewOtelHTTPClient(0)),
 	)
 	if err != nil {
-		c.logger.Errorw("failed to create Paddle SDK client", "error", err)
+		c.logger.Error(ctx, "failed to create Paddle SDK client", "error", err)
 		return nil, nil, ierr.NewError("failed to initialize Paddle client").
 			WithHint("Unable to connect to Paddle").
 			Mark(ierr.ErrInternal)
@@ -218,7 +222,7 @@ func (c *Client) CreateCustomer(ctx context.Context, req *paddle.CreateCustomerR
 
 	customer, err := client.CreateCustomer(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create customer in Paddle", "error", err)
+		c.logger.Error(ctx, "failed to create customer in Paddle", "error", err)
 		return nil, ierr.NewError("failed to create customer in Paddle").
 			WithHint("Unable to create customer in Paddle").
 			WithReportableDetails(map[string]interface{}{
@@ -227,7 +231,7 @@ func (c *Client) CreateCustomer(ctx context.Context, req *paddle.CreateCustomerR
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created customer in Paddle", "customer_id", customer.ID)
+	c.logger.Info(ctx, "successfully created customer in Paddle", "customer_id", customer.ID)
 	return customer, nil
 }
 
@@ -257,7 +261,7 @@ func (c *Client) CreateAddress(ctx context.Context, customerID string, req *padd
 	req.CustomerID = customerID
 	address, err := client.CreateAddress(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create address in Paddle",
+		c.logger.Error(ctx, "failed to create address in Paddle",
 			"error", err,
 			"customer_id", customerID)
 		return nil, ierr.NewError("failed to create address in Paddle").
@@ -269,7 +273,7 @@ func (c *Client) CreateAddress(ctx context.Context, customerID string, req *padd
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created address in Paddle",
+	c.logger.Info(ctx, "successfully created address in Paddle",
 		"address_id", address.ID,
 		"customer_id", customerID)
 	return address, nil
@@ -286,7 +290,7 @@ func (c *Client) UpdateAddress(ctx context.Context, customerID string, addressID
 	req.AddressID = addressID
 	address, err := client.UpdateAddress(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to update address in Paddle",
+		c.logger.Error(ctx, "failed to update address in Paddle",
 			"error", err,
 			"customer_id", customerID,
 			"address_id", addressID)
@@ -300,7 +304,7 @@ func (c *Client) UpdateAddress(ctx context.Context, customerID string, addressID
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully updated address in Paddle",
+	c.logger.Info(ctx, "successfully updated address in Paddle",
 		"address_id", address.ID,
 		"customer_id", customerID)
 	return address, nil
@@ -315,10 +319,10 @@ func (c *Client) CreateTransaction(ctx context.Context, req *paddle.CreateTransa
 
 	txn, err := client.CreateTransaction(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create transaction in Paddle",
+		c.logger.Error(ctx, "failed to create transaction in Paddle",
 			"error", err,
 			"paddle_error_detail", err.Error())
-		return nil, ierr.NewError("failed to create transaction in Paddle: "+err.Error()).
+		return nil, ierr.NewError("failed to create transaction in Paddle: " + err.Error()).
 			WithHint("Unable to create transaction in Paddle").
 			WithReportableDetails(map[string]interface{}{
 				"error": err.Error(),
@@ -326,7 +330,7 @@ func (c *Client) CreateTransaction(ctx context.Context, req *paddle.CreateTransa
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created transaction in Paddle",
+	c.logger.Info(ctx, "successfully created transaction in Paddle",
 		"transaction_id", txn.ID)
 	return txn, nil
 }
@@ -341,7 +345,7 @@ func (c *Client) PreviewTransaction(ctx context.Context, req *paddle.PreviewTran
 
 	preview, err := client.PreviewTransactionCreate(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to preview transaction in Paddle",
+		c.logger.Error(ctx, "failed to preview transaction in Paddle",
 			"error", err)
 		return nil, ierr.NewError("failed to preview transaction in Paddle").
 			WithHint("Unable to get tax preview from Paddle").
@@ -351,7 +355,7 @@ func (c *Client) PreviewTransaction(ctx context.Context, req *paddle.PreviewTran
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully previewed transaction in Paddle")
+	c.logger.Info(ctx, "successfully previewed transaction in Paddle")
 	return preview, nil
 }
 
@@ -363,13 +367,13 @@ func (c *Client) CreateProduct(ctx context.Context, req *paddle.CreateProductReq
 	}
 	product, err := client.CreateProduct(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create product in Paddle", "error", err)
+		c.logger.Error(ctx, "failed to create product in Paddle", "error", err)
 		return nil, ierr.NewError("failed to create product in Paddle").
 			WithHint("Unable to create product in Paddle").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
-	c.logger.Infow("successfully created product in Paddle", "product_id", product.ID)
+	c.logger.Info(ctx, "successfully created product in Paddle", "product_id", product.ID)
 	return product, nil
 }
 
@@ -381,13 +385,13 @@ func (c *Client) CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest
 	}
 	price, err := client.CreatePrice(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create price in Paddle", "error", err)
+		c.logger.Error(ctx, "failed to create price in Paddle", "error", err)
 		return nil, ierr.NewError("failed to create price in Paddle").
 			WithHint("Unable to create price in Paddle").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
-	c.logger.Infow("successfully created price in Paddle", "price_id", price.ID)
+	c.logger.Info(ctx, "successfully created price in Paddle", "price_id", price.ID)
 	return price, nil
 }
 
@@ -399,7 +403,7 @@ func (c *Client) CreateSubscriptionCharge(ctx context.Context, req *paddle.Creat
 	}
 	sub, err := client.CreateSubscriptionCharge(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to create subscription charge in Paddle",
+		c.logger.Error(ctx, "failed to create subscription charge in Paddle",
 			"subscription_id", req.SubscriptionID, "error", err)
 		return nil, ierr.NewError("failed to create subscription charge in Paddle").
 			WithHint("Unable to create subscription charge in Paddle").
@@ -409,7 +413,7 @@ func (c *Client) CreateSubscriptionCharge(ctx context.Context, req *paddle.Creat
 			}).
 			Mark(ierr.ErrInternal)
 	}
-	c.logger.Infow("successfully created subscription charge in Paddle", "subscription_id", sub.ID)
+	c.logger.Info(ctx, "successfully created subscription charge in Paddle", "subscription_id", sub.ID)
 	return sub, nil
 }
 
@@ -421,13 +425,13 @@ func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransacti
 	}
 	result, err := client.ListTransactions(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to list transactions in Paddle", "error", err)
+		c.logger.Error(ctx, "failed to list transactions in Paddle", "error", err)
 		return nil, ierr.NewError("failed to list transactions in Paddle").
 			WithHint("Unable to list transactions in Paddle").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
-	c.logger.Infow("successfully listed transactions in Paddle", "count", result.EstimatedTotal())
+	c.logger.Info(ctx, "successfully listed transactions in Paddle", "count", result.EstimatedTotal())
 	return result, nil
 }
 
@@ -439,12 +443,12 @@ func (c *Client) GetTransaction(ctx context.Context, transactionID string) (*pad
 	}
 	txn, err := client.GetTransaction(ctx, &paddle.GetTransactionRequest{TransactionID: transactionID})
 	if err != nil {
-		c.logger.Errorw("failed to get transaction from Paddle", "transaction_id", transactionID, "error", err)
+		c.logger.Error(ctx, "failed to get transaction from Paddle", "transaction_id", transactionID, "error", err)
 		return nil, ierr.NewError("failed to get transaction from Paddle").
 			WithReportableDetails(map[string]interface{}{"transaction_id": transactionID, "error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
-	c.logger.Debugw("fetched transaction from Paddle", "transaction_id", txn.ID)
+	c.logger.Debug(ctx, "fetched transaction from Paddle", "transaction_id", txn.ID)
 	return txn, nil
 }
 
@@ -456,7 +460,7 @@ func (c *Client) ListSubscriptions(ctx context.Context, req *paddle.ListSubscrip
 	}
 	result, err := client.ListSubscriptions(ctx, req)
 	if err != nil {
-		c.logger.Errorw("failed to list subscriptions in Paddle", "error", err)
+		c.logger.Error(ctx, "failed to list subscriptions in Paddle", "error", err)
 		return nil, ierr.NewError("failed to list subscriptions in Paddle").
 			WithHint("Unable to list subscriptions in Paddle").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).

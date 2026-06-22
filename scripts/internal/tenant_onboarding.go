@@ -15,7 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/nedpals/supabase-go"
 	"github.com/samber/lo"
@@ -49,7 +49,7 @@ func newOnboardingScript() (*onboardingScript, error) {
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 
 	// Initialize repositories
 	repoParams := repository.RepositoryParams{
@@ -142,6 +142,7 @@ func (s *onboardingScript) createEnvironment(ctx context.Context, name string, e
 			CreatedBy: types.DefaultUserID,
 			UpdatedBy: types.DefaultUserID,
 			CreatedAt: time.Now(),
+			Status:    types.StatusPublished,
 			UpdatedAt: time.Now(),
 		},
 	}
@@ -189,12 +190,12 @@ func OnboardNewTenant() error {
 	// Create default environments (development, staging, production)
 	envTypes := []types.EnvironmentType{
 		types.EnvironmentDevelopment,
-		types.EnvironmentProduction,
+		// types.EnvironmentProduction,
 	}
 
 	envNameMap := map[types.EnvironmentType]string{
 		types.EnvironmentDevelopment: "Sandbox",
-		types.EnvironmentProduction:  "Production",
+		// types.EnvironmentProduction:  "Production",
 	}
 
 	for _, envType := range envTypes {

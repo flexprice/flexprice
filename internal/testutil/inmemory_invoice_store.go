@@ -620,6 +620,11 @@ func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice
 	return s.Update(ctx, inv)
 }
 
+// ListPendingInvoicesByProvider is a no-op in the in-memory store (requires a JOIN with connections).
+func (s *InMemoryInvoiceStore) ListPendingInvoicesByProvider(_ context.Context, _ types.SecretProvider) ([]invoice.PendingProviderInvoice, error) {
+	return nil, nil
+}
+
 // Clear removes all invoices from the store, and also clears the associated line item store if set.
 func (s *InMemoryInvoiceStore) Clear() {
 	s.InMemoryStore.Clear()

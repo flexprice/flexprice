@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func EnvAccessMiddleware(envAccessService service.EnvAccessService, logger *logg
 		// Check if user has access to the environment
 		hasAccess := envAccessService.HasEnvironmentAccess(c.Request.Context(), userID, tenantID, environmentID)
 		if !hasAccess {
-			logger.Warnw("environment access denied",
+			logger.Info(c.Request.Context(), "environment access denied",
 				"user_id", userID,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,

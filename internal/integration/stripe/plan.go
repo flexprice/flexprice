@@ -44,7 +44,7 @@ func (s *stripePlanService) fetchStripeProduct(ctx context.Context, productID st
 	// Retrieve the product from Stripe
 	product, err := stripeClient.V1Products.Retrieve(ctx, productID, nil)
 	if err != nil {
-		s.logger.Errorw("failed to retrieve product from Stripe",
+		s.logger.Error(ctx, "failed to retrieve product from Stripe",
 			"error", err,
 			"product_id", productID,
 		)
@@ -262,7 +262,7 @@ func (s *stripePlanService) DeletePlan(ctx context.Context, stripeProductID stri
 		// Clean up entity integration mappings
 		for _, mapping := range mappings.Items {
 			if err := services.EntityIntegrationMappingService.DeleteEntityIntegrationMapping(txCtx, mapping.ID); err != nil {
-				s.logger.Errorw("failed to delete entity integration mapping",
+				s.logger.Error(ctx, "failed to delete entity integration mapping",
 					"error", err,
 					"mapping_id", mapping.ID,
 					"plan_id", flexPricePlanID,

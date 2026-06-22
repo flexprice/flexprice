@@ -234,14 +234,14 @@ LIMIT ? OFFSET ?
 
 ### Implementation Files to Create
 
-1. **`internal/service/sync/export/credit_topup_export.go`**
+1. **`internal/ee/service/sync/export/credit_topup_export.go`**
    - CreditTopupExporter struct
    - CreditTopupCSV struct (CSV schema)
    - PrepareData() method with batching
    - convertToCSVRecords() helper
    - GetFilenamePrefix() returns "credit_topups"
 
-2. **Update `internal/service/sync/export/base.go`**
+2. **Update `internal/ee/service/sync/export/base.go`**
    - Add CreditTopupExporter to getExporter() switch case
    - Add case for types.ScheduledTaskEntityTypeCreditTopup
 

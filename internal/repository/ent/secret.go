@@ -41,7 +41,7 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating secret",
+	r.log.Debug(ctx, "creating secret",
 		"secret_id", s.ID,
 		"tenant_id", s.TenantID,
 		"type", s.Type,
@@ -63,6 +63,7 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 		SetEnvironmentID(s.EnvironmentID).
 		SetRoles(s.Roles).
 		SetUserType(s.UserType).
+		SetUserID(s.UserID).
 		SetStatus(string(s.Status)).
 		SetCreatedAt(s.CreatedAt).
 		SetUpdatedAt(s.UpdatedAt).
@@ -113,7 +114,7 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 func (r *secretRepository) Get(ctx context.Context, id string) (*domainSecret.Secret, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting secret", "secret_id", id)
+	r.log.Debug(ctx, "getting secret", "secret_id", id)
 
 	s, err := client.Secret.Query().
 		Where(
@@ -190,7 +191,7 @@ func (r *secretRepository) GetAPIKeyByValue(ctx context.Context, value string) (
 func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating last used timestamp", "secret_id", id)
+	r.log.Debug(ctx, "updating last used timestamp", "secret_id", id)
 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
@@ -221,7 +222,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 func (r *secretRepository) List(ctx context.Context, filter *types.SecretFilter) ([]*domainSecret.Secret, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("listing secrets")
+	r.log.Debug(ctx, "listing secrets")
 
 	query := client.Secret.Query()
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -241,7 +242,7 @@ func (r *secretRepository) List(ctx context.Context, filter *types.SecretFilter)
 func (r *secretRepository) Count(ctx context.Context, filter *types.SecretFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("counting secrets")
+	r.log.Debug(ctx, "counting secrets")
 
 	query := client.Secret.Query()
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
@@ -287,7 +288,7 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	client := r.client.Writer(ctx)
-	r.log.Debugw("deleting secret", "secret_id", id)
+	r.log.Debug(ctx, "deleting secret", "secret_id", id)
 
 	err = client.Secret.UpdateOneID(id).
 		SetStatus(string(types.StatusDeleted)).
@@ -378,6 +379,19 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 	// Apply key filter if specified
 	if f.Provider != nil {
 		query = query.Where(secret.Provider(string(*f.Provider)))
+	}
+
+	// Apply user ID filter if specified
+	if f.UserID != nil {
+		query = query.Where(secret.UserID(*f.UserID))
+	}
+
+	if f.NotExpiredAt != nil {
+		t := *f.NotExpiredAt
+		query = query.Where(secret.Or(
+			secret.ExpiresAtIsNil(),
+			secret.ExpiresAtGT(t),
+		))
 	}
 
 	// Apply time range filters if specified

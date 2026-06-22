@@ -33,7 +33,7 @@ func NewCreditGrantApplicationRepository(client postgres.IClient, log *logger.Lo
 
 func (r *creditGrantApplicationRepository) Create(ctx context.Context, a *domain.CreditGrantApplication) error {
 
-	r.log.Debugw("creating credit grant application",
+	r.log.Debug(ctx, "creating credit grant application",
 		"application_id", a.ID,
 		"tenant_id", a.TenantID,
 		"credit_grant_id", a.CreditGrantID,
@@ -102,7 +102,7 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, a *domain
 
 func (r *creditGrantApplicationRepository) Get(ctx context.Context, id string) (*domain.CreditGrantApplication, error) {
 
-	r.log.Debugw("getting credit grant application", "application_id", id)
+	r.log.Debug(ctx, "getting credit grant application", "application_id", id)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditgrantapplication", "get", map[string]interface{}{
@@ -250,7 +250,7 @@ func (r *creditGrantApplicationRepository) ListAll(ctx context.Context, filter *
 
 func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain.CreditGrantApplication) error {
 
-	r.log.Debugw("updating credit grant application",
+	r.log.Debug(ctx, "updating credit grant application",
 		"application_id", a.ID,
 		"tenant_id", a.TenantID,
 		"credit_grant_id", a.CreditGrantID,
@@ -321,7 +321,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 func (r *creditGrantApplicationRepository) Delete(ctx context.Context, application *domain.CreditGrantApplication) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting credit grant application",
+	r.log.Debug(ctx, "deleting credit grant application",
 		"application_id", application.ID,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -411,7 +411,7 @@ func (r *creditGrantApplicationRepository) FindByIdempotencyKey(ctx context.Cont
 		SetSpanError(span, err)
 
 		if ent.IsNotFound(err) {
-			r.log.Debugw("credit grant application not found by idempotency key", "idempotency_key", idempotencyKey)
+			r.log.Debug(ctx, "credit grant application not found by idempotency key", "idempotency_key", idempotencyKey)
 			return nil, ierr.NewErrorf("credit grant application not found by idempotency key %s", idempotencyKey).
 				WithHint("credit grant application not found by idempotency key").
 				WithReportableDetails(map[string]any{
@@ -545,7 +545,7 @@ func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, applica
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, tenantID, environmentID, application.ID)
 	r.cache.Set(ctx, cacheKey, application, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "key", cacheKey)
+	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
 func (r *creditGrantApplicationRepository) GetCache(ctx context.Context, id string) *domain.CreditGrantApplication {
@@ -559,7 +559,7 @@ func (r *creditGrantApplicationRepository) GetCache(ctx context.Context, id stri
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if application, ok := value.(*domain.CreditGrantApplication); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return application
 		}
 	}
@@ -577,5 +577,5 @@ func (r *creditGrantApplicationRepository) DeleteCache(ctx context.Context, appl
 
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, tenantID, environmentID, application.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

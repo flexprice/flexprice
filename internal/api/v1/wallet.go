@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -43,7 +43,7 @@ func NewWalletHandler(walletService service.WalletService, logger *logger.Logger
 func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	var req dto.CreateWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -52,7 +52,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.CreateWallet(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Error("Failed to create wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to create wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -95,7 +95,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 	// Get wallets
 	wallets, err := h.walletService.GetWalletsByCustomerID(c.Request.Context(), customerID)
 	if err != nil {
-		h.logger.Error("Failed to get wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -105,7 +105,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 		for _, w := range wallets {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.Wallet.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.Wallet.ID)
 				// Don't fail the request, just log the error and continue without breakdown
@@ -136,7 +136,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 	var req dto.GetCustomerWalletsRequest
 	// All data is present in the query params
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.Error("Failed to bind query parameters", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind query parameters", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -162,7 +162,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 	// Get wallets
 	wallets, err := h.walletService.GetCustomerWallets(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Error("Failed to get customer wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get customer wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -173,7 +173,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 			if wallet.Wallet != nil {
 				breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), wallet.Wallet.ID)
 				if err != nil {
-					h.logger.Errorw("failed to get credits available breakdown",
+					h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 						"error", err,
 						"wallet_id", wallet.Wallet.ID)
 					// Don't fail the request, just log the error and continue without breakdown
@@ -212,7 +212,7 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 
 	wallet, err := h.walletService.GetWalletByID(c.Request.Context(), walletID)
 	if err != nil {
-		h.logger.Error("Failed to get wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -246,7 +246,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 	var filter types.WalletTransactionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.logger.Error("Failed to bind query", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -259,7 +259,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 	transactions, err := h.walletService.GetWalletTransactions(c.Request.Context(), walletID, &filter)
 	if err != nil {
-		h.logger.Error("Failed to get wallet transactions", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet transactions", "error", err)
 		c.Error(err)
 		return
 	}
@@ -293,7 +293,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	var req dto.TopUpWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -302,7 +302,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error("Failed to top up wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to top up wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -355,7 +355,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	if err != nil {
-		h.logger.Error("Failed to get wallet balance", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
 	}
@@ -364,7 +364,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 		breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), walletID)
 		if err != nil {
-			h.logger.Errorw("failed to get credits available breakdown",
+			h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 				"error", err,
 				"wallet_id", walletID)
 			// Don't fail the request, just log the error and continue without breakdown
@@ -406,7 +406,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	// Get wallet balance
 	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, maxLiveSeconds)
 	if err != nil {
-		h.logger.Error("Failed to get wallet balance", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
 	}
@@ -415,7 +415,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 		breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), walletID)
 		if err != nil {
-			h.logger.Errorw("failed to get credits available breakdown",
+			h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 				"error", err,
 				"wallet_id", walletID)
 			// Don't fail the request, just log the error and continue without breakdown
@@ -452,7 +452,7 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 
 	err := h.walletService.TerminateWallet(c.Request.Context(), walletID)
 	if err != nil {
-		h.logger.Error("Failed to terminate wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to terminate wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -481,7 +481,7 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	var req dto.UpdateWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -490,12 +490,40 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	updated, err := h.walletService.UpdateWallet(ctx, id, &req)
 	if err != nil {
-		h.logger.Error("Failed to update wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to update wallet", "error", err)
 		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, dto.FromWallet(updated))
+}
+
+func (h *WalletHandler) ModifyWallet(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ModifyWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	modified, err := h.walletService.ModifyWallet(c.Request.Context(), walletID, &req)
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "Failed to modify wallet", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, modified)
 }
 
 func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
@@ -509,7 +537,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 	var req dto.ManualBalanceDebitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -518,7 +546,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 	wallet, err := h.walletService.ManualBalanceDebit(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error("Failed to debit balance manually", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to debit balance manually", "error", err)
 		c.Error(err)
 		return
 	}
@@ -603,7 +631,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 
 	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -617,7 +645,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.ID)
 				// Don't fail the request, just log the error and continue without breakdown
@@ -674,7 +702,7 @@ func (h *WalletHandler) QueryWallets(c *gin.Context) {
 
 	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -688,7 +716,7 @@ func (h *WalletHandler) QueryWallets(c *gin.Context) {
 		if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.ID)
 				// Don't fail the request, just log the error and continue without breakdown

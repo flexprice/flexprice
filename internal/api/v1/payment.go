@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -37,7 +37,7 @@ func NewPaymentHandler(service service.PaymentService, processor service.Payment
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	var req dto.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -46,7 +46,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 
 	resp, err := h.service.CreatePayment(c.Request.Context(), &req)
 	if err != nil {
-		h.log.Error("Failed to create payment", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create payment", "error", err)
 		c.Error(err)
 		return
 	}
@@ -78,7 +78,7 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 
 	resp, err := h.service.GetPayment(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get payment", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get payment", "error", err)
 		c.Error(err)
 		return
 	}
@@ -110,7 +110,7 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 
 	var req dto.UpdatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -119,7 +119,7 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 
 	resp, err := h.service.UpdatePayment(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update payment", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update payment", "error", err)
 		c.Error(err)
 		return
 	}
@@ -142,7 +142,7 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 func (h *PaymentHandler) ListPayments(c *gin.Context) {
 	var filter types.PaymentFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -155,7 +155,7 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 
 	resp, err := h.service.ListPayments(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list payments", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list payments", "error", err)
 		c.Error(err)
 		return
 	}
@@ -186,7 +186,7 @@ func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 	}
 
 	if err := h.service.DeletePayment(c.Request.Context(), id); err != nil {
-		h.log.Error("Failed to delete payment", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete payment", "error", err)
 		c.Error(err)
 		return
 	}
@@ -218,7 +218,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 
 	p, err := h.processor.ProcessPayment(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to process payment", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to process payment", "error", err)
 		c.Error(err)
 		return
 	}

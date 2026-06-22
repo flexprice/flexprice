@@ -34,7 +34,7 @@ func NewConnectionRepository(client postgres.IClient, log *logger.Logger, cache 
 func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.Connection) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating connection",
+	r.log.Debug(ctx, "creating connection",
 		"connection_id", c.ID,
 		"tenant_id", c.TenantID,
 		"name", c.Name,
@@ -108,7 +108,7 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting connection", "connection_id", id)
+	r.log.Debug(ctx, "getting connection", "connection_id", id)
 
 	c, err := client.Connection.Query().
 		Where(
@@ -153,7 +153,7 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("getting connection by provider",
+	r.log.Debug(ctx, "getting connection by provider",
 		"provider_type", provider)
 
 	// Create a filter to get connections by provider (tenant/environment inferred from ctx)
@@ -437,7 +437,7 @@ func (r *connectionRepository) Count(ctx context.Context, filter *types.Connecti
 func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.Connection) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating connection",
+	r.log.Debug(ctx, "updating connection",
 		"connection_id", c.ID,
 		"tenant_id", c.TenantID,
 	)
@@ -495,7 +495,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.Connection) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting connection",
+	r.log.Debug(ctx, "deleting connection",
 		"connection_id", c.ID,
 		"tenant_id", c.TenantID,
 	)
@@ -657,7 +657,7 @@ func (r *connectionRepository) SetCache(ctx context.Context, connection *domainC
 
 	r.cache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "key", cacheKey)
+	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
 func (r *connectionRepository) GetCache(ctx context.Context, key string) *domainConnection.Connection {
@@ -669,7 +669,7 @@ func (r *connectionRepository) GetCache(ctx context.Context, key string) *domain
 	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if connection, ok := value.(*domainConnection.Connection); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return connection
 		}
 	}
@@ -688,5 +688,5 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 	// Delete ID-based cache
 	cacheKey := cache.GenerateKey(cache.PrefixConnection, tenantID, environmentID, connection.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

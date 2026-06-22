@@ -2,7 +2,7 @@
 
 This document captures **verified dependency directions**, **chains**, and **concentrations of coupling** for the FlexPrice Go backend. It complements [`REPO_MAP.md`](REPO_MAP.md).
 
-**Evidence sources:** package structure, Fx wiring in `cmd/server/main.go`, `internal/service/factory.go` (`ServiceParams`), import rules between layers, and targeted code searches (e.g., `GetGlobalTemporalService`).
+**Evidence sources:** package structure, Fx wiring in `cmd/server/main.go`, `internal/ee/service/factory.go` (`ServiceParams`), import rules between layers, and targeted code searches (e.g., `GetGlobalTemporalService`).
 
 ---
 
@@ -15,7 +15,7 @@ flowchart LR
     CRON[internal/api/cron]
   end
   subgraph app
-    SVC[internal/service]
+    SVC[internal/ee/service]
     WH[internal/webhook]
     IE[internal/integration/events]
   end
@@ -48,7 +48,7 @@ flowchart LR
   IE --> PS
 ```
 
-**Intended invariant:** `internal/domain/**` MUST NOT import `internal/repository`, `internal/service`, or `internal/api`.
+**Intended invariant:** `internal/domain/**` MUST NOT import `internal/repository`, `internal/ee/service`, or `internal/api`.
 
 ---
 
@@ -91,7 +91,7 @@ Domain action / activity → Kafka system_events topic → WebhookService consum
 
 ## ServiceParams: structural hub (“god bag” tendency)
 
-`internal/service/factory.go` defines **`ServiceParams`**, the shared dependency struct for constructing services:
+`internal/ee/service/factory.go` defines **`ServiceParams`**, the shared dependency struct for constructing services:
 
 - **Repositories**: ~35+ interfaces (PostgreSQL aggregates + event-related repos split by concern).
 - **Cross-cutting**: `Logger`, `Config`, `postgres.IClient`, publishers (`publisher.EventPublisher`, `webhook` publisher via params), HTTP client, proration calculator, **`integration.Factory`**, pubsubs for wallet alerts and usage benchmarks.
@@ -104,7 +104,7 @@ Domain action / activity → Kafka system_events topic → WebhookService consum
 
 | Module / type | Role | Call pattern |
 | ------------- | ---- | ------------- |
-| `internal/service.ServiceParams` | Universal DI blob for services | Embedded or passed explicitly into service structs |
+| `internal/ee/service.ServiceParams` | Universal DI blob for services | Embedded or passed explicitly into service structs |
 | `internal/domain/*/repository.go` | Interface boundaries | Implemented once per store (Ent vs CH) |
 | `internal/integration/factory.go` | Provider routing | Resolved by billing, payments, onboarding, Temporal activities |
 | `internal/config.Configuration` | All tunables | Every layer reads scoped subtrees |

@@ -105,7 +105,7 @@ func (w *workflowTrackingInboundInterceptor) ExecuteWorkflow(
 		EndTime:        endTime,
 		DurationMs:     durationMs,
 		TenantID:       tenantID,
-		EnvironmentID: environmentID,
+		EnvironmentID:  environmentID,
 	})
 
 	return result, err

@@ -49,7 +49,7 @@ func (r *groupRepository) Create(ctx context.Context, grp *domainGroup.Group) er
 		Save(ctx)
 
 	if err != nil {
-		r.log.Error("Failed to create group", "error", err, "group_id", grp.ID)
+		r.log.Error(ctx, "Failed to create group", "error", err, "group_id", grp.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to create group").
 			Mark(ierr.ErrDatabase)
@@ -77,7 +77,7 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 				WithHint("Group not found").
 				Mark(ierr.ErrNotFound)
 		}
-		r.log.Error("Failed to get group", "error", err, "group_id", id)
+		r.log.Error(ctx, "Failed to get group", "error", err, "group_id", id)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get group").
 			Mark(ierr.ErrDatabase)
@@ -106,7 +106,7 @@ func (r *groupRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 				WithHint("Group not found").
 				Mark(ierr.ErrNotFound)
 		}
-		r.log.Error("Failed to get group by lookup key", "error", err, "lookup_key", lookupKey)
+		r.log.Error(ctx, "Failed to get group by lookup key", "error", err, "lookup_key", lookupKey)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get group by lookup key").
 			Mark(ierr.ErrDatabase)
@@ -137,7 +137,7 @@ func (r *groupRepository) List(ctx context.Context, filter *types.GroupFilter) (
 	entGroups, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Error("Failed to list groups", "error", err)
+		r.log.Error(ctx, "Failed to list groups", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list groups").
 			Mark(ierr.ErrDatabase)
@@ -200,7 +200,7 @@ func (r *groupRepository) Update(ctx context.Context, grp *domainGroup.Group) er
 		Save(ctx)
 
 	if err != nil {
-		r.log.Error("Failed to update group", "error", err, "group_id", grp.ID)
+		r.log.Error(ctx, "Failed to update group", "error", err, "group_id", grp.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to update group").
 			Mark(ierr.ErrDatabase)
@@ -225,7 +225,7 @@ func (r *groupRepository) Delete(ctx context.Context, id string) error {
 		Save(ctx)
 
 	if err != nil {
-		r.log.Error("Failed to delete group", "error", err, "group_id", id)
+		r.log.Error(ctx, "Failed to delete group", "error", err, "group_id", id)
 		return ierr.WithError(err).
 			WithHint("Failed to delete group").
 			Mark(ierr.ErrDatabase)

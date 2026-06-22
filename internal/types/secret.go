@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -70,9 +72,11 @@ type SecretFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	Type     *SecretType     `json:"type,omitempty" form:"type"`
-	Provider *SecretProvider `json:"provider,omitempty" form:"provider"`
-	Prefix   *string         `json:"prefix,omitempty" form:"prefix"`
+	Type         *SecretType     `json:"type,omitempty" form:"type"`
+	Provider     *SecretProvider `json:"provider,omitempty" form:"provider"`
+	Prefix       *string         `json:"prefix,omitempty" form:"prefix"`
+	UserID       *string         `json:"user_id,omitempty" form:"user_id"`
+	NotExpiredAt *time.Time      `json:"-"` // exclude records expired before this time (expires_at IS NULL OR expires_at > value)
 }
 
 func NewSecretFilter() *SecretFilter {

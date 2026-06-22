@@ -23,10 +23,17 @@ type Configuration struct {
 	Server                     ServerConfig                     `validate:"required"`
 	Auth                       AuthConfig                       `validate:"required"`
 	Kafka                      KafkaConfig                      `validate:"required"`
+	// KafkaSecondary is the optional second Kafka cluster the source event publisher also
+	// writes to during the AWS→GCP migration (the "other" cloud's cluster). When set
+	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
+	// when nil, publishing is single-cluster. The `kafka` block is this deployment's own
+	// local cluster — consumed AND always written. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	KafkaSecondary             *KafkaConfig                     `mapstructure:"kafka_secondary" validate:"omitempty"`
 	ClickHouse                 ClickHouseConfig                 `validate:"required"`
 	Logging                    LoggingConfig                    `validate:"required"`
 	Postgres                   PostgresConfig                   `validate:"required"`
 	Sentry                     SentryConfig                     `validate:"required"`
+	Otel                       OtelConfig                       `validate:"omitempty"`
 	Pyroscope                  PyroscopeConfig                  `validate:"required"`
 	Event                      EventConfig                      `validate:"required"`
 	DynamoDB                   DynamoDBConfig                   `validate:"required"`
@@ -47,6 +54,7 @@ type Configuration struct {
 	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
 	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
+	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
 	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
@@ -124,22 +132,22 @@ type SupabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers                []string             `mapstructure:"brokers" validate:"required"`
-	ConsumerGroup          string               `mapstructure:"consumer_group" validate:"required"`
-	Topic                  string               `mapstructure:"topic" validate:"required"`
-	TopicLazy              string               `mapstructure:"topic_lazy" validate:"required"`
-	TopicDLQ               string               `mapstructure:"topic_dlq" default:""`
-	TLS                    bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
-	UseSASL                bool                 `mapstructure:"use_sasl"`
-	SASLMechanism          sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
-	SASLUser               string               `mapstructure:"sasl_user"`
-	SASLPassword           string               `mapstructure:"sasl_password"`
+	Brokers       []string             `mapstructure:"brokers" validate:"required"`
+	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
+	Topic         string               `mapstructure:"topic" validate:"required"`
+	TopicLazy     string               `mapstructure:"topic_lazy" validate:"required"`
+	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
+	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	UseSASL       bool                 `mapstructure:"use_sasl"`
+	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
+	SASLUser      string               `mapstructure:"sasl_user"`
+	SASLPassword  string               `mapstructure:"sasl_password"`
 	// SASLOAuthScopes is consulted only when SASLMechanism is OAUTHBEARER.
 	// Empty defaults to ["https://www.googleapis.com/auth/cloud-platform"],
 	// which is what GCP Managed Kafka requires.
-	SASLOAuthScopes        []string             `mapstructure:"sasl_oauth_scopes"`
-	ClientID               string               `mapstructure:"client_id" validate:"required"`
-	RouteTenantsOnLazyMode []string             `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
+	ClientID               string   `mapstructure:"client_id" validate:"required"`
+	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
 }
 
 type ClickHouseConfig struct {
@@ -159,11 +167,6 @@ type LoggingConfig struct {
 	ServiceName string `mapstructure:"service_name" validate:"omitempty"`
 	Environment string `mapstructure:"environment" validate:"omitempty"`
 	Region      string `mapstructure:"region" validate:"omitempty"`
-
-	// Fluentd configuration
-	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
-	FluentdHost    string `mapstructure:"fluentd_host" validate:"omitempty"`
-	FluentdPort    int    `mapstructure:"fluentd_port" validate:"omitempty"`
 
 	// OpenTelemetry log export configuration (works with SigNoz, Grafana, Datadog, etc.)
 	OtelEnabled    bool   `mapstructure:"otel_enabled" default:"false"`
@@ -204,11 +207,126 @@ type APIKeyDetails struct {
 	IsActive bool   `mapstructure:"is_active" json:"is_active" default:"true"` // whether this key is active
 }
 
+// SentryConfig is retained only for transitional rollback. Error/exception
+// capture is now OTel-native (see internal/tracing.CaptureException and
+// internal/spanerr); Sentry is no longer the sink and defaults to disabled.
 type SentryConfig struct {
-	Enabled     bool    `mapstructure:"enabled"`
+	Enabled     bool    `mapstructure:"enabled" default:"false"`
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
+}
+
+// OtelConfig is the unified OTLP exporter configuration. Each signal (traces,
+// logs) can target a different backend with its own headers — useful when you
+// want, for example, logs to SigNoz and traces to Sentry. Top-level fields act
+// as defaults; per-signal fields override when non-empty.
+type OtelConfig struct {
+	Enabled     bool              `mapstructure:"enabled" default:"false"`
+	ServiceName string            `mapstructure:"service_name" validate:"omitempty"` // falls back to logging.service_name, then deployment.mode
+	Protocol    string            `mapstructure:"protocol" default:"grpc"`           // grpc (default) or http
+	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
+	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
+
+	Traces OtelTracesConfig `mapstructure:"traces"`
+	Logs   OtelLogsConfig   `mapstructure:"logs"`
+}
+
+// OtelTracesConfig configures OTLP span export.
+//
+// For backends that need a single auth header (Sentry's OTLP gateway, SigNoz
+// Cloud, Grafana Cloud, etc.) prefer the AuthHeader/AuthValue pair — these are
+// env-var friendly. Use Headers when you need to send more than one header.
+// AuthHeader/AuthValue are merged into the resolved header set at startup.
+type OtelTracesConfig struct {
+	Enabled             bool              `mapstructure:"enabled" default:"false"`
+	Endpoint            string            `mapstructure:"endpoint" validate:"omitempty"` // host:port (grpc) or full URL (http)
+	Protocol            string            `mapstructure:"protocol" validate:"omitempty"` // overrides otel.protocol when non-empty
+	AuthHeader          string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
+	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
+	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// CaptureExceptions records errors (CaptureException calls, error-level logs,
+	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
+	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
+	CaptureExceptions bool `mapstructure:"capture_exceptions" default:"true"`
+}
+
+// OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
+// AuthHeader/AuthValue convenience pair.
+type OtelLogsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+}
+
+// MergedHeaders returns the effective header set, merging the AuthHeader/
+// AuthValue convenience pair into the explicit Headers map. The pair wins on
+// conflict so single-header env-var configs take precedence over YAML defaults.
+func (c OtelTracesConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+func mergeAuthHeader(headers map[string]string, authHeader, authValue string) map[string]string {
+	if authHeader == "" || authValue == "" {
+		return headers
+	}
+	out := make(map[string]string, len(headers)+1)
+	for k, v := range headers {
+		out[k] = v
+	}
+	out[authHeader] = authValue
+	return out
+}
+
+// ResolveServiceName returns the service name for the OTel resource.
+// Precedence: otel.service_name → logging.service_name → deployment.mode.
+func (c OtelConfig) ResolveServiceName(cfg *Configuration) string {
+	if c.ServiceName != "" {
+		return c.ServiceName
+	}
+	if cfg.Logging.ServiceName != "" {
+		return cfg.Logging.ServiceName
+	}
+	return string(cfg.Deployment.Mode)
+}
+
+// ResolveProtocol picks a per-signal protocol, falling back to otel.protocol,
+// then to "grpc". The result is normalized to a canonical transport value:
+// "http" for any HTTP variant (the OTel-standard "http/protobuf", "http/json",
+// or a bare "http") and "grpc" otherwise. Normalizing here prevents the
+// exporter-selection bug where a config value of "http/protobuf" failed an
+// exact `protocol == "http"` check and silently fell back to the gRPC exporter.
+func (c OtelConfig) ResolveProtocol(signalProtocol string) string {
+	raw := signalProtocol
+	if raw == "" {
+		raw = c.Protocol
+	}
+	if raw == "" {
+		return "grpc"
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "http") {
+		return "http"
+	}
+	return "grpc"
+}
+
+// ResolveHeaders picks per-signal headers, falling back to otel.headers when
+// the signal hasn't supplied its own.
+func (c OtelConfig) ResolveHeaders(signalHeaders map[string]string) map[string]string {
+	if len(signalHeaders) > 0 {
+		return signalHeaders
+	}
+	return c.Headers
 }
 
 type PyroscopeConfig struct {
@@ -333,6 +451,18 @@ type MeterUsageTrackingConfig struct {
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 }
 
+// MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
+// the central publisher routes to the events_lazy topic (see Kafka.TopicLazy
+// and Kafka.RouteTenantsOnLazyMode). Mirrors MeterUsageTrackingConfig but
+// reads from a separate topic with its own consumer group so lazy traffic is
+// isolated from the normal stream.
+type MeterUsageTrackingLazyConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"events_lazy"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
+}
+
 // UsageBenchmarkConfig configures the usage benchmarking consumer
 type UsageBenchmarkConfig struct {
 	Enabled       bool   `mapstructure:"enabled" default:"false"`
@@ -396,6 +526,7 @@ type FeatureFlagConfig struct {
 	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
 	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
+	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
 
 	// Per-tenant overrides for the meter-usage rollout. Resolution order:
 	//   1. disabled_tenants — tenant force-disabled (highest priority)
@@ -405,6 +536,8 @@ type FeatureFlagConfig struct {
 	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
+	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
+	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
@@ -428,6 +561,19 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) boo
 		c.EnableMeterUsageForAnalytics,
 		c.MeterUsageForAnalyticsEnabledTenants,
 		c.MeterUsageForAnalyticsDisabledTenants,
+	)
+}
+
+// IsUsageBenchmarkEnabled resolves the usage-benchmark publish gate for a
+// specific tenant. Gates publishBenchmarkEvent in the wallet billing path so
+// the feature-usage / meter-usage comparison runs only for selected tenants.
+// See FeatureFlagConfig for the resolution order.
+func (c *FeatureFlagConfig) IsUsageBenchmarkEnabled(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnableUsageBenchmark,
+		c.UsageBenchmarkEnabledTenants,
+		c.UsageBenchmarkDisabledTenants,
 	)
 }
 
@@ -480,20 +626,20 @@ type CustomerPortalConfig struct {
 
 // RedisConfig holds configuration for Redis
 type RedisConfig struct {
-	Host        string        `mapstructure:"host" default:"localhost"`
-	Port        int           `mapstructure:"port" default:"6379"`
-	Password    string        `mapstructure:"password" default:""`
-	DB          int           `mapstructure:"db" default:"0"`
-	UseTLS      bool          `mapstructure:"use_tls" default:"false"`
-	PoolSize    int           `mapstructure:"pool_size" default:"10"`
-	Timeout     time.Duration `mapstructure:"timeout" default:"5s"`
-	KeyPrefix   string        `mapstructure:"key_prefix" default:"flexprice"`
+	Host      string        `mapstructure:"host" default:"localhost"`
+	Port      int           `mapstructure:"port" default:"6379"`
+	Password  string        `mapstructure:"password" default:""`
+	DB        int           `mapstructure:"db" default:"0"`
+	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
+	PoolSize  int           `mapstructure:"pool_size" default:"10"`
+	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
 	// ClusterMode: true → *redis.ClusterClient (Redis Cluster, ElastiCache
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
 	// FLEXPRICE_REDIS_CLUSTER_MODE.
-	ClusterMode bool          `mapstructure:"cluster_mode"`
+	ClusterMode bool `mapstructure:"cluster_mode"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -528,6 +674,30 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
 	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
 
+	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
+	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
+	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
+	_ = v.BindEnv("otel.protocol", "FLEXPRICE_OTEL_PROTOCOL")
+	_ = v.BindEnv("otel.insecure", "FLEXPRICE_OTEL_INSECURE")
+	_ = v.BindEnv("otel.traces.enabled", "FLEXPRICE_OTEL_TRACES_ENABLED")
+	_ = v.BindEnv("otel.traces.endpoint", "FLEXPRICE_OTEL_TRACES_ENDPOINT")
+	_ = v.BindEnv("otel.traces.protocol", "FLEXPRICE_OTEL_TRACES_PROTOCOL")
+	_ = v.BindEnv("otel.traces.auth_header", "FLEXPRICE_OTEL_TRACES_AUTH_HEADER")
+	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
+	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
+	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
+	_ = v.BindEnv("otel.traces.capture_exceptions", "FLEXPRICE_OTEL_TRACES_CAPTURE_EXCEPTIONS")
+	// Exception capture is on by default. Struct `default:` tags aren't applied at
+	// runtime here (defaults live in config.yaml), so guarantee default-on via
+	// SetDefault for deploys whose config.yaml predates this key. Env/yaml override.
+	v.SetDefault("otel.traces.capture_exceptions", true)
+	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
+	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
+	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
+	_ = v.BindEnv("otel.logs.insecure", "FLEXPRICE_OTEL_LOGS_INSECURE")
+	_ = v.BindEnv("otel.logs.auth_header", "FLEXPRICE_OTEL_LOGS_AUTH_HEADER")
+	_ = v.BindEnv("otel.logs.auth_value", "FLEXPRICE_OTEL_LOGS_AUTH_VALUE")
+
 	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
 	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
 	_ = v.BindEnv("logging.otel_endpoint", "FLEXPRICE_LOGGING_OTEL_ENDPOINT")
@@ -545,8 +715,48 @@ func NewConfig() (*Configuration, error) {
 
 	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// Explicitly bind auth.secret — the helm ConfigMap's rendered config.yaml omits this key,
+	// so on GKE deployments it stays empty and supabase/JWT token validation fails (login
+	// broken, and an empty key makes tokens forgeable). The FLEXPRICE_AUTH_SECRET env is
+	// injected from the secret; this bind makes Unmarshal actually read it.
+	_ = v.BindEnv("auth.secret", "FLEXPRICE_AUTH_SECRET")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
+
+	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
+	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
+	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
+	// are silently ignored and dual-write never turns on. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	_ = v.BindEnv("kafka_secondary.brokers", "FLEXPRICE_KAFKA_SECONDARY_BROKERS")
+	_ = v.BindEnv("kafka_secondary.consumer_group", "FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP")
+	_ = v.BindEnv("kafka_secondary.topic", "FLEXPRICE_KAFKA_SECONDARY_TOPIC")
+	_ = v.BindEnv("kafka_secondary.topic_lazy", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_LAZY")
+	_ = v.BindEnv("kafka_secondary.topic_dlq", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_DLQ")
+	_ = v.BindEnv("kafka_secondary.tls", "FLEXPRICE_KAFKA_SECONDARY_TLS")
+	_ = v.BindEnv("kafka_secondary.use_sasl", "FLEXPRICE_KAFKA_SECONDARY_USE_SASL")
+	_ = v.BindEnv("kafka_secondary.sasl_mechanism", "FLEXPRICE_KAFKA_SECONDARY_SASL_MECHANISM")
+	_ = v.BindEnv("kafka_secondary.sasl_user", "FLEXPRICE_KAFKA_SECONDARY_SASL_USER")
+	_ = v.BindEnv("kafka_secondary.sasl_password", "FLEXPRICE_KAFKA_SECONDARY_SASL_PASSWORD")
+	_ = v.BindEnv("kafka_secondary.sasl_oauth_scopes", "FLEXPRICE_KAFKA_SECONDARY_SASL_OAUTH_SCOPES")
+	_ = v.BindEnv("kafka_secondary.client_id", "FLEXPRICE_KAFKA_SECONDARY_CLIENT_ID")
+	_ = v.BindEnv("kafka_secondary.route_tenants_on_lazy_mode", "FLEXPRICE_KAFKA_SECONDARY_ROUTE_TENANTS_ON_LAZY_MODE")
+
+	// Explicitly bind the PRIMARY kafka SASL credentials. The helm ConfigMap renders the
+	// kafka block without sasl_user/sasl_password, so on a GKE deployment whose primary
+	// cluster uses a password mechanism (e.g. AWS MSK SCRAM-SHA-512) these stay empty and
+	// SCRAM auth fails. The FLEXPRICE_KAFKA_SASL_{USER,PASSWORD} envs are injected by the
+	// chart; these binds make Unmarshal read them. (OAUTHBEARER/GMK needs neither.)
+	_ = v.BindEnv("kafka.sasl_user", "FLEXPRICE_KAFKA_SASL_USER")
+	_ = v.BindEnv("kafka.sasl_password", "FLEXPRICE_KAFKA_SASL_PASSWORD")
+
+	// Explicitly bind deployment.mode — the helm ConfigMap is one shared object across the
+	// api/consumer/worker Deployments, so it cannot carry a per-component mode; the only
+	// per-component signal is the FLEXPRICE_DEPLOYMENT_MODE env each Deployment sets. Since
+	// deployment.mode is absent from the rendered config.yaml and was not bound, AutomaticEnv+
+	// Unmarshal ignored the env and every pod fell back to ModeLocal (running API + Temporal +
+	// Kafka consumers regardless of role — e.g. the api consuming prod topics). This bind makes
+	// Unmarshal honor the per-Deployment env. See infrastructure/docs/gcp-mumbai-gmk-consumer-runbook.md.
+	_ = v.BindEnv("deployment.mode", "FLEXPRICE_DEPLOYMENT_MODE")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

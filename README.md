@@ -15,9 +15,7 @@ Flexprice lets AI-native and SaaS teams operate usage-based, credit-based, and h
 
 [Docs](https://docs.flexprice.io) • [Demo](https://www.loom.com/share/60d8308781254fe0bc5be341501f9fd5) • [Website](https://flexprice.io/) • [LinkedIn](https://www.linkedin.com/company/flexpriceio) • [X](https://x.com/tryflexprice) • [Slack Community](https://flexpricecommunity.slack.com/ssb/redirect#/shared-invite/email)
 
-
-[![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/flexprice/go-sdk) [![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)](https://pypi.org/project/flexprice) [![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)](https://www.npmjs.com/package/@flexprice/sdk) 
-
+[![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/flexprice/go-sdk) [![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)](https://pypi.org/project/flexprice) [![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)](https://www.npmjs.com/package/@flexprice/sdk)
 
 <a href="https://trendshift.io/repositories/14669" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14669" alt="flexprice%2Fflexprice | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -28,7 +26,8 @@ Flexprice lets AI-native and SaaS teams operate usage-based, credit-based, and h
 ---
 
 ## Open architecture
-The Flexprice core (metering, credits, pricing, billing) has an open and composable design. 
+
+The Flexprice core (metering, credits, pricing, billing) has an open and composable design.
 
 Your application, whether it's running backend APIs, AI agents, or custom workflows, can send usage data to Flexprice. You can directly stream data from data warehouses or analytics pipelines as well.
 
@@ -41,7 +40,8 @@ With this architecture, you get full control over how billing works inside your 
 ## Why billing is a developer problem?
 
 ##### TL;DR
-*When existing billing tools don’t flex to your product’s needs, developers shoulder the burden eating up valuable development time and causing ongoing maintenance headaches.*
+
+_When existing billing tools don’t flex to your product’s needs, developers shoulder the burden eating up valuable development time and causing ongoing maintenance headaches._
 
 <p align="center">
   <img align="center" src="./assets/struggle.png" alt="struggle is real"/>
@@ -64,11 +64,9 @@ Flexprice’s approach is to abstract away the hard parts of billing while prese
 - **Developer-first design:** Flexprice is built API-first with easy integrations. You can instrument your app by simply sending usage events via SDKs, and Flexprice handles the aggregation, metering, and billing logic in real time. This means minimal code to write on your end and no need to reinvent metering or invoice calculations.
 
 * **Open-source and self-hostable:** Flexprice is open-source, so you can run it on your own infrastructure for full transparency and control. There’s no black-box dependency or surprise fees and you’re free from vendor lock-in. You can inspect the code, extend functionality, and trust that your billing logic is fully in your hands.
-    
-    
+
 - **Composable with your stack:** Rather than replacing your existing billing or payment provider, Flexprice augments it. You can build it from scratch or build on top of your existing billing providers like Stripe or Chargebee to manage usage data, pricing rules, credits, and entitlements. You can easily integrate with your existing payment gateways, CRM, CPQ, etc. This layered approach preserves your current workflows and customer touchpoints.
-    
-    
+
 * **Flexible pricing models out-of-the-box:** Whether you need pure usage-based billing, tiered plans, seat-based subscriptions, prepaid credits, free tiers with overage, or any hybrid model, Flexprice’s data model and rules engine can support it. Flexprice is designed to accommodate changing pricing strategies in minutues that would normally require schema updates and migration scripts.
 
 - **Transparency and visibility:** Because Flexprice meters every event and ties it to billing, you (and your customers) get clear visibility into usage and charges. It can provide real-time usage summaries and cost reports, helping both engineering and finance teams ensure everything lines up correctly. Customers get detailed invoices that show exactly what they’re paying for, reducing billing disputes or confusion.
@@ -83,14 +81,17 @@ Flexprice provides a rich set of features to power usage-based and hybrid billin
   <img align="center" src="./assets/features.jpg" alt="features"/>
 </p>
 
-*  [**Usage Metering:**](https://docs.flexprice.io/api-reference/events/get-raw-events) Define custom usage events (API calls, compute time, database queries, etc.) at a granular level and track them in real time. Flexprice’s metering system can handle millions of events and aggregates usage data reliably, even at peak load. This ensures your billing is always up-to-date with actual customer usage.
-- [**Credit Grants (Prepaid & Promotional Credits):**](https://docs.flexprice.io/docs/Wallet/Creating%20a%20wallet) Support credit-based workflows with full control. You can grant prepaid credits or promotional credits to customers, set up automatic top-ups at thresholds, and expire unused credits as needed. Flexprice’s credit system is built-in, so you don’t need extra custom logic to handle one-time credits or wallets.
-* [**Pricing Plans:**](https://docs.flexprice.io/docs/Product%20catalogue/Plans/Overview) Design and iterate on pricing models with total flexibility – whether seat-based subscriptions, pure pay-as-you-go, volume-tiered pricing, or hybrids. You can launch new plans or modify existing ones (e.g. special pricing for a particular customer) without additional engineering effort. Flexprice lets you override plan settings per customer and manage plan versioning over time, making it easy to evolve pricing as your product and market strategy change.
-- [**Feature Management:**](https://docs.flexprice.io/docs/Product%20catalogue/Features/Overview) Manage feature entitlements and usage limits per plan or per customer. Flexprice lets you define feature toggles (on/off), metered feature limits, or configuration values tied to plans. You can enforce usage limits in your application by checking with Flexprice (for example, limit API calls per month or enable/disable certain features based on plan) without building complex entitlement logic yourself. This ensures that your product’s feature access is always in sync with what the customer has paid for.
-* [**Subscriptions & Invoicing:**](https://docs.flexprice.io/docs/Invoices/Overview) Flexprice generates clear, accurate invoices based on real-time usage data, subscriptions, and credits. It automates billing cycles – handling proration, overages, and credit application – and produces invoice line items that give customers full visibility into their charges. Finance teams can easily reconcile billing because every charge is linked to tracked usage or a defined price. You can also integrate this with your payment processor to automate charging customers once an invoice is finalized.
+- [**Usage Metering:**](https://docs.flexprice.io/api-reference/events/get-raw-events) Define custom usage events (API calls, compute time, database queries, etc.) at a granular level and track them in real time. Flexprice’s metering system can handle millions of events and aggregates usage data reliably, even at peak load. This ensures your billing is always up-to-date with actual customer usage.
+
+* [**Credit Grants (Prepaid & Promotional Credits):**](https://docs.flexprice.io/docs/Wallet/Creating%20a%20wallet) Support credit-based workflows with full control. You can grant prepaid credits or promotional credits to customers, set up automatic top-ups at thresholds, and expire unused credits as needed. Flexprice’s credit system is built-in, so you don’t need extra custom logic to handle one-time credits or wallets.
+
+- [**Pricing Plans:**](https://docs.flexprice.io/docs/Product%20catalogue/Plans/Overview) Design and iterate on pricing models with total flexibility – whether seat-based subscriptions, pure pay-as-you-go, volume-tiered pricing, or hybrids. You can launch new plans or modify existing ones (e.g. special pricing for a particular customer) without additional engineering effort. Flexprice lets you override plan settings per customer and manage plan versioning over time, making it easy to evolve pricing as your product and market strategy change.
+
+* [**Feature Management:**](https://docs.flexprice.io/docs/Product%20catalogue/Features/Overview) Manage feature entitlements and usage limits per plan or per customer. Flexprice lets you define feature toggles (on/off), metered feature limits, or configuration values tied to plans. You can enforce usage limits in your application by checking with Flexprice (for example, limit API calls per month or enable/disable certain features based on plan) without building complex entitlement logic yourself. This ensures that your product’s feature access is always in sync with what the customer has paid for.
+
+- [**Subscriptions & Invoicing:**](https://docs.flexprice.io/docs/Invoices/Overview) Flexprice generates clear, accurate invoices based on real-time usage data, subscriptions, and credits. It automates billing cycles – handling proration, overages, and credit application – and produces invoice line items that give customers full visibility into their charges. Finance teams can easily reconcile billing because every charge is linked to tracked usage or a defined price. You can also integrate this with your payment processor to automate charging customers once an invoice is finalized.
 
 Each of these features is accessible via Flexprice’s APIs and dashboard, allowing you to mix and match to build the exact billing experience you need.
-
 
 ### 🚀 Setting up Flexprice from source for development and contributions
 
@@ -99,9 +100,9 @@ To run Flexprice for local development or running from source, you will need
 1. [Golang](https://go.dev/)
 2. [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
 3. Any of the below supported platform environments:
-    1. [Linux based environment](https://en.wikipedia.org/wiki/Comparison_of_Linux_distributions)
-    2. [OSX (Darwin) based environment](https://en.wikipedia.org/wiki/MacOS)
-    3. WSL under Windows
+   1. [Linux based environment](https://en.wikipedia.org/wiki/Comparison_of_Linux_distributions)
+   2. [OSX (Darwin) based environment](https://en.wikipedia.org/wiki/MacOS)
+   3. WSL under Windows
 
 #### Quick Setup with Docker Compose
 
@@ -117,12 +118,14 @@ make dev-setup
 ```
 
 This will:
+
 1. Start all required infrastructure (PostgreSQL, Kafka, ClickHouse, Temporal)
 2. Build the FlexPrice application image
 3. Run database migrations and initialize Kafka
 4. Start all FlexPrice services (API, Consumer, Worker)
 
 Once complete, you can access:
+
 - FlexPrice API: http://localhost:8080
 - Temporal UI: http://localhost:8088
 - Kafka UI: http://localhost:8084 (with profile 'dev')
@@ -159,7 +162,6 @@ docker compose up -d postgres kafka clickhouse temporal temporal-ui
 go run cmd/server/main.go
 ```
 
-
 ## 👨🏻‍💻 Let's Build Together! 👩🏻‍💻
 
 Whether you're a newbie coder or a wizard 🧙‍♀️, your perspective is golden. Take a peek at our:
@@ -186,7 +188,7 @@ Whether you're a newbie coder or a wizard 🧙‍♀️, your perspective is gol
 
 ## License
 
-Flexprice is a commercial open source company, which means some parts of this open source repository require a commercial license. The concept is called "Open Core" where the core technology (99%) is fully open source, licensed under [AGPLv3](https://opensource.org/license/agpl-v3) and the last 1% is covered under a commercial license (["/ee" Enterprise Edition"]).
+Flexprice is a commercial open source company, which means some parts of this open source repository require a commercial license. The concept is called "Open Core" where the core technology (99%) is fully open source, licensed under [AGPLv3](https://opensource.org/license/agpl-v3) and the last 1% is covered under a commercial license ([`ee` , `internal/ee` Enterprise Edition]).
 
 > [!TIP]
 > We work closely with the community and always invite feedback about what should be open and what is fine to be commercial. This list is not set and stone and we have moved things from commercial to open in the past. Please open a [discussion](https://github.com/flexprice/flexprice/discussions) if you feel like something is wrong.

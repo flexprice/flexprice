@@ -34,7 +34,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	}
 
 	// log the incoming request
-	h.logger.Infof("incoming request: %s %s | body: %s", c.Request.Method, c.Request.URL.Path, request)
+	h.logger.Info(c.Request.Context(), "incoming request", "method", c.Request.Method, "path", c.Request.URL.Path, "body", request)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

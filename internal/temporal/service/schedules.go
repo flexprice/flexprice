@@ -9,9 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	cronWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/cron"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
-	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
@@ -44,10 +44,10 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			ID:       types.ScheduleIDSubscriptionBilling,
-			Interval: 15 * time.Minute,
-			Workflow: subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
-			Input:    subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{BatchSize: types.DEFAULT_BATCH_SIZE},
+			ID:        types.ScheduleIDSubscriptionBilling,
+			Interval:  2 * time.Minute,
+			Workflow:  subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
+			Input:     subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{BatchSize: types.DEFAULT_BATCH_SIZE},
 			TaskQueue: types.TemporalTaskQueueSubscription,
 		},
 		{
@@ -73,9 +73,16 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 		},
 		{
 			ID:        types.ScheduleIDOutboundWebhookStaleRetry,
-			Interval:  15 * time.Minute,
+			Interval:  2 * time.Minute,
 			Workflow:  cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			Input:     models.OutboundWebhookStaleRetryWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDPaddleInvoicePullSync,
+			Interval:  1 * time.Hour,
+			Workflow:  cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
+			Input:     models.PaddleInvoicePullSyncCronInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 	}
@@ -88,7 +95,7 @@ func EnsureSchedules(ctx context.Context, tc client.TemporalClient, log *logger.
 		if err := ensureOneSchedule(ctx, tc, cfg); err != nil {
 			return err
 		}
-		log.Infow("schedule ensured", "id", cfg.ID)
+		log.Info(ctx, "schedule ensured", "id", cfg.ID)
 	}
 	return nil
 }

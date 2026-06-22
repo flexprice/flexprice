@@ -18,8 +18,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -174,7 +174,7 @@ func newAssignPlanScript() (*assignPlanScript, error) {
 	}
 
 	// Initialize ClickHouse client for event repositories
-	sentryService := sentry.NewSentryService(cfg, log)
+	sentryService := tracing.NewService(cfg, log)
 	chStore, err := clickhouse.NewClickHouseStore(cfg, sentryService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to clickhouse: %w", err)
@@ -185,7 +185,7 @@ func newAssignPlanScript() (*assignPlanScript, error) {
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
 
 	// Create repositories

@@ -1,0 +1,519 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
+	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
+)
+
+type CustomerService = interfaces.CustomerService
+
+type customerService struct {
+	ServiceParams
+}
+
+func NewCustomerService(params ServiceParams) CustomerService {
+	return &customerService{
+		ServiceParams: params,
+	}
+}
+
+func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	cust := req.ToCustomer(ctx)
+
+	// Validate address fields
+	if err := customer.ValidateAddress(cust); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid address information provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.CustomerRepo.Create(txCtx, cust); err != nil {
+			// No need to wrap the error as the repository already returns properly formatted errors
+			return err
+		}
+
+		taxService := NewTaxService(s.ServiceParams)
+
+		// Link tax rates to customer if provided
+		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		if len(req.TaxRateOverrides) > 0 {
+			err := taxService.LinkTaxRatesToEntity(txCtx, dto.LinkTaxRateToEntityRequest{
+				EntityType:       types.TaxRateEntityTypeCustomer,
+				EntityID:         cust.ID,
+				TaxRateOverrides: req.TaxRateOverrides,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		// If no tax rate overrides are provided, link the tenant tax rate to the customer
+		if req.TaxRateOverrides == nil {
+			filter := types.NewNoLimitTaxAssociationFilter()
+			filter.EntityType = types.TaxRateEntityTypeTenant
+			filter.EntityID = types.GetTenantID(txCtx)
+			filter.AutoApply = lo.ToPtr(true)
+			tenantTaxAssociations, err := taxService.ListTaxAssociations(txCtx, filter)
+			if err != nil {
+				return err
+			}
+
+			err = taxService.LinkTaxRatesToEntity(txCtx, dto.LinkTaxRateToEntityRequest{
+				EntityType:              types.TaxRateEntityTypeCustomer,
+				EntityID:                cust.ID,
+				ExistingTaxAssociations: tenantTaxAssociations.Items,
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// Publish webhook event for customer creation
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
+
+	// Check if we should skip the customer onboarding workflow
+	// This flag is used when a customer is created via a workflow to prevent infinite loops
+	if !req.SkipOnboardingWorkflow {
+		if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
+			s.Logger.Error(ctx, "failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
+		}
+	} else {
+		s.Logger.Debug(ctx, "skipping customer onboarding workflow",
+			"customer_id", cust.ID,
+			"external_id", cust.ExternalID,
+			"reason", "skip_onboarding_workflow flag is true")
+	}
+
+	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.CustomerResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("customer ID is required").
+			WithHint("Customer ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	customer, err := s.CustomerRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.CustomerResponse{Customer: customer}, nil
+}
+
+func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
+	if filter == nil {
+		filter = &types.CustomerFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	// Validate expand fields
+	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation)
+	}
+
+	customers, err := s.CustomerRepo.List(ctx, filter)
+	if err != nil {
+		// No need to wrap the error as the repository already returns properly formatted errors
+		return nil, err
+	}
+
+	total, err := s.CustomerRepo.Count(ctx, filter)
+	if err != nil {
+		// No need to wrap the error as the repository already returns properly formatted errors
+		return nil, err
+	}
+
+	response := make([]*dto.CustomerResponse, 0, len(customers))
+	for _, c := range customers {
+		response = append(response, &dto.CustomerResponse{Customer: c})
+	}
+
+	if len(response) == 0 {
+		return &dto.ListCustomersResponse{
+			Items:      response,
+			Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+		}, nil
+	}
+
+	// Expand integration mappings if requested
+	var integrationsByCustomerID map[string][]*dto.EntityIntegrationMappingResponse
+	if filter.GetExpand().Has(types.ExpandIntegrations) {
+		customerIDs := make([]string, 0, len(customers))
+		for _, c := range customers {
+			customerIDs = append(customerIDs, c.ID)
+		}
+
+		entityMappingService := NewEntityIntegrationMappingService(s.ServiceParams)
+		mappingFilter := types.NewNoLimitEntityIntegrationMappingFilter()
+		mappingFilter.EntityType = types.IntegrationEntityTypeCustomer
+		mappingFilter.EntityIDs = customerIDs
+
+		mappings, err := entityMappingService.GetEntityIntegrationMappings(ctx, mappingFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		integrationsByCustomerID = make(map[string][]*dto.EntityIntegrationMappingResponse)
+		for _, m := range mappings.Items {
+			integrationsByCustomerID[m.EntityID] = append(integrationsByCustomerID[m.EntityID], m)
+		}
+	}
+
+	for _, resp := range response {
+		if filter.GetExpand().Has(types.ExpandIntegrations) {
+			resp.Integrations = integrationsByCustomerID[resp.Customer.ID]
+		}
+	}
+
+	return &dto.ListCustomersResponse{
+		Items:      response,
+		Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+	}, nil
+}
+
+func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("customer ID is required").
+			WithHint("Customer ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	cust, err := s.CustomerRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update basic fields
+	if req.ExternalID != nil && *req.ExternalID != cust.ExternalID {
+		cust.ExternalID = *req.ExternalID
+		oldExternalIDs, ok := cust.Metadata["old_external_ids"]
+		if !ok {
+			oldExternalIDs = ""
+		}
+		if oldExternalIDs == "" {
+			cust.Metadata["old_external_ids"] = cust.ExternalID
+		} else {
+			cust.Metadata["old_external_ids"] = oldExternalIDs + "," + cust.ExternalID
+		}
+	}
+
+	if req.Name != nil {
+		cust.Name = *req.Name
+	}
+	if req.Email != nil {
+		cust.Email = *req.Email
+	}
+
+	// Update address fields
+	if req.AddressLine1 != nil {
+		cust.AddressLine1 = *req.AddressLine1
+	}
+	if req.AddressLine2 != nil {
+		cust.AddressLine2 = *req.AddressLine2
+	}
+	if req.AddressCity != nil {
+		cust.AddressCity = *req.AddressCity
+	}
+	if req.AddressState != nil {
+		cust.AddressState = *req.AddressState
+	}
+	if req.AddressPostalCode != nil {
+		cust.AddressPostalCode = *req.AddressPostalCode
+	}
+	if req.AddressCountry != nil {
+		cust.AddressCountry = *req.AddressCountry
+	}
+
+	// Update metadata if provided
+	if req.Metadata != nil {
+		cust.Metadata = req.Metadata
+	}
+
+	// Validate address fields after update
+	if err := customer.ValidateAddress(cust); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid address information provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.CustomerRepo.Update(ctx, cust); err != nil {
+		// No need to wrap the error as the repository already returns properly formatted errors
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
+
+	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("customer ID is required").
+			WithHint("Customer ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	customer, err := s.CustomerRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if customer.Status != types.StatusPublished {
+		return ierr.NewError("customer is not published").
+			WithHint("Customer does not exist").
+			Mark(ierr.ErrNotFound)
+	}
+
+	subscriptionFilter := types.NewSubscriptionFilter()
+	subscriptionFilter.CustomerID = id
+	subscriptionFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	subscriptionFilter.Limit = lo.ToPtr(1)
+	subscriptions, err := s.SubRepo.List(ctx, subscriptionFilter)
+	if err != nil {
+		return err
+	}
+
+	if len(subscriptions) > 0 {
+		return ierr.NewError("customer cannot be deleted due to active subscriptions").
+			WithHint("Please cancel all subscriptions before deleting the customer").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if len(wallets) > 0 {
+		return ierr.NewError("customer cannot be deleted due to associated wallets").
+			WithHint("Customer cannot be deleted due to associated wallets").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if err := s.CustomerRepo.Delete(ctx, customer); err != nil {
+		return err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerDeleted, id)
+	return nil
+}
+
+func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error) {
+	if lookupKey == "" {
+		return nil, ierr.NewError("lookup key is required").
+			WithHint("Lookup key is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, lookupKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.CustomerResponse{Customer: customer}, nil
+}
+
+func (s *customerService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, customerID string) {
+	webhookPayload, err := json.Marshal(webhookDto.InternalCustomerEvent{
+		CustomerID: customerID,
+		TenantID:   types.GetTenantID(ctx),
+	})
+
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeCustomer,
+		EntityID:      customerID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+	}
+}
+
+// GetUpcomingCreditGrantApplications retrieves upcoming credit grant applications for all subscriptions of a customer
+// This method gets all subscriptions for the customer and then fetches upcoming credit grant applications across all of them
+func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context, customerID string) (*dto.ListCreditGrantApplicationsResponse, error) {
+	// Validate customer exists
+	_, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all subscriptions for this customer
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	subscriptions, err := subscriptionService.ListByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscriptions for customer").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Extract subscription IDs
+	subscriptionIDs := make([]string, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		if sub != nil && sub.ID != "" {
+			subscriptionIDs = append(subscriptionIDs, sub.ID)
+		}
+	}
+
+	// If no subscriptions found, return empty response
+	if len(subscriptionIDs) == 0 {
+		return &dto.ListCreditGrantApplicationsResponse{
+			Items: []*dto.CreditGrantApplicationResponse{},
+			Pagination: types.PaginationResponse{
+				Total:  0,
+				Limit:  0,
+				Offset: 0,
+			},
+		}, nil
+	}
+
+	// Get upcoming credit grant applications for all subscriptions
+	req := &dto.GetUpcomingCreditGrantApplicationsRequest{
+		SubscriptionIDs: subscriptionIDs,
+	}
+
+	return subscriptionService.GetUpcomingCreditGrantApplications(ctx, req)
+}
+
+func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer) error {
+	s.Logger.Info(ctx, "handling customer onboarding", "customer_id", customer.ID)
+
+	// Get customer onboarding workflow config
+	settingsService := &settingsService{
+		ServiceParams: s.ServiceParams,
+	}
+	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyCustomerOnboarding)
+	if err != nil {
+		return err
+	}
+
+	if workflowConfig == nil {
+		s.Logger.Info(ctx, "workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
+		return nil
+	}
+
+	// If there are no actions, return
+	if len(workflowConfig.Actions) == 0 {
+		s.Logger.Info(ctx, "no actions found for customer onboarding", "customer_id", customer.ID)
+		return nil
+	}
+
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
+
+	s.Logger.Info(ctx, "executing customer onboarding workflow",
+		"customer_id", customer.ID,
+		"tenant_id", tenantID,
+		"environment_id", envID,
+		"user_id", userID,
+		"action_count", len(workflowConfig.Actions))
+
+	// Prepare workflow input with all necessary IDs
+	// Pass both CustomerID and ExternalCustomerID so the workflow can skip create_customer when customer exists
+	input := &workflowModels.CustomerOnboardingWorkflowInput{
+		CustomerID:         customer.ID,
+		ExternalCustomerID: customer.ExternalID,
+		TenantID:           tenantID,
+		EnvironmentID:      envID,
+		UserID:             userID,
+		WorkflowConfig:     *workflowConfig,
+	}
+
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Error(ctx, "invalid workflow input for customer onboarding",
+			"error", err,
+			"customer_id", customer.ID)
+		return ierr.WithError(err).
+			WithHint("Invalid workflow input for customer onboarding").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return ierr.NewError("temporal service not available").
+			WithHint("Customer onboarding workflow requires Temporal service").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Execute workflow via Temporal
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalCustomerOnboardingWorkflow,
+		input,
+	)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to start customer onboarding workflow",
+			"error", err,
+			"customer_id", customer.ID)
+		return ierr.WithError(err).
+			WithHint("Failed to start customer onboarding workflow").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Info(ctx, "customer onboarding workflow started successfully",
+		"customer_id", customer.ID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+
+	return nil
+}

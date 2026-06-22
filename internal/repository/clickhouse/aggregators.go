@@ -697,11 +697,13 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params)
 
-	// When GroupByProperty is set, return per-group rows so tiered pricing can be applied per group (e.g. per KRN).
+	// When GroupBy has a "properties.X" entry, return per-group rows so tiered pricing
+	// can be applied per group (e.g. per KRN). The events-table SQL only supports
+	// a single property dim here; multi-dim grouping is on the bucketed-meter path.
 	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
-	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
-		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
+	if groupByProperty := events.FirstGroupByProperty(params.GroupBy); groupByProperty != "" && validateGroupByProperty(groupByProperty) == nil {
+		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", groupByProperty)
 
 		return fmt.Sprintf(`
 			WITH per_group AS (

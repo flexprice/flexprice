@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -63,7 +63,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
 
 	if err != nil {
-		h.log.Error("failed to start temporal workflow", "error", err, "task_id", resp.ID)
+		h.log.Error(c.Request.Context(), "failed to start temporal workflow", "error", err, "task_id", resp.ID)
 		c.Error(err)
 		return
 	}
@@ -239,7 +239,7 @@ func (h *TaskHandler) DownloadTaskFile(c *gin.Context) {
 
 	downloadURL, err := h.service.GenerateDownloadURL(c.Request.Context(), id)
 	if err != nil {
-		h.log.Errorw("failed to generate download URL",
+		h.log.Error(c.Request.Context(), "failed to generate download URL",
 			"error", err,
 			"task_id", id)
 		c.Error(err)

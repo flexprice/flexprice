@@ -5,10 +5,10 @@ import (
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -92,9 +92,22 @@ func NewRouter(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
-		middleware.SentryMiddleware(cfg),    // Add Sentry middleware
-		middleware.PyroscopeMiddleware(cfg), // Add Pyroscope middleware
 	)
+	// Tracing middleware creates the otelgin span per request (SigNoz / OTLP).
+	// Each handler is added separately because gin's Use signature is variadic
+	// and the slice may be empty.
+	for _, h := range middleware.TracingMiddleware(cfg) {
+		router.Use(h)
+	}
+	// OtelRecoveryMiddleware runs inside the otelgin span so it can record a
+	// panic as an exception span event before re-panicking to gin's outer
+	// recovery (registered above) for the 500 response + log.
+	router.Use(middleware.OtelRecoveryMiddleware())
+	// SpanEnrichmentMiddleware runs after otelgin (span created) and before handlers.
+	// Post-phase executes before otelgin's post-phase (LIFO), so it can set span
+	// status / record errors before the span is ended and exported.
+	router.Use(middleware.SpanEnrichmentMiddleware())
+	router.Use(middleware.PyroscopeMiddleware(cfg)) // Add Pyroscope middleware
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
@@ -127,7 +140,7 @@ func NewRouter(
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
 	private.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
-	private.Use(middleware.SentryTenantContextMiddleware)
+	private.Use(middleware.TenantContextMiddleware)
 
 	v1Private := private.Group("/v1")
 	v1Private.Use(middleware.ErrorHandler())
@@ -137,6 +150,8 @@ func NewRouter(
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write("user", types.ActionWrite), handlers.User.CreateUser)
 			user.PUT("/me", write("user", types.ActionWrite), handlers.User.UpdateUser)
+			user.PUT("/:id", write("user", types.ActionWrite), handlers.User.UpdateServiceAccount)
+			user.DELETE("/:id", write("user", types.ActionWrite), handlers.User.DeleteUser)
 			user.POST("/search", handlers.User.QueryUsers)
 		}
 
@@ -340,6 +355,7 @@ func NewRouter(
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", write("wallet", types.ActionWrite), handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", write("wallet", types.ActionWrite), handlers.Wallet.TerminateWallet)
+			wallet.POST("/:id/modify", write("wallet", types.ActionWrite), handlers.Wallet.ModifyWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write("wallet", types.ActionWrite), handlers.Wallet.UpdateWallet)
@@ -516,13 +532,14 @@ func NewRouter(
 		integrations := v1Private.Group("/integrations")
 		{
 			integrations.POST("/link", write("integration", types.ActionWrite), handlers.Integration.Link)
+			integrations.DELETE("/link", write("integration", types.ActionWrite), handlers.Integration.Delink)
 			integrations.POST("/sync", write("integration", types.ActionWrite), handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
-			// 			paddleGroup := integrations.Group("/paddle")
-			// 			{
-			// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
-			// 			}
+			// paddleGroup := integrations.Group("/paddle")
+			// {
+			// 	paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// }
 		}
 
 		// Coupon routes
@@ -530,10 +547,17 @@ func NewRouter(
 		{
 			coupon.POST("", write("coupon", types.ActionWrite), handlers.Coupon.CreateCoupon)
 			coupon.GET("", handlers.Coupon.ListCoupons)
+			coupon.GET("/code/:code", handlers.Coupon.GetCouponByCode)
 			coupon.GET("/:id", handlers.Coupon.GetCoupon)
 			coupon.PUT("/:id", write("coupon", types.ActionWrite), handlers.Coupon.UpdateCoupon)
 			coupon.DELETE("/:id", write("coupon", types.ActionWrite), handlers.Coupon.DeleteCoupon)
 			coupon.POST("/search", handlers.Coupon.QueryCoupons)
+
+			couponAssociations := coupon.Group("/associations")
+			{
+				couponAssociations.GET("", handlers.Coupon.ListCouponAssociations)
+				couponAssociations.GET("/:id", handlers.Coupon.GetCouponAssociation)
+			}
 		}
 
 		// Admin routes (API Key only)

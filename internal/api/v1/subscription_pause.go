@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,14 +27,14 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Errorw("subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.PauseSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Errorw("failed to bind request", "error", err)
+		h.log.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request body").
 			Mark(ierr.ErrValidation))
@@ -49,7 +49,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 			&req,
 		)
 		if err != nil {
-			h.log.Errorw("failed to calculate pause impact", "error", err, "subscription_id", subscriptionID)
+			h.log.Error(c.Request.Context(), "failed to calculate pause impact", "error", err, "subscription_id", subscriptionID)
 			c.Error(err)
 			return
 		}
@@ -67,7 +67,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 		&req,
 	)
 	if err != nil {
-		h.log.Errorw("failed to pause subscription", "error", err, "subscription_id", subscriptionID)
+		h.log.Error(c.Request.Context(), "failed to pause subscription", "error", err, "subscription_id", subscriptionID)
 		c.Error(err)
 		return
 	}
@@ -78,7 +78,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Errorw("subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
 		return
 	}
@@ -99,7 +99,7 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 			&req,
 		)
 		if err != nil {
-			h.log.Errorw("failed to calculate resume impact", "error", err, "subscription_id", subscriptionID)
+			h.log.Error(c.Request.Context(), "failed to calculate resume impact", "error", err, "subscription_id", subscriptionID)
 			c.Error(err)
 			return
 		}
@@ -117,7 +117,7 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 		&req,
 	)
 	if err != nil {
-		h.log.Errorw("failed to resume subscription", "error", err, "subscription_id", subscriptionID)
+		h.log.Error(c.Request.Context(), "failed to resume subscription", "error", err, "subscription_id", subscriptionID)
 		c.Error(err)
 		return
 	}
@@ -128,14 +128,14 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 func (h *SubscriptionPauseHandler) ListPauses(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Errorw("subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("Subscription ID is required").Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.service.ListPauses(c.Request.Context(), subscriptionID)
 	if err != nil {
-		h.log.Errorw("failed to list subscription pauses", "error", err, "subscription_id", subscriptionID)
+		h.log.Error(c.Request.Context(), "failed to list subscription pauses", "error", err, "subscription_id", subscriptionID)
 		c.Error(err)
 		return
 	}

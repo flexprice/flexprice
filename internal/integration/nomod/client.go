@@ -68,7 +68,8 @@ func (c *Client) GetNomodConfig(ctx context.Context) (*NomodConfig, error) {
 
 	// Validate required fields
 	if nomodConfig.APIKey == "" {
-		c.logger.Errorw("missing Nomod API key",
+		c.logger.Error(ctx, "missing Nomod API key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Nomod API key").
@@ -106,14 +107,14 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	// For Nomod connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderNomod {
 		if conn.EncryptedSecretData.Nomod == nil {
-			c.logger.Warnw("no nomod metadata found", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no nomod metadata found", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
 		// Decrypt API key
 		apiKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Nomod.APIKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt API key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt API key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt API key").Mark(ierr.ErrInternal)
 		}
 
@@ -125,14 +126,14 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Nomod.WebhookSecret != "" {
 			webhookSecret, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Nomod.WebhookSecret)
 			if err != nil {
-				c.logger.Errorw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+				c.logger.Error(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 				// Don't fail completely, just skip webhook secret
 			} else {
 				decryptedMetadata["webhook_secret"] = webhookSecret
 			}
 		}
 
-		c.logger.Infow("successfully decrypted nomod credentials",
+		c.logger.Info(context.Background(), "successfully decrypted nomod credentials",
 			"connection_id", conn.ID,
 			"has_api_key", apiKey != "",
 			"has_webhook_secret", decryptedMetadata["webhook_secret"] != "")
@@ -181,7 +182,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	if body != nil {
 		jsonBody, err = json.Marshal(body)
 		if err != nil {
-			c.logger.Errorw("failed to marshal request body", "error", err)
+			c.logger.Error(ctx, "failed to marshal request body", "error", err)
 			return ierr.NewError("failed to marshal request body").
 				WithHint("Invalid request data").
 				Mark(ierr.ErrInternal)
@@ -203,7 +204,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	// Send request
 	resp, err := c.httpClient.Send(ctx, httpReq)
 	if err != nil {
-		c.logger.Errorw("nomod API request failed",
+		c.logger.Error(ctx, "nomod API request failed",
 			"error", err,
 			"method", method,
 			"endpoint", endpoint,
@@ -220,7 +221,8 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 	// Check for successful status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.logger.Errorw("nomod API returned error",
+		c.logger.Error(ctx, "nomod API returned error",
+			"error", err,
 			"status_code", resp.StatusCode,
 			"method", method,
 			"endpoint", endpoint,
@@ -239,7 +241,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	// Unmarshal response if provided
 	if response != nil {
 		if err := json.Unmarshal(resp.Body, response); err != nil {
-			c.logger.Errorw("failed to unmarshal response", "error", err, "body", string(resp.Body))
+			c.logger.Error(ctx, "failed to unmarshal response", "error", err, "body", string(resp.Body))
 			return ierr.NewError("failed to unmarshal response").
 				WithHint("Invalid response from Nomod").
 				Mark(ierr.ErrInternal)
@@ -251,41 +253,41 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 // CreateCustomer creates a customer in Nomod
 func (c *Client) CreateCustomer(ctx context.Context, req CreateCustomerRequest) (*CustomerResponse, error) {
-	c.logger.Infow("creating customer in Nomod",
+	c.logger.Info(ctx, "creating customer in Nomod",
 		"email", req.Email,
 		"first_name", req.FirstName)
 
 	var response CustomerResponse
 	err := c.makeRequest(ctx, http.MethodPost, "/v1/customers", req, &response)
 	if err != nil {
-		c.logger.Errorw("failed to create customer in Nomod", "error", err)
+		c.logger.Error(ctx, "failed to create customer in Nomod", "error", err)
 		return nil, err
 	}
 
-	c.logger.Infow("successfully created customer in Nomod", "customer_id", response.ID)
+	c.logger.Info(ctx, "successfully created customer in Nomod", "customer_id", response.ID)
 	return &response, nil
 }
 
 // CreatePaymentLink creates a payment link in Nomod
 func (c *Client) CreatePaymentLink(ctx context.Context, req CreatePaymentLinkRequest) (*PaymentLinkResponse, error) {
-	c.logger.Infow("creating payment link in Nomod",
+	c.logger.Info(ctx, "creating payment link in Nomod",
 		"currency", req.Currency,
 		"items_count", len(req.Items))
 
 	var response PaymentLinkResponse
 	err := c.makeRequest(ctx, http.MethodPost, "/v1/links", req, &response)
 	if err != nil {
-		c.logger.Errorw("failed to create payment link in Nomod", "error", err)
+		c.logger.Error(ctx, "failed to create payment link in Nomod", "error", err)
 		return nil, err
 	}
 
-	c.logger.Infow("successfully created payment link in Nomod", "link_id", response.ID, "url", response.URL)
+	c.logger.Info(ctx, "successfully created payment link in Nomod", "link_id", response.ID, "url", response.URL)
 	return &response, nil
 }
 
 // CreateInvoice creates an invoice in Nomod
 func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error) {
-	c.logger.Infow("creating invoice in Nomod",
+	c.logger.Info(ctx, "creating invoice in Nomod",
 		"currency", req.Currency,
 		"customer", req.Customer,
 		"items_count", len(req.Items))
@@ -293,11 +295,11 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 	var response InvoiceResponse
 	err := c.makeRequest(ctx, http.MethodPost, "/v1/invoices", req, &response)
 	if err != nil {
-		c.logger.Errorw("failed to create invoice in Nomod", "error", err)
+		c.logger.Error(ctx, "failed to create invoice in Nomod", "error", err)
 		return nil, err
 	}
 
-	c.logger.Infow("successfully created invoice in Nomod",
+	c.logger.Info(ctx, "successfully created invoice in Nomod",
 		"invoice_id", response.ID,
 		"reference_id", response.ReferenceID,
 		"status", response.Status)
@@ -306,12 +308,12 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 
 // GetCharge retrieves charge details from Nomod API
 func (c *Client) GetCharge(ctx context.Context, chargeID string) (*ChargeResponse, error) {
-	c.logger.Infow("fetching charge details from Nomod", "charge_id", chargeID)
+	c.logger.Info(ctx, "fetching charge details from Nomod", "charge_id", chargeID)
 
 	var response ChargeResponse
 	err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/charges/%s", chargeID), nil, &response)
 	if err != nil {
-		c.logger.Errorw("failed to get charge from Nomod",
+		c.logger.Error(ctx, "failed to get charge from Nomod",
 			"error", err,
 			"charge_id", chargeID)
 		return nil, ierr.WithError(err).
@@ -322,7 +324,7 @@ func (c *Client) GetCharge(ctx context.Context, chargeID string) (*ChargeRespons
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully fetched charge from Nomod",
+	c.logger.Info(ctx, "successfully fetched charge from Nomod",
 		"charge_id", response.ID,
 		"status", response.Status,
 		"currency", response.Currency,
@@ -342,18 +344,18 @@ func (c *Client) VerifyWebhookAuth(ctx context.Context, providedAPIKey string) e
 
 	// If no webhook secret configured, skip verification
 	if config.WebhookSecret == "" {
-		c.logger.Debugw("no webhook secret configured, skipping verification")
+		c.logger.Debug(ctx, "no webhook secret configured, skipping verification")
 		return nil
 	}
 
 	// Verify the provided API key matches the webhook secret
 	if providedAPIKey != config.WebhookSecret {
-		c.logger.Warnw("webhook authentication failed - invalid X-API-KEY")
+		c.logger.Info(ctx, "webhook authentication failed - invalid X-API-KEY")
 		return ierr.NewError("invalid webhook API key").
 			WithHint("X-API-KEY header does not match configured webhook secret").
 			Mark(ierr.ErrValidation)
 	}
 
-	c.logger.Debugw("webhook authentication successful")
+	c.logger.Debug(ctx, "webhook authentication successful")
 	return nil
 }

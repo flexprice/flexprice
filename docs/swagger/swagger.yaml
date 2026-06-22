@@ -560,6 +560,15 @@ definitions:
       wallet:
         $ref: '#/definitions/WalletResponse'
     type: object
+  AttributedToCustomerResult:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      meter_usage:
+        $ref: '#/definitions/MeterUsageAttribution'
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
+    type: object
   BillingCycleInfo:
     properties:
       billing_anchor:
@@ -592,6 +601,38 @@ definitions:
         description: e.g., "monthly", "yearly"
         type: string
       start_time:
+        type: string
+    type: object
+  BucketSummary:
+    properties:
+      base_charge:
+        type: string
+      bucket_id:
+        type: string
+      commitment_type:
+        type: string
+      commitment_value:
+        type: string
+      computed_overage:
+        type: string
+      computed_true_up:
+        type: string
+      computed_utilized:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      price_id:
+        description: |-
+          PriceID is the bucket's own price (the line item's price for the
+          out-of-bucket row).
+        type: string
+      start:
+        $ref: '#/definitions/types.Bucket'
+      subscription_line_item_id:
+        description: SubscriptionLineItemID is the line item this bucket is configured
+          on.
+        type: string
+      total_usage:
         type: string
     type: object
   BulkIngestEventRequest:
@@ -636,6 +677,11 @@ definitions:
   CancelSubscriptionRequest:
     properties:
       cancel_at:
+        description: |-
+          CancelAt is the exact date/time when the subscription should be cancelled.
+          Required for cancellation_type "scheduled_date"; optional for "immediate" (past dates only — backdated cancellation).
+          For "scheduled_date", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).
+          For "immediate", accepts past/current dates only; use "scheduled_date" for future dates.
         type: string
       cancel_immediately_inovice_policy:
         allOf:
@@ -779,10 +825,14 @@ definitions:
     properties:
       action:
         $ref: '#/definitions/ChangedSubscriptionAction'
+      current_period_end:
+        type: string
       id:
         type: string
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
+      trial_end:
+        type: string
     type: object
   ChangedSubscriptionAction:
     description: created | updated
@@ -846,6 +896,25 @@ definitions:
         description: Name is required and must be different from the source plan's
           name
         type: string
+    type: object
+  CommitmentBucketRequest:
+    properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      id:
+        type: string
+      overage_factor:
+        type: string
+      price:
+        $ref: '#/definitions/CreatePriceRequest'
+      start:
+        $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
     type: object
   CostAnalyticItem:
     properties:
@@ -1031,6 +1100,8 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.CouponCadence'
+      coupon_code:
+        type: string
       created_at:
         type: string
       created_by:
@@ -1217,6 +1288,8 @@ definitions:
         - once
         - repeated
         - forever
+      coupon_code:
+        type: string
       currency:
         type: string
       duration_in_periods:
@@ -1534,6 +1607,10 @@ definitions:
     type: object
   CreateInvoiceLineItemRequest:
     properties:
+      adjusted_entitlement_quantity:
+        description: adjusted_entitlement_quantity is the entitlement-covered units
+          deducted from raw usage.
+        type: string
       amount:
         description: amount is the monetary amount for this line item
         type: string
@@ -1614,6 +1691,15 @@ definitions:
         type: string
       quantity:
         description: quantity is the quantity of units for this line item
+        type: string
+      subscription_id:
+        description: |-
+          subscription_id overrides the invoice's subscription_id for this specific line item.
+          Used for grouped invoicing where child line items belong to child subscriptions.
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this line item to the subscription_line_item
+          that generated it.
         type: string
     required:
     - amount
@@ -2019,6 +2105,10 @@ definitions:
         type: number
       commitment_quantity:
         type: number
+      commitment_time_buckets:
+        items:
+          $ref: '#/definitions/CommitmentBucketRequest'
+        type: array
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -2111,6 +2201,7 @@ definitions:
         description: CommitmentDuration is the time frame of the commitment (e.g.,
           ANNUAL commitment on MONTHLY billing)
       coupons:
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
           type: string
         type: array
@@ -2160,6 +2251,7 @@ definitions:
           items:
             type: string
           type: array
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
         description: LineItems are extra line items to add at creation (each with
@@ -2217,6 +2309,13 @@ definitions:
           This is IGNORED when the billing cycle is anniversary.
       start_date:
         type: string
+      subscription_coupons:
+        description: |-
+          SubscriptionCoupons is the preferred way to attach coupons at creation.
+          Accepts coupon_code; optionally targets a line item via price_id.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
       subscription_status:
         allOf:
         - $ref: '#/definitions/types.SubscriptionStatus'
@@ -2266,6 +2365,10 @@ definitions:
         type: boolean
       currency:
         type: string
+      end_date:
+        description: EndDate sets when this association expires. Must be after StartDate
+          when both are provided.
+        type: string
       entity_id:
         type: string
       entity_type:
@@ -2278,6 +2381,10 @@ definitions:
         type: object
       priority:
         type: integer
+      start_date:
+        description: StartDate sets when this association becomes active. Defaults
+          to now if omitted.
+        type: string
       tax_rate_code:
         type: string
     required:
@@ -2328,6 +2435,9 @@ definitions:
       email:
         description: Required when type is "user"
         type: string
+      name:
+        description: Display name; optional for service accounts
+        type: string
       roles:
         description: Required when type is "service_account"
         items:
@@ -2346,6 +2456,12 @@ definitions:
         description: Empty for service accounts
         type: string
       id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
         type: string
       password:
         type: string
@@ -2803,6 +2919,8 @@ definitions:
     type: object
   DebugTracker:
     properties:
+      attributed_to_customer:
+        $ref: '#/definitions/AttributedToCustomerResult'
       customer_lookup:
         $ref: '#/definitions/CustomerLookupResult'
       failure_point:
@@ -2842,6 +2960,19 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: ProrationBehavior controls mid-period credit issuance. Defaults
           to none.
+    type: object
+  DelinkIntegrationMappingRequest:
+    properties:
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.IntegrationEntityType'
+      provider_type:
+        type: string
+    required:
+    - entity_id
+    - entity_type
+    - provider_type
     type: object
   EntitlementResponse:
     properties:
@@ -2944,6 +3075,9 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
       provider_entity_id:
         type: string
       provider_type:
@@ -2986,12 +3120,18 @@ definitions:
     type: object
   ExecuteSubscriptionModifyRequest:
     properties:
+      coupon_params:
+        $ref: '#/definitions/SubModifyCouponParams'
       grouped_invoicing_params:
         $ref: '#/definitions/SubModifyGroupedInvoicingParams'
       inheritance_params:
         $ref: '#/definitions/SubModifyInheritanceRequest'
       quantity_change_params:
         $ref: '#/definitions/SubModifyQuantityChangeRequest'
+      tax_params:
+        $ref: '#/definitions/SubModifyTaxParams'
+      trial_end_params:
+        $ref: '#/definitions/SubModifyTrialEndRequest'
       type:
         $ref: '#/definitions/SubscriptionModifyType'
     required:
@@ -3278,6 +3418,13 @@ definitions:
     type: object
   GetUsageAnalyticsRequest:
     properties:
+      breakdown_bucket:
+        description: |-
+          BreakdownBucket when true augments each time-series point with BucketID/PriceID
+          and appends a BucketSummaries rollup to each item. Requires WindowSize to be set
+          and the item to be linked to a subscription line item that has CommitmentTimeBuckets.
+          Default: false (opt-in, backward compatible).
+        type: boolean
       end_time:
         type: string
       expand:
@@ -3582,6 +3729,30 @@ definitions:
     - event_name
     - external_customer_id
     type: object
+  InheritanceAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - InheritanceActionAdd
+    - InheritanceActionRemove
+  IntegrationConfigEntry:
+    properties:
+      base_config:
+        $ref: '#/definitions/types.SyncConfig'
+      current_config:
+        $ref: '#/definitions/types.SyncConfig'
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+    type: object
+  IntegrationConfigResponse:
+    properties:
+      integrations:
+        items:
+          $ref: '#/definitions/IntegrationConfigEntry'
+        type: array
+    type: object
   InvoiceCoupon:
     properties:
       coupon_association_id:
@@ -3630,6 +3801,11 @@ definitions:
     type: object
   InvoiceLineItemResponse:
     properties:
+      adjusted_entitlement_quantity:
+        description: |-
+          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
+        type: string
       amount:
         type: string
       commitment_info:
@@ -3693,6 +3869,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this invoice line item to the subscription_line_item
+          that generated it.
         type: string
       tenant_id:
         type: string
@@ -3945,6 +4125,15 @@ definitions:
         description: CommitmentQuantity is the minimum quantity committed for this
           line item
         type: number
+      commitment_time_buckets:
+        description: |-
+          CommitmentTimeBuckets defines per-bucket commitment + inline price for
+          windows whose start UTC hour falls within each configured bucket. Each
+          bucket carries its own price (materialized by the service). Requires
+          IsWindowCommitment=true.
+        items:
+          $ref: '#/definitions/CommitmentBucketRequest'
+        type: array
       commitment_type:
         allOf:
         - $ref: '#/definitions/types.CommitmentType'
@@ -4018,6 +4207,24 @@ definitions:
       items:
         items:
           $ref: '#/definitions/CostsheetResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListCouponAssociationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CouponAssociationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListEntityIntegrationMappingsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EntityIntegrationMappingResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -4129,6 +4336,15 @@ definitions:
         type: string
       updated_at:
         example: "2024-03-20T15:04:05Z"
+        type: string
+    type: object
+  MeterUsageAttribution:
+    properties:
+      external_customer_id:
+        type: string
+      meter_id:
+        type: string
+      qty_total:
         type: string
     type: object
   OverrideEntitlementRequest:
@@ -4332,6 +4548,13 @@ definitions:
         description: name of the plan
         type: string
     type: object
+  PointBucket:
+    properties:
+      bucket_id:
+        type: string
+      price_id:
+        type: string
+    type: object
   PriceLookupResult:
     properties:
       error:
@@ -4453,6 +4676,13 @@ definitions:
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
         $ref: '#/definitions/PriceUnitResponse'
+      sequence:
+        description: |-
+          Sequence is the monotonic stamp bumped on every state change that
+          subscription line items need to react to. Read by the plan-price sync;
+          set by the database (DEFAULT nextval) on create and by the price
+          repository on termination / compatibility-affecting edits.
+        type: integer
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -4680,6 +4910,45 @@ definitions:
           additional context)
         type: string
     type: object
+  SubModifyCouponAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - SubModifyCouponActionAdd
+    - SubModifyCouponActionRemove
+  SubModifyCouponParams:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/SubModifyCouponAction'
+        description: Required. "add" to attach a coupon; "remove" to detach an existing
+          association.
+      association_id:
+        description: Required when action="remove". ID of the CouponAssociation to
+          soft-delete.
+        type: string
+      coupon_code:
+        description: Required for action="add". Coupon code of the coupon to attach.
+        type: string
+      end_date:
+        description: Optional. When the coupon association ends.
+        type: string
+      start_date:
+        description: Optional. When the coupon association starts; defaults to now.
+        type: string
+      subscription_id:
+        description: Optional. Apply at subscription level. Mutually exclusive with
+          SubscriptionLineItemID.
+        type: string
+      subscription_line_item_id:
+        description: Optional. Apply at a specific line item. Mutually exclusive with
+          SubscriptionID.
+        type: string
+    required:
+    - action
+    type: object
   SubModifyGroupedInvoicingParams:
     properties:
       action:
@@ -4699,7 +4968,18 @@ definitions:
     type: object
   SubModifyInheritanceRequest:
     properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/InheritanceAction'
+        description: Action is "add" or "remove". Defaults to "add" when omitted —
+          fully backward-compatible.
       external_customer_ids_to_inherit_subscription:
+        description: ExternalCustomerIDsToInheritSubscription is used for action="add".
+        items:
+          type: string
+        type: array
+      external_customer_ids_to_remove:
+        description: ExternalCustomerIDsToRemove is used for action="remove".
         items:
           type: string
         type: array
@@ -4713,6 +4993,46 @@ definitions:
         type: array
     required:
     - line_items
+    type: object
+  SubModifyTaxAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - SubModifyTaxActionAdd
+    - SubModifyTaxActionRemove
+  SubModifyTaxParams:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/SubModifyTaxAction'
+        description: Required. "add" to attach a tax rate; "remove" to detach an existing
+          association.
+      association_id:
+        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
+        type: string
+      effective_date:
+        description: Optional. When to apply the change; defaults to now if omitted.
+        type: string
+      tax_rate_id:
+        description: Required when action="add". ID of the active tax rate to attach.
+        type: string
+    required:
+    - action
+    type: object
+  SubModifyTrialEndRequest:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/TrialEndAction'
+        description: Action is "immediate" or "scheduled_date".
+      new_trial_end:
+        description: NewTrialEnd is the new trial end date. Required when action is
+          "scheduled_date".
+        type: string
+    required:
+    - action
     type: object
   SubscriptionChangeExecuteResponse:
     description: Response after successfully executing a subscription plan change
@@ -4863,6 +5183,27 @@ definitions:
     - proration_behavior
     - target_plan_id
     type: object
+  SubscriptionCouponInput:
+    properties:
+      coupon_code:
+        description: CouponCode is the coupon's human-readable code (case-insensitive).
+          Required.
+        type: string
+      end_date:
+        description: EndDate is when the coupon ends; overrides duration_in_periods
+          calculation.
+        type: string
+      price_id:
+        description: PriceID is the price ID of the line item to target; omit for
+          subscription-level.
+        type: string
+      start_date:
+        description: StartDate is when the coupon starts; defaults to subscription/phase
+          StartDate.
+        type: string
+    required:
+    - coupon_code
+    type: object
   SubscriptionEntitlementsResponse:
     properties:
       features:
@@ -4930,6 +5271,10 @@ definitions:
         type: string
       commitment_quantity:
         type: string
+      commitment_time_buckets:
+        items:
+          $ref: '#/definitions/types.TimeOfDayBucket'
+        type: array
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -5011,16 +5356,21 @@ definitions:
     - inheritance
     - quantity_change
     - grouped_invoicing
+    - trial_end
+    - coupon
+    - tax
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
     - SubscriptionModifyTypeQuantityChange
     - SubscriptionModifyTypeGroupedInvoicing
+    - SubscriptionModifyTypeTrialEnd
+    - SubscriptionModifyTypeCoupon
+    - SubscriptionModifyTypeTax
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
-        description: Coupons represents subscription-level coupons to be applied to
-          this phase
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
           type: string
         type: array
@@ -5031,8 +5381,7 @@ definitions:
           items:
             type: string
           type: array
-        description: LineItemCoupons represents line item-level coupons (map of line_item_id
-          to coupon IDs)
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
         description: |-
@@ -5054,6 +5403,12 @@ definitions:
         type: array
       start_date:
         type: string
+      subscription_coupons:
+        description: SubscriptionCoupons is the preferred way to attach coupons to
+          this phase.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
     required:
     - start_date
     type: object
@@ -5325,6 +5680,12 @@ definitions:
         - $ref: '#/definitions/types.SubscriptionType'
         description: SubscriptionType categorises the subscription within a customer
           hierarchy (standalone, parent, inherited).
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the plan-price sequence up to which this
+          subscription's line items have been reconciled. Bumped by the
+          plan-price sync after a successful pass.
+        type: integer
       tenant_id:
         type: string
       trial_end:
@@ -5506,6 +5867,12 @@ definitions:
       plan_id:
         description: PlanID is the identifier for the plan in our system
         type: string
+      plan_prices_out_of_sync:
+        description: |-
+          PlanPricesOutOfSync is true when the subscription's synced_price_sequence
+          is behind the plan's current max prices.sequence — i.e. plan-price
+          changes have not yet been reconciled into this subscription's line items.
+        type: boolean
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
       start_date:
@@ -5520,6 +5887,12 @@ definitions:
         - $ref: '#/definitions/types.SubscriptionType'
         description: SubscriptionType categorises the subscription within a customer
           hierarchy (standalone, parent, inherited).
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the plan-price sequence up to which this
+          subscription's line items have been reconciled. Bumped by the
+          plan-price sync after a successful pass.
+        type: integer
       tenant_id:
         type: string
       trial_end:
@@ -5759,6 +6132,10 @@ definitions:
       currency:
         description: Currency
         type: string
+      end_date:
+        description: EndDate is the optional date until which this association is
+          active
+        type: string
       entity_id:
         description: ID of the entity this tax rate applies to
         type: string
@@ -5781,6 +6158,9 @@ definitions:
       priority:
         description: Priority for tax resolution (lower number = higher priority)
         type: integer
+      start_date:
+        description: StartDate is the date from which this association is active
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       tax_rate:
@@ -5956,6 +6336,14 @@ definitions:
         - $ref: '#/definitions/WalletTransactionResponse'
         description: Wallet transaction created (could be PENDING or COMPLETED)
     type: object
+  TrialEndAction:
+    enum:
+    - immediate
+    - scheduled_date
+    type: string
+    x-enum-varnames:
+    - TrialEndActionImmediate
+    - TrialEndActionScheduledDate
   TriggerForceRunRequest:
     properties:
       end_time:
@@ -6245,6 +6633,35 @@ definitions:
     required:
     - enabled
     type: object
+  UpdateServiceAccountRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  UpdateServiceAccountResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
+    type: object
   UpdateSubscriptionLineItemRequest:
     properties:
       amount:
@@ -6261,6 +6678,12 @@ definitions:
         type: number
       commitment_quantity:
         type: number
+      commitment_time_buckets:
+        description: Pointer so an explicit empty array can clear existing buckets
+          (omission keeps them).
+        items:
+          $ref: '#/definitions/CommitmentBucketRequest'
+        type: array
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -6344,6 +6767,37 @@ definitions:
       name:
         type: string
     type: object
+  UpdateUserRequest:
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+    type: object
+  UpdateUserResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
+    type: object
   UpdateWalletRequest:
     properties:
       alert_settings:
@@ -6369,6 +6823,13 @@ definitions:
         description: Full addon object (only if expand includes "addon")
       aggregation_type:
         $ref: '#/definitions/types.AggregationType'
+      bucket_summaries:
+        description: |-
+          BucketSummaries is populated only when BreakdownBucket=true. Contains one
+          entry per defined CommitmentTimeBucket plus one for out-of-bucket usage.
+        items:
+          $ref: '#/definitions/BucketSummary'
+        type: array
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       currency:
@@ -6457,10 +6918,23 @@ definitions:
       window_size:
         allOf:
         - $ref: '#/definitions/types.WindowSize'
-        description: Window size for bucketed meters (only set if meter is bucketed)
+        description: 'Granularity of Points: max(request window_size, meter bucket_size)
+          for bucketed meters; the request window_size otherwise'
     type: object
   UsageAnalyticPoint:
     properties:
+      buckets:
+        description: |-
+          Buckets lists every commitment bucket this (possibly rolled-up) window
+          overlaps — only populated when BreakdownBucket=true and the line item has
+          CommitmentTimeBuckets. A coarse window can overlap more than one bucket, and
+          only partially, so this is a list. Empty when the window touches no bucket.
+          It is an informational HINT only: the point's single cost/computed_* totals
+          mix all overlapped buckets and out-of-bucket time and CANNOT be split per
+          bucket — read bucket_summaries for exact per-bucket cost.
+        items:
+          $ref: '#/definitions/PointBucket'
+        type: array
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
         type: string
@@ -6514,6 +6988,12 @@ definitions:
         description: Empty for service accounts
         type: string
       id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
         type: string
       roles:
         items:
@@ -6816,6 +7296,8 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.CouponCadence'
+      coupon_code:
+        type: string
       created_at:
         type: string
       created_by:
@@ -7268,6 +7750,17 @@ definitions:
     x-enum-varnames:
     - BILLING_TIER_VOLUME
     - BILLING_TIER_SLAB
+  types.Bucket:
+    properties:
+      hour:
+        maximum: 24
+        minimum: 0
+        type: integer
+      minute:
+        maximum: 59
+        minimum: 0
+        type: integer
+    type: object
   types.CancelImmediatelyInvoicePolicy:
     enum:
     - generate_invoice
@@ -7549,12 +8042,16 @@ definitions:
     - not_found
     - found
     - error
+    - processing
+    - attributed
     type: string
     x-enum-varnames:
     - DebugTrackerStatusUnprocessed
     - DebugTrackerStatusNotFound
     - DebugTrackerStatusFound
     - DebugTrackerStatusError
+    - DebugTrackerStatusProcessing
+    - DebugTrackerStatusAttributed
   types.EntitlementEntityType:
     enum:
     - PLAN
@@ -7633,6 +8130,15 @@ definitions:
     - ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER
     - ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR
     - ENTITLEMENT_USAGE_RESET_PERIOD_NEVER
+  types.EntitySyncConfig:
+    properties:
+      inbound:
+        description: Inbound from external provider to FlexPrice
+        type: boolean
+      outbound:
+        description: Outbound from FlexPrice to external provider
+        type: boolean
+    type: object
   types.EntityType:
     enum:
     - EVENTS
@@ -7700,12 +8206,14 @@ definitions:
     - meter_lookup
     - price_lookup
     - subscription_line_item_lookup
+    - attributed_to_customer
     type: string
     x-enum-varnames:
     - FailurePointTypeCustomerLookup
     - FailurePointTypeMeterLookup
     - FailurePointTypePriceLookup
     - FailurePointTypeSubscriptionLineItemLookup
+    - FailurePointTypeAttributedToCustomer
   types.FeatureFilter:
     properties:
       end_time:
@@ -7891,6 +8399,7 @@ definitions:
     - PRORATION
     - MANUAL
     - AUTO_INVOICE_THRESHOLD
+    - WALLET_AUTO_TOPUP
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -7901,6 +8410,7 @@ definitions:
     - InvoiceBillingReasonProration
     - InvoiceBillingReasonManual
     - InvoiceBillingReasonAutoInvoiceThreshold
+    - InvoiceBillingReasonWalletAutoTopup
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -7921,6 +8431,15 @@ definitions:
           amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
           Useful for finding invoices that still have significant unpaid amounts
         type: number
+      billing_reason:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceBillingReason'
+        description: BillingReason filters invoices by why they were generated
+      currency:
+        description: |-
+          currency filters invoices by their currency (ISO 4217 code, e.g. "usd", "eur").
+          Matches on the invoices.currency column exactly.
+        type: string
       customer_id:
         description: |-
           customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
@@ -8025,6 +8544,16 @@ definitions:
     - InvoiceStatusFinalized
     - InvoiceStatusVoided
     - InvoiceStatusSkipped
+  types.InvoiceSyncSettings:
+    properties:
+      normalize_fixed_to:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: |-
+          NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
+          For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
+          qty=3, rate=$100. Empty string means no normalization (keep original).
+    type: object
   types.InvoiceType:
     enum:
     - SUBSCRIPTION
@@ -8093,6 +8622,7 @@ definitions:
     - nomod
     - moyasar
     - paddle
+    - whop
     type: string
     x-enum-varnames:
     - PaymentGatewayTypeStripe
@@ -8100,6 +8630,7 @@ definitions:
     - PaymentGatewayTypeNomod
     - PaymentGatewayTypeMoyasar
     - PaymentGatewayTypePaddle
+    - PaymentGatewayTypeWhop
   types.PaymentMethodType:
     enum:
     - CARD
@@ -8211,6 +8742,10 @@ definitions:
       allow_expired_prices:
         default: false
         type: boolean
+      billing_periods:
+        items:
+          $ref: '#/definitions/types.BillingPeriod'
+        type: array
       end_time:
         type: string
       entity_ids:
@@ -8405,6 +8940,30 @@ definitions:
     - S3EncryptionTypeAES256
     - S3EncryptionTypeAwsKms
     - S3EncryptionTypeAwsKmsDsse
+  types.S3ExportConfig:
+    properties:
+      bucket:
+        description: S3 bucket name
+        type: string
+      compression:
+        allOf:
+        - $ref: '#/definitions/types.S3CompressionType'
+        description: 'Compression type: "gzip", "none" (default: "none")'
+      encryption:
+        allOf:
+        - $ref: '#/definitions/types.S3EncryptionType'
+        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
+          "AES256")'
+      is_flexprice_managed:
+        description: If true, use Flexprice-managed S3 credentials instead of user-provided
+        type: boolean
+      key_prefix:
+        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
+        type: string
+      region:
+        description: AWS region (e.g., "us-west-2")
+        type: string
+    type: object
   types.S3JobConfig:
     properties:
       bucket:
@@ -8502,6 +9061,7 @@ definitions:
     - nomod
     - moyasar
     - paddle
+    - whop
     type: string
     x-enum-comments:
       SecretProviderS3: supports multiple connections per environment
@@ -8517,6 +9077,7 @@ definitions:
     - SecretProviderNomod
     - SecretProviderMoyasar
     - SecretProviderPaddle
+    - SecretProviderWhop
   types.SecretType:
     enum:
     - private_key
@@ -8777,6 +9338,38 @@ definitions:
     - SubscriptionTypeParent
     - SubscriptionTypeInherited
     - SubscriptionTypeGroupedInvoicing
+  types.SyncConfig:
+    properties:
+      customer:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      deal:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: CRM sync (HubSpot, Salesforce, etc.)
+      invoice:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      invoice_sync_settings:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceSyncSettings'
+        description: InvoiceSyncSettings controls line-item transformation during
+          outbound invoice sync
+      payment:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Payment sync (QuickBooks bidirectional)
+      plan:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Integration sync (Stripe, Razorpay, QuickBooks, etc.)
+      quote:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      s3:
+        allOf:
+        - $ref: '#/definitions/types.S3ExportConfig'
+        description: S3 connection metadata (for Flexprice-managed S3 connections)
+      subscription:
+        $ref: '#/definitions/types.EntitySyncConfig'
+    type: object
   types.TaskStatus:
     enum:
     - PENDING
@@ -9187,7 +9780,6 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
     - WindowSizeMinute
@@ -9200,7 +9792,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -9281,6 +9872,11 @@ definitions:
     type: object
   invoice.InvoiceLineItem:
     properties:
+      adjusted_entitlement_quantity:
+        description: |-
+          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
+        type: string
       amount:
         type: string
       commitment_info:
@@ -9344,6 +9940,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this invoice line item to the subscription_line_item
+          that generated it.
         type: string
       tenant_id:
         type: string
@@ -9581,6 +10181,13 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+      sequence:
+        description: |-
+          Sequence is the monotonic stamp bumped on every state change that
+          subscription line items need to react to. Read by the plan-price sync;
+          set by the database (DEFAULT nextval) on create and by the price
+          repository on termination / compatibility-affecting edits.
+        type: integer
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -9654,6 +10261,10 @@ definitions:
         type: string
       commitment_quantity:
         type: string
+      commitment_time_buckets:
+        items:
+          $ref: '#/definitions/types.TimeOfDayBucket'
+        type: array
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -9818,6 +10429,31 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  types.TimeOfDayBucket:
+    properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      id:
+        description: |-
+          ID is server-assigned. Stable for the lifetime of the line item;
+          invoice breakdown and analytics responses reference this ID.
+        type: string
+      overage_factor:
+        type: number
+      price_id:
+        description: |-
+          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+          Immutable post-create; changing pricing requires a successor line item.
+        type: string
+      start:
+        $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -10675,6 +11311,126 @@ paths:
       summary: Update coupon
       tags:
       - Coupons
+  /coupons/associations:
+    get:
+      description: List coupon associations with optional filters. Coupon associations
+        are created and removed via the subscription modify API.
+      operationId: listCouponAssociations
+      parameters:
+      - collectionFormat: csv
+        description: Filter by subscription IDs (max 100)
+        in: query
+        items:
+          type: string
+        name: subscription_ids
+        type: array
+      - collectionFormat: csv
+        description: Filter by coupon IDs (max 100)
+        in: query
+        items:
+          type: string
+        name: coupon_ids
+        type: array
+      - description: Return only currently active associations
+        in: query
+        name: active_only
+        type: boolean
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Page offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCouponAssociationsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List coupon associations
+      tags:
+      - Coupon Associations
+      x-scope: read
+  /coupons/associations/{id}:
+    get:
+      description: Get a single coupon association by ID. Coupon associations are
+        created and removed via the subscription modify API.
+      operationId: getCouponAssociation
+      parameters:
+      - description: Coupon Association ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CouponAssociationResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get coupon association
+      tags:
+      - Coupon Associations
+      x-scope: read
+  /coupons/code/{code}:
+    get:
+      description: Use when resolving a coupon by promo code (e.g. checkout or validation).
+      operationId: getCouponByCode
+      parameters:
+      - description: Coupon code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CouponResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get coupon by code
+      tags:
+      - Coupons
+      x-scope: read
   /coupons/search:
     post:
       consumes:
@@ -12322,7 +13078,65 @@ paths:
       summary: Query groups
       tags:
       - Groups
+  /integrations/config:
+    get:
+      description: Returns the base capabilities and current sync configuration for
+        all connected providers.
+      operationId: getIntegrationConfig
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/IntegrationConfigResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get integration configurations
+      tags:
+      - Integrations
   /integrations/link:
+    delete:
+      consumes:
+      - application/json
+      description: Soft-delete (archive) the mapping between a FlexPrice entity and
+        a provider entity.
+      operationId: delinkIntegrationMapping
+      parameters:
+      - description: Delink mapping request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/DelinkIntegrationMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delink integration mapping
+      tags:
+      - Integrations
     post:
       consumes:
       - application/json
@@ -12354,6 +13168,43 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Link integration mapping
+      tags:
+      - Integrations
+  /integrations/mappings:
+    get:
+      description: Get integration mappings for a specific entity by entity type and
+        entity ID.
+      operationId: getEntityIntegrationMappings
+      parameters:
+      - description: Entity type (customer, plan, invoice, subscription, payment,
+          credit_note, addon, item, item_price, price)
+        in: query
+        name: entity_type
+        required: true
+        type: string
+      - description: Entity ID
+        in: query
+        name: entity_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEntityIntegrationMappingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get entity integration mappings
       tags:
       - Integrations
   /invoices:
@@ -14574,8 +15425,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Execute a mid-cycle subscription modification (inheritance or quantity
-        change).
+      description: Execute a mid-cycle subscription modification (inheritance, quantity
+        change, grouped invoicing, trial end, coupon, or tax).
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -14618,8 +15469,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Preview the impact of a mid-cycle subscription modification without
-        committing changes.
+      description: Preview the impact of a mid-cycle subscription modification (inheritance,
+        quantity change, grouped invoicing, trial end, coupon, or tax) without committing
+        changes.
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -16079,6 +16931,79 @@ paths:
       summary: Create user or service account
       tags:
       - Users
+  /users/{id}:
+    delete:
+      description: Soft-delete (archive) a service account by ID.
+      operationId: deleteServiceAccount
+      parameters:
+      - description: Service Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete service account
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update a service account by ID (name only).
+      operationId: updateServiceAccount
+      parameters:
+      - description: Service Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update service account request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateServiceAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/UpdateServiceAccountResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update service account
+      tags:
+      - Users
   /users/me:
     get:
       description: Use to show the logged-in user's profile in the UI or to check
@@ -16102,6 +17027,39 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get current user
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update the current authenticated user. Supports name and metadata
+        updates.
+      operationId: updateUser
+      parameters:
+      - description: Update user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/UpdateUserResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update current user
       tags:
       - Users
   /users/search:

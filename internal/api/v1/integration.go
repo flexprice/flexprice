@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -44,7 +44,7 @@ func (h *IntegrationHandler) Sync(c *gin.Context) {
 	}
 
 	if err := h.syncService.SyncEntity(c.Request.Context(), req); err != nil {
-		h.logger.Errorw("failed to trigger integration sync",
+		h.logger.Error(c.Request.Context(), "failed to trigger integration sync",
 			"error", err,
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
@@ -79,6 +79,33 @@ func (h *IntegrationHandler) Link(c *gin.Context) {
 		return
 	}
 	resp, err := h.mappingService.LinkIntegrationMapping(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Delink integration mapping
+// @ID delinkIntegrationMapping
+// @Description Soft-delete (archive) the mapping between a FlexPrice entity and a provider entity.
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.DelinkIntegrationMappingRequest true "Delink mapping request"
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /integrations/link [delete]
+func (h *IntegrationHandler) Delink(c *gin.Context) {
+	var req dto.DelinkIntegrationMappingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid request body").Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.mappingService.DelinkIntegrationMapping(c.Request.Context(), req)
 	if err != nil {
 		c.Error(err)
 		return
@@ -142,7 +169,7 @@ func (h *IntegrationHandler) GetConfig(c *gin.Context) {
 	}
 	connResp, err := h.connectionService.GetConnections(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.Errorw("failed to get connections for integration config", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get connections for integration config", "error", err)
 		c.Error(err)
 		return
 	}

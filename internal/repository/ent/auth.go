@@ -48,7 +48,7 @@ func (r *authRepository) CreateAuth(ctx context.Context, auth *domainAuth.Auth) 
 			Mark(ierr.ErrValidation)
 	}
 
-	r.logger.Debugw("creating auth", "user_id", auth.UserID, "provider", auth.Provider)
+	r.logger.Debug(ctx, "creating auth", "user_id", auth.UserID, "provider", auth.Provider)
 
 	client := r.client.Writer(ctx)
 	_, err := client.Auth.
@@ -134,7 +134,7 @@ func (r *authRepository) UpdateAuth(ctx context.Context, auth *domainAuth.Auth) 
 			Mark(ierr.ErrValidation)
 	}
 
-	r.logger.Debugw("updating auth", "user_id", auth.UserID, "provider", auth.Provider)
+	r.logger.Debug(ctx, "updating auth", "user_id", auth.UserID, "provider", auth.Provider)
 
 	client := r.client.Writer(ctx)
 	_, err := client.Auth.
@@ -176,7 +176,7 @@ func (r *authRepository) DeleteAuth(ctx context.Context, userID string) error {
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("deleting auth", "user_id", userID)
+	r.logger.Debug(ctx, "deleting auth", "user_id", userID)
 
 	client := r.client.Writer(ctx)
 	_, err := client.Auth.

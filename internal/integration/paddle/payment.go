@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
+	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -32,27 +32,27 @@ func NewPaymentService(logger *logger.Logger) *PaymentService {
 // It creates a payment record and reconciles the invoice.
 func (s *PaymentService) ProcessExternalPaddleTransaction(
 	ctx context.Context,
-	transaction *paddlenotification.TransactionNotification,
+	transaction *paddlesdk.Transaction,
 	flexpriceInvoiceID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 ) error {
 	paddleTransactionID := transaction.ID
 
-	s.logger.Infow("processing external Paddle transaction",
+	s.logger.Info(ctx, "processing external Paddle transaction",
 		"paddle_transaction_id", paddleTransactionID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 
 	// Step 1: Idempotency - check if payment already exists
 	exists, err := paymentService.PaymentExistsByGatewayPaymentID(ctx, paddleTransactionID)
 	if err != nil {
-		s.logger.Errorw("failed to check if payment exists",
+		s.logger.Error(ctx, "failed to check if payment exists",
 			"error", err,
 			"paddle_transaction_id", paddleTransactionID)
 		return err
 	}
 	if exists {
-		s.logger.Debugw("payment already exists for Paddle transaction, skipping",
+		s.logger.Debug(ctx, "payment already exists for Paddle transaction, skipping",
 			"paddle_transaction_id", paddleTransactionID)
 		return nil
 	}
@@ -60,7 +60,7 @@ func (s *PaymentService) ProcessExternalPaddleTransaction(
 	// Step 2: Create external payment record
 	err = s.createExternalPaymentRecord(ctx, transaction, flexpriceInvoiceID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"paddle_transaction_id", paddleTransactionID)
 		return err
@@ -70,13 +70,13 @@ func (s *PaymentService) ProcessExternalPaddleTransaction(
 	amount := s.convertFromSmallestUnit(transaction.Details.Totals.Total, string(transaction.CurrencyCode))
 	err = s.reconcileInvoice(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice with external payment",
+		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
 			"error", err,
 			"invoice_id", flexpriceInvoiceID)
 		return err
 	}
 
-	s.logger.Infow("successfully processed external Paddle transaction",
+	s.logger.Info(ctx, "successfully processed external Paddle transaction",
 		"paddle_transaction_id", paddleTransactionID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 
@@ -86,7 +86,7 @@ func (s *PaymentService) ProcessExternalPaddleTransaction(
 // createExternalPaymentRecord creates a payment record for an external Paddle transaction
 func (s *PaymentService) createExternalPaymentRecord(
 	ctx context.Context,
-	transaction *paddlenotification.TransactionNotification,
+	transaction *paddlesdk.Transaction,
 	invoiceID string,
 	paymentService interfaces.PaymentService,
 ) error {
@@ -99,7 +99,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	var paddlePaymentMethodType string
 	var cardLast4 string
 	for _, p := range transaction.Payments {
-		if p.Status == paddlenotification.PaymentAttemptStatusCaptured {
+		if p.Status == paddlesdk.PaymentAttemptStatusCaptured {
 			paddlePaymentAttemptID = p.PaymentAttemptID
 			if p.PaymentMethodID != nil && *p.PaymentMethodID != "" {
 				paddlePaymentMethodID = *p.PaymentMethodID
@@ -114,7 +114,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 		}
 	}
 
-	s.logger.Debugw("creating external payment record",
+	s.logger.Debug(ctx, "creating external payment record",
 		"paddle_transaction_id", paddleTransactionID,
 		"invoice_id", invoiceID)
 
@@ -148,7 +148,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	paymentResp, err := paymentService.CreatePayment(ctx, createReq)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"paddle_transaction_id", paddleTransactionID,
 			"invoice_id", invoiceID)
@@ -165,24 +165,24 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	_, err = paymentService.UpdatePayment(ctx, paymentResp.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update external payment status, attempting cleanup",
+		s.logger.Error(ctx, "failed to update external payment status, attempting cleanup",
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"paddle_transaction_id", paddleTransactionID)
 
 		if deleteErr := paymentService.DeletePayment(ctx, paymentResp.ID); deleteErr != nil {
-			s.logger.Errorw("failed to cleanup orphaned payment record",
+			s.logger.Error(ctx, "failed to cleanup orphaned payment record",
 				"error", deleteErr,
 				"payment_id", paymentResp.ID,
 				"paddle_transaction_id", paddleTransactionID)
 		} else {
-			s.logger.Debugw("cleaned up orphaned payment record",
+			s.logger.Debug(ctx, "cleaned up orphaned payment record",
 				"payment_id", paymentResp.ID)
 		}
 		return err
 	}
 
-	s.logger.Infow("successfully created external payment record",
+	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"paddle_transaction_id", paddleTransactionID,
 		"invoice_id", invoiceID)
@@ -199,13 +199,13 @@ func (s *PaymentService) reconcileInvoice(
 ) error {
 	err := invoiceService.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice payment status",
+		s.logger.Error(ctx, "failed to reconcile invoice payment status",
 			"invoice_id", invoiceID,
 			"error", err)
 		return err
 	}
 
-	s.logger.Debugw("reconciled invoice", "invoice_id", invoiceID)
+	s.logger.Debug(ctx, "reconciled invoice", "invoice_id", invoiceID)
 
 	return nil
 }
@@ -214,12 +214,12 @@ func (s *PaymentService) reconcileInvoice(
 // Paddle stores amounts as strings in smallest denomination.
 func (s *PaymentService) convertFromSmallestUnit(totalStr string, currency string) decimal.Decimal {
 	if totalStr == "" {
-		s.logger.Warnw("empty Paddle total, using zero", "currency", currency)
+		s.logger.Info(context.Background(), "empty Paddle total, using zero", "currency", currency)
 		return decimal.Zero
 	}
 	amountInt, err := strconv.ParseInt(totalStr, 10, 64)
 	if err != nil {
-		s.logger.Warnw("failed to parse Paddle total, using zero",
+		s.logger.Info(context.Background(), "failed to parse Paddle total, using zero",
 			"currency", currency,
 			"error", err)
 		return decimal.Zero

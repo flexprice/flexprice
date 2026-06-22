@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,7 +45,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	authResponse, err := h.authService.SignUp(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to sign up", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to sign up", "error", err)
 		c.Error(err)
 		return
 	}
@@ -69,7 +69,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	authResponse, err := h.authService.Login(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to login", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to login", "error", err)
 		c.Error(err)
 		return
 	}

@@ -59,6 +59,18 @@ func secretFilterFn(ctx context.Context, s *secret.Secret, filter interface{}) b
 		return false
 	}
 
+	// Filter by user_id
+	if filter_.UserID != nil && s.UserID != *filter_.UserID {
+		return false
+	}
+
+	// Filter by not-expired: expires_at IS NULL OR expires_at > NotExpiredAt
+	if filter_.NotExpiredAt != nil {
+		if s.ExpiresAt != nil && !s.ExpiresAt.After(*filter_.NotExpiredAt) {
+			return false
+		}
+	}
+
 	// Filter by time range
 	if filter_.TimeRangeFilter != nil {
 		if filter_.StartTime != nil && s.CreatedAt.Before(*filter_.StartTime) {

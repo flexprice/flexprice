@@ -44,7 +44,8 @@ func NewClientWithConfig(config ClientConfig) Client {
 
 	return &DefaultClient{
 		client: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: OtelTransport(nil),
 		},
 	}
 }
@@ -58,7 +59,8 @@ type DefaultClient struct {
 func NewDefaultClient() Client {
 	return &DefaultClient{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: OtelTransport(nil),
 		},
 	}
 }

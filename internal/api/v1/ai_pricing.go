@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,9 +59,9 @@ func (h *AIPricingHandler) ParseGeminiPricing(c *gin.Context) {
 	payload, err := h.geminiPricing.ParsePricing(c.Request.Context(), &req)
 	if err != nil {
 		if ierr.IsTooManyRequests(err) {
-			h.log.WarnwCtx(c.Request.Context(), "parse gemini pricing rate limited", "error", err)
+			h.log.Info(c.Request.Context(), "parse gemini pricing rate limited", "error", err)
 		} else {
-			h.log.ErrorwCtx(c.Request.Context(), "parse gemini pricing failed", "error", err)
+			h.log.Error(c.Request.Context(), "parse gemini pricing failed", "error", err)
 		}
 		c.Error(err)
 		return

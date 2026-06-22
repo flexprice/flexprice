@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -126,6 +127,7 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 		TxStatus:            e.TransactionStatus,
 		ReferenceType:       e.ReferenceType,
 		ReferenceID:         e.ReferenceID,
+		IdempotencyKey:      lo.FromPtr(e.IdempotencyKey),
 		Description:         e.Description,
 		Metadata:            types.Metadata(e.Metadata),
 		ExpiryDate:          e.ExpiryDate,

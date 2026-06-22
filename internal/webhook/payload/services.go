@@ -1,11 +1,15 @@
 package payload
 
 import (
-	"github.com/flexprice/flexprice/internal/sentry"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
-// Services container for all services needed by payload builders
+// Services container for all services needed by payload builders.
+//
+// Tracing carries the OTel tracer + Sentry error-capture sink — callers that
+// previously read .Sentry should use .Tracing. The field name is kept short
+// because builders only use it for CaptureException today.
 type Services struct {
 	InvoiceService      service.InvoiceService
 	PlanService         service.PlanService
@@ -16,7 +20,7 @@ type Services struct {
 	WalletService       service.WalletService
 	CustomerService     service.CustomerService
 	PaymentService      service.PaymentService
-	Sentry              *sentry.Service
+	Tracing             *tracing.Service
 	CreditNoteService   service.CreditNoteService
 }
 
@@ -31,7 +35,7 @@ func NewServices(
 	walletService service.WalletService,
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
-	sentry *sentry.Service,
+	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
 ) *Services {
 	return &Services{
@@ -44,7 +48,7 @@ func NewServices(
 		WalletService:       walletService,
 		CustomerService:     customerService,
 		PaymentService:      paymentService,
-		Sentry:              sentry,
+		Tracing:             tracingSvc,
 		CreditNoteService:   creditNoteService,
 	}
 }

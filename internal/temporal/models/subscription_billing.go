@@ -111,12 +111,12 @@ func (i *ProcessSingleSubscriptionWorkflowInput) Validate() error {
 
 // ProcessSingleSubscriptionWorkflowResult represents the result of processing a single subscription
 type ProcessSingleSubscriptionWorkflowResult struct {
-	SubscriptionID     string    `json:"subscription_id"`
-	Status             string    `json:"status"`
+	SubscriptionID          string    `json:"subscription_id"`
+	Status                  string    `json:"status"`
 	BillingPeriodsProcessed int       `json:"billing_periods_processed"`
-	InvoicesCreated    []string  `json:"invoices_created"`
-	ErrorSummary       *string   `json:"error_summary,omitempty"`
-	CompletedAt        time.Time `json:"completed_at"`
+	InvoicesCreated         []string  `json:"invoices_created"`
+	ErrorSummary            *string   `json:"error_summary,omitempty"`
+	CompletedAt             time.Time `json:"completed_at"`
 }
 
 // ===================== Activity Models =====================
@@ -318,4 +318,3 @@ func (i *UpdateSubscriptionPeriodActivityInput) Validate() error {
 	}
 	return nil
 }
-

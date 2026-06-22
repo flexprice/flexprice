@@ -268,7 +268,7 @@ func (r *MeterUsageRepository) marshalProperties(record *events.MeterUsage) stri
 	}
 	propsJSON, err := json.Marshal(record.Properties)
 	if err != nil {
-		r.logger.Errorw("failed to marshal properties for meter_usage",
+		r.logger.Error(context.Background(), "failed to marshal properties for meter_usage",
 			"event_id", record.ID,
 			"error", err,
 		)
@@ -287,10 +287,10 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 
 	query, args := r.qb.BuildBucketedQuery(params)
 
-	r.logger.Debugw("executing bucketed meter usage query",
+	r.logger.Debug(ctx, "executing bucketed meter usage query",
 		"meter_id", params.MeterID,
 		"window_size", params.WindowSize,
-		"group_by", params.GroupByProperty,
+		"group_by", params.GroupBy,
 	)
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
@@ -309,41 +309,183 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 	result.Type = params.AggregationType
 	result.MeterID = params.MeterID
 
-	hasGroupBy := params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty)
-
+	// Both no-group and grouped SQL paths emit the same 5 columns: total,
+	// total_event_count, timestamp, value, event_count. Per-row dim values
+	// are no longer surfaced — no consumer reads them.
 	for rows.Next() {
 		var total decimal.Decimal
+		var totalEventCount uint64
 		var windowStart time.Time
 		var value decimal.Decimal
+		var eventCount uint64
 
-		if hasGroupBy {
-			var groupKey string
-			if err := rows.Scan(&total, &windowStart, &value, &groupKey); err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan bucketed meter usage row (with group_key)").
-					Mark(ierr.ErrDatabase)
-			}
-			result.Value = total
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: windowStart,
-				Value:      value,
-				GroupKey:   groupKey,
-			})
-		} else {
-			if err := rows.Scan(&total, &windowStart, &value); err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan bucketed meter usage row").
-					Mark(ierr.ErrDatabase)
-			}
-			result.Value = total
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: windowStart,
-				Value:      value,
-			})
+		if err := rows.Scan(&total, &totalEventCount, &windowStart, &value, &eventCount); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed meter usage row").
+				Mark(ierr.ErrDatabase)
 		}
+		result.Value = total
+		result.EventCount = totalEventCount
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: windowStart,
+			Value:      value,
+			EventCount: eventCount,
+		})
+	}
+	// rows.Next() returns false on both end-of-rows and iteration error.
+	// Without this check we'd silently return partial results as success and
+	// downstream billing totals would be wrong.
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed meter usage rows").
+			Mark(ierr.ErrDatabase)
 	}
 
 	return &result, nil
+}
+
+// GetUsageForBucketedMetersDetailed runs the analytics-side bucketed query:
+// 1) the aggregate query returns one row per (source, properties) combo with
+// per-combo TotalUsage / EventCount; 2) for each combo, a follow-up query
+// fetches per-bucket Points. Matches feature_usage's two-query pattern so the
+// service layer doesn't have to re-group rows in Go.
+//
+// Callers MUST set params.GroupBy; otherwise an empty slice is returned (no
+// combos to enumerate). For the no-grouping case use GetUsageForBucketedMeters.
+func (r *MeterUsageRepository) GetUsageForBucketedMetersDetailed(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageDetailedResult, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	aggQuery, aggArgs, dims := r.qb.BuildBucketedAggregateQuery(params)
+	if aggQuery == "" {
+		return nil, nil
+	}
+
+	r.logger.Debug(ctx, "executing bucketed detailed aggregate query",
+		"meter_id", params.MeterID,
+		"window_size", params.WindowSize,
+		"group_by", params.GroupBy,
+	)
+
+	rows, err := r.store.GetConn().Query(ctx, aggQuery, aggArgs...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute bucketed detailed aggregate query").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":    params.MeterID,
+				"window_size": params.WindowSize,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Each row carries (dim values..., group_total, group_event_count).
+	results := make([]*events.MeterUsageDetailedResult, 0)
+	for rows.Next() {
+		dimVals := make([]string, len(dims))
+		var groupTotal decimal.Decimal
+		var groupEC uint64
+
+		scanArgs := make([]interface{}, 0, len(dims)+2)
+		for i := range dimVals {
+			scanArgs = append(scanArgs, &dimVals[i])
+		}
+		scanArgs = append(scanArgs, &groupTotal, &groupEC)
+
+		if err := rows.Scan(scanArgs...); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed detailed aggregate row").
+				Mark(ierr.ErrDatabase)
+		}
+
+		res := &events.MeterUsageDetailedResult{
+			MeterID:    params.MeterID,
+			Properties: make(map[string]string),
+			TotalUsage: groupTotal,
+			EventCount: groupEC,
+		}
+		// MAX bucketed meters also surface MaxUsage = TotalUsage for response parity.
+		if params.AggregationType != types.AggregationSum {
+			res.MaxUsage = groupTotal
+		}
+		for i, d := range dims {
+			if d.IsSource() {
+				res.Source = dimVals[i]
+			} else if d.IsProperty() && dimVals[i] != "" {
+				// Drop missing-key dims (JSONExtractString returns "" when the key isn't present)
+				res.Properties[d.PropertyName] = dimVals[i]
+			}
+		}
+		results = append(results, res)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed detailed aggregate rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Fetch Points per combo (one query each) when the caller asked for a
+	// window_size. Skip the round-trips when no time-series is needed.
+	if params.WindowSize != "" {
+		for _, res := range results {
+			pts, err := r.fetchBucketedComboPoints(ctx, params, dims, res.Source, res.Properties, params.AggregationType)
+			if err != nil {
+				return nil, err
+			}
+			res.Points = pts
+		}
+	}
+
+	return results, nil
+}
+
+// fetchBucketedComboPoints runs BuildBucketedPointsQuery for one combo and
+// converts the bucket rows into the MeterUsageDetailedPoint shape the response
+// builder consumes.
+func (r *MeterUsageRepository) fetchBucketedComboPoints(
+	ctx context.Context,
+	params *events.MeterUsageQueryParams,
+	dims []BucketedGroupByDim,
+	comboSource string,
+	comboProps map[string]string,
+	aggType types.AggregationType,
+) ([]events.MeterUsageDetailedPoint, error) {
+	query, args := r.qb.BuildBucketedPointsQuery(params, dims, comboSource, comboProps)
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute bucketed combo points query").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	pts := make([]events.MeterUsageDetailedPoint, 0)
+	for rows.Next() {
+		var bucketStart time.Time
+		var bucketValue decimal.Decimal
+		var bucketEC uint64
+		if err := rows.Scan(&bucketStart, &bucketValue, &bucketEC); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed combo points row").
+				Mark(ierr.ErrDatabase)
+		}
+		p := events.MeterUsageDetailedPoint{
+			WindowStart: bucketStart,
+			TotalUsage:  bucketValue,
+			EventCount:  bucketEC,
+		}
+		if aggType != types.AggregationSum {
+			p.MaxUsage = bucketValue
+		}
+		pts = append(pts, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed combo points rows").
+			Mark(ierr.ErrDatabase)
+	}
+	return pts, nil
 }
 
 // GetDistinctMeterIDs returns the set of meter_ids that have data in meter_usage
@@ -414,7 +556,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 	if len(groupByResult.Aliases) > 0 {
 		selectColumns = append(selectColumns, groupByResult.Aliases...)
 	}
-	aggColumns := buildConditionalAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
 	selectColumns = append(selectColumns, aggColumns...)
 	if !sourceInGroupBy {
 		selectColumns = append(selectColumns, "groupUniqArray(source) AS sources")
@@ -439,7 +581,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 		query += "\n" + settings
 	}
 
-	r.logger.Debugw("executing detailed meter usage analytics query",
+	r.logger.Debug(ctx, "executing detailed meter usage analytics query",
 		"query", query,
 		"group_by", params.GroupBy,
 		"property_filters", params.PropertyFilters,
@@ -503,7 +645,9 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
 					start := len("JSONExtractString(properties, '")
 					end := strings.Index(col[start:], "'")
-					if end > 0 {
+					if end > 0 && value != "" {
+						// Skip missing-key dims so the response doesn't carry
+						// stray empty entries — matches feature-side parity.
 						propName := col[start : start+end]
 						result.Properties[propName] = value
 					}
@@ -588,12 +732,77 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 	case *MeterUsageAvgAggregator:
 		aggExpr = "AVG(qty_total)"
 	case *MeterUsageLatestAggregator:
-		aggExpr = fmt.Sprintf("argMax(qty_total, timestamp)")
+		aggExpr = "argMax(qty_total, timestamp)"
 	default:
 		aggExpr = "SUM(qty_total)"
 	}
 
 	return aggExpr, countExpr
+}
+
+// buildMeterUsageAggregationColumns builds SQL aggregation columns for meter_usage
+// analytics queries.
+//
+// Unlike feature_usage's buildConditionalAggregationColumns (where total_usage
+// only holds a real value when SUM is in the aggregation set), here total_usage
+// always holds the PRIMARY aggregation result regardless of type — COUNT meters
+// get total_usage = COUNT(DISTINCT id), MAX meters get total_usage = MAX(qty_total),
+// etc. Priority order matches frequency (SUM → COUNT → COUNT_UNIQUE → MAX → AVG → LATEST).
+//
+// This keeps the Go-side simple: r.TotalUsage and p.TotalUsage carry the
+// aggregation-aware value with no further routing needed. The per-type columns
+// (max_usage, latest_usage, count_unique_usage) remain so multi-aggregation
+// queries still get all values in a single round-trip; for single-aggregation
+// queries (the common case) total_usage and the matching per-type column will
+// hold the same value, which is harmless.
+func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []string {
+	aggSet := make(map[types.AggregationType]bool, len(aggTypes))
+	for _, aggType := range aggTypes {
+		aggSet[aggType] = true
+	}
+
+	var primaryExpr string
+	switch {
+	case aggSet[types.AggregationSum]:
+		primaryExpr = "SUM(qty_total)"
+	case aggSet[types.AggregationCount]:
+		primaryExpr = "COUNT(DISTINCT id)"
+	case aggSet[types.AggregationCountUnique]:
+		primaryExpr = "COUNT(DISTINCT unique_hash)"
+	case aggSet[types.AggregationMax]:
+		primaryExpr = "MAX(qty_total)"
+	case aggSet[types.AggregationAvg]:
+		primaryExpr = "AVG(qty_total)"
+	case aggSet[types.AggregationLatest]:
+		primaryExpr = "argMax(qty_total, timestamp)"
+	default:
+		primaryExpr = "toDecimal128(0, 9)"
+	}
+
+	columns := []string{primaryExpr + " AS total_usage"}
+
+	if aggSet[types.AggregationMax] {
+		columns = append(columns, "MAX(qty_total) AS max_usage")
+	} else {
+		columns = append(columns, "toDecimal128(0, 9) AS max_usage")
+	}
+
+	if aggSet[types.AggregationLatest] {
+		columns = append(columns, "argMax(qty_total, timestamp) AS latest_usage")
+	} else {
+		columns = append(columns, "toDecimal128(0, 9) AS latest_usage")
+	}
+
+	if aggSet[types.AggregationCountUnique] {
+		columns = append(columns, "COUNT(DISTINCT unique_hash) AS count_unique_usage")
+	} else {
+		columns = append(columns, "toUInt64(0) AS count_unique_usage")
+	}
+
+	// event_count is the total distinct event count for every query.
+	columns = append(columns, "COUNT(DISTINCT id) AS event_count")
+
+	return columns
 }
 
 // GetMeterUsageForExport retrieves meter usage data for export in batches.
@@ -663,7 +872,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})
@@ -679,7 +888,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("meter_usage export batch query completed",
+	r.logger.Debug(ctx, "meter_usage export batch query completed",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"batch_size", batchSize,
@@ -687,4 +896,64 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 		"records_in_batch", len(results))
 
 	return results, nil
+}
+
+// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
+func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+	query := `
+		SELECT
+			id,
+			tenant_id,
+			environment_id,
+			external_customer_id,
+			event_name,
+			source,
+			timestamp,
+			ingested_at,
+			properties,
+			meter_id,
+			qty_total,
+			unique_hash
+		FROM meter_usage
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND id = ?
+		LIMIT 1
+		SETTINGS max_memory_usage = 96636764160
+	`
+
+	var usage events.MeterUsage
+	var propertiesJSON string
+
+	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, eventID).Scan(
+		&usage.ID,
+		&usage.TenantID,
+		&usage.EnvironmentID,
+		&usage.ExternalCustomerID,
+		&usage.EventName,
+		&usage.Source,
+		&usage.Timestamp,
+		&usage.IngestedAt,
+		&propertiesJSON,
+		&usage.MeterID,
+		&usage.QtyTotal,
+		&usage.UniqueHash,
+	)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query meter_usage by event ID").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if propertiesJSON != "" {
+		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
+			usage.Properties = make(map[string]interface{})
+		}
+	}
+
+	return &usage, nil
 }

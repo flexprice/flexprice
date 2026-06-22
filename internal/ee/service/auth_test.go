@@ -1,0 +1,156 @@
+package service
+
+import (
+	"testing"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/stretchr/testify/suite"
+)
+
+type AuthServiceSuite struct {
+	testutil.BaseServiceTestSuite
+	authService AuthService
+	userRepo    *testutil.InMemoryUserStore
+	tenantRepo  *testutil.InMemoryTenantStore
+}
+
+func TestAuthService(t *testing.T) {
+	suite.Run(t, new(AuthServiceSuite))
+}
+
+func (s *AuthServiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.setupService()
+	s.setupTestData()
+}
+
+func (s *AuthServiceSuite) setupService() {
+	s.userRepo = s.GetStores().UserRepo.(*testutil.InMemoryUserStore)
+	s.tenantRepo = s.GetStores().TenantRepo.(*testutil.InMemoryTenantStore)
+	pubSub := testutil.NewInMemoryPubSub()
+
+	s.authService = NewAuthService(ServiceParams{
+		Logger:                       s.GetLogger(),
+		Config:                       s.GetConfig(),
+		DB:                           s.GetDB(),
+		SubRepo:                      s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo:        s.GetStores().SubscriptionPhaseRepo,
+		PlanRepo:                     s.GetStores().PlanRepo,
+		PriceRepo:                    s.GetStores().PriceRepo,
+		PriceUnitRepo:                s.GetStores().PriceUnitRepo,
+		EventRepo:                    s.GetStores().EventRepo,
+		MeterRepo:                    s.GetStores().MeterRepo,
+		CustomerRepo:                 s.GetStores().CustomerRepo,
+		InvoiceRepo:                  s.GetStores().InvoiceRepo,
+		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
+		EntitlementRepo:              s.GetStores().EntitlementRepo,
+		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
+		FeatureRepo:                  s.GetStores().FeatureRepo,
+		TenantRepo:                   s.GetStores().TenantRepo,
+		UserRepo:                     s.GetStores().UserRepo,
+		AuthRepo:                     s.GetStores().AuthRepo,
+		WalletRepo:                   s.GetStores().WalletRepo,
+		CreditGrantRepo:              s.GetStores().CreditGrantRepo,
+		CreditGrantApplicationRepo:   s.GetStores().CreditGrantApplicationRepo,
+		PaymentRepo:                  s.GetStores().PaymentRepo,
+		TaskRepo:                     s.GetStores().TaskRepo,
+		SecretRepo:                   s.GetStores().SecretRepo,
+		CouponRepo:                   s.GetStores().CouponRepo,
+		CouponAssociationRepo:        s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:        s.GetStores().CouponApplicationRepo,
+		ConnectionRepo:               s.GetStores().ConnectionRepo,
+		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
+		EventPublisher:               s.GetPublisher(),
+		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
+		TaxRateRepo:                  s.GetStores().TaxRateRepo,
+		SettingsRepo:                 s.GetStores().SettingsRepo,
+		WebhookPublisher:             s.GetWebhookPublisher(),
+		IntegrationFactory:           s.GetIntegrationFactory(),
+	}, pubSub)
+}
+
+func (s *AuthServiceSuite) setupTestData() {
+	// Clear any existing data
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *AuthServiceSuite) TestSignUp() {
+	testCases := []struct {
+		name          string
+		req           *dto.SignUpRequest
+		setupFunc     func()
+		expectedError bool
+	}{
+		{
+			name: "successful_signup",
+			req: &dto.SignUpRequest{
+				Email:    "test@example.com",
+				Password: "securepassword",
+			},
+			setupFunc:     nil,
+			expectedError: false,
+		},
+		{
+			name: "successful_signup_with_metadata",
+			req: &dto.SignUpRequest{
+				Email:    "metadata@example.com",
+				Password: "securepassword",
+				Metadata: map[string]string{
+					"signup_source": "landing_page",
+					"utm_campaign":  "q2_launch",
+				},
+			},
+			setupFunc:     nil,
+			expectedError: false,
+		},
+		{
+			name: "duplicate_email",
+			req: &dto.SignUpRequest{
+				Email:    "existing@example.com",
+				Password: "securepassword",
+			},
+			setupFunc: func() {
+				// Create an existing user to trigger a duplicate scenario
+				_ = s.userRepo.Create(s.GetContext(), &user.User{
+					ID:    "user-1",
+					Email: "existing@example.com",
+				})
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.setupTestData()
+			if tc.setupFunc != nil {
+				tc.setupFunc()
+			}
+
+			resp, err := s.authService.SignUp(s.GetContext(), tc.req)
+
+			if tc.expectedError {
+				s.Error(err)
+				s.Nil(resp)
+			} else {
+				s.NoError(err)
+				s.NotNil(resp)
+				// We used a real provider, so check that token exists (not necessarily 'auth-token' as before)
+				s.NotEmpty(resp.Token)
+
+				if tc.req.Metadata != nil {
+					createdUser, err := s.userRepo.GetByEmail(s.GetContext(), tc.req.Email)
+					s.NoError(err)
+					s.Equal(tc.req.Metadata, createdUser.Metadata)
+
+					createdTenant, err := s.tenantRepo.GetByID(s.GetContext(), resp.TenantID)
+					s.NoError(err)
+					s.Equal(tc.req.Metadata, map[string]string(createdTenant.Metadata))
+				}
+			}
+		})
+	}
+}

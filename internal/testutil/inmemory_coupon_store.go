@@ -43,6 +43,7 @@ func copyCoupon(c *coupon.Coupon) *coupon.Coupon {
 		Cadence:           c.Cadence,
 		DurationInPeriods: c.DurationInPeriods,
 		Currency:          c.Currency,
+		CouponCode:        c.CouponCode,
 		Metadata:          c.Metadata,
 		EnvironmentID:     c.EnvironmentID,
 		BaseModel: types.BaseModel{
@@ -84,6 +85,41 @@ func (s *InMemoryCouponStore) Get(ctx context.Context, id string) (*coupon.Coupo
 			Mark(ierr.ErrNotFound)
 	}
 	return copyCoupon(c), nil
+}
+
+func (s *InMemoryCouponStore) GetByCode(ctx context.Context, code string) (*coupon.Coupon, error) {
+	normalised := strings.ToLower(strings.TrimSpace(code))
+	if normalised == "" {
+		return nil, ierr.NewError("coupon_code is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	items, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, c *coupon.Coupon, _ interface{}) bool {
+		if c.CouponCode == nil {
+			return false
+		}
+		tenantID := types.GetTenantID(ctx)
+		if tenantID != "" && c.TenantID != tenantID {
+			return false
+		}
+		if !CheckEnvironmentFilter(ctx, c.EnvironmentID) {
+			return false
+		}
+		if c.Status != types.StatusPublished {
+			return false
+		}
+		return strings.ToLower(strings.TrimSpace(*c.CouponCode)) == normalised
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, ierr.NewError("coupon not found").
+			WithHintf("Coupon with code '%s' was not found", code).
+			WithReportableDetails(map[string]interface{}{"coupon_code": code}).
+			Mark(ierr.ErrNotFound)
+	}
+	return copyCoupon(items[0]), nil
 }
 
 func (s *InMemoryCouponStore) Update(ctx context.Context, c *coupon.Coupon) error {

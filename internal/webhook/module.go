@@ -1,14 +1,15 @@
 package webhook
 
 import (
+	"context"
 	"github.com/flexprice/flexprice/internal/config"
 	kafkaProducerPkg "github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -42,7 +43,7 @@ func providePayloadBuilderFactory(
 	walletService service.WalletService,
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
-	sentry *sentry.Service,
+	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
@@ -55,7 +56,7 @@ func providePayloadBuilderFactory(
 		walletService,
 		customerService,
 		paymentService,
-		sentry,
+		tracingSvc,
 		creditNoteService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
@@ -67,7 +68,7 @@ func providePubSub(
 ) pubsub.PubSub {
 	pubSub, err := kafka.NewPubSubFromConfig(cfg, logger, cfg.Webhook.ConsumerGroup)
 	if err != nil {
-		logger.Fatalw("failed to create kafka pubsub for webhooks", "error", err)
+		logger.Fatal(context.Background(), "failed to create kafka pubsub for webhooks", "error", err)
 	}
 	return pubSub
 }

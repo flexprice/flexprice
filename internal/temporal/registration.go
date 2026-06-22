@@ -3,7 +3,7 @@ package temporal
 import (
 	"fmt"
 
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -45,10 +45,11 @@ type WorkerConfig struct {
 
 // cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
 type cronActivityBundle struct {
-	creditGrant          *cronActivities.CreditGrantActivities
-	subscription         *cronActivities.SubscriptionCronActivities
-	walletCreditExpiry   *cronActivities.WalletCreditExpiryActivities
-	webhookOutboundRetry *cronActivities.WebhookOutboundRetryActivities
+	creditGrant           *cronActivities.CreditGrantActivities
+	subscription          *cronActivities.SubscriptionCronActivities
+	walletCreditExpiry    *cronActivities.WalletCreditExpiryActivities
+	webhookOutboundRetry  *cronActivities.WebhookOutboundRetryActivities
+	paddleInvoicePullSync *cronActivities.PaddleInvoicePullSyncActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -261,10 +262,11 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	cronBundle := &cronActivityBundle{
-		creditGrant:          cronActivities.NewCreditGrantActivities(creditGrantService),
-		subscription:         cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
-		walletCreditExpiry:   cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
-		webhookOutboundRetry: cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		creditGrant:           cronActivities.NewCreditGrantActivities(creditGrantService),
+		subscription:          cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
+		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
+		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -336,6 +338,7 @@ func buildWorkerConfig(
 			workflows.WhopInvoiceMarkPaidWorkflow,
 			workflows.MoyasarInvoiceSyncWorkflow,
 			workflows.PaddleInvoiceSyncWorkflow,
+			workflows.PaddleInvoicePullSyncWorkflow,
 			workflows.StripeInvoiceSyncWorkflow,
 			workflows.RazorpayInvoiceSyncWorkflow,
 			workflows.ChargebeeInvoiceSyncWorkflow,
@@ -361,6 +364,7 @@ func buildWorkerConfig(
 			whopInvoiceSyncActivities.MarkWhopInvoicePaid,
 			moyasarInvoiceSyncActivities.SyncInvoiceToMoyasar,
 			paddleInvoiceSyncActivities.SyncInvoiceToPaddle,
+			paddleInvoiceSyncActivities.PullAndUpdatePaddleInvoice,
 			stripeInvoiceSyncActivities.SyncInvoiceToStripe,
 			razorpayInvoiceSyncActivities.SyncInvoiceToRazorpay,
 			chargebeeInvoiceSyncActivities.SyncInvoiceToChargebee,
@@ -488,6 +492,7 @@ func buildWorkerConfig(
 			cronWorkflows.SubscriptionTrialEndDueWorkflow,
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
+			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -498,6 +503,7 @@ func buildWorkerConfig(
 			cron.subscription.ProcessTrialEndDueActivity,
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 			cron.subscription.ProcessAutoInvoiceThresholdBillingActivity,
+			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
 		)
 	}
 	return WorkerConfig{

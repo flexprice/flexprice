@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 	domainevents "github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -25,11 +26,12 @@ type EventsHandler struct {
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
 	meterUsageService            service.MeterUsageService
+	usageBenchmarkService        service.UsageBenchmarkService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, usageBenchmarkService service.UsageBenchmarkService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		eventPostProcessingService:   eventPostProcessingService,
@@ -37,6 +39,7 @@ func NewEventsHandler(eventService service.EventService, eventPostProcessingServ
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
 		meterUsageService:            meterUsageService,
+		usageBenchmarkService:        usageBenchmarkService,
 		config:                       config,
 		log:                          log,
 	}
@@ -58,7 +61,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.IngestEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.NewError("invalid request payload").
 			WithHint("Invalid request payload").
 			Mark(ierr.ErrValidation))
@@ -72,7 +75,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 
 	err := h.eventService.CreateEvent(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to ingest event", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to ingest event", "error", err)
 		c.Error(err)
 		return
 	}
@@ -96,7 +99,7 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.BulkIngestEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request payload").
 			Mark(ierr.ErrValidation))
@@ -105,7 +108,7 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 
 	err := h.eventService.BulkCreateEvents(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to bulk ingest events", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bulk ingest events", "error", err)
 		c.Error(err)
 		return
 	}
@@ -120,7 +123,7 @@ func (h *EventsHandler) BulkIngestRawEvent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.BulkIngestRawEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request payload").
 			Mark(ierr.ErrValidation))
@@ -133,7 +136,7 @@ func (h *EventsHandler) BulkIngestRawEvent(c *gin.Context) {
 	}
 
 	if err := h.rawEventConsumptionService.BulkIngestRawEvents(ctx, req.Events); err != nil {
-		h.log.Error("Failed to bulk ingest raw events", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bulk ingest raw events", "error", err)
 		c.Error(err)
 		return
 	}
@@ -307,7 +310,7 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 		Order:              lo.Ternary(order != "", &order, nil),
 	})
 	if err != nil {
-		h.log.Error("Failed to get events", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get events", "error", err)
 		c.Error(err)
 		return
 	}
@@ -407,6 +410,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 			WindowSize:          req.WindowSize,
 			Expand:              req.Expand,
 			IncludeChildren:     req.IncludeChildren,
+			BreakdownBucket:     req.BreakdownBucket,
 			// BillingAnchor omitted: service defaults to subscription's billing anchor
 		}
 		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)
@@ -422,6 +426,8 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	h.publishAnalyticsBenchmark(ctx, &req)
 
 	c.JSON(http.StatusOK, response)
 }
@@ -453,7 +459,27 @@ func (h *EventsHandler) GetUsageAnalyticsV2(c *gin.Context) {
 		return
 	}
 
+	h.publishAnalyticsBenchmark(ctx, &req)
+
 	c.JSON(http.StatusOK, response)
+}
+
+// publishAnalyticsBenchmark fires a benchmark trigger to Kafka after the live
+// analytics response is produced. Strict fire-and-forget: gated on the per-tenant
+// feature flag, never blocks or fails the live response, errors are logged only.
+func (h *EventsHandler) publishAnalyticsBenchmark(ctx context.Context, req *dto.GetUsageAnalyticsRequest) {
+	if h.usageBenchmarkService == nil || h.config == nil {
+		return
+	}
+	if !h.config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
+		return
+	}
+	if err := h.usageBenchmarkService.PublishAnalyticsEvent(ctx, req); err != nil {
+		h.log.Info(ctx, "analytics benchmark: failed to publish event",
+			"tenant_id", types.GetTenantID(ctx),
+			"error", err,
+		)
+	}
 }
 
 func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time, error) {
@@ -572,7 +598,7 @@ func (h *EventsHandler) GetEventByID(c *gin.Context) {
 
 	response, err := h.featureUsageTrackingService.DebugEvent(ctx, eventID)
 	if err != nil {
-		h.log.Error("Failed to debug event", "error", err, "event_id", eventID)
+		h.log.Error(c.Request.Context(), "Failed to debug event", "error", err, "event_id", eventID)
 		c.Error(err)
 		return
 	}
@@ -585,7 +611,7 @@ func (h *EventsHandler) ReprocessEvents(c *gin.Context) {
 	var req dto.ReprocessEventsRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -594,7 +620,7 @@ func (h *EventsHandler) ReprocessEvents(c *gin.Context) {
 
 	result, err := h.featureUsageTrackingService.TriggerReprocessEventsWorkflow(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to trigger reprocess events workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger reprocess events workflow", "error", err)
 		c.Error(err)
 		return
 	}
@@ -607,7 +633,7 @@ func (h *EventsHandler) ReprocessEventsInternal(c *gin.Context) {
 	var req dto.InternalReprocessEventsRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -616,7 +642,7 @@ func (h *EventsHandler) ReprocessEventsInternal(c *gin.Context) {
 
 	result, err := h.featureUsageTrackingService.TriggerReprocessEventsWorkflowInternal(ctx, &req)
 	if err != nil {
-		h.log.Error("Failed to trigger internal reprocess events workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger internal reprocess events workflow", "error", err)
 		c.Error(err)
 		return
 	}
@@ -629,7 +655,7 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 	var req dto.ReprocessRawEventsRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -637,7 +663,7 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 	}
 
 	if err := req.Validate(); err != nil {
-		h.log.Error("Failed to validate request", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to validate request", "error", err)
 		c.Error(err)
 		return
 	}
@@ -652,7 +678,7 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 		UseUnprocessed:      false,
 	})
 	if err != nil {
-		h.log.Error("Failed to trigger reprocess raw events workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger reprocess raw events workflow", "error", err)
 		c.Error(err)
 		return
 	}
@@ -665,7 +691,7 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 	var req dto.ReprocessRawEventsRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -673,7 +699,7 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 	}
 
 	if err := req.Validate(); err != nil {
-		h.log.Error("Failed to validate request", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to validate request", "error", err)
 		c.Error(err)
 		return
 	}
@@ -688,7 +714,7 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 		UseUnprocessed:      true,
 	})
 	if err != nil {
-		h.log.Error("Failed to trigger reprocess unprocessed raw events workflow", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to trigger reprocess unprocessed raw events workflow", "error", err)
 		c.Error(err)
 		return
 	}

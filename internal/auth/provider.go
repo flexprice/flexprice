@@ -60,6 +60,12 @@ type Provider interface {
 	// Customer Dashboard Token Management
 	GenerateSessionToken(customerID, externalCustomerID, tenantID, environmentID string, timeoutHours int) (string, time.Time, error)
 	ValidateSessionToken(ctx context.Context, token string) (*auth.SessionClaims, error)
+
+	// GenerateDevToken creates a short-lived JWT for internal developer testing.
+	// The claim schema is provider-specific:
+	//   flexprice → { user_id, tenant_id, environment_id }   (email ignored)
+	//   supabase  → { sub, email, app_metadata.tenant_id }   (environmentID ignored; pass X-Environment-ID header)
+	GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error)
 }
 
 func NewProvider(cfg *config.Configuration) Provider {

@@ -35,7 +35,7 @@ func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger,
 // Create creates a new tax config
 func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
+	r.logger.Debug(ctx, "creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "create", map[string]interface{}{
 		"tax_association_id": t.ID,
@@ -64,6 +64,8 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetCreatedBy(t.CreatedBy).
 		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
+		SetStartDate(t.StartDate).
+		SetNillableEndDate(t.EndDate).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -106,7 +108,7 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 	}
 
 	client := r.client.Reader(ctx)
-	r.logger.Debugw("getting tax association", "tax_association_id", id)
+	r.logger.Debug(ctx, "getting tax association", "tax_association_id", id)
 
 	tc, err := client.TaxAssociation.Query().
 		Where(
@@ -138,14 +140,14 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 // Update updates a tax association
 func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("updating tax association", "tax_association_id", t.ID)
+	r.logger.Debug(ctx, "updating tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "update", map[string]interface{}{
 		"tax_association_id": t.ID,
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxAssociation.Update().
+	update := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -156,8 +158,10 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetAutoApply(t.AutoApply).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetMetadata(t.Metadata).
-		Save(ctx)
+		SetNillableEndDate(t.EndDate).
+		SetMetadata(t.Metadata)
+
+	_, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -180,7 +184,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 // Delete deletes a tax association by ID
 func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("deleting tax association", "tax_association_id", t.ID)
+	r.logger.Debug(ctx, "deleting tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "delete", map[string]interface{}{
 		"tax_association_id": t.ID,
@@ -399,6 +403,15 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 		if f.TimeRangeFilter.EndTime != nil {
 			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
+	}
+	if f.StartDate != nil && f.EndDate != nil {
+		query = query.Where(
+			entTaxConfig.StartDateLTE(lo.FromPtr(f.EndDate)),
+			entTaxConfig.Or(
+				entTaxConfig.EndDateIsNil(),
+				entTaxConfig.EndDateGT(lo.FromPtr(f.StartDate)),
+			),
+		)
 	}
 	return query, nil
 }

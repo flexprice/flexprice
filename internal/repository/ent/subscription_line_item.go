@@ -66,7 +66,7 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("creating subscription line item",
+	r.log.Debug(ctx, "creating subscription line item",
 		"line_item_id", item.ID,
 		"subscription_id", item.SubscriptionID,
 		"price_id", item.PriceID,
@@ -120,6 +120,7 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 		SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 		SetCommitmentWindowed(item.CommitmentWindowed).
+		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetTenantID(item.TenantID).
 		SetEnvironmentID(item.EnvironmentID).
 		SetStatus(string(item.Status)).
@@ -177,7 +178,7 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 		return nil, err
 	}
 
-	r.log.Debugw("getting subscription line item",
+	r.log.Debug(ctx, "getting subscription line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -223,7 +224,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("updating subscription line item",
+	r.log.Debug(ctx, "updating subscription line item",
 		"line_item_id", item.ID,
 		"tenant_id", item.TenantID,
 	)
@@ -254,6 +255,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 		SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 		SetCommitmentWindowed(item.CommitmentWindowed).
+		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
 		SetUpdatedAt(time.Now()).
@@ -330,7 +332,7 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("deleting subscription line item",
+	r.log.Debug(ctx, "deleting subscription line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -371,7 +373,7 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("creating subscription line items in bulk",
+	r.log.Debug(ctx, "creating subscription line items in bulk",
 		"item_count", len(items),
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -421,6 +423,7 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetMetadata(item.Metadata).
+			SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 			SetTenantID(item.TenantID).
 			SetEnvironmentID(item.EnvironmentID).
 			SetStatus(string(item.Status)).
@@ -466,7 +469,7 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("listing subscription line items by subscription",
+	r.log.Debug(ctx, "listing subscription line items by subscription",
 		"subscription_id", sub.ID,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -593,13 +596,31 @@ func (r *subscriptionLineItemRepository) GetDistinctCustomerIDsWithCommitmentTru
 	})
 	defer FinishSpan(span)
 
+	// True-up can be enabled either at the line-item level (commitment_true_up_enabled)
+	// or on any individual commitment time bucket (the true_up_enabled flag inside the
+	// commitment_time_buckets jsonb array). Both must surface the customer so their
+	// committed minimum is billed even with no usage in the window.
+	//
+	// jsonb_typeof guard: ent marshals a nil TimeOfDayBuckets slice as the JSON literal
+	// 'null' (a JSONB scalar, not SQL NULL), so COALESCE alone won't shield
+	// jsonb_array_elements from "cannot extract elements from a scalar".
 	const query = `
 		SELECT DISTINCT customer_id
 		FROM subscription_line_items
 		WHERE tenant_id = $1
 			AND environment_id = $2
 			AND status = $3
-			AND commitment_true_up_enabled = true
+			AND (
+				commitment_true_up_enabled = true
+				OR (
+					jsonb_typeof(commitment_time_buckets) = 'array'
+					AND EXISTS (
+						SELECT 1
+						FROM jsonb_array_elements(commitment_time_buckets) AS bucket
+						WHERE (bucket->>'true_up_enabled')::boolean = true
+					)
+				)
+			)
 	`
 
 	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, envID, string(types.StatusPublished))

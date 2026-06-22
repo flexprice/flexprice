@@ -313,7 +313,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 }
 
 // ConsumeCredits processes debit operation across multiple credits
-func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) error {
+func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]*walletdomain.Transaction, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "consume_credits", map[string]interface{}{
 		"credits_count": len(credits),
@@ -322,6 +322,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
+	consumedCreditTransactions := make([]*walletdomain.Transaction, 0)
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -341,7 +342,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 			Save(ctx)
 
 		if err != nil {
-			return ierr.WithError(err).
+			return consumedCreditTransactions, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -351,9 +352,10 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
+		consumedCreditTransactions = append(consumedCreditTransactions, credit)
 	}
 
-	return nil
+	return consumedCreditTransactions, nil
 }
 
 // CreateTransaction creates a new wallet transaction record
@@ -406,6 +408,17 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		Save(ctx)
 
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A wallet transaction with this idempotency key already exists").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":       tx.WalletID,
+					"type":            tx.Type,
+					"amount":          tx.Amount,
+					"idempotency_key": tx.IdempotencyKey,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create wallet transaction").
 			WithReportableDetails(map[string]interface{}{
@@ -1068,7 +1081,7 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.CreatedAt,
 		)
 		if err != nil {
-			r.logger.Errorw("failed to scan credit topup export data", "error", err)
+			r.logger.Error(ctx, "failed to scan credit topup export data", "error", err)
 			continue
 		}
 

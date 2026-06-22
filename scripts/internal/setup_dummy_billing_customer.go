@@ -27,8 +27,8 @@ import (
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/security"
-	"github.com/flexprice/flexprice/internal/sentry"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/shopspring/decimal"
@@ -95,7 +95,7 @@ func SetupDummyBillingCustomer() error {
 		return fmt.Errorf("logger: %w", err)
 	}
 
-	sentrySvc := sentry.NewSentryService(cfg, appLogger)
+	sentrySvc := tracing.NewService(cfg, appLogger)
 	chStore, err := clickhouse.NewClickHouseStore(cfg, sentrySvc)
 	if err != nil {
 		return fmt.Errorf("clickhouse: %w", err)
@@ -167,7 +167,8 @@ func SetupDummyBillingCustomer() error {
 		}
 	}()
 
-	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil)
+	// secondaryProducer=nil (no dual-write in this script), dynamoClient=nil (kafka only)
+	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil, nil)
 	if err != nil {
 		return fmt.Errorf("event publisher: %w", err)
 	}
@@ -258,7 +259,7 @@ func SetupDummyBillingCustomer() error {
 	customerSvc := service.NewCustomerService(params)
 	subscriptionSvc := service.NewSubscriptionService(params)
 	walletSvc := service.NewWalletService(params)
-	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg)
+	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg, nil)
 
 	ctx := context.Background()
 	ctx = types.SetTenantID(ctx, tenantID)

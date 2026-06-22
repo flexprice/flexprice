@@ -230,6 +230,26 @@ func (s *MeterUsageQuerySuite) TestWindowSize_Empty() {
 	assert.Equal(s.T(), "", result)
 }
 
+// TestWindowSize_BucketableSizes covers the sub-hourly and multi-hour window
+// sizes that per-bucket commitment meters may use now that a meter window of up
+// to a day is allowed for time-of-day buckets (see ValidateWindowAlignment).
+// These must produce a correct ClickHouse interval grouping.
+func (s *MeterUsageQuerySuite) TestWindowSize_BucketableSizes() {
+	cases := []struct {
+		window types.WindowSize
+		expect string
+	}{
+		{types.WindowSize15Min, "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"},
+		{types.WindowSize30Min, "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"},
+		{types.WindowSize3Hour, "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"},
+		{types.WindowSize6Hour, "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"},
+		{types.WindowSize12Hour, "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"},
+	}
+	for _, c := range cases {
+		assert.Equal(s.T(), c.expect, formatWindowSize(c.window), "window %s", c.window)
+	}
+}
+
 func (s *MeterUsageQuerySuite) TestWindowSize_WithBillingAnchor() {
 	anchor := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, &anchor)

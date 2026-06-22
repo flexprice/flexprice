@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:experimental
 # Build stage
-FROM golang:1.24-alpine3.20 AS builder
+# Pin the builder to the runner's native arch ($BUILDPLATFORM) and
+# cross-compile to the requested $TARGETARCH. Avoids QEMU emulation of
+# the Go toolchain, which is 10-20x slower on multi-arch builds.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
@@ -11,12 +14,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
+# TARGETARCH is provided automatically by buildx (e.g. amd64, arm64)
+ARG TARGETARCH
 ENV CGO_ENABLED=0 \
     GOOS=linux
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -ldflags="-w -s" -trimpath -o server cmd/server/main.go && \
-    go build -ldflags="-w -s" -trimpath -o migrate cmd/migrate/main.go
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server cmd/server/main.go && \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate cmd/migrate/main.go
 
 # Typst stage
 FROM ghcr.io/typst/typst:v0.13.1 AS typst

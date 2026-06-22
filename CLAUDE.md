@@ -49,7 +49,7 @@ make test-verbose
 make test-coverage
 
 # Run a single test by name
-go test -v -race ./internal/service -run TestBillingService_GenerateInvoice
+go test -v -race ./internal/ee/service -run TestBillingService_GenerateInvoice
 ```
 
 ## Linting & Vetting
@@ -146,7 +146,7 @@ flexprice/
 
 1. **Domain Layer** (`internal/domain/`) — Core business entities, repository interfaces, no external dependencies
 2. **Repository Layer** (`internal/repository/`) — Implements domain interfaces, direct DB access via Ent/ClickHouse
-3. **Service Layer** (`internal/service/`) — Business logic orchestration, transaction management
+3. **Service Layer** (`internal/ee/service/`) — Business logic orchestration, transaction management
 4. **API Layer** (`internal/api/`) — HTTP request/response, DTO conversions, request validation (no business logic)
 5. **Integration Layer** (`internal/integration/`) — Third-party service integrations (Stripe, Chargebee, Razorpay, HubSpot, QuickBooks, etc.), factory pattern
 
@@ -195,7 +195,7 @@ flexprice/
 1. Define domain model in `internal/domain/<entity>/`
 2. Create/update Ent schema in `ent/schema/<entity>.go`
 3. Implement repository in `internal/repository/<entity>.go`
-4. Implement service in `internal/service/<entity>.go`
+4. Implement service in `internal/ee/service/<entity>.go`
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations, then run `make swagger`
@@ -230,7 +230,7 @@ flexprice/
 
 ## Testing Conventions
 
-- **File location**: Tests live alongside implementation (e.g., `internal/service/billing_test.go`)
+- **File location**: Tests live alongside implementation (e.g., `internal/ee/service/billing_test.go`)
 - **Test utilities**: Use `internal/testutil/` for DB setup (`testutil.SetupTestDB()`), fixtures, and mocks
 - **Table-driven tests**: Preferred for multiple scenarios
 - **Integration tests**: Use real DB instances (via testcontainers or docker compose); avoid mocking Ent client

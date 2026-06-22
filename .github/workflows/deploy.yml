@@ -62,12 +62,12 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Login to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/v')
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
 
       - name: Prepare image tags
         id: image-tag
@@ -79,32 +79,50 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
+          echo "ecr_tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          # legacy output used by deploy jobs
           echo "tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+          IS_DEVELOP="${{ github.ref_name == 'develop' }}"
+
           {
-            echo "tags<<TAGS_EOF"
-            echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+            echo "ghcr_tags<<TAGS_EOF"
+            echo "${GHCR_IMAGE}:${GITHUB_SHA}"
             if [ "$IS_RELEASE" = "true" ]; then
-              echo "${GHCR_IMAGE}:${GITHUB_SHA}"
               echo "${GHCR_IMAGE}:${GITHUB_REF_NAME}"
               echo "${GHCR_IMAGE}:latest"
+            elif [ "$IS_DEVELOP" = "true" ]; then
+              echo "${GHCR_IMAGE}:develop"
             fi
             echo "TAGS_EOF"
           } >> $GITHUB_OUTPUT
 
-          if [ "$IS_RELEASE" = "true" ]; then
-            echo "platforms=linux/amd64,linux/arm64,linux/arm/v7" >> $GITHUB_OUTPUT
+          if [ "$IS_RELEASE" = "true" ] || [ "$IS_DEVELOP" = "true" ]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
           else
             echo "platforms=linux/arm64" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build & push image
-        uses: docker/build-push-action@v4
+      - name: Build & push image to ECR
+        id: build-ecr
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
           platforms: ${{ steps.image-tag.outputs.platforms }}
           push: true
-          tags: ${{ steps.image-tag.outputs.tags }}
+          tags: ${{ steps.image-tag.outputs.ecr_tag }}
+          provenance: false
+
+      - name: Push image to GHCR
+        uses: docker/build-push-action@v7
+        continue-on-error: true
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ steps.image-tag.outputs.platforms }}
+          push: true
+          tags: ${{ steps.image-tag.outputs.ghcr_tags }}
           provenance: false
 
       - name: Set image output
@@ -131,7 +149,8 @@ jobs:
   #       "cluster":          "fp-prod-backend",
   #       "api_service":      "flexprice-api-v4",
   #       "consumer_service": "flexprice-consumer-v1",
-  #       "worker_service":   "temporal-worker"
+  #       "worker_service":   "temporal-worker",
+  #       "preprod_service":  "preprod-flexprice-api-service"
   #     },
   #     {
   #       "region":           "us-west-2",
@@ -141,6 +160,10 @@ jobs:
   #       "worker_service":   "flexprice-temporal-worker-v1"
   #     }
   #   ]
+  #
+  #   preprod_service (optional): canary ECS service in the SAME cluster/region.
+  #   Targets that define it are deployed to preprod first; production rollout
+  #   then waits for manual approval (GitHub Environment: prod-approval).
   #
   #   Trigger mapping:
   #     push to main    → production targets
@@ -152,6 +175,8 @@ jobs:
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
+      preprod_targets: ${{ steps.config.outputs.preprod_targets }}
+      environment: ${{ steps.config.outputs.environment }}
       dry_run: ${{ steps.config.outputs.dry_run }}
 
     steps:
@@ -177,21 +202,100 @@ jobs:
 
           echo "Environment and dry_run configured (values redacted for public logs)"
 
-          # Use delimiter format so JSON (newlines, spaces) is written correctly to GITHUB_OUTPUT
           if [ "$ENV" = "production" ]; then
-            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
-            echo "$PROD_TARGETS" >> $GITHUB_OUTPUT
-            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+            TARGETS_JSON="$PROD_TARGETS"
           else
-            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
-            echo "$STAGING_TARGETS" >> $GITHUB_OUTPUT
-            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+            TARGETS_JSON="$STAGING_TARGETS"
           fi
 
+          # Targets that also define a preprod_service get a canary deploy +
+          # manual approval gate before the full production rollout.
+          if [ -z "$TARGETS_JSON" ]; then
+            PREPROD_TARGETS_JSON="[]"
+          else
+            PREPROD_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
+          import json, sys
+          targets = json.load(sys.stdin)
+          print(json.dumps([t for t in targets if t.get('preprod_service')]))
+          ")
+          fi
+
+          # Use delimiter format so JSON (newlines, spaces) is written correctly to GITHUB_OUTPUT
+          echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
+          echo "$TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+
+          echo "preprod_targets<<PREPROD_EOF" >> $GITHUB_OUTPUT
+          echo "$PREPROD_TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "PREPROD_EOF" >> $GITHUB_OUTPUT
+
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
+  # Job 3: Canary — deploy preprod service(s) for targets that define one.
+  # Runs BEFORE the approval gate; production rollout only proceeds after a
+  # human validates these preprod deployments and approves the gate.
+  # Skipped entirely when no target defines preprod_service (e.g. staging).
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy-preprod:
+    name: Deploy Preprod (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: ${{ always() && needs.resolve-config.result == 'success' && needs.resolve-config.outputs.preprod_targets != '[]' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.preprod_targets) }}
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy ECS Preprod service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.preprod_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 4: Manual approval gate (production only).
+  # Bound to the GitHub Environment `prod-approval` whose required-reviewers
+  # protection rule pauses the run here until a reviewer approves.
+  # - Runs only for production, after preprod deploys succeed.
+  # - 'skipped' preprod is also accepted so a prod config with no preprod
+  #   services still gates + deploys instead of silently doing nothing.
+  # - Dry runs bypass the gate (nothing is registered/deployed anyway).
+  # Setup runbook: docs/deployment/preprod-approval-gate.md
+  # ──────────────────────────────────────────────────────────────────────────
+  approval-gate:
+    name: Approve production rollout
+    needs: [resolve-config, deploy-preprod]
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.environment == 'production' &&
+          needs.resolve-config.outputs.dry_run != 'true' &&
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+    runs-on: self-hosted
+    environment: prod-approval
+
+    steps:
+      - name: Production rollout approved
+        run: |
+          echo "Preprod canary validated and production rollout approved."
+          echo "Proceeding to deploy api, consumer and worker services to all production targets."
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Jobs 5a–5c: Deploy API, Consumer, Worker — one job per service type,
   # each with matrix over targets (regions). Runs in parallel for faster deploys
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
   #
@@ -201,8 +305,16 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -229,8 +341,16 @@ jobs:
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -257,8 +377,16 @@ jobs:
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:

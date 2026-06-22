@@ -34,7 +34,7 @@ func (a *DealSyncActivities) CreateLineItems(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
 ) error {
-	a.logger.Infow("creating HubSpot line items",
+	a.logger.Info(ctx, "creating HubSpot line items",
 		"subscription_id", input.SubscriptionID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
@@ -47,7 +47,7 @@ func (a *DealSyncActivities) CreateLineItems(
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("HubSpot connection not configured",
+			a.logger.Debug(ctx, "HubSpot connection not configured",
 				"subscription_id", input.SubscriptionID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
@@ -56,7 +56,7 @@ func (a *DealSyncActivities) CreateLineItems(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get HubSpot integration",
+		a.logger.Error(ctx, "failed to get HubSpot integration",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
@@ -65,13 +65,13 @@ func (a *DealSyncActivities) CreateLineItems(
 	// Create line items - uses existing DealSyncService logic
 	err = hubspotIntegration.DealSyncSvc.SyncSubscriptionToDeal(ctx, input.SubscriptionID)
 	if err != nil {
-		a.logger.Errorw("failed to create line items",
+		a.logger.Error(ctx, "failed to create line items",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
 	}
 
-	a.logger.Infow("successfully created HubSpot line items",
+	a.logger.Info(ctx, "successfully created HubSpot line items",
 		"subscription_id", input.SubscriptionID)
 
 	return nil
@@ -83,7 +83,7 @@ func (a *DealSyncActivities) UpdateDealAmount(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
 ) error {
-	a.logger.Infow("updating HubSpot deal amount",
+	a.logger.Info(ctx, "updating HubSpot deal amount",
 		"customer_id", input.CustomerID,
 		"deal_id", input.DealID,
 		"tenant_id", input.TenantID,
@@ -97,7 +97,7 @@ func (a *DealSyncActivities) UpdateDealAmount(
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("HubSpot connection not configured",
+			a.logger.Debug(ctx, "HubSpot connection not configured",
 				"customer_id", input.CustomerID,
 				"deal_id", input.DealID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
@@ -107,7 +107,7 @@ func (a *DealSyncActivities) UpdateDealAmount(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get HubSpot integration",
+		a.logger.Error(ctx, "failed to get HubSpot integration",
 			"error", err,
 			"customer_id", input.CustomerID,
 			"deal_id", input.DealID)
@@ -118,14 +118,14 @@ func (a *DealSyncActivities) UpdateDealAmount(
 	// Now we pass customerID and dealID directly instead of fetching subscription
 	err = hubspotIntegration.DealSyncSvc.UpdateDealAmountFromACV(ctx, input.CustomerID, input.DealID)
 	if err != nil {
-		a.logger.Errorw("failed to update deal amount",
+		a.logger.Error(ctx, "failed to update deal amount",
 			"error", err,
 			"customer_id", input.CustomerID,
 			"deal_id", input.DealID)
 		return err
 	}
 
-	a.logger.Infow("successfully updated HubSpot deal amount",
+	a.logger.Info(ctx, "successfully updated HubSpot deal amount",
 		"customer_id", input.CustomerID,
 		"deal_id", input.DealID)
 
