@@ -3,6 +3,8 @@ package stripe
 import (
 	"context"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -47,14 +49,12 @@ func (s *StripeCheckoutProvider) CreateCheckoutSession(ctx context.Context, req 
 }
 
 func (s *StripeCheckoutProvider) createPaymentSession(ctx context.Context, req checkout.CheckoutSessionRequest) (*checkout.CheckoutSessionResponse, error) {
-	metadata := types.Metadata{}
-	for k, v := range req.Metadata {
-		metadata[k] = v
-	}
 	// flexprice_checkout_id is included so the webhook can mark the checkout
 	// record complete after payment succeeds (the handler processes payment first,
 	// then calls Complete() — no short-circuit risk in the current handler).
-	metadata["flexprice_checkout_id"] = req.CheckoutID
+	metadata := lo.Assign(req.Metadata, map[string]string{
+		"flexprice_checkout_id": req.CheckoutID,
+	})
 
 	resp, err := s.payment.CreatePaymentLink(ctx, &dto.CreateStripePaymentLinkRequest{
 		InvoiceID:              req.InvoiceID,
@@ -96,11 +96,9 @@ func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req che
 
 	// Build session metadata; flexprice_checkout_id is required so the
 	// checkout.session.completed webhook can resolve the checkout by id.
-	metadata := map[string]string{}
-	for k, v := range req.Metadata {
-		metadata[k] = v
-	}
-	metadata["flexprice_checkout_id"] = req.CheckoutID
+	metadata := lo.Assign(req.Metadata, map[string]string{
+		"flexprice_checkout_id": req.CheckoutID,
+	})
 
 	// Setup mode differs from payment mode: no LineItems and no PaymentIntentData.
 	// SetupIntentData metadata (set_default + customer_id) drives the existing

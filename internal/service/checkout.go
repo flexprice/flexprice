@@ -89,16 +89,18 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 		return nil, err
 	}
 
+	subSvc := NewSubscriptionService(s.ServiceParams)
+
 	var chk *checkout.Checkout
 	var invoiceID, paymentID string
 	var customerID string
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		subSvc := NewSubscriptionService(s.ServiceParams)
+
 		subResp, err := subSvc.CreateSubscription(txCtx, subReq)
 		if err != nil {
 			return err
 		}
-		customerID = subResp.Subscription.CustomerID
+		customerID = subResp.Subscription.GetInvoicingCustomerID()
 
 		if subResp.LatestInvoice == nil {
 			return ierr.NewError("subscription has no opening invoice").
