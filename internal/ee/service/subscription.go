@@ -3503,7 +3503,7 @@ func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscription 
 			continue
 		}
 		periodOK := p.Price.BillingPeriod == subscription.BillingPeriod ||
-			types.IsBillingPeriodMultiple(p.Price.BillingPeriod, subscription.BillingPeriod)
+			types.IsBillingPeriodMultiple(subscription.BillingPeriod, p.Price.BillingPeriod)
 		if periodOK {
 			validPrices = append(validPrices, p)
 		}
