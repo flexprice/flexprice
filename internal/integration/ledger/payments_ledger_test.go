@@ -226,6 +226,19 @@ func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_MissingParams() {
 	}
 }
 
+func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_RejectsNonInitiatedPayment() {
+	ctx := s.GetContext()
+	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	s.NoError(err)
+
+	// Confirm once: INITIATED → PENDING
+	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_dup"))
+
+	// Confirming again on a PENDING payment must be rejected
+	err = s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_dup2")
+	s.Error(err, "expected error when confirming a non-INITIATED payment")
+}
+
 // ── RecordPaymentSuccess ─────────────────────────────────────────────────────
 
 func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_Success() {
