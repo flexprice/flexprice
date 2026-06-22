@@ -55,7 +55,7 @@ func WebhookLoggingMiddleware(
 		persisted := false
 		if bodyTooLarge {
 			if log != nil {
-				log.Error(c.Request.Context(), "webhook body exceeds max size, skipping db persistence",
+				log.Info(c.Request.Context(), "webhook body exceeds max size, skipping db persistence",
 					"max_bytes", maxWebhookBodyBytes,
 					"provider", provider,
 					"tenant_id", tenantID,
