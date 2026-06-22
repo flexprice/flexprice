@@ -7,15 +7,13 @@ import (
 
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-// validateAPIKey validates the API key and returns roles and userType if valid.
-// Config API keys return userType="" and empty roles (full access). DB-backed keys
-// return the userType and roles stored on the secret record.
+// validateAPIKey validates the API key against the config first, then the database.
 func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
 	if apiKey == "" {
 		return "", "", "", "", nil, false
