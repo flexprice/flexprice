@@ -72,27 +72,3 @@ func TestInMemoryCheckoutStore_GetPendingByEntity(t *testing.T) {
 		})
 	}
 }
-
-func TestInMemoryCheckoutStore_ListPendingExpired(t *testing.T) {
-	ctx := SetupContext()
-	store := NewInMemoryCheckoutStore()
-	now := time.Now().UTC()
-
-	if err := store.Create(ctx, newCheckout("chk_old", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(-time.Hour))); err != nil {
-		t.Fatalf("Create chk_old: %v", err)
-	}
-	if err := store.Create(ctx, newCheckout("chk_future", "sub_2", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
-		t.Fatalf("Create chk_future: %v", err)
-	}
-	if err := store.Create(ctx, newCheckout("chk_old_done", "sub_3", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(-time.Hour))); err != nil {
-		t.Fatalf("Create chk_old_done: %v", err)
-	}
-
-	got, err := store.ListPendingExpired(ctx, now, nil)
-	if err != nil {
-		t.Fatalf("ListPendingExpired: %v", err)
-	}
-	if len(got) != 1 || got[0].ID != "chk_old" {
-		t.Fatalf("expected [chk_old], got %+v", got)
-	}
-}

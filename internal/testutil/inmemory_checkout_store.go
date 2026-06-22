@@ -90,6 +90,12 @@ func (m *InMemoryCheckoutStore) ListPendingExpired(ctx context.Context, cutoff t
 		return nil, err
 	}
 	if filter != nil && !filter.IsUnlimited() {
+		if offset := filter.GetOffset(); offset > 0 {
+			if offset >= len(items) {
+				return []*checkout.Checkout{}, nil
+			}
+			items = items[offset:]
+		}
 		limit := filter.GetLimit()
 		if limit > 0 && len(items) > limit {
 			items = items[:limit]

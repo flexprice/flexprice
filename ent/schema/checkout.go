@@ -70,12 +70,14 @@ func (Checkout) Fields() []ent.Field {
 func (Checkout) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id"),
+		// customer lookup — list all checkouts for a customer in a tenant/env
+		index.Fields("tenant_id", "environment_id", "customer_id", "checkout_status"),
 		// one in-flight checkout per (tenant, env, entity, mode); also serves payment-completion lookup
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "mode").
 			Unique().
-			Annotations(entsql.IndexAnnotation{Where: "checkout_status = 'pending'"}),
+			Annotations(entsql.IndexWhere("checkout_status = 'pending'")),
 		// expiry sweep — cross-tenant intentional for the cleanup cron
 		index.Fields("expires_at").
-			Annotations(entsql.IndexAnnotation{Where: "checkout_status = 'pending'"}),
+			Annotations(entsql.IndexWhere("checkout_status = 'pending'")),
 	}
 }
