@@ -23,7 +23,7 @@ func (s *subscriptionModificationService) executeTaxModification(
 	case dto.SubModifyTaxActionAdd:
 		return s.executeAddTax(ctx, subscriptionID, *params.TaxRateID, effectiveDate)
 	case dto.SubModifyTaxActionRemove:
-		return s.executeRemoveTax(ctx, subscriptionID, *params.AssociationID, effectiveDate)
+		return s.executeRemoveTax(ctx, subscriptionID, *params.TaxAssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown tax action: " + string(params.Action)).
 			Mark(ierr.ErrValidation)
@@ -191,7 +191,7 @@ func (s *subscriptionModificationService) previewTaxModification(
 	case dto.SubModifyTaxActionAdd:
 		return s.previewAddTax(ctx, subscriptionID, *params.TaxRateID, effectiveDate)
 	case dto.SubModifyTaxActionRemove:
-		return s.previewRemoveTax(ctx, subscriptionID, *params.AssociationID, effectiveDate)
+		return s.previewRemoveTax(ctx, subscriptionID, *params.TaxAssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown tax action: " + string(params.Action)).
 			Mark(ierr.ErrValidation)
