@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -113,23 +114,28 @@ func FromEnt(e *ent.Checkout) *Checkout {
 			UpdatedBy: e.UpdatedBy,
 		},
 	}
-	if len(e.Configuration) > 0 {
-		b, err := json.Marshal(e.Configuration)
-		if err == nil {
-			var cfg CheckoutConfiguration
-			if json.Unmarshal(b, &cfg) == nil {
-				c.Configuration = &cfg
-			}
-		}
-	}
+	c.Configuration = configurationFromMap(e.Configuration)
 	return c
+}
+
+func configurationFromMap(m map[string]interface{}) *CheckoutConfiguration {
+	if len(m) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	var cfg CheckoutConfiguration
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return nil
+	}
+	return lo.ToPtr(cfg)
 }
 
 // FromEntList converts a list of Ent entities to domain models.
 func FromEntList(entities []*ent.Checkout) []*Checkout {
-	out := make([]*Checkout, 0, len(entities))
-	for _, e := range entities {
-		out = append(out, FromEnt(e))
-	}
-	return out
+	return lo.Map(entities, func(e *ent.Checkout, _ int) *Checkout {
+		return FromEnt(e)
+	})
 }
