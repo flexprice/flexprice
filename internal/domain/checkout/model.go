@@ -44,9 +44,9 @@ type Checkout struct {
 // CheckoutConfiguration is the deferred-operation payload stored on the checkout.
 // Each action type uses a dedicated key so callers can unmarshal into a typed struct.
 type CheckoutConfiguration struct {
-	// SubscriptionCreateParams carries the deferred subscription creation spec
+	// SubscriptionCreationParams carries the deferred subscription creation spec
 	// for checkout_action = subscription_creation checkouts.
-	SubscriptionCreateParams json.RawMessage `json:"subscription_create_params,omitempty"`
+	SubscriptionCreationParams json.RawMessage `json:"subscription_creation_params,omitempty"`
 }
 
 func (c *Checkout) IsPending() bool {
