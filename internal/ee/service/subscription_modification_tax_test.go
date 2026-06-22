@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -230,9 +230,9 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &assoc.ID,
-						EffectiveDate: &past,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &assoc.ID,
+						EffectiveDate:    &past,
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -261,9 +261,9 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &assoc.ID,
-						EffectiveDate: &future,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &assoc.ID,
+						EffectiveDate:    &future,
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -292,8 +292,8 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &assoc.ID,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &assoc.ID,
 						// EffectiveDate nil → defaults to now
 					},
 				}
@@ -318,8 +318,8 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &bogusID,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &bogusID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
@@ -343,8 +343,8 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &assoc.ID,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &assoc.ID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub1.ID, req)
@@ -369,9 +369,9 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyTaxActionRemove,
-						AssociationID: &assoc.ID,
-						EffectiveDate: &effectiveDate,
+						Action:           dto.SubModifyTaxActionRemove,
+						TaxAssociationID: &assoc.ID,
+						EffectiveDate:    &effectiveDate,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
