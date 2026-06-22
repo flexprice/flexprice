@@ -89,7 +89,7 @@ func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req che
 		return nil, err
 	}
 
-	stripeCustomerID, _, err := s.payment.resolveStripeCustomerID(ctx, req.CustomerID, s.customer)
+	stripeCustomerID, _, err := s.payment.getOrCreateStripeCustomer(ctx, req.CustomerID, s.customer)
 	if err != nil {
 		return nil, err
 	}

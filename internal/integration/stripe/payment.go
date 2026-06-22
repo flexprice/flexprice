@@ -123,7 +123,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 			Mark(ierr.ErrValidation)
 	}
 
-	stripeCustomerID, customerResp, err := s.resolveStripeCustomerID(ctx, req.CustomerID, customerService)
+	stripeCustomerID, customerResp, err := s.getOrCreateStripeCustomer(ctx, req.CustomerID, customerService)
 	if err != nil {
 		return nil, err
 	}
@@ -1878,10 +1878,10 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	}
 }
 
-// resolveStripeCustomerID syncs the flexprice customer to Stripe and returns the
+// getOrCreateStripeCustomer syncs the flexprice customer to Stripe and returns the
 // Stripe customer ID along with the customer response. Used by both CreatePaymentLink
 // and createSetupSession to avoid duplicating the sync + extraction logic.
-func (s *PaymentService) resolveStripeCustomerID(ctx context.Context, customerID string, customerSvc interfaces.CustomerService) (string, *dto.CustomerResponse, error) {
+func (s *PaymentService) getOrCreateStripeCustomer(ctx context.Context, customerID string, customerSvc interfaces.CustomerService) (string, *dto.CustomerResponse, error) {
 	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customerSvc)
 	if err != nil {
 		return "", nil, ierr.WithError(err).
