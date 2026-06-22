@@ -810,59 +810,53 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"event_id", event.ID)
 		return nil
 	}
+	// Payment-objective: process the payment before marking the checkout complete.
+	if flexpricePaymentID != "" {
+		payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+		if err != nil {
+			h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
+			return nil
+		}
+
+		if payment.PaymentStatus == types.PaymentStatusSucceeded {
+			h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
+			return nil
+		}
+
+		var paymentIntent *stripeapi.PaymentIntent
+		if checkoutSession.PaymentIntent != nil {
+			paymentIntentID := checkoutSession.PaymentIntent.ID
+			paymentIntent, err = h.paymentSvc.GetPaymentIntent(ctx, paymentIntentID, environmentID)
+			if err != nil {
+				h.logger.Error(ctx, "failed to fetch payment intent, continuing without it",
+					"error", err,
+					"payment_intent_id", paymentIntentID,
+					"event_id", event.ID)
+			}
+		}
+
+		if err := h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService); err != nil {
+			h.logger.Error(ctx, "failed to handle FlexPrice checkout payment, skipping event",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"event_id", event.ID)
+			return nil
+		}
+	}
+
+	// Complete the checkout (setup-objective: card captured; payment-objective: payment succeeded).
 	if flexpriceCheckoutID != "" {
 		if services.CheckoutService == nil {
-			h.logger.Error(ctx, "checkout service not wired into webhook deps, skipping setup completion",
+			h.logger.Error(ctx, "checkout service not wired into webhook deps, skipping checkout completion",
 				"flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
 			return nil
 		}
-		// Complete is idempotent and activates the parked draft subscription. The
-		// captured card is saved as default separately by handleSetupIntentSucceeded
-		// (via the session's SetupIntentData metadata).
 		if err := services.CheckoutService.Complete(ctx, flexpriceCheckoutID); err != nil {
-			h.logger.Error(ctx, "failed to complete setup checkout",
+			h.logger.Error(ctx, "failed to complete checkout",
 				"flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID, "error", err)
-			return err // let Stripe retry
+			return err
 		}
-		h.logger.Info(ctx, "completed setup checkout", "flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
-		return nil
-	}
-
-	// get payment from database
-	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
-		return nil
-	}
-
-	// check if payment is already succeeded
-	if payment.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
-		return nil
-	}
-
-	// Get payment intent if it exists
-	var paymentIntent *stripeapi.PaymentIntent
-	if checkoutSession.PaymentIntent != nil {
-		paymentIntentID := checkoutSession.PaymentIntent.ID
-		paymentIntent, err = h.paymentSvc.GetPaymentIntent(ctx, paymentIntentID, environmentID)
-		if err != nil {
-			h.logger.Error(ctx, "failed to fetch payment intent, continuing without it",
-				"error", err,
-				"payment_intent_id", paymentIntentID,
-				"event_id", event.ID)
-			paymentIntent = nil
-		}
-	}
-
-	// Call HandleFlexPriceCheckoutPayment with optional payment intent
-	err = h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService)
-	if err != nil {
-		h.logger.Error(ctx, "failed to handle FlexPrice checkout payment, skipping event",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"event_id", event.ID)
-		return nil
+		h.logger.Info(ctx, "completed checkout", "flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
 	}
 
 	return nil
