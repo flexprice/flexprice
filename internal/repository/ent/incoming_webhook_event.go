@@ -5,18 +5,16 @@ import (
 
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 )
 
 type incomingWebhookEventRepository struct {
 	client postgres.IClient
-	log    *logger.Logger
 }
 
 // NewIncomingWebhookEventRepository creates a new Ent-backed incoming webhook event repository.
-func NewIncomingWebhookEventRepository(client postgres.IClient, log *logger.Logger) domainIncomingWebhookEvent.Repository {
-	return &incomingWebhookEventRepository{client: client, log: log}
+func NewIncomingWebhookEventRepository(client postgres.IClient) domainIncomingWebhookEvent.Repository {
+	return &incomingWebhookEventRepository{client: client}
 }
 
 func (r *incomingWebhookEventRepository) Create(ctx context.Context, event *domainIncomingWebhookEvent.IncomingWebhookEvent) error {

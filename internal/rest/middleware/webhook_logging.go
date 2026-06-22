@@ -25,7 +25,14 @@ func WebhookLoggingMiddleware(
 	return func(c *gin.Context) {
 		// Read up to maxWebhookBodyBytes+1 to detect oversized payloads without
 		// loading arbitrarily large bodies into memory.
-		peek, _ := io.ReadAll(io.LimitReader(c.Request.Body, int64(maxWebhookBodyBytes)+1))
+		peek, readErr := io.ReadAll(io.LimitReader(c.Request.Body, int64(maxWebhookBodyBytes)+1))
+		if readErr != nil {
+			if log != nil {
+				log.Error(c.Request.Context(), "failed to read webhook request body", "error", readErr)
+			}
+			c.Next()
+			return
+		}
 		bodyTooLarge := len(peek) > maxWebhookBodyBytes
 
 		// Always restore the full body so the downstream handler is unaffected.
@@ -48,7 +55,7 @@ func WebhookLoggingMiddleware(
 		persisted := false
 		if bodyTooLarge {
 			if log != nil {
-				log.Warn(c.Request.Context(), "webhook body exceeds max size, skipping db persistence",
+				log.Error(c.Request.Context(), "webhook body exceeds max size, skipping db persistence",
 					"max_bytes", maxWebhookBodyBytes,
 					"provider", provider,
 					"tenant_id", tenantID,

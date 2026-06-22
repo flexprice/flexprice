@@ -34,11 +34,24 @@ func TestShouldPersistRequest(t *testing.T) {
 		EnvironmentIDs: []string{"env_yyy"},
 	}
 
-	assert.True(t, shouldPersistRequest(cfg, "t_aaa", "env_xxx"))  // matches tenant
-	assert.True(t, shouldPersistRequest(cfg, "t_zzz", "env_yyy"))  // matches environment
-	assert.True(t, shouldPersistRequest(cfg, "t_aaa", "env_yyy"))  // matches both
-	assert.False(t, shouldPersistRequest(cfg, "t_zzz", "env_zzz")) // matches neither
-	assert.False(t, shouldPersistRequest(cfg, "", ""))              // empty IDs
+	cases := []struct {
+		name          string
+		tenantID      string
+		environmentID string
+		expected      bool
+	}{
+		{"matches tenant", "t_aaa", "env_xxx", true},
+		{"matches environment", "t_zzz", "env_yyy", true},
+		{"matches both", "t_aaa", "env_yyy", true},
+		{"matches neither", "t_zzz", "env_zzz", false},
+		{"empty IDs", "", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, shouldPersistRequest(cfg, tc.tenantID, tc.environmentID))
+		})
+	}
 }
 
 func TestWebhookLoggingMiddleware_BuffersBody(t *testing.T) {

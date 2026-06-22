@@ -269,5 +269,5 @@ func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Reposi
 }
 
 func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {
-	return entRepo.NewIncomingWebhookEventRepository(p.EntClient, p.Logger)
+	return entRepo.NewIncomingWebhookEventRepository(p.EntClient)
 }
