@@ -114,9 +114,10 @@ type InvoiceCreateRequest struct {
 }
 
 type InvoiceResponse struct {
-	InvoiceID string          `json:"invoice_id"`
-	Status    string          `json:"status,omitempty"`
-	Total     decimal.Decimal `json:"total,omitempty"`
+	InvoiceID     string          `json:"invoice_id"`
+	InvoiceNumber string          `json:"invoice_number"`
+	Status        string          `json:"status,omitempty"`
+	Total         decimal.Decimal `json:"total,omitempty"`
 }
 
 type ZohoInvoiceSyncRequest struct {
