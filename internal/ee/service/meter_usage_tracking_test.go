@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +24,9 @@ func TestMeterUsageTracking(t *testing.T) {
 }
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
-	s.svc = &meterUsageTrackingService{}
+	s.svc = &meterUsageTrackingService{
+		ServiceParams: ServiceParams{Logger: logger.NewNoopLogger()},
+	}
 }
 
 // --- checkMeterFilters tests ---
@@ -114,7 +118,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Count() {
 	event := &events.Event{}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCount}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromInt(1).Equal(qty))
 }
@@ -125,7 +129,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Sum_Float() {
 	}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromFloat(42.5).Equal(qty))
 }
@@ -136,7 +140,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Sum_String() {
 	}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	expected, _ := decimal.NewFromString("100.25")
 	assert.True(s.T(), expected.Equal(qty))
@@ -146,7 +150,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Sum_MissingField() {
 	event := &events.Event{Properties: map[string]interface{}{}}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.Zero.Equal(qty))
 }
@@ -155,7 +159,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Sum_EmptyField() {
 	event := &events.Event{Properties: map[string]interface{}{"tokens": float64(5)}}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: ""}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.Zero.Equal(qty))
 }
@@ -166,7 +170,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_CountUnique() {
 	}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "user_id"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromInt(1).Equal(qty))
 }
@@ -175,7 +179,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_CountUnique_MissingField()
 	event := &events.Event{Properties: map[string]interface{}{}}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "user_id"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.Zero.Equal(qty))
 }
@@ -186,7 +190,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Max() {
 	}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationMax, Field: "memory_gb"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromFloat(16.5).Equal(qty))
 }
@@ -197,7 +201,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_Avg() {
 	}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationAvg, Field: "latency_ms"}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromFloat(250).Equal(qty))
 }
@@ -213,7 +217,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_SumWithMultiplier() {
 		Multiplier: &multiplier,
 	}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromFloat(150).Equal(qty))
 }
@@ -227,7 +231,7 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_SumWithMultiplier_NilMulti
 		Field: "tokens",
 	}}
 
-	qty, err := s.svc.extractQuantity(event, m)
+	qty, err := s.svc.extractQuantity(context.Background(), event, m)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.Zero.Equal(qty))
 }
@@ -255,7 +259,7 @@ func (s *MeterUsageTrackingSuite) TestConvertToDecimal_AllTypes() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			result := s.svc.convertToDecimal(tt.input)
+			result := s.svc.convertToDecimalLogged(context.Background(), tt.input, nil, nil)
 			assert.True(s.T(), tt.expected.Equal(result), "expected %s, got %s", tt.expected, result)
 		})
 	}
@@ -320,13 +324,13 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 
 	// Verify m1 matches
 	assert.True(s.T(), s.svc.checkMeterFilters(event, m1.Filters))
-	qty1, err := s.svc.extractQuantity(event, m1)
+	qty1, err := s.svc.extractQuantity(context.Background(), event, m1)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromFloat(500).Equal(qty1))
 
 	// Verify m2 matches (filter passes)
 	assert.True(s.T(), s.svc.checkMeterFilters(event, m2.Filters))
-	qty2, err := s.svc.extractQuantity(event, m2)
+	qty2, err := s.svc.extractQuantity(context.Background(), event, m2)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), decimal.NewFromInt(1).Equal(qty2))
 
