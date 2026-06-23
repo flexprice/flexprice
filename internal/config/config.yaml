@@ -344,9 +344,9 @@ feature_flag:
   # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
   force_v1_for_tenant: ""
   # Switch /invoices/preview to use meter-usage
-  enable_meter_usage_for_preview_invoice: false
+  enable_meter_usage_for_preview_invoice: true
   # Switch /events/analytics to use meter-usage
-  enable_meter_usage_for_analytics: false
+  enable_meter_usage_for_analytics: true
   # Per-tenant rollout overrides for meter-usage. Resolution order per tenant:
   #   disabled_tenants > enabled_tenants > global enable_* flag above.
   meter_usage_for_preview_invoice_enabled_tenants: []
