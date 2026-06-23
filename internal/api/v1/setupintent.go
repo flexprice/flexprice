@@ -88,7 +88,7 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 		return
 	}
 
-	authProvider := flexpricejwt.NewFlexpriceAuth(h.config)
+	authProvider := flexpricejwt.NewProvider(h.config)
 	checkoutToken, err := authProvider.GenerateCheckoutToken(map[string]interface{}{
 		"publishable_key":      publishableKey,
 		"flexprice_payment_id": flexpricePaymentID,
