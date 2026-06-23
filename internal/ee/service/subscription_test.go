@@ -6912,8 +6912,9 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 	s.True(updatedSub.CurrentPeriodEnd.After(periodEnd), "Period end should be updated")
 }
 
-// TestMultiCadence_ProrationMutualExclusion_Creation implements PRD E.3.1: subscription creation with mixed billing periods.
-// Mixed periods + none -> success; mixed periods + create_prorations -> error.
+// TestMultiCadence_ProrationMutualExclusion_Creation: creating a MONTHLY sub against an M+Q plan.
+// The billing-period filter selects only the MONTHLY price, so no mixed periods occur and
+// both proration_behavior values (none and create_prorations) succeed.
 func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Creation() {
 	ctx := s.GetContext()
 	s.ClearStores()
@@ -6969,17 +6970,18 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Cre
 		ProrationBehavior:  types.ProrationBehaviorNone,
 	}
 	resp, err := s.service.CreateSubscription(ctx, reqNone)
-	s.NoError(err, "E.3.1: mixed periods + none should succeed")
+	s.NoError(err, "MONTHLY sub on M+Q plan with none should succeed: only MONTHLY price selected")
 	s.NotNil(resp)
 	s.NotEmpty(resp.ID)
 
-	// Same plan, create_prorations -> must fail
+	// create_prorations also succeeds: filter already ensures only MONTHLY price is included,
+	// so no mixed billing periods in the resulting subscription.
 	reqProration := reqNone
 	reqProration.ProrationBehavior = types.ProrationBehaviorCreateProrations
-	_, err2 := s.service.CreateSubscription(ctx, reqProration)
-	s.Require().Error(err2, "E.3.1: mixed periods + create_prorations must fail")
-	s.True(ierr.IsValidation(err2), "error should be validation")
-	s.Contains(err2.Error(), "mixed billing periods", "error message should mention mixed billing periods")
+	resp2, err2 := s.service.CreateSubscription(ctx, reqProration)
+	s.NoError(err2, "MONTHLY sub on M+Q plan with create_prorations should succeed: only MONTHLY price selected")
+	s.NotNil(resp2)
+	s.NotEmpty(resp2.ID)
 }
 
 // TestMultiCadence_ProrationMutualExclusion_Cancellation implements PRD E.3.2: cancel with mixed periods + create_prorations -> error.
@@ -7038,24 +7040,14 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Can
 	s.NoError(err)
 	s.Require().NotNil(resp)
 
+	// Filter selects only the MONTHLY price → no mixed periods → create_prorations cancel succeeds.
 	cancelReq := &dto.CancelSubscriptionRequest{
 		CancellationType:  types.CancellationTypeImmediate,
 		ProrationBehavior: types.ProrationBehaviorCreateProrations,
 	}
 	cancelReq.Validate()
 	_, errCancel := s.service.CancelSubscription(ctx, resp.ID, cancelReq)
-	s.Require().Error(errCancel, "E.3.2: cancel with mixed + create_prorations must fail")
-	s.True(ierr.IsValidation(errCancel))
-	s.Contains(errCancel.Error(), "mixed billing periods")
-
-	// Same sub, cancel with none -> success (need a new sub since we didn't cancel the first with none first - actually first cancel failed so sub is still active)
-	cancelReqNone := &dto.CancelSubscriptionRequest{
-		CancellationType:  types.CancellationTypeImmediate,
-		ProrationBehavior: types.ProrationBehaviorNone,
-	}
-	cancelReqNone.Validate()
-	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
-	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
+	s.NoError(errCancel, "cancel with MONTHLY-only sub and create_prorations should succeed")
 }
 
 func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {

@@ -20,7 +20,7 @@ func (s *subscriptionModificationService) executeCouponModification(
 	case dto.SubModifyCouponActionAdd:
 		return s.executeAddCoupon(ctx, subscriptionID, params, effectiveDate)
 	case dto.SubModifyCouponActionRemove:
-		return s.executeRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
+		return s.executeRemoveCoupon(ctx, subscriptionID, *params.CouponAssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown coupon action: " + string(params.Action)).
 			Mark(ierr.ErrValidation)
@@ -210,7 +210,7 @@ func (s *subscriptionModificationService) previewCouponModification(
 	case dto.SubModifyCouponActionAdd:
 		return s.previewAddCoupon(ctx, subscriptionID, params, effectiveDate)
 	case dto.SubModifyCouponActionRemove:
-		return s.previewRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
+		return s.previewRemoveCoupon(ctx, subscriptionID, *params.CouponAssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown coupon action: " + string(params.Action)).
 			Mark(ierr.ErrValidation)

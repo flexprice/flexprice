@@ -202,8 +202,24 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 			WithHint("Failed to list subscriptions").
 			Mark(ierr.ErrDatabase)
 	}
-	// Attach line items to each subscription
+	// Attach line items to each subscription. Mirror GetWithLineItems:
+	// when lineItemStore is wired (the standard test setup wires it via
+	// SetLineItemStore), source from it so line items added via the
+	// SubscriptionLineItemRepo are visible here too. Falls back to the
+	// initial-batch map populated by CreateWithLineItems.
 	for _, sub := range subs {
+		if s.lineItemStore != nil {
+			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+			liFilter.SubscriptionIDs = []string{sub.ID}
+			liFilter.ActiveFilter = true
+			liFilter.CurrentPeriodStart = &sub.CurrentPeriodStart
+			items, lerr := s.lineItemStore.List(ctx, liFilter)
+			if lerr != nil {
+				return nil, lerr
+			}
+			sub.LineItems = items
+			continue
+		}
 		if items, ok := s.lineItems[sub.ID]; ok {
 			sub.LineItems = items
 		}

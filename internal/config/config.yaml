@@ -34,6 +34,28 @@ kafka:
   client_id: "flexprice-client-local"
   route_tenants_on_lazy_mode: []
 
+# Optional SECOND Kafka cluster for the AWS→GCP migration (GCP-CUTOVER-STEPWISE.md).
+# `kafka` above = this deployment's own/local cluster (consumed AND always written).
+# `kafka_secondary` below = the other cloud's cluster. Dual-write is PRESENCE-BASED:
+#   single cluster (today):  kafka_secondary absent  -> writes local only
+#   dual-write (migration):  kafka_secondary set     -> writes local + secondary
+# Writes are independent (one failing does not block the other). Consumers/webhooks/DLQ
+# always read the local `kafka` cluster. Per deployment:
+#   AWS box: kafka=MSK, kafka_secondary=GMK ;  GCP box: kafka=GMK, kafka_secondary=MSK.
+# Set via FLEXPRICE_KAFKA_SECONDARY_* env. kafka_secondary mirrors the kafka block:
+# kafka_secondary:
+#   brokers: ""
+#   consumer_group: "flexprice-consumer"
+#   topic: "events"
+#   topic_lazy: "events_lazy"
+#   topic_dlq: "events_dlq"
+#   tls: true
+#   use_sasl: true
+#   sasl_mechanism: "OAUTHBEARER"
+#   sasl_oauth_scopes: []   # defaults to https://www.googleapis.com/auth/cloud-platform
+#   client_id: "flexprice-client"
+#   route_tenants_on_lazy_mode: []
+
 clickhouse:
   address: 127.0.0.1:9000 # For local mode
   # Will be overridden by FLEXPRICE_CLICKHOUSE_ADDRESS env var in Docker
@@ -342,6 +364,10 @@ gemini:
 
 whop:
   base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
+
+webhook_logging:
+  tenant_ids: []
+  environment_ids: []
 
 
 email:

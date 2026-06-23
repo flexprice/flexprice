@@ -423,8 +423,10 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 	}
 
 	// Block archive if the service account has active (published, non-expired) API keys.
+	// Service accounts are tenant-scoped, so check across all environments.
 	now := time.Now().UTC()
-	activeCount, err := s.secretRepo.Count(ctx, &types.SecretFilter{
+	tenantCtx := types.SetEnvironmentID(ctx, "")
+	activeCount, err := s.secretRepo.Count(tenantCtx, &types.SecretFilter{
 		QueryFilter: &types.QueryFilter{
 			Status: lo.ToPtr(types.StatusPublished),
 		},

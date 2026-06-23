@@ -16719,8 +16719,15 @@ const docTemplate = `{
                         }
                     }
                 },
+                "group_by": {
+                    "description": "GroupBy lists the analytics group_by dimensions.\n  - \"source\"        — group by event source column\n  - \"properties.X\"  — group by JSON property X",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "group_by_property": {
-                    "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.",
+                    "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.\n\nDeprecated: prefer GroupBy []string{\"properties.\u003cX\u003e\"} for parity with\nother analytics endpoints. ToUsageParams translates this field into\nGroupBy when GroupBy is otherwise empty.",
                     "type": "string"
                 },
                 "multiplier": {
@@ -18430,6 +18437,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "service_account_name": {
+                    "description": "name of the service account (populated for service_account user_type)",
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -18437,6 +18448,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.SecretType"
                 },
                 "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "user or service account this key belongs to",
                     "type": "string"
                 },
                 "user_type": {
@@ -18499,7 +18514,7 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "association_id": {
+                "coupon_association_id": {
                     "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete.",
                     "type": "string"
                 },
@@ -18618,12 +18633,12 @@ const docTemplate = `{
                         }
                     ]
                 },
-                "association_id": {
-                    "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete.",
-                    "type": "string"
-                },
                 "effective_date": {
                     "description": "Optional. When to apply the change; defaults to now if omitted.",
+                    "type": "string"
+                },
+                "tax_association_id": {
+                    "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete.",
                     "type": "string"
                 },
                 "tax_rate_id": {
@@ -22530,6 +22545,12 @@ const docTemplate = `{
         "types.CouponFilter": {
             "type": "object",
             "properties": {
+                "coupon_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "coupon_ids": {
                     "type": "array",
                     "items": {

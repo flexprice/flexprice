@@ -26,7 +26,7 @@ func NewConsumer(cfg *config.Configuration) (MessageConsumer, error) {
 	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
 	enableDebugLogs := cfg.Logging.Level == types.LogLevelDebug
 
-	saramaConfig := GetSaramaConfig(cfg)
+	saramaConfig := GetSaramaConfig(&cfg.Kafka)
 	if saramaConfig != nil {
 		// Optimize consumer configs for throughput
 		// TODO: move this to config

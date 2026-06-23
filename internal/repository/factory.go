@@ -42,6 +42,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -270,4 +271,8 @@ func NewAnalyticsBenchmarkRepository(p RepositoryParams) events.AnalyticsBenchma
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
 	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {
+	return entRepo.NewIncomingWebhookEventRepository(p.EntClient)
 }

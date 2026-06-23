@@ -66,6 +66,9 @@ type Feature func(*sql.Selector)
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
+// IncomingWebhookEvent is the predicate function for incomingwebhookevent builders.
+type IncomingWebhookEvent func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 

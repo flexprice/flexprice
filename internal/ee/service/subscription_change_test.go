@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -632,7 +630,9 @@ func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeValida
 	assert.Error(s.T(), err)
 }
 
-// TestMultiCadence_ProrationMutualExclusion_PlanChange implements PRD E.3.3: M only -> M+Q with create_prorations must fail.
+// TestMultiCadence_ProrationMutualExclusion_PlanChange: M only -> M+Q plan with MONTHLY billing_period.
+// The billing-period filter now correctly picks only the MONTHLY price from the M+Q plan,
+// so the resulting subscription has no mixed periods and the change succeeds.
 func (s *SubscriptionChangeServiceTestSuite) TestMultiCadence_ProrationMutualExclusion_PlanChange() {
 	ctx := s.GetContext()
 
@@ -680,11 +680,13 @@ func (s *SubscriptionChangeServiceTestSuite) TestMultiCadence_ProrationMutualExc
 	}
 	require.NoError(s.T(), s.GetStores().PriceRepo.Create(ctx, priceQ))
 
+	// With BillingPeriod=MONTHLY, the filter picks only the MONTHLY price from M+Q.
+	// No mixed billing periods in the new subscription → change succeeds with create_prorations.
 	req := s.createSubscriptionChangeRequest(planMQ.ID, types.ProrationBehaviorCreateProrations)
-	_, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
-	require.Error(s.T(), err, "E.3.3: change to mixed-cadence plan with create_prorations must fail")
-	assert.True(s.T(), ierr.IsValidation(err), "error should be validation")
-	assert.True(s.T(), strings.Contains(err.Error(), "mixed billing periods"), "error message should mention mixed billing periods")
+	resp, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+	require.NoError(s.T(), err, "MONTHLY billing_period change to M+Q plan should succeed: only MONTHLY price is selected")
+	assert.NotNil(s.T(), resp)
+	assert.Equal(s.T(), planMQ.ID, resp.NewSubscription.PlanID)
 }
 
 func (s *SubscriptionChangeServiceTestSuite) TestCalculatePeriodEndHelper() {
@@ -832,8 +834,15 @@ func (s *SubscriptionChangeServiceTestSuite) TestMonthlyToYearlyChange() {
 	yearlyPlan := s.createTestPlanWithBilling("Basic Yearly", decimal.NewFromFloat(100.00), types.BILLING_PERIOD_ANNUAL)
 	testSub := s.createTestSubscriptionWithCycle(monthlyPlan.ID, customer.ID, types.BillingCycleAnniversary, types.BILLING_PERIOD_MONTHLY)
 
-	// Create change request
-	req := s.createSubscriptionChangeRequest(yearlyPlan.ID, types.ProrationBehaviorCreateProrations)
+	// Create change request — billing period must match the target plan's price period (ANNUAL)
+	req := dto.SubscriptionChangeRequest{
+		TargetPlanID:       yearlyPlan.ID,
+		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	}
 
 	// Test preview
 	previewReq := req

@@ -639,10 +639,20 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMetersDetailed(_ context.Co
 	results := make([]*events.MeterUsageDetailedResult, 0, len(keys))
 	for _, k := range keys {
 		cs := combos[k]
+		// cs.props keeps empty values so the combo key groups events that
+		// share missing-property semantics; the result Properties map must
+		// drop empties to match the SQL repo's scan behavior and feature-side
+		// parity.
+		visibleProps := make(map[string]string, len(cs.props))
+		for pk, pv := range cs.props {
+			if pv != "" {
+				visibleProps[pk] = pv
+			}
+		}
 		res := &events.MeterUsageDetailedResult{
 			MeterID:    params.MeterID,
 			Source:     cs.source,
-			Properties: cs.props,
+			Properties: visibleProps,
 			TotalUsage: cs.total,
 			EventCount: cs.eventTC,
 		}

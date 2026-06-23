@@ -42,6 +42,7 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -119,6 +120,7 @@ func main() {
 
 			// Producers and Consumers
 			kafka.NewProducer,
+			kafka.NewSecondaryProducer,
 			kafka.NewConsumer,
 
 			// Event Publisher
@@ -177,6 +179,7 @@ func main() {
 			repository.NewSubscriptionScheduleRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
+			repository.NewIncomingWebhookEventRepository,
 			repository.NewSystemEventRepository,
 			repository.NewSystemEventDomainRepository,
 			repository.NewGroupRepository,
@@ -425,6 +428,7 @@ func provideRouter(
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
+	webhookRequestRepo incomingwebhookevent.Repository,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -434,6 +438,7 @@ func provideRouter(
 		envAccessService,
 		rbacService,
 		tenantService,
+		webhookRequestRepo,
 	)
 }
 

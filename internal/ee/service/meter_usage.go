@@ -140,10 +140,60 @@ type lineItemWithMeter struct {
 // Simple passthrough methods
 // ---------------------------------------------------------------------------
 
+// activeSubscriptionMeterIDs returns the set of meter_ids that belong to any
+// currently-active (active or trialing) subscription for the given customer.
+//
+// The meter ingestion pipeline no longer validates that a meter belongs to an
+// active subscription before writing, so meter_usage now contains rows for
+// "stale" meters — meters that match the customer's event_name but aren't on
+// any of their current subscription line items. Reads must filter those out.
+//
+// Returns an empty set (not an error) if the customer doesn't exist; callers
+// should treat that as "no usage to return".
+func (s *meterUsageService) activeSubscriptionMeterIDs(ctx context.Context, externalCustomerID string) (map[string]struct{}, error) {
+	out := make(map[string]struct{})
+	if externalCustomerID == "" {
+		return out, nil
+	}
+	cust, err := s.CustomerRepo.GetByLookupKey(ctx, externalCustomerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return out, nil
+		}
+		return nil, err
+	}
+	subs, err := s.SubRepo.ListByCustomerID(ctx, cust.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, sub := range subs {
+		for _, li := range sub.LineItems {
+			if li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != "" {
+				out[li.MeterID] = struct{}{}
+			}
+		}
+	}
+	return out, nil
+}
+
 func (s *meterUsageService) GetUsage(ctx context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error) {
 	if params == nil {
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
+
+	activeMeters, err := s.activeSubscriptionMeterIDs(ctx, params.ExternalCustomerID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := activeMeters[params.MeterID]; !ok {
+		// meter_id is not on any active subscription line item for this
+		// customer — return zeroed result rather than leaking stale rows.
+		return &events.MeterUsageAggregationResult{
+			MeterID:         params.MeterID,
+			AggregationType: params.AggregationType,
+		}, nil
+	}
+
 	return s.repo.GetUsage(ctx, params)
 }
 
@@ -151,7 +201,27 @@ func (s *meterUsageService) GetUsageMultiMeter(ctx context.Context, params *even
 	if params == nil || len(params.MeterIDs) == 0 {
 		return nil, ierr.NewError("params with meter_ids are required").Mark(ierr.ErrValidation)
 	}
-	return s.repo.GetUsageMultiMeter(ctx, params)
+
+	activeMeters, err := s.activeSubscriptionMeterIDs(ctx, params.ExternalCustomerID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := params.MeterIDs[:0:0]
+	for _, id := range params.MeterIDs {
+		if _, ok := activeMeters[id]; ok {
+			filtered = append(filtered, id)
+		}
+	}
+	if len(filtered) == 0 {
+		// None of the requested meters are on the customer's active
+		// subscriptions — nothing to fetch.
+		return nil, nil
+	}
+
+	// Don't mutate caller's params slice — make a shallow copy.
+	q := *params
+	q.MeterIDs = filtered
+	return s.repo.GetUsageMultiMeter(ctx, &q)
 }
 
 // ---------------------------------------------------------------------------
@@ -867,12 +937,8 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
-	// feature_id is a feature_usage-table column; meter_usage doesn't carry it.
-	// Since feature.meter_id is 1:1, group_by=[feature_id] is semantically
-	// equivalent to group_by=[meter_id] — rewrite at the entry point so the
-	// downstream query builder (which only knows meter_id/source/properties.*)
-	// accepts it, and the converter populates FeatureID from the meter→feature
-	// lookup. Dedupe so [feature_id, meter_id] doesn't become [meter_id, meter_id].
+	// feature_id ≡ meter_id (1:1). Rewrite at entry so the SQL builder accepts
+	// it; the converter restores FeatureID via the meter→feature lookup.
 	if len(params.GroupBy) > 0 {
 		rewritten := make([]string, 0, len(params.GroupBy))
 		for _, g := range params.GroupBy {
@@ -882,17 +948,14 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			rewritten = append(rewritten, g)
 		}
 		params.GroupBy = lo.Uniq(rewritten)
-		// Reject malformed entries before they hit the SQL builder, where
-		// they'd be silently dropped (debugging nightmare). Accepted forms:
-		// "meter_id" / "source" / "properties.<valid name>". Everything else
-		// is a user error worth surfacing as a 400.
+		// Surface invalid group_by as 400 — the SQL builder would otherwise drop it silently.
 		if err := validateAnalyticsGroupBy(params.GroupBy); err != nil {
 			return nil, err
 		}
 	}
 
-	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
-	// Fail closed: a feature-scoped request must not silently broaden to all meters.
+	// Resolve FeatureIDs → MeterIDs. Fail closed so an unresolvable feature
+	// list doesn't silently broaden to "all meters".
 	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
 		features, err := s.FeatureRepo.ListByIDs(ctx, params.FeatureIDs)
 		if err != nil {
@@ -912,11 +975,58 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
-	// Resolve customer → subscriptions
 	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
 	if err != nil || len(subscriptions) == 0 {
-		// No customer context — fallback to direct repo queries
+		// No customer context — admin-style query across raw meter_usage.
 		return s.getDetailedAnalyticsWithoutSubscriptionContext(ctx, params)
+	}
+
+	// Filter to meters on a subscription line item overlapping the query window.
+	// Ingestion doesn't validate "meter on active sub", so meter_usage can carry
+	// stale rows from shared event_name fan-out. Uses the same CancelledAt and
+	// GetPeriodStart/End clamps as the GSMU loop below so the bounds agree.
+	activeMeters := make(map[string]struct{})
+	for _, sub := range subscriptions {
+		subEnd := params.EndTime
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
+			if sub.CancelledAt.Before(subEnd) {
+				subEnd = *sub.CancelledAt
+			}
+		}
+		if !subEnd.After(params.StartTime) {
+			continue // sub's effective window ended before query window starts
+		}
+		for _, li := range sub.LineItems {
+			if li.PriceType != types.PRICE_TYPE_USAGE || li.MeterID == "" {
+				continue
+			}
+			liStart := li.GetPeriodStart(params.StartTime)
+			liEnd := li.GetPeriodEnd(subEnd)
+			if liStart.Before(liEnd) {
+				activeMeters[li.MeterID] = struct{}{}
+			}
+		}
+	}
+	if len(params.MeterIDs) > 0 {
+		filtered := make([]string, 0, len(params.MeterIDs))
+		for _, id := range params.MeterIDs {
+			if _, ok := activeMeters[id]; ok {
+				filtered = append(filtered, id)
+			}
+		}
+		params.MeterIDs = filtered
+	} else {
+		// No caller filter → restrict to the active set.
+		params.MeterIDs = make([]string, 0, len(activeMeters))
+		for id := range activeMeters {
+			params.MeterIDs = append(params.MeterIDs, id)
+		}
+	}
+	if len(params.MeterIDs) == 0 {
+		return &dto.GetUsageAnalyticsResponse{
+			TotalCost: decimal.Zero,
+			Items:     []dto.UsageAnalyticItem{},
+		}, nil
 	}
 
 	// Call GetSubscriptionMeterUsage per subscription
@@ -927,13 +1037,9 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			billingAnchor = &sub.BillingAnchor
 		}
 
-		// Clamp the query window by CancelledAt for cancelled subs. meter_usage
-		// has no per-event subscription linkage — the per-line-item date bound
-		// (lineItem.GetPeriodEnd) falls back to the request EndTime when the
-		// line item has no EndDate, which is the common case after a cancel.
-		// Without this clamp, a cancelled sub's line items would re-attribute
-		// post-cancellation events from whichever sub is now active for the
-		// same meter. Skip entirely when the clamped window has no overlap.
+		// Clamp by CancelledAt: meter_usage has no per-event sub linkage, so
+		// without this a cancelled sub's line items would steal post-cancel
+		// events from whichever sub is now active for the same meter.
 		subEndTime := params.EndTime
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
 			if sub.CancelledAt.Before(subEndTime) {
