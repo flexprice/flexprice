@@ -254,9 +254,6 @@ func (s *PaymentService) GetPaymentStatus(
 	if payment.Source != nil {
 		response.PaymentMethod = payment.Source.Type
 		response.PaymentMethodID = payment.Source.GatewayID
-		if response.PaymentMethodID == "" {
-			response.PaymentMethodID = payment.Source.ReferenceID
-		}
 	}
 
 	// Extract FlexPrice payment ID from metadata if available
@@ -278,7 +275,7 @@ func (s *PaymentService) GetPaymentStatus(
 // This is called when a payment_paid webhook is received without a flexprice_payment_id
 func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 ) error {
@@ -319,7 +316,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 // ProcessExternalMoyasarPayment processes a payment that was made directly in Moyasar (external to FlexPrice)
 func (s *PaymentService) ProcessExternalMoyasarPayment(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	flexpriceInvoiceID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
@@ -376,7 +373,7 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 // createExternalPaymentRecord creates a payment record for an external Moyasar payment
 func (s *PaymentService) createExternalPaymentRecord(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	invoiceID string,
 	paymentService interfaces.PaymentService,
 ) error {
@@ -389,9 +386,6 @@ func (s *PaymentService) createExternalPaymentRecord(
 	var paymentMethodID string
 	if payment.Source != nil {
 		paymentMethodID = payment.Source.GatewayID
-		if paymentMethodID == "" {
-			paymentMethodID = payment.Source.ReferenceID
-		}
 	}
 
 	s.logger.Info(ctx, "creating external payment record",

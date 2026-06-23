@@ -56,11 +56,62 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 		"created_at", event.CreatedAt,
 	)
 
+	// Use the webhook payload only as a trigger — fetch the authoritative payment
+	// state from Moyasar before acting so we are never misled by tampered payloads.
+	paymentID := event.Data.ID
+	if paymentID == "" {
+		h.logger.Error(ctx, "webhook event has no payment ID, skipping", "event_id", event.ID)
+		return nil
+	}
+
+	fetchedMoyasarPayment, err := h.client.GetPayment(ctx, paymentID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to fetch payment from Moyasar for verification",
+			"moyasar_payment_id", paymentID,
+			"error", err,
+		)
+		return nil
+	}
+	if fetchedMoyasarPayment == nil {
+		h.logger.Error(ctx, "Moyasar returned nil payment, skipping", "moyasar_payment_id", paymentID)
+		return nil
+	}
+
+	payment := &moyasar.MoyasarPayment{
+		ID:             fetchedMoyasarPayment.ID,
+		Status:         fetchedMoyasarPayment.Status,
+		Amount:         fetchedMoyasarPayment.Amount,
+		Fee:            fetchedMoyasarPayment.Fee,
+		Currency:       fetchedMoyasarPayment.Currency,
+		RefundedAmount: fetchedMoyasarPayment.RefundedAmount,
+		RefundedAt:     fetchedMoyasarPayment.RefundedAt,
+		CapturedAmount: fetchedMoyasarPayment.CapturedAmount,
+		CapturedAt:     fetchedMoyasarPayment.CapturedAt,
+		VoidedAt:       fetchedMoyasarPayment.VoidedAt,
+		Description:    fetchedMoyasarPayment.Description,
+		InvoiceID:      fetchedMoyasarPayment.InvoiceID,
+		CreatedAt:      fetchedMoyasarPayment.CreatedAt,
+		UpdatedAt:      fetchedMoyasarPayment.UpdatedAt,
+		Metadata:       fetchedMoyasarPayment.Metadata,
+	}
+
+	if fetchedMoyasarPayment.Source != nil {
+		payment.Source = &moyasar.PaymentSource{
+			Type:      fetchedMoyasarPayment.Source.Type,
+			Company:   fetchedMoyasarPayment.Source.Company,
+			Name:      fetchedMoyasarPayment.Source.Name,
+			Number:    fetchedMoyasarPayment.Source.Number,
+			Token:     fetchedMoyasarPayment.Source.Token,
+			GatewayID: fetchedMoyasarPayment.Source.GatewayID,
+			Message:   fetchedMoyasarPayment.Source.Message,
+		}
+	}
+
 	switch event.Type {
 	case EventPaymentPaid, EventPaymentCaptured:
-		return h.handlePaymentPaid(ctx, event, environmentID, services)
+		return h.handlePaymentPaid(ctx, payment, environmentID, services)
 	case EventPaymentFailed:
-		return h.handlePaymentFailed(ctx, event, services)
+		return h.handlePaymentFailed(ctx, payment, services)
 	}
 
 	h.logger.Info(ctx, "ignoring unhandled event type", "type", event.Type)
@@ -72,9 +123,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 // Priority:
 //  1. flexprice_payment_id in metadata → ledger-managed payment (AUTH or INVOICE autopay)
 //  2. invoice_id in payment body      → Moyasar invoice-link flow (external / manual pay)
-func (h *Handler) handlePaymentPaid(ctx context.Context, event *MoyasarWebhookEvent, environmentID string, services *ServiceDependencies) error {
-	payment := event.Data
-
+func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.MoyasarPayment, environmentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_paid webhook",
 		"moyasar_payment_id", payment.ID,
 		"amount", payment.Amount,
@@ -102,7 +151,7 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, event *MoyasarWebhookEv
 
 // handleLedgerPayment handles payments that Flexprice initiated (AUTH or INVOICE autopay).
 // The flexprice_payment_id in metadata is the cross-system anchor.
-func (h *Handler) handleLedgerPayment(ctx context.Context, payment PaymentEventData, flexpricePaymentID string, services *ServiceDependencies) error {
+func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePaymentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "handling ledger-managed payment",
 		"flexprice_payment_id", flexpricePaymentID,
 		"moyasar_payment_id", payment.ID,
@@ -148,11 +197,11 @@ func (h *Handler) handleLedgerPayment(ctx context.Context, payment PaymentEventD
 	return nil
 }
 
-// activatePaymentMethod saves the Moyasar token from the webhook source as an ACTIVE PaymentMethod.
+// activatePaymentMethod saves the Moyasar token from the payment source as an ACTIVE PaymentMethod.
 // Idempotent: skips if a method with the same token already exists for the customer.
-func (h *Handler) activatePaymentMethod(ctx context.Context, payment PaymentEventData, customerID string) {
+func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.MoyasarPayment, customerID string) {
 	if payment.Source == nil || payment.Source.Token == "" {
-		h.logger.Error(ctx, "no token in webhook source, cannot activate payment method",
+		h.logger.Error(ctx, "no token in payment source, cannot activate payment method",
 			"moyasar_payment_id", payment.ID,
 			"customer_id", customerID,
 			"error", "missing token in payment source",
@@ -243,13 +292,13 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 			)
 		}
 		return
+	} else {
+		h.logger.Info(ctx, "void attempt failed, falling back to refund",
+			"flexprice_payment_id", flexpricePaymentID,
+			"gateway_payment_id", gatewayPaymentID,
+			"error", voidErr,
+		)
 	}
-
-	// Void failed — try full refund
-	h.logger.Info(ctx, "void failed, attempting full refund",
-		"flexprice_payment_id", flexpricePaymentID,
-		"gateway_payment_id", gatewayPaymentID,
-	)
 
 	if _, refundErr := h.client.RefundPayment(ctx, gatewayPaymentID, 0); refundErr != nil {
 		h.logger.Error(ctx, "void and refund both failed for AUTH payment",
@@ -280,13 +329,12 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 }
 
 // handleInvoicePayment handles payments made via Moyasar-hosted invoice page (external flow).
-func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEventData, services *ServiceDependencies) error {
+func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.MoyasarPayment, services *ServiceDependencies) error {
 	moyasarInvoiceID := payment.InvoiceID
 	h.logger.Info(ctx, "processing Moyasar invoice payment",
 		"moyasar_payment_id", payment.ID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
-	// Find the FlexPrice invoice using the integration mapping
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderMoyasar)},
 		ProviderEntityIDs: []string{moyasarInvoiceID},
@@ -312,31 +360,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
-	// Convert payment object for processing
-	// We need to reconstruct the MoyasarPaymentObject to reuse the service method
-	moyasarPayment := &moyasar.MoyasarPaymentObject{
-		ID:          payment.ID,
-		Status:      payment.Status,
-		Amount:      payment.Amount,
-		Currency:    payment.Currency,
-		Description: payment.Description,
-		CreatedAt:   payment.CreatedAt,
-		Metadata:    payment.Metadata,
-	}
-
-	if payment.Source != nil {
-		moyasarPayment.Source = &moyasar.PaymentSource{
-			Type:        moyasar.PaymentSourceType(payment.Source.Type),
-			Company:     payment.Source.Company,
-			Name:        payment.Source.Name,
-			Number:      payment.Source.Number,
-			GatewayID:   payment.Source.GatewayID,
-			ReferenceID: payment.Source.ReferenceID,
-			Message:     payment.Source.Message,
-		}
-	}
-
-	if err := h.paymentSvc.ProcessExternalMoyasarPayment(ctx, moyasarPayment, flexpriceInvoiceID, services.PaymentService, services.InvoiceService); err != nil {
+	if err := h.paymentSvc.ProcessExternalMoyasarPayment(ctx, payment, flexpriceInvoiceID, services.PaymentService, services.InvoiceService); err != nil {
 		h.logger.Error(ctx, "failed to process external Moyasar payment",
 			"error", err,
 			"flexprice_invoice_id", flexpriceInvoiceID,
@@ -354,9 +378,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 // handlePaymentFailed handles payment_failed events.
 // For ledger-managed payments, records the failure so the Flexprice payment
 // transitions to FAILED and the invoice remains unpaid for retry/manual action.
-func (h *Handler) handlePaymentFailed(ctx context.Context, event *MoyasarWebhookEvent, services *ServiceDependencies) error {
-	payment := event.Data
-
+func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.MoyasarPayment, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_failed webhook",
 		"moyasar_payment_id", payment.ID,
 		"status", payment.Status,
@@ -373,9 +395,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *MoyasarWebhook
 		return nil
 	}
 
-	failedAt := time.Now().UTC()
-
-	// Extract error message from source if available
 	errorMessage := "payment failed"
 	if payment.Source != nil && payment.Source.Message != "" {
 		errorMessage = payment.Source.Message
@@ -384,7 +403,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *MoyasarWebhook
 	if err := h.ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
-		FailedAt:           failedAt,
+		FailedAt:           time.Now().UTC(),
 		ErrorMessage:       errorMessage,
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record payment failure",
