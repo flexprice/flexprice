@@ -513,16 +513,6 @@ func (s *meterUsageTrackingService) extractQuantity(ctx context.Context, event *
 	}
 }
 
-// convertToDecimal converts a property value to decimal. Silent: returns
-// decimal.Zero on parse failure or unknown type. Prefer convertToDecimalLogged
-// from extractQuantity so a zero in meter_usage can be traced back to its
-// cause; this entry point stays for any callers that don't have event+meter
-// context handy.
-func (s *meterUsageTrackingService) convertToDecimal(val interface{}) decimal.Decimal {
-	d, _ := s.parseDecimal(val)
-	return d
-}
-
 // convertToDecimalLogged is the diagnostic wrapper used inside extractQuantity:
 // when parsing yields decimal.Zero because of a parse failure or an unknown
 // runtime type, it emits a structured log so a qty_total=0 row in meter_usage
