@@ -305,7 +305,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			continue
 		}
 
-		qty, err := s.extractQuantity(event, m)
+		qty, err := s.extractQuantity(ctx, event, m)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to extract quantity, skipping meter",
 				"event_id", event.ID,
@@ -395,7 +395,13 @@ func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *m
 
 // extractQuantity extracts the quantity from event properties based on the meter's aggregation config.
 // Simplified version: no subscription or period needed.
-func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *meter.Meter) (decimal.Decimal, error) {
+//
+// Every silent-zero return logs why it fired (empty field, missing property,
+// parse failure, unknown type). Without these logs a qty_total=0 row in
+// meter_usage is indistinguishable from a real zero-value event, and the only
+// way to find an ingest-side bug is to redeploy with logging — exactly the gap
+// that hid the qty_total=0 case for MAX-with-string-property events.
+func (s *meterUsageTrackingService) extractQuantity(ctx context.Context, event *events.Event, m *meter.Meter) (decimal.Decimal, error) {
 	// CEL expression evaluation
 	if m.Aggregation.Expression != "" {
 		if m.Aggregation.Type == types.AggregationCountUnique {
@@ -418,45 +424,88 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if m.Aggregation.Field == "" {
+			s.Logger.Info(ctx, "qty_total=0: aggregation has empty field",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"aggregation_type", m.Aggregation.Type,
+			)
 			return decimal.Zero, nil
 		}
 		val, ok := event.Properties[m.Aggregation.Field]
 		if !ok {
+			s.Logger.Info(ctx, "qty_total=0: property not found on event",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"field", m.Aggregation.Field,
+				"aggregation_type", m.Aggregation.Type,
+				"available_keys", lo.Keys(event.Properties),
+			)
 			return decimal.Zero, nil
 		}
-		return s.convertToDecimal(val), nil
+		return s.convertToDecimalLogged(ctx, val, event, m), nil
 
 	case types.AggregationSumWithMultiplier:
 		if m.Aggregation.Field == "" || m.Aggregation.Multiplier == nil {
+			s.Logger.Info(ctx, "qty_total=0: sum_with_multiplier missing field or multiplier",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"field", m.Aggregation.Field,
+				"multiplier_nil", m.Aggregation.Multiplier == nil,
+			)
 			return decimal.Zero, nil
 		}
 		val, ok := event.Properties[m.Aggregation.Field]
 		if !ok {
+			s.Logger.Info(ctx, "qty_total=0: sum_with_multiplier property not found",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"field", m.Aggregation.Field,
+				"available_keys", lo.Keys(event.Properties),
+			)
 			return decimal.Zero, nil
 		}
-		return s.convertToDecimal(val).Mul(*m.Aggregation.Multiplier), nil
+		return s.convertToDecimalLogged(ctx, val, event, m).Mul(*m.Aggregation.Multiplier), nil
 
 	case types.AggregationCountUnique:
 		if m.Aggregation.Field == "" {
+			s.Logger.Info(ctx, "qty_total=0: count_unique aggregation has empty field",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+			)
 			return decimal.Zero, nil
 		}
 		if _, ok := event.Properties[m.Aggregation.Field]; !ok {
+			s.Logger.Info(ctx, "qty_total=0: count_unique property not found on event",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"field", m.Aggregation.Field,
+			)
 			return decimal.Zero, nil
 		}
 		return decimal.NewFromInt(1), nil
 
 	case types.AggregationWeightedSum:
 		if m.Aggregation.Field == "" {
+			s.Logger.Info(ctx, "qty_total=0: weighted_sum aggregation has empty field",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+			)
 			return decimal.Zero, nil
 		}
 		val, ok := event.Properties[m.Aggregation.Field]
 		if !ok {
+			s.Logger.Info(ctx, "qty_total=0: weighted_sum property not found on event",
+				"event_id", event.ID,
+				"meter_id", m.ID,
+				"field", m.Aggregation.Field,
+			)
 			return decimal.Zero, nil
 		}
-		return s.convertToDecimal(val), nil
+		return s.convertToDecimalLogged(ctx, val, event, m), nil
 
 	default:
-		s.Logger.Info(context.Background(), "unsupported aggregation type for meter usage",
+		s.Logger.Info(ctx, "qty_total=0: unsupported aggregation type for meter usage",
+			"event_id", event.ID,
 			"meter_id", m.ID,
 			"aggregation_type", m.Aggregation.Type,
 		)
@@ -464,40 +513,62 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 	}
 }
 
-// convertToDecimal converts a property value to decimal
-func (s *meterUsageTrackingService) convertToDecimal(val interface{}) decimal.Decimal {
+// convertToDecimalLogged is the diagnostic wrapper used inside extractQuantity:
+// when parsing yields decimal.Zero because of a parse failure or an unknown
+// runtime type, it emits a structured log so a qty_total=0 row in meter_usage
+// is not a silent dead end.
+func (s *meterUsageTrackingService) convertToDecimalLogged(
+	ctx context.Context, val interface{}, event *events.Event, m *meter.Meter,
+) decimal.Decimal {
+	d, parseErr := s.parseDecimal(val)
+	if parseErr != nil {
+		s.Logger.Info(ctx, "qty_total=0: property value could not be parsed as decimal",
+			"event_id", event.ID,
+			"meter_id", m.ID,
+			"field", m.Aggregation.Field,
+			"aggregation_type", m.Aggregation.Type,
+			"value_type", fmt.Sprintf("%T", val),
+			"parse_error", parseErr,
+		)
+	}
+	return d
+}
+
+// parseDecimal does the type switch + decimal parse, returning a non-empty
+// parseErr string when it had to fall back to decimal.Zero so callers can log.
+func (s *meterUsageTrackingService) parseDecimal(val interface{}) (decimal.Decimal, error) {
 	switch v := val.(type) {
 	case float64:
-		return decimal.NewFromFloat(v)
+		return decimal.NewFromFloat(v), nil
 	case float32:
-		return decimal.NewFromFloat32(v)
+		return decimal.NewFromFloat32(v), nil
 	case int:
-		return decimal.NewFromInt(int64(v))
+		return decimal.NewFromInt(int64(v)), nil
 	case int64:
-		return decimal.NewFromInt(v)
+		return decimal.NewFromInt(v), nil
 	case int32:
-		return decimal.NewFromInt(int64(v))
+		return decimal.NewFromInt(int64(v)), nil
 	case uint:
-		return decimal.NewFromInt(int64(v))
+		return decimal.NewFromInt(int64(v)), nil
 	case uint64:
 		d, err := decimal.NewFromString(fmt.Sprintf("%d", v))
 		if err != nil {
-			return decimal.Zero
+			return decimal.Zero, err
 		}
-		return d
+		return d, nil
 	case string:
 		d, err := decimal.NewFromString(v)
 		if err != nil {
-			return decimal.Zero
+			return decimal.Zero, err
 		}
-		return d
+		return d, nil
 	case json.Number:
 		d, err := decimal.NewFromString(string(v))
 		if err != nil {
-			return decimal.Zero
+			return decimal.Zero, err
 		}
-		return d
+		return d, nil
 	default:
-		return decimal.Zero
+		return decimal.Zero, fmt.Errorf("unsupported runtime type %T", val)
 	}
 }
