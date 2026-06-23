@@ -223,8 +223,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &assoc.ID,
+						Action:              dto.SubModifyCouponActionRemove,
+						CouponAssociationID: &assoc.ID,
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -248,8 +248,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &bogusID,
+						Action:              dto.SubModifyCouponActionRemove,
+						CouponAssociationID: &bogusID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
@@ -273,8 +273,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &assoc.ID,
+						Action:              dto.SubModifyCouponActionRemove,
+						CouponAssociationID: &assoc.ID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub1.ID, req)
@@ -298,8 +298,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &assoc.ID,
+						Action:              dto.SubModifyCouponActionRemove,
+						CouponAssociationID: &assoc.ID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
