@@ -86,9 +86,9 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			ID:        types.ScheduleIDMoyasarAuthPaymentRefund,
+			ID:        types.ScheduleIDMoyasarAuthPaymentSettlement,
 			Interval:  15 * time.Minute,
-			Workflow:  cronWorkflows.MoyasarAuthPaymentRefundWorkflow,
+			Workflow:  cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
 			Input:     struct{}{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},

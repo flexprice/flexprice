@@ -85,6 +85,32 @@ type PaddleInvoicePullSyncCronResult struct {
 	Failed    int `json:"failed"`
 }
 
+// ===================== Moyasar AUTH payment refund =====================
+
+// MoyasarReconcilePendingResult captures metrics for the pending-reconciliation pass.
+type MoyasarReconcilePendingResult struct {
+	Total     int `json:"total"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
+	Skipped   int `json:"skipped"`
+	Errors    int `json:"errors"`
+}
+
+// MoyasarVoidOrRefundResult captures metrics for the void/refund pass.
+type MoyasarVoidOrRefundResult struct {
+	Total    int `json:"total"`
+	Voided   int `json:"voided"`
+	Refunded int `json:"refunded"`
+	Skipped  int `json:"skipped"`
+	Errors   int `json:"errors"`
+}
+
+// MoyasarAuthPaymentSettlementWorkflowResult is the combined workflow result.
+type MoyasarAuthPaymentSettlementWorkflowResult struct {
+	Reconcile  MoyasarReconcilePendingResult `json:"reconcile"`
+	VoidRefund MoyasarVoidOrRefundResult     `json:"void_refund"`
+}
+
 // ===================== Auto invoice threshold billing =====================
 
 // AutoInvoiceThresholdBillingWorkflowInput is the input for AutoInvoiceThresholdBillingWorkflow.

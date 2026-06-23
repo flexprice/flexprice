@@ -50,7 +50,7 @@ type cronActivityBundle struct {
 	walletCreditExpiry           *cronActivities.WalletCreditExpiryActivities
 	webhookOutboundRetry         *cronActivities.WebhookOutboundRetryActivities
 	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
-	moyasarAuthPaymentRefund     *cronActivities.MoyasarAuthPaymentRefundActivities
+	moyasarAuthPaymentSettlement     *cronActivities.MoyasarAuthPaymentSettlementActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -137,7 +137,6 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	subscriptionService := service.NewSubscriptionService(params)
-	paymentService := service.NewPaymentService(params)
 
 	scheduleBillingActivities := subscriptionActivities.NewSubscriptionActivities(subscriptionService)
 	billingActivities := subscriptionActivities.NewBillingActivities(
@@ -271,7 +270,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
 		paddleInvoicePullSync:    cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
-		moyasarAuthPaymentRefund: cronActivities.NewMoyasarAuthPaymentRefundActivities(params.IntegrationFactory, paymentService, params.Logger),
+		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -498,7 +497,7 @@ func buildWorkerConfig(
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
-			cronWorkflows.MoyasarAuthPaymentRefundWorkflow,
+			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -510,8 +509,8 @@ func buildWorkerConfig(
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 			cron.subscription.ProcessAutoInvoiceThresholdBillingActivity,
 			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
-			cron.moyasarAuthPaymentRefund.ReconcilePendingAuthPaymentsActivity,
-			cron.moyasarAuthPaymentRefund.VoidOrRefundSucceededAuthPaymentsActivity,
+			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
+			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
 		)
 	}
 	return WorkerConfig{
