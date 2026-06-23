@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -43,17 +42,15 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Ac
 		if types.IsServiceAccount(ctx) {
 			roles := types.GetRoles(ctx)
 			if !pm.rbacService.HasPermission(roles, entity, string(action)) {
-				pm.logger.Info(ctx, "permission denied",
+				pm.logger.Info(ctx, "service account access refrained due to insufficient RBAC roles",
 					"user_id", types.GetUserID(ctx),
+					"tenant_id", types.GetTenantID(ctx),
+					"environment_id", types.GetEnvironmentID(ctx),
 					"roles", roles,
 					"entity", entity,
 					"action", action,
 					"path", c.Request.URL.Path,
 				)
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
-				})
-				return
 			}
 		}
 

@@ -286,12 +286,11 @@ func TestRequirePermission_ServiceAccountRBAC(t *testing.T) {
 			wantCode:     http.StatusOK,
 		},
 		{
-			name:         "service account without required role is denied",
+			name:         "service account without required role is logged but allowed",
 			userType:     string(types.UserTypeServiceAccount),
 			roles:        []string{"some_other_role"},
 			tenantStatus: types.TenantInternalStatusActive,
-			wantCode:     http.StatusForbidden,
-			wantErrMsg:   "Insufficient permissions to write event",
+			wantCode:     http.StatusOK,
 		},
 		{
 			name:         "JWT user (empty userType) bypasses RBAC",
