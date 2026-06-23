@@ -5,27 +5,20 @@ import (
 	"io"
 	"strings"
 
-	"github.com/flexprice/flexprice/internal/config"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-const maxWebhookBodyBytes = 1 << 20 // 1 MiB
-
 // WebhookLoggingMiddleware logs every inbound webhook request and optionally
-// persists it to the incoming_webhook_events table when the tenant_id or
-// environment_id matches the config whitelist.
+// persists it to the incoming_webhook_events table.
 func WebhookLoggingMiddleware(
-	cfg *config.Configuration,
 	log *logger.Logger,
 	repo domainIncomingWebhookEvent.Repository,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Read up to maxWebhookBodyBytes+1 to detect oversized payloads without
-		// loading arbitrarily large bodies into memory.
-		peek, readErr := io.ReadAll(io.LimitReader(c.Request.Body, int64(maxWebhookBodyBytes)+1))
+		peek, readErr := io.ReadAll(c.Request.Body)
 		if readErr != nil {
 			if log != nil {
 				log.Error(c.Request.Context(), "failed to read webhook request body", "error", readErr)
@@ -33,14 +26,7 @@ func WebhookLoggingMiddleware(
 			c.Next()
 			return
 		}
-		bodyTooLarge := len(peek) > maxWebhookBodyBytes
-
-		// Always restore the full body so the downstream handler is unaffected.
-		if bodyTooLarge {
-			c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(peek), c.Request.Body))
-		} else {
-			c.Request.Body = io.NopCloser(bytes.NewReader(peek))
-		}
+		c.Request.Body = io.NopCloser(bytes.NewReader(peek))
 
 		tenantID := c.Param("tenant_id")
 		environmentID := c.Param("environment_id")
@@ -53,17 +39,7 @@ func WebhookLoggingMiddleware(
 		}
 
 		persisted := false
-		if bodyTooLarge {
-			if log != nil {
-				log.Info(c.Request.Context(), "webhook body exceeds max size, skipping db persistence",
-					"max_bytes", maxWebhookBodyBytes,
-					"provider", provider,
-					"tenant_id", tenantID,
-					"environment_id", environmentID,
-					"request_id", requestID,
-				)
-			}
-		} else if repo != nil && shouldPersistRequest(cfg.WebhookLogging, tenantID, environmentID) {
+		if repo != nil {
 			req := &domainIncomingWebhookEvent.IncomingWebhookEvent{
 				ID:            types.GenerateUUID(),
 				TenantID:      tenantID,
@@ -100,7 +76,6 @@ func WebhookLoggingMiddleware(
 				"path", c.Request.URL.Path,
 				"request_id", requestID,
 				"payload_size_bytes", len(peek),
-				"body_too_large", bodyTooLarge,
 				"persisted", persisted,
 			)
 		}
@@ -115,20 +90,4 @@ func extractProvider(path string) string {
 		return parts[2]
 	}
 	return "unknown"
-}
-
-// shouldPersistRequest returns true when the request's tenant_id or environment_id
-// appears in the config whitelist.
-func shouldPersistRequest(cfg config.WebhookLoggingConfig, tenantID, environmentID string) bool {
-	for _, tid := range cfg.TenantIDs {
-		if tid != "" && tid == tenantID {
-			return true
-		}
-	}
-	for _, eid := range cfg.EnvironmentIDs {
-		if eid != "" && eid == environmentID {
-			return true
-		}
-	}
-	return false
 }

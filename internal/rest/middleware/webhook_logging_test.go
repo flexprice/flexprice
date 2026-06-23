@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -28,44 +27,12 @@ func TestExtractProvider(t *testing.T) {
 	}
 }
 
-func TestShouldPersistRequest(t *testing.T) {
-	cfg := config.WebhookLoggingConfig{
-		TenantIDs:      []string{"t_aaa", "t_bbb"},
-		EnvironmentIDs: []string{"env_yyy"},
-	}
-
-	cases := []struct {
-		name          string
-		tenantID      string
-		environmentID string
-		expected      bool
-	}{
-		{"matches tenant", "t_aaa", "env_xxx", true},
-		{"matches environment", "t_zzz", "env_yyy", true},
-		{"matches both", "t_aaa", "env_yyy", true},
-		{"matches neither", "t_zzz", "env_zzz", false},
-		{"empty IDs", "", "", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, shouldPersistRequest(cfg, tc.tenantID, tc.environmentID))
-		})
-	}
-}
-
 func TestWebhookLoggingMiddleware_BuffersBody(t *testing.T) {
-	// nil logger is safe here: empty whitelist means no persist attempt,
-	// so the log.Error / log.Debug paths are not reached.
 	gin.SetMode(gin.TestMode)
-
-	cfg := &config.Configuration{
-		WebhookLogging: config.WebhookLoggingConfig{},
-	}
 
 	bodyRead := ""
 	router := gin.New()
-	router.Use(WebhookLoggingMiddleware(cfg, nil, nil))
+	router.Use(WebhookLoggingMiddleware(nil, nil))
 	router.POST("/v1/webhooks/stripe/:tenant_id/:environment_id", func(c *gin.Context) {
 		b, _ := io.ReadAll(c.Request.Body)
 		bodyRead = string(b)
