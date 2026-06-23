@@ -632,7 +632,7 @@ func NewRouter(
 
 	// Public webhook endpoints (no authentication required)
 	webhooks := v1Public.Group("/webhooks")
-	webhooks.Use(middleware.WebhookLoggingMiddleware(cfg, logger, webhookRequestRepo))
+	webhooks.Use(middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
 	{
 		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
