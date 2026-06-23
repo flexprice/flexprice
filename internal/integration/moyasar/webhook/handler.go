@@ -61,7 +61,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 	// state from Moyasar before acting so we are never misled by tampered payloads.
 	paymentID := event.Data.ID
 	if paymentID == "" {
-		h.logger.Error(ctx, "webhook event has no payment ID, skipping", "event_id", event.ID)
+		h.logger.Info(ctx, "webhook event has no payment ID, skipping", "event_id", event.ID)
 		return nil
 	}
 
@@ -82,7 +82,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 		return err
 	}
 	if fetchedMoyasarPayment == nil {
-		h.logger.Error(ctx, "Moyasar returned nil payment, skipping", "moyasar_payment_id", paymentID)
+		h.logger.Info(ctx, "Moyasar returned nil payment, skipping", "moyasar_payment_id", paymentID)
 		return nil
 	}
 
