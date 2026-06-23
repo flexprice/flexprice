@@ -18604,9 +18604,16 @@
               }
             }
           },
+          "group_by": {
+            "type": "array",
+            "description": "GroupBy lists the analytics group_by dimensions.\n  - \"source\"        \u2014 group by event source column\n  - \"properties.X\"  \u2014 group by JSON property X",
+            "items": {
+              "type": "string"
+            }
+          },
           "group_by_property": {
             "type": "string",
-            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
+            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.\n\nDeprecated: prefer GroupBy []string{\"properties.<X>\"} for parity with\nother analytics endpoints. ToUsageParams translates this field into\nGroupBy when GroupBy is otherwise empty."
           },
           "multiplier": {
             "type": "string"
@@ -20294,6 +20301,10 @@
               "type": "string"
             }
           },
+          "service_account_name": {
+            "type": "string",
+            "description": "name of the service account (populated for service_account user_type)"
+          },
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
@@ -20303,6 +20314,10 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "user or service account this key belongs to"
           },
           "user_type": {
             "$ref": "#/components/schemas/types.UserType"
@@ -20354,7 +20369,7 @@
           "action": {
             "$ref": "#/components/schemas/SubModifyCouponAction"
           },
-          "association_id": {
+          "coupon_association_id": {
             "type": "string",
             "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete."
           },
@@ -20460,14 +20475,14 @@
           "action": {
             "$ref": "#/components/schemas/SubModifyTaxAction"
           },
-          "association_id": {
-            "type": "string",
-            "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete."
-          },
           "effective_date": {
             "type": "string",
             "description": "Optional. When to apply the change; defaults to now if omitted.",
             "format": "date-time"
+          },
+          "tax_association_id": {
+            "type": "string",
+            "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete."
           },
           "tax_rate_id": {
             "type": "string",
@@ -24224,6 +24239,12 @@
       "types.CouponFilter": {
         "type": "object",
         "properties": {
+          "coupon_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "coupon_ids": {
             "type": "array",
             "items": {

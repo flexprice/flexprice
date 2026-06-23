@@ -3629,11 +3629,23 @@ definitions:
             type: string
           type: array
         type: object
+      group_by:
+        description: |-
+          GroupBy lists the analytics group_by dimensions.
+            - "source"        — group by event source column
+            - "properties.X"  — group by JSON property X
+        items:
+          type: string
+        type: array
       group_by_property:
         description: |-
           GroupByProperty is the property name in event.properties to group by before aggregating.
           When set, aggregation is applied per unique value of this property within each bucket,
           then the per-group results are summed to produce the bucket total.
+
+          Deprecated: prefer GroupBy []string{"properties.<X>"} for parity with
+          other analytics endpoints. ToUsageParams translates this field into
+          GroupBy when GroupBy is otherwise empty.
         type: string
       multiplier:
         type: string
@@ -4879,11 +4891,17 @@ definitions:
         items:
           type: string
         type: array
+      service_account_name:
+        description: name of the service account (populated for service_account user_type)
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       type:
         $ref: '#/definitions/types.SecretType'
       updated_at:
+        type: string
+      user_id:
+        description: user or service account this key belongs to
         type: string
       user_type:
         allOf:
@@ -4925,7 +4943,7 @@ definitions:
         - $ref: '#/definitions/SubModifyCouponAction'
         description: Required. "add" to attach a coupon; "remove" to detach an existing
           association.
-      association_id:
+      coupon_association_id:
         description: Required when action="remove". ID of the CouponAssociation to
           soft-delete.
         type: string
@@ -5009,11 +5027,11 @@ definitions:
         - $ref: '#/definitions/SubModifyTaxAction'
         description: Required. "add" to attach a tax rate; "remove" to detach an existing
           association.
-      association_id:
-        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
-        type: string
       effective_date:
         description: Optional. When to apply the change; defaults to now if omitted.
+        type: string
+      tax_association_id:
+        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
         type: string
       tax_rate_id:
         description: Required when action="add". ID of the active tax rate to attach.
@@ -7833,6 +7851,10 @@ definitions:
     - CouponCadenceForever
   types.CouponFilter:
     properties:
+      coupon_codes:
+        items:
+          type: string
+        type: array
       coupon_ids:
         items:
           type: string
