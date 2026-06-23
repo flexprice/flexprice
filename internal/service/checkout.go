@@ -7,20 +7,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
-// CheckoutService manages hosted checkout sessions for deferred subscription activation.
-type CheckoutService interface {
-	// Create opens a checkout for a new subscription (payment or setup mode).
-	Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error)
-	// Complete marks a checkout completed (idempotent). Setup-mode activation happens here;
-	// payment-mode activation is driven by the invoice.paid hook.
-	Complete(ctx context.Context, checkoutID string) error
-	// Get returns a checkout by ID.
-	Get(ctx context.Context, id string) (*dto.CheckoutResponse, error)
-}
+type CheckoutService = interfaces.CheckoutService
 
 type checkoutService struct {
 	ServiceParams

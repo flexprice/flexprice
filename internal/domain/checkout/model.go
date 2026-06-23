@@ -12,33 +12,33 @@ import (
 
 // Checkout is a deferred, user-gated activation of a subject (a subscription).
 type Checkout struct {
-	ID         string
-	CustomerID string
+	ID         string `json:"id"`
+	CustomerID string `json:"customer_id"`
 
-	EntityType types.CheckoutEntityType
-	EntityID   string
+	EntityType types.CheckoutEntityType `json:"entity_type"`
+	EntityID   string                   `json:"entity_id"`
 
-	CheckoutAction types.CheckoutAction
-	Mode           types.CheckoutMode
-	Status         types.CheckoutStatus
+	CheckoutAction types.CheckoutAction `json:"checkout_action"`
+	Mode           types.CheckoutMode   `json:"mode"`
+	Status         types.CheckoutStatus `json:"checkout_status"`
 
-	Amount   *decimal.Decimal
-	Currency string
+	Amount   *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	Currency string           `json:"currency"`
 
-	Provider          types.CheckoutProvider
-	ProviderSessionID *string
-	CheckoutURL       *string
-	SuccessURL        *string
-	CancelURL         *string
+	Provider          types.CheckoutProvider `json:"provider"`
+	ProviderSessionID *string                `json:"provider_session_id,omitempty"`
+	CheckoutURL       *string                `json:"checkout_url,omitempty"`
+	SuccessURL        *string                `json:"success_url,omitempty"`
+	CancelURL         *string                `json:"cancel_url,omitempty"`
 
-	Configuration *CheckoutConfiguration // deferred-operation payload; nil in v1
+	Configuration *CheckoutConfiguration `json:"configuration,omitempty"` // deferred-operation payload; nil in v1
 
-	ExpiresAt      time.Time
-	CompletedAt    *time.Time
-	CancelledAt    *time.Time
-	FailureMessage *string
+	ExpiresAt      time.Time  `json:"expires_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	CancelledAt    *time.Time `json:"cancelled_at,omitempty"`
+	FailureMessage *string    `json:"failure_message,omitempty"`
 
-	EnvironmentID string
+	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
 }
 

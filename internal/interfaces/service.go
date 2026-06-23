@@ -201,10 +201,15 @@ type CreditAdjustmentService interface {
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 }
 
-// CheckoutService is the subset of the checkout service the webhook layer needs.
-// The concrete *checkoutService in internal/service satisfies this.
+// CheckoutService manages hosted checkout sessions for deferred subscription activation.
 type CheckoutService interface {
+	// Create opens a checkout for a new subscription (payment or setup mode).
+	Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error)
+	// Complete marks a checkout completed (idempotent). Setup-mode activation happens here;
+	// payment-mode activation is driven by the invoice.paid hook.
 	Complete(ctx context.Context, checkoutID string) error
+	// Get returns a checkout by ID.
+	Get(ctx context.Context, id string) (*dto.CheckoutResponse, error)
 }
 
 type ServiceDependencies struct {
