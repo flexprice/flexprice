@@ -528,7 +528,6 @@ func (s *meterUsageTrackingService) convertToDecimalLogged(
 			"field", m.Aggregation.Field,
 			"aggregation_type", m.Aggregation.Type,
 			"value_type", fmt.Sprintf("%T", val),
-			"value", fmt.Sprintf("%v", val),
 			"parse_error", parseErr,
 		)
 	}
