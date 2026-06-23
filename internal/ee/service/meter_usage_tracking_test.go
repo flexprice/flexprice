@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -257,9 +258,9 @@ func (s *MeterUsageTrackingSuite) TestConvertToDecimal_AllTypes() {
 		{"nil", nil, decimal.Zero},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		s.Run(tt.name, func() {
-			result := s.svc.convertToDecimalLogged(context.Background(), tt.input, nil, nil)
+			result := s.svc.convertToDecimalLogged(context.Background(), tt.input, &events.Event{ID: fmt.Sprintf("event_%d", i)}, &meter.Meter{ID: fmt.Sprintf("meter_%d", i), Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}})
 			assert.True(s.T(), tt.expected.Equal(result), "expected %s, got %s", tt.expected, result)
 		})
 	}
