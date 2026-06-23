@@ -186,7 +186,15 @@ func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.Moya
 		h.activatePaymentMethod(ctx, payment, flexpricePayment.DestinationID)
 		h.voidOrRefundAuthPayment(ctx, flexpricePaymentID, payment.ID)
 	case types.PaymentDestinationTypeInvoice:
-		// Invoice reconciliation is handled inside RecordPaymentSuccess via InvoiceService
+		// Invoice reconciliation is handled inside RecordPaymentSuccess via InvoiceService.
+		// Sync the Moyasar payment status into the Flexprice invoice metadata so the UI reflects the current state.
+		if syncErr := h.paymentSvc.SyncMoyasarInvoiceStatus(ctx, flexpricePayment.DestinationID, payment.Status, services.InvoiceService); syncErr != nil {
+			h.logger.Error(ctx, "failed to sync Moyasar invoice status to invoice metadata",
+				"flexprice_invoice_id", flexpricePayment.DestinationID,
+				"moyasar_payment_id", payment.ID,
+				"error", syncErr,
+			)
+		}
 	default:
 		h.logger.Info(ctx, "unhandled destination type in ledger payment",
 			"destination_type", flexpricePayment.DestinationType,

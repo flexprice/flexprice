@@ -362,12 +362,45 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 		return err
 	}
 
+	// Step 4: Sync Moyasar invoice status into FlexPrice invoice metadata
+	if syncErr := s.SyncMoyasarInvoiceStatus(ctx, flexpriceInvoiceID, payment.Status, invoiceService); syncErr != nil {
+		s.logger.Error(ctx, "failed to sync Moyasar invoice status to invoice metadata",
+			"error", syncErr,
+			"flexprice_invoice_id", flexpriceInvoiceID,
+			"moyasar_status", payment.Status)
+	}
+
 	s.logger.Info(ctx, "successfully processed external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"amount", amount.String())
 
 	return nil
+}
+
+// syncMoyasarInvoiceStatus updates the moyasar_invoice_status key in the FlexPrice invoice metadata
+// to reflect the current Moyasar payment status. Failures are non-fatal — logged by the caller.
+func (s *PaymentService) SyncMoyasarInvoiceStatus(
+	ctx context.Context,
+	flexpriceInvoiceID string,
+	moyasarStatus string,
+	invoiceService interfaces.InvoiceService,
+) error {
+	inv, err := invoiceService.GetInvoice(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+
+	metadata := types.Metadata{}
+	for k, v := range inv.Metadata {
+		metadata[k] = v
+	}
+	metadata["moyasar_invoice_status"] = moyasarStatus
+
+	_, err = invoiceService.UpdateInvoice(ctx, flexpriceInvoiceID, apidto.UpdateInvoiceRequest{
+		Metadata: &metadata,
+	})
+	return err
 }
 
 // createExternalPaymentRecord creates a payment record for an external Moyasar payment
