@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/ledger"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -66,11 +67,19 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 
 	fetchedMoyasarPayment, err := h.client.GetPayment(ctx, paymentID)
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			// Payment genuinely absent in Moyasar — safe to skip.
+			h.logger.Info(ctx, "payment not found in Moyasar, skipping",
+				"moyasar_payment_id", paymentID,
+			)
+			return nil
+		}
+		// Transient failure (network, 5xx) — return error so Moyasar retries the webhook.
 		h.logger.Error(ctx, "failed to fetch payment from Moyasar for verification",
 			"moyasar_payment_id", paymentID,
 			"error", err,
 		)
-		return nil
+		return err
 	}
 	if fetchedMoyasarPayment == nil {
 		h.logger.Error(ctx, "Moyasar returned nil payment, skipping", "moyasar_payment_id", paymentID)
