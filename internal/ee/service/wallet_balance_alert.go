@@ -60,6 +60,15 @@ func NewWalletBalanceAlertService(
 // PublishEvent publishes a wallet balance alert event to Kafka
 func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wallet.WalletBalanceAlertEvent) error {
 
+	// Feature gate: when disabled, do not produce. `enabled` is the single switch
+	// for the whole feature (this producer + the consumer in RegisterHandler). The
+	// call sites in walletService invoke this on every wallet operation regardless
+	// of the flag, so without this guard a disabled deployment would still publish
+	// to a (possibly empty/unprovisioned) topic and error on every operation.
+	if !s.Config.WalletBalanceAlert.Enabled {
+		return nil
+	}
+
 	err := event.Validate()
 	if err != nil {
 		return ierr.WithError(err).

@@ -795,6 +795,16 @@ onboardingEvents:
   consumerGroup: "onboarding_events_consumer"
   maxRetries: 3
 
+# Wallet balance alert configuration.
+# Default off: enabling requires the topic to exist on the broker and a consumer
+# to be running. The producer is gated on `enabled`, so off => no Kafka publish.
+# Override `enabled: true` per-environment once the topic + consumer are provisioned.
+walletBalanceAlert:
+  enabled: false
+  topic: "wallet_alert"
+  rateLimit: 1
+  consumerGroup: "v1_wallet_alert_service"
+
 # Raw event consumption configuration
 rawEventConsumption:
   enabled: false
