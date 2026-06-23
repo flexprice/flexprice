@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentMethodUpdate is the builder for updating PaymentMethod entities.
@@ -69,29 +70,29 @@ func (pmu *PaymentMethodUpdate) ClearUpdatedBy() *PaymentMethodUpdate {
 }
 
 // SetType sets the "type" field.
-func (pmu *PaymentMethodUpdate) SetType(s string) *PaymentMethodUpdate {
-	pmu.mutation.SetType(s)
+func (pmu *PaymentMethodUpdate) SetType(tmt types.PaymentMethodType) *PaymentMethodUpdate {
+	pmu.mutation.SetType(tmt)
 	return pmu
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (pmu *PaymentMethodUpdate) SetNillableType(s *string) *PaymentMethodUpdate {
-	if s != nil {
-		pmu.SetType(*s)
+func (pmu *PaymentMethodUpdate) SetNillableType(tmt *types.PaymentMethodType) *PaymentMethodUpdate {
+	if tmt != nil {
+		pmu.SetType(*tmt)
 	}
 	return pmu
 }
 
 // SetGateway sets the "gateway" field.
-func (pmu *PaymentMethodUpdate) SetGateway(s string) *PaymentMethodUpdate {
-	pmu.mutation.SetGateway(s)
+func (pmu *PaymentMethodUpdate) SetGateway(tgt types.PaymentGatewayType) *PaymentMethodUpdate {
+	pmu.mutation.SetGateway(tgt)
 	return pmu
 }
 
 // SetNillableGateway sets the "gateway" field if the given value is not nil.
-func (pmu *PaymentMethodUpdate) SetNillableGateway(s *string) *PaymentMethodUpdate {
-	if s != nil {
-		pmu.SetGateway(*s)
+func (pmu *PaymentMethodUpdate) SetNillableGateway(tgt *types.PaymentGatewayType) *PaymentMethodUpdate {
+	if tgt != nil {
+		pmu.SetGateway(*tgt)
 	}
 	return pmu
 }
@@ -111,15 +112,15 @@ func (pmu *PaymentMethodUpdate) SetNillableGatewayMethodID(s *string) *PaymentMe
 }
 
 // SetPaymentMethodStatus sets the "payment_method_status" field.
-func (pmu *PaymentMethodUpdate) SetPaymentMethodStatus(s string) *PaymentMethodUpdate {
-	pmu.mutation.SetPaymentMethodStatus(s)
+func (pmu *PaymentMethodUpdate) SetPaymentMethodStatus(tms types.PaymentMethodStatus) *PaymentMethodUpdate {
+	pmu.mutation.SetPaymentMethodStatus(tms)
 	return pmu
 }
 
 // SetNillablePaymentMethodStatus sets the "payment_method_status" field if the given value is not nil.
-func (pmu *PaymentMethodUpdate) SetNillablePaymentMethodStatus(s *string) *PaymentMethodUpdate {
-	if s != nil {
-		pmu.SetPaymentMethodStatus(*s)
+func (pmu *PaymentMethodUpdate) SetNillablePaymentMethodStatus(tms *types.PaymentMethodStatus) *PaymentMethodUpdate {
+	if tms != nil {
+		pmu.SetPaymentMethodStatus(*tms)
 	}
 	return pmu
 }
@@ -194,18 +195,23 @@ func (pmu *PaymentMethodUpdate) defaults() {
 // check runs all checks and user-defined validators on the builder.
 func (pmu *PaymentMethodUpdate) check() error {
 	if v, ok := pmu.mutation.GetType(); ok {
-		if err := paymentmethod.TypeValidator(v); err != nil {
+		if err := paymentmethod.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.type": %w`, err)}
 		}
 	}
 	if v, ok := pmu.mutation.Gateway(); ok {
-		if err := paymentmethod.GatewayValidator(v); err != nil {
+		if err := paymentmethod.GatewayValidator(string(v)); err != nil {
 			return &ValidationError{Name: "gateway", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.gateway": %w`, err)}
 		}
 	}
 	if v, ok := pmu.mutation.GatewayMethodID(); ok {
 		if err := paymentmethod.GatewayMethodIDValidator(v); err != nil {
 			return &ValidationError{Name: "gateway_method_id", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.gateway_method_id": %w`, err)}
+		}
+	}
+	if v, ok := pmu.mutation.PaymentMethodStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_method_status", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.payment_method_status": %w`, err)}
 		}
 	}
 	return nil
@@ -323,29 +329,29 @@ func (pmuo *PaymentMethodUpdateOne) ClearUpdatedBy() *PaymentMethodUpdateOne {
 }
 
 // SetType sets the "type" field.
-func (pmuo *PaymentMethodUpdateOne) SetType(s string) *PaymentMethodUpdateOne {
-	pmuo.mutation.SetType(s)
+func (pmuo *PaymentMethodUpdateOne) SetType(tmt types.PaymentMethodType) *PaymentMethodUpdateOne {
+	pmuo.mutation.SetType(tmt)
 	return pmuo
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (pmuo *PaymentMethodUpdateOne) SetNillableType(s *string) *PaymentMethodUpdateOne {
-	if s != nil {
-		pmuo.SetType(*s)
+func (pmuo *PaymentMethodUpdateOne) SetNillableType(tmt *types.PaymentMethodType) *PaymentMethodUpdateOne {
+	if tmt != nil {
+		pmuo.SetType(*tmt)
 	}
 	return pmuo
 }
 
 // SetGateway sets the "gateway" field.
-func (pmuo *PaymentMethodUpdateOne) SetGateway(s string) *PaymentMethodUpdateOne {
-	pmuo.mutation.SetGateway(s)
+func (pmuo *PaymentMethodUpdateOne) SetGateway(tgt types.PaymentGatewayType) *PaymentMethodUpdateOne {
+	pmuo.mutation.SetGateway(tgt)
 	return pmuo
 }
 
 // SetNillableGateway sets the "gateway" field if the given value is not nil.
-func (pmuo *PaymentMethodUpdateOne) SetNillableGateway(s *string) *PaymentMethodUpdateOne {
-	if s != nil {
-		pmuo.SetGateway(*s)
+func (pmuo *PaymentMethodUpdateOne) SetNillableGateway(tgt *types.PaymentGatewayType) *PaymentMethodUpdateOne {
+	if tgt != nil {
+		pmuo.SetGateway(*tgt)
 	}
 	return pmuo
 }
@@ -365,15 +371,15 @@ func (pmuo *PaymentMethodUpdateOne) SetNillableGatewayMethodID(s *string) *Payme
 }
 
 // SetPaymentMethodStatus sets the "payment_method_status" field.
-func (pmuo *PaymentMethodUpdateOne) SetPaymentMethodStatus(s string) *PaymentMethodUpdateOne {
-	pmuo.mutation.SetPaymentMethodStatus(s)
+func (pmuo *PaymentMethodUpdateOne) SetPaymentMethodStatus(tms types.PaymentMethodStatus) *PaymentMethodUpdateOne {
+	pmuo.mutation.SetPaymentMethodStatus(tms)
 	return pmuo
 }
 
 // SetNillablePaymentMethodStatus sets the "payment_method_status" field if the given value is not nil.
-func (pmuo *PaymentMethodUpdateOne) SetNillablePaymentMethodStatus(s *string) *PaymentMethodUpdateOne {
-	if s != nil {
-		pmuo.SetPaymentMethodStatus(*s)
+func (pmuo *PaymentMethodUpdateOne) SetNillablePaymentMethodStatus(tms *types.PaymentMethodStatus) *PaymentMethodUpdateOne {
+	if tms != nil {
+		pmuo.SetPaymentMethodStatus(*tms)
 	}
 	return pmuo
 }
@@ -461,18 +467,23 @@ func (pmuo *PaymentMethodUpdateOne) defaults() {
 // check runs all checks and user-defined validators on the builder.
 func (pmuo *PaymentMethodUpdateOne) check() error {
 	if v, ok := pmuo.mutation.GetType(); ok {
-		if err := paymentmethod.TypeValidator(v); err != nil {
+		if err := paymentmethod.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.type": %w`, err)}
 		}
 	}
 	if v, ok := pmuo.mutation.Gateway(); ok {
-		if err := paymentmethod.GatewayValidator(v); err != nil {
+		if err := paymentmethod.GatewayValidator(string(v)); err != nil {
 			return &ValidationError{Name: "gateway", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.gateway": %w`, err)}
 		}
 	}
 	if v, ok := pmuo.mutation.GatewayMethodID(); ok {
 		if err := paymentmethod.GatewayMethodIDValidator(v); err != nil {
 			return &ValidationError{Name: "gateway_method_id", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.gateway_method_id": %w`, err)}
+		}
+	}
+	if v, ok := pmuo.mutation.PaymentMethodStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_method_status", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.payment_method_status": %w`, err)}
 		}
 	}
 	return nil

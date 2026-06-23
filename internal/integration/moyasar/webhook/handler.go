@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration/ledger"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -20,7 +20,7 @@ type Handler struct {
 	paymentSvc                   *moyasar.PaymentService
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	paymentMethodRepo            paymentmethod.Repository
-	ledger                       *ledger.PaymentsLedger
+	lifecycle                    *payments.PaymentLifecycle
 	logger                       *logger.Logger
 }
 
@@ -30,7 +30,7 @@ func NewHandler(
 	paymentSvc *moyasar.PaymentService,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	paymentMethodRepo paymentmethod.Repository,
-	ledger *ledger.PaymentsLedger,
+	lifecycle *payments.PaymentLifecycle,
 	logger *logger.Logger,
 ) *Handler {
 	return &Handler{
@@ -38,7 +38,7 @@ func NewHandler(
 		paymentSvc:                   paymentSvc,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		paymentMethodRepo:            paymentMethodRepo,
-		ledger:                       ledger,
+		lifecycle:                    lifecycle,
 		logger:                       logger,
 	}
 }
@@ -130,7 +130,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 // handlePaymentPaid dispatches payment_paid / payment_captured events.
 //
 // Priority:
-//  1. flexprice_payment_id in metadata → ledger-managed payment (AUTH or INVOICE autopay)
+//  1. flexprice_payment_id in metadata → lifecycle-managed payment (CUSTOMER or INVOICE autopay)
 //  2. invoice_id in payment body      → Moyasar invoice-link flow (external / manual pay)
 func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.MoyasarPayment, environmentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_paid webhook",
@@ -141,10 +141,10 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 		"environment_id", environmentID,
 	)
 
-	// Path 1: ledger-managed payment — flexprice_payment_id is the anchor
+	// Path 1: lifecycle-managed payment — flexprice_payment_id is the anchor
 	if payment.Metadata != nil {
 		if flexpricePaymentID := payment.Metadata["flexprice_payment_id"]; flexpricePaymentID != "" {
-			return h.handleLedgerPayment(ctx, payment, flexpricePaymentID, services)
+			return h.handlePaymentLifecycle(ctx, payment, flexpricePaymentID, services)
 		}
 	}
 
@@ -158,10 +158,10 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 	return nil
 }
 
-// handleLedgerPayment handles payments that Flexprice initiated (AUTH or INVOICE autopay).
+// handlePaymentLifecycle handles payments that Flexprice initiated (CUSTOMER tokenization or INVOICE autopay).
 // The flexprice_payment_id in metadata is the cross-system anchor.
-func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePaymentID string, services *ServiceDependencies) error {
-	h.logger.Info(ctx, "handling ledger-managed payment",
+func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePaymentID string, services *ServiceDependencies) error {
+	h.logger.Info(ctx, "handling lifecycle-managed payment",
 		"flexprice_payment_id", flexpricePaymentID,
 		"moyasar_payment_id", payment.ID,
 	)
@@ -177,7 +177,7 @@ func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.Moya
 
 	now := time.Now().UTC()
 
-	if err := h.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
 		SucceededAt:        now,
@@ -191,7 +191,7 @@ func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.Moya
 	}
 
 	switch flexpricePayment.DestinationType {
-	case types.PaymentDestinationTypeAuth:
+	case types.PaymentDestinationTypeCustomer:
 		h.activatePaymentMethod(ctx, payment, flexpricePayment.DestinationID)
 		h.voidOrRefundAuthPayment(ctx, flexpricePaymentID, payment.ID)
 	case types.PaymentDestinationTypeInvoice:
@@ -205,7 +205,7 @@ func (h *Handler) handleLedgerPayment(ctx context.Context, payment *moyasar.Moya
 			)
 		}
 	default:
-		h.logger.Info(ctx, "unhandled destination type in ledger payment",
+		h.logger.Info(ctx, "unhandled destination type in lifecycle payment",
 			"destination_type", flexpricePayment.DestinationType,
 			"flexprice_payment_id", flexpricePaymentID,
 		)
@@ -253,7 +253,7 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_METHOD),
 		CustomerID:          customerID,
 		Type:                types.PaymentMethodTypeCard,
-		Gateway:             string(types.SecretProviderMoyasar),
+		Gateway:             types.PaymentGatewayTypeMoyasar,
 		GatewayMethodID:     token,
 		PaymentMethodStatus: types.PaymentMethodStatusActive,
 		IsDefault:           false,
@@ -292,15 +292,15 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 
 	// Try void first
 	if _, voidErr := h.client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
-		if ledgerErr := h.ledger.RecordPaymentVoided(ctx, ledger.RecordPaymentVoidedParams{
+		if lifecycleErr := h.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
 			VoidedAt:           time.Now().UTC(),
-		}); ledgerErr != nil {
-			h.logger.Error(ctx, "failed to record payment voided in ledger",
+		}); lifecycleErr != nil {
+			h.logger.Error(ctx, "failed to record payment voided",
 				"flexprice_payment_id", flexpricePaymentID,
 				"gateway_payment_id", gatewayPaymentID,
-				"error", ledgerErr,
+				"error", lifecycleErr,
 			)
 		} else {
 			h.logger.Info(ctx, "AUTH payment voided successfully",
@@ -326,15 +326,15 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 		return
 	}
 
-	if ledgerErr := h.ledger.RecordPaymentRefunded(ctx, ledger.RecordPaymentRefundedParams{
+	if lifecycleErr := h.lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
 		RefundedAt:         time.Now().UTC(),
-	}); ledgerErr != nil {
-		h.logger.Error(ctx, "failed to record payment refunded in ledger",
+	}); lifecycleErr != nil {
+		h.logger.Error(ctx, "failed to record payment refunded",
 			"flexprice_payment_id", flexpricePaymentID,
 			"gateway_payment_id", gatewayPaymentID,
-			"error", ledgerErr,
+			"error", lifecycleErr,
 		)
 		return
 	}
@@ -393,7 +393,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 }
 
 // handlePaymentFailed handles payment_failed events.
-// For ledger-managed payments, records the failure so the Flexprice payment
+// For lifecycle-managed payments, records the failure so the Flexprice payment
 // transitions to FAILED and the invoice remains unpaid for retry/manual action.
 func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.MoyasarPayment, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_failed webhook",
@@ -417,7 +417,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 		errorMessage = payment.Source.Message
 	}
 
-	if err := h.ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
+	if err := h.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
 		FailedAt:           time.Now().UTC(),

@@ -1,4 +1,4 @@
-package ledger_test
+package payments_test
 
 import (
 	"testing"
@@ -7,37 +7,37 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
-	"github.com/flexprice/flexprice/internal/integration/ledger"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
 
-type PaymentsLedgerSuite struct {
+type PaymentLifecycleSuite struct {
 	testutil.BaseServiceTestSuite
-	ledger   *ledger.PaymentsLedger
+	lifecycle *payments.PaymentLifecycle
 	testData struct {
 		customer *customer.Customer
 		invoice  *invoice.Invoice
 	}
 }
 
-func TestPaymentsLedger(t *testing.T) {
-	suite.Run(t, new(PaymentsLedgerSuite))
+func TestPaymentLifecycle(t *testing.T) {
+	suite.Run(t, new(PaymentLifecycleSuite))
 }
 
-func (s *PaymentsLedgerSuite) SetupTest() {
+func (s *PaymentLifecycleSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
-	s.setupLedger()
+	s.setupLifecycle()
 	s.setupTestData()
 }
 
-func (s *PaymentsLedgerSuite) TearDownTest() {
+func (s *PaymentLifecycleSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
 }
 
-func (s *PaymentsLedgerSuite) setupLedger() {
+func (s *PaymentLifecycleSuite) setupLifecycle() {
 	params := service.ServiceParams{
 		Logger:           s.GetLogger(),
 		Config:           s.GetConfig(),
@@ -62,21 +62,21 @@ func (s *PaymentsLedgerSuite) setupLedger() {
 	}
 	paymentSvc := service.NewPaymentService(params)
 	invoiceSvc := service.NewInvoiceService(params)
-	s.ledger = ledger.NewPaymentsLedger(paymentSvc, invoiceSvc, s.GetLogger())
+	s.lifecycle = payments.NewPaymentLifecycle(paymentSvc, invoiceSvc, s.GetLogger())
 }
 
-func (s *PaymentsLedgerSuite) setupTestData() {
+func (s *PaymentLifecycleSuite) setupTestData() {
 	s.testData.customer = &customer.Customer{
-		ID:         "cust_ledger_test",
-		ExternalID: "ext_cust_ledger_test",
+		ID:         "cust_lifecycle_test",
+		ExternalID: "ext_cust_lifecycle_test",
 		Name:       "Ledger Test Customer",
-		Email:      "ledger@example.com",
+		Email:      "lifecycle@example.com",
 		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), s.testData.customer))
 
 	s.testData.invoice = &invoice.Invoice{
-		ID:              "inv_ledger_test",
+		ID:              "inv_lifecycle_test",
 		CustomerID:      s.testData.customer.ID,
 		InvoiceType:     types.InvoiceTypeOneOff,
 		InvoiceStatus:   types.InvoiceStatusFinalized,
@@ -92,9 +92,9 @@ func (s *PaymentsLedgerSuite) setupTestData() {
 }
 
 // authParams returns a minimal InitiatePaymentParams for an AUTH payment.
-func (s *PaymentsLedgerSuite) authParams() ledger.InitiatePaymentParams {
-	return ledger.InitiatePaymentParams{
-		DestinationType:   types.PaymentDestinationTypeAuth,
+func (s *PaymentLifecycleSuite) authParams() payments.InitiatePaymentParams {
+	return payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
 		DestinationID:     s.testData.customer.ID,
 		PaymentMethodType: types.PaymentMethodTypeCard,
 		Gateway:           string(types.PaymentGatewayTypeMoyasar),
@@ -104,8 +104,8 @@ func (s *PaymentsLedgerSuite) authParams() ledger.InitiatePaymentParams {
 }
 
 // invoiceParams returns a minimal InitiatePaymentParams for an INVOICE payment.
-func (s *PaymentsLedgerSuite) invoiceParams() ledger.InitiatePaymentParams {
-	return ledger.InitiatePaymentParams{
+func (s *PaymentLifecycleSuite) invoiceParams() payments.InitiatePaymentParams {
+	return payments.InitiatePaymentParams{
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     s.testData.invoice.ID,
 		PaymentMethodType: types.PaymentMethodTypeCard,
@@ -117,9 +117,9 @@ func (s *PaymentsLedgerSuite) invoiceParams() ledger.InitiatePaymentParams {
 
 // ── InitiatePayment ──────────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestInitiatePayment_Success() {
+func (s *PaymentLifecycleSuite) TestInitiatePayment_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 	s.NotEmpty(id)
 
@@ -128,10 +128,10 @@ func (s *PaymentsLedgerSuite) TestInitiatePayment_Success() {
 	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
 }
 
-func (s *PaymentsLedgerSuite) TestInitiatePayment_Idempotent() {
+func (s *PaymentLifecycleSuite) TestInitiatePayment_Idempotent() {
 	ctx := s.GetContext()
 
-	id1, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id1, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 	s.NotEmpty(id1)
 
@@ -140,41 +140,41 @@ func (s *PaymentsLedgerSuite) TestInitiatePayment_Idempotent() {
 	// Since InitiatePaymentParams has no explicit IdempotencyKey field, the
 	// service-level idempotency (duplicate key constraint) may not apply here
 	// but we verify no error is returned.
-	id2, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id2, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 	s.NotEmpty(id2)
 }
 
-func (s *PaymentsLedgerSuite) TestInitiatePayment_ValidationErrors() {
+func (s *PaymentLifecycleSuite) TestInitiatePayment_ValidationErrors() {
 	ctx := s.GetContext()
 
 	tests := []struct {
 		name   string
-		mutate func(*ledger.InitiatePaymentParams)
+		mutate func(*payments.InitiatePaymentParams)
 	}{
 		{
 			name:   "missing DestinationType",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.DestinationType = "" },
+			mutate: func(p *payments.InitiatePaymentParams) { p.DestinationType = "" },
 		},
 		{
 			name:   "missing DestinationID",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.DestinationID = "" },
+			mutate: func(p *payments.InitiatePaymentParams) { p.DestinationID = "" },
 		},
 		{
 			name:   "zero Amount",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.Amount = decimal.Zero },
+			mutate: func(p *payments.InitiatePaymentParams) { p.Amount = decimal.Zero },
 		},
 		{
 			name:   "negative Amount",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.Amount = decimal.NewFromFloat(-5) },
+			mutate: func(p *payments.InitiatePaymentParams) { p.Amount = decimal.NewFromFloat(-5) },
 		},
 		{
 			name:   "missing Currency",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.Currency = "" },
+			mutate: func(p *payments.InitiatePaymentParams) { p.Currency = "" },
 		},
 		{
 			name:   "missing Gateway",
-			mutate: func(p *ledger.InitiatePaymentParams) { p.Gateway = "" },
+			mutate: func(p *payments.InitiatePaymentParams) { p.Gateway = "" },
 		},
 	}
 
@@ -182,7 +182,7 @@ func (s *PaymentsLedgerSuite) TestInitiatePayment_ValidationErrors() {
 		s.Run(tc.name, func() {
 			p := s.authParams()
 			tc.mutate(&p)
-			_, err := s.ledger.InitiatePayment(ctx, p)
+			_, err := s.lifecycle.InitiatePayment(ctx, p)
 			s.Error(err, "expected validation error for: %s", tc.name)
 		})
 	}
@@ -190,12 +190,12 @@ func (s *PaymentsLedgerSuite) TestInitiatePayment_ValidationErrors() {
 
 // ── ConfirmGatewayPayment ────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_Success() {
+func (s *PaymentLifecycleSuite) TestConfirmGatewayPayment_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 
-	err = s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_001")
+	err = s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_001")
 	s.NoError(err)
 
 	payment, err := s.GetStores().PaymentRepo.Get(ctx, id)
@@ -204,9 +204,9 @@ func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_Success() {
 	s.Require().NotNil(payment.PaymentGateway)
 }
 
-func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_MissingParams() {
+func (s *PaymentLifecycleSuite) TestConfirmGatewayPayment_MissingParams() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 
 	tests := []struct {
@@ -220,34 +220,34 @@ func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_MissingParams() {
 
 	for _, tc := range tests {
 		s.Run(tc.name, func() {
-			err := s.ledger.ConfirmGatewayPayment(ctx, tc.flexpricePaymentID, tc.gatewayPaymentID)
+			err := s.lifecycle.ConfirmGatewayPayment(ctx, tc.flexpricePaymentID, tc.gatewayPaymentID)
 			s.Error(err)
 		})
 	}
 }
 
-func (s *PaymentsLedgerSuite) TestConfirmGatewayPayment_RejectsNonInitiatedPayment() {
+func (s *PaymentLifecycleSuite) TestConfirmGatewayPayment_RejectsNonInitiatedPayment() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 
 	// Confirm once: INITIATED → PENDING
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_dup"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_dup"))
 
 	// Confirming again on a PENDING payment must be rejected
-	err = s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_dup2")
+	err = s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_dup2")
 	s.Error(err, "expected error when confirming a non-INITIATED payment")
 }
 
 // ── RecordPaymentSuccess ─────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_Success() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentSuccess_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_002"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_002"))
 
-	err = s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	err = s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_002",
 		SucceededAt:        time.Now().UTC(),
@@ -259,39 +259,39 @@ func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_Success() {
 	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
 }
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_Idempotent() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentSuccess_Idempotent() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_003"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_003"))
 
-	successParams := ledger.RecordPaymentSuccessParams{
+	successParams := payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_003",
 		SucceededAt:        time.Now().UTC(),
 	}
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, successParams))
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, successParams))
 	// Second call — already SUCCEEDED, must return nil.
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, successParams))
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, successParams))
 }
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_TerminalStateError() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentSuccess_TerminalStateError() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_004"))
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_004"))
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_004",
 	}))
 	// Void it so it's in a non-SUCCEEDED terminal state.
-	s.NoError(s.ledger.RecordPaymentVoided(ctx, ledger.RecordPaymentVoidedParams{
+	s.NoError(s.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_004",
 	}))
 
 	// Now attempting to mark it succeeded should fail.
-	err = s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	err = s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_004",
 	})
@@ -300,13 +300,13 @@ func (s *PaymentsLedgerSuite) TestRecordPaymentSuccess_TerminalStateError() {
 
 // ── RecordPaymentFailure ─────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentFailure_Success() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentFailure_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_005"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_005"))
 
-	err = s.ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
+	err = s.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_005",
 		ErrorMessage:       "card declined",
@@ -319,35 +319,35 @@ func (s *PaymentsLedgerSuite) TestRecordPaymentFailure_Success() {
 	s.Equal(types.PaymentStatusFailed, payment.PaymentStatus)
 }
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentFailure_Idempotent() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentFailure_Idempotent() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_006"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_006"))
 
-	failParams := ledger.RecordPaymentFailureParams{
+	failParams := payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_006",
 		ErrorMessage:       "insufficient funds",
 	}
-	s.NoError(s.ledger.RecordPaymentFailure(ctx, failParams))
+	s.NoError(s.lifecycle.RecordPaymentFailure(ctx, failParams))
 	// Second call — already FAILED, must return nil.
-	s.NoError(s.ledger.RecordPaymentFailure(ctx, failParams))
+	s.NoError(s.lifecycle.RecordPaymentFailure(ctx, failParams))
 }
 
 // ── RecordPaymentVoided ──────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentVoided_Success() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentVoided_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_007"))
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_007"))
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_007",
 	}))
 
-	err = s.ledger.RecordPaymentVoided(ctx, ledger.RecordPaymentVoidedParams{
+	err = s.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_007",
 		VoidedAt:           time.Now().UTC(),
@@ -361,17 +361,17 @@ func (s *PaymentsLedgerSuite) TestRecordPaymentVoided_Success() {
 
 // ── RecordPaymentRefunded ────────────────────────────────────────────────────
 
-func (s *PaymentsLedgerSuite) TestRecordPaymentRefunded_Success() {
+func (s *PaymentLifecycleSuite) TestRecordPaymentRefunded_Success() {
 	ctx := s.GetContext()
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_pay_008"))
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_008"))
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_008",
 	}))
 
-	err = s.ledger.RecordPaymentRefunded(ctx, ledger.RecordPaymentRefundedParams{
+	err = s.lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_pay_008",
 		RefundedAt:         time.Now().UTC(),
@@ -387,11 +387,11 @@ func (s *PaymentsLedgerSuite) TestRecordPaymentRefunded_Success() {
 
 // TestFullLifecycle_AUTH exercises the complete AUTH token flow:
 // INITIATED → PENDING → SUCCEEDED → VOIDED
-func (s *PaymentsLedgerSuite) TestFullLifecycle_AUTH() {
+func (s *PaymentLifecycleSuite) TestFullLifecycle_AUTH() {
 	ctx := s.GetContext()
 
 	// Step 1: Initiate
-	id, err := s.ledger.InitiatePayment(ctx, s.authParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
 	s.NoError(err)
 	s.NotEmpty(id)
 
@@ -400,13 +400,13 @@ func (s *PaymentsLedgerSuite) TestFullLifecycle_AUTH() {
 	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
 
 	// Step 2: Confirm (INITIATED → PENDING)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_auth_001"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_auth_001"))
 	payment, err = s.GetStores().PaymentRepo.Get(ctx, id)
 	s.NoError(err)
 	s.Equal(types.PaymentStatusPending, payment.PaymentStatus)
 
 	// Step 3: Succeed (PENDING → SUCCEEDED)
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_auth_001",
 		SucceededAt:        time.Now().UTC(),
@@ -416,7 +416,7 @@ func (s *PaymentsLedgerSuite) TestFullLifecycle_AUTH() {
 	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
 
 	// Step 4: Void (SUCCEEDED → VOIDED)
-	s.NoError(s.ledger.RecordPaymentVoided(ctx, ledger.RecordPaymentVoidedParams{
+	s.NoError(s.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_auth_001",
 		VoidedAt:           time.Now().UTC(),
@@ -428,11 +428,11 @@ func (s *PaymentsLedgerSuite) TestFullLifecycle_AUTH() {
 
 // TestFullLifecycle_Invoice exercises the complete invoice payment flow:
 // INITIATED → PENDING → SUCCEEDED (with invoice reconciliation)
-func (s *PaymentsLedgerSuite) TestFullLifecycle_Invoice() {
+func (s *PaymentLifecycleSuite) TestFullLifecycle_Invoice() {
 	ctx := s.GetContext()
 
 	// Step 1: Initiate
-	id, err := s.ledger.InitiatePayment(ctx, s.invoiceParams())
+	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
 	s.NoError(err)
 	s.NotEmpty(id)
 
@@ -442,13 +442,13 @@ func (s *PaymentsLedgerSuite) TestFullLifecycle_Invoice() {
 	s.Equal(types.PaymentDestinationTypeInvoice, payment.DestinationType)
 
 	// Step 2: Confirm (INITIATED → PENDING)
-	s.NoError(s.ledger.ConfirmGatewayPayment(ctx, id, "gw_inv_001"))
+	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_inv_001"))
 	payment, err = s.GetStores().PaymentRepo.Get(ctx, id)
 	s.NoError(err)
 	s.Equal(types.PaymentStatusPending, payment.PaymentStatus)
 
 	// Step 3: Succeed (PENDING → SUCCEEDED) — invoice should be reconciled
-	s.NoError(s.ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: id,
 		GatewayPaymentID:   "gw_inv_001",
 		SucceededAt:        time.Now().UTC(),

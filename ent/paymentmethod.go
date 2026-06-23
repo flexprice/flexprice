@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentMethod is the model entity for the PaymentMethod schema.
@@ -35,13 +36,13 @@ type PaymentMethod struct {
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID string `json:"customer_id,omitempty"`
 	// Type holds the value of the "type" field.
-	Type string `json:"type,omitempty"`
+	Type types.PaymentMethodType `json:"type,omitempty"`
 	// Gateway holds the value of the "gateway" field.
-	Gateway string `json:"gateway,omitempty"`
+	Gateway types.PaymentGatewayType `json:"gateway,omitempty"`
 	// GatewayMethodID holds the value of the "gateway_method_id" field.
 	GatewayMethodID string `json:"gateway_method_id,omitempty"`
 	// PaymentMethodStatus holds the value of the "payment_method_status" field.
-	PaymentMethodStatus string `json:"payment_method_status,omitempty"`
+	PaymentMethodStatus types.PaymentMethodStatus `json:"payment_method_status,omitempty"`
 	// IsDefault holds the value of the "is_default" field.
 	IsDefault bool `json:"is_default,omitempty"`
 	// MethodDetails holds the value of the "method_details" field.
@@ -135,13 +136,13 @@ func (pm *PaymentMethod) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				pm.Type = value.String
+				pm.Type = types.PaymentMethodType(value.String)
 			}
 		case paymentmethod.FieldGateway:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway", values[i])
 			} else if value.Valid {
-				pm.Gateway = value.String
+				pm.Gateway = types.PaymentGatewayType(value.String)
 			}
 		case paymentmethod.FieldGatewayMethodID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -153,7 +154,7 @@ func (pm *PaymentMethod) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_method_status", values[i])
 			} else if value.Valid {
-				pm.PaymentMethodStatus = value.String
+				pm.PaymentMethodStatus = types.PaymentMethodStatus(value.String)
 			}
 		case paymentmethod.FieldIsDefault:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -230,16 +231,16 @@ func (pm *PaymentMethod) String() string {
 	builder.WriteString(pm.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(pm.Type)
+	builder.WriteString(fmt.Sprintf("%v", pm.Type))
 	builder.WriteString(", ")
 	builder.WriteString("gateway=")
-	builder.WriteString(pm.Gateway)
+	builder.WriteString(fmt.Sprintf("%v", pm.Gateway))
 	builder.WriteString(", ")
 	builder.WriteString("gateway_method_id=")
 	builder.WriteString(pm.GatewayMethodID)
 	builder.WriteString(", ")
 	builder.WriteString("payment_method_status=")
-	builder.WriteString(pm.PaymentMethodStatus)
+	builder.WriteString(fmt.Sprintf("%v", pm.PaymentMethodStatus))
 	builder.WriteString(", ")
 	builder.WriteString("is_default=")
 	builder.WriteString(fmt.Sprintf("%v", pm.IsDefault))

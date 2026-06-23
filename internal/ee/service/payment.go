@@ -42,7 +42,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 
 	allowedDestinations := []types.PaymentDestinationType{
 		types.PaymentDestinationTypeInvoice,
-		types.PaymentDestinationTypeAuth,
+		types.PaymentDestinationTypeCustomer,
 	}
 	if !lo.Contains(allowedDestinations, p.DestinationType) {
 		return nil, ierr.NewError("invalid destination type").

@@ -4,6 +4,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentMethod holds the schema definition for the PaymentMethod entity.
@@ -36,11 +37,13 @@ func (PaymentMethod) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
+			GoType(types.PaymentMethodType("")).
 			NotEmpty(),
 		field.String("gateway").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
+			GoType(types.PaymentGatewayType("")).
 			NotEmpty(),
 		field.String("gateway_method_id").
 			SchemaType(map[string]string{
@@ -51,7 +54,8 @@ func (PaymentMethod) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default("ACTIVE"),
+			GoType(types.PaymentMethodStatus("")).
+			Default(string(types.PaymentMethodStatusActive)),
 		field.Bool("is_default").
 			Default(false),
 		field.JSON("method_details", map[string]interface{}{}).

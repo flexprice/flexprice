@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -105,13 +106,15 @@ func CustomerID(v string) predicate.PaymentMethod {
 }
 
 // Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
-func Type(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldType, v))
+func Type(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldType, vc))
 }
 
 // Gateway applies equality check predicate on the "gateway" field. It's identical to GatewayEQ.
-func Gateway(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldGateway, v))
+func Gateway(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldGateway, vc))
 }
 
 // GatewayMethodID applies equality check predicate on the "gateway_method_id" field. It's identical to GatewayMethodIDEQ.
@@ -120,8 +123,9 @@ func GatewayMethodID(v string) predicate.PaymentMethod {
 }
 
 // PaymentMethodStatus applies equality check predicate on the "payment_method_status" field. It's identical to PaymentMethodStatusEQ.
-func PaymentMethodStatus(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldPaymentMethodStatus, v))
+func PaymentMethodStatus(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldPaymentMethodStatus, vc))
 }
 
 // IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
@@ -630,133 +634,171 @@ func CustomerIDContainsFold(v string) predicate.PaymentMethod {
 }
 
 // TypeEQ applies the EQ predicate on the "type" field.
-func TypeEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldType, v))
+func TypeEQ(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldType, vc))
 }
 
 // TypeNEQ applies the NEQ predicate on the "type" field.
-func TypeNEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNEQ(FieldType, v))
+func TypeNEQ(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldNEQ(FieldType, vc))
 }
 
 // TypeIn applies the In predicate on the "type" field.
-func TypeIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldIn(FieldType, vs...))
+func TypeIn(vs ...types.PaymentMethodType) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldIn(FieldType, v...))
 }
 
 // TypeNotIn applies the NotIn predicate on the "type" field.
-func TypeNotIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNotIn(FieldType, vs...))
+func TypeNotIn(vs ...types.PaymentMethodType) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldNotIn(FieldType, v...))
 }
 
 // TypeGT applies the GT predicate on the "type" field.
-func TypeGT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGT(FieldType, v))
+func TypeGT(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGT(FieldType, vc))
 }
 
 // TypeGTE applies the GTE predicate on the "type" field.
-func TypeGTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGTE(FieldType, v))
+func TypeGTE(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGTE(FieldType, vc))
 }
 
 // TypeLT applies the LT predicate on the "type" field.
-func TypeLT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLT(FieldType, v))
+func TypeLT(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLT(FieldType, vc))
 }
 
 // TypeLTE applies the LTE predicate on the "type" field.
-func TypeLTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLTE(FieldType, v))
+func TypeLTE(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLTE(FieldType, vc))
 }
 
 // TypeContains applies the Contains predicate on the "type" field.
-func TypeContains(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContains(FieldType, v))
+func TypeContains(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContains(FieldType, vc))
 }
 
 // TypeHasPrefix applies the HasPrefix predicate on the "type" field.
-func TypeHasPrefix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldType, v))
+func TypeHasPrefix(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldType, vc))
 }
 
 // TypeHasSuffix applies the HasSuffix predicate on the "type" field.
-func TypeHasSuffix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldType, v))
+func TypeHasSuffix(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldType, vc))
 }
 
 // TypeEqualFold applies the EqualFold predicate on the "type" field.
-func TypeEqualFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEqualFold(FieldType, v))
+func TypeEqualFold(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEqualFold(FieldType, vc))
 }
 
 // TypeContainsFold applies the ContainsFold predicate on the "type" field.
-func TypeContainsFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContainsFold(FieldType, v))
+func TypeContainsFold(v types.PaymentMethodType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContainsFold(FieldType, vc))
 }
 
 // GatewayEQ applies the EQ predicate on the "gateway" field.
-func GatewayEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldGateway, v))
+func GatewayEQ(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldGateway, vc))
 }
 
 // GatewayNEQ applies the NEQ predicate on the "gateway" field.
-func GatewayNEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNEQ(FieldGateway, v))
+func GatewayNEQ(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldNEQ(FieldGateway, vc))
 }
 
 // GatewayIn applies the In predicate on the "gateway" field.
-func GatewayIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldIn(FieldGateway, vs...))
+func GatewayIn(vs ...types.PaymentGatewayType) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldIn(FieldGateway, v...))
 }
 
 // GatewayNotIn applies the NotIn predicate on the "gateway" field.
-func GatewayNotIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNotIn(FieldGateway, vs...))
+func GatewayNotIn(vs ...types.PaymentGatewayType) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldNotIn(FieldGateway, v...))
 }
 
 // GatewayGT applies the GT predicate on the "gateway" field.
-func GatewayGT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGT(FieldGateway, v))
+func GatewayGT(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGT(FieldGateway, vc))
 }
 
 // GatewayGTE applies the GTE predicate on the "gateway" field.
-func GatewayGTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGTE(FieldGateway, v))
+func GatewayGTE(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGTE(FieldGateway, vc))
 }
 
 // GatewayLT applies the LT predicate on the "gateway" field.
-func GatewayLT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLT(FieldGateway, v))
+func GatewayLT(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLT(FieldGateway, vc))
 }
 
 // GatewayLTE applies the LTE predicate on the "gateway" field.
-func GatewayLTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLTE(FieldGateway, v))
+func GatewayLTE(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLTE(FieldGateway, vc))
 }
 
 // GatewayContains applies the Contains predicate on the "gateway" field.
-func GatewayContains(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContains(FieldGateway, v))
+func GatewayContains(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContains(FieldGateway, vc))
 }
 
 // GatewayHasPrefix applies the HasPrefix predicate on the "gateway" field.
-func GatewayHasPrefix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldGateway, v))
+func GatewayHasPrefix(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldGateway, vc))
 }
 
 // GatewayHasSuffix applies the HasSuffix predicate on the "gateway" field.
-func GatewayHasSuffix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldGateway, v))
+func GatewayHasSuffix(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldGateway, vc))
 }
 
 // GatewayEqualFold applies the EqualFold predicate on the "gateway" field.
-func GatewayEqualFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEqualFold(FieldGateway, v))
+func GatewayEqualFold(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEqualFold(FieldGateway, vc))
 }
 
 // GatewayContainsFold applies the ContainsFold predicate on the "gateway" field.
-func GatewayContainsFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContainsFold(FieldGateway, v))
+func GatewayContainsFold(v types.PaymentGatewayType) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContainsFold(FieldGateway, vc))
 }
 
 // GatewayMethodIDEQ applies the EQ predicate on the "gateway_method_id" field.
@@ -825,68 +867,87 @@ func GatewayMethodIDContainsFold(v string) predicate.PaymentMethod {
 }
 
 // PaymentMethodStatusEQ applies the EQ predicate on the "payment_method_status" field.
-func PaymentMethodStatusEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEQ(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusEQ(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEQ(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusNEQ applies the NEQ predicate on the "payment_method_status" field.
-func PaymentMethodStatusNEQ(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNEQ(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusNEQ(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldNEQ(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusIn applies the In predicate on the "payment_method_status" field.
-func PaymentMethodStatusIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldIn(FieldPaymentMethodStatus, vs...))
+func PaymentMethodStatusIn(vs ...types.PaymentMethodStatus) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldIn(FieldPaymentMethodStatus, v...))
 }
 
 // PaymentMethodStatusNotIn applies the NotIn predicate on the "payment_method_status" field.
-func PaymentMethodStatusNotIn(vs ...string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldNotIn(FieldPaymentMethodStatus, vs...))
+func PaymentMethodStatusNotIn(vs ...types.PaymentMethodStatus) predicate.PaymentMethod {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.PaymentMethod(sql.FieldNotIn(FieldPaymentMethodStatus, v...))
 }
 
 // PaymentMethodStatusGT applies the GT predicate on the "payment_method_status" field.
-func PaymentMethodStatusGT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGT(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusGT(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGT(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusGTE applies the GTE predicate on the "payment_method_status" field.
-func PaymentMethodStatusGTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldGTE(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusGTE(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldGTE(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusLT applies the LT predicate on the "payment_method_status" field.
-func PaymentMethodStatusLT(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLT(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusLT(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLT(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusLTE applies the LTE predicate on the "payment_method_status" field.
-func PaymentMethodStatusLTE(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldLTE(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusLTE(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldLTE(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusContains applies the Contains predicate on the "payment_method_status" field.
-func PaymentMethodStatusContains(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContains(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusContains(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContains(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusHasPrefix applies the HasPrefix predicate on the "payment_method_status" field.
-func PaymentMethodStatusHasPrefix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusHasPrefix(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasPrefix(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusHasSuffix applies the HasSuffix predicate on the "payment_method_status" field.
-func PaymentMethodStatusHasSuffix(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusHasSuffix(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldHasSuffix(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusEqualFold applies the EqualFold predicate on the "payment_method_status" field.
-func PaymentMethodStatusEqualFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldEqualFold(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusEqualFold(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldEqualFold(FieldPaymentMethodStatus, vc))
 }
 
 // PaymentMethodStatusContainsFold applies the ContainsFold predicate on the "payment_method_status" field.
-func PaymentMethodStatusContainsFold(v string) predicate.PaymentMethod {
-	return predicate.PaymentMethod(sql.FieldContainsFold(FieldPaymentMethodStatus, v))
+func PaymentMethodStatusContainsFold(v types.PaymentMethodStatus) predicate.PaymentMethod {
+	vc := string(v)
+	return predicate.PaymentMethod(sql.FieldContainsFold(FieldPaymentMethodStatus, vc))
 }
 
 // IsDefaultEQ applies the EQ predicate on the "is_default" field.

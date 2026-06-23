@@ -474,12 +474,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -494,12 +494,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -7760,8 +7760,8 @@ type (
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, User, Wallet, WalletTransaction, WorkflowExecution []ent.Hook
 	}
@@ -7771,8 +7771,8 @@ type (
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
 		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, User, Wallet, WalletTransaction, WorkflowExecution []ent.Interceptor
 	}

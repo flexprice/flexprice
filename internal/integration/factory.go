@@ -21,7 +21,7 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
-	"github.com/flexprice/flexprice/internal/integration/ledger"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
@@ -69,7 +69,7 @@ type Factory struct {
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
-	ledger         *ledger.PaymentsLedger
+	lifecycle       *payments.PaymentLifecycle
 }
 
 // NewFactory creates a new integration factory
@@ -114,7 +114,7 @@ func NewFactory(
 func (f *Factory) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
 	f.paymentService = paymentService
 	f.invoiceService = invoiceService
-	f.ledger = ledger.NewPaymentsLedger(paymentService, invoiceService, f.logger)
+	f.lifecycle = payments.NewPaymentLifecycle(paymentService, invoiceService, f.logger)
 }
 
 // GetStripeIntegration returns a complete Stripe integration setup
@@ -577,7 +577,7 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		paymentSvc,
 		f.entityIntegrationMappingRepo,
 		f.paymentMethodRepo,
-		f.ledger,
+		f.lifecycle,
 		f.logger,
 	)
 
@@ -587,7 +587,7 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		PaymentSvc:        paymentSvc,
 		InvoiceSyncSvc:    invoiceSyncSvc,
 		WebhookHandler:    webhookHandler,
-		Ledger:            f.ledger,
+		Lifecycle:         f.lifecycle,
 		PaymentMethodRepo: f.paymentMethodRepo,
 		Logger:            f.logger,
 	}, nil
@@ -833,7 +833,7 @@ type MoyasarIntegration struct {
 	PaymentSvc        *moyasar.PaymentService
 	InvoiceSyncSvc    *moyasar.InvoiceSyncService
 	WebhookHandler    *moyasarwebhook.Handler
-	Ledger            *ledger.PaymentsLedger
+	Lifecycle            *payments.PaymentLifecycle
 	PaymentMethodRepo paymentmethod.Repository
 	Logger            *logger.Logger
 }
@@ -846,18 +846,18 @@ func (m *MoyasarIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID
 // If void fails, it falls back to a full refund.
 // Returns (voided, refunded, err).
 func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) (voided bool, refunded bool, err error) {
-	if m.Ledger == nil {
-		return false, false, ierr.NewError("ledger not initialised").Mark(ierr.ErrInternal)
+	if m.Lifecycle == nil {
+		return false, false, ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
 	// Try void first
 	if _, voidErr := m.Client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
-		if ledgerErr := m.Ledger.RecordPaymentVoided(ctx, ledger.RecordPaymentVoidedParams{
+		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
 			VoidedAt:           time.Now().UTC(),
-		}); ledgerErr != nil {
-			return false, false, ledgerErr
+		}); lifecycleErr != nil {
+			return false, false, lifecycleErr
 		}
 		return true, false, nil
 	} else {
@@ -873,12 +873,12 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	if _, refundErr := m.Client.RefundPayment(ctx, gatewayPaymentID, 0); refundErr != nil {
 		return false, false, refundErr
 	}
-	if ledgerErr := m.Ledger.RecordPaymentRefunded(ctx, ledger.RecordPaymentRefundedParams{
+	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
 		RefundedAt:         time.Now().UTC(),
-	}); ledgerErr != nil {
-		return false, false, ledgerErr
+	}); lifecycleErr != nil {
+		return false, false, lifecycleErr
 	}
 	return false, true, nil
 }
@@ -887,12 +887,12 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 // Returns the flexprice_payment_id (anchor for webhook reconciliation) and the
 // Moyasar publishable key (needed by Moyasar.js on the frontend).
 func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerID string) (flexpricePaymentID string, publishableKey string, err error) {
-	if m.Ledger == nil {
-		return "", "", ierr.NewError("ledger not initialised").Mark(ierr.ErrInternal)
+	if m.Lifecycle == nil {
+		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
-	flexpricePaymentID, err = m.Ledger.InitiatePayment(ctx, ledger.InitiatePaymentParams{
-		DestinationType:   types.PaymentDestinationTypeAuth,
+	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
 		DestinationID:     customerID,
 		PaymentMethodType: types.PaymentMethodTypeCard,
 		Gateway:           string(types.SecretProviderMoyasar),
@@ -915,8 +915,8 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 // Returns (true, nil) if the charge was initiated, (false, nil) if no active token exists
 // (caller should fall through to invoice-link flow), or (false, err) on failure.
 func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoiceID, customerID string, amount decimal.Decimal, currency, moyasarInvoiceID string) (charged bool, err error) {
-	if m.Ledger == nil || m.PaymentMethodRepo == nil {
-		return false, ierr.NewError("ledger or payment method repo not initialised").Mark(ierr.ErrInternal)
+	if m.Lifecycle == nil || m.PaymentMethodRepo == nil {
+		return false, ierr.NewError("lifecycle or payment method repo not initialised").Mark(ierr.ErrInternal)
 	}
 
 	gateway := string(types.SecretProviderMoyasar)
@@ -931,7 +931,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		return false, nil // Token exists but not active — fall through
 	}
 
-	flexpricePaymentID, err := m.Ledger.InitiatePayment(ctx, ledger.InitiatePaymentParams{
+	flexpricePaymentID, err := m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     invoiceID,
 		PaymentMethodType: types.PaymentMethodTypeCard,
@@ -954,7 +954,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		flexpricePaymentID,
 	)
 	if err != nil {
-		if failErr := m.Ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
+		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   "",
 			FailedAt:           time.Now().UTC(),
@@ -969,7 +969,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 	}
 
 	// Transition to PENDING now that Moyasar accepted the charge
-	if err := m.Ledger.ConfirmGatewayPayment(ctx, flexpricePaymentID, chargeResp.ID); err != nil {
+	if err := m.Lifecycle.ConfirmGatewayPayment(ctx, flexpricePaymentID, chargeResp.ID); err != nil {
 		return false, err
 	}
 

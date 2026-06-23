@@ -38149,10 +38149,10 @@ type PaymentMethodMutation struct {
 	updated_by            *string
 	environment_id        *string
 	customer_id           *string
-	_type                 *string
-	gateway               *string
+	_type                 *types.PaymentMethodType
+	gateway               *types.PaymentGatewayType
 	gateway_method_id     *string
-	payment_method_status *string
+	payment_method_status *types.PaymentMethodStatus
 	is_default            *bool
 	method_details        *map[string]interface{}
 	clearedFields         map[string]struct{}
@@ -38593,12 +38593,12 @@ func (m *PaymentMethodMutation) ResetCustomerID() {
 }
 
 // SetType sets the "type" field.
-func (m *PaymentMethodMutation) SetType(s string) {
-	m._type = &s
+func (m *PaymentMethodMutation) SetType(tmt types.PaymentMethodType) {
+	m._type = &tmt
 }
 
 // GetType returns the value of the "type" field in the mutation.
-func (m *PaymentMethodMutation) GetType() (r string, exists bool) {
+func (m *PaymentMethodMutation) GetType() (r types.PaymentMethodType, exists bool) {
 	v := m._type
 	if v == nil {
 		return
@@ -38609,7 +38609,7 @@ func (m *PaymentMethodMutation) GetType() (r string, exists bool) {
 // OldType returns the old "type" field's value of the PaymentMethod entity.
 // If the PaymentMethod object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PaymentMethodMutation) OldType(ctx context.Context) (v string, err error) {
+func (m *PaymentMethodMutation) OldType(ctx context.Context) (v types.PaymentMethodType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldType is only allowed on UpdateOne operations")
 	}
@@ -38629,12 +38629,12 @@ func (m *PaymentMethodMutation) ResetType() {
 }
 
 // SetGateway sets the "gateway" field.
-func (m *PaymentMethodMutation) SetGateway(s string) {
-	m.gateway = &s
+func (m *PaymentMethodMutation) SetGateway(tgt types.PaymentGatewayType) {
+	m.gateway = &tgt
 }
 
 // Gateway returns the value of the "gateway" field in the mutation.
-func (m *PaymentMethodMutation) Gateway() (r string, exists bool) {
+func (m *PaymentMethodMutation) Gateway() (r types.PaymentGatewayType, exists bool) {
 	v := m.gateway
 	if v == nil {
 		return
@@ -38645,7 +38645,7 @@ func (m *PaymentMethodMutation) Gateway() (r string, exists bool) {
 // OldGateway returns the old "gateway" field's value of the PaymentMethod entity.
 // If the PaymentMethod object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PaymentMethodMutation) OldGateway(ctx context.Context) (v string, err error) {
+func (m *PaymentMethodMutation) OldGateway(ctx context.Context) (v types.PaymentGatewayType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldGateway is only allowed on UpdateOne operations")
 	}
@@ -38701,12 +38701,12 @@ func (m *PaymentMethodMutation) ResetGatewayMethodID() {
 }
 
 // SetPaymentMethodStatus sets the "payment_method_status" field.
-func (m *PaymentMethodMutation) SetPaymentMethodStatus(s string) {
-	m.payment_method_status = &s
+func (m *PaymentMethodMutation) SetPaymentMethodStatus(tms types.PaymentMethodStatus) {
+	m.payment_method_status = &tms
 }
 
 // PaymentMethodStatus returns the value of the "payment_method_status" field in the mutation.
-func (m *PaymentMethodMutation) PaymentMethodStatus() (r string, exists bool) {
+func (m *PaymentMethodMutation) PaymentMethodStatus() (r types.PaymentMethodStatus, exists bool) {
 	v := m.payment_method_status
 	if v == nil {
 		return
@@ -38717,7 +38717,7 @@ func (m *PaymentMethodMutation) PaymentMethodStatus() (r string, exists bool) {
 // OldPaymentMethodStatus returns the old "payment_method_status" field's value of the PaymentMethod entity.
 // If the PaymentMethod object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PaymentMethodMutation) OldPaymentMethodStatus(ctx context.Context) (v string, err error) {
+func (m *PaymentMethodMutation) OldPaymentMethodStatus(ctx context.Context) (v types.PaymentMethodStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPaymentMethodStatus is only allowed on UpdateOne operations")
 	}
@@ -39037,14 +39037,14 @@ func (m *PaymentMethodMutation) SetField(name string, value ent.Value) error {
 		m.SetCustomerID(v)
 		return nil
 	case paymentmethod.FieldType:
-		v, ok := value.(string)
+		v, ok := value.(types.PaymentMethodType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
 		return nil
 	case paymentmethod.FieldGateway:
-		v, ok := value.(string)
+		v, ok := value.(types.PaymentGatewayType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39058,7 +39058,7 @@ func (m *PaymentMethodMutation) SetField(name string, value ent.Value) error {
 		m.SetGatewayMethodID(v)
 		return nil
 	case paymentmethod.FieldPaymentMethodStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.PaymentMethodStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

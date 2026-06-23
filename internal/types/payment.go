@@ -93,9 +93,9 @@ type PaymentDestinationType string
 
 const (
 	PaymentDestinationTypeInvoice PaymentDestinationType = "INVOICE"
-	// PaymentDestinationTypeAuth is used when the payment's purpose is to tokenize
-	// a payment method at the gateway (auth charge that is voided after token is saved).
-	PaymentDestinationTypeAuth PaymentDestinationType = "AUTH"
+	// PaymentDestinationTypeCustomer is used when the payment's purpose is to tokenize
+	// a payment method for a customer (auth charge that is voided after the token is saved).
+	PaymentDestinationTypeCustomer PaymentDestinationType = "CUSTOMER"
 )
 
 func (s PaymentDestinationType) String() string {
@@ -105,7 +105,7 @@ func (s PaymentDestinationType) String() string {
 func (s PaymentDestinationType) Validate() error {
 	allowed := []PaymentDestinationType{
 		PaymentDestinationTypeInvoice,
-		PaymentDestinationTypeAuth,
+		PaymentDestinationTypeCustomer,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment destination type").

@@ -1329,7 +1329,7 @@ func init() {
 	// paymentmethodDescPaymentMethodStatus is the schema descriptor for payment_method_status field.
 	paymentmethodDescPaymentMethodStatus := paymentmethodFields[5].Descriptor()
 	// paymentmethod.DefaultPaymentMethodStatus holds the default value on creation for the payment_method_status field.
-	paymentmethod.DefaultPaymentMethodStatus = paymentmethodDescPaymentMethodStatus.Default.(string)
+	paymentmethod.DefaultPaymentMethodStatus = types.PaymentMethodStatus(paymentmethodDescPaymentMethodStatus.Default.(string))
 	// paymentmethodDescIsDefault is the schema descriptor for is_default field.
 	paymentmethodDescIsDefault := paymentmethodFields[6].Descriptor()
 	// paymentmethod.DefaultIsDefault holds the default value on creation for the is_default field.

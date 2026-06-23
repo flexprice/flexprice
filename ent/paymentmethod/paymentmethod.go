@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -96,7 +97,7 @@ var (
 	// GatewayMethodIDValidator is a validator for the "gateway_method_id" field. It is called by the builders before save.
 	GatewayMethodIDValidator func(string) error
 	// DefaultPaymentMethodStatus holds the default value on creation for the "payment_method_status" field.
-	DefaultPaymentMethodStatus string
+	DefaultPaymentMethodStatus types.PaymentMethodStatus
 	// DefaultIsDefault holds the default value on creation for the "is_default" field.
 	DefaultIsDefault bool
 )

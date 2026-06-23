@@ -1,4 +1,4 @@
-package ledger
+package payments
 
 import (
 	"context"
@@ -13,22 +13,22 @@ import (
 	"github.com/samber/lo"
 )
 
-// PaymentsLedger maintains cross-system traceability for Flexprice-initiated payments.
+// PaymentLifecycle maintains cross-system traceability for Flexprice-initiated payments.
 // It creates an internal payment record before any gateway call, threads its ID through
 // the gateway's metadata, and records the outcome when the webhook resolves it back.
-type PaymentsLedger struct {
+type PaymentLifecycle struct {
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
 	logger         *logger.Logger
 }
 
-// NewPaymentsLedger returns a PaymentsLedger wired with the given payment and invoice services.
-func NewPaymentsLedger(
+// NewPaymentLifecycle returns a PaymentLifecycle wired with the given payment and invoice services.
+func NewPaymentLifecycle(
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 	logger *logger.Logger,
-) *PaymentsLedger {
-	return &PaymentsLedger{
+) *PaymentLifecycle {
+	return &PaymentLifecycle{
 		paymentService: paymentService,
 		invoiceService: invoiceService,
 		logger:         logger,
@@ -41,7 +41,7 @@ func NewPaymentsLedger(
 //
 // Idempotent: if a payment with the given IdempotencyKey already exists,
 // the existing ID is returned without creating a duplicate.
-func (l *PaymentsLedger) InitiatePayment(ctx context.Context, params InitiatePaymentParams) (string, error) {
+func (l *PaymentLifecycle) InitiatePayment(ctx context.Context, params InitiatePaymentParams) (string, error) {
 	l.logger.Info(ctx, "initiating payment",
 		"destination_type", params.DestinationType,
 		"destination_id", params.DestinationID,
@@ -97,7 +97,7 @@ func (l *PaymentsLedger) InitiatePayment(ctx context.Context, params InitiatePay
 // ConfirmGatewayPayment transitions the payment from INITIATED to PENDING.
 // Call this immediately after the gateway accepts the charge request and
 // returns a gateway_payment_id. This proves the charge is in-flight.
-func (l *PaymentsLedger) ConfirmGatewayPayment(ctx context.Context, flexpricePaymentID, gatewayPaymentID string) error {
+func (l *PaymentLifecycle) ConfirmGatewayPayment(ctx context.Context, flexpricePaymentID, gatewayPaymentID string) error {
 	l.logger.Info(ctx, "confirming gateway payment",
 		"flexprice_payment_id", flexpricePaymentID,
 		"gateway_payment_id", gatewayPaymentID,
@@ -159,7 +159,7 @@ func (l *PaymentsLedger) ConfirmGatewayPayment(ctx context.Context, flexpricePay
 // destination payments, reconciles the invoice. Called from the webhook handler.
 //
 // Idempotent: if the payment is already SUCCEEDED, logs and returns nil.
-func (l *PaymentsLedger) RecordPaymentSuccess(ctx context.Context, params RecordPaymentSuccessParams) error {
+func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params RecordPaymentSuccessParams) error {
 	l.logger.Info(ctx, "recording payment success",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
@@ -274,7 +274,7 @@ func (l *PaymentsLedger) RecordPaymentSuccess(ctx context.Context, params Record
 // webhook handler on payment_failed or equivalent gateway event.
 //
 // Idempotent: if the payment is already FAILED, logs and returns nil.
-func (l *PaymentsLedger) RecordPaymentFailure(ctx context.Context, params RecordPaymentFailureParams) error {
+func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params RecordPaymentFailureParams) error {
 	l.logger.Info(ctx, "recording payment failure",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
@@ -361,7 +361,7 @@ func (l *PaymentsLedger) RecordPaymentFailure(ctx context.Context, params Record
 // was reversed at the gateway after the token was saved.
 //
 // Idempotent: if the payment is already VOIDED, logs and returns nil.
-func (l *PaymentsLedger) RecordPaymentVoided(ctx context.Context, params RecordPaymentVoidedParams) error {
+func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params RecordPaymentVoidedParams) error {
 	l.logger.Info(ctx, "recording payment voided",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
@@ -441,7 +441,7 @@ func (l *PaymentsLedger) RecordPaymentVoided(ctx context.Context, params RecordP
 // was refunded at the gateway after the token was saved.
 //
 // Idempotent: if the payment is already REFUNDED, logs and returns nil.
-func (l *PaymentsLedger) RecordPaymentRefunded(ctx context.Context, params RecordPaymentRefundedParams) error {
+func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params RecordPaymentRefundedParams) error {
 	l.logger.Info(ctx, "recording payment refunded",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
@@ -522,7 +522,7 @@ func (l *PaymentsLedger) RecordPaymentRefunded(ctx context.Context, params Recor
 }
 
 // validateInitiateParams checks all required fields before creating a payment record.
-func (l *PaymentsLedger) validateInitiateParams(params InitiatePaymentParams) error {
+func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) error {
 	if err := params.DestinationType.Validate(); err != nil {
 		return ierr.NewError("invalid destination_type").Mark(ierr.ErrValidation)
 	}

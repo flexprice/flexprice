@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/integration"
-	"github.com/flexprice/flexprice/internal/integration/ledger"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -44,7 +44,7 @@ func (a *MoyasarAuthPaymentRefundActivities) ReconcilePendingAuthPaymentsActivit
 		return nil
 	}
 
-	destType := string(types.PaymentDestinationTypeAuth)
+	destType := string(types.PaymentDestinationTypeCustomer)
 	status := string(types.PaymentStatusPending)
 
 	paymentsResp, err := a.paymentService.ListPayments(ctx, &types.PaymentFilter{
@@ -82,7 +82,7 @@ func (a *MoyasarAuthPaymentRefundActivities) ReconcilePendingAuthPaymentsActivit
 	return nil
 }
 
-// reconcilePaymentStatus maps a Moyasar status to a ledger transition.
+// reconcilePaymentStatus maps a Moyasar status to a lifecycle transition.
 func (a *MoyasarAuthPaymentRefundActivities) reconcilePaymentStatus(
 	ctx context.Context,
 	moyasarIntegration *integration.MoyasarIntegration,
@@ -92,7 +92,7 @@ func (a *MoyasarAuthPaymentRefundActivities) reconcilePaymentStatus(
 ) {
 	switch statusResp.Status {
 	case string(moyasar.MoyasarPaymentStatusPaid), string(moyasar.MoyasarPaymentStatusCaptured):
-		if err := moyasarIntegration.Ledger.RecordPaymentSuccess(ctx, ledger.RecordPaymentSuccessParams{
+		if err := moyasarIntegration.Lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
 			SucceededAt:        time.Now().UTC(),
@@ -110,7 +110,7 @@ func (a *MoyasarAuthPaymentRefundActivities) reconcilePaymentStatus(
 		}
 
 	case string(moyasar.MoyasarPaymentStatusFailed):
-		if err := moyasarIntegration.Ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
+		if err := moyasarIntegration.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
 			FailedAt:           time.Now().UTC(),
@@ -138,7 +138,7 @@ func (a *MoyasarAuthPaymentRefundActivities) reconcilePaymentStatus(
 }
 
 // VoidOrRefundSucceededAuthPaymentsActivity fetches all SUCCEEDED AUTH payments and voids
-// or refunds each one via Moyasar, then records the outcome in the ledger.
+// or refunds each one via Moyasar, then records the outcome in the lifecycle.
 func (a *MoyasarAuthPaymentRefundActivities) VoidOrRefundSucceededAuthPaymentsActivity(ctx context.Context) error {
 	a.logger.Info(ctx, "starting VoidOrRefundSucceededAuthPaymentsActivity")
 
@@ -148,7 +148,7 @@ func (a *MoyasarAuthPaymentRefundActivities) VoidOrRefundSucceededAuthPaymentsAc
 		return nil
 	}
 
-	destType := string(types.PaymentDestinationTypeAuth)
+	destType := string(types.PaymentDestinationTypeCustomer)
 	status := string(types.PaymentStatusSucceeded)
 
 	paymentsResp, err := a.paymentService.ListPayments(ctx, &types.PaymentFilter{

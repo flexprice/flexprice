@@ -54,10 +54,10 @@ func (r *paymentMethodRepository) Create(ctx context.Context, pm *domainPaymentM
 	result, err := client.PaymentMethod.Create().
 		SetID(pm.ID).
 		SetCustomerID(pm.CustomerID).
-		SetType(string(pm.Type)).
+		SetType(pm.Type).
 		SetGateway(pm.Gateway).
 		SetGatewayMethodID(pm.GatewayMethodID).
-		SetPaymentMethodStatus(string(pm.PaymentMethodStatus)).
+		SetPaymentMethodStatus(pm.PaymentMethodStatus).
 		SetIsDefault(pm.IsDefault).
 		SetMethodDetails(pm.MethodDetails).
 		SetTenantID(pm.TenantID).
@@ -154,7 +154,7 @@ func (r *paymentMethodRepository) Update(ctx context.Context, pm *domainPaymentM
 			entpaymentmethod.TenantID(pm.TenantID),
 			entpaymentmethod.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetPaymentMethodStatus(string(pm.PaymentMethodStatus)).
+		SetPaymentMethodStatus(pm.PaymentMethodStatus).
 		SetIsDefault(pm.IsDefault).
 		SetMethodDetails(pm.MethodDetails).
 		SetStatus(string(pm.Status)).
@@ -310,11 +310,11 @@ func (r *paymentMethodRepository) GetDefaultForCustomer(ctx context.Context, cus
 	pm, err := client.PaymentMethod.Query().
 		Where(
 			entpaymentmethod.CustomerID(customerID),
-			entpaymentmethod.Gateway(gateway),
+			entpaymentmethod.Gateway(types.PaymentGatewayType(gateway)),
 			entpaymentmethod.TenantID(types.GetTenantID(ctx)),
 			entpaymentmethod.EnvironmentID(types.GetEnvironmentID(ctx)),
 			entpaymentmethod.Status(string(types.StatusPublished)),
-			entpaymentmethod.PaymentMethodStatus(string(types.PaymentMethodStatusActive)),
+			entpaymentmethod.PaymentMethodStatus(types.PaymentMethodStatusActive),
 		).
 		Order(ent.Desc(entpaymentmethod.FieldIsDefault), ent.Desc(entpaymentmethod.FieldCreatedAt)).
 		First(ctx)
@@ -398,16 +398,16 @@ func (o PaymentMethodQueryOptions) applyEntityFilters(_ context.Context, f *type
 		query = query.Where(entpaymentmethod.CustomerID(*f.CustomerID))
 	}
 	if f.Gateway != nil {
-		query = query.Where(entpaymentmethod.Gateway(*f.Gateway))
+		query = query.Where(entpaymentmethod.Gateway(types.PaymentGatewayType(*f.Gateway)))
 	}
 	if f.GatewayMethodID != nil {
 		query = query.Where(entpaymentmethod.GatewayMethodID(*f.GatewayMethodID))
 	}
 	if f.Type != nil {
-		query = query.Where(entpaymentmethod.Type(*f.Type))
+		query = query.Where(entpaymentmethod.Type(types.PaymentMethodType(*f.Type)))
 	}
 	if f.PaymentMethodStatus != nil {
-		query = query.Where(entpaymentmethod.PaymentMethodStatus(*f.PaymentMethodStatus))
+		query = query.Where(entpaymentmethod.PaymentMethodStatus(types.PaymentMethodStatus(*f.PaymentMethodStatus)))
 	}
 	if f.IsDefault != nil {
 		query = query.Where(entpaymentmethod.IsDefault(*f.IsDefault))

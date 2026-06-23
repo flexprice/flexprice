@@ -14,10 +14,10 @@ func FromEnt(e *ent.PaymentMethod) *PaymentMethod {
 	return &PaymentMethod{
 		ID:                  e.ID,
 		CustomerID:          e.CustomerID,
-		Type:                types.PaymentMethodType(e.Type),
+		Type:                e.Type,
 		Gateway:             e.Gateway,
 		GatewayMethodID:     e.GatewayMethodID,
-		PaymentMethodStatus: types.PaymentMethodStatus(e.PaymentMethodStatus),
+		PaymentMethodStatus: e.PaymentMethodStatus,
 		IsDefault:           e.IsDefault,
 		MethodDetails:       e.MethodDetails,
 		EnvironmentID:       e.EnvironmentID,

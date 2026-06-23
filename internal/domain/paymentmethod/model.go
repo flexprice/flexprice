@@ -13,7 +13,7 @@ type PaymentMethod struct {
 	// Type is the payment instrument type (CARD, ACH, etc.)
 	Type types.PaymentMethodType `json:"type"`
 	// Gateway is the payment provider that holds the token (moyasar, stripe, etc.)
-	Gateway string `json:"gateway"`
+	Gateway types.PaymentGatewayType `json:"gateway"`
 	// GatewayMethodID is the token or method identifier at the gateway (e.g. token_xxx in Moyasar)
 	GatewayMethodID string `json:"gateway_method_id"`
 	// PaymentMethodStatus indicates whether this method is usable

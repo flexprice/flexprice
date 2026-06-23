@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentMethodCreate is the builder for creating a PaymentMethod entity.
@@ -117,14 +118,14 @@ func (pmc *PaymentMethodCreate) SetCustomerID(s string) *PaymentMethodCreate {
 }
 
 // SetType sets the "type" field.
-func (pmc *PaymentMethodCreate) SetType(s string) *PaymentMethodCreate {
-	pmc.mutation.SetType(s)
+func (pmc *PaymentMethodCreate) SetType(tmt types.PaymentMethodType) *PaymentMethodCreate {
+	pmc.mutation.SetType(tmt)
 	return pmc
 }
 
 // SetGateway sets the "gateway" field.
-func (pmc *PaymentMethodCreate) SetGateway(s string) *PaymentMethodCreate {
-	pmc.mutation.SetGateway(s)
+func (pmc *PaymentMethodCreate) SetGateway(tgt types.PaymentGatewayType) *PaymentMethodCreate {
+	pmc.mutation.SetGateway(tgt)
 	return pmc
 }
 
@@ -135,15 +136,15 @@ func (pmc *PaymentMethodCreate) SetGatewayMethodID(s string) *PaymentMethodCreat
 }
 
 // SetPaymentMethodStatus sets the "payment_method_status" field.
-func (pmc *PaymentMethodCreate) SetPaymentMethodStatus(s string) *PaymentMethodCreate {
-	pmc.mutation.SetPaymentMethodStatus(s)
+func (pmc *PaymentMethodCreate) SetPaymentMethodStatus(tms types.PaymentMethodStatus) *PaymentMethodCreate {
+	pmc.mutation.SetPaymentMethodStatus(tms)
 	return pmc
 }
 
 // SetNillablePaymentMethodStatus sets the "payment_method_status" field if the given value is not nil.
-func (pmc *PaymentMethodCreate) SetNillablePaymentMethodStatus(s *string) *PaymentMethodCreate {
-	if s != nil {
-		pmc.SetPaymentMethodStatus(*s)
+func (pmc *PaymentMethodCreate) SetNillablePaymentMethodStatus(tms *types.PaymentMethodStatus) *PaymentMethodCreate {
+	if tms != nil {
+		pmc.SetPaymentMethodStatus(*tms)
 	}
 	return pmc
 }
@@ -266,7 +267,7 @@ func (pmc *PaymentMethodCreate) check() error {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "PaymentMethod.type"`)}
 	}
 	if v, ok := pmc.mutation.GetType(); ok {
-		if err := paymentmethod.TypeValidator(v); err != nil {
+		if err := paymentmethod.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.type": %w`, err)}
 		}
 	}
@@ -274,7 +275,7 @@ func (pmc *PaymentMethodCreate) check() error {
 		return &ValidationError{Name: "gateway", err: errors.New(`ent: missing required field "PaymentMethod.gateway"`)}
 	}
 	if v, ok := pmc.mutation.Gateway(); ok {
-		if err := paymentmethod.GatewayValidator(v); err != nil {
+		if err := paymentmethod.GatewayValidator(string(v)); err != nil {
 			return &ValidationError{Name: "gateway", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.gateway": %w`, err)}
 		}
 	}
@@ -288,6 +289,11 @@ func (pmc *PaymentMethodCreate) check() error {
 	}
 	if _, ok := pmc.mutation.PaymentMethodStatus(); !ok {
 		return &ValidationError{Name: "payment_method_status", err: errors.New(`ent: missing required field "PaymentMethod.payment_method_status"`)}
+	}
+	if v, ok := pmc.mutation.PaymentMethodStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_method_status", err: fmt.Errorf(`ent: validator failed for field "PaymentMethod.payment_method_status": %w`, err)}
+		}
 	}
 	if _, ok := pmc.mutation.IsDefault(); !ok {
 		return &ValidationError{Name: "is_default", err: errors.New(`ent: missing required field "PaymentMethod.is_default"`)}
