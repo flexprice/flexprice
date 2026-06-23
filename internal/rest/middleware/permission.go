@@ -26,7 +26,7 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 // RequirePermission returns a middleware that enforces two access controls:
 // suspended tenants are blocked from write operations regardless of caller type,
 // and service accounts are subject to RBAC role checks for the given entity and action.
-func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Action) gin.HandlerFunc {
+func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action types.Action) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -41,7 +41,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Ac
 		// Service accounts are subject to RBAC; JWT users and config keys are not.
 		if types.IsServiceAccount(ctx) {
 			roles := types.GetRoles(ctx)
-			if !pm.rbacService.HasPermission(roles, entity, string(action)) {
+			if !pm.rbacService.HasPermission(roles, string(entity), string(action)) {
 				pm.logger.Info(ctx, "service account access refrained due to insufficient RBAC roles",
 					"user_id", types.GetUserID(ctx),
 					"tenant_id", types.GetTenantID(ctx),
