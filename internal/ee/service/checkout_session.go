@@ -43,6 +43,8 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 	session := req.ToCheckoutSession(ctx)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		// TODO: on ErrAlreadyExists (idempotency key conflict), consider fetching and returning
+		// the existing session transparently (HTTP 200) instead of propagating 409
 		return nil, err
 	}
 
