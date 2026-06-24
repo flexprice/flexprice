@@ -1167,6 +1167,14 @@
             }
           },
           {
+            "name": "expand",
+            "in": "query",
+            "description": "Comma-separated fields: coupon, subscription_line_items, subscription_line_items.prices",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Page size",
@@ -15306,7 +15314,7 @@
         "type": "object",
         "properties": {
           "coupon": {
-            "$ref": "#/components/schemas/Coupon"
+            "$ref": "#/components/schemas/CouponResponse"
           },
           "coupon_id": {
             "type": "string"
@@ -15345,6 +15353,9 @@
           "subscription_id": {
             "type": "string",
             "description": "Mandatory"
+          },
+          "subscription_line_item": {
+            "$ref": "#/components/schemas/SubscriptionLineItemResponse"
           },
           "subscription_line_item_id": {
             "type": "string",
@@ -26260,6 +26271,12 @@
             "$ref": "#/components/schemas/types.Status"
           },
           "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscription_line_item_ids": {
             "type": "array",
             "description": "Specific filters",
             "items": {

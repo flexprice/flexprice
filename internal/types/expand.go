@@ -174,6 +174,15 @@ var (
 		},
 	}
 
+	// CouponAssociationExpandConfig defines what can be expanded on a coupon association
+	CouponAssociationExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandCoupon, ExpandSubscriptionLineItems},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandCoupon:                {},
+			ExpandSubscriptionLineItems: {ExpandPrices},
+		},
+	}
+
 	// SubscriptionLineItemListExpandConfig defines expands for listing subscription line items (collection APIs).
 	// Supports top-level prices (and nested price fields) and subscription_line_items.prices for parity with subscription expand strings.
 	SubscriptionLineItemListExpandConfig = ExpandConfig{

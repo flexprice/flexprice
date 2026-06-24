@@ -978,6 +978,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "Comma-separated fields: coupon, subscription_line_items, subscription_line_items.prices",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "Page size",
                         "name": "limit",
@@ -13283,7 +13289,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "coupon": {
-                    "$ref": "#/definitions/Coupon"
+                    "$ref": "#/definitions/CouponResponse"
                 },
                 "coupon_id": {
                     "type": "string"
@@ -13319,6 +13325,9 @@ const docTemplate = `{
                 "subscription_id": {
                     "description": "Mandatory",
                     "type": "string"
+                },
+                "subscription_line_item": {
+                    "$ref": "#/definitions/SubscriptionLineItemResponse"
                 },
                 "subscription_line_item_id": {
                     "description": "Optional",
@@ -24506,6 +24515,12 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Status"
                 },
                 "subscription_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "subscription_line_item_ids": {
                     "description": "Specific filters",
                     "type": "array",
                     "items": {

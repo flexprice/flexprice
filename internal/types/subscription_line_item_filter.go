@@ -11,7 +11,8 @@ type SubscriptionLineItemFilter struct {
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
 	// Specific filters
-	SubscriptionIDs     []string                        `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	SubscriptionLineItemIDs []string                        `json:"subscription_line_item_ids,omitempty" form:"subscription_line_item_ids"`
+	SubscriptionIDs         []string                        `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	CustomerIDs         []string                        `json:"customer_ids,omitempty" form:"customer_ids"`
 	PriceIDs            []string                        `json:"price_ids,omitempty" form:"price_ids"`
 	MeterIDs            []string                        `json:"meter_ids,omitempty" form:"meter_ids"`
