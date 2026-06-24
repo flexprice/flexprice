@@ -1,11 +1,81 @@
 package checkout
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// JSONB types for complex fields stored as PostgreSQL jsonb columns.
+
+// JSONBCheckoutConfiguration wraps CheckoutConfiguration for JSONB storage.
+type JSONBCheckoutConfiguration types.CheckoutConfiguration
+
+func (j *JSONBCheckoutConfiguration) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return ierr.NewError("invalid type for jsonb checkout configuration").
+			WithHint("Invalid type for JSONB checkout configuration").
+			Mark(ierr.ErrValidation)
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+func (j JSONBCheckoutConfiguration) Value() (driver.Value, error) {
+	return json.Marshal(j)
+}
+
+// JSONBCheckoutResult wraps CheckoutResult for JSONB storage.
+type JSONBCheckoutResult types.CheckoutResult
+
+func (j *JSONBCheckoutResult) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return ierr.NewError("invalid type for jsonb checkout result").
+			WithHint("Invalid type for JSONB checkout result").
+			Mark(ierr.ErrValidation)
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+func (j *JSONBCheckoutResult) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+// JSONBCheckoutProviderResult wraps CheckoutProviderResult for JSONB storage.
+type JSONBCheckoutProviderResult types.CheckoutProviderResult
+
+func (j *JSONBCheckoutProviderResult) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return ierr.NewError("invalid type for jsonb checkout provider result").
+			WithHint("Invalid type for JSONB checkout provider result").
+			Mark(ierr.ErrValidation)
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+func (j *JSONBCheckoutProviderResult) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
 
 // CheckoutSession is a single-use session that drives a B2C payment flow.
 // It captures the caller's intent (action + configuration) at creation and
@@ -30,7 +100,7 @@ type CheckoutSession struct {
 	// CheckoutStatus tracks the session lifecycle. Starts at "initiated"
 	// when the session row is inserted; advances to "pending" once the
 	// provider call succeeds; settles to completed/failed/expired.
-	CheckoutStatus  types.CheckoutStatus          `db:"checkout_status" json:"checkout_status"`
+	CheckoutStatus types.CheckoutStatus `db:"checkout_status" json:"checkout_status"`
 	// PaymentProvider is required and immutable after creation.
 	PaymentProvider types.CheckoutPaymentProvider `db:"payment_provider" json:"payment_provider"`
 
@@ -41,16 +111,16 @@ type CheckoutSession struct {
 
 	// Configuration holds the immutable caller inputs set at creation time.
 	// Only the sub-struct matching Action is populated; the others are nil.
-	Configuration types.CheckoutConfiguration `db:"configuration" json:"configuration"`
+	Configuration JSONBCheckoutConfiguration `db:"configuration,jsonb" json:"configuration"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
-	Result *types.CheckoutResult `db:"result" json:"result,omitempty"`
+	Result *JSONBCheckoutResult `db:"result,jsonb" json:"result,omitempty"`
 
 	// ProviderResult holds the external provider response (session URL,
 	// payment intent ID, etc.). Set after the provider call in the create
 	// step. Source of truth for deriving PaymentActions in API responses.
-	ProviderResult *types.CheckoutProviderResult `db:"provider_result" json:"provider_result,omitempty"`
+	ProviderResult *JSONBCheckoutProviderResult `db:"provider_result,jsonb" json:"provider_result,omitempty"`
 
 	// IdempotencyKey is caller-supplied. It is unique only while the session
 	// is active (initiated|pending). The same key may be reused once the
@@ -71,8 +141,8 @@ type CheckoutSession struct {
 	CancelledAt *time.Time `db:"cancelled_at" json:"cancelled_at,omitempty"`
 
 	// FailureReason is a human-readable string set on failed sessions.
-	FailureReason *string           `db:"failure_reason" json:"failure_reason,omitempty"`
-	Metadata      map[string]string `db:"metadata" json:"metadata,omitempty"`
+	FailureReason *string        `db:"failure_reason" json:"failure_reason,omitempty"`
+	Metadata      types.Metadata `db:"metadata,jsonb" json:"metadata,omitempty"`
 
 	types.BaseModel
 }

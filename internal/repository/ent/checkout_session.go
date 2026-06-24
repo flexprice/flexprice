@@ -50,9 +50,9 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetPaymentProvider(s.PaymentProvider).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
-		SetConfiguration(s.Configuration).
-		SetResult(s.Result).
-		SetProviderResult(s.ProviderResult).
+		SetConfiguration(types.CheckoutConfiguration(s.Configuration)).
+		SetResult((*types.CheckoutResult)(s.Result)).
+		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
 		SetNillableIdempotencyKey(s.IdempotencyKey).
 		SetNillableSuccessURL(s.SuccessURL).
 		SetNillableFailureURL(s.FailureURL).
@@ -61,7 +61,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
-		SetMetadata(s.Metadata).
+		SetMetadata(map[string]string(s.Metadata)).
 		SetStatus(string(s.Status)).
 		SetCreatedBy(s.CreatedBy).
 		SetUpdatedBy(s.UpdatedBy).
@@ -98,7 +98,6 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 			entCheckout.ID(id),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -127,17 +126,16 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		SetCheckoutStatus(s.CheckoutStatus).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
-		SetResult(s.Result).
-		SetProviderResult(s.ProviderResult).
+		SetResult((*types.CheckoutResult)(s.Result)).
+		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
-		SetMetadata(s.Metadata).
+		SetMetadata(map[string]string(s.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -346,9 +344,9 @@ func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
 		PaymentProvider:   e.PaymentProvider,
 		CheckoutInvoiceID: e.CheckoutInvoiceID,
 		CheckoutPaymentID: e.CheckoutPaymentID,
-		Configuration:     e.Configuration,
-		Result:            e.Result,
-		ProviderResult:    e.ProviderResult,
+		Configuration:     domainCheckout.JSONBCheckoutConfiguration(e.Configuration),
+		Result:            (*domainCheckout.JSONBCheckoutResult)(e.Result),
+		ProviderResult:    (*domainCheckout.JSONBCheckoutProviderResult)(e.ProviderResult),
 		IdempotencyKey:    e.IdempotencyKey,
 		SuccessURL:        e.SuccessURL,
 		FailureURL:        e.FailureURL,

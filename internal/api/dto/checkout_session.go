@@ -11,15 +11,15 @@ import (
 
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
 type CreateCheckoutSessionRequest struct {
-	CustomerID      string                         `json:"customer_id" binding:"required"`
-	Action          types.CheckoutAction           `json:"action" binding:"required"`
+	CustomerID      string                        `json:"customer_id" binding:"required"`
+	Action          types.CheckoutAction          `json:"action" binding:"required"`
 	PaymentProvider types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
-	Configuration   types.CheckoutConfiguration    `json:"configuration"`
-	IdempotencyKey  *string                        `json:"idempotency_key,omitempty"`
-	SuccessURL      *string                        `json:"success_url,omitempty"`
-	FailureURL      *string                        `json:"failure_url,omitempty"`
-	CancelURL       *string                        `json:"cancel_url,omitempty"`
-	Metadata        map[string]string              `json:"metadata,omitempty"`
+	Configuration   types.CheckoutConfiguration   `json:"configuration"`
+	IdempotencyKey  *string                       `json:"idempotency_key,omitempty"`
+	SuccessURL      *string                       `json:"success_url,omitempty"`
+	FailureURL      *string                       `json:"failure_url,omitempty"`
+	CancelURL       *string                       `json:"cancel_url,omitempty"`
+	Metadata        map[string]string             `json:"metadata,omitempty"`
 }
 
 func (r *CreateCheckoutSessionRequest) Validate() error {
@@ -51,7 +51,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context) *d
 		Action:          r.Action,
 		CheckoutStatus:  types.CheckoutStatusInitiated,
 		PaymentProvider: r.PaymentProvider,
-		Configuration:   r.Configuration,
+		Configuration:   domainCheckout.JSONBCheckoutConfiguration(r.Configuration),
 		IdempotencyKey:  r.IdempotencyKey,
 		SuccessURL:      r.SuccessURL,
 		FailureURL:      r.FailureURL,

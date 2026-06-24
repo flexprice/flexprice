@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -109,10 +110,10 @@ func (s *checkoutSessionService) UpdateCheckoutSession(ctx context.Context, id s
 		session.CheckoutPaymentID = req.CheckoutPaymentID
 	}
 	if req.Result != nil {
-		session.Result = req.Result
+		session.Result = (*domainCheckout.JSONBCheckoutResult)(req.Result)
 	}
 	if req.ProviderResult != nil {
-		session.ProviderResult = req.ProviderResult
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(req.ProviderResult)
 	}
 	if req.CompletedAt != nil {
 		session.CompletedAt = req.CompletedAt
