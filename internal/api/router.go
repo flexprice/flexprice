@@ -58,7 +58,6 @@ type Handlers struct {
 	Dashboard                *v1.DashboardHandler
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
-	CheckoutSession          *v1.CheckoutSessionHandler
 
 	// Portal handlers
 	Onboarding     *v1.OnboardingHandler
@@ -407,17 +406,6 @@ func NewRouter(
 			feature.DELETE("/:id", write("feature", types.ActionWrite), handlers.Feature.DeleteFeature)
 			feature.POST("/search", handlers.Feature.QueryFeatures)
 			feature.POST("/:id/clone", write("feature", types.ActionWrite), handlers.Feature.CloneFeature)
-		}
-
-		checkoutSessions := v1Private.Group("/checkout/sessions")
-		{
-			checkoutSessions.POST("", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Create)
-			checkoutSessions.POST("/search", handlers.CheckoutSession.Query)
-			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
-			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
-			// TODO: remove after testing — manual lifecycle triggers for local E2E testing
-			checkoutSessions.POST("/:id/complete", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestComplete)
-			checkoutSessions.POST("/:id/cleanup", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestCleanup)
 		}
 
 		entitlement := v1Private.Group("/entitlements")

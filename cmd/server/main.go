@@ -186,7 +186,6 @@ func main() {
 			repository.NewScheduledTaskRepository,
 			repository.NewPriceUnitRepository,
 			repository.NewWorkflowExecutionRepository,
-			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
 
 			// PubSub
@@ -237,7 +236,6 @@ func main() {
 			service.NewMeterUsageTrackingService,
 			service.NewUsageBenchmarkService,
 			service.NewMeterUsageService,
-			service.NewCheckoutSessionService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
 			service.NewCustomerService,
@@ -363,7 +361,6 @@ func provideHandlers(
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
-	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	usageBenchmarkService service.UsageBenchmarkService,
@@ -420,7 +417,6 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
-		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }
 
