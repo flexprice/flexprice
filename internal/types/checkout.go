@@ -43,8 +43,6 @@ type CheckoutAction string
 
 const (
 	CheckoutActionCreateSubscription CheckoutAction = "create_subscription"
-	CheckoutActionChangePlan         CheckoutAction = "change_plan"
-	CheckoutActionSetup              CheckoutAction = "setup"
 )
 
 func (a CheckoutAction) String() string { return string(a) }
@@ -52,12 +50,10 @@ func (a CheckoutAction) String() string { return string(a) }
 func (a CheckoutAction) Validate() error {
 	allowed := []CheckoutAction{
 		CheckoutActionCreateSubscription,
-		CheckoutActionChangePlan,
-		CheckoutActionSetup,
 	}
 	if a != "" && !lo.Contains(allowed, a) {
 		return ierr.NewError("invalid checkout action").
-			WithHint("Allowed values: create_subscription, change_plan, setup").
+			WithHint("Allowed values: create_subscription").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -67,9 +63,7 @@ func (a CheckoutAction) Validate() error {
 type CheckoutPaymentProvider string
 
 const (
-	CheckoutPaymentProviderStripe   CheckoutPaymentProvider = "stripe"
-	CheckoutPaymentProviderRazorpay CheckoutPaymentProvider = "razorpay"
-	CheckoutPaymentProviderMoyasar  CheckoutPaymentProvider = "moyasar"
+	CheckoutPaymentProviderStripe CheckoutPaymentProvider = "stripe"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
@@ -77,55 +71,10 @@ func (p CheckoutPaymentProvider) String() string { return string(p) }
 func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
 		CheckoutPaymentProviderStripe,
-		CheckoutPaymentProviderRazorpay,
-		CheckoutPaymentProviderMoyasar,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: stripe, razorpay, moyasar").
-			WithReportableDetails(map[string]any{"allowed_values": allowed}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-type PlanChangeEffective string
-
-const (
-	PlanChangeEffectiveImmediate PlanChangeEffective = "immediate"
-	PlanChangeEffectivePeriodEnd PlanChangeEffective = "period_end"
-)
-
-func (e PlanChangeEffective) String() string { return string(e) }
-
-func (e PlanChangeEffective) Validate() error {
-	allowed := []PlanChangeEffective{PlanChangeEffectiveImmediate, PlanChangeEffectivePeriodEnd}
-	if e != "" && !lo.Contains(allowed, e) {
-		return ierr.NewError("invalid plan change effective").
-			WithHint("Allowed values: immediate, period_end").
-			WithReportableDetails(map[string]any{"allowed_values": allowed}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-type PlanChangeProrationBehavior string
-
-const (
-	PlanChangeProrationBehaviorNone             PlanChangeProrationBehavior = "none"
-	PlanChangeProrationBehaviorCreateProrations PlanChangeProrationBehavior = "create_prorations"
-)
-
-func (b PlanChangeProrationBehavior) String() string { return string(b) }
-
-func (b PlanChangeProrationBehavior) Validate() error {
-	allowed := []PlanChangeProrationBehavior{
-		PlanChangeProrationBehaviorNone,
-		PlanChangeProrationBehaviorCreateProrations,
-	}
-	if b != "" && !lo.Contains(allowed, b) {
-		return ierr.NewError("invalid proration behavior").
-			WithHint("Allowed values: none, create_prorations").
+			WithHint("Allowed values: stripe").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -159,7 +108,6 @@ func (t PaymentActionType) Validate() error {
 // ent/schema → internal/types is safe; ent/schema → internal/domain/checkout → ent/ would cycle.
 type CheckoutConfiguration struct {
 	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
-	PlanChangeParams         *PlanChangeParams         `json:"plan_change_params,omitempty"`
 }
 
 type CreateSubscriptionParams struct {
@@ -175,13 +123,6 @@ type CreateSubscriptionParams struct {
 	SubscriptionCoupons []CheckoutCouponInput `json:"subscription_coupons,omitempty"`
 	LineItems           []CheckoutLineItem    `json:"line_items,omitempty"`
 	Metadata            map[string]string     `json:"metadata,omitempty"`
-}
-
-type PlanChangeParams struct {
-	SubscriptionID    string                      `json:"subscription_id" validate:"required"`
-	PlanID            string                      `json:"plan_id" validate:"required"`
-	Effective         PlanChangeEffective         `json:"effective"`
-	ProrationBehavior PlanChangeProrationBehavior `json:"proration_behavior"`
 }
 
 type CheckoutCreditGrant struct {
@@ -206,8 +147,6 @@ type CheckoutLineItem struct {
 
 type CheckoutResult struct {
 	CreateSubscriptionResult *CreateSubscriptionResult `json:"create_subscription_result,omitempty"`
-	PlanChangeResult         *PlanChangeResult         `json:"plan_change_result,omitempty"`
-	SetupResult              *CheckoutSetupResult      `json:"setup_result,omitempty"`
 }
 
 type CreateSubscriptionResult struct {
@@ -216,35 +155,16 @@ type CreateSubscriptionResult struct {
 	PaymentID      string `json:"payment_id"`
 }
 
-type PlanChangeResult struct {
-	OldSubscriptionID string `json:"old_subscription_id"`
-	NewSubscriptionID string `json:"new_subscription_id"`
-	InvoiceID         string `json:"invoice_id"`
-	PaymentID         string `json:"payment_id"`
-}
-
-type CheckoutSetupResult struct {
-	PaymentMethodID string `json:"payment_method_id"`
-}
-
 // ── JSONB provider_result structs ────────────────────────────────────────────
 
 type CheckoutProviderResult struct {
 	CreateSubscriptionResult *ProviderSubscriptionResult `json:"create_subscription_result,omitempty"`
-	PlanChangeResult         *ProviderSubscriptionResult `json:"plan_change_result,omitempty"`
-	SetupResult              *ProviderSetupResult        `json:"setup_result,omitempty"`
 }
 
 type ProviderSubscriptionResult struct {
 	SessionID       string `json:"session_id"`
 	SessionURL      string `json:"session_url"`
 	PaymentIntentID string `json:"payment_intent_id"`
-}
-
-type ProviderSetupResult struct {
-	SetupIntentID   string `json:"setup_intent_id"`
-	SessionURL      string `json:"session_url"`
-	PaymentMethodID string `json:"payment_method_id"`
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────
