@@ -14,7 +14,6 @@ type CheckoutSessionService interface {
 	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
-	Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Delete(ctx context.Context, id string) error
 	// CleanupCheckoutSession archives all entities created during fulfillment (subscription,
 	// invoice, payment) and marks the session as failed with the given reason.
@@ -103,55 +102,6 @@ func (s *checkoutSessionService) List(ctx context.Context, filter *types.Checkou
 	return &result, nil
 }
 
-func (s *checkoutSessionService) Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
-	if id == "" {
-		return nil, ierr.NewError("id is required").
-			WithHint("checkout session ID cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
-
-	session, err := s.CheckoutSessionRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.CheckoutStatus != nil {
-		if err := req.CheckoutStatus.Validate(); err != nil {
-			return nil, err
-		}
-		session.CheckoutStatus = *req.CheckoutStatus
-	}
-	if req.CheckoutInvoiceID != nil {
-		session.CheckoutInvoiceID = req.CheckoutInvoiceID
-	}
-	if req.CheckoutPaymentID != nil {
-		session.CheckoutPaymentID = req.CheckoutPaymentID
-	}
-	if req.Result != nil {
-		session.Result = (*domainCheckout.JSONBCheckoutResult)(req.Result)
-	}
-	if req.ProviderResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(req.ProviderResult)
-	}
-	if req.CompletedAt != nil {
-		session.CompletedAt = req.CompletedAt
-	}
-	if req.CancelledAt != nil {
-		session.CancelledAt = req.CancelledAt
-	}
-	if req.FailureReason != nil {
-		session.FailureReason = req.FailureReason
-	}
-
-	session.UpdatedBy = types.GetUserID(ctx)
-
-	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
-		return nil, err
-	}
-
-	return dto.ToCheckoutSessionResponse(session), nil
-}
-
 func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("id is required").
@@ -200,21 +150,24 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 			return err
 		}
 
+		// Stage sub and invoice IDs immediately so CleanupCheckoutSession can
+		// archive them if the payment step below fails.
+		result := types.CheckoutResult{
+			CreateSubscriptionResult: &types.CreateSubscriptionResult{
+				SubscriptionID: subResp.ID,
+				InvoiceID:      invResp.ID,
+			},
+		}
+		session.Result = (*domainCheckout.JSONBCheckoutResult)(&result)
+
 		payResp, err := s.createCheckoutPayment(ctx, &invResp.Invoice, session.PaymentProvider)
 		if err != nil {
 			return err
 		}
 
+		result.CreateSubscriptionResult.PaymentID = payResp.ID
 		session.CheckoutInvoiceID = &invResp.ID
 		session.CheckoutPaymentID = &payResp.ID
-		result := types.CheckoutResult{
-			CreateSubscriptionResult: &types.CreateSubscriptionResult{
-				SubscriptionID: subResp.ID,
-				InvoiceID:      invResp.ID,
-				PaymentID:      payResp.ID,
-			},
-		}
-		session.Result = (*domainCheckout.JSONBCheckoutResult)(&result)
 
 	default:
 		return ierr.NewError("unsupported checkout action").
@@ -258,7 +211,8 @@ func (s *checkoutSessionService) createDraftSubscriptionWithInvoice(ctx context.
 		ReferencePoint: types.ReferencePointPeriodStart,
 	}
 
-	// PaymentParameters are unused by isDraftSubscription=true path but required by signature.
+	// Pass default_incomplete behavior so ProcessDraftInvoice does not attempt to charge.
+	// The checkout payment step handles collection separately.
 	paymentParams := dto.NewPaymentParameters(
 		types.CollectionMethodChargeAutomatically,
 		types.PaymentBehaviorDefaultIncomplete,
@@ -273,6 +227,10 @@ func (s *checkoutSessionService) createDraftSubscriptionWithInvoice(ctx context.
 	)
 	if err != nil {
 		return nil, nil, err
+	}
+	if invResp == nil {
+		return nil, nil, ierr.NewError("checkout requires a non-zero invoice; plan produced no charges").
+			Mark(ierr.ErrValidation)
 	}
 
 	return subResp, invResp, nil
