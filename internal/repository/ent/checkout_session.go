@@ -55,9 +55,9 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
 		SetMetadata(s.Metadata).
-		SetStatus(string(types.StatusPublished)).
-		SetCreatedBy(types.GetUserID(ctx)).
-		SetUpdatedBy(types.GetUserID(ctx)).
+		SetStatus(string(s.Status)).
+		SetCreatedBy(s.CreatedBy).
+		SetUpdatedBy(s.UpdatedBy).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -122,7 +122,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
 		SetMetadata(s.Metadata).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
