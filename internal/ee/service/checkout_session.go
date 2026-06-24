@@ -14,7 +14,6 @@ type CheckoutSessionService interface {
 	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
-	Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Delete(ctx context.Context, id string) error
 	// CleanupCheckoutSession archives all entities created during fulfillment (subscription,
 	// invoice, payment) and marks the session as failed with the given reason.
@@ -101,55 +100,6 @@ func (s *checkoutSessionService) List(ctx context.Context, filter *types.Checkou
 
 	result := types.NewListResponse(items, count, filter.GetLimit(), filter.GetOffset())
 	return &result, nil
-}
-
-func (s *checkoutSessionService) Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
-	if id == "" {
-		return nil, ierr.NewError("id is required").
-			WithHint("checkout session ID cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
-
-	session, err := s.CheckoutSessionRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.CheckoutStatus != nil {
-		if err := req.CheckoutStatus.Validate(); err != nil {
-			return nil, err
-		}
-		session.CheckoutStatus = *req.CheckoutStatus
-	}
-	if req.CheckoutInvoiceID != nil {
-		session.CheckoutInvoiceID = req.CheckoutInvoiceID
-	}
-	if req.CheckoutPaymentID != nil {
-		session.CheckoutPaymentID = req.CheckoutPaymentID
-	}
-	if req.Result != nil {
-		session.Result = (*domainCheckout.JSONBCheckoutResult)(req.Result)
-	}
-	if req.ProviderResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(req.ProviderResult)
-	}
-	if req.CompletedAt != nil {
-		session.CompletedAt = req.CompletedAt
-	}
-	if req.CancelledAt != nil {
-		session.CancelledAt = req.CancelledAt
-	}
-	if req.FailureReason != nil {
-		session.FailureReason = req.FailureReason
-	}
-
-	session.UpdatedBy = types.GetUserID(ctx)
-
-	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
-		return nil, err
-	}
-
-	return dto.ToCheckoutSessionResponse(session), nil
 }
 
 func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
