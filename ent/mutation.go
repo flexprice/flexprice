@@ -5424,7 +5424,7 @@ func (m *CheckoutSessionMutation) PaymentProvider() (r types.CheckoutPaymentProv
 // OldPaymentProvider returns the old "payment_provider" field's value of the CheckoutSession entity.
 // If the CheckoutSession object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutSessionMutation) OldPaymentProvider(ctx context.Context) (v *types.CheckoutPaymentProvider, err error) {
+func (m *CheckoutSessionMutation) OldPaymentProvider(ctx context.Context) (v types.CheckoutPaymentProvider, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPaymentProvider is only allowed on UpdateOne operations")
 	}
@@ -5438,22 +5438,9 @@ func (m *CheckoutSessionMutation) OldPaymentProvider(ctx context.Context) (v *ty
 	return oldValue.PaymentProvider, nil
 }
 
-// ClearPaymentProvider clears the value of the "payment_provider" field.
-func (m *CheckoutSessionMutation) ClearPaymentProvider() {
-	m.payment_provider = nil
-	m.clearedFields[checkoutsession.FieldPaymentProvider] = struct{}{}
-}
-
-// PaymentProviderCleared returns if the "payment_provider" field was cleared in this mutation.
-func (m *CheckoutSessionMutation) PaymentProviderCleared() bool {
-	_, ok := m.clearedFields[checkoutsession.FieldPaymentProvider]
-	return ok
-}
-
 // ResetPaymentProvider resets all changes to the "payment_provider" field.
 func (m *CheckoutSessionMutation) ResetPaymentProvider() {
 	m.payment_provider = nil
-	delete(m.clearedFields, checkoutsession.FieldPaymentProvider)
 }
 
 // SetCheckoutInvoiceID sets the "checkout_invoice_id" field.
@@ -6579,9 +6566,6 @@ func (m *CheckoutSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(checkoutsession.FieldEnvironmentID) {
 		fields = append(fields, checkoutsession.FieldEnvironmentID)
 	}
-	if m.FieldCleared(checkoutsession.FieldPaymentProvider) {
-		fields = append(fields, checkoutsession.FieldPaymentProvider)
-	}
 	if m.FieldCleared(checkoutsession.FieldCheckoutInvoiceID) {
 		fields = append(fields, checkoutsession.FieldCheckoutInvoiceID)
 	}
@@ -6643,9 +6627,6 @@ func (m *CheckoutSessionMutation) ClearField(name string) error {
 		return nil
 	case checkoutsession.FieldEnvironmentID:
 		m.ClearEnvironmentID()
-		return nil
-	case checkoutsession.FieldPaymentProvider:
-		m.ClearPaymentProvider()
 		return nil
 	case checkoutsession.FieldCheckoutInvoiceID:
 		m.ClearCheckoutInvoiceID()

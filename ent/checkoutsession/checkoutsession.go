@@ -127,6 +127,8 @@ var (
 	ActionValidator func(string) error
 	// DefaultCheckoutStatus holds the default value on creation for the "checkout_status" field.
 	DefaultCheckoutStatus types.CheckoutStatus
+	// PaymentProviderValidator is a validator for the "payment_provider" field. It is called by the builders before save.
+	PaymentProviderValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the CheckoutSession queries.

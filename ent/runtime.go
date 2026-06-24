@@ -286,6 +286,10 @@ func init() {
 	checkoutsessionDescCheckoutStatus := checkoutsessionFields[3].Descriptor()
 	// checkoutsession.DefaultCheckoutStatus holds the default value on creation for the checkout_status field.
 	checkoutsession.DefaultCheckoutStatus = types.CheckoutStatus(checkoutsessionDescCheckoutStatus.Default.(string))
+	// checkoutsessionDescPaymentProvider is the schema descriptor for payment_provider field.
+	checkoutsessionDescPaymentProvider := checkoutsessionFields[4].Descriptor()
+	// checkoutsession.PaymentProviderValidator is a validator for the "payment_provider" field. It is called by the builders before save.
+	checkoutsession.PaymentProviderValidator = checkoutsessionDescPaymentProvider.Validators[0].(func(string) error)
 	connectionMixin := schema.Connection{}.Mixin()
 	connectionMixinFields0 := connectionMixin[0].Fields()
 	_ = connectionMixinFields0

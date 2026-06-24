@@ -14,7 +14,7 @@ import (
 type CreateCheckoutSessionRequest struct {
 	CustomerID      string                         `json:"customer_id" binding:"required"`
 	Action          types.CheckoutAction           `json:"action" binding:"required"`
-	PaymentProvider *types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
+	PaymentProvider types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
 	Configuration   types.CheckoutConfiguration    `json:"configuration"`
 	IdempotencyKey  *string                        `json:"idempotency_key,omitempty"`
 	SuccessURL      *string                        `json:"success_url,omitempty"`
@@ -34,11 +34,6 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
-	if r.PaymentProvider == nil {
-		return ierr.NewError("payment_provider is required").
-			WithHint("payment_provider cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
 	if err := r.PaymentProvider.Validate(); err != nil {
 		return err
 	}

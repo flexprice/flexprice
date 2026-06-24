@@ -913,16 +913,6 @@ func PaymentProviderHasSuffix(v types.CheckoutPaymentProvider) predicate.Checkou
 	return predicate.CheckoutSession(sql.FieldHasSuffix(FieldPaymentProvider, vc))
 }
 
-// PaymentProviderIsNil applies the IsNil predicate on the "payment_provider" field.
-func PaymentProviderIsNil() predicate.CheckoutSession {
-	return predicate.CheckoutSession(sql.FieldIsNull(FieldPaymentProvider))
-}
-
-// PaymentProviderNotNil applies the NotNil predicate on the "payment_provider" field.
-func PaymentProviderNotNil() predicate.CheckoutSession {
-	return predicate.CheckoutSession(sql.FieldNotNull(FieldPaymentProvider))
-}
-
 // PaymentProviderEqualFold applies the EqualFold predicate on the "payment_provider" field.
 func PaymentProviderEqualFold(v types.CheckoutPaymentProvider) predicate.CheckoutSession {
 	vc := string(v)

@@ -47,7 +47,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetCustomerID(s.CustomerID).
 		SetAction(s.Action).
 		SetCheckoutStatus(s.CheckoutStatus).
-		SetNillablePaymentProvider(s.PaymentProvider).
+		SetPaymentProvider(s.PaymentProvider).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
 		SetConfiguration(s.Configuration).
@@ -130,7 +130,6 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		SetCheckoutStatus(s.CheckoutStatus).
-		SetNillablePaymentProvider(s.PaymentProvider).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
 		SetResult(s.Result).

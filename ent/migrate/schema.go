@@ -201,7 +201,7 @@ var (
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "action", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
 		{Name: "checkout_status", Type: field.TypeString, Default: "initiated", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "payment_provider", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "payment_provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "checkout_invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "checkout_payment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "configuration", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},

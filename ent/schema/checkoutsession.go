@@ -51,8 +51,8 @@ func (CheckoutSession) Fields() []ent.Field {
 		field.String("payment_provider").
 			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			GoType(types.CheckoutPaymentProvider("")).
-			Optional().
-			Nillable(),
+			NotEmpty().
+			Immutable(),
 
 		field.String("checkout_invoice_id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).

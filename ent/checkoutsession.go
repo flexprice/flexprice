@@ -40,7 +40,7 @@ type CheckoutSession struct {
 	// CheckoutStatus holds the value of the "checkout_status" field.
 	CheckoutStatus types.CheckoutStatus `json:"checkout_status,omitempty"`
 	// PaymentProvider holds the value of the "payment_provider" field.
-	PaymentProvider *types.CheckoutPaymentProvider `json:"payment_provider,omitempty"`
+	PaymentProvider types.CheckoutPaymentProvider `json:"payment_provider,omitempty"`
 	// CheckoutInvoiceID holds the value of the "checkout_invoice_id" field.
 	CheckoutInvoiceID *string `json:"checkout_invoice_id,omitempty"`
 	// CheckoutPaymentID holds the value of the "checkout_payment_id" field.
@@ -168,8 +168,7 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_provider", values[i])
 			} else if value.Valid {
-				cs.PaymentProvider = new(types.CheckoutPaymentProvider)
-				*cs.PaymentProvider = types.CheckoutPaymentProvider(value.String)
+				cs.PaymentProvider = types.CheckoutPaymentProvider(value.String)
 			}
 		case checkoutsession.FieldCheckoutInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -339,10 +338,8 @@ func (cs *CheckoutSession) String() string {
 	builder.WriteString("checkout_status=")
 	builder.WriteString(fmt.Sprintf("%v", cs.CheckoutStatus))
 	builder.WriteString(", ")
-	if v := cs.PaymentProvider; v != nil {
-		builder.WriteString("payment_provider=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("payment_provider=")
+	builder.WriteString(fmt.Sprintf("%v", cs.PaymentProvider))
 	builder.WriteString(", ")
 	if v := cs.CheckoutInvoiceID; v != nil {
 		builder.WriteString("checkout_invoice_id=")

@@ -83,26 +83,6 @@ func (csu *CheckoutSessionUpdate) SetNillableCheckoutStatus(ts *types.CheckoutSt
 	return csu
 }
 
-// SetPaymentProvider sets the "payment_provider" field.
-func (csu *CheckoutSessionUpdate) SetPaymentProvider(tpp types.CheckoutPaymentProvider) *CheckoutSessionUpdate {
-	csu.mutation.SetPaymentProvider(tpp)
-	return csu
-}
-
-// SetNillablePaymentProvider sets the "payment_provider" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillablePaymentProvider(tpp *types.CheckoutPaymentProvider) *CheckoutSessionUpdate {
-	if tpp != nil {
-		csu.SetPaymentProvider(*tpp)
-	}
-	return csu
-}
-
-// ClearPaymentProvider clears the value of the "payment_provider" field.
-func (csu *CheckoutSessionUpdate) ClearPaymentProvider() *CheckoutSessionUpdate {
-	csu.mutation.ClearPaymentProvider()
-	return csu
-}
-
 // SetCheckoutInvoiceID sets the "checkout_invoice_id" field.
 func (csu *CheckoutSessionUpdate) SetCheckoutInvoiceID(s string) *CheckoutSessionUpdate {
 	csu.mutation.SetCheckoutInvoiceID(s)
@@ -424,12 +404,6 @@ func (csu *CheckoutSessionUpdate) sqlSave(ctx context.Context) (n int, err error
 	if value, ok := csu.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutStatus, field.TypeString, value)
 	}
-	if value, ok := csu.mutation.PaymentProvider(); ok {
-		_spec.SetField(checkoutsession.FieldPaymentProvider, field.TypeString, value)
-	}
-	if csu.mutation.PaymentProviderCleared() {
-		_spec.ClearField(checkoutsession.FieldPaymentProvider, field.TypeString)
-	}
 	if value, ok := csu.mutation.CheckoutInvoiceID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString, value)
 	}
@@ -582,26 +556,6 @@ func (csuo *CheckoutSessionUpdateOne) SetNillableCheckoutStatus(ts *types.Checko
 	if ts != nil {
 		csuo.SetCheckoutStatus(*ts)
 	}
-	return csuo
-}
-
-// SetPaymentProvider sets the "payment_provider" field.
-func (csuo *CheckoutSessionUpdateOne) SetPaymentProvider(tpp types.CheckoutPaymentProvider) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetPaymentProvider(tpp)
-	return csuo
-}
-
-// SetNillablePaymentProvider sets the "payment_provider" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillablePaymentProvider(tpp *types.CheckoutPaymentProvider) *CheckoutSessionUpdateOne {
-	if tpp != nil {
-		csuo.SetPaymentProvider(*tpp)
-	}
-	return csuo
-}
-
-// ClearPaymentProvider clears the value of the "payment_provider" field.
-func (csuo *CheckoutSessionUpdateOne) ClearPaymentProvider() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearPaymentProvider()
 	return csuo
 }
 
@@ -955,12 +909,6 @@ func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *Check
 	}
 	if value, ok := csuo.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutStatus, field.TypeString, value)
-	}
-	if value, ok := csuo.mutation.PaymentProvider(); ok {
-		_spec.SetField(checkoutsession.FieldPaymentProvider, field.TypeString, value)
-	}
-	if csuo.mutation.PaymentProviderCleared() {
-		_spec.ClearField(checkoutsession.FieldPaymentProvider, field.TypeString)
 	}
 	if value, ok := csuo.mutation.CheckoutInvoiceID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString, value)

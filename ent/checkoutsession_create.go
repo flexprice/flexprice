@@ -143,14 +143,6 @@ func (csc *CheckoutSessionCreate) SetPaymentProvider(tpp types.CheckoutPaymentPr
 	return csc
 }
 
-// SetNillablePaymentProvider sets the "payment_provider" field if the given value is not nil.
-func (csc *CheckoutSessionCreate) SetNillablePaymentProvider(tpp *types.CheckoutPaymentProvider) *CheckoutSessionCreate {
-	if tpp != nil {
-		csc.SetPaymentProvider(*tpp)
-	}
-	return csc
-}
-
 // SetCheckoutInvoiceID sets the "checkout_invoice_id" field.
 func (csc *CheckoutSessionCreate) SetCheckoutInvoiceID(s string) *CheckoutSessionCreate {
 	csc.mutation.SetCheckoutInvoiceID(s)
@@ -421,8 +413,11 @@ func (csc *CheckoutSessionCreate) check() error {
 			return &ValidationError{Name: "checkout_status", err: fmt.Errorf(`ent: validator failed for field "CheckoutSession.checkout_status": %w`, err)}
 		}
 	}
+	if _, ok := csc.mutation.PaymentProvider(); !ok {
+		return &ValidationError{Name: "payment_provider", err: errors.New(`ent: missing required field "CheckoutSession.payment_provider"`)}
+	}
 	if v, ok := csc.mutation.PaymentProvider(); ok {
-		if err := v.Validate(); err != nil {
+		if err := checkoutsession.PaymentProviderValidator(string(v)); err != nil {
 			return &ValidationError{Name: "payment_provider", err: fmt.Errorf(`ent: validator failed for field "CheckoutSession.payment_provider": %w`, err)}
 		}
 	}
@@ -506,7 +501,7 @@ func (csc *CheckoutSessionCreate) createSpec() (*CheckoutSession, *sqlgraph.Crea
 	}
 	if value, ok := csc.mutation.PaymentProvider(); ok {
 		_spec.SetField(checkoutsession.FieldPaymentProvider, field.TypeString, value)
-		_node.PaymentProvider = &value
+		_node.PaymentProvider = value
 	}
 	if value, ok := csc.mutation.CheckoutInvoiceID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString, value)

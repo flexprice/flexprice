@@ -3,6 +3,7 @@ package checkout
 import (
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -29,8 +30,9 @@ type CheckoutSession struct {
 	// CheckoutStatus tracks the session lifecycle. Starts at "initiated"
 	// when the session row is inserted; advances to "pending" once the
 	// provider call succeeds; settles to completed/failed/expired.
-	CheckoutStatus  types.CheckoutStatus           `db:"checkout_status" json:"checkout_status"`
-	PaymentProvider *types.CheckoutPaymentProvider `db:"payment_provider" json:"payment_provider,omitempty"`
+	CheckoutStatus  types.CheckoutStatus          `db:"checkout_status" json:"checkout_status"`
+	// PaymentProvider is required and immutable after creation.
+	PaymentProvider types.CheckoutPaymentProvider `db:"payment_provider" json:"payment_provider"`
 
 	// CheckoutInvoiceID and CheckoutPaymentID are set once the apply step
 	// creates the corresponding Flexprice entities (completed sessions only).
@@ -73,4 +75,28 @@ type CheckoutSession struct {
 	Metadata      map[string]string `db:"metadata" json:"metadata,omitempty"`
 
 	types.BaseModel
+}
+
+// Validate checks that the session has all required fields and that enum values are valid.
+func (s *CheckoutSession) Validate() error {
+	if s.CustomerID == "" {
+		return ierr.NewError("customer_id is required").
+			WithHint("customer_id cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	if err := s.Action.Validate(); err != nil {
+		return err
+	}
+	if err := s.CheckoutStatus.Validate(); err != nil {
+		return err
+	}
+	if s.ExpiresAt.IsZero() {
+		return ierr.NewError("expires_at is required").
+			WithHint("expires_at cannot be zero").
+			Mark(ierr.ErrValidation)
+	}
+	if err := s.PaymentProvider.Validate(); err != nil {
+		return err
+	}
+	return nil
 }

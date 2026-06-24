@@ -38,11 +38,10 @@ func (s *CheckoutSessionServiceSuite) TearDownTest() {
 }
 
 func (s *CheckoutSessionServiceSuite) makeCreateReq() dto.CreateCheckoutSessionRequest {
-	provider := types.CheckoutPaymentProviderStripe
 	return dto.CreateCheckoutSessionRequest{
 		CustomerID:      "cust_test",
 		Action:          types.CheckoutActionCreateSubscription,
-		PaymentProvider: &provider,
+		PaymentProvider: types.CheckoutPaymentProviderStripe,
 		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				PlanID:        "plan_test",
