@@ -168,6 +168,7 @@ data:
       topic: {{ .Values.webhook.topic | quote }}
       pubsub: {{ .Values.webhook.pubsub | quote }}
       consumer_group: {{ .Values.webhook.consumerGroup | quote }}
+      rate_limit: {{ .Values.webhook.rateLimit }}
       max_retries: {{ .Values.webhook.maxRetries }}
       initial_interval: {{ .Values.webhook.initialInterval | quote }}
       max_interval: {{ .Values.webhook.maxInterval | quote }}
@@ -178,7 +179,16 @@ data:
         enabled: {{ .Values.webhook.svixConfig.enabled }}
         base_url: {{ .Values.webhook.svixConfig.baseUrl | quote }}
     {{- end }}
-    
+
+    # Integration events: consumed from the SAME system_events topic as webhooks,
+    # but under an independent consumer group. Rendered here because viper does not
+    # apply Go `default` tags on Unmarshal (same class as event_processing) — without
+    # this block enabled resolves to false and the integration-events consumer never starts.
+    integration_events:
+      enabled: {{ .Values.integrationEvents.enabled }}
+      consumer_group: {{ .Values.integrationEvents.consumerGroup | quote }}
+      rate_limit: {{ .Values.integrationEvents.rateLimit }}
+
     billing:
       tenant_id: {{ .Values.billing.tenantId | quote }}
       environment_id: {{ .Values.billing.environmentId | quote }}
