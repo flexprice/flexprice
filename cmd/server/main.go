@@ -186,6 +186,7 @@ func main() {
 			repository.NewScheduledTaskRepository,
 			repository.NewPriceUnitRepository,
 			repository.NewWorkflowExecutionRepository,
+			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
 
 			// PubSub

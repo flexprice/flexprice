@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -275,4 +276,8 @@ func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Reposi
 
 func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {
 	return entRepo.NewIncomingWebhookEventRepository(p.EntClient)
+}
+
+func NewCheckoutSessionRepository(p RepositoryParams) checkout.Repository {
+	return entRepo.NewCheckoutSessionRepository(p.EntClient, p.Logger)
 }
