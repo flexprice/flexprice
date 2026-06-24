@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -126,6 +127,7 @@ func checkColumn(table, column string) error {
 			alertlogs.Table:                alertlogs.ValidColumn,
 			auth.Table:                     auth.ValidColumn,
 			billingsequence.Table:          billingsequence.ValidColumn,
+			checkoutsession.Table:          checkoutsession.ValidColumn,
 			connection.Table:               connection.ValidColumn,
 			costsheet.Table:                costsheet.ValidColumn,
 			coupon.Table:                   coupon.ValidColumn,

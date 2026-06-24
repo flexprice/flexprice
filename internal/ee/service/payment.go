@@ -567,3 +567,44 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 
 	return count > 0, nil
 }
+
+// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
+// session directly via repo, without gateway calls or lifecycle processing.
+// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
+func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error) {
+	if req == nil || req.Invoice == nil {
+		return nil, ierr.NewError("request and invoice are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	gatewayStr := string(req.Gateway)
+	p := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     req.Invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    &gatewayStr,
+		Amount:            req.Invoice.AmountDue,
+		Currency:          req.Invoice.Currency,
+		PaymentStatus:     types.PaymentStatusInitiated,
+		TrackAttempts:     false, // checkout payments are promoted via webhook callback, not attempt tracking
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+
+	p.IdempotencyKey = s.idempGen.GenerateKey(idempotency.ScopePayment, map[string]interface{}{
+		"checkout_invoice_id": req.Invoice.ID,
+		"gateway":             req.Gateway,
+	})
+
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.PaymentRepo.Create(ctx, p); err != nil {
+		return nil, err
+	}
+
+	// Webhook event intentionally omitted — the gateway webhook will drive payment lifecycle updates.
+	return dto.NewPaymentResponse(p), nil
+}

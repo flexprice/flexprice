@@ -427,6 +427,163 @@ const docTemplate = `{
                 }
             }
         },
+        "/checkout/sessions": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new checkout session to initiate a B2C payment flow.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Create checkout session",
+                "operationId": "createCheckoutSession",
+                "parameters": [
+                    {
+                        "description": "Checkout session to create",
+                        "name": "session",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateCheckoutSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Idempotency key conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/checkout/sessions/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing or searching checkout sessions. Returns a paginated list; supports filtering by customer IDs, statuses, and other fields.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Search checkout sessions",
+                "operationId": "queryCheckoutSessions",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CheckoutSessionFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCheckoutSessionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/checkout/sessions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve a checkout session by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Get checkout session",
+                "operationId": "getCheckoutSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Checkout session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/costs": {
             "post": {
                 "security": [
@@ -12974,6 +13131,130 @@ const docTemplate = `{
                 "ChangedSubscriptionActionUpdated"
             ]
         },
+        "CheckoutSessionResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "Action is the billing operation this session will perform.\nImmutable after creation; determines which sub-struct inside\nConfiguration is populated.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutAction"
+                        }
+                    ]
+                },
+                "cancel_url": {
+                    "type": "string"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "checkout_invoice_id": {
+                    "description": "CheckoutInvoiceID and CheckoutPaymentID are set once the apply step\ncreates the corresponding Flexprice entities (completed sessions only).",
+                    "type": "string"
+                },
+                "checkout_payment_id": {
+                    "type": "string"
+                },
+                "checkout_status": {
+                    "description": "CheckoutStatus tracks the session lifecycle. Starts at \"initiated\"\nwhen the session row is inserted; advances to \"pending\" once the\nprovider call succeeds; settles to completed/failed/expired.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutStatus"
+                        }
+                    ]
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "configuration": {
+                    "description": "Configuration holds the immutable caller inputs set at creation time.\nOnly the sub-struct matching Action is populated; the others are nil.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutConfiguration"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "description": "ExpiresAt is required. A Temporal timer fires at this time for any\nsession still in initiated|pending, marking it expired. The caller\nmust create a new session after expiry (expire-and-restart model).",
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "description": "FailureReason is a human-readable string set on failed sessions.",
+                    "type": "string"
+                },
+                "failure_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "description": "IdempotencyKey is caller-supplied. It is unique only while the session\nis active (initiated|pending). The same key may be reused once the\nsession reaches a terminal state (completed|failed|expired).",
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "payment_action": {
+                    "$ref": "#/definitions/PaymentAction"
+                },
+                "payment_provider": {
+                    "description": "PaymentProvider is required and immutable after creation.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                        }
+                    ]
+                },
+                "provider_result": {
+                    "description": "ProviderResult holds the external provider response (session URL,\npayment intent ID, etc.). Set after the provider call in the create\nstep. Source of truth for deriving PaymentActions in API responses.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutProviderResult"
+                        }
+                    ]
+                },
+                "result": {
+                    "description": "Result holds the Flexprice entity IDs created during the apply step.\nNil until the session reaches completed status.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CheckoutResult"
+                        }
+                    ]
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "success_url": {
+                    "description": "Redirect URLs sent to the payment provider. The provider redirects the\nuser browser to the appropriate URL after the payment flow completes.",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "CloneEnvironmentRequest": {
             "type": "object",
             "properties": {
@@ -13583,6 +13864,46 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/PriceResponse"
                     }
+                }
+            }
+        },
+        "CreateCheckoutSessionRequest": {
+            "type": "object",
+            "required": [
+                "action",
+                "customer_id",
+                "payment_provider"
+            ],
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/types.CheckoutAction"
+                },
+                "cancel_url": {
+                    "type": "string"
+                },
+                "configuration": {
+                    "$ref": "#/definitions/types.CheckoutConfiguration"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "failure_url": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "payment_provider": {
+                    "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                },
+                "success_url": {
+                    "type": "string"
                 }
             }
         },
@@ -17477,6 +17798,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListCheckoutSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CheckoutSessionResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListCostsheetResponse": {
             "type": "object",
             "properties": {
@@ -17775,6 +18110,17 @@ const docTemplate = `{
                             "$ref": "#/definitions/price.TransformQuantity"
                         }
                     ]
+                }
+            }
+        },
+        "PaymentAction": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/types.PaymentActionType"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },
@@ -26013,6 +26359,251 @@ const docTemplate = `{
                 }
             }
         },
+        "types.CheckoutAction": {
+            "type": "string",
+            "enum": [
+                "create_subscription"
+            ],
+            "x-enum-varnames": [
+                "CheckoutActionCreateSubscription"
+            ]
+        },
+        "types.CheckoutConfiguration": {
+            "type": "object",
+            "properties": {
+                "create_subscription_params": {
+                    "$ref": "#/definitions/types.CreateSubscriptionParams"
+                }
+            }
+        },
+        "types.CheckoutCouponInput": {
+            "type": "object",
+            "properties": {
+                "coupon_code": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CheckoutCreditGrant": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CheckoutLineItem": {
+            "type": "object",
+            "properties": {
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                }
+            }
+        },
+        "types.CheckoutPaymentProvider": {
+            "type": "string",
+            "enum": [
+                "stripe"
+            ],
+            "x-enum-varnames": [
+                "CheckoutPaymentProviderStripe"
+            ]
+        },
+        "types.CheckoutProviderResult": {
+            "type": "object",
+            "properties": {
+                "create_subscription_result": {
+                    "$ref": "#/definitions/types.ProviderSubscriptionResult"
+                }
+            }
+        },
+        "types.CheckoutResult": {
+            "type": "object",
+            "properties": {
+                "create_subscription_result": {
+                    "$ref": "#/definitions/types.CreateSubscriptionResult"
+                }
+            }
+        },
+        "types.CheckoutSessionFilter": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutAction"
+                    }
+                },
+                "checkout_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_payment_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutStatus"
+                    }
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "expires_at_lt": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "payment_providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                    }
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
+        "types.CheckoutStatus": {
+            "type": "string",
+            "enum": [
+                "initiated",
+                "pending",
+                "completed",
+                "failed",
+                "expired"
+            ],
+            "x-enum-varnames": [
+                "CheckoutStatusInitiated",
+                "CheckoutStatusPending",
+                "CheckoutStatusCompleted",
+                "CheckoutStatusFailed",
+                "CheckoutStatusExpired"
+            ]
+        },
+        "types.CreateSubscriptionParams": {
+            "type": "object",
+            "required": [
+                "billing_period",
+                "currency",
+                "plan_id"
+            ],
+            "properties": {
+                "billing_cycle": {
+                    "$ref": "#/definitions/types.BillingCycle"
+                },
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "type": "integer"
+                },
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutCreditGrant"
+                    }
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutLineItem"
+                    }
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutCouponInput"
+                    }
+                }
+            }
+        },
+        "types.CreateSubscriptionResult": {
+            "type": "object",
+            "properties": {
+                "invoice_id": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -26031,6 +26622,31 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.PaymentActionType": {
+            "type": "string",
+            "enum": [
+                "checkout_url",
+                "payment_link"
+            ],
+            "x-enum-varnames": [
+                "PaymentActionTypeCheckoutURL",
+                "PaymentActionTypePaymentLink"
+            ]
+        },
+        "types.ProviderSubscriptionResult": {
+            "type": "object",
+            "properties": {
+                "payment_intent_id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "session_url": {
+                    "type": "string"
+                }
             }
         },
         "types.TimeOfDayBucket": {

@@ -96,6 +96,7 @@ const (
 	UUID_PREFIX_TAX_ASSOCIATION            = "ta"
 	UUID_PREFIX_TAX_APPLIED                = "taxapp"
 	UUID_PREFIX_CREDIT_GRANT               = "cg"
+	UUID_PREFIX_CHECKOUT_SESSION           = "cs"
 	UUID_PREFIX_COSTSHEET                  = "cost"
 	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM      = "cn_line"
 	UUID_PREFIX_ENTITY_INTEGRATION_MAPPING = "eim"
