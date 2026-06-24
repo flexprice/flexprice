@@ -52,7 +52,7 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 		if cleanupErr := s.CleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after fulfillment error",
 				"session_id", session.ID,
-				"cleanup_err", cleanupErr,
+				"error", cleanupErr,
 				"original_err", err,
 			)
 		}
@@ -126,17 +126,17 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 		res := session.Result.CreateSubscriptionResult
 		if res.PaymentID != "" {
 			if err := s.PaymentRepo.Delete(ctx, res.PaymentID); err != nil {
-				s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", res.PaymentID, "err", err)
+				s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", res.PaymentID, "error", err)
 			}
 		}
 		if res.InvoiceID != "" {
 			if err := s.InvoiceRepo.Delete(ctx, res.InvoiceID); err != nil {
-				s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", res.InvoiceID, "err", err)
+				s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", res.InvoiceID, "error", err)
 			}
 		}
 		if res.SubscriptionID != "" {
 			if err := s.SubRepo.Delete(ctx, res.SubscriptionID); err != nil {
-				s.Logger.Error(ctx, "failed to archive checkout subscription", "subscription_id", res.SubscriptionID, "err", err)
+				s.Logger.Error(ctx, "failed to archive checkout subscription", "subscription_id", res.SubscriptionID, "error", err)
 			}
 		}
 	}
