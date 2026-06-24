@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -19,6 +20,9 @@ type CheckoutSessionService interface {
 	// invoice, payment) and marks the session as failed with the given reason.
 	// Pass reason=nil when cleaning up without an error (e.g. session expiry).
 	CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error
+	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
+	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
+	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
 }
 
 type checkoutSessionService struct {
@@ -142,45 +146,39 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 	return s.CheckoutSessionRepo.Update(ctx, session)
 }
 
-func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
-	switch session.Action {
-	case types.CheckoutActionCreateSubscription:
-		subResp, invResp, err := s.createDraftSubscriptionWithInvoice(ctx, session)
-		if err != nil {
-			return err
-		}
-
-		// Stage sub and invoice IDs immediately so CleanupCheckoutSession can
-		// archive them if the payment step below fails.
-		result := types.CheckoutResult{
-			CreateSubscriptionResult: &types.CreateSubscriptionResult{
-				SubscriptionID: subResp.ID,
-				InvoiceID:      invResp.ID,
-			},
-		}
-		session.Result = (*domainCheckout.JSONBCheckoutResult)(&result)
-
-		payResp, err := s.createCheckoutPayment(ctx, &invResp.Invoice, session.PaymentProvider)
-		if err != nil {
-			return err
-		}
-
-		result.CreateSubscriptionResult.PaymentID = payResp.ID
-		session.CheckoutInvoiceID = &invResp.ID
-		session.CheckoutPaymentID = &payResp.ID
-		session.CheckoutStatus = types.CheckoutStatusPending
-
-	default:
-		return ierr.NewError("unsupported checkout action").
-			WithHint("No fulfillment handler for this action type").
-			WithReportableDetails(map[string]any{"action": session.Action}).
+func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error {
+	if sessionID == "" {
+		return ierr.NewError("session ID is required").
+			WithHint("checkout session ID cannot be empty").
 			Mark(ierr.ErrValidation)
 	}
 
+	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+
+	if session.CheckoutStatus != types.CheckoutStatusPending &&
+		session.CheckoutStatus != types.CheckoutStatusInitiated {
+		return ierr.NewError("checkout session cannot be completed").
+			WithHintf("session is in %s status; must be pending or initiated", session.CheckoutStatus).
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.completeCheckoutAction(ctx, session, providerResult); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	session.CheckoutStatus = types.CheckoutStatusCompleted
+	session.CompletedAt = &now
+	if providerResult != nil {
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	}
 	return s.CheckoutSessionRepo.Update(ctx, session)
 }
 
-func (s *checkoutSessionService) createDraftSubscriptionWithInvoice(ctx context.Context, session *domainCheckout.CheckoutSession) (*dto.SubscriptionResponse, *dto.InvoiceResponse, error) {
+func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, session *domainCheckout.CheckoutSession) (*dto.SubscriptionResponse, *dto.InvoiceResponse, error) {
 	params := session.Configuration.CreateSubscriptionParams
 	if params == nil {
 		return nil, nil, ierr.NewError("create_subscription_params is required for create_subscription action").
