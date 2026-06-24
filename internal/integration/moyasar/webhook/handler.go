@@ -236,7 +236,6 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 	if err != nil {
 		h.logger.Error(ctx, "failed to check existing payment methods",
 			"customer_id", customerID,
-			"token", token,
 			"error", err,
 		)
 		return
@@ -244,7 +243,6 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 	if count > 0 {
 		h.logger.Info(ctx, "payment method already exists for token, skipping",
 			"customer_id", customerID,
-			"token", token,
 		)
 		return
 	}
@@ -269,7 +267,6 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 	if err := h.paymentMethodRepo.Create(ctx, paymentMethod); err != nil {
 		h.logger.Error(ctx, "failed to create payment method",
 			"customer_id", customerID,
-			"token", token,
 			"error", err,
 		)
 		return
@@ -278,7 +275,6 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 	h.logger.Info(ctx, "payment method activated",
 		"customer_id", customerID,
 		"payment_method_id", paymentMethod.ID,
-		"token", token,
 	)
 }
 

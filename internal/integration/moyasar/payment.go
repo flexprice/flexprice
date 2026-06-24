@@ -568,7 +568,6 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 
 	s.logger.Info(ctx, "charging saved payment method",
 		"customer_id", customerID,
-		"token_id", tokenID,
 		"amount", amount.String(),
 		"currency", currency)
 
@@ -578,7 +577,6 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 	if err != nil {
 		s.logger.Error(ctx, "failed to charge saved payment method",
 			"customer_id", customerID,
-			"token_id", tokenID,
 			"error", err)
 		return nil, err
 	}
@@ -682,7 +680,6 @@ func (s *PaymentService) GetCustomerPaymentMethods(
 		token, err := s.client.GetToken(ctx, tokenID)
 		if err != nil {
 			s.logger.Info(context.Background(), "failed to get token from Moyasar, skipping",
-				"token_id", tokenID,
 				"error", err)
 			continue
 		}
