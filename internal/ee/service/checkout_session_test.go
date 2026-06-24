@@ -367,20 +367,15 @@ func (s *CheckoutSessionServiceSuite) TestCleanup_HappyPath() {
 	s.Equal(types.CheckoutStatusFailed, updated.CheckoutStatus)
 	s.Nil(updated.FailureReason)
 
-	// Payment should be archived (soft-deleted)
-	pay, err := s.GetStores().PaymentRepo.Get(s.GetContext(), res.PaymentID)
-	s.Require().NoError(err)
-	s.Equal(types.StatusArchived, pay.Status)
+	// In-memory stores hard-delete; verify all three entities were removed.
+	_, err = s.GetStores().PaymentRepo.Get(s.GetContext(), res.PaymentID)
+	s.True(ierr.IsNotFound(err), "payment should have been deleted on cleanup")
 
-	// Invoice should be archived
-	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), res.InvoiceID)
-	s.Require().NoError(err)
-	s.Equal(types.StatusArchived, inv.Status)
+	_, err = s.GetStores().InvoiceRepo.Get(s.GetContext(), res.InvoiceID)
+	s.True(ierr.IsNotFound(err), "invoice should have been deleted on cleanup")
 
-	// Subscription should be archived
-	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), res.SubscriptionID)
-	s.Require().NoError(err)
-	s.Equal(types.StatusArchived, sub.Status)
+	_, err = s.GetStores().SubscriptionRepo.Get(s.GetContext(), res.SubscriptionID)
+	s.True(ierr.IsNotFound(err), "subscription should have been deleted on cleanup")
 }
 
 func (s *CheckoutSessionServiceSuite) TestCleanup_WithFailureReason() {
