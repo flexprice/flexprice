@@ -3,7 +3,7 @@ package checkout
 import (
 	"time"
 
-	"github.com/flexprice/flexprice/ent"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -16,7 +16,7 @@ import (
 //
 //	created ──► initiated ──► pending ──► completed
 //	                │              └──────► failed
-//	                └─────────────────────► expired  
+//	                └─────────────────────► expired
 type CheckoutSession struct {
 	ID            string `db:"id" json:"id"`
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
@@ -65,7 +65,7 @@ type CheckoutSession struct {
 	// ExpiresAt is required. A Temporal timer fires at this time for any
 	// session still in initiated|pending, marking it expired. The caller
 	// must create a new session after expiry (expire-and-restart model).
-	ExpiresAt   *time.Time `db:"expires_at" json:"expires_at"`
+	ExpiresAt   time.Time  `db:"expires_at" json:"expires_at"`
 	CompletedAt *time.Time `db:"completed_at" json:"completed_at,omitempty"`
 	CancelledAt *time.Time `db:"cancelled_at" json:"cancelled_at,omitempty"`
 
@@ -76,35 +76,27 @@ type CheckoutSession struct {
 	types.BaseModel
 }
 
-func FromEnt(ent *ent.CheckoutSession) *CheckoutSession {
-	return &CheckoutSession{
-		ID:                ent.ID,
-		EnvironmentID:     ent.EnvironmentID,
-		CustomerID:        ent.CustomerID,
-		Action:            ent.Action,
-		CheckoutStatus:    types.CheckoutStatus(ent.CheckoutStatus),
-		PaymentProvider:   ent.PaymentProvider,
-		CheckoutInvoiceID: ent.CheckoutInvoiceID,
-		CheckoutPaymentID: ent.CheckoutPaymentID,
-		Configuration:     ent.Configuration,
-		Result:            ent.Result,
-		ProviderResult:    ent.ProviderResult,
-		IdempotencyKey:    ent.IdempotencyKey,
-		SuccessURL:        ent.SuccessURL,
-		FailureURL:        ent.FailureURL,
-		CancelURL:         ent.CancelURL,
-		ExpiresAt:         ent.ExpiresAt,
-		CompletedAt:       ent.CompletedAt,
-		CancelledAt:       ent.CancelledAt,
-		FailureReason:     ent.FailureReason,
-		Metadata:          types.Metadata(ent.Metadata),
-		BaseModel: types.BaseModel{
-			TenantID:  ent.TenantID,
-			Status:    types.Status(ent.Status),
-			CreatedAt: ent.CreatedAt,
-			UpdatedAt: ent.UpdatedAt,
-			CreatedBy: ent.CreatedBy,
-			UpdatedBy: ent.UpdatedBy,
-		},
+func (s *CheckoutSession) Validate() error {
+	if s.CustomerID == "" {
+		return ierr.NewError("customer_id is required").
+			WithHint("customer_id cannot be empty").
+			Mark(ierr.ErrValidation)
 	}
+	if err := s.Action.Validate(); err != nil {
+		return err
+	}
+	if err := s.CheckoutStatus.Validate(); err != nil {
+		return err
+	}
+	if s.PaymentProvider != nil {
+		if err := s.PaymentProvider.Validate(); err != nil {
+			return err
+		}
+	}
+	if s.ExpiresAt.IsZero() {
+		return ierr.NewError("expires_at is required").
+			WithHint("expires_at cannot be zero").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }

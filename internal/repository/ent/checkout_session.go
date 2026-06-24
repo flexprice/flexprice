@@ -57,7 +57,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableSuccessURL(s.SuccessURL).
 		SetNillableFailureURL(s.FailureURL).
 		SetNillableCancelURL(s.CancelURL).
-		SetNillableExpiresAt(s.ExpiresAt).
+		SetExpiresAt(s.ExpiresAt).
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
@@ -98,6 +98,7 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 			entCheckout.ID(id),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -112,7 +113,7 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 	}
 
 	SetSpanSuccess(span)
-	return domainCheckout.FromEnt(e), nil
+	return fromEntCheckout(e), nil
 }
 
 func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckout.CheckoutSession) error {
@@ -126,6 +127,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		SetCheckoutStatus(s.CheckoutStatus).
 		SetNillablePaymentProvider(s.PaymentProvider).
@@ -184,7 +186,7 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 	SetSpanSuccess(span)
 	result := make([]*domainCheckout.CheckoutSession, len(entities))
 	for i, e := range entities {
-		result[i] = domainCheckout.FromEnt(e)
+		result[i] = fromEntCheckout(e)
 	}
 	return result, nil
 }
@@ -251,7 +253,7 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 	}
 
 	SetSpanSuccess(span)
-	return domainCheckout.FromEnt(e), nil
+	return fromEntCheckout(e), nil
 }
 
 // CheckoutSessionQuery type alias for better readability
@@ -333,4 +335,40 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 		query = query.Where(entCheckout.CheckoutPaymentIDIn(f.CheckoutPaymentIDs...))
 	}
 	return query, nil
+}
+
+func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
+	s := &domainCheckout.CheckoutSession{
+		ID:                e.ID,
+		EnvironmentID:     e.EnvironmentID,
+		CustomerID:        e.CustomerID,
+		Action:            e.Action,
+		CheckoutStatus:    types.CheckoutStatus(e.CheckoutStatus),
+		PaymentProvider:   e.PaymentProvider,
+		CheckoutInvoiceID: e.CheckoutInvoiceID,
+		CheckoutPaymentID: e.CheckoutPaymentID,
+		Configuration:     e.Configuration,
+		Result:            e.Result,
+		ProviderResult:    e.ProviderResult,
+		IdempotencyKey:    e.IdempotencyKey,
+		SuccessURL:        e.SuccessURL,
+		FailureURL:        e.FailureURL,
+		CancelURL:         e.CancelURL,
+		CompletedAt:       e.CompletedAt,
+		CancelledAt:       e.CancelledAt,
+		FailureReason:     e.FailureReason,
+		Metadata:          types.Metadata(e.Metadata),
+		BaseModel: types.BaseModel{
+			TenantID:  e.TenantID,
+			Status:    types.Status(e.Status),
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
+		},
+	}
+	if e.ExpiresAt != nil {
+		s.ExpiresAt = *e.ExpiresAt
+	}
+	return s
 }
