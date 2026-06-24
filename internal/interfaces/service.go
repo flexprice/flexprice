@@ -36,6 +36,10 @@ type PaymentService interface {
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
 	PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error)
+	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
+	// session without triggering payment lifecycle processing.
+	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
+	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 }
 
 // InvoiceService defines the interface for invoice operations

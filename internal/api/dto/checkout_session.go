@@ -5,6 +5,7 @@ import (
 	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -73,6 +74,15 @@ type UpdateCheckoutSessionRequest struct {
 	CompletedAt       *time.Time                    `json:"completed_at,omitempty"`
 	CancelledAt       *time.Time                    `json:"cancelled_at,omitempty"`
 	FailureReason     *string                       `json:"failure_reason,omitempty"`
+}
+
+// CreateCheckoutPaymentRequest holds parameters for creating an INITIATED payment
+// record during checkout fulfillment. Uses the domain invoice directly to avoid
+// a redundant DB lookup. Extend this struct to add metadata, idempotency keys,
+// or additional gateway fields without changing the service interface signature.
+type CreateCheckoutPaymentRequest struct {
+	Invoice *invoice.Invoice
+	Gateway types.PaymentGatewayType
 }
 
 // PaymentAction is derived from ProviderResult at response-build time; never stored.
