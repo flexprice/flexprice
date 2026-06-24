@@ -14,18 +14,25 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 )
 
 type checkoutSessionRepository struct {
 	client postgres.IClient
-	logger *logger.Logger
+	log    *logger.Logger
 }
 
-func NewCheckoutSessionRepository(client postgres.IClient, logger *logger.Logger) domainCheckout.Repository {
-	return &checkoutSessionRepository{client: client, logger: logger}
+func NewCheckoutSessionRepository(client postgres.IClient, log *logger.Logger) domainCheckout.Repository {
+	return &checkoutSessionRepository{client: client, log: log}
 }
 
 func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckout.CheckoutSession) error {
+	r.log.Debug(ctx, "creating checkout session",
+		"id", s.ID,
+		"customer_id", s.CustomerID,
+		"action", s.Action,
+	)
+
 	span := StartRepositorySpan(ctx, "checkout_session", "create", map[string]interface{}{
 		"id":          s.ID,
 		"customer_id": s.CustomerID,
@@ -75,10 +82,14 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		}
 		return ierr.WithError(err).WithHint("checkout session creation failed").Mark(ierr.ErrDatabase)
 	}
+
+	SetSpanSuccess(span)
 	return nil
 }
 
 func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domainCheckout.CheckoutSession, error) {
+	r.log.Debug(ctx, "getting checkout session", "id", id)
+
 	span := StartRepositorySpan(ctx, "checkout_session", "get", map[string]interface{}{"id": id})
 	defer FinishSpan(span)
 
@@ -99,10 +110,14 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 		}
 		return nil, ierr.WithError(err).WithHint("get checkout session failed").Mark(ierr.ErrDatabase)
 	}
+
+	SetSpanSuccess(span)
 	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckout.CheckoutSession) error {
+	r.log.Debug(ctx, "updating checkout session", "id", s.ID)
+
 	span := StartRepositorySpan(ctx, "checkout_session", "update", map[string]interface{}{"id": s.ID})
 	defer FinishSpan(span)
 
@@ -134,6 +149,8 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			WithHintf("checkout session %s not found or already archived", s.ID).
 			Mark(ierr.ErrNotFound)
 	}
+
+	SetSpanSuccess(span)
 	return nil
 }
 
@@ -141,28 +158,22 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 	span := StartRepositorySpan(ctx, "checkout_session", "list", map[string]interface{}{"filter": filter})
 	defer FinishSpan(span)
 
+	if filter == nil {
+		filter = types.NewDefaultCheckoutSessionFilter()
+	}
+
 	if err := filter.Validate(); err != nil {
 		return nil, err
 	}
 
-	query := r.client.Reader(ctx).CheckoutSession.Query().
-		Where(
-			entCheckout.TenantID(types.GetTenantID(ctx)),
-			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
-
-	query = applyCheckoutFilters(query, filter)
-
-	if filter.GetLimit() > 0 {
-		query = query.Limit(filter.GetLimit())
+	queryOpts := CheckoutSessionQueryOptions{}
+	query := r.client.Reader(ctx).CheckoutSession.Query()
+	query, err := queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
 	}
-	query = query.Offset(filter.GetOffset())
-
-	orderFunc := ent.Desc
-	if filter.GetOrder() == "asc" {
-		orderFunc = ent.Asc
-	}
-	query = query.Order(orderFunc(entCheckout.FieldCreatedAt))
+	query = ApplyQueryOptions(ctx, query, filter, queryOpts)
 
 	entities, err := query.All(ctx)
 	if err != nil {
@@ -170,6 +181,7 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 		return nil, ierr.WithError(err).WithHint("list checkout sessions failed").Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
 	result := make([]*domainCheckout.CheckoutSession, len(entities))
 	for i, e := range entities {
 		result[i] = domainCheckout.FromEnt(e)
@@ -181,28 +193,36 @@ func (r *checkoutSessionRepository) Count(ctx context.Context, filter *types.Che
 	span := StartRepositorySpan(ctx, "checkout_session", "count", map[string]interface{}{"filter": filter})
 	defer FinishSpan(span)
 
+	if filter == nil {
+		filter = types.NewDefaultCheckoutSessionFilter()
+	}
+
 	if err := filter.Validate(); err != nil {
 		return 0, err
 	}
 
-	query := r.client.Reader(ctx).CheckoutSession.Query().
-		Where(
-			entCheckout.TenantID(types.GetTenantID(ctx)),
-			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
-		)
-
-	query = applyCheckoutFilters(query, filter)
+	queryOpts := CheckoutSessionQueryOptions{}
+	query := r.client.Reader(ctx).CheckoutSession.Query()
+	query = ApplyBaseFilters(ctx, query, filter, queryOpts)
+	query, err := queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, err
+	}
 
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).WithHint("count checkout sessions failed").Mark(ierr.ErrDatabase)
 	}
+
+	SetSpanSuccess(span)
 	return count, nil
 }
 
 func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domainCheckout.CheckoutSession, error) {
+	r.log.Debug(ctx, "getting checkout session by idempotency key", "idempotency_key", key)
+
 	span := StartRepositorySpan(ctx, "checkout_session", "get_by_idempotency_key", map[string]interface{}{
 		"idempotency_key": key,
 	})
@@ -229,21 +249,88 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 		}
 		return nil, ierr.WithError(err).WithHint("get by idempotency key failed").Mark(ierr.ErrDatabase)
 	}
+
+	SetSpanSuccess(span)
 	return domainCheckout.FromEnt(e), nil
 }
 
-func applyCheckoutFilters(query *ent.CheckoutSessionQuery, filter *types.CheckoutSessionFilter) *ent.CheckoutSessionQuery {
-	if filter.CustomerID != nil {
-		query = query.Where(entCheckout.CustomerID(*filter.CustomerID))
-	}
-	if len(filter.Statuses) > 0 {
-		query = query.Where(entCheckout.CheckoutStatusIn(filter.Statuses...))
-	}
-	if len(filter.Actions) > 0 {
-		query = query.Where(entCheckout.ActionIn(filter.Actions...))
-	}
-	if filter.PaymentProvider != nil {
-		query = query.Where(entCheckout.PaymentProviderEQ(*filter.PaymentProvider))
+// CheckoutSessionQuery type alias for better readability
+type CheckoutSessionQuery = *ent.CheckoutSessionQuery
+
+// CheckoutSessionQueryOptions implements BaseQueryOptions for checkout session queries
+type CheckoutSessionQueryOptions struct{}
+
+func (o CheckoutSessionQueryOptions) ApplyTenantFilter(ctx context.Context, query CheckoutSessionQuery) CheckoutSessionQuery {
+	return query.Where(entCheckout.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o CheckoutSessionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query CheckoutSessionQuery) CheckoutSessionQuery {
+	environmentID := types.GetEnvironmentID(ctx)
+	if environmentID != "" {
+		return query.Where(entCheckout.EnvironmentIDEQ(environmentID))
 	}
 	return query
+}
+
+func (o CheckoutSessionQueryOptions) ApplyStatusFilter(query CheckoutSessionQuery, status string) CheckoutSessionQuery {
+	if status == "" {
+		return query.Where(entCheckout.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(entCheckout.StatusEQ(status))
+}
+
+func (o CheckoutSessionQueryOptions) ApplySortFilter(query CheckoutSessionQuery, field string, order string) CheckoutSessionQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	if field == "" {
+		field = entCheckout.FieldCreatedAt
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o CheckoutSessionQueryOptions) ApplyPaginationFilter(query CheckoutSessionQuery, limit int, offset int) CheckoutSessionQuery {
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o CheckoutSessionQueryOptions) GetFieldName(field string) string {
+	if entCheckout.ValidColumn(field) {
+		return field
+	}
+	return ""
+}
+
+func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CheckoutSessionFilter, query CheckoutSessionQuery) (CheckoutSessionQuery, error) {
+	if f == nil {
+		return query, nil
+	}
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(entCheckout.CustomerIDIn(f.CustomerIDs...))
+	}
+	if len(f.Actions) > 0 {
+		query = query.Where(entCheckout.ActionIn(f.Actions...))
+	}
+	if len(f.PaymentProviders) > 0 {
+		query = query.Where(entCheckout.PaymentProviderIn(f.PaymentProviders...))
+	}
+	if len(f.CheckoutStatuses) > 0 {
+		query = query.Where(entCheckout.CheckoutStatusIn(f.CheckoutStatuses...))
+	}
+	if f.ExpiresAtLT != nil {
+		query = query.Where(entCheckout.ExpiresAtLT(lo.FromPtr(f.ExpiresAtLT)))
+	}
+	if len(f.CheckoutInvoiceIDs) > 0 {
+		query = query.Where(entCheckout.CheckoutInvoiceIDIn(f.CheckoutInvoiceIDs...))
+	}
+	if len(f.CheckoutPaymentIDs) > 0 {
+		query = query.Where(entCheckout.CheckoutPaymentIDIn(f.CheckoutPaymentIDs...))
+	}
+	return query, nil
 }

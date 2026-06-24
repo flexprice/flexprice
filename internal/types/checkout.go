@@ -251,10 +251,13 @@ type ProviderSetupResult struct {
 
 type CheckoutSessionFilter struct {
 	*QueryFilter
-	CustomerID      *string
-	Statuses        []CheckoutStatus
-	Actions         []CheckoutAction
-	PaymentProvider *CheckoutPaymentProvider
+	CustomerIDs        []string                  `json:"customer_ids,omitempty"`
+	Actions            []CheckoutAction          `json:"actions,omitempty"`
+	PaymentProviders   []CheckoutPaymentProvider `json:"payment_providers,omitempty"`
+	CheckoutStatuses   []CheckoutStatus          `json:"checkout_statuses,omitempty"`
+	ExpiresAtLT        *time.Time                `json:"expires_at_lt,omitempty"`
+	CheckoutInvoiceIDs []string                  `json:"checkout_invoice_ids,omitempty"`
+	CheckoutPaymentIDs []string                  `json:"checkout_payment_ids,omitempty"`
 }
 
 func NewDefaultCheckoutSessionFilter() *CheckoutSessionFilter {
@@ -267,20 +270,22 @@ func (f *CheckoutSessionFilter) Validate() error {
 			return err
 		}
 	}
-	for _, s := range f.Statuses {
-		if err := s.Validate(); err != nil {
-			return err
-		}
-	}
 	for _, a := range f.Actions {
 		if err := a.Validate(); err != nil {
 			return err
 		}
 	}
-	if f.PaymentProvider != nil {
-		if err := f.PaymentProvider.Validate(); err != nil {
+	for _, p := range f.PaymentProviders {
+		if err := p.Validate(); err != nil {
 			return err
 		}
 	}
+
+	for _, s := range f.CheckoutStatuses {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
