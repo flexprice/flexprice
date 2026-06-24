@@ -163,6 +163,16 @@ data:
       consumer_group: {{ .Values.onboardingEvents.consumerGroup | quote }}
       max_retries: {{ .Values.onboardingEvents.maxRetries }}
 
+    wallet_balance_alert:
+      # Rendered here because viper does NOT apply Go `default` tags on Unmarshal
+      # (same class as event_processing above). Without this block the topic
+      # resolves to "" and Kafka rejects the publish as an invalid topic. The
+      # producer is also gated on `enabled`, so enabled:false => no publish.
+      enabled: {{ .Values.walletBalanceAlert.enabled }}
+      topic: {{ .Values.walletBalanceAlert.topic | quote }}
+      rate_limit: {{ .Values.walletBalanceAlert.rateLimit }}
+      consumer_group: {{ .Values.walletBalanceAlert.consumerGroup | quote }}
+
     webhook:
       enabled: {{ .Values.webhook.enabled }}
       topic: {{ .Values.webhook.topic | quote }}
