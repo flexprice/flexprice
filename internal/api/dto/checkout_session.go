@@ -36,6 +36,11 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 	if err := r.PaymentProvider.Validate(); err != nil {
 		return err
 	}
+
+	if err := r.Configuration.Validate(r.Action); err != nil {
+		return err
+	}
+
 	return nil
 }
 

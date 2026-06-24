@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
 type CheckoutSessionService interface {
@@ -57,7 +59,9 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 		return nil, err
 	}
 
-	return dto.ToCheckoutSessionResponse(session), nil
+	resp := dto.ToCheckoutSessionResponse(session)
+	s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionInitiated)
+	return resp, nil
 }
 
 func (s *checkoutSessionService) Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
@@ -175,7 +179,33 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	if providerResult != nil {
 		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 	}
-	return s.CheckoutSessionRepo.Update(ctx, session)
+	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
+		return err
+	}
+	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
+	return nil
+}
+
+func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, session *dto.CheckoutSessionResponse, eventName types.WebhookEventName) {
+	payload, err := json.Marshal(webhookDto.NewCheckoutSessionWebhookPayload(session, eventName))
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal checkout webhook payload", "event_name", eventName, "error", err)
+		return
+	}
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     eventName,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(payload),
+		EntityType:    types.SystemEntityTypeCheckoutSession,
+		EntityID:      session.ID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Error(ctx, "failed to publish checkout webhook event", "event_name", eventName, "error", err)
+	}
 }
 
 func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, session *domainCheckout.CheckoutSession) (*dto.SubscriptionResponse, *dto.InvoiceResponse, error) {
@@ -183,6 +213,9 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 	if params == nil {
 		return nil, nil, ierr.NewError("create_subscription_params is required for create_subscription action").
 			Mark(ierr.ErrValidation)
+	}
+	if err := params.Validate(); err != nil {
+		return nil, nil, err
 	}
 
 	subReq := dto.CreateSubscriptionRequest{

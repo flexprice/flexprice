@@ -415,6 +415,9 @@ func NewRouter(
 			checkoutSessions.POST("/search", handlers.CheckoutSession.Query)
 			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
 			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
+			// TODO: remove after testing — manual lifecycle triggers for local E2E testing
+			checkoutSessions.POST("/:id/complete", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestComplete)
+			checkoutSessions.POST("/:id/cleanup", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestCleanup)
 		}
 
 		entitlement := v1Private.Group("/entitlements")
