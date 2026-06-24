@@ -254,15 +254,12 @@ func (s *PaymentService) GetPaymentStatus(
 	if payment.Source != nil {
 		response.PaymentMethod = payment.Source.Type
 		response.PaymentMethodID = payment.Source.GatewayID
-		if response.PaymentMethodID == "" {
-			response.PaymentMethodID = payment.Source.ReferenceID
-		}
 	}
 
 	// Extract FlexPrice payment ID from metadata if available
 	if payment.Metadata != nil {
-		if fpPaymentID, ok := payment.Metadata["flexprice_payment_id"]; ok {
-			response.FlexPricePaymentID = fpPaymentID
+		if flexpricePaymentID, ok := payment.Metadata["flexprice_payment_id"]; ok {
+			response.FlexPricePaymentID = flexpricePaymentID
 		}
 	}
 
@@ -278,7 +275,7 @@ func (s *PaymentService) GetPaymentStatus(
 // This is called when a payment_paid webhook is received without a flexprice_payment_id
 func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 ) error {
@@ -319,7 +316,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 // ProcessExternalMoyasarPayment processes a payment that was made directly in Moyasar (external to FlexPrice)
 func (s *PaymentService) ProcessExternalMoyasarPayment(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	flexpriceInvoiceID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
@@ -365,6 +362,14 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 		return err
 	}
 
+	// Step 4: Sync Moyasar invoice status into FlexPrice invoice metadata
+	if syncErr := s.SyncMoyasarInvoiceStatus(ctx, flexpriceInvoiceID, payment.Status, invoiceService); syncErr != nil {
+		s.logger.Error(ctx, "failed to sync Moyasar invoice status to invoice metadata",
+			"error", syncErr,
+			"flexprice_invoice_id", flexpriceInvoiceID,
+			"moyasar_status", payment.Status)
+	}
+
 	s.logger.Info(ctx, "successfully processed external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID,
@@ -373,10 +378,35 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 	return nil
 }
 
+// syncMoyasarInvoiceStatus updates the moyasar_invoice_status key in the FlexPrice invoice metadata
+// to reflect the current Moyasar payment status. Failures are non-fatal — logged by the caller.
+func (s *PaymentService) SyncMoyasarInvoiceStatus(
+	ctx context.Context,
+	flexpriceInvoiceID string,
+	moyasarStatus string,
+	invoiceService interfaces.InvoiceService,
+) error {
+	inv, err := invoiceService.GetInvoice(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+
+	metadata := types.Metadata{}
+	for k, v := range inv.Metadata {
+		metadata[k] = v
+	}
+	metadata["moyasar_invoice_status"] = moyasarStatus
+
+	_, err = invoiceService.UpdateInvoice(ctx, flexpriceInvoiceID, apidto.UpdateInvoiceRequest{
+		Metadata: &metadata,
+	})
+	return err
+}
+
 // createExternalPaymentRecord creates a payment record for an external Moyasar payment
 func (s *PaymentService) createExternalPaymentRecord(
 	ctx context.Context,
-	payment *MoyasarPaymentObject,
+	payment *MoyasarPayment,
 	invoiceID string,
 	paymentService interfaces.PaymentService,
 ) error {
@@ -389,9 +419,6 @@ func (s *PaymentService) createExternalPaymentRecord(
 	var paymentMethodID string
 	if payment.Source != nil {
 		paymentMethodID = payment.Source.GatewayID
-		if paymentMethodID == "" {
-			paymentMethodID = payment.Source.ReferenceID
-		}
 	}
 
 	s.logger.Info(ctx, "creating external payment record",
@@ -503,7 +530,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 	amount decimal.Decimal,
 	currency string,
 	description string,
-	invoiceID string,
+	moyasarInvoiceID string,
 	paymentID string,
 ) (*CreatePaymentLinkResponse, error) {
 	if tokenID == "" {
@@ -529,7 +556,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 
 	// Build description
 	if description == "" {
-		description = fmt.Sprintf("%s: %s", DefaultInvoiceLabel, invoiceID)
+		description = fmt.Sprintf("%s: %s", DefaultInvoiceLabel, paymentID)
 	}
 
 	// Build metadata
@@ -538,9 +565,6 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		"flexprice_payment_id":  paymentID,
 		"payment_type":          "recurring",
 	}
-	if invoiceID != "" {
-		metadata["flexprice_invoice_id"] = invoiceID
-	}
 
 	s.logger.Info(ctx, "charging saved payment method",
 		"customer_id", customerID,
@@ -548,8 +572,9 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		"amount", amount.String(),
 		"currency", currency)
 
-	// Charge using token
-	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, paymentID)
+	// Charge using token — no given_id, flexprice_payment_id in metadata is the anchor
+	// moyasarInvoiceID links this payment to the Moyasar invoice so Moyasar marks it paid internally
+	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, "", moyasarInvoiceID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to charge saved payment method",
 			"customer_id", customerID,

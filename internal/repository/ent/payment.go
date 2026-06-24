@@ -191,6 +191,54 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 	return domainPayment.FromEntList(payments), nil
 }
 
+// ListScopedByDestinationStatusGateway returns payments across all tenants and
+// environments matching the given destination type, payment status, and gateway.
+func (r *paymentRepository) ListScopedByDestinationStatusGateway(ctx context.Context, destinationType types.PaymentDestinationType, status types.PaymentStatus, gateway types.PaymentGatewayType) ([]domainPayment.ScopedPayment, error) {
+	span := StartRepositorySpan(ctx, "payment", "list_scoped_by_destination_status_gateway", map[string]interface{}{
+		"destination_type": destinationType,
+		"payment_status":   status,
+		"gateway":          gateway,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT id, tenant_id, environment_id, gateway_payment_id
+		FROM payments
+		WHERE destination_type = $1
+		  AND payment_status   = $2
+		  AND payment_gateway  = $3
+		  AND status           = 'published'
+		  AND gateway_payment_id <> ''`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query,
+		string(destinationType),
+		string(status),
+		string(gateway),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to list scoped payments").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result []domainPayment.ScopedPayment
+	for rows.Next() {
+		var row domainPayment.ScopedPayment
+		if err := rows.Scan(&row.PaymentID, &row.TenantID, &row.EnvironmentID, &row.GatewayPaymentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan scoped payment row").Mark(ierr.ErrDatabase)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate scoped payment rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilter) (int, error) {
 	client := r.client.Reader(ctx)
 

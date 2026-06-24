@@ -176,6 +176,11 @@ func RefundedAt(v time.Time) predicate.Payment {
 	return predicate.Payment(sql.FieldEQ(FieldRefundedAt, v))
 }
 
+// VoidedAt applies equality check predicate on the "voided_at" field. It's identical to VoidedAtEQ.
+func VoidedAt(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldEQ(FieldVoidedAt, v))
+}
+
 // RecordedAt applies equality check predicate on the "recorded_at" field. It's identical to RecordedAtEQ.
 func RecordedAt(v time.Time) predicate.Payment {
 	return predicate.Payment(sql.FieldEQ(FieldRecordedAt, v))
@@ -1529,6 +1534,56 @@ func RefundedAtIsNil() predicate.Payment {
 // RefundedAtNotNil applies the NotNil predicate on the "refunded_at" field.
 func RefundedAtNotNil() predicate.Payment {
 	return predicate.Payment(sql.FieldNotNull(FieldRefundedAt))
+}
+
+// VoidedAtEQ applies the EQ predicate on the "voided_at" field.
+func VoidedAtEQ(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldEQ(FieldVoidedAt, v))
+}
+
+// VoidedAtNEQ applies the NEQ predicate on the "voided_at" field.
+func VoidedAtNEQ(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldNEQ(FieldVoidedAt, v))
+}
+
+// VoidedAtIn applies the In predicate on the "voided_at" field.
+func VoidedAtIn(vs ...time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldIn(FieldVoidedAt, vs...))
+}
+
+// VoidedAtNotIn applies the NotIn predicate on the "voided_at" field.
+func VoidedAtNotIn(vs ...time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldNotIn(FieldVoidedAt, vs...))
+}
+
+// VoidedAtGT applies the GT predicate on the "voided_at" field.
+func VoidedAtGT(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldGT(FieldVoidedAt, v))
+}
+
+// VoidedAtGTE applies the GTE predicate on the "voided_at" field.
+func VoidedAtGTE(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldGTE(FieldVoidedAt, v))
+}
+
+// VoidedAtLT applies the LT predicate on the "voided_at" field.
+func VoidedAtLT(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldLT(FieldVoidedAt, v))
+}
+
+// VoidedAtLTE applies the LTE predicate on the "voided_at" field.
+func VoidedAtLTE(v time.Time) predicate.Payment {
+	return predicate.Payment(sql.FieldLTE(FieldVoidedAt, v))
+}
+
+// VoidedAtIsNil applies the IsNil predicate on the "voided_at" field.
+func VoidedAtIsNil() predicate.Payment {
+	return predicate.Payment(sql.FieldIsNull(FieldVoidedAt))
+}
+
+// VoidedAtNotNil applies the NotNil predicate on the "voided_at" field.
+func VoidedAtNotNil() predicate.Payment {
+	return predicate.Payment(sql.FieldNotNull(FieldVoidedAt))
 }
 
 // RecordedAtEQ applies the EQ predicate on the "recorded_at" field.

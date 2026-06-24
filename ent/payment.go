@@ -67,6 +67,8 @@ type Payment struct {
 	FailedAt *time.Time `json:"failed_at,omitempty"`
 	// RefundedAt holds the value of the "refunded_at" field.
 	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+	// VoidedAt holds the value of the "voided_at" field.
+	VoidedAt *time.Time `json:"voided_at,omitempty"`
 	// RecordedAt holds the value of the "recorded_at" field.
 	RecordedAt *time.Time `json:"recorded_at,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
@@ -108,7 +110,7 @@ func (*Payment) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case payment.FieldID, payment.FieldTenantID, payment.FieldStatus, payment.FieldCreatedBy, payment.FieldUpdatedBy, payment.FieldEnvironmentID, payment.FieldIdempotencyKey, payment.FieldDestinationType, payment.FieldDestinationID, payment.FieldPaymentMethodType, payment.FieldPaymentMethodID, payment.FieldPaymentGateway, payment.FieldGatewayPaymentID, payment.FieldGatewayTrackingID, payment.FieldCurrency, payment.FieldPaymentStatus, payment.FieldErrorMessage:
 			values[i] = new(sql.NullString)
-		case payment.FieldCreatedAt, payment.FieldUpdatedAt, payment.FieldSucceededAt, payment.FieldFailedAt, payment.FieldRefundedAt, payment.FieldRecordedAt:
+		case payment.FieldCreatedAt, payment.FieldUpdatedAt, payment.FieldSucceededAt, payment.FieldFailedAt, payment.FieldRefundedAt, payment.FieldVoidedAt, payment.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -285,6 +287,13 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 				pa.RefundedAt = new(time.Time)
 				*pa.RefundedAt = value.Time
 			}
+		case payment.FieldVoidedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field voided_at", values[i])
+			} else if value.Valid {
+				pa.VoidedAt = new(time.Time)
+				*pa.VoidedAt = value.Time
+			}
 		case payment.FieldRecordedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field recorded_at", values[i])
@@ -421,6 +430,11 @@ func (pa *Payment) String() string {
 	builder.WriteString(", ")
 	if v := pa.RefundedAt; v != nil {
 		builder.WriteString("refunded_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := pa.VoidedAt; v != nil {
+		builder.WriteString("voided_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
