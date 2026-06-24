@@ -275,6 +275,12 @@ func (csu *CheckoutSessionUpdate) SetNillableExpiresAt(t *time.Time) *CheckoutSe
 	return csu
 }
 
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (csu *CheckoutSessionUpdate) ClearExpiresAt() *CheckoutSessionUpdate {
+	csu.mutation.ClearExpiresAt()
+	return csu
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (csu *CheckoutSessionUpdate) SetCompletedAt(t time.Time) *CheckoutSessionUpdate {
 	csu.mutation.SetCompletedAt(t)
@@ -477,6 +483,9 @@ func (csu *CheckoutSessionUpdate) sqlSave(ctx context.Context) (n int, err error
 	}
 	if value, ok := csu.mutation.ExpiresAt(); ok {
 		_spec.SetField(checkoutsession.FieldExpiresAt, field.TypeTime, value)
+	}
+	if csu.mutation.ExpiresAtCleared() {
+		_spec.ClearField(checkoutsession.FieldExpiresAt, field.TypeTime)
 	}
 	if value, ok := csu.mutation.CompletedAt(); ok {
 		_spec.SetField(checkoutsession.FieldCompletedAt, field.TypeTime, value)
@@ -768,6 +777,12 @@ func (csuo *CheckoutSessionUpdateOne) SetNillableExpiresAt(t *time.Time) *Checko
 	return csuo
 }
 
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (csuo *CheckoutSessionUpdateOne) ClearExpiresAt() *CheckoutSessionUpdateOne {
+	csuo.mutation.ClearExpiresAt()
+	return csuo
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (csuo *CheckoutSessionUpdateOne) SetCompletedAt(t time.Time) *CheckoutSessionUpdateOne {
 	csuo.mutation.SetCompletedAt(t)
@@ -1000,6 +1015,9 @@ func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *Check
 	}
 	if value, ok := csuo.mutation.ExpiresAt(); ok {
 		_spec.SetField(checkoutsession.FieldExpiresAt, field.TypeTime, value)
+	}
+	if csuo.mutation.ExpiresAtCleared() {
+		_spec.ClearField(checkoutsession.FieldExpiresAt, field.TypeTime)
 	}
 	if value, ok := csuo.mutation.CompletedAt(); ok {
 		_spec.SetField(checkoutsession.FieldCompletedAt, field.TypeTime, value)

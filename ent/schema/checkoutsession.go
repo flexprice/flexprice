@@ -92,7 +92,9 @@ func (CheckoutSession) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		field.Time("expires_at"),
+		field.Time("expires_at").
+			Optional().
+			Nillable(),
 
 		field.Time("completed_at").
 			Optional().

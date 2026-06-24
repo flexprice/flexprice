@@ -60,7 +60,7 @@ type CheckoutSession struct {
 	// CancelURL holds the value of the "cancel_url" field.
 	CancelURL *string `json:"cancel_url,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
-	ExpiresAt time.Time `json:"expires_at,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// CancelledAt holds the value of the "cancelled_at" field.
@@ -241,7 +241,8 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
 			} else if value.Valid {
-				cs.ExpiresAt = value.Time
+				cs.ExpiresAt = new(time.Time)
+				*cs.ExpiresAt = value.Time
 			}
 		case checkoutsession.FieldCompletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -382,8 +383,10 @@ func (cs *CheckoutSession) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(cs.ExpiresAt.Format(time.ANSIC))
+	if v := cs.ExpiresAt; v != nil {
+		builder.WriteString("expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := cs.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")

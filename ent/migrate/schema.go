@@ -211,7 +211,7 @@ var (
 		{Name: "success_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "failure_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "cancel_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
 		{Name: "failure_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},

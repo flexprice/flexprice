@@ -1445,6 +1445,16 @@ func ExpiresAtLTE(v time.Time) predicate.CheckoutSession {
 	return predicate.CheckoutSession(sql.FieldLTE(FieldExpiresAt, v))
 }
 
+// ExpiresAtIsNil applies the IsNil predicate on the "expires_at" field.
+func ExpiresAtIsNil() predicate.CheckoutSession {
+	return predicate.CheckoutSession(sql.FieldIsNull(FieldExpiresAt))
+}
+
+// ExpiresAtNotNil applies the NotNil predicate on the "expires_at" field.
+func ExpiresAtNotNil() predicate.CheckoutSession {
+	return predicate.CheckoutSession(sql.FieldNotNull(FieldExpiresAt))
+}
+
 // CompletedAtEQ applies the EQ predicate on the "completed_at" field.
 func CompletedAtEQ(v time.Time) predicate.CheckoutSession {
 	return predicate.CheckoutSession(sql.FieldEQ(FieldCompletedAt, v))

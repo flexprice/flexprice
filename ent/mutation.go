@@ -5901,7 +5901,7 @@ func (m *CheckoutSessionMutation) ExpiresAt() (r time.Time, exists bool) {
 // OldExpiresAt returns the old "expires_at" field's value of the CheckoutSession entity.
 // If the CheckoutSession object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutSessionMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+func (m *CheckoutSessionMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
 	}
@@ -5915,9 +5915,22 @@ func (m *CheckoutSessionMutation) OldExpiresAt(ctx context.Context) (v time.Time
 	return oldValue.ExpiresAt, nil
 }
 
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *CheckoutSessionMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[checkoutsession.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *CheckoutSessionMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[checkoutsession.FieldExpiresAt]
+	return ok
+}
+
 // ResetExpiresAt resets all changes to the "expires_at" field.
 func (m *CheckoutSessionMutation) ResetExpiresAt() {
 	m.expires_at = nil
+	delete(m.clearedFields, checkoutsession.FieldExpiresAt)
 }
 
 // SetCompletedAt sets the "completed_at" field.
@@ -6593,6 +6606,9 @@ func (m *CheckoutSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(checkoutsession.FieldCancelURL) {
 		fields = append(fields, checkoutsession.FieldCancelURL)
 	}
+	if m.FieldCleared(checkoutsession.FieldExpiresAt) {
+		fields = append(fields, checkoutsession.FieldExpiresAt)
+	}
 	if m.FieldCleared(checkoutsession.FieldCompletedAt) {
 		fields = append(fields, checkoutsession.FieldCompletedAt)
 	}
@@ -6654,6 +6670,9 @@ func (m *CheckoutSessionMutation) ClearField(name string) error {
 		return nil
 	case checkoutsession.FieldCancelURL:
 		m.ClearCancelURL()
+		return nil
+	case checkoutsession.FieldExpiresAt:
+		m.ClearExpiresAt()
 		return nil
 	case checkoutsession.FieldCompletedAt:
 		m.ClearCompletedAt()

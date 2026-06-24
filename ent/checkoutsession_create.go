@@ -259,6 +259,14 @@ func (csc *CheckoutSessionCreate) SetExpiresAt(t time.Time) *CheckoutSessionCrea
 	return csc
 }
 
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (csc *CheckoutSessionCreate) SetNillableExpiresAt(t *time.Time) *CheckoutSessionCreate {
+	if t != nil {
+		csc.SetExpiresAt(*t)
+	}
+	return csc
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (csc *CheckoutSessionCreate) SetCompletedAt(t time.Time) *CheckoutSessionCreate {
 	csc.mutation.SetCompletedAt(t)
@@ -421,9 +429,6 @@ func (csc *CheckoutSessionCreate) check() error {
 	if _, ok := csc.mutation.Configuration(); !ok {
 		return &ValidationError{Name: "configuration", err: errors.New(`ent: missing required field "CheckoutSession.configuration"`)}
 	}
-	if _, ok := csc.mutation.ExpiresAt(); !ok {
-		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "CheckoutSession.expires_at"`)}
-	}
 	return nil
 }
 
@@ -541,7 +546,7 @@ func (csc *CheckoutSessionCreate) createSpec() (*CheckoutSession, *sqlgraph.Crea
 	}
 	if value, ok := csc.mutation.ExpiresAt(); ok {
 		_spec.SetField(checkoutsession.FieldExpiresAt, field.TypeTime, value)
-		_node.ExpiresAt = value
+		_node.ExpiresAt = &value
 	}
 	if value, ok := csc.mutation.CompletedAt(); ok {
 		_spec.SetField(checkoutsession.FieldCompletedAt, field.TypeTime, value)

@@ -33,10 +33,6 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 	})
 	defer FinishSpan(span)
 
-	if s.EnvironmentID == "" {
-		s.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
-
 	_, err := r.client.Writer(ctx).CheckoutSession.Create().
 		SetID(s.ID).
 		SetTenantID(s.TenantID).
@@ -54,7 +50,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableSuccessURL(s.SuccessURL).
 		SetNillableFailureURL(s.FailureURL).
 		SetNillableCancelURL(s.CancelURL).
-		SetExpiresAt(s.ExpiresAt).
+		SetNillableExpiresAt(s.ExpiresAt).
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
@@ -91,7 +87,6 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 			entCheckout.ID(id),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -104,7 +99,7 @@ func (r *checkoutSessionRepository) Get(ctx context.Context, id string) (*domain
 		}
 		return nil, ierr.WithError(err).WithHint("get checkout session failed").Mark(ierr.ErrDatabase)
 	}
-	return fromEntCheckout(e), nil
+	return domainCheckout.FromEnt(e), nil
 }
 
 func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckout.CheckoutSession) error {
@@ -116,7 +111,6 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
 		).
 		SetCheckoutStatus(s.CheckoutStatus).
 		SetNillablePaymentProvider(s.PaymentProvider).
@@ -155,7 +149,6 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 		Where(
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entCheckout.StatusEQ(string(types.StatusPublished)),
 		)
 
 	query = applyCheckoutFilters(query, filter)
@@ -179,7 +172,7 @@ func (r *checkoutSessionRepository) List(ctx context.Context, filter *types.Chec
 
 	result := make([]*domainCheckout.CheckoutSession, len(entities))
 	for i, e := range entities {
-		result[i] = fromEntCheckout(e)
+		result[i] = domainCheckout.FromEnt(e)
 	}
 	return result, nil
 }
@@ -236,41 +229,7 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 		}
 		return nil, ierr.WithError(err).WithHint("get by idempotency key failed").Mark(ierr.ErrDatabase)
 	}
-	return fromEntCheckout(e), nil
-}
-
-func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
-	if e == nil {
-		return nil
-	}
-	return &domainCheckout.CheckoutSession{
-		ID:                e.ID,
-		TenantID:          e.TenantID,
-		EnvironmentID:     e.EnvironmentID,
-		CustomerID:        e.CustomerID,
-		Action:            e.Action,
-		CheckoutStatus:    e.CheckoutStatus,
-		PaymentProvider:   e.PaymentProvider,
-		CheckoutInvoiceID: e.CheckoutInvoiceID,
-		CheckoutPaymentID: e.CheckoutPaymentID,
-		Configuration:     e.Configuration,
-		Result:            e.Result,
-		ProviderResult:    e.ProviderResult,
-		IdempotencyKey:    e.IdempotencyKey,
-		SuccessURL:        e.SuccessURL,
-		FailureURL:        e.FailureURL,
-		CancelURL:         e.CancelURL,
-		ExpiresAt:         e.ExpiresAt,
-		CompletedAt:       e.CompletedAt,
-		CancelledAt:       e.CancelledAt,
-		FailureReason:     e.FailureReason,
-		Metadata:          e.Metadata,
-		Status:            types.Status(e.Status),
-		CreatedAt:         e.CreatedAt,
-		UpdatedAt:         e.UpdatedAt,
-		CreatedBy:         e.CreatedBy,
-		UpdatedBy:         e.UpdatedBy,
-	}
+	return domainCheckout.FromEnt(e), nil
 }
 
 func applyCheckoutFilters(query *ent.CheckoutSessionQuery, filter *types.CheckoutSessionFilter) *ent.CheckoutSessionQuery {
