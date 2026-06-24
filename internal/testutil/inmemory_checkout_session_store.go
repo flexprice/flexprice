@@ -96,6 +96,16 @@ func (s *InMemoryCheckoutSessionStore) Count(ctx context.Context, filter *types.
 	return s.InMemoryStore.Count(ctx, filter, checkoutSessionFilterFn)
 }
 
+func (s *InMemoryCheckoutSessionStore) Delete(ctx context.Context, id string) error {
+	session, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	session.Status = types.StatusArchived
+	return s.InMemoryStore.Update(ctx, id, session)
+}
+
 func (s *InMemoryCheckoutSessionStore) GetByIdempotencyKey(ctx context.Context, key string) (*domainCheckout.CheckoutSession, error) {
 	items, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {

@@ -254,6 +254,39 @@ func (r *checkoutSessionRepository) GetByIdempotencyKey(ctx context.Context, key
 	return fromEntCheckout(e), nil
 }
 
+func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error {
+	r.log.Debug(ctx, "deleting checkout session", "id", id)
+
+	span := StartRepositorySpan(ctx, "checkout_session", "delete", map[string]interface{}{"id": id})
+	defer FinishSpan(span)
+
+	n, err := r.client.Writer(ctx).CheckoutSession.Update().
+		Where(
+			entCheckout.ID(id),
+			entCheckout.TenantID(types.GetTenantID(ctx)),
+			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("checkout session delete failed").
+			WithReportableDetails(map[string]any{"id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	if n == 0 {
+		return ierr.NewError("checkout session not found").
+			WithHintf("checkout session %s not found or already archived", id).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
 // CheckoutSessionQuery type alias for better readability
 type CheckoutSessionQuery = *ent.CheckoutSessionQuery
 

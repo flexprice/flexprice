@@ -141,15 +141,7 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	session, err := s.CheckoutSessionRepo.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	session.Status = types.StatusArchived
-	session.UpdatedBy = types.GetUserID(ctx)
-
-	return s.CheckoutSessionRepo.Update(ctx, session)
+	return s.CheckoutSessionRepo.Delete(ctx, id)
 }
 
 // ensure interface compliance at compile time

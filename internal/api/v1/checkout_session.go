@@ -115,7 +115,7 @@ func (h *CheckoutSessionHandler) Delete(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 // Query godoc
