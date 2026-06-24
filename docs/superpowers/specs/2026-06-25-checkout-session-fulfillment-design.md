@@ -67,7 +67,12 @@ Create(ctx, req)
   └─ fulfillCheckoutAction(ctx, session)  ← new private method
 ```
 
-If `fulfillCheckoutAction` fails, the session remains in `initiated` status and the error is returned to the caller. No rollback of the session record — it serves as the durable audit trail.
+If `fulfillCheckoutAction` fails at any point:
+1. Set `session.CheckoutStatus = failed` and `session.FailureReason = err.Error()`
+2. Call `repo.Update(ctx, session)` to persist the failure
+3. Return the original error to the caller
+
+The session record is always updated to reflect the terminal failure state so callers and operators can observe what went wrong.
 
 ### `fulfillCheckoutAction` dispatcher
 

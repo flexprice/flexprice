@@ -168,6 +168,7 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 		result.CreateSubscriptionResult.PaymentID = payResp.ID
 		session.CheckoutInvoiceID = &invResp.ID
 		session.CheckoutPaymentID = &payResp.ID
+		session.CheckoutStatus = types.CheckoutStatusPending
 
 	default:
 		return ierr.NewError("unsupported checkout action").
