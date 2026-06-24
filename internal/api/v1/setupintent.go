@@ -74,6 +74,12 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string) {
 	ctx := c.Request.Context()
 
+	if _, err := h.customerService.GetCustomer(ctx, customerID); err != nil {
+		h.log.Error(ctx, "Customer not found for Moyasar tokenization", "customer_id", customerID, "error", err)
+		c.Error(err)
+		return
+	}
+
 	moyasarIntegration, err := h.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
 		h.log.Error(ctx, "Failed to get Moyasar integration", "error", err)

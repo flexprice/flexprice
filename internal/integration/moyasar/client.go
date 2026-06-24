@@ -821,7 +821,6 @@ func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int
 	}
 
 	c.logger.Info(ctx, "charging payment with token",
-		"token_id", tokenID,
 		"amount", amount,
 		"currency", currency)
 
