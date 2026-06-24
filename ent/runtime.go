@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -244,6 +245,47 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	checkoutsessionMixin := schema.CheckoutSession{}.Mixin()
+	checkoutsessionMixinFields0 := checkoutsessionMixin[0].Fields()
+	_ = checkoutsessionMixinFields0
+	checkoutsessionMixinFields1 := checkoutsessionMixin[1].Fields()
+	_ = checkoutsessionMixinFields1
+	checkoutsessionFields := schema.CheckoutSession{}.Fields()
+	_ = checkoutsessionFields
+	// checkoutsessionDescTenantID is the schema descriptor for tenant_id field.
+	checkoutsessionDescTenantID := checkoutsessionMixinFields0[0].Descriptor()
+	// checkoutsession.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	checkoutsession.TenantIDValidator = checkoutsessionDescTenantID.Validators[0].(func(string) error)
+	// checkoutsessionDescStatus is the schema descriptor for status field.
+	checkoutsessionDescStatus := checkoutsessionMixinFields0[1].Descriptor()
+	// checkoutsession.DefaultStatus holds the default value on creation for the status field.
+	checkoutsession.DefaultStatus = checkoutsessionDescStatus.Default.(string)
+	// checkoutsessionDescCreatedAt is the schema descriptor for created_at field.
+	checkoutsessionDescCreatedAt := checkoutsessionMixinFields0[2].Descriptor()
+	// checkoutsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	checkoutsession.DefaultCreatedAt = checkoutsessionDescCreatedAt.Default.(func() time.Time)
+	// checkoutsessionDescUpdatedAt is the schema descriptor for updated_at field.
+	checkoutsessionDescUpdatedAt := checkoutsessionMixinFields0[3].Descriptor()
+	// checkoutsession.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	checkoutsession.DefaultUpdatedAt = checkoutsessionDescUpdatedAt.Default.(func() time.Time)
+	// checkoutsession.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	checkoutsession.UpdateDefaultUpdatedAt = checkoutsessionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// checkoutsessionDescEnvironmentID is the schema descriptor for environment_id field.
+	checkoutsessionDescEnvironmentID := checkoutsessionMixinFields1[0].Descriptor()
+	// checkoutsession.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	checkoutsession.DefaultEnvironmentID = checkoutsessionDescEnvironmentID.Default.(string)
+	// checkoutsessionDescCustomerID is the schema descriptor for customer_id field.
+	checkoutsessionDescCustomerID := checkoutsessionFields[1].Descriptor()
+	// checkoutsession.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	checkoutsession.CustomerIDValidator = checkoutsessionDescCustomerID.Validators[0].(func(string) error)
+	// checkoutsessionDescAction is the schema descriptor for action field.
+	checkoutsessionDescAction := checkoutsessionFields[2].Descriptor()
+	// checkoutsession.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	checkoutsession.ActionValidator = checkoutsessionDescAction.Validators[0].(func(string) error)
+	// checkoutsessionDescCheckoutStatus is the schema descriptor for checkout_status field.
+	checkoutsessionDescCheckoutStatus := checkoutsessionFields[3].Descriptor()
+	// checkoutsession.DefaultCheckoutStatus holds the default value on creation for the checkout_status field.
+	checkoutsession.DefaultCheckoutStatus = types.CheckoutStatus(checkoutsessionDescCheckoutStatus.Default.(string))
 	connectionMixin := schema.Connection{}.Mixin()
 	connectionMixinFields0 := connectionMixin[0].Fields()
 	_ = connectionMixinFields0
