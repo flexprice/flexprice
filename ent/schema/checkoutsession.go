@@ -31,63 +31,81 @@ func (CheckoutSession) Fields() []ent.Field {
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			Unique().
 			Immutable(),
+
 		field.String("customer_id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			NotEmpty().
 			Immutable(),
+
 		field.String("action").
 			SchemaType(map[string]string{"postgres": "varchar(30)"}).
 			GoType(types.CheckoutAction("")).
 			NotEmpty().
 			Immutable(),
+
 		field.String("checkout_status").
 			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			GoType(types.CheckoutStatus("")).
 			Default(string(types.CheckoutStatusInitiated)),
+
 		field.String("payment_provider").
 			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			GoType(types.CheckoutPaymentProvider("")).
 			Optional().
 			Nillable(),
+
 		field.String("checkout_invoice_id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			Optional().
 			Nillable(),
+
 		field.String("checkout_payment_id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			Optional().
 			Nillable(),
+
 		field.JSON("configuration", types.CheckoutConfiguration{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}),
+
 		field.JSON("result", &types.CheckoutResult{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional(),
+
 		field.JSON("provider_result", &types.CheckoutProviderResult{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional(),
+
 		field.String("idempotency_key").
 			SchemaType(map[string]string{"postgres": "varchar(255)"}).
 			Optional().
 			Nillable(),
+
 		field.Text("success_url").
 			Optional().
 			Nillable(),
+
 		field.Text("failure_url").
 			Optional().
 			Nillable(),
+
 		field.Text("cancel_url").
 			Optional().
 			Nillable(),
+
 		field.Time("expires_at"),
+
 		field.Time("completed_at").
 			Optional().
 			Nillable(),
+
 		field.Time("cancelled_at").
 			Optional().
 			Nillable(),
+
 		field.Text("failure_reason").
 			Optional().
 			Nillable(),
+			
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional(),
