@@ -10,11 +10,11 @@ import (
 )
 
 type CheckoutSessionService interface {
-	CreateCheckoutSession(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
-	GetCheckoutSession(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
-	ListCheckoutSessions(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
-	UpdateCheckoutSession(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
-	DeleteCheckoutSession(ctx context.Context, id string) error
+	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
+	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
+	Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
+	Delete(ctx context.Context, id string) error
 }
 
 type checkoutSessionService struct {
@@ -25,7 +25,7 @@ func NewCheckoutSessionService(params ServiceParams) CheckoutSessionService {
 	return &checkoutSessionService{ServiceParams: params}
 }
 
-func (s *checkoutSessionService) CreateCheckoutSession(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
+func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (s *checkoutSessionService) CreateCheckoutSession(ctx context.Context, req 
 	return dto.ToCheckoutSessionResponse(session), nil
 }
 
-func (s *checkoutSessionService) GetCheckoutSession(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
+func (s *checkoutSessionService) Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("id is required").
 			WithHint("checkout session ID cannot be empty").
@@ -54,7 +54,7 @@ func (s *checkoutSessionService) GetCheckoutSession(ctx context.Context, id stri
 	return dto.ToCheckoutSessionResponse(session), nil
 }
 
-func (s *checkoutSessionService) ListCheckoutSessions(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
+func (s *checkoutSessionService) List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
 	if filter == nil {
 		filter = types.NewDefaultCheckoutSessionFilter()
 	}
@@ -85,7 +85,7 @@ func (s *checkoutSessionService) ListCheckoutSessions(ctx context.Context, filte
 	return &result, nil
 }
 
-func (s *checkoutSessionService) UpdateCheckoutSession(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
+func (s *checkoutSessionService) Update(ctx context.Context, id string, req dto.UpdateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("id is required").
 			WithHint("checkout session ID cannot be empty").
@@ -134,7 +134,7 @@ func (s *checkoutSessionService) UpdateCheckoutSession(ctx context.Context, id s
 	return dto.ToCheckoutSessionResponse(session), nil
 }
 
-func (s *checkoutSessionService) DeleteCheckoutSession(ctx context.Context, id string) error {
+func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("id is required").
 			WithHint("checkout session ID cannot be empty").

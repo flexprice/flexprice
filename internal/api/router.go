@@ -411,9 +411,10 @@ func NewRouter(
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
-			checkoutSessions.POST("", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.CreateCheckoutSession)
-			checkoutSessions.POST("/search", handlers.CheckoutSession.QueryCheckoutSessions)
-			checkoutSessions.GET("/:id", handlers.CheckoutSession.GetCheckoutSession)
+			checkoutSessions.POST("", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Create)
+			checkoutSessions.POST("/search", handlers.CheckoutSession.Query)
+			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
+			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
 		}
 
 		entitlement := v1Private.Group("/entitlements")

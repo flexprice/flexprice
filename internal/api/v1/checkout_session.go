@@ -21,99 +21,128 @@ func NewCheckoutSessionHandler(svc service.CheckoutSessionService, log *logger.L
 	return &CheckoutSessionHandler{service: svc, log: log}
 }
 
-// CreateCheckoutSession godoc
+// Create godoc
 // @Summary Create checkout session
 // @ID createCheckoutSession
-// @Description Create a new checkout session to initiate a B2C payment flow.
 // @Tags Checkout
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param session body dto.CreateCheckoutSessionRequest true "Checkout session to create"
 // @Success 201 {object} dto.CheckoutSessionResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 409 {object} ierr.ErrorResponse "Idempotency key conflict"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /checkout/sessions [post]
-func (h *CheckoutSessionHandler) CreateCheckoutSession(c *gin.Context) {
+func (h *CheckoutSessionHandler) Create(c *gin.Context) {
 	var req dto.CreateCheckoutSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 		return
 	}
-
-	resp, err := h.service.CreateCheckoutSession(c.Request.Context(), req)
+	resp, err := h.service.Create(c.Request.Context(), req)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-
 	c.JSON(http.StatusCreated, resp)
 }
 
-// GetCheckoutSession godoc
+// Get godoc
 // @Summary Get checkout session
 // @ID getCheckoutSession
-// @Description Retrieve a checkout session by ID.
 // @Tags Checkout
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Checkout session ID"
 // @Success 200 {object} dto.CheckoutSessionResponse
-// @Failure 404 {object} ierr.ErrorResponse "Not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /checkout/sessions/{id} [get]
-func (h *CheckoutSessionHandler) GetCheckoutSession(c *gin.Context) {
+func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 	id := c.Param("id")
-	if id == "" {
-		c.Error(ierr.NewError("checkout session ID is required").
-			WithHint("ID must be provided in the URL path").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.service.GetCheckoutSession(c.Request.Context(), id)
+	resp, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }
 
-// QueryCheckoutSessions godoc
+// Update godoc
+// @Summary Update checkout session
+// @ID updateCheckoutSession
+// @Tags Checkout
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Checkout session ID"
+// @Param session body dto.UpdateCheckoutSessionRequest true "Fields to update"
+// @Success 200 {object} dto.CheckoutSessionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /checkout/sessions/{id} [put]
+func (h *CheckoutSessionHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	var req dto.UpdateCheckoutSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.service.Update(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// Delete godoc
+// @Summary Delete checkout session
+// @ID deleteCheckoutSession
+// @Tags Checkout
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Checkout session ID"
+// @Success 204
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /checkout/sessions/{id} [delete]
+func (h *CheckoutSessionHandler) Delete(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.service.Delete(c.Request.Context(), id); err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusNoContent, nil)
+}
+
+// Query godoc
 // @Summary Search checkout sessions
 // @ID queryCheckoutSessions
-// @Description Use when listing or searching checkout sessions. Returns a paginated list; supports filtering by customer IDs, statuses, and other fields.
 // @Tags Checkout
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.CheckoutSessionFilter true "Filter"
 // @Success 200 {object} dto.ListCheckoutSessionsResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid filter"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /checkout/sessions/search [post]
-func (h *CheckoutSessionHandler) QueryCheckoutSessions(c *gin.Context) {
+func (h *CheckoutSessionHandler) Query(c *gin.Context) {
 	var filter types.CheckoutSessionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).WithHint("Invalid filter parameters").Mark(ierr.ErrValidation))
 		return
 	}
-
 	if filter.GetLimit() == 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
-
-	resp, err := h.service.ListCheckoutSessions(c.Request.Context(), &filter)
+	resp, err := h.service.List(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }
