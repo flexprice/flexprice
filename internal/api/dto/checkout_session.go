@@ -5,7 +5,6 @@ import (
 	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -20,7 +19,6 @@ type CreateCheckoutSessionRequest struct {
 	SuccessURL      *string                        `json:"success_url,omitempty"`
 	FailureURL      *string                        `json:"failure_url,omitempty"`
 	CancelURL       *string                        `json:"cancel_url,omitempty"`
-	ExpiresAt       time.Time                      `json:"expires_at" binding:"required"`
 	Metadata        map[string]string              `json:"metadata,omitempty"`
 }
 
@@ -37,12 +35,12 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 	if err := r.PaymentProvider.Validate(); err != nil {
 		return err
 	}
-	if r.ExpiresAt.IsZero() {
-		return ierr.NewError("expires_at is required").
-			WithHint("expires_at cannot be zero").
-			Mark(ierr.ErrValidation)
-	}
 	return nil
+}
+
+// ResolveExpiresAt returns when the session should expire based on the payment provider.
+func (r *CreateCheckoutSessionRequest) ResolveExpiresAt(now time.Time) time.Time {
+	return now.UTC().Add(r.PaymentProvider.SessionExpiry())
 }
 
 func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context) *domainCheckout.CheckoutSession {
@@ -58,7 +56,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context) *d
 		SuccessURL:      r.SuccessURL,
 		FailureURL:      r.FailureURL,
 		CancelURL:       r.CancelURL,
-		ExpiresAt:       r.ExpiresAt,
+		ExpiresAt:       r.ResolveExpiresAt(time.Now()),
 		Metadata:        r.Metadata,
 		BaseModel:       types.GetDefaultBaseModel(ctx),
 	}

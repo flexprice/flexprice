@@ -80,6 +80,17 @@ func (p CheckoutPaymentProvider) Validate() error {
 	return nil
 }
 
+// SessionExpiry returns how long checkout sessions remain valid for this provider.
+func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
+	switch p {
+	case CheckoutPaymentProviderStripe:
+		// Stripe Checkout Sessions expire 24 hours after creation by default.
+		return 24 * time.Hour
+	default:
+		return 30 * time.Minute
+	}
+}
+
 type PaymentActionType string
 
 const (

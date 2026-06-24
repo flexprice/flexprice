@@ -49,7 +49,6 @@ func (s *CheckoutSessionServiceSuite) makeCreateReq() dto.CreateCheckoutSessionR
 				BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 			},
 		},
-		ExpiresAt: time.Now().UTC().Add(30 * time.Minute),
 	}
 }
 
