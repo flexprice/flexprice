@@ -127,6 +127,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetStatus(string(s.Status)).
 		SetCheckoutStatus(s.CheckoutStatus).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
