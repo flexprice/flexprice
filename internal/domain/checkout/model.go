@@ -3,7 +3,6 @@ package checkout
 import (
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -74,29 +73,4 @@ type CheckoutSession struct {
 	Metadata      map[string]string `db:"metadata" json:"metadata,omitempty"`
 
 	types.BaseModel
-}
-
-func (s *CheckoutSession) Validate() error {
-	if s.CustomerID == "" {
-		return ierr.NewError("customer_id is required").
-			WithHint("customer_id cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
-	if err := s.Action.Validate(); err != nil {
-		return err
-	}
-	if err := s.CheckoutStatus.Validate(); err != nil {
-		return err
-	}
-	if s.PaymentProvider != nil {
-		if err := s.PaymentProvider.Validate(); err != nil {
-			return err
-		}
-	}
-	if s.ExpiresAt.IsZero() {
-		return ierr.NewError("expires_at is required").
-			WithHint("expires_at cannot be zero").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
 }
