@@ -236,33 +236,33 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		return nil, nil, err
 	}
 
-	invoiceReq := &dto.CreateSubscriptionInvoiceRequest{
-		SubscriptionID: subResp.ID,
-		PeriodStart:    subResp.CurrentPeriodStart,
-		PeriodEnd:      subResp.CurrentPeriodEnd,
-		ReferencePoint: types.ReferencePointPeriodStart,
-	}
-
-	// Pass default_incomplete behavior so ProcessDraftInvoice does not attempt to charge.
-	// The checkout payment step handles collection separately.
-	paymentParams := dto.NewPaymentParameters(
-		types.CollectionMethodChargeAutomatically,
-		types.PaymentBehaviorDefaultIncomplete,
-		nil,
-	).NormalizePaymentParameters()
-
+	// Create a DRAFT invoice (no finalization yet — that happens in completeSubscriptionCheckout
+	// after payment is confirmed). This gives us computed amounts for the payment step.
 	invSvc := NewInvoiceService(s.ServiceParams)
-	invResp, _, err := invSvc.CreateSubscriptionInvoice(
-		ctx, invoiceReq, paymentParams,
-		types.InvoiceFlowSubscriptionCreation,
-		true, // isDraftSubscription — suppresses finalization, gateway, webhooks
+	invResp, err := invSvc.CreateDraftInvoiceForSubscription(
+		ctx,
+		subResp.ID,
+		subResp.CurrentPeriodStart,
+		subResp.CurrentPeriodEnd,
+		types.ReferencePointPeriodStart,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
-	if invResp == nil {
+
+	skipped, err := invSvc.ComputeInvoice(ctx, invResp.ID, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	if skipped {
 		return nil, nil, ierr.NewError("checkout requires a non-zero invoice; plan produced no charges").
 			Mark(ierr.ErrValidation)
+	}
+
+	// Re-fetch after compute so invoice amounts are populated on the returned struct.
+	invResp, err = invSvc.GetInvoice(ctx, invResp.ID)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return subResp, invResp, nil
