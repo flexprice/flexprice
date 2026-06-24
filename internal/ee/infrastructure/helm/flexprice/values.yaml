@@ -818,7 +818,8 @@ webhook:
   enabled: true
   topic: "system_events"
   pubsub: "memory"
-  consumerGroup: "webhook-consumer"
+  consumerGroup: "system-events-consumer"
+  rateLimit: 5
   maxRetries: 3
   initialInterval: "1s"
   maxInterval: "10s"
@@ -829,6 +830,12 @@ webhook:
     enabled: false
     authToken: "" # Set via secret
     baseUrl: "https://api.us.svix.com"
+
+# Integration events consumer — same system_events topic, independent consumer group.
+integrationEvents:
+  enabled: true
+  consumerGroup: "integration-events-consumer"
+  rateLimit: 10
 
 # ---------------------------------------------------------------------------
 # Secrets management
