@@ -10,12 +10,7 @@ import (
 
 // CheckoutProvider is implemented by each payment gateway that supports hosted checkout.
 type CheckoutProvider interface {
-	CreatePaymentLink(
-		ctx context.Context,
-		req CheckoutProviderRequest,
-		customerSvc CustomerService,
-		invoiceSvc InvoiceService,
-	) (*CheckoutProviderResponse, error)
+	CreatePaymentLink(ctx context.Context, req CheckoutProviderRequest) (*CheckoutProviderResponse, error)
 }
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.

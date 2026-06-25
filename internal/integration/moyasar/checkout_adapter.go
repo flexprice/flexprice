@@ -9,14 +9,14 @@ import (
 
 // CheckoutAdapter wraps PaymentService to implement interfaces.CheckoutProvider.
 type CheckoutAdapter struct {
-	Svc *PaymentService
+	Svc         *PaymentService
+	CustomerSvc interfaces.CustomerService
+	InvoiceSvc  interfaces.InvoiceService
 }
 
 func (a *CheckoutAdapter) CreatePaymentLink(
 	ctx context.Context,
 	req interfaces.CheckoutProviderRequest,
-	customerSvc interfaces.CustomerService,
-	invoiceSvc interfaces.InvoiceService,
 ) (*interfaces.CheckoutProviderResponse, error) {
 	r, err := a.Svc.CreatePaymentLink(ctx, CreatePaymentLinkRequest{
 		InvoiceID:     req.InvoiceID,
@@ -28,7 +28,7 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 		Metadata:      req.Metadata,
 		EnvironmentID: req.EnvironmentID,
 		PaymentID:     req.PaymentID,
-	}, customerSvc, invoiceSvc)
+	}, a.CustomerSvc, a.InvoiceSvc)
 	if err != nil {
 		return nil, err
 	}

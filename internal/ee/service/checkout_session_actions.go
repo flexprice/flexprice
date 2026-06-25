@@ -61,13 +61,12 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	session *domainCheckout.CheckoutSession,
 	payResp *dto.PaymentResponse,
 ) (*types.CheckoutProviderResult, error) {
-	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, session.PaymentProvider)
+	customerSvc := NewCustomerService(s.ServiceParams)
+	invoiceSvc := NewInvoiceService(s.ServiceParams)
+	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, session.PaymentProvider, customerSvc, invoiceSvc)
 	if err != nil {
 		return nil, err
 	}
-
-	customerSvc := NewCustomerService(s.ServiceParams)
-	invoiceSvc := NewInvoiceService(s.ServiceParams)
 
 	req := interfaces.CheckoutProviderRequest{
 		InvoiceID:     *session.CheckoutInvoiceID,
@@ -90,7 +89,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		req.CancelURL = *session.CancelURL
 	}
 
-	resp, err := provider.CreatePaymentLink(ctx, req, customerSvc, invoiceSvc)
+	resp, err := provider.CreatePaymentLink(ctx, req)
 	if err != nil {
 		return nil, err
 	}
