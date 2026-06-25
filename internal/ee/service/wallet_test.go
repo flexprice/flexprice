@@ -2891,6 +2891,36 @@ func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wall
 	ws.computeRealtimeBalance = fn
 }
 
+func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLive() {
+	ctx := s.GetContext()
+	// Custom inMemCache that distinguishes max-live-filtered reads from no-filter reads.
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+
+	ws := s.service.(*walletService)
+	ws.cacheGet = func(_ context.Context, walletID string, maxLive *int64) *decimal.Decimal {
+		// Caller-side max-live (non-nil) → return miss (simulate "too stale").
+		if maxLive != nil {
+			return nil
+		}
+		// Fallback path (nil) → return the cached entry.
+		v := decimal.NewFromInt(42)
+		return &v
+	}
+	cacheSetCalled := false
+	ws.cacheSet = func(_ context.Context, _ string, _ decimal.Decimal) { cacheSetCalled = true }
+
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, ierr.NewError("db down").Mark(ierr.ErrDatabase)
+	})
+
+	maxLive := int64(1)
+	resp, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
+	s.NoError(err)
+	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
+	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
+	s.False(cacheSetCalled, "should not write to cache on fallback")
+}
+
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
 	ctx := s.GetContext()
 	cache := s.installCache()
