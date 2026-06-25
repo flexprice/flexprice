@@ -147,23 +147,31 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 	}
 	res := session.Result.CreateSubscriptionResult
 
-	// 1. Activate subscription: draft → active (no billing side effects needed)
+	// 1. Activate subscription: only update if still in draft.
 	sub, err := s.SubRepo.Get(ctx, res.SubscriptionID)
 	if err != nil {
 		return err
 	}
-	sub.SubscriptionStatus = types.SubscriptionStatusActive
-	if err := s.SubRepo.Update(ctx, sub); err != nil {
-		return err
+	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+		sub.SubscriptionStatus = types.SubscriptionStatusActive
+		if err := s.SubRepo.Update(ctx, sub); err != nil {
+			return err
+		}
 	}
 
-	// 2. Finalize the draft invoice (assigns invoice number, seals it)
+	// 2. Finalize the draft invoice (idempotent: check status first).
 	invSvc := NewInvoiceService(s.ServiceParams)
-	if err := invSvc.FinalizeInvoice(ctx, res.InvoiceID); err != nil {
+	invResp, err := invSvc.GetInvoice(ctx, res.InvoiceID)
+	if err != nil {
 		return err
 	}
+	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
+		if err := invSvc.FinalizeInvoice(ctx, res.InvoiceID); err != nil {
+			return err
+		}
+	}
 
-	// 3. Mark the checkout payment as SUCCEEDED, storing the gateway payment ID
+	// 3. Mark the checkout payment as SUCCEEDED, storing the gateway payment ID.
 	statusStr := string(types.PaymentStatusSucceeded)
 	now := time.Now().UTC()
 	updateReq := dto.UpdatePaymentRequest{
@@ -179,6 +187,6 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 		return err
 	}
 
-	// 4. Reconcile invoice payment status (marks invoice as paid)
+	// 4. Reconcile invoice payment status (marks invoice as paid — already idempotent).
 	return invSvc.ReconcilePaymentStatus(ctx, res.InvoiceID, types.PaymentStatusSucceeded, nil)
 }

@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -104,6 +105,26 @@ func (s *InMemoryCheckoutSessionStore) Delete(ctx context.Context, id string) er
 
 	session.Status = types.StatusArchived
 	return s.InMemoryStore.Update(ctx, id, session)
+}
+
+func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error) {
+	session, err := s.InMemoryStore.Get(ctx, sessionID)
+	if err != nil {
+		return false, err
+	}
+	// Only claim if the session is still in a non-terminal state.
+	if session.CheckoutStatus != types.CheckoutStatusPending && session.CheckoutStatus != types.CheckoutStatusInitiated {
+		return false, nil
+	}
+	session.CheckoutStatus = types.CheckoutStatusCompleted
+	session.CompletedAt = &completedAt
+	if providerResult != nil {
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	}
+	if err := s.InMemoryStore.Update(ctx, sessionID, session); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *InMemoryCheckoutSessionStore) GetByIdempotencyKey(ctx context.Context, key string) (*domainCheckout.CheckoutSession, error) {

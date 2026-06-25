@@ -287,6 +287,34 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 	return nil
 }
 
+func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error) {
+	r.log.Debug(ctx, "marking checkout session completed", "id", sessionID)
+
+	span := StartRepositorySpan(ctx, "checkout_session", "mark_completed", map[string]interface{}{"id": sessionID})
+	defer FinishSpan(span)
+
+	n, err := r.client.Writer(ctx).CheckoutSession.Update().
+		Where(
+			entCheckout.ID(sessionID),
+			entCheckout.TenantID(types.GetTenantID(ctx)),
+			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.CheckoutStatusIn(types.CheckoutStatusPending, types.CheckoutStatusInitiated),
+		).
+		SetCheckoutStatus(types.CheckoutStatusCompleted).
+		SetCompletedAt(completedAt).
+		SetProviderResult(providerResult).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).WithHint("failed to mark checkout session completed").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return n > 0, nil
+}
+
 // CheckoutSessionQuery type alias for better readability
 type CheckoutSessionQuery = *ent.CheckoutSessionQuery
 

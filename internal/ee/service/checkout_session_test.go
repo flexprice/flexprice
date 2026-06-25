@@ -285,11 +285,8 @@ func (s *CheckoutSessionServiceSuite) TestComplete_WithProviderResult() {
 	s.Require().NoError(err)
 
 	providerResult := &types.CheckoutProviderResult{
-		CreateSubscriptionResult: &types.ProviderSubscriptionResult{
-			SessionID:       "cs_stripe_session_abc",
-			SessionURL:      "https://checkout.stripe.com/pay/cs_abc",
-			PaymentIntentID: "pi_abc123",
-		},
+		ProviderSessionID:       "cs_stripe_session_abc",
+		ProviderPaymentIntentID: "pi_abc123",
 	}
 	err = s.svc.CompleteCheckoutSession(s.GetContext(), resp.ID, providerResult)
 	s.Require().NoError(err)
@@ -317,10 +314,10 @@ func (s *CheckoutSessionServiceSuite) TestComplete_AlreadyCompleted() {
 	// Complete once
 	s.Require().NoError(s.svc.CompleteCheckoutSession(s.GetContext(), resp.ID, nil))
 
-	// Complete again — should fail with validation error
+	// Complete again — should fail with already-exists (terminal state guard)
 	err = s.svc.CompleteCheckoutSession(s.GetContext(), resp.ID, nil)
 	s.Require().Error(err)
-	s.True(ierr.IsValidation(err), "expected validation error, got: %v", err)
+	s.True(ierr.IsAlreadyExists(err), "expected already-exists error, got: %v", err)
 }
 
 func (s *CheckoutSessionServiceSuite) TestComplete_FailedSession() {
@@ -339,7 +336,7 @@ func (s *CheckoutSessionServiceSuite) TestComplete_FailedSession() {
 
 	err = s.svc.CompleteCheckoutSession(s.GetContext(), failedSessionID, nil)
 	s.Require().Error(err)
-	s.True(ierr.IsValidation(err), "expected validation error for failed session, got: %v", err)
+	s.True(ierr.IsAlreadyExists(err), "expected already-exists error for failed session, got: %v", err)
 }
 
 // ─────────────────────────────────────────────
@@ -361,10 +358,10 @@ func (s *CheckoutSessionServiceSuite) TestCleanup_HappyPath() {
 	err = s.svc.CleanupCheckoutSession(s.GetContext(), session, nil)
 	s.Require().NoError(err)
 
-	// Session should be failed
+	// Session should be expired (cleanup with no reason = natural expiry)
 	updated, err := s.GetStores().CheckoutSessionRepo.Get(s.GetContext(), resp.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusFailed, updated.CheckoutStatus)
+	s.Equal(types.CheckoutStatusExpired, updated.CheckoutStatus)
 	s.Nil(updated.FailureReason)
 
 	// In-memory stores hard-delete; verify all three entities were removed.
@@ -428,7 +425,7 @@ func (s *CheckoutSessionServiceSuite) TestCleanup_NoEntities() {
 
 	updated, err := s.GetStores().CheckoutSessionRepo.Get(ctx, domSess.ID)
 	s.Require().NoError(err)
-	s.Equal(types.CheckoutStatusFailed, updated.CheckoutStatus)
+	s.Equal(types.CheckoutStatusExpired, updated.CheckoutStatus)
 }
 
 // ─────────────────────────────────────────────

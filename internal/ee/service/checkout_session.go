@@ -123,33 +123,54 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 }
 
 func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
+	// Guard: already in a terminal state — idempotent no-op.
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusCompleted, types.CheckoutStatusFailed, types.CheckoutStatusExpired:
+		return nil
+	}
+
 	// Archive all entities created during fulfillment.
+	// Treat IsNotFound as success: partial failure in a prior cleanup run is safe to ignore.
 	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
 		res := session.Result.CreateSubscriptionResult
 		if res.PaymentID != "" {
-			if err := s.PaymentRepo.Delete(ctx, res.PaymentID); err != nil {
+			if err := s.PaymentRepo.Delete(ctx, res.PaymentID); err != nil && !ierr.IsNotFound(err) {
 				s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", res.PaymentID, "error", err)
 			}
 		}
 		if res.InvoiceID != "" {
-			if err := s.InvoiceRepo.Delete(ctx, res.InvoiceID); err != nil {
+			if err := s.InvoiceRepo.Delete(ctx, res.InvoiceID); err != nil && !ierr.IsNotFound(err) {
 				s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", res.InvoiceID, "error", err)
 			}
 		}
 		if res.SubscriptionID != "" {
-			if err := s.SubRepo.Delete(ctx, res.SubscriptionID); err != nil {
+			if err := s.SubRepo.Delete(ctx, res.SubscriptionID); err != nil && !ierr.IsNotFound(err) {
 				s.Logger.Error(ctx, "failed to archive checkout subscription", "subscription_id", res.SubscriptionID, "error", err)
 			}
 		}
 	}
 
-	// Mark session failed.
-	session.CheckoutStatus = types.CheckoutStatusFailed
+	// Terminal status depends on whether this is a natural expiry or an error.
 	if reason != nil {
-		errMsg := reason.Error()
-		session.FailureReason = &errMsg
+		session.CheckoutStatus = types.CheckoutStatusFailed
+		msg := reason.Error()
+		session.FailureReason = &msg
+	} else {
+		session.CheckoutStatus = types.CheckoutStatusExpired
 	}
-	return s.CheckoutSessionRepo.Update(ctx, session)
+
+	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
+		return err
+	}
+
+	// Publish the appropriate lifecycle webhook.
+	resp := dto.ToCheckoutSessionResponse(session)
+	if reason != nil {
+		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionFailed)
+	} else {
+		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionExpired)
+	}
+	return nil
 }
 
 func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error {
@@ -159,31 +180,41 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
+	// Fetch session for completeCheckoutAction context (subscription/invoice/payment IDs).
 	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 
-	if session.CheckoutStatus != types.CheckoutStatusPending &&
-		session.CheckoutStatus != types.CheckoutStatusInitiated {
-		return ierr.NewError("checkout session cannot be completed").
-			WithHintf("session is in %s status; must be pending or initiated", session.CheckoutStatus).
-			Mark(ierr.ErrValidation)
+	// Fast-path guard: already in a terminal state — nothing to do.
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusCompleted, types.CheckoutStatusFailed, types.CheckoutStatusExpired:
+		return ierr.NewError("checkout session already in terminal state").
+			WithHintf("session %s is %s", sessionID, session.CheckoutStatus).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
+	// Run sub-steps idempotently before claiming the session.
+	// Safe to run in parallel with a duplicate webhook — each step is conditional.
 	if err := s.completeCheckoutAction(ctx, session, providerResult); err != nil {
 		return err
 	}
 
+	// Atomic claim: only one concurrent caller gets n > 0.
 	now := time.Now().UTC()
-	session.CheckoutStatus = types.CheckoutStatusCompleted
-	session.CompletedAt = &now
-	if providerResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
-	}
-	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
+	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, providerResult)
+	if err != nil {
 		return err
 	}
+	if !claimed {
+		// Another process completed it simultaneously — idempotent no-op.
+		return ierr.NewError("checkout session already completed by concurrent request").
+			WithHintf("session %s was claimed by another process", sessionID).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	session.CheckoutStatus = types.CheckoutStatusCompleted
+	session.CompletedAt = &now
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
 	return nil
 }
