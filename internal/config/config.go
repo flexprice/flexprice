@@ -723,6 +723,11 @@ func NewConfig() (*Configuration, error) {
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
+	// checkout.base_url is delivered only as an env var (extraEnv) and is absent from the
+	// Helm-rendered ConfigMap, so Unmarshal would otherwise leave it empty. Bind it so the
+	// FLEXPRICE_CHECKOUT_BASE_URL value is actually read.
+	_ = v.BindEnv("checkout.base_url", "FLEXPRICE_CHECKOUT_BASE_URL")
+
 	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
 	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
 	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
