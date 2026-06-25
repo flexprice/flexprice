@@ -433,3 +433,7 @@ onboarding_events:
   rate_limit: 10
   consumer_group: "onboarding_events_consumer"
   max_retries: 3
+
+# Checkout base URL for the checkout page
+checkout:
+  base_url: "http://localhost:3000"
