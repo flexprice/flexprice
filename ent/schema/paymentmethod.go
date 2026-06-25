@@ -2,7 +2,9 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -68,4 +70,11 @@ func (PaymentMethod) Fields() []ent.Field {
 
 func (PaymentMethod) Edges() []ent.Edge {
 	return nil
+}
+
+func (PaymentMethod) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("tenant_id", "environment_id", "customer_id", "status").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+	}
 }

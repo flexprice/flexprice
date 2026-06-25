@@ -1390,6 +1390,16 @@ var (
 		Name:       "payment_methods",
 		Columns:    PaymentMethodsColumns,
 		PrimaryKey: []*schema.Column{PaymentMethodsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentmethod_tenant_id_environment_id_customer_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentMethodsColumns[1], PaymentMethodsColumns[7], PaymentMethodsColumns[8], PaymentMethodsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+		},
 	}
 	// PlansColumns holds the columns for the "plans" table.
 	PlansColumns = []*schema.Column{
