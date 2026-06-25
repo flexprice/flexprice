@@ -628,7 +628,7 @@ type CostSheetUsageTrackingLazyConfig struct {
 }
 
 type CheckoutConfig struct {
-	BaseURL string `mapstructure:"base_url" validate:"required"`
+	BaseURL string `mapstructure:"base_url" validate:"required,url"`
 }
 
 type CustomerPortalConfig struct {
