@@ -6,7 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	domainMapping "github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -22,8 +24,6 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 		}
 		s.Logger.Debug(ctx, "executeCheckoutAction: draft subscription created", "sub_id", subResp.ID, "inv_id", invResp.ID)
 
-		// Stage sub and invoice IDs immediately so CleanupCheckoutSession can
-		// archive them if the payment step below fails.
 		result := types.CheckoutResult{
 			CreateSubscriptionResult: &types.CreateSubscriptionResult{
 				SubscriptionID: subResp.ID,
@@ -36,10 +36,16 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 		if err != nil {
 			return err
 		}
-
 		result.CreateSubscriptionResult.PaymentID = payResp.ID
 		session.CheckoutInvoiceID = &invResp.ID
 		session.CheckoutPaymentID = &payResp.ID
+
+		// Contact the payment gateway and get the hosted checkout URL.
+		providerResult, err := s.callCheckoutProvider(ctx, session, payResp)
+		if err != nil {
+			return err
+		}
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 		session.CheckoutStatus = types.CheckoutStatusPending
 
 	default:
@@ -50,6 +56,75 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 	}
 
 	return s.CheckoutSessionRepo.Update(ctx, session)
+}
+
+// callCheckoutProvider contacts the payment gateway, tightens ExpiresAt if the provider URL
+// expires sooner, and records an EntityIntegrationMapping (ProviderSessionID → FlexPrice PaymentID).
+func (s *checkoutSessionService) callCheckoutProvider(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	payResp *dto.PaymentResponse,
+) (*types.CheckoutProviderResult, error) {
+	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, session.PaymentProvider)
+	if err != nil {
+		return nil, err
+	}
+
+	customerSvc := NewCustomerService(s.ServiceParams)
+	invoiceSvc := NewInvoiceService(s.ServiceParams)
+
+	req := interfaces.CheckoutProviderRequest{
+		InvoiceID:     *session.CheckoutInvoiceID,
+		CustomerID:    session.CustomerID,
+		Amount:        payResp.Amount,
+		Currency:      payResp.Currency,
+		PaymentID:     payResp.ID,
+		EnvironmentID: session.EnvironmentID,
+	}
+	if len(session.Metadata) > 0 {
+		req.Metadata = map[string]string(session.Metadata)
+	}
+	if session.SuccessURL != nil {
+		req.SuccessURL = *session.SuccessURL
+	}
+	if session.FailureURL != nil {
+		req.FailureURL = *session.FailureURL
+	}
+	if session.CancelURL != nil {
+		req.CancelURL = *session.CancelURL
+	}
+
+	resp, err := provider.CreatePaymentLink(ctx, req, customerSvc, invoiceSvc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tighten session expiry if the provider URL expires sooner.
+	if resp.ExpiresAt != nil && resp.ExpiresAt.Before(session.ExpiresAt) {
+		session.ExpiresAt = *resp.ExpiresAt
+	}
+
+	// Record ProviderSessionID → FlexPrice PaymentID so incoming webhooks can route back.
+	mapping := &domainMapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         payResp.ID,
+		EntityType:       types.IntegrationEntityTypePayment,
+		ProviderType:     session.PaymentProvider.String(),
+		ProviderEntityID: resp.ProviderSessionID,
+		EnvironmentID:    session.EnvironmentID,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		return nil, err
+	}
+
+	return &types.CheckoutProviderResult{
+		NextAction:              &resp.NextAction,
+		ProviderSessionID:       resp.ProviderSessionID,
+		ProviderPaymentIntentID: resp.ProviderPaymentIntentID,
+		ExpiresAt:               resp.ExpiresAt,
+		ProviderMetadata:        resp.ProviderMetadata,
+	}, nil
 }
 
 func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
@@ -95,10 +170,9 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,
 	}
-	if providerResult != nil && providerResult.CreateSubscriptionResult != nil {
-		if id := providerResult.CreateSubscriptionResult.PaymentIntentID; id != "" {
-			updateReq.GatewayPaymentID = &id
-		}
+	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
+		id := providerResult.ProviderPaymentIntentID
+		updateReq.GatewayPaymentID = &id
 	}
 	paySvc := NewPaymentService(s.ServiceParams)
 	if _, err := paySvc.UpdatePayment(ctx, res.PaymentID, updateReq); err != nil {
