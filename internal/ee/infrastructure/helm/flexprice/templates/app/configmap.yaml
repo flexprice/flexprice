@@ -204,6 +204,9 @@ data:
     billing:
       tenant_id: {{ .Values.billing.tenantId | quote }}
       environment_id: {{ .Values.billing.environmentId | quote }}
+
+    checkout:
+      base_url: {{ .Values.checkout.baseUrl | quote }}
     
     email:
       enabled: {{ .Values.email.enabled }}
