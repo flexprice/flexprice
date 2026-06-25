@@ -945,6 +945,10 @@ app:
   customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
   oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
 
+# Checkout flow base URL → rendered into config.yaml as checkout.base_url
+checkout:
+  baseUrl: ""   # e.g. "https://admin.flexprice.io"
+
 # Feature flag configuration
 featureFlag:
   enableFeatureUsageForAnalytics: true
