@@ -80,9 +80,14 @@ func (p *PubSub) Publish(ctx context.Context, topic string, msg *message.Message
 
 	if p.secondary != nil {
 		if serr := p.secondary.Publish(topic, secondaryMsg); serr != nil {
-			p.logger.Error(ctx, "secondary kafka publish failed",
+			// Same message + cluster label as EventPublisher.logFailure so one
+			// alert/grep ("kafka publish failed", cluster=secondary) covers both
+			// dual-write paths.
+			p.logger.Error(ctx, "kafka publish failed",
 				"cluster", "secondary",
 				"topic", topic,
+				"message_id", secondaryMsg.UUID,
+				"tenant_id", secondaryMsg.Metadata.Get("tenant_id"),
 				"error", serr,
 			)
 		}
