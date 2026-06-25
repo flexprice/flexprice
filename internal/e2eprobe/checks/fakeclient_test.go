@@ -394,6 +394,15 @@ type fakeEvents struct {
 	ingested     []types.DtoIngestEventRequest
 	analytics    int
 	anaErr       error
+	// anaErrTimes: if > 0, GetUsageAnalytics returns anaErr (or a default
+	// transient error) for the first N calls, then succeeds. Used to verify
+	// retry behavior.
+	anaErrTimes int
+	// anaErrTransient: when true, anaErr is treated as a transient error
+	// that resolves automatically once anaErrTimes is exhausted. Set this
+	// alongside anaErr+anaErrTimes for transient-then-recovery scenarios;
+	// leave false for "persistent error every call" scenarios.
+	anaErrTransient bool
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
 	analyticsItems []types.DtoUsageAnalyticItem
 	// listRawItems, when set, is returned in ListRaw responses. Otherwise
@@ -412,7 +421,19 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAna
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.analytics++
-	if f.anaErr != nil {
+	// Two error modes (mutually exclusive in practice):
+	//   - anaErrTimes > 0: simulate transient — fail N times then succeed.
+	//     anaErr (if set) is the error returned during those N calls.
+	//   - anaErrTimes == 0 && anaErr != nil: persistent — every call fails.
+	if f.anaErrTimes > 0 {
+		f.anaErrTimes--
+		err := f.anaErr
+		if err == nil {
+			err = errors.New("transient")
+		}
+		return nil, err
+	}
+	if f.anaErrTimes == 0 && f.anaErr != nil && !f.anaErrTransient {
 		return nil, f.anaErr
 	}
 	if len(f.analyticsItems) > 0 {

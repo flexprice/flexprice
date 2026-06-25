@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -40,6 +41,18 @@ func (p *MeterAggregationProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe
 // window should show hundreds of events per meter if aggregation is healthy.
 const meterAggLookback = 30 * time.Minute
 
+// meterAggMaxAttempts / meterAggRetryDelay absorb transient upstream
+// hiccups (empty `{}` bodies, momentary 5xx). Three attempts total with
+// ~5s between them — long enough to survive a brief deploy/load spike,
+// short enough that a real outage still alerts within ~15s.
+//
+// var (not const) so tests can shorten the delay; production callers
+// should not mutate these.
+var (
+	meterAggMaxAttempts = 3
+	meterAggRetryDelay  = 5 * time.Second
+)
+
 func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
 	if len(seeds.PersistentCustomerIDs) == 0 || len(seeds.MeterIDs) == 0 {
@@ -62,17 +75,37 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	startStr := start.Format(time.RFC3339)
 	endStr := end.Format(time.RFC3339)
 
-	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.DtoGetUsageAnalyticsRequest{
-		ExternalCustomerID: extCustID,
-		StartTime:          &startStr,
-		EndTime:            &endStr,
-	})
+	// Transient retry: the upstream analytics endpoint occasionally returns
+	// a 4xx/5xx with an empty `{}` body (we've seen the same pattern on
+	// cancel and customer-delete). One-shot alerts on those are pure noise.
+	// Retry 2 more times with brief backoff, then give up and report.
+	var resp *sdkdtos.GetUsageAnalyticsResponse
+	var err error
+	for attempt := 0; attempt < meterAggMaxAttempts; attempt++ {
+		resp, err = p.client.Events().GetUsageAnalytics(ctx, types.DtoGetUsageAnalyticsRequest{
+			ExternalCustomerID: extCustID,
+			StartTime:          &startStr,
+			EndTime:            &endStr,
+		})
+		if err == nil {
+			break
+		}
+		if attempt == meterAggMaxAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(meterAggRetryDelay):
+		}
+	}
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
 			"window":               meterAggLookback.String(),
-		}, "analytics for %s/%s: %w", extCustID, eventName, err)
+			"attempts":             fmt.Sprintf("%d", meterAggMaxAttempts),
+		}, "analytics for %s/%s after %d attempts: %w", extCustID, eventName, meterAggMaxAttempts, err)
 	}
 
 	sum := extractAnalyticsSum(resp, eventName)
