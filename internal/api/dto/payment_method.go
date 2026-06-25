@@ -181,7 +181,9 @@ func (r *CreateSetupIntentRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	if err := r.Provider.Validate(); err != nil {
+	switch r.Provider {
+	case types.SecretProviderStripe, types.SecretProviderMoyasar:
+	default:
 		return errors.NewError("unsupported payment provider").
 			WithHint("Supported providers: stripe, moyasar").
 			WithReportableDetails(map[string]interface{}{
