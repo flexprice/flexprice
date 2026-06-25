@@ -10301,6 +10301,68 @@ const docTemplate = `{
                 }
             }
         },
+        "/wallets/{id}/balance/cached": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.\nReturns the cached wallet balance. On transient backend failure\nduring a forced recompute, the endpoint falls back to the last\ncached balance (response includes ` + "`" + `is_cached_fallback=true` + "`" + `).\nA 5xx is only returned when no cached balance is available to serve.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Get cached wallet balance",
+                "operationId": "getWalletBalanceForceCached",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Expand fields (e.g., credits_available_breakdown)",
+                        "name": "expand",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/WalletBalanceResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error - only when cache is also unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/wallets/{id}/balance/real-time": {
             "get": {
                 "security": [

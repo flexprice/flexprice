@@ -2646,28 +2646,32 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 
 	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
-		s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+		if resp != nil && resp.RealTimeBalance != nil {
+			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+		}
 		return resp, nil
 	}
 
-	if isFallbackEligibleError(err) && cachedBalance != nil {
+	if isFallbackEligibleError(ctx, err) && cachedBalance != nil {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
 			"reason", classifyFallbackReason(err),
 			"cache_hit", true,
+			"endpoint", "real_time",
 		)
 		return s.buildResponseFromCachedBalance(w, *cachedBalance, true), nil
 	}
 
-	if isFallbackEligibleError(err) {
+	if isFallbackEligibleError(ctx, err) {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
 			"reason", classifyFallbackReason(err),
 			"cache_hit", false,
+			"endpoint", "real_time",
 		)
 	}
 	return nil, err
@@ -2854,11 +2858,13 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 
 	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
-		s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+		if resp != nil && resp.RealTimeBalance != nil {
+			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+		}
 		return resp, nil
 	}
 
-	if isFallbackEligibleError(err) && fallbackCache != nil {
+	if isFallbackEligibleError(ctx, err) && fallbackCache != nil {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
@@ -2870,7 +2876,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return s.buildResponseFromCachedBalance(w, *fallbackCache, true), nil
 	}
 
-	if isFallbackEligibleError(err) {
+	if isFallbackEligibleError(ctx, err) {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),

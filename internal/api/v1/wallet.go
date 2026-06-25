@@ -380,6 +380,25 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, balance)
 }
 
+// GetWalletBalanceForceCached godoc
+// @Summary Get cached wallet balance
+// @ID getWalletBalanceForceCached
+// @Description Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.
+// @Description Returns the cached wallet balance. On transient backend failure
+// @Description during a forced recompute, the endpoint falls back to the last
+// @Description cached balance (response includes `is_cached_fallback=true`).
+// @Description A 5xx is only returned when no cached balance is available to serve.
+// @Tags Wallets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Wallet ID"
+// @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
+// @Success 200 {object} dto.WalletBalanceResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error - only when cache is also unavailable"
+// @Router /wallets/{id}/balance/cached [get]
 func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {

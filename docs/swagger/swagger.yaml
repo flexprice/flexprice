@@ -17360,6 +17360,51 @@ paths:
       summary: Update a wallet
       tags:
       - Wallets
+  /wallets/{id}/balance/cached:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.
+        Returns the cached wallet balance. On transient backend failure
+        during a forced recompute, the endpoint falls back to the last
+        cached balance (response includes `is_cached_fallback=true`).
+        A 5xx is only returned when no cached balance is available to serve.
+      operationId: getWalletBalanceForceCached
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Expand fields (e.g., credits_available_breakdown)
+        in: query
+        name: expand
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/WalletBalanceResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error - only when cache is also unavailable
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get cached wallet balance
+      tags:
+      - Wallets
   /wallets/{id}/balance/real-time:
     get:
       consumes:

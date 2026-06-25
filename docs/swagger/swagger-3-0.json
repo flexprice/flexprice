@@ -12358,6 +12358,82 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/wallets/{id}/balance/cached": {
+      "get": {
+        "tags": [
+          "Wallets"
+        ],
+        "summary": "Get cached wallet balance",
+        "description": "Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.\nReturns the cached wallet balance. On transient backend failure\nduring a forced recompute, the endpoint falls back to the last\ncached balance (response includes `is_cached_fallback=true`).\nA 5xx is only returned when no cached balance is available to serve.",
+        "operationId": "getWalletBalanceForceCached",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Wallet ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Expand fields (e.g., credits_available_breakdown)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletBalanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error - only when cache is also unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/wallets/{id}/balance/real-time": {
       "get": {
         "tags": [
