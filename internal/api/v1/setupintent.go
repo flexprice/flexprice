@@ -2,8 +2,11 @@ package v1
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+
+	"github.com/google/uuid"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	flexpricejwt "github.com/flexprice/flexprice/internal/auth"
@@ -64,14 +67,14 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	}
 
 	switch req.Provider {
-	case string(types.SecretProviderMoyasar):
-		h.createMoyasarSetupIntent(c, customerID)
+	case types.SecretProviderMoyasar:
+		h.createMoyasarSetupIntent(c, customerID, &req)
 	default:
 		h.createStripeSetupIntent(c, customerID, &req)
 	}
 }
 
-func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string) {
+func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
 	ctx := c.Request.Context()
 
 	if _, err := h.customerService.GetCustomer(ctx, customerID); err != nil {
@@ -94,10 +97,24 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 		return
 	}
 
+	// given_id is a deterministic UUID v5 derived from the Flexprice payment ID.
+	// Moyasar requires a UUID for idempotency; ULIDs are not valid UUIDs.
+	givenID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(flexpricePaymentID)).String()
+
+	// success_url is where the checkout page redirects after the card save completes.
+	// Falls back to the customer overview page when not provided by the caller.
+	appBaseURL := h.config.Checkout.BaseURL
+	successURL := req.SuccessURL
+	if successURL == "" {
+		successURL = fmt.Sprintf("%s/customers/%s", appBaseURL, customerID)
+	}
+
 	authProvider := flexpricejwt.NewProvider(h.config)
 	checkoutToken, err := authProvider.GenerateCheckoutToken(map[string]interface{}{
 		"publishable_key":      publishableKey,
 		"flexprice_payment_id": flexpricePaymentID,
+		"given_id":             givenID,
+		"success_url":          successURL,
 	})
 	if err != nil {
 		h.log.Error(ctx, "Failed to generate checkout token", "error", err)
@@ -105,10 +122,13 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 		return
 	}
 
+	// JWT is embedded in the checkout URL — the checkout page decodes it client-side.
+	checkoutURL := fmt.Sprintf("%s/checkout?provider=moyasar&token=%s", appBaseURL, checkoutToken)
+
 	c.JSON(http.StatusCreated, dto.SetupIntentResponse{
-		Status:        "pending_card_entry",
-		CustomerID:    customerID,
-		CheckoutToken: checkoutToken,
+		Status:      "pending_card_entry",
+		CustomerID:  customerID,
+		CheckoutURL: checkoutURL,
 	})
 }
 

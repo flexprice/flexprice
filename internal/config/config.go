@@ -19,10 +19,10 @@ import (
 )
 
 type Configuration struct {
-	Deployment                 DeploymentConfig                 `validate:"required"`
-	Server                     ServerConfig                     `validate:"required"`
-	Auth                       AuthConfig                       `validate:"required"`
-	Kafka                      KafkaConfig                      `validate:"required"`
+	Deployment DeploymentConfig `validate:"required"`
+	Server     ServerConfig     `validate:"required"`
+	Auth       AuthConfig       `validate:"required"`
+	Kafka      KafkaConfig      `validate:"required"`
 	// KafkaSecondary is the optional second Kafka cluster the source event publisher also
 	// writes to during the AWS→GCP migration (the "other" cloud's cluster). When set
 	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
@@ -63,6 +63,7 @@ type Configuration struct {
 	OAuth                      OAuthConfig                      `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
+	Checkout                   CheckoutConfig                   `mapstructure:"checkout" validate:"omitempty"`
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
@@ -624,6 +625,10 @@ type CostSheetUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`
+}
+
+type CheckoutConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"required,url"`
 }
 
 type CustomerPortalConfig struct {

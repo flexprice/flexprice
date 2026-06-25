@@ -105,13 +105,13 @@ type StripeInvoiceSyncResponse struct {
 
 // CreateSetupIntentRequest represents a request to create a Setup Intent session
 type CreateSetupIntentRequest struct {
-	Provider           string         `json:"provider" binding:"required"`    // Payment provider: "stripe", "razorpay", etc.
-	Usage              string         `json:"usage,omitempty"`                // "on_session" or "off_session" (default: "off_session")
-	PaymentMethodTypes []string       `json:"payment_method_types,omitempty"` // defaults to ["card"]
-	SuccessURL         string         `json:"success_url,omitempty"`          // User-configurable success redirect URL
-	CancelURL          string         `json:"cancel_url,omitempty"`           // User-configurable cancel redirect URL
-	SetDefault         bool           `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
-	Metadata           types.Metadata `json:"metadata,omitempty"`
+	Provider           types.SecretProvider `json:"provider" binding:"required"`    // Payment provider: "stripe", "moyasar", etc.
+	Usage              string               `json:"usage,omitempty"`                // "on_session" or "off_session" (default: "off_session")
+	PaymentMethodTypes []string             `json:"payment_method_types,omitempty"` // defaults to ["card"]
+	SuccessURL         string               `json:"success_url,omitempty"`          // User-configurable success redirect URL
+	CancelURL          string               `json:"cancel_url,omitempty"`           // User-configurable cancel redirect URL
+	SetDefault         bool                 `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
+	Metadata           types.Metadata       `json:"metadata,omitempty"`
 }
 
 // SetupIntentResponse represents a response from creating a Setup Intent session
@@ -120,7 +120,6 @@ type SetupIntentResponse struct {
 	CheckoutSessionID string `json:"checkout_session_id"`
 	CheckoutURL       string `json:"checkout_url"`
 	ClientSecret      string `json:"client_secret"`
-	CheckoutToken     string `json:"checkout_token,omitempty"`
 	Status            string `json:"status"`
 	Usage             string `json:"usage"`
 	CustomerID        string `json:"customer_id"`
@@ -176,7 +175,6 @@ type ListPaymentMethodsRequest struct {
 
 // Validate validates the create Setup Intent request
 func (r *CreateSetupIntentRequest) Validate() error {
-	// Validate provider parameter
 	if r.Provider == "" {
 		return errors.NewError("provider is required").
 			WithHint("Please provide a payment provider").
@@ -184,7 +182,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	}
 
 	switch r.Provider {
-	case string(types.PaymentMethodProviderStripe), string(types.SecretProviderMoyasar):
+	case types.SecretProviderStripe, types.SecretProviderMoyasar:
 	default:
 		return errors.NewError("unsupported payment provider").
 			WithHint("Supported providers: stripe, moyasar").
