@@ -104,9 +104,9 @@ func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID
 	// success_url is where the checkout page redirects after the card save completes.
 	// Falls back to the customer overview page when not provided by the caller.
 	appBaseURL := h.config.Checkout.BaseURL
-	successURL := req.SuccessURL
-	if successURL == "" {
-		successURL = fmt.Sprintf("%s/customers/%s", appBaseURL, customerID)
+	var successURL string
+	if req.SuccessURL != "" {
+		successURL = req.SuccessURL
 	}
 
 	authProvider := flexpricejwt.NewProvider(h.config)
