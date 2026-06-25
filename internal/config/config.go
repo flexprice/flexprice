@@ -730,6 +730,13 @@ func NewConfig() (*Configuration, error) {
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
+	// Explicitly bind the Svix auth token. The helm ConfigMap renders webhook.svix_config
+	// {enabled, base_url} but NOT auth_token (it's a secret), and the chart injects the token
+	// as FLEXPRICE_SVIX_API_KEY. Without this bind, webhook.svix_config.auth_token stays empty
+	// on GKE (AutomaticEnv+Unmarshal won't map FLEXPRICE_SVIX_API_KEY to it), so the Svix client
+	// is created with an empty key and every call 401s. Same class as auth.secret above.
+	_ = v.BindEnv("webhook.svix_config.auth_token", "FLEXPRICE_SVIX_API_KEY")
+
 	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
 	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
 	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
