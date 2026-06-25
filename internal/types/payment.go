@@ -17,10 +17,18 @@ const (
 	PaymentStatusFailed            PaymentStatus = "FAILED"
 	PaymentStatusRefunded          PaymentStatus = "REFUNDED"
 	PaymentStatusPartiallyRefunded PaymentStatus = "PARTIALLY_REFUNDED"
+	PaymentStatusVoided            PaymentStatus = "VOIDED"
 )
 
 func (s PaymentStatus) String() string {
 	return string(s)
+}
+
+// IsTerminal returns true if no further lifecycle transitions are valid.
+// VOIDED, REFUNDED, and FAILED are terminal. SUCCEEDED is not — AUTH payments
+// can still transition from SUCCEEDED to VOIDED or REFUNDED.
+func (s PaymentStatus) IsTerminal() bool {
+	return s == PaymentStatusVoided || s == PaymentStatusRefunded || s == PaymentStatusFailed
 }
 
 func (s PaymentStatus) Validate() error {
@@ -33,6 +41,7 @@ func (s PaymentStatus) Validate() error {
 		PaymentStatusFailed,
 		PaymentStatusRefunded,
 		PaymentStatusPartiallyRefunded,
+		PaymentStatusVoided,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment status").
@@ -84,6 +93,9 @@ type PaymentDestinationType string
 
 const (
 	PaymentDestinationTypeInvoice PaymentDestinationType = "INVOICE"
+	// PaymentDestinationTypeCustomer is used when the payment's purpose is to tokenize
+	// a payment method for a customer (auth charge that is voided after the token is saved).
+	PaymentDestinationTypeCustomer PaymentDestinationType = "CUSTOMER"
 )
 
 func (s PaymentDestinationType) String() string {
@@ -93,6 +105,7 @@ func (s PaymentDestinationType) String() string {
 func (s PaymentDestinationType) Validate() error {
 	allowed := []PaymentDestinationType{
 		PaymentDestinationTypeInvoice,
+		PaymentDestinationTypeCustomer,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment destination type").
@@ -203,3 +216,121 @@ type PaymentMethodProvider string
 const (
 	PaymentMethodProviderStripe PaymentMethodProvider = "stripe"
 )
+
+// PaymentMethodStatus represents the lifecycle status of a saved payment method
+type PaymentMethodStatus string
+
+const (
+	PaymentMethodStatusActive   PaymentMethodStatus = "ACTIVE"
+	PaymentMethodStatusInactive PaymentMethodStatus = "INACTIVE"
+	PaymentMethodStatusExpired  PaymentMethodStatus = "EXPIRED"
+)
+
+func (s PaymentMethodStatus) String() string {
+	return string(s)
+}
+
+func (s PaymentMethodStatus) Validate() error {
+	allowed := []PaymentMethodStatus{
+		PaymentMethodStatusActive,
+		PaymentMethodStatusInactive,
+		PaymentMethodStatusExpired,
+	}
+	if !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid payment method status").
+			WithHint("Please provide a valid payment method status").
+			WithReportableDetails(map[string]any{
+				"allowed": allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// PaymentMethodFilter represents the filter for listing payment methods
+type PaymentMethodFilter struct {
+	*QueryFilter
+	*TimeRangeFilter
+
+	CustomerID          *string `form:"customer_id"`
+	Gateway             *string `form:"gateway"`
+	GatewayMethodID     *string `form:"gateway_method_id"`
+	Type                *string `form:"type"`
+	PaymentMethodStatus *string `form:"payment_method_status"`
+	IsDefault           *bool   `form:"is_default"`
+}
+
+func NewNoLimitPaymentMethodFilter() *PaymentMethodFilter {
+	return &PaymentMethodFilter{
+		QueryFilter: NewNoLimitQueryFilter(),
+	}
+}
+
+func (f *PaymentMethodFilter) Validate() error {
+	if f == nil {
+		return nil
+	}
+	if err := f.QueryFilter.Validate(); err != nil {
+		return err
+	}
+	if f.PaymentMethodStatus != nil {
+		if err := PaymentMethodStatus(*f.PaymentMethodStatus).Validate(); err != nil {
+			return err
+		}
+	}
+	if f.Type != nil {
+		if err := PaymentMethodType(*f.Type).Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *PaymentMethodFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+func (f *PaymentMethodFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+func (f *PaymentMethodFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+func (f *PaymentMethodFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+func (f *PaymentMethodFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+func (f *PaymentMethodFilter) GetExpand() Expand {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+func (f *PaymentMethodFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
+}

@@ -66,6 +66,11 @@ type Provider interface {
 	//   flexprice → { user_id, tenant_id, environment_id }   (email ignored)
 	//   supabase  → { sub, email, app_metadata.tenant_id }   (environmentID ignored; pass X-Environment-ID header)
 	GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error)
+
+	// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+	// The token carries provider-specific claims (e.g. publishable_key, flexprice_payment_id)
+	// and is decoded client-side by the checkout page. Both providers sign with HS256.
+	GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error)
 }
 
 func NewProvider(cfg *config.Configuration) Provider {

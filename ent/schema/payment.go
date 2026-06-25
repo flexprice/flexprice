@@ -113,6 +113,9 @@ func (Payment) Fields() []ent.Field {
 		field.Time("refunded_at").
 			Optional().
 			Nillable(),
+		field.Time("voided_at").
+			Optional().
+			Nillable(),
 		field.Time("recorded_at").
 			Optional().
 			Nillable(),

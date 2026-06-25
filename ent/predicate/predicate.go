@@ -87,6 +87,9 @@ type Payment func(*sql.Selector)
 // PaymentAttempt is the predicate function for paymentattempt builders.
 type PaymentAttempt func(*sql.Selector)
 
+// PaymentMethod is the predicate function for paymentmethod builders.
+type PaymentMethod func(*sql.Selector)
+
 // Plan is the predicate function for plan builders.
 type Plan func(*sql.Selector)
 

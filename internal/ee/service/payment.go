@@ -40,29 +40,37 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		return nil, err // Already using ierr in the DTO
 	}
 
-	if p.DestinationType != types.PaymentDestinationTypeInvoice {
+	allowedDestinations := []types.PaymentDestinationType{
+		types.PaymentDestinationTypeInvoice,
+		types.PaymentDestinationTypeCustomer,
+	}
+	if !lo.Contains(allowedDestinations, p.DestinationType) {
 		return nil, ierr.NewError("invalid destination type").
-			WithHint("Only invoice destination type is supported").
+			WithHint("Only invoice and auth destination types are supported").
 			WithReportableDetails(map[string]interface{}{
-				"destination_type": p.DestinationType,
+				"allowed": allowedDestinations,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	// validate the destination
-	invoice, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to validate invoice").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": p.DestinationID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
+	// For INVOICE destination, validate the invoice and its payment eligibility.
+	// AUTH destination uses customer_id as DestinationID — no invoice lookup.
+	var invoice *invoice.Invoice
+	if p.DestinationType == types.PaymentDestinationTypeInvoice {
+		invoice, err = s.InvoiceRepo.Get(ctx, p.DestinationID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to validate invoice").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": p.DestinationID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 
-	// validate the invoice payment eligibility
-	if err := s.validateInvoicePaymentEligibility(ctx, invoice, req); err != nil {
-		return nil, err
+		// validate the invoice payment eligibility
+		if err := s.validateInvoicePaymentEligibility(ctx, invoice, req); err != nil {
+			return nil, err
+		}
 	}
 
 	// Check if payment link already exists for this invoice
@@ -362,6 +370,10 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 	if req.GatewayPaymentID != nil {
 		p.GatewayPaymentID = req.GatewayPaymentID
+		// Confirm the gateway accepted the payment: INITIATED → PENDING
+		if p.PaymentStatus == types.PaymentStatusInitiated {
+			p.PaymentStatus = types.PaymentStatusPending
+		}
 	}
 	if req.PaymentMethodID != nil {
 		p.PaymentMethodID = *req.PaymentMethodID
@@ -371,6 +383,12 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 	if req.FailedAt != nil {
 		p.FailedAt = req.FailedAt
+	}
+	if req.VoidedAt != nil {
+		p.VoidedAt = req.VoidedAt
+	}
+	if req.RefundedAt != nil {
+		p.RefundedAt = req.RefundedAt
 	}
 	if req.ErrorMessage != nil {
 		p.ErrorMessage = req.ErrorMessage

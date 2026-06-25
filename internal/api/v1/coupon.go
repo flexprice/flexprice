@@ -294,6 +294,7 @@ func (h *CouponHandler) GetCouponAssociation(c *gin.Context) {
 // @Param subscription_ids query []string false "Filter by subscription IDs (max 100)"
 // @Param coupon_ids query []string false "Filter by coupon IDs (max 100)"
 // @Param active_only query boolean false "Return only currently active associations"
+// @Param expand query string false "Comma-separated fields: coupon, subscription_line_items, subscription_line_items.prices"
 // @Param limit query integer false "Page size"
 // @Param offset query integer false "Page offset"
 // @Success 200 {object} dto.ListCouponAssociationsResponse

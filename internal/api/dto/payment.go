@@ -38,6 +38,8 @@ type UpdatePaymentRequest struct {
 	Metadata         *types.Metadata `json:"metadata,omitempty"`
 	SucceededAt      *time.Time      `json:"succeeded_at,omitempty"`
 	FailedAt         *time.Time      `json:"failed_at,omitempty"`
+	VoidedAt         *time.Time      `json:"voided_at,omitempty"`
+	RefundedAt       *time.Time      `json:"refunded_at,omitempty"`
 	ErrorMessage     *string         `json:"error_message,omitempty"`
 }
 
@@ -62,6 +64,7 @@ type PaymentResponse struct {
 	SucceededAt            *time.Time                   `json:"succeeded_at,omitempty"`
 	FailedAt               *time.Time                   `json:"failed_at,omitempty"`
 	RefundedAt             *time.Time                   `json:"refunded_at,omitempty"`
+	VoidedAt               *time.Time                   `json:"voided_at,omitempty"`
 	ErrorMessage           *string                      `json:"error_message,omitempty"`
 	Attempts               []*PaymentAttemptResponse    `json:"attempts,omitempty"`
 	InvoiceNumber          *string                      `json:"invoice_number,omitempty"`
@@ -114,6 +117,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
 		RefundedAt:        p.RefundedAt,
+		VoidedAt:          p.VoidedAt,
 		ErrorMessage:      p.ErrorMessage,
 		TenantID:          p.TenantID,
 		CreatedAt:         p.CreatedAt,
@@ -198,8 +202,16 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set payment status to pending
-	p.PaymentStatus = types.PaymentStatusPending
+	// Set initial payment status. When ProcessPayment is false the payment is being
+	// created by the lifecycle module before a gateway call — start as INITIATED.
+	// Offline and credits payments always start as PENDING (no gateway involvement).
+	if !r.ProcessPayment &&
+		r.PaymentMethodType != types.PaymentMethodTypeOffline &&
+		r.PaymentMethodType != types.PaymentMethodTypeCredits {
+		p.PaymentStatus = types.PaymentStatusInitiated
+	} else {
+		p.PaymentStatus = types.PaymentStatusPending
+	}
 
 	// Handle payment gateway if provided
 	if r.PaymentGateway != nil {

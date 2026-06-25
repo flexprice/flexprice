@@ -259,3 +259,26 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil
 }
+
+// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+// Signed with the shared auth secret so the checkout page can decode it regardless of auth provider.
+func (s *supabaseAuth) GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error) {
+	expiresAt := time.Now().Add(checkoutTokenTTL)
+
+	claims := jwt.MapClaims{
+		"exp": expiresAt.Unix(),
+		"iat": time.Now().Unix(),
+	}
+	for k, v := range extraClaims {
+		claims[k] = v
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(s.AuthConfig.Secret))
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to sign checkout token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, nil
+}

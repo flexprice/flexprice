@@ -180,6 +180,7 @@ data:
       topic: {{ .Values.webhook.topic | quote }}
       pubsub: {{ .Values.webhook.pubsub | quote }}
       consumer_group: {{ .Values.webhook.consumerGroup | quote }}
+      rate_limit: {{ .Values.webhook.rateLimit }}
       max_retries: {{ .Values.webhook.maxRetries }}
       initial_interval: {{ .Values.webhook.initialInterval | quote }}
       max_interval: {{ .Values.webhook.maxInterval | quote }}
@@ -190,7 +191,16 @@ data:
         enabled: {{ .Values.webhook.svixConfig.enabled }}
         base_url: {{ .Values.webhook.svixConfig.baseUrl | quote }}
     {{- end }}
-    
+
+    # Integration events: consumed from the SAME system_events topic as webhooks,
+    # but under an independent consumer group. Rendered here because viper does not
+    # apply Go `default` tags on Unmarshal (same class as event_processing) — without
+    # this block enabled resolves to false and the integration-events consumer never starts.
+    integration_events:
+      enabled: {{ .Values.integrationEvents.enabled }}
+      consumer_group: {{ .Values.integrationEvents.consumerGroup | quote }}
+      rate_limit: {{ .Values.integrationEvents.rateLimit }}
+
     billing:
       tenant_id: {{ .Values.billing.tenantId | quote }}
       environment_id: {{ .Values.billing.environmentId | quote }}
@@ -204,7 +214,13 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
-    
+      # Rendered with per-field defaults (Go zero value) so deployments that don't set
+      # them are unchanged; per-env values opt in. The app otherwise resolves these to
+      # false (not the config.yaml baked default), diverging from AWS prod where they are on.
+      enable_meter_usage_for_analytics: {{ .Values.featureFlag.enableMeterUsageForAnalytics | default false }}
+      enable_meter_usage_for_preview_invoice: {{ .Values.featureFlag.enableMeterUsageForPreviewInvoice | default false }}
+      enable_usage_benchmark: {{ .Values.featureFlag.enableUsageBenchmark | default false }}
+
     secrets:
       encryption_key: {{ .Values.secrets.encryptionKey | quote }}
     

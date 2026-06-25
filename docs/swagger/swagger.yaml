@@ -1056,7 +1056,7 @@ definitions:
   CouponAssociationResponse:
     properties:
       coupon:
-        $ref: '#/definitions/Coupon'
+        $ref: '#/definitions/CouponResponse'
       coupon_id:
         type: string
       created_at:
@@ -1081,6 +1081,8 @@ definitions:
       subscription_id:
         description: Mandatory
         type: string
+      subscription_line_item:
+        $ref: '#/definitions/SubscriptionLineItemResponse'
       subscription_line_item_id:
         description: Optional
         type: string
@@ -9317,6 +9319,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_ids:
+        items:
+          type: string
+        type: array
+      subscription_line_item_ids:
         description: Specific filters
         items:
           type: string
@@ -11357,6 +11363,10 @@ paths:
         in: query
         name: active_only
         type: boolean
+      - description: 'Comma-separated fields: coupon, subscription_line_items, subscription_line_items.prices'
+        in: query
+        name: expand
+        type: string
       - description: Page size
         in: query
         name: limit
