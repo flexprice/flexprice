@@ -13,7 +13,7 @@ const (
 )
 
 // CheckoutSessionExpiryWorkflow expires checkout sessions that have passed their expiry date.
-// It is triggered by a Temporal Schedule every 5 minutes.
+// It is triggered by a Temporal Schedule every 30 minutes.
 func CheckoutSessionExpiryWorkflow(ctx workflow.Context, _ cronModels.CheckoutSessionExpiryWorkflowInput) (*cronModels.CheckoutSessionExpiryWorkflowResult, error) {
 	log := workflow.GetLogger(ctx)
 	log.Info("Starting CheckoutSessionExpiryWorkflow")
