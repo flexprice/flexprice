@@ -9,12 +9,20 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 )
 
+// messagePublisher is the subset of *Producer that PubSub depends on. *Producer satisfies it;
+// tests substitute a fake to exercise the dual-write fan-out without a broker (mirrors the
+// seam in internal/kafka EventPublisher).
+type messagePublisher interface {
+	Publish(topic string, messages ...*message.Message) error
+	Close() error
+}
+
 type PubSub struct {
-	producer *Producer
+	producer messagePublisher
 	// secondary is the optional second-cluster producer (cfg.KafkaSecondary). When non-nil,
 	// every Publish ALSO writes to it (presence-based dual-write for the AWS→GCP migration);
 	// nil ⇒ single-cluster. Its failures are logged, never fatal to the primary write.
-	secondary *Producer
+	secondary messagePublisher
 	consumer  *Consumer
 	config    *config.Configuration
 	logger    *logger.Logger
@@ -28,13 +36,19 @@ func NewPubSub(
 	secondary *Producer,
 	consumer *Consumer,
 ) pubsub.PubSub {
-	return &PubSub{
-		producer:  producer,
-		secondary: secondary,
-		consumer:  consumer,
-		config:    config,
-		logger:    logger,
+	ps := &PubSub{
+		producer: producer,
+		consumer: consumer,
+		config:   config,
+		logger:   logger,
 	}
+	// Only set the interface field when a real producer is present. A typed-nil *Producer
+	// stored in an interface is itself non-nil, which would break the `p.secondary != nil`
+	// guard in Publish and panic. NewSecondaryProducer returns nil when KafkaSecondary is unset.
+	if secondary != nil {
+		ps.secondary = secondary
+	}
+	return ps
 }
 
 func NewPubSubFromConfig(
