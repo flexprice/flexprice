@@ -320,10 +320,14 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Wallet ID"
 // @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
+// @Description Returns the real-time wallet balance. On transient backend failure
+// @Description the endpoint falls back to the last cached balance (response
+// @Description includes `is_cached_fallback=true`). A 5xx is only returned when
+// @Description no cached balance is available to serve.
 // @Success 200 {object} dto.WalletBalanceResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 500 {object} ierr.ErrorResponse "Server error - only when cache is also unavailable"
 // @Router /wallets/{id}/balance/real-time [get]
 func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	walletID := c.Param("id")
