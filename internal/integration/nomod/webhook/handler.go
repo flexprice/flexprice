@@ -234,8 +234,64 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, charge *nomod.Charge
 	return nil
 }
 
-// handlePaymentLinkPayment processes FlexPrice-initiated payment link payments
+// handlePaymentLinkPayment processes FlexPrice-initiated payment link payments via checkout sessions.
+// NOTE: Nomod's webhook fires with a Charge ID as payload.ID, and a separate PaymentLinkID field.
+// We stored the PaymentLinkID in EntityIntegrationMapping at session creation, so we MUST look up
+// by PaymentLinkID here. Using payload.ID (the Charge ID) would always miss.
 func (h *Handler) handlePaymentLinkPayment(ctx context.Context, charge *nomod.ChargeResponse, nomodPaymentLinkID string, services *ServiceDependencies) error {
+	h.logger.Info(ctx, "processing Nomod payment link payment",
+		"charge_id", charge.ID,
+		"nomod_payment_link_id", nomodPaymentLinkID)
+
+	// Primary path: EntityIntegrationMapping lookup.
+	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
+		ctx,
+		&types.EntityIntegrationMappingFilter{
+			ProviderEntityIDs: []string{nomodPaymentLinkID},
+			ProviderTypes:     []string{"nomod"},
+			EntityType:        types.IntegrationEntityTypePayment,
+		},
+	)
+	if err != nil || mappings == nil || len(mappings.Items) == 0 {
+		h.logger.Info(ctx, "no EntityIntegrationMapping for Nomod payment link, falling through to legacy path",
+			"nomod_payment_link_id", nomodPaymentLinkID)
+		// Legacy fallback: look up by gateway_tracking_id (pre-EntityIntegrationMapping sessions).
+		return h.handlePaymentLinkPaymentLegacy(ctx, charge, nomodPaymentLinkID, services)
+	}
+
+	paymentID := mappings.Items[0].EntityID
+	sessions, sessErr := services.CheckoutSessionService.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:        types.NewDefaultQueryFilter(),
+		CheckoutPaymentIDs: []string{paymentID},
+		CheckoutStatuses:   []types.CheckoutStatus{types.CheckoutStatusPending, types.CheckoutStatusInitiated},
+	})
+	if sessErr != nil || sessions == nil || len(sessions.Items) == 0 {
+		h.logger.Info(ctx, "no active checkout session for Nomod payment, skipping",
+			"payment_id", paymentID)
+		return nil
+	}
+
+	sessionID := sessions.Items[0].ID
+	// Store the Charge ID as gateway_payment_id via ProviderPaymentIntentID.
+	providerResult := &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: charge.ID,
+	}
+	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, providerResult); err != nil {
+		if ierr.IsAlreadyExists(err) {
+			h.logger.Info(ctx, "checkout session already completed, skipping", "session_id", sessionID)
+			return nil
+		}
+		h.logger.Error(ctx, "failed to complete checkout session", "error", err, "session_id", sessionID)
+		return err
+	}
+	h.logger.Info(ctx, "checkout session completed via Nomod payment link", "session_id", sessionID)
+	return nil
+}
+
+// handlePaymentLinkPaymentLegacy is the pre-EntityIntegrationMapping path.
+// It looks up the payment by gateway_tracking_id and updates it directly.
+// Remove after all active sessions have been migrated.
+func (h *Handler) handlePaymentLinkPaymentLegacy(ctx context.Context, charge *nomod.ChargeResponse, nomodPaymentLinkID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "processing payment link payment",
 		"charge_id", charge.ID,
 		"nomod_payment_link_id", nomodPaymentLinkID)
