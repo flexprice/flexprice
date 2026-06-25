@@ -215,6 +215,9 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 
 	session.CheckoutStatus = types.CheckoutStatusCompleted
 	session.CompletedAt = &now
+	if providerResult != nil {
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	}
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
 	return nil
 }
@@ -306,6 +309,12 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	switch provider {
 	case types.CheckoutPaymentProviderStripe:
 		gateway = types.PaymentGatewayTypeStripe
+	case types.CheckoutPaymentProviderRazorpay:
+		gateway = types.PaymentGatewayTypeRazorpay
+	case types.CheckoutPaymentProviderNomod:
+		gateway = types.PaymentGatewayTypeNomod
+	case types.CheckoutPaymentProviderMoyasar:
+		gateway = types.PaymentGatewayTypeMoyasar
 	default:
 		return nil, ierr.NewError("unsupported payment provider for checkout").
 			WithHint("No gateway mapping exists for this provider").

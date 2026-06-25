@@ -13,16 +13,12 @@ import (
 )
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
-	s.Logger.Debug(ctx, "executeCheckoutAction: starting", "session_id", session.ID, "action", session.Action)
 	switch session.Action {
 	case types.CheckoutActionCreateSubscription:
-		s.Logger.Debug(ctx, "executeCheckoutAction: creating draft subscription", "session_id", session.ID)
 		subResp, invResp, err := s.createDraftSubscription(ctx, session)
 		if err != nil {
-			s.Logger.Error(ctx, "executeCheckoutAction: createDraftSubscription failed", "session_id", session.ID, "error", err)
 			return err
 		}
-		s.Logger.Debug(ctx, "executeCheckoutAction: draft subscription created", "sub_id", subResp.ID, "inv_id", invResp.ID)
 
 		result := types.CheckoutResult{
 			CreateSubscriptionResult: &types.CreateSubscriptionResult{

@@ -9,7 +9,6 @@ import (
 )
 
 // CheckoutProvider is implemented by each payment gateway that supports hosted checkout.
-// Adapters wrap the existing provider PaymentService.CreatePaymentLink() without modifying it.
 type CheckoutProvider interface {
 	CreatePaymentLink(
 		ctx context.Context,
@@ -23,7 +22,7 @@ type CheckoutProvider interface {
 type CheckoutProviderRequest struct {
 	InvoiceID     string
 	CustomerID    string
-	Amount        decimal.Decimal // decimal string, e.g. "99.00"
+	Amount        decimal.Decimal
 	Currency      string
 	PaymentID     string // FlexPrice payment ID — embedded in provider metadata for idempotency
 	EnvironmentID string
