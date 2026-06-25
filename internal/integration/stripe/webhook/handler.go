@@ -819,10 +819,10 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	)
 	if err == nil && mappings != nil && len(mappings.Items) > 0 {
 		paymentID := mappings.Items[0].EntityID
-		if routed := h.routeToCheckoutSession(ctx, paymentID, &types.CheckoutProviderResult{
+		if routed, routeErr := h.routeToCheckoutSession(ctx, paymentID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: providerPaymentIntentID,
 		}, services); routed {
-			return nil
+			return routeErr
 		}
 	}
 
@@ -855,25 +855,32 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 }
 
 // routeToCheckoutSession finds the active checkout session for a payment and completes it.
-// Returns true if a checkout session was found and CompleteCheckoutSession was called (regardless of outcome).
-func (h *Handler) routeToCheckoutSession(ctx context.Context, paymentID string, providerResult *types.CheckoutProviderResult, services *ServiceDependencies) bool {
+// Returns (true, nil) on success or conflict (already-completed).
+// Returns (true, err) when CompleteCheckoutSession fails for any other reason — still routed to
+// prevent fallthrough to the legacy path, but the error propagates to the caller so Stripe retries.
+// Returns (false, nil) when no matching session is found (fall through to legacy path).
+func (h *Handler) routeToCheckoutSession(ctx context.Context, paymentID string, providerResult *types.CheckoutProviderResult, services *ServiceDependencies) (bool, error) {
 	sessions, err := services.CheckoutSessionService.List(ctx, &types.CheckoutSessionFilter{
 		QueryFilter:        types.NewDefaultQueryFilter(),
 		CheckoutPaymentIDs: []string{paymentID},
 		CheckoutStatuses:   []types.CheckoutStatus{types.CheckoutStatusPending, types.CheckoutStatusInitiated},
 	})
-	if err != nil || sessions == nil || len(sessions.Items) == 0 {
-		return false
+	if err != nil {
+		h.logger.Error(ctx, "failed to list checkout sessions for payment", "error", err, "payment_id", paymentID)
+		return false, nil
+	}
+	if sessions == nil || len(sessions.Items) == 0 {
+		return false, nil
 	}
 	sessionID := sessions.Items[0].ID
 	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, providerResult); err != nil {
 		if ierr.IsAlreadyExists(err) {
 			h.logger.Info(ctx, "checkout session already completed by concurrent request, skipping", "session_id", sessionID)
-			return true
+			return true, nil
 		}
 		h.logger.Error(ctx, "failed to complete checkout session", "error", err, "session_id", sessionID)
-		return true // still routed; don't fall through to legacy path
+		return true, err // still routed; don't fall through to legacy path, but propagate error
 	}
 	h.logger.Info(ctx, "checkout session completed via EntityIntegrationMapping routing", "session_id", sessionID)
-	return true
+	return true, nil
 }
