@@ -90,32 +90,24 @@ type CreateCheckoutPaymentRequest struct {
 	Gateway types.PaymentGatewayType
 }
 
-// PaymentAction is derived from ProviderResult at response-build time; never stored.
-type PaymentAction struct {
-	Type types.PaymentActionType `json:"type"`
-	URL  string                  `json:"url"`
-}
-
 // CheckoutSessionResponse is the API response for a single checkout session.
 type CheckoutSessionResponse struct {
 	*domainCheckout.CheckoutSession
-	PaymentAction *PaymentAction `json:"payment_action,omitempty"`
+	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
 }
 
 // ListCheckoutSessionsResponse is the paginated list response.
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 
-// ToCheckoutSessionResponse maps a domain session to its API response, deriving PaymentAction.
+// ToCheckoutSessionResponse maps a domain session to its API response.
+// PaymentAction is derived from ProviderResult; the raw ProviderResult is zeroed
+// before serialization because it contains sensitive gateway tokens.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
 	resp := &CheckoutSessionResponse{CheckoutSession: s}
-	if s.ProviderResult != nil && s.ProviderResult.CreateSubscriptionResult != nil {
-		url := s.ProviderResult.CreateSubscriptionResult.SessionURL
-		if url != "" {
-			resp.PaymentAction = &PaymentAction{
-				Type: types.PaymentActionTypeCheckoutURL,
-				URL:  url,
-			}
-		}
+	if s.ProviderResult != nil {
+		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentActionForUser()
+		// Zero out provider_result — not safe to expose to API callers.
+		resp.CheckoutSession.ProviderResult = nil
 	}
 	return resp
 }
