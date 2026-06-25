@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // CheckoutAdapter wraps PaymentService to implement interfaces.CheckoutProvider.
@@ -20,14 +19,11 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 	customerSvc interfaces.CustomerService,
 	invoiceSvc interfaces.InvoiceService,
 ) (*interfaces.CheckoutProviderResponse, error) {
-	amount, err := decimal.NewFromString(req.Amount)
-	if err != nil {
-		return nil, err
-	}
+
 	r, err := a.Svc.CreatePaymentLink(ctx, &dto.CreateStripePaymentLinkRequest{
 		InvoiceID:     req.InvoiceID,
 		CustomerID:    req.CustomerID,
-		Amount:        amount,
+		Amount:        req.Amount,
 		Currency:      req.Currency,
 		SuccessURL:    req.SuccessURL,
 		CancelURL:     req.CancelURL,

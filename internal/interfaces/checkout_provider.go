@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CheckoutProvider is implemented by each payment gateway that supports hosted checkout.
@@ -22,7 +23,7 @@ type CheckoutProvider interface {
 type CheckoutProviderRequest struct {
 	InvoiceID     string
 	CustomerID    string
-	Amount        string // decimal string, e.g. "99.00"
+	Amount        decimal.Decimal // decimal string, e.g. "99.00"
 	Currency      string
 	PaymentID     string // FlexPrice payment ID — embedded in provider metadata for idempotency
 	EnvironmentID string
