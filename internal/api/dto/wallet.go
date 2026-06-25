@@ -391,6 +391,7 @@ type WalletBalanceResponse struct {
 	CurrentPeriodUsage        *decimal.Decimal       `json:"current_period_usage,omitempty" swaggertype:"string"`
 	UnpaidInvoicesAmount      *decimal.Decimal       `json:"unpaid_invoices_amount,omitempty" swaggertype:"string"`
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
+	IsCachedFallback          bool                   `json:"is_cached_fallback,omitempty"`
 }
 
 type ExpiredCreditsResponseItem struct {
