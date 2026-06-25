@@ -105,7 +105,7 @@ type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
 	resp := &CheckoutSessionResponse{CheckoutSession: s}
 	if s.ProviderResult != nil {
-		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentActionForUser()
+		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentAction()
 		// Zero out provider_result — not safe to expose to API callers.
 		resp.CheckoutSession.ProviderResult = nil
 	}

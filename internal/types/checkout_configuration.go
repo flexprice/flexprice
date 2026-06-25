@@ -111,9 +111,9 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
-// PaymentActionForUser extracts the safe-to-expose action from a provider result.
+// PaymentAction extracts the safe-to-expose action from a provider result.
 // All other fields in CheckoutProviderResult are sensitive gateway data.
-func (r *CheckoutProviderResult) PaymentActionForUser() *PaymentAction {
+func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	if r == nil {
 		return nil
 	}
