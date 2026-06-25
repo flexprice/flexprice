@@ -163,6 +163,18 @@ data:
       consumer_group: {{ .Values.onboardingEvents.consumerGroup | quote }}
       max_retries: {{ .Values.onboardingEvents.maxRetries }}
 
+    {{- with .Values.walletBalanceAlert }}
+    wallet_balance_alert:
+      # Rendered only when a deployment sets walletBalanceAlert; otherwise the section
+      # is omitted and the app's Go struct defaults apply (topic "wallet_alert"). Per-
+      # field defaults mirror the struct so partial overrides stay safe — no chart
+      # values.yaml default needed. enabled gates only the consumer; publish fires regardless.
+      enabled: {{ .enabled | default false }}
+      topic: {{ .topic | default "wallet_alert" | quote }}
+      rate_limit: {{ .rateLimit | default 1 }}
+      consumer_group: {{ .consumerGroup | default "v1_wallet_alert_service" | quote }}
+    {{- end }}
+
     webhook:
       enabled: {{ .Values.webhook.enabled }}
       topic: {{ .Values.webhook.topic | quote }}
@@ -202,7 +214,13 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
-    
+      # Rendered with per-field defaults (Go zero value) so deployments that don't set
+      # them are unchanged; per-env values opt in. The app otherwise resolves these to
+      # false (not the config.yaml baked default), diverging from AWS prod where they are on.
+      enable_meter_usage_for_analytics: {{ .Values.featureFlag.enableMeterUsageForAnalytics | default false }}
+      enable_meter_usage_for_preview_invoice: {{ .Values.featureFlag.enableMeterUsageForPreviewInvoice | default false }}
+      enable_usage_benchmark: {{ .Values.featureFlag.enableUsageBenchmark | default false }}
+
     secrets:
       encryption_key: {{ .Values.secrets.encryptionKey | quote }}
     
