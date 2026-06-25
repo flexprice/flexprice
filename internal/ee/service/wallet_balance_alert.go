@@ -203,7 +203,7 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 	)
 
 	// Create context with tenant and environment IDs
-	ctx := context.Background()
+	ctx := msg.Context()
 	if event.TenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	}
