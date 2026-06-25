@@ -674,6 +674,14 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
 	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
 
+	// Redis cluster_mode/key_prefix are supplied only as env vars by the Helm chart
+	// (they are not rendered into config.yaml). viper's Unmarshal does not consult
+	// AutomaticEnv for keys absent from the config file, so without these explicit
+	// binds ClusterMode silently resolves to false and a single-node client is used
+	// against a cluster-mode endpoint, causing "MOVED" errors on every off-slot key.
+	_ = v.BindEnv("redis.cluster_mode", "FLEXPRICE_REDIS_CLUSTER_MODE")
+	_ = v.BindEnv("redis.key_prefix", "FLEXPRICE_REDIS_KEY_PREFIX")
+
 	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
 	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
 	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
