@@ -62,7 +62,10 @@ func (a CheckoutAction) Validate() error {
 type CheckoutPaymentProvider string
 
 const (
-	CheckoutPaymentProviderStripe CheckoutPaymentProvider = "stripe"
+	CheckoutPaymentProviderStripe   CheckoutPaymentProvider = "stripe"
+	CheckoutPaymentProviderRazorpay CheckoutPaymentProvider = "razorpay"
+	CheckoutPaymentProviderNomod    CheckoutPaymentProvider = "nomod"
+	CheckoutPaymentProviderMoyasar  CheckoutPaymentProvider = "moyasar"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
@@ -70,24 +73,28 @@ func (p CheckoutPaymentProvider) String() string { return string(p) }
 func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
 		CheckoutPaymentProviderStripe,
+		CheckoutPaymentProviderRazorpay,
+		CheckoutPaymentProviderNomod,
+		CheckoutPaymentProviderMoyasar,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: stripe").
+			WithHint("Allowed values: stripe, razorpay, nomod, moyasar").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
 	return nil
 }
 
-// SessionExpiry returns how long checkout sessions remain valid for this provider.
+// SessionExpiry returns the default lifetime for a checkout session with this provider.
 func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
 	switch p {
 	case CheckoutPaymentProviderStripe:
-		// Stripe Checkout Sessions expire 24 hours after creation by default.
 		return 24 * time.Hour
-	default:
+	case CheckoutPaymentProviderNomod:
 		return 30 * time.Minute
+	default:
+		return 15 * time.Minute
 	}
 }
 
@@ -109,6 +116,13 @@ func (t PaymentActionType) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// PaymentAction is the customer-facing next step to complete payment.
+// Surfaced in CheckoutSessionResponse; the full CheckoutProviderResult is never exposed.
+type PaymentAction struct {
+	Type PaymentActionType `json:"type"`
+	URL  string            `json:"url"`
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────
