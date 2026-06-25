@@ -111,12 +111,19 @@ type WalletService interface {
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
 }
 
+// walletBalanceComputeTimeout bounds the realtime-balance computation in
+// GetWalletBalanceV2 / GetWalletBalanceFromCache. On exceedance the wrapper
+// falls back to the last cached balance (if any), otherwise surfaces the
+// timeout as the original error.
+const walletBalanceComputeTimeout = 30 * time.Second
+
 type walletService struct {
 	ServiceParams
 	idempGen *idempotency.Generator
 
 	// Test seams. Defaulted in NewWalletService; production code must not
 	// override these. Tests in package service may set them via type assertion.
+	computeBalanceTimeout  time.Duration
 	cacheGet               func(ctx context.Context, walletID string, maxLive *int64) *decimal.Decimal
 	cacheSet               func(ctx context.Context, walletID string, balance decimal.Decimal)
 	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
@@ -128,6 +135,9 @@ func NewWalletService(params ServiceParams) WalletService {
 		ServiceParams: params,
 		idempGen:      idempotency.NewGenerator(),
 	}
+
+	// Test seams. Production code must not override these.
+	s.computeBalanceTimeout = walletBalanceComputeTimeout
 	s.cacheGet = s.getWalletRealtimeBalanceFromCache
 	s.cacheSet = s.setWalletRealtimeBalanceToCache
 	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
@@ -2632,14 +2642,24 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
-	// PRE_PAID: try real-time compute. On any failure, fall back to the last
-	// cached balance if available; otherwise surface the original error.
-	resp, err := s.computeRealtimeBalance(ctx, w)
+	// PRE_PAID: try real-time compute under a deadline so a hung or slow DB
+	// trips fallback instead of starving the request. On any failure (timeout
+	// or otherwise) fall back to the last cached balance if available.
+	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
+	defer cancel()
+
+	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
 		}
 		return resp, nil
+	}
+
+	// If the parent ctx itself is canceled (e.g. client disconnect), there
+	// is no caller left to serve a cached response to — skip the fallback.
+	if ctx.Err() != nil {
+		return nil, err
 	}
 
 	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
@@ -2843,15 +2863,23 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
 
-	// Cache miss (or stale per caller's max-live): recompute. On any failure
-	// fall back to the last cached balance ignoring max-live — any value
-	// within Redis TTL beats a 5xx.
-	resp, err := s.computeRealtimeBalance(ctx, w)
+	// Cache miss (or stale per caller's max-live): recompute under a deadline,
+	// then fall back to the last cached balance (ignoring max-live) on any
+	// failure — any value within Redis TTL beats a 5xx.
+	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
+	defer cancel()
+
+	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
 		}
 		return resp, nil
+	}
+
+	// Skip fallback when the parent ctx is canceled (client disconnect).
+	if ctx.Err() != nil {
+		return nil, err
 	}
 
 	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
