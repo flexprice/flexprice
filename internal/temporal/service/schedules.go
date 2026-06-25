@@ -92,6 +92,13 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     struct{}{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDCheckoutSessionExpiry,
+			Interval:  5 * time.Minute,
+			Workflow:  cronWorkflows.CheckoutSessionExpiryWorkflow,
+			Input:     models.CheckoutSessionExpiryWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

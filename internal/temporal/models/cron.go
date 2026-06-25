@@ -124,3 +124,15 @@ type AutoInvoiceThresholdBillingWorkflowResult struct {
 	TotalSkipped  int `json:"total_skipped"`
 	TotalFailed   int `json:"total_failed"`
 }
+
+// ===================== Checkout Session Expiry =====================
+
+// CheckoutSessionExpiryWorkflowInput is the input for CheckoutSessionExpiryWorkflow.
+type CheckoutSessionExpiryWorkflowInput struct{}
+
+// CheckoutSessionExpiryWorkflowResult captures outcome metrics.
+type CheckoutSessionExpiryWorkflowResult struct {
+	Total     int `json:"total"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
+}
