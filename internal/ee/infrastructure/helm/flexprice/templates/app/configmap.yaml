@@ -204,7 +204,13 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
-    
+      # Rendered with per-field defaults (Go zero value) so deployments that don't set
+      # them are unchanged; per-env values opt in. The app otherwise resolves these to
+      # false (not the config.yaml baked default), diverging from AWS prod where they are on.
+      enable_meter_usage_for_analytics: {{ .Values.featureFlag.enableMeterUsageForAnalytics | default false }}
+      enable_meter_usage_for_preview_invoice: {{ .Values.featureFlag.enableMeterUsageForPreviewInvoice | default false }}
+      enable_usage_benchmark: {{ .Values.featureFlag.enableUsageBenchmark | default false }}
+
     secrets:
       encryption_key: {{ .Values.secrets.encryptionKey | quote }}
     
