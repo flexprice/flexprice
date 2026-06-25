@@ -1,3 +1,25 @@
+x-flexprice-env: &flexprice-env
+  FLEXPRICE_POSTGRES_HOST: postgres
+  FLEXPRICE_KAFKA_BROKERS: kafka:9092
+  FLEXPRICE_CLICKHOUSE_ADDRESS: clickhouse:9000
+  FLEXPRICE_TEMPORAL_ADDRESS: temporal:7233
+
+x-flexprice-common: &flexprice-common
+  depends_on:
+    postgres:
+      condition: service_healthy
+    kafka:
+      condition: service_healthy
+    clickhouse:
+      condition: service_healthy
+    temporal:
+      condition: service_started
+
+  volumes:
+    - ./internal/config:/app/internal/config
+
+  restart: unless-stopped
+
 services:
   postgres:
     image: postgres:17
@@ -124,72 +146,35 @@ services:
     command: ["echo", "Build complete"]
 
   flexprice-api:
+    <<: *flexprice-common
     image: flexprice-app:local
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-      temporal:
-        condition: service_started
+
     ports:
       - "127.0.0.1:8080:8080"
+  
     environment:
-      - FLEXPRICE_DEPLOYMENT_MODE=api
-      # Override config.yaml settings for containerized environment
-      - FLEXPRICE_POSTGRES_HOST=postgres
-      - FLEXPRICE_KAFKA_BROKERS=kafka:9092
-      - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
-      - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
-    volumes:
-      - ./internal/config:/app/internal/config
-    restart: unless-stopped
+      <<: *flexprice-env
+      FLEXPRICE_DEPLOYMENT_MODE: api
+      
 
   flexprice-consumer:
+    <<: *flexprice-common
     image: flexprice-app:local
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-      temporal:
-        condition: service_started
-    environment:
-      - FLEXPRICE_DEPLOYMENT_MODE=consumer
-      # Override config.yaml settings for containerized environment
-      - FLEXPRICE_POSTGRES_HOST=postgres
-      - FLEXPRICE_KAFKA_BROKERS=kafka:9092
-      - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
-      - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
-    volumes:
-      - ./internal/config:/app/internal/config
-    restart: unless-stopped
 
-  flexprice-worker:
-    image: flexprice-app:local
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-      temporal:
-        condition: service_started
     environment:
-      - FLEXPRICE_DEPLOYMENT_MODE=temporal_worker
-      # Override config.yaml settings for containerized environment
-      - FLEXPRICE_POSTGRES_HOST=postgres
-      - FLEXPRICE_KAFKA_BROKERS=kafka:9092
-      - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
-      - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
-    volumes:
-      - ./internal/config:/app/internal/config
-    restart: unless-stopped
+      <<: *flexprice-env
+      FLEXPRICE_DEPLOYMENT_MODE: consumer
+      
+
+  
+  flexprice-worker:
+    <<: *flexprice-common
+    image: flexprice-app:local
+
+    environment:
+      <<: *flexprice-env
+      FLEXPRICE_DEPLOYMENT_MODE: temporal_worker
+    
 
 volumes:
   postgres-data:
