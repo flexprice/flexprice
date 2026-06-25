@@ -111,17 +111,32 @@ type WalletService interface {
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
 }
 
+// walletBalanceComputeTimeout bounds the realtime balance computation.
+// On exceedance, GetWalletBalanceV2 / GetWalletBalanceFromCache fall back
+// to the cached value if one is available.
+const walletBalanceComputeTimeout = 30 * time.Second
+
 type walletService struct {
 	ServiceParams
 	idempGen *idempotency.Generator
+
+	// Test seams. Defaulted in NewWalletService; production code must not
+	// override these. Tests in package service may set them via type assertion.
+	computeBalanceTimeout time.Duration
+	cacheGet              func(ctx context.Context, walletID string, maxLive *int64) *decimal.Decimal
+	cacheSet              func(ctx context.Context, walletID string, balance decimal.Decimal)
 }
 
 // NewWalletService creates a new instance of WalletService
 func NewWalletService(params ServiceParams) WalletService {
-	return &walletService{
+	s := &walletService{
 		ServiceParams: params,
 		idempGen:      idempotency.NewGenerator(),
 	}
+	s.computeBalanceTimeout = walletBalanceComputeTimeout
+	s.cacheGet = s.getWalletRealtimeBalanceFromCache
+	s.cacheSet = s.setWalletRealtimeBalanceToCache
+	return s
 }
 
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
@@ -2611,7 +2626,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// POST_PAID wallets: balance doesn't deplete with usage, real-time balance = wallet balance
 	if w.WalletType == types.WalletTypePostPaid {
 		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(w.Balance, w.ConversionRate)
-		s.setWalletRealtimeBalanceToCache(ctx, walletID, w.Balance)
+		s.cacheSet(ctx, walletID, w.Balance)
 		return &dto.WalletBalanceResponse{
 			Wallet:                w,
 			RealTimeBalance:       lo.ToPtr(w.Balance),
@@ -2731,7 +2746,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
 
-	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
+	s.cacheSet(ctx, walletID, realTimeBalance)
 
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
@@ -2787,7 +2802,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
 	totalPendingCharges := decimal.Zero
-	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds)
+	cachedBalance := s.cacheGet(ctx, walletID, maxLiveSeconds)
 	if cachedBalance != nil {
 		s.Logger.Info(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
@@ -2915,7 +2930,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
 
-	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
+	s.cacheSet(ctx, walletID, realTimeBalance)
 
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
