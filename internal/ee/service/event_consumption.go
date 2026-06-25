@@ -224,8 +224,8 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		environmentID = event.EnvironmentID
 	}
 
-	// Create a background context with tenant ID
-	ctx := context.Background()
+	// Start from the Watermill message context so cancellation and trace values propagate.
+	ctx := msg.Context()
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}

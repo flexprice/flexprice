@@ -215,8 +215,8 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 		"environment_id", environmentID,
 	)
 
-	// Create a background context with tenant ID
-	ctx := context.Background()
+	// Start from the Watermill message context so cancellation and trace values propagate.
+	ctx := msg.Context()
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
