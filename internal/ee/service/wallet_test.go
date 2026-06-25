@@ -2885,7 +2885,7 @@ func (s *WalletServiceSuite) installCache() *inMemCache {
 	return c
 }
 
-// installCompute swaps the compute step. Only callable AFTER Task 4 lands.
+// installCompute swaps the realtime-compute step on the wallet service.
 func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)) {
 	ws := s.service.(*walletService)
 	ws.computeRealtimeBalance = fn
@@ -2919,32 +2919,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLiv
 	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
 	s.False(cacheSetCalled, "should not write to cache on fallback")
-}
-
-func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
-	ctx := s.GetContext()
-	cache := s.installCache()
-	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
-	cache.set(ctx, w.ID, decimal.NewFromInt(72))
-
-	ws := s.service.(*walletService)
-	ws.computeBalanceTimeout = 5 * time.Millisecond
-	s.installCompute(func(cctx context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
-		select {
-		case <-cctx.Done():
-			return nil, cctx.Err()
-		case <-time.After(200 * time.Millisecond):
-			s.FailNow("compute should have been canceled by deadline")
-			return nil, nil
-		}
-	})
-
-	resp, err := s.service.GetWalletBalanceV2(ctx, w.ID)
-	s.NoError(err)
-	s.NotNil(resp)
-	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
-	s.NotNil(resp.RealTimeBalance)
-	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(72)), "balance=%s", resp.RealTimeBalance.String())
 }
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() {

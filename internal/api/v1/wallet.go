@@ -320,14 +320,10 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Wallet ID"
 // @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
-// @Description Returns the real-time wallet balance. On transient backend failure
-// @Description the endpoint falls back to the last cached balance (response
-// @Description includes `is_cached_fallback=true`). A 5xx is only returned when
-// @Description no cached balance is available to serve.
 // @Success 200 {object} dto.WalletBalanceResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error - only when cache is also unavailable"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/balance/real-time [get]
 func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	walletID := c.Param("id")
@@ -384,10 +380,6 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 // @Summary Get cached wallet balance
 // @ID getWalletBalanceForceCached
 // @Description Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.
-// @Description Returns the cached wallet balance. On transient backend failure
-// @Description during a forced recompute, the endpoint falls back to the last
-// @Description cached balance (response includes `is_cached_fallback=true`).
-// @Description A 5xx is only returned when no cached balance is available to serve.
 // @Tags Wallets
 // @Accept json
 // @Produce json
@@ -397,7 +389,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 // @Success 200 {object} dto.WalletBalanceResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error - only when cache is also unavailable"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/balance/cached [get]
 func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	walletID := c.Param("id")

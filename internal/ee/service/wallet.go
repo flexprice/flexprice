@@ -111,18 +111,12 @@ type WalletService interface {
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
 }
 
-// walletBalanceComputeTimeout bounds the realtime balance computation.
-// On exceedance, GetWalletBalanceV2 / GetWalletBalanceFromCache fall back
-// to the cached value if one is available.
-const walletBalanceComputeTimeout = 30 * time.Second
-
 type walletService struct {
 	ServiceParams
 	idempGen *idempotency.Generator
 
 	// Test seams. Defaulted in NewWalletService; production code must not
 	// override these. Tests in package service may set them via type assertion.
-	computeBalanceTimeout  time.Duration
 	cacheGet               func(ctx context.Context, walletID string, maxLive *int64) *decimal.Decimal
 	cacheSet               func(ctx context.Context, walletID string, balance decimal.Decimal)
 	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
@@ -134,7 +128,6 @@ func NewWalletService(params ServiceParams) WalletService {
 		ServiceParams: params,
 		idempGen:      idempotency.NewGenerator(),
 	}
-	s.computeBalanceTimeout = walletBalanceComputeTimeout
 	s.cacheGet = s.getWalletRealtimeBalanceFromCache
 	s.cacheSet = s.setWalletRealtimeBalanceToCache
 	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
@@ -2607,12 +2600,14 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			Mark(ierr.ErrValidation)
 	}
 
+	// Get wallet details
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Inactive wallets short-circuit synchronously — no timeout, no fallback.
+	// Safety check: Return zero balance for inactive wallets
+	// This prevents any calculations on invalid wallet states
 	if w.WalletStatus != types.WalletStatusActive {
 		return &dto.WalletBalanceResponse{
 			Wallet:                w,
@@ -2623,7 +2618,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
-	// POST_PAID wallets: balance doesn't deplete with usage. Cache + return.
+	// POST_PAID wallets: balance doesn't deplete with usage, real-time balance = wallet balance
 	if w.WalletType == types.WalletTypePostPaid {
 		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(w.Balance, w.ConversionRate)
 		s.cacheSet(ctx, walletID, w.Balance)
@@ -2637,14 +2632,9 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
-	// PRE_PAID: read cache up-front (no max-live filter) so we have a fallback
-	// available, then run the expensive compute under a deadline.
-	cachedBalance := s.cacheGet(ctx, walletID, nil)
-
-	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
-	defer cancel()
-
-	resp, err := s.computeRealtimeBalance(computeCtx, w)
+	// PRE_PAID: try real-time compute. On any failure, fall back to the last
+	// cached balance if available; otherwise surface the original error.
+	resp, err := s.computeRealtimeBalance(ctx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
@@ -2652,34 +2642,24 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		return resp, nil
 	}
 
-	if isFallbackEligibleError(ctx, err) && cachedBalance != nil {
+	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
-			"reason", classifyFallbackReason(err),
-			"cache_hit", true,
 			"endpoint", "real_time",
+			"error", err.Error(),
 		)
-		return s.buildResponseFromCachedBalance(w, *cachedBalance, true), nil
+		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
 
-	if isFallbackEligibleError(ctx, err) {
-		s.Logger.Warn(ctx, "wallet balance fallback to cache",
-			"wallet_id", walletID,
-			"tenant_id", types.GetTenantID(ctx),
-			"environment_id", types.GetEnvironmentID(ctx),
-			"reason", classifyFallbackReason(err),
-			"cache_hit", false,
-			"endpoint", "real_time",
-		)
-	}
 	return nil, err
 }
 
 // buildResponseFromCachedBalance builds a WalletBalanceResponse from a cached
-// real-time balance. Used by the fallback path on V2 and FromCache.
-func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance decimal.Decimal, isFallback bool) *dto.WalletBalanceResponse {
+// real-time balance and flags IsCachedFallback so callers know the data is
+// not freshly computed. Shared by V2 fallback and FromCache (hit + fallback).
+func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance decimal.Decimal) *dto.WalletBalanceResponse {
 	rt := balance
 	credit := s.GetCreditsFromCurrencyAmount(rt, w.ConversionRate)
 	zero := decimal.Zero
@@ -2689,25 +2669,29 @@ func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance
 		RealTimeCreditBalance: &credit,
 		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
 		CurrentPeriodUsage:    &zero,
-		IsCachedFallback:      isFallback,
+		IsCachedFallback:      true,
 	}
 }
 
-// computeRealtimeBalanceDefault contains the expensive section previously
-// inlined in GetWalletBalanceV2. The caller is responsible for the deadline.
+// computeRealtimeBalanceDefault is the production implementation of the
+// realtime-balance computation. Defaulted into the computeRealtimeBalance
+// field by NewWalletService; tests may override the field to inject failures.
 func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+	// PRE_PAID wallets: calculate pending usage charges that will consume prepaid balance
 	var totalPendingCharges decimal.Decimal
 	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
 	if shouldIncludeUsage {
+		// Get all active subscriptions to calculate current usage
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
 		subscriptions, err := subscriptionService.ListByCustomerID(ctx, w.CustomerID)
 		if err != nil {
 			return nil, err
 		}
 
+		// Filter subscriptions by currency
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
@@ -2724,7 +2708,9 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		billingService := NewBillingService(s.ServiceParams)
 		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
 
+		// Calculate total pending charges (usage)
 		for _, sub := range filteredSubscriptions {
+			// Get current period
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
@@ -2749,6 +2735,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 			}
 
+			// Calculate usage charges for feature/meter usage data
 			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
 				Subscription: sub,
 				Usage:        usage,
@@ -2768,6 +2755,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		}
 	}
 
+	// Get unpaid invoices for PRE_PAID wallets
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
 		CustomerID: w.CustomerID,
@@ -2783,6 +2771,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
 	}
 
+	// Calculate real-time balance: wallet balance minus pending charges
 	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
 	s.Logger.Debug(ctx, "detailed balance calculation",
@@ -2793,6 +2782,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		"real_time_balance", realTimeBalance,
 		"credit_balance", w.CreditBalance)
 
+	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
 
 	return &dto.WalletBalanceResponse{
@@ -2812,11 +2802,14 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			Mark(ierr.ErrValidation)
 	}
 
+	// Get wallet details
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Safety check: Return zero balance for inactive wallets
+	// This prevents any calculations on invalid wallet states
 	if w.WalletStatus != types.WalletStatusActive {
 		return &dto.WalletBalanceResponse{
 			Wallet:                w,
@@ -2827,6 +2820,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		}, nil
 	}
 
+	// POST_PAID wallets: balance doesn't deplete with usage, real-time balance = wallet balance
 	if w.WalletType == types.WalletTypePostPaid {
 		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(w.Balance, w.ConversionRate)
 		return &dto.WalletBalanceResponse{
@@ -2839,24 +2833,20 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		}, nil
 	}
 
-	// Caller-driven cache read (honors maxLiveSeconds).
+	// Caller-driven cache read (honors maxLiveSeconds). A hit is the happy
+	// path for this endpoint: the caller asked for cached data, we have it.
 	if cached := s.cacheGet(ctx, walletID, maxLiveSeconds); cached != nil {
 		s.Logger.Info(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
 			"cached_balance", cached,
 		)
-		return s.buildResponseFromCachedBalance(w, *cached, false), nil
+		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
 
-	// Cache miss / too stale per caller → recompute, with fallback safety net.
-	// The safety-net cache read ignores maxLiveSeconds (any value within Redis
-	// TTL is acceptable when we'd otherwise 5xx).
-	fallbackCache := s.cacheGet(ctx, walletID, nil)
-
-	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
-	defer cancel()
-
-	resp, err := s.computeRealtimeBalance(computeCtx, w)
+	// Cache miss (or stale per caller's max-live): recompute. On any failure
+	// fall back to the last cached balance ignoring max-live — any value
+	// within Redis TTL beats a 5xx.
+	resp, err := s.computeRealtimeBalance(ctx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
@@ -2864,28 +2854,17 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return resp, nil
 	}
 
-	if isFallbackEligibleError(ctx, err) && fallbackCache != nil {
+	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
 		s.Logger.Warn(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
-			"reason", classifyFallbackReason(err),
-			"cache_hit", true,
 			"endpoint", "from_cache",
+			"error", err.Error(),
 		)
-		return s.buildResponseFromCachedBalance(w, *fallbackCache, true), nil
+		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
 
-	if isFallbackEligibleError(ctx, err) {
-		s.Logger.Warn(ctx, "wallet balance fallback to cache",
-			"wallet_id", walletID,
-			"tenant_id", types.GetTenantID(ctx),
-			"environment_id", types.GetEnvironmentID(ctx),
-			"reason", classifyFallbackReason(err),
-			"cache_hit", false,
-			"endpoint", "from_cache",
-		)
-	}
 	return nil, err
 }
 
