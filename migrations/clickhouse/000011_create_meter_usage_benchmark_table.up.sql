@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage_benchmark
     final_mem_peak_bytes     UInt64  NOT NULL DEFAULT 0,
     final_result_rows        UInt64  NOT NULL DEFAULT 0,
 
-    -- pre-computed signed diffs (final - nofinal); FINAL can be lighter on small ranges.
+    -- pre-computed signed diffs (final - nofinal). FINAL can be lighter on small ranges.
     duration_diff_ms         Float64 NOT NULL DEFAULT 0,
     scan_rows_diff           Int64   NOT NULL DEFAULT 0,
     scan_bytes_diff          Int64   NOT NULL DEFAULT 0,
