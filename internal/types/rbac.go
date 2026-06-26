@@ -1,7 +1,12 @@
 package types
 
-type Action string
 type Entity string
+
+func (e Entity) String() string { return string(e) }
+
+type Action string
+
+func (a Action) String() string { return string(a) }
 
 const (
 	ActionRead  Action = "read"
