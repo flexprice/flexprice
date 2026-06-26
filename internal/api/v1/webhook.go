@@ -509,6 +509,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -851,10 +852,11 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &nomodwebhook.ServiceDependencies{
-		CustomerService: h.customerService,
-		PaymentService:  h.paymentService,
-		InvoiceService:  h.invoiceService,
-		PlanService:     h.planService,
+		CustomerService:        h.customerService,
+		PaymentService:         h.paymentService,
+		InvoiceService:         h.invoiceService,
+		PlanService:            h.planService,
+		CheckoutSessionService: h.checkoutSessionService,
 	}
 
 	// Handle the event
@@ -998,6 +1000,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 

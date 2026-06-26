@@ -100,13 +100,14 @@ type CheckoutSessionResponse struct {
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 
 // ToCheckoutSessionResponse maps a domain session to its API response.
-// PaymentAction is derived from ProviderResult; the raw ProviderResult is zeroed
-// before serialization because it contains sensitive gateway tokens.
+// PaymentAction is derived from ProviderResult; the raw ProviderResult is omitted
+// from the response because it contains sensitive gateway tokens.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
-	resp := &CheckoutSessionResponse{CheckoutSession: s}
+	// Shallow-copy so we don't mutate the caller's domain object.
+	copy := *s
+	resp := &CheckoutSessionResponse{CheckoutSession: &copy}
 	if s.ProviderResult != nil {
 		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentAction()
-		// Zero out provider_result — not safe to expose to API callers.
 		resp.CheckoutSession.ProviderResult = nil
 	}
 	return resp

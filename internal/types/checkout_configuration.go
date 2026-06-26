@@ -87,7 +87,7 @@ type CreateSubscriptionResult struct {
 
 // CheckoutProviderResult is the flat, action-agnostic provider response stored in
 // checkout_sessions.provider_result. It is never serialized to API callers directly —
-// use PaymentActionForUser() to extract the safe-to-expose action.
+// use PaymentAction() to extract the safe-to-expose action.
 type CheckoutProviderResult struct {
 	// NextAction is what the customer must do to complete payment.
 	NextAction *PaymentAction `json:"next_action,omitempty"`
