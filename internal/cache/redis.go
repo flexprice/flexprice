@@ -96,7 +96,6 @@ func (c *redisCacheImpl) IsEnabled() bool {
 // Get retrieves a value from the cache
 func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool) {
 	if c == nil || !c.IsEnabled() {
-		c.log.Debug(ctx, "Cache is disabled")
 		return nil, false
 	}
 
@@ -118,7 +117,6 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 // Set adds a value to the cache with the specified expiration
 func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	if c == nil || !c.IsEnabled() {
-		c.log.Debug(ctx, "Cache is disabled")
 		return
 	}
 	// Use default expiration if none specified
@@ -152,7 +150,6 @@ func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{},
 // Delete removes a key from the cache with retry
 func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
 	if c == nil || !c.IsEnabled() {
-		c.log.Debug(ctx, "Cache is disabled")
 		return
 	}
 	redisKey := c.GetRedisKey(key)
@@ -183,7 +180,6 @@ func (c *redisCacheImpl) delete(ctx context.Context, key string) error {
 // Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
 func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
 	if c == nil || !c.IsEnabled() {
-		c.log.Debug(ctx, "Cache is disabled")
 		return false, nil
 	}
 
@@ -209,7 +205,6 @@ func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interfa
 // DeleteByPrefix removes all keys with the given prefix
 func (c *redisCacheImpl) DeleteByPrefix(ctx context.Context, prefix string) {
 	if c == nil || !c.IsEnabled() {
-		c.log.Debug(ctx, "Cache is disabled")
 		return
 	}
 
