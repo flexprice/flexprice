@@ -26,7 +26,7 @@ type inMemoryCache struct {
 var globalCache *inMemoryCache
 
 // InitializeInMemoryCache initializes the global cache instance
-func InitializeInMemoryCache() {
+func InitializeInMemoryCache() InMemoryCache {
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -38,6 +38,7 @@ func InitializeInMemoryCache() {
 			cfg:   cfg,
 		}
 	}
+	return globalCache
 }
 
 // NewInMemoryCache creates a new inMemoryCache instance
