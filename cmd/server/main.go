@@ -140,7 +140,7 @@ func main() {
 			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
 			repository.NewUsageBenchmarkRepository,
-			repository.NewAnalyticsBenchmarkRepository,
+			repository.NewMeterUsageBenchmarkRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
