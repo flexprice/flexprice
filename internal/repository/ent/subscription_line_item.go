@@ -25,11 +25,11 @@ type subscriptionLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SubscriptionLineItemQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
 // NewSubscriptionLineItemRepository creates a new subscription line item repository
-func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) subscription.LineItemRepository {
+func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) subscription.LineItemRepository {
 	return &subscriptionLineItemRepository{
 		client:    client,
 		log:       log,

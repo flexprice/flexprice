@@ -20,10 +20,10 @@ type couponApplicationRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CouponApplicationQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCouponApplication.Repository {
+func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCouponApplication.Repository {
 	return &couponApplicationRepository{
 		client:    client,
 		log:       log,

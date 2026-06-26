@@ -23,10 +23,10 @@ type addonRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts AddonQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewAddonRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainAddon.Repository {
+func NewAddonRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainAddon.Repository {
 	return &addonRepository{
 		client:    client,
 		log:       log,

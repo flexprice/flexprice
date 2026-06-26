@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
-// Cache defines the interface for caching operations
-type Cache interface {
+// InMemoryCache defines the interface for caching operations
+type InMemoryCache interface {
+	IsEnabled() bool
+
 	// Get retrieves a value from the cache
 	// Returns the value and a boolean indicating whether the key was found
 	Get(ctx context.Context, key string) (interface{}, bool)
@@ -31,6 +33,15 @@ type Cache interface {
 
 	// ForceCacheSet adds a value to the cache without checking if the cache is enabled
 	ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration)
+
+	// ForceCacheDelete removes a value from the cache without checking if the cache is enabled
+	ForceCacheDelete(ctx context.Context, key string)
+}
+
+type RedisCache interface {
+	InMemoryCache
+	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
+	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 }
 
 // Predefined cache key prefixes for different entity types
