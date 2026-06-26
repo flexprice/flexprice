@@ -48,16 +48,6 @@ func NewInMemoryCache() Cache {
 	return globalCache
 }
 
-// NewIsolatedInMemoryCache creates a fresh InMemoryCache instance that does
-// NOT share state with the global singleton. Intended for tests that need
-// isolation between cases — production code should use NewInMemoryCache.
-func NewIsolatedInMemoryCache(cfg *config.Configuration) Cache {
-	return &InMemoryCache{
-		cache: goCache.New(DefaultExpiration, DefaultCleanupInterval),
-		cfg:   cfg,
-	}
-}
-
 // GetCache returns the global cache instance
 func GetInMemoryCache() *InMemoryCache {
 	if globalCache == nil {
@@ -76,25 +66,6 @@ func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
 
 func (c *InMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
 	return c.cache.Get(key)
-}
-
-// ForceCacheGetWithTTL returns the cached value plus its remaining TTL.
-// The underlying go-cache library exposes an absolute expiration time;
-// we convert it to a remaining duration so the semantics match RedisCache.
-func (c *InMemoryCache) ForceCacheGetWithTTL(_ context.Context, key string) (interface{}, time.Duration, bool) {
-	value, expiration, found := c.cache.GetWithExpiration(key)
-	if !found {
-		return nil, 0, false
-	}
-	// go-cache returns the zero time for "no expiration"; treat as ttl=0.
-	if expiration.IsZero() {
-		return value, 0, true
-	}
-	ttl := time.Until(expiration)
-	if ttl < 0 {
-		ttl = 0
-	}
-	return value, ttl, true
 }
 
 func (c *InMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {

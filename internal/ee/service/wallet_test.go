@@ -79,7 +79,7 @@ func (s *WalletServiceSuite) setupService() {
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
-		Cache:                    cache.NewIsolatedInMemoryCache(s.GetConfig()),
+		RedisCache:               testutil.NewInMemoryRedis(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
@@ -2847,14 +2847,14 @@ func (s *CheckWalletBalanceAlertSuite) TestMultipleWallets_EachProcessedIndepend
 func (s *WalletServiceSuite) buildFallbackTestWallet(balance decimal.Decimal) *wallet.Wallet {
 	ctx := s.GetContext()
 	w := &wallet.Wallet{
-		ID:           "wlt_fallback_" + types.GenerateUUIDWithPrefix("test"),
-		CustomerID:   s.testData.customer.ID,
-		Currency:     "usd",
-		Balance:      balance,
-		CreditBalance: balance,
-		WalletStatus: types.WalletStatusActive,
-		WalletType:   types.WalletTypePrePaid,
-		Config:       types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
+		ID:             "wlt_fallback_" + types.GenerateUUIDWithPrefix("test"),
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		Balance:        balance,
+		CreditBalance:  balance,
+		WalletStatus:   types.WalletStatusActive,
+		WalletType:     types.WalletTypePrePaid,
+		Config:         types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
 		ConversionRate: decimal.NewFromInt(1),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
@@ -2873,7 +2873,7 @@ func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wall
 func (s *WalletServiceSuite) primeCachedBalance(ctx context.Context, walletID string, balance decimal.Decimal, ttl time.Duration) {
 	ws := s.service.(*walletService)
 	key := cache.GenerateKey(cache.PrefixWallet, walletID)
-	ws.Cache.ForceCacheSet(ctx, key, balance.String(), ttl)
+	ws.RedisCache.ForceCacheSet(ctx, key, balance.String(), ttl)
 }
 
 // readCachedBalance reads back a wallet's cached balance through the same

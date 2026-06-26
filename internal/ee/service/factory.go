@@ -64,7 +64,7 @@ type ServiceParams struct {
 	PDFGenerator pdf.Generator
 	S3           s3.Service
 	TracingSvc   *tracing.Service
-	Cache        cache.Cache
+	RedisCache   cache.RedisCache
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -142,7 +142,7 @@ func NewServiceParams(
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
 	tracingSvc *tracing.Service,
-	cacheInstance cache.Cache,
+	redisCache cache.RedisCache,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -207,7 +207,7 @@ func NewServiceParams(
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
 		TracingSvc:                   tracingSvc,
-		Cache:                        cacheInstance,
+		RedisCache:                   redisCache,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
