@@ -79,7 +79,7 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 					"entity_type":        t.EntityType,
 					"entity_id":          t.EntityID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 
 		return ierr.WithError(err).
