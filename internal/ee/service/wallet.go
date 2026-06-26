@@ -2658,6 +2658,11 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 
 		resp, err := s.computeRealtimeBalance(computeCtx, w)
 		if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
+				return nil, err
+			}
 			s.Logger.Error(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
@@ -2867,12 +2872,56 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	// Caller-driven cache read (honors maxLiveSeconds). A hit is the happy
 	// path for this endpoint: the caller asked for cached data, we have it.
 	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds); cached != nil {
-		s.Logger.Info(ctx, "using cached real-time balance",
+		s.Logger.Debug(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
 			"cached_balance", cached,
 		)
 		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
+
+	// attempt to fetch older cached balance
+	// if no cached balance is not found within the max live seconds
+	// then, compute the real-time balance and set the cache if successful
+
+	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+
+	if cached != nil {
+		// Calculate the timeout duration based on the context deadline
+		var timeoutDuration time.Duration
+		currentTimeout, ok := ctx.Deadline()
+		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
+			timeoutDuration = time.Until(currentTimeout)
+		} else {
+			timeoutDuration = s.computeBalanceTimeout
+		}
+
+		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		defer cancel()
+
+		resp, err := s.computeRealtimeBalance(computeCtx, w)
+		if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			s.Logger.Error(ctx, "wallet balance fallback to cache",
+				"wallet_id", walletID,
+				"tenant_id", types.GetTenantID(ctx),
+				"environment_id", types.GetEnvironmentID(ctx),
+				"endpoint", "real_time",
+				"error", err.Error(),
+			)
+			return s.buildResponseFromCachedBalance(w, *cached), nil
+		}
+
+		if resp != nil && resp.RealTimeBalance != nil {
+			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
+		}
+		return resp, nil
+	}
+
+	// if no cached balance, compute the real-time balance and set the cache
 
 	resp, err := s.computeRealtimeBalance(ctx, w)
 	if err != nil {
@@ -3442,6 +3491,10 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 }
 
 func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
+	if s.RedisCache == nil {
+		return
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
@@ -3452,7 +3505,7 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
-	if walletID == "" {
+	if walletID == "" || s.RedisCache == nil {
 		return
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
@@ -3460,6 +3513,10 @@ func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
+	if s.RedisCache == nil {
+		return nil
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
@@ -3480,7 +3537,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 		if cacheAge > maxAge {
 			// Cache entry is too old, treat as miss
-			s.Logger.Info(ctx, "cache entry exceeds max-live, treating as miss",
+			s.Logger.Debug(ctx, "cache entry exceeds max-live, treating as miss",
 				"wallet_id", walletID,
 				"cache_age_seconds", cacheAge.Seconds(),
 				"max_live_seconds", *maxLiveSeconds,

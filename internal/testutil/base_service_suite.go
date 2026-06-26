@@ -56,8 +56,6 @@ import (
 
 // Stores holds all the repository interfaces for testing
 type Stores struct {
-	InMemoryCache                cache.InMemoryCache
-	RedisCache                   cache.RedisCache
 	CreditGrantRepo              creditgrant.Repository
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	SubscriptionRepo             subscription.Repository
@@ -110,6 +108,8 @@ type BaseServiceTestSuite struct {
 	publisher           publisher.EventPublisher
 	webhookPublisher    webhookPublisher.WebhookPublisher
 	db                  postgres.IClient
+	inMemoryCache       cache.InMemoryCache
+	redisCache          cache.RedisCache
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -253,8 +253,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 	}
 
 	// Cache stores
-	s.stores.InMemoryCache = cache.NewInMemoryCache()
-	s.stores.RedisCache = NewInMemoryRedis()
+	s.inMemoryCache = cache.NewInMemoryCache()
+	s.redisCache = NewInMemoryRedis()
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
@@ -339,6 +339,16 @@ func (s *BaseServiceTestSuite) GetPublisher() publisher.EventPublisher {
 // GetWebhookPublisher returns the test webhook publisher
 func (s *BaseServiceTestSuite) GetWebhookPublisher() webhookPublisher.WebhookPublisher {
 	return s.webhookPublisher
+}
+
+// GetInMemoryCache returns the test in-memory cache
+func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
+	return s.inMemoryCache
+}
+
+// GetRedisCache returns the test Redis cache
+func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
+	return s.redisCache
 }
 
 // GetDB returns the test database client

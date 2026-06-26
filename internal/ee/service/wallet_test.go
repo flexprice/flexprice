@@ -2840,7 +2840,7 @@ func (s *CheckWalletBalanceAlertSuite) TestMultipleWallets_EachProcessedIndepend
 	s.Equal(1, s.countAutoTopupInvoices(), "exactly one auto top-up invoice for wallet C")
 }
 
-// --- Wallet balance fallback (added in Task 4) ---
+// --- Wallet balance fallback ---
 
 // buildFallbackTestWallet creates an active PRE_PAID wallet with a known balance
 // for use across the fallback tests.
