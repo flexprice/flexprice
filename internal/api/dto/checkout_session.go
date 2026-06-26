@@ -12,19 +12,18 @@ import (
 
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
 type CreateCheckoutSessionRequest struct {
-	CustomerID      string                        `json:"customer_id" binding:"required"`
-	Action          types.CheckoutAction          `json:"action" binding:"required"`
-	PaymentProvider types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
-	Configuration   types.CheckoutConfiguration   `json:"configuration"`
-	IdempotencyKey  *string                       `json:"idempotency_key,omitempty"`
-	SuccessURL      *string                       `json:"success_url,omitempty"`
-	FailureURL      *string                       `json:"failure_url,omitempty"`
-	CancelURL       *string                       `json:"cancel_url,omitempty"`
-	Metadata        map[string]string             `json:"metadata,omitempty"`
+	CustomerExternalID string                        `json:"customer_external_id" binding:"required"`
+	Action             types.CheckoutAction          `json:"action" binding:"required"`
+	PaymentProvider    types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
+	Configuration      types.CheckoutConfiguration   `json:"configuration"`
+	IdempotencyKey     *string                       `json:"idempotency_key,omitempty"`
+	SuccessURL         *string                       `json:"success_url,omitempty"`
+	FailureURL         *string                       `json:"failure_url,omitempty"`
+	CancelURL          *string                       `json:"cancel_url,omitempty"`
+	Metadata           map[string]string             `json:"metadata,omitempty"`
 }
 
 func (r *CreateCheckoutSessionRequest) Validate() error {
-
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -49,11 +48,11 @@ func (r *CreateCheckoutSessionRequest) ResolveExpiresAt(now time.Time) time.Time
 	return now.UTC().Add(r.PaymentProvider.SessionExpiry())
 }
 
-func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context) *domainCheckout.CheckoutSession {
+func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, customerID string) *domainCheckout.CheckoutSession {
 	return &domainCheckout.CheckoutSession{
 		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
 		EnvironmentID:   types.GetEnvironmentID(ctx),
-		CustomerID:      r.CustomerID,
+		CustomerID:      customerID,
 		Action:          r.Action,
 		CheckoutStatus:  types.CheckoutStatusInitiated,
 		PaymentProvider: r.PaymentProvider,

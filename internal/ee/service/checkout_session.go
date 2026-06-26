@@ -40,7 +40,19 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 		return nil, err
 	}
 
-	session := req.ToCheckoutSession(ctx)
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.CustomerExternalID)
+	if err != nil {
+		return nil, err
+	}
+
+	if customer.Status != types.StatusPublished {
+		return nil, ierr.NewError("customer is not active").
+			WithHint("The customer must be active to create a checkout session").
+			WithReportableDetails(map[string]any{"customer_id": customer.ID, "status": customer.Status}).
+			Mark(ierr.ErrValidation)
+	}
+
+	session := req.ToCheckoutSession(ctx, customer.ID)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
 		// TODO: on ErrAlreadyExists (idempotency key conflict), consider fetching and returning
