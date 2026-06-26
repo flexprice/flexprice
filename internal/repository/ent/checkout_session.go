@@ -316,6 +316,43 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 	return n > 0, nil
 }
 
+func (r *checkoutSessionRepository) ListExpired(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*domainCheckout.CheckoutSession, error) {
+	span := StartRepositorySpan(ctx, "checkout_session", "list_expired", map[string]interface{}{
+		"effective_date": effectiveDate,
+		"limit":          limit,
+		"offset":         offset,
+	})
+	defer FinishSpan(span)
+
+	query := r.client.Reader(ctx).CheckoutSession.Query().
+		Where(
+			entCheckout.TenantID(types.GetTenantID(ctx)),
+			entCheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
+			entCheckout.StatusNotIn(string(types.StatusDeleted)),
+			entCheckout.CheckoutStatusIn(
+				types.CheckoutStatusInitiated,
+				types.CheckoutStatusPending,
+			),
+			entCheckout.ExpiresAtLT(effectiveDate),
+		).
+		Order(ent.Asc(entCheckout.FieldExpiresAt)).
+		Limit(limit).
+		Offset(offset)
+
+	entities, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("list expired checkout sessions failed").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	result := make([]*domainCheckout.CheckoutSession, len(entities))
+	for i, e := range entities {
+		result[i] = fromEntCheckout(e)
+	}
+	return result, nil
+}
+
 // CheckoutSessionQuery type alias for better readability
 type CheckoutSessionQuery = *ent.CheckoutSessionQuery
 

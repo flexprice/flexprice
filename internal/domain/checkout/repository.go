@@ -38,4 +38,8 @@ type Repository interface {
 	// Returns (false, nil) if the session was already in a terminal state — idempotent no-op.
 	// Never returns an error for the already-terminal case.
 	MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error)
+
+	// ListExpired returns active (initiated|pending) sessions whose ExpiresAt is before
+	// effectiveDate within the tenant+environment in ctx, ordered by expires_at asc.
+	ListExpired(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*CheckoutSession, error)
 }
