@@ -100,7 +100,7 @@ func main() {
 			pyroscope.NewPyroscopeService,
 
 			// Cache
-			cache.Initialize,
+			cache.InitializeInMemoryCache,
 			cache.NewRedisCache,
 
 			// Postgres

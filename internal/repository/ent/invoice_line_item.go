@@ -25,7 +25,7 @@ const invoiceLineItemBatchSize = 1000
 type invoiceLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 	queryOpts InvoiceLineItemQueryOptions
 }
 
@@ -33,7 +33,7 @@ type invoiceLineItemRepository struct {
 func NewInvoiceLineItemRepository(
 	client postgres.IClient,
 	log *logger.Logger,
-	c cache.Cache,
+	c cache.InMemoryCache,
 ) domaininvoice.LineItemRepository {
 	return &invoiceLineItemRepository{client: client, log: log, cache: c, queryOpts: InvoiceLineItemQueryOptions{}}
 }

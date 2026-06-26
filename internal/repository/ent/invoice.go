@@ -27,10 +27,10 @@ type invoiceRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts InvoiceQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainInvoice.Repository {
 	return &invoiceRepository{
 		client:    client,
 		logger:    logger,

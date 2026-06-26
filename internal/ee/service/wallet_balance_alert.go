@@ -35,7 +35,7 @@ type WalletBalanceAlertService interface {
 type walletBalanceAlertService struct {
 	ServiceParams
 	pubSub pubsub.PubSub
-	cache  cache.Cache
+	cache  cache.InMemoryCache
 }
 
 // NewWalletBalanceAlertService creates a new wallet balance alert service
@@ -44,7 +44,7 @@ func NewWalletBalanceAlertService(
 ) WalletBalanceAlertService {
 	svc := &walletBalanceAlertService{
 		ServiceParams: params,
-		cache:         cache.NewInMemoryCache(),
+		cache:         params.InMemoryCache,
 	}
 
 	svc.pubSub = params.WalletBalanceAlertPubSub.PubSub

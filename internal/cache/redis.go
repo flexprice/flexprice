@@ -87,10 +87,13 @@ func (c *redisCacheImpl) GetRedisKey(key string) string {
 	return c.config.Redis.KeyPrefix + ":" + key
 }
 
+func (c *redisCacheImpl) IsEnabled() bool {
+	return c.config.Cache.Enabled && c.config.Cache.Redis.Enabled
+}
+
 // Get retrieves a value from the cache
 func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool) {
-
-	if !c.config.Cache.Enabled {
+	if c == nil || !c.IsEnabled() {
 		c.log.Debug(ctx, "Cache is disabled")
 		return nil, false
 	}
@@ -112,8 +115,7 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 
 // Set adds a value to the cache with the specified expiration
 func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
-
-	if !c.config.Cache.Enabled {
+	if c == nil || !c.IsEnabled() {
 		c.log.Debug(ctx, "Cache is disabled")
 		return
 	}
@@ -147,7 +149,10 @@ func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{},
 
 // Delete removes a key from the cache with retry
 func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
-
+	if c == nil || !c.IsEnabled() {
+		c.log.Debug(ctx, "Cache is disabled")
+		return
+	}
 	redisKey := c.GetRedisKey(key)
 	err := c.delete(ctx, redisKey)
 	if err != nil {
@@ -169,12 +174,17 @@ func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
 
 // delete is a helper function to perform the actual deletion
 func (c *redisCacheImpl) delete(ctx context.Context, key string) error {
-	return c.client.Del(ctx, key).Err()
+	return c.client.Unlink(ctx, key).Err()
 }
 
 // TrySetNX sets key to value with expiration only if the key does not exist (lock acquire).
 // Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
 func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	if c == nil || !c.IsEnabled() {
+		c.log.Debug(ctx, "Cache is disabled")
+		return false, nil
+	}
+
 	redisKey := c.GetRedisKey(key)
 	var strValue string
 	switch v := value.(type) {
@@ -196,6 +206,10 @@ func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interfa
 
 // DeleteByPrefix removes all keys with the given prefix
 func (c *redisCacheImpl) DeleteByPrefix(ctx context.Context, prefix string) {
+	if c == nil || !c.IsEnabled() {
+		c.log.Debug(ctx, "Cache is disabled")
+		return
+	}
 
 	// TODO: This needs to be implemented properly
 	// Use SCAN to iterate through keys matching the pattern
@@ -229,6 +243,9 @@ func (c *redisCacheImpl) DeleteByPrefix(ctx context.Context, prefix string) {
 
 // Flush removes all items from the cache
 func (c *redisCacheImpl) Flush(ctx context.Context) {
+	if c == nil || !c.IsEnabled() {
+		return
+	}
 	if err := c.client.FlushDB(ctx).Err(); err != nil {
 		c.log.Error(ctx, "Redis FLUSHDB error", "error", err)
 	}
@@ -236,6 +253,10 @@ func (c *redisCacheImpl) Flush(ctx context.Context) {
 
 // Get value from cache bypassing configuration checks
 func (c *redisCacheImpl) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
+	if c == nil {
+		return nil, false
+	}
+
 	redisKey := c.GetRedisKey(key)
 	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
@@ -252,6 +273,10 @@ func (c *redisCacheImpl) ForceCacheGet(ctx context.Context, key string) (interfa
 
 // ForceCacheGetWithTTL retrieves a value and its remaining TTL from the cache bypassing configuration checks
 func (c *redisCacheImpl) ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool) {
+	if c == nil {
+		return nil, 0, false
+	}
+
 	redisKey := c.GetRedisKey(key)
 	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
@@ -274,6 +299,10 @@ func (c *redisCacheImpl) ForceCacheGetWithTTL(ctx context.Context, key string) (
 
 // Set value from cache bypassing configuration checks
 func (c *redisCacheImpl) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	if c == nil {
+		return
+	}
+
 	// Use default expiration if none specified
 	if expiration == 0 {
 		expiration = ExpiryDefaultRedis
@@ -299,5 +328,15 @@ func (c *redisCacheImpl) ForceCacheSet(ctx context.Context, key string, value in
 
 	if err := c.client.Set(ctx, redisKey, strValue, expiration).Err(); err != nil {
 		c.log.Error(ctx, "Redis SET error", "key", redisKey, "error", err)
+	}
+}
+
+func (c *redisCacheImpl) ForceCacheDelete(ctx context.Context, key string) {
+	if c == nil {
+		return
+	}
+	redisKey := c.GetRedisKey(key)
+	if err := c.client.Unlink(ctx, redisKey).Err(); err != nil {
+		c.log.Error(ctx, "Redis UNLINK error", "key", redisKey, "error", err)
 	}
 }

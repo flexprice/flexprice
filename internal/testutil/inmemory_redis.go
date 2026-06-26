@@ -32,6 +32,10 @@ func NewInMemoryRedis() cache.RedisCache {
 	return &InMemoryRedis{values: make(map[string]inMemoryRedisEntry)}
 }
 
+func (r *InMemoryRedis) IsEnabled() bool {
+	return true
+}
+
 // Get returns the cached value if present and not expired.
 func (r *InMemoryRedis) Get(_ context.Context, key string) (interface{}, bool) {
 	return r.get(key)
@@ -149,4 +153,10 @@ func (r *InMemoryRedis) TrySetNXWithTTL(ctx context.Context, key string, value i
 	}
 	r.values[key] = inMemoryRedisEntry{value: value, expiration: exp}
 	return true, expiration, nil
+}
+
+func (r *InMemoryRedis) ForceCacheDelete(ctx context.Context, key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.values, key)
 }

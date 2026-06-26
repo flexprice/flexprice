@@ -250,7 +250,10 @@ flexprice_s3_exports:
 
 cache:
   enabled: false
-  type: "inmemory"
+  inmemory:
+    enabled: false
+  redis:
+    enabled: false
 
 event_processing:
   enabled: true
