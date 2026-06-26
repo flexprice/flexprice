@@ -20,7 +20,7 @@ import (
 // UsageBenchmarkService publishes benchmark trigger events and consumes them
 // to compare two analytics pipelines. Two event kinds share the topic:
 //   - "subscription": GetFeatureUsageBySubscription vs GetMeterUsageBySubscription
-//   - "analytics":    featureUsageTracking GetDetailedUsageAnalytics vs meterUsage GetDetailedAnalytics
+//   - "analytics":    meterUsage GetDetailedAnalytics with FINAL vs without FINAL (perf + result diff)
 type UsageBenchmarkService interface {
 	// PublishEvent sends a thin benchmark trigger to Kafka. Non-blocking best-effort.
 	PublishEvent(ctx context.Context, event *events.UsageBenchmarkEvent) error
