@@ -115,7 +115,7 @@ type WalletService interface {
 // GetWalletBalanceV2 / GetWalletBalanceFromCache. On exceedance the wrapper
 // falls back to the last cached balance (if any), otherwise surfaces the
 // timeout as the original error.
-const walletBalanceComputeTimeout = 30 * time.Second
+const walletBalanceComputeTimeout = 80 * time.Second
 
 type walletService struct {
 	ServiceParams
@@ -2640,35 +2640,51 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// PRE_PAID: try real-time compute under a deadline so a hung or slow DB
 	// trips fallback instead of starving the request. On any failure (timeout
 	// or otherwise) fall back to the last cached balance if available.
-	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
-	defer cancel()
 
-	resp, err := s.computeRealtimeBalance(computeCtx, w)
-	if err == nil {
+	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+
+	if cached != nil {
+		// Calculate the timeout duration based on the context deadline
+		var timeoutDuration time.Duration
+		currentTimeout, ok := ctx.Deadline()
+		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
+			timeoutDuration = time.Until(currentTimeout)
+		} else {
+			timeoutDuration = s.computeBalanceTimeout
+		}
+
+		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		defer cancel()
+
+		resp, err := s.computeRealtimeBalance(computeCtx, w)
+		if err != nil {
+			s.Logger.Error(ctx, "wallet balance fallback to cache",
+				"wallet_id", walletID,
+				"tenant_id", types.GetTenantID(ctx),
+				"environment_id", types.GetEnvironmentID(ctx),
+				"endpoint", "real_time",
+				"error", err.Error(),
+			)
+			return s.buildResponseFromCachedBalance(w, *cached), nil
+		}
+
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 		}
 		return resp, nil
 	}
 
-	// If the parent ctx itself is canceled (e.g. client disconnect), there
-	// is no caller left to serve a cached response to — skip the fallback.
-	if ctx.Err() != nil {
+	// if no cached balance, compute the real-time balance and set the cache
+
+	resp, err := s.computeRealtimeBalance(ctx, w)
+	if err != nil {
 		return nil, err
 	}
 
-	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil); cached != nil {
-		s.Logger.Error(ctx, "wallet balance fallback to cache",
-			"wallet_id", walletID,
-			"tenant_id", types.GetTenantID(ctx),
-			"environment_id", types.GetEnvironmentID(ctx),
-			"endpoint", "real_time",
-			"error", err.Error(),
-		)
-		return s.buildResponseFromCachedBalance(w, *cached), nil
+	if resp != nil && resp.RealTimeBalance != nil {
+		s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 	}
-
-	return nil, err
+	return resp, nil
 }
 
 // buildResponseFromCachedBalance builds a WalletBalanceResponse from a cached
@@ -2858,37 +2874,15 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
 
-	// Cache miss (or stale per caller's max-live): recompute under a deadline,
-	// then fall back to the last cached balance (ignoring max-live) on any
-	// failure — any value within Redis TTL beats a 5xx.
-	computeCtx, cancel := context.WithTimeout(ctx, s.computeBalanceTimeout)
-	defer cancel()
-
-	resp, err := s.computeRealtimeBalance(computeCtx, w)
-	if err == nil {
-		if resp != nil && resp.RealTimeBalance != nil {
-			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
-		}
+	resp, err := s.computeRealtimeBalance(ctx, w)
+	if err != nil {
 		return resp, nil
 	}
 
-	// Skip fallback when the parent ctx is canceled (client disconnect).
-	if ctx.Err() != nil {
-		return nil, err
+	if resp != nil && resp.RealTimeBalance != nil {
+		s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 	}
-
-	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil); cached != nil {
-		s.Logger.Error(ctx, "wallet balance fallback to cache",
-			"wallet_id", walletID,
-			"tenant_id", types.GetTenantID(ctx),
-			"environment_id", types.GetEnvironmentID(ctx),
-			"endpoint", "from_cache",
-			"error", err.Error(),
-		)
-		return s.buildResponseFromCachedBalance(w, *cached), nil
-	}
-
-	return nil, err
+	return resp, nil
 }
 
 func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string, req *dto.ManualBalanceDebitRequest) (*dto.WalletResponse, error) {
