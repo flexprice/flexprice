@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
@@ -21,35 +23,36 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 	}
 }
 
-// RequirePermission returns a middleware that checks for specific entity.action.
-// For write actions it also blocks suspended tenants, so a single inline call
-// handles both RBAC and tenant access control.
-func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Action) gin.HandlerFunc {
+// RequirePermission returns a middleware that enforces two access controls:
+// suspended tenants are blocked from write operations regardless of caller type,
+// and service accounts are subject to RBAC role checks for the given entity and action.
+func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action types.Action) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// ctx := c.Request.Context()
+		ctx := c.Request.Context()
 
-		// if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
-		// 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-		// 		"error": "tenant account is suspended",
-		// 	})
-		// 	return
-		// }
+		// Suspended tenants are blocked from all write operations.
+		if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"message": "tenant account is suspended",
+			})
+			return
+		}
 
-		// roles := types.GetRoles(ctx)
-		// if !pm.rbacService.HasPermission(roles, entity, string(action)) {
-		// 	pm.logger.Info("Permission denied",
-		// 		"user_id", types.GetUserID(ctx),
-		// 		"roles", roles,
-		// 		"entity", entity,
-		// 		"action", action,
-		// 		"path", c.Request.URL.Path,
-		// 	)
-		// 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-		// 		"error":   "Forbidden",
-		// 		"message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
-		// 	})
-		// 	return
-		// }
+		// Service accounts are subject to RBAC; JWT users and config keys are not.
+		if types.IsServiceAccount(ctx) {
+			roles := types.GetRoles(ctx)
+			if !pm.rbacService.HasPermission(roles, string(entity), string(action)) {
+				pm.logger.Info(ctx, "service account access refrained due to insufficient RBAC roles",
+					"user_id", types.GetUserID(ctx),
+					"tenant_id", types.GetTenantID(ctx),
+					"environment_id", types.GetEnvironmentID(ctx),
+					"roles", roles,
+					"entity", entity,
+					"action", action,
+					"path", c.Request.URL.Path,
+				)
+			}
+		}
 
 		c.Next()
 	}
