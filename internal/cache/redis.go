@@ -30,7 +30,7 @@ type redisCacheImpl struct {
 }
 
 // Redis cache instance
-var redisCache RedisCache
+var redisCache *redisCacheImpl
 
 // NewRedisCache creates a new Redis cache
 func NewRedisCache() RedisCache {
