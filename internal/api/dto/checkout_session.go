@@ -109,5 +109,8 @@ func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessi
 		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentAction()
 		resp.CheckoutSession.ProviderResult = nil
 	}
+	// Strip internal fields from the API response.
+	resp.CheckoutSession.Result = nil
+	resp.CheckoutSession.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
 	return resp
 }
