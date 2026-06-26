@@ -62,24 +62,18 @@ func (a CheckoutAction) Validate() error {
 type CheckoutPaymentProvider string
 
 const (
-	CheckoutPaymentProviderStripe   CheckoutPaymentProvider = "stripe"
 	CheckoutPaymentProviderRazorpay CheckoutPaymentProvider = "razorpay"
-	CheckoutPaymentProviderNomod    CheckoutPaymentProvider = "nomod"
-	CheckoutPaymentProviderMoyasar  CheckoutPaymentProvider = "moyasar"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
 
 func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
-		CheckoutPaymentProviderStripe,
 		CheckoutPaymentProviderRazorpay,
-		CheckoutPaymentProviderNomod,
-		CheckoutPaymentProviderMoyasar,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: stripe, razorpay, nomod, moyasar").
+			WithHint("Allowed values: razorpay").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -88,14 +82,7 @@ func (p CheckoutPaymentProvider) Validate() error {
 
 // SessionExpiry returns the default lifetime for a checkout session with this provider.
 func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
-	switch p {
-	case CheckoutPaymentProviderStripe:
-		return 24 * time.Hour
-	case CheckoutPaymentProviderNomod:
-		return 30 * time.Minute
-	default:
-		return 15 * time.Minute
-	}
+	return 15 * time.Minute
 }
 
 type PaymentActionType string

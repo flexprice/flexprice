@@ -1237,30 +1237,12 @@ func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
 // Returns ErrValidation for providers that do not support hosted checkout.
 func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
 	switch provider {
-	case types.CheckoutPaymentProviderStripe:
-		i, err := f.GetStripeIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &stripe.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
 	case types.CheckoutPaymentProviderRazorpay:
 		i, err := f.GetRazorpayIntegration(ctx)
 		if err != nil {
 			return nil, err
 		}
 		return &razorpay.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
-	case types.CheckoutPaymentProviderNomod:
-		i, err := f.GetNomodIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &nomod.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
-	case types.CheckoutPaymentProviderMoyasar:
-		i, err := f.GetMoyasarIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &moyasar.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
 	default:
 		return nil, ierr.NewError("payment provider not supported for checkout").
 			WithHintf("%s does not support hosted checkout sessions", provider).
