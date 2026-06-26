@@ -50,7 +50,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		e.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	result, err := client.Entitlement.Create().
+	createQuery := client.Entitlement.Create().
 		SetID(e.ID).
 		SetEntityType(e.EntityType).
 		SetEntityID(e.EntityID).
@@ -70,8 +70,11 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetUpdatedAt(e.UpdatedAt).
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
-		SetEnvironmentID(e.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(e.EnvironmentID)
+	if e.ConfigValue != nil {
+		createQuery = createQuery.SetConfigValue(e.ConfigValue)
+	}
+	result, err := createQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -278,7 +281,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 	})
 	defer FinishSpan(span)
 
-	result, err := client.Entitlement.UpdateOneID(e.ID).
+	updateQuery := client.Entitlement.UpdateOneID(e.ID).
 		Where(
 			entitlement.TenantID(e.TenantID),
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -295,8 +298,11 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableParentEntitlementID(e.ParentEntitlementID).
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+	if e.ConfigValue != nil {
+		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
+	}
+	result, err := updateQuery.Save(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -381,7 +387,7 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			e.EnvironmentID = environmentID
 		}
 
-		builders[i] = client.Entitlement.Create().
+		builder := client.Entitlement.Create().
 			SetID(e.ID).
 			SetEntityType(e.EntityType).
 			SetEntityID(e.EntityID).
@@ -403,6 +409,10 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetCreatedBy(e.CreatedBy).
 			SetUpdatedBy(e.UpdatedBy).
 			SetEnvironmentID(e.EnvironmentID)
+		if e.ConfigValue != nil {
+			builder = builder.SetConfigValue(e.ConfigValue)
+		}
+		builders[i] = builder
 	}
 
 	results, err := client.Entitlement.CreateBulk(builders...).Save(ctx)

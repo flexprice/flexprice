@@ -10,18 +10,18 @@ import (
 )
 
 type Feature struct {
-	ID            string               `json:"id"`
-	Name          string               `json:"name"`
-	LookupKey     string               `json:"lookup_key"`
-	Description   string               `json:"description"`
-	MeterID       string               `json:"meter_id"`
-	Metadata      types.Metadata       `json:"metadata"`
-	Type          types.FeatureType    `json:"type"`
-	UnitSingular  string               `json:"unit_singular"`
-	UnitPlural    string               `json:"unit_plural"`
-	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
-	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
-	GroupID       string               `json:"group_id,omitempty"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	LookupKey     string                 `json:"lookup_key"`
+	Description   string                 `json:"description"`
+	MeterID       string                 `json:"meter_id"`
+	Metadata      types.Metadata         `json:"metadata"`
+	Type          types.FeatureType      `json:"type"`
+	UnitSingular  string                 `json:"unit_singular"`
+	UnitPlural    string                 `json:"unit_plural"`
+	ReportingUnit *types.ReportingUnit   `json:"reporting_unit,omitempty"`
+	AlertSettings *types.AlertSettings   `json:"alert_settings,omitempty"`
+	GroupID       string                 `json:"group_id,omitempty"`
 	// Group is populated by the service layer when building responses; repository/FromEnt do not set it.
 	Group         *group.Group `json:"group,omitempty"`
 	EnvironmentID string       `json:"environment_id"`

@@ -642,6 +642,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if req.StaticValue != "" {
 		existing.StaticValue = req.StaticValue
 	}
+	if req.ConfigValue != nil {
+		existing.ConfigValue = req.ConfigValue
+	}
 
 	// Validate updated entitlement
 	if err := existing.Validate(); err != nil {

@@ -277,6 +277,12 @@ func (ec *EntitlementCreate) SetNillableEndDate(t *time.Time) *EntitlementCreate
 	return ec
 }
 
+// SetConfigValue sets the "config_value" field.
+func (ec *EntitlementCreate) SetConfigValue(m map[string]interface{}) *EntitlementCreate {
+	ec.mutation.SetConfigValue(m)
+	return ec
+}
+
 // SetID sets the "id" field.
 func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	ec.mutation.SetID(s)
@@ -525,6 +531,10 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.EndDate(); ok {
 		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
+	}
+	if value, ok := ec.mutation.ConfigValue(); ok {
+		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
+		_node.ConfigValue = value
 	}
 	return _node, _spec
 }

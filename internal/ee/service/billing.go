@@ -3087,6 +3087,25 @@ func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	}
 }
 
+func aggregateConfigEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
+	isEnabled := false
+	var configValue map[string]interface{}
+
+	for _, e := range entitlements {
+		if e.IsEnabled {
+			isEnabled = true
+			if len(e.ConfigValue) > 0 && configValue == nil {
+				configValue = e.ConfigValue
+			}
+		}
+	}
+
+	return &dto.AggregatedEntitlement{
+		IsEnabled:   isEnabled,
+		ConfigValue: configValue,
+	}
+}
+
 func aggregateStaticEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	isEnabled := false
 	staticValues := []string{}
@@ -3173,6 +3192,7 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 			IsEnabled:      ent.IsEnabled,
 			UsageLimit:     ent.UsageLimit,
 			StaticValue:    ent.StaticValue,
+			ConfigValue:    ent.ConfigValue,
 		}
 
 		// Add source to feature sources
@@ -3212,6 +3232,7 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 				UsageResetPeriod: types.EntitlementUsageResetPeriod(entResp.UsageResetPeriod),
 				IsSoftLimit:      entResp.IsSoftLimit,
 				StaticValue:      entResp.StaticValue,
+				ConfigValue:      entResp.ConfigValue,
 			}
 			domainEntitlements = append(domainEntitlements, domainEnt)
 		}
@@ -3225,6 +3246,8 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 			aggregatedEntitlement = aggregateBooleanEntitlementsForBilling(domainEntitlements)
 		case types.FeatureTypeStatic:
 			aggregatedEntitlement = aggregateStaticEntitlementsForBilling(domainEntitlements)
+		case types.FeatureTypeConfig:
+			aggregatedEntitlement = aggregateConfigEntitlementsForBilling(domainEntitlements)
 		default:
 			// Skip unknown feature types
 			continue
@@ -3636,6 +3659,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		types.FeatureTypeMetered: 1,
 		types.FeatureTypeStatic:  2,
 		types.FeatureTypeBoolean: 3,
+		types.FeatureTypeConfig:  4,
 	}
 
 	sort.SliceStable(features, func(i, j int) bool {

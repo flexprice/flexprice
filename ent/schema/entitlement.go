@@ -88,6 +88,9 @@ func (Entitlement) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("End date for time-bound entitlements (subscription-scoped only)"),
+		field.JSON("config_value", map[string]interface{}{}).
+			Optional().
+			SchemaType(map[string]string{"postgres": "jsonb"}),
 	}
 }
 

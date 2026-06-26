@@ -52,7 +52,8 @@ type AggregatedEntitlement struct {
 	UsageLimit       *int64                            `json:"usage_limit,omitempty"`
 	IsSoftLimit      bool                              `json:"is_soft_limit"`
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
-	StaticValues     []string                          `json:"static_values,omitempty"` // For static/SLA features
+	StaticValues     []string                          `json:"static_values,omitempty"`
+	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
 }
 
 // EntitlementSourceType defines the type of entitlement source
@@ -93,6 +94,7 @@ type EntitlementSource struct {
 	UsageLimit       *int64                      `json:"usage_limit,omitempty"`
 	StaticValue      string                      `json:"static_value,omitempty"`
 	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period,omitempty"`
+	ConfigValue      map[string]interface{}      `json:"config_value,omitempty"`
 }
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary

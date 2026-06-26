@@ -26,6 +26,7 @@ type CreateEntitlementRequest struct {
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
+	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -57,6 +58,27 @@ func (r *CreateEntitlementRequest) Validate() error {
 				WithHint("Static value is required for static features").
 				Mark(ierr.ErrValidation)
 		}
+	case types.FeatureTypeConfig:
+		if len(r.ConfigValue) > 0 {
+			for k, v := range r.ConfigValue {
+				if k == "" {
+					return ierr.NewError("config_value keys must not be empty").
+						WithHint("All keys in config_value must be non-empty strings").
+						Mark(ierr.ErrValidation)
+				}
+				if s, ok := v.(string); ok && s == "" {
+					return ierr.NewError("config_value values must not be empty").
+						WithHintf("Value for key %q is empty", k).
+						Mark(ierr.ErrValidation)
+				}
+			}
+		}
+	}
+
+	if r.FeatureType != types.FeatureTypeConfig && len(r.ConfigValue) > 0 {
+		return ierr.NewError("config_value is only supported for config features").
+			WithHint("Remove config_value or change the feature type to config").
+			Mark(ierr.ErrValidation)
 	}
 
 	// either you pass planId or entityType and entityId
@@ -87,7 +109,7 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		r.EntityID = r.PlanID
 	}
 
-	return &entitlement.Entitlement{
+	ent := &entitlement.Entitlement{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
 		EntityType:          r.EntityType,
 		EntityID:            r.EntityID,
@@ -104,6 +126,10 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
+	if r.FeatureType == types.FeatureTypeConfig {
+		ent.ConfigValue = r.ConfigValue
+	}
+	return ent
 }
 
 // UpdateEntitlementRequest represents the request to update an existing entitlement
@@ -113,6 +139,7 @@ type UpdateEntitlementRequest struct {
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`
 	StaticValue      string                            `json:"static_value"`
+	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
 }
 
 // EntitlementResponse represents the response for an entitlement

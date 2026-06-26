@@ -32,6 +32,7 @@ type FeatureServiceSuite struct {
 			apiCalls *feature.Feature
 			storage  *feature.Feature
 			boolean  *feature.Feature
+			config   *feature.Feature
 		}
 	}
 }
@@ -138,6 +139,17 @@ func (s *FeatureServiceSuite) setupTestData() {
 	}
 	s.testData.features.boolean.CreatedAt = now.Add(-time.Hour * 24)
 	s.NoError(s.featureRepo.Create(s.GetContext(), s.testData.features.boolean))
+
+	s.testData.features.config = &feature.Feature{
+		ID:          "feature_config",
+		Name:        "Config Feature",
+		Description: "Key-value config feature",
+		LookupKey:   "config_feature",
+		Type:        types.FeatureTypeConfig,
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.testData.features.config.CreatedAt = now.Add(-time.Hour * 36)
+	s.NoError(s.featureRepo.Create(s.GetContext(), s.testData.features.config))
 }
 
 func (s *FeatureServiceSuite) TestCreateFeature() {
@@ -269,6 +281,15 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 			},
 			wantErr:   true,
 			errString: "conversion_rate",
+		},
+		{
+			name: "successful creation of config feature",
+			req: dto.CreateFeatureRequest{
+				Name:        "Config Feature",
+				Description: "Key-value config",
+				LookupKey:   "config_key",
+				Type:        types.FeatureTypeConfig,
+			},
 		},
 		{
 			name: "error - non-existent group_id",
@@ -474,11 +495,12 @@ func (s *FeatureServiceSuite) TestGetFeatures() {
 		{
 			name:          "get all features",
 			filter:        types.NewNoLimitFeatureFilter(),
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs: []string{
 				s.testData.features.apiCalls.ID,
 				s.testData.features.storage.ID,
 				s.testData.features.boolean.ID,
+				s.testData.features.config.ID,
 			},
 		},
 		{
@@ -489,7 +511,7 @@ func (s *FeatureServiceSuite) TestGetFeatures() {
 					Offset: lo.ToPtr(0),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs:   []string{s.testData.features.apiCalls.ID},
 		},
 		{
@@ -499,11 +521,12 @@ func (s *FeatureServiceSuite) TestGetFeatures() {
 					Expand: lo.ToPtr("meters"),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs: []string{
 				s.testData.features.apiCalls.ID,
 				s.testData.features.storage.ID,
 				s.testData.features.boolean.ID,
+				s.testData.features.config.ID,
 			},
 			expectExpanded: true,
 		},
@@ -583,11 +606,12 @@ func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
 					Order: lo.ToPtr("desc"),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs: []string{
 				s.testData.features.apiCalls.ID,
 				s.testData.features.storage.ID,
 				s.testData.features.boolean.ID,
+				s.testData.features.config.ID,
 			},
 		},
 		{
@@ -598,10 +622,11 @@ func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
 					Order: lo.ToPtr("asc"),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs: []string{
 				s.testData.features.apiCalls.ID,
 				s.testData.features.boolean.ID,
+				s.testData.features.config.ID,
 				s.testData.features.storage.ID,
 			},
 		},
@@ -642,11 +667,12 @@ func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
 					Expand: lo.ToPtr("meters"),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs: []string{
 				s.testData.features.apiCalls.ID,
 				s.testData.features.storage.ID,
 				s.testData.features.boolean.ID,
+				s.testData.features.config.ID,
 			},
 			expectExpanded: true,
 		},
@@ -660,7 +686,7 @@ func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
 					Order:  lo.ToPtr("desc"),
 				},
 			},
-			expectedTotal: 3,
+			expectedTotal: 4,
 			expectedIDs:   []string{s.testData.features.storage.ID},
 		},
 	}
@@ -1081,6 +1107,7 @@ func (s *FeatureServiceSuite) TestDeleteFeature() {
 		})
 	}
 }
+
 
 func (s *FeatureServiceSuite) TestFeature_ToReportingValue() {
 	// apiCalls feature has ReportingUnit: thousand tokens, conversion_rate 0.001
