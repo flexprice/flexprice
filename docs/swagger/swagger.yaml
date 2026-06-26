@@ -172,6 +172,21 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  checkout.JSONBCheckoutConfiguration:
+    properties:
+      create_subscription_params:
+        $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  checkout.JSONBCheckoutProviderResult:
+    properties:
+      create_subscription_result:
+        $ref: '#/definitions/types.ProviderSubscriptionResult'
+    type: object
+  checkout.JSONBCheckoutResult:
+    properties:
+      create_subscription_result:
+        $ref: '#/definitions/types.CreateSubscriptionResult'
+    type: object
   costsheet.Filter:
     properties:
       costsheetIDs:
@@ -874,7 +889,7 @@ definitions:
         type: string
       configuration:
         allOf:
-        - $ref: '#/definitions/types.CheckoutConfiguration'
+        - $ref: '#/definitions/checkout.JSONBCheckoutConfiguration'
         description: |-
           Configuration holds the immutable caller inputs set at creation time.
           Only the sub-struct matching Action is populated; the others are nil.
@@ -906,9 +921,7 @@ definitions:
           session reaches a terminal state (completed|failed|expired).
         type: string
       metadata:
-        additionalProperties:
-          type: string
-        type: object
+        $ref: '#/definitions/types.Metadata'
       payment_action:
         $ref: '#/definitions/PaymentAction'
       payment_provider:
@@ -917,14 +930,14 @@ definitions:
         description: PaymentProvider is required and immutable after creation.
       provider_result:
         allOf:
-        - $ref: '#/definitions/types.CheckoutProviderResult'
+        - $ref: '#/definitions/checkout.JSONBCheckoutProviderResult'
         description: |-
           ProviderResult holds the external provider response (session URL,
           payment intent ID, etc.). Set after the provider call in the create
           step. Source of truth for deriving PaymentActions in API responses.
       result:
         allOf:
-        - $ref: '#/definitions/types.CheckoutResult'
+        - $ref: '#/definitions/checkout.JSONBCheckoutResult'
         description: |-
           Result holds the Flexprice entity IDs created during the apply step.
           Nil until the session reaches completed status.
@@ -4646,6 +4659,8 @@ definitions:
         type: string
       updated_by:
         type: string
+      voided_at:
+        type: string
     type: object
   PlanResponse:
     properties:
@@ -6697,7 +6712,11 @@ definitions:
         type: string
       payment_status:
         type: string
+      refunded_at:
+        type: string
       succeeded_at:
+        type: string
+      voided_at:
         type: string
     type: object
   UpdatePaymentStatusRequest:
@@ -8778,9 +8797,11 @@ definitions:
   types.PaymentDestinationType:
     enum:
     - INVOICE
+    - CUSTOMER
     type: string
     x-enum-varnames:
     - PaymentDestinationTypeInvoice
+    - PaymentDestinationTypeCustomer
   types.PaymentGatewayType:
     enum:
     - stripe
@@ -8821,6 +8842,7 @@ definitions:
     - FAILED
     - REFUNDED
     - PARTIALLY_REFUNDED
+    - VOIDED
     type: string
     x-enum-varnames:
     - PaymentStatusInitiated
@@ -8831,6 +8853,7 @@ definitions:
     - PaymentStatusFailed
     - PaymentStatusRefunded
     - PaymentStatusPartiallyRefunded
+    - PaymentStatusVoided
   types.PaymentTerms:
     enum:
     - 15 NET
@@ -9894,6 +9917,9 @@ definitions:
     - invoice.communication.triggered
     - credit_note.created
     - credit_note.updated
+    - checkout.session.initiated
+    - checkout.session.completed
+    - checkout.session.failed
     type: string
     x-enum-varnames:
     - WebhookEventSubscriptionCreated
@@ -9938,6 +9964,9 @@ definitions:
     - WebhookEventInvoiceCommunicationTriggered
     - WebhookEventCreditNoteCreated
     - WebhookEventCreditNoteUpdated
+    - WebhookEventCheckoutSessionInitiated
+    - WebhookEventCheckoutSessionCompleted
+    - WebhookEventCheckoutSessionFailed
   types.WindowSize:
     enum:
     - MINUTE
@@ -10598,35 +10627,6 @@ definitions:
       create_subscription_params:
         $ref: '#/definitions/types.CreateSubscriptionParams'
     type: object
-  types.CheckoutCouponInput:
-    properties:
-      coupon_code:
-        type: string
-      price_id:
-        type: string
-    type: object
-  types.CheckoutCreditGrant:
-    properties:
-      amount:
-        type: string
-      currency:
-        type: string
-      expires_at:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      name:
-        type: string
-    type: object
-  types.CheckoutLineItem:
-    properties:
-      price_id:
-        type: string
-      quantity:
-        type: integer
-    type: object
   types.CheckoutPaymentProvider:
     enum:
     - stripe
@@ -10637,11 +10637,6 @@ definitions:
     properties:
       create_subscription_result:
         $ref: '#/definitions/types.ProviderSubscriptionResult'
-    type: object
-  types.CheckoutResult:
-    properties:
-      create_subscription_result:
-        $ref: '#/definitions/types.CreateSubscriptionResult'
     type: object
   types.CheckoutSessionFilter:
     properties:
@@ -10706,24 +10701,12 @@ definitions:
     - CheckoutStatusExpired
   types.CreateSubscriptionParams:
     properties:
-      billing_cycle:
-        $ref: '#/definitions/types.BillingCycle'
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
-      billing_period_count:
-        type: integer
-      credit_grants:
-        items:
-          $ref: '#/definitions/types.CheckoutCreditGrant'
-        type: array
       currency:
         type: string
       end_date:
         type: string
-      line_items:
-        items:
-          $ref: '#/definitions/types.CheckoutLineItem'
-        type: array
       lookup_key:
         type: string
       metadata:
@@ -10734,14 +10717,6 @@ definitions:
         type: string
       start_date:
         type: string
-      subscription_coupons:
-        items:
-          $ref: '#/definitions/types.CheckoutCouponInput'
-        type: array
-    required:
-    - billing_period
-    - currency
-    - plan_id
     type: object
   types.CreateSubscriptionResult:
     properties:
@@ -11199,7 +11174,6 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new checkout session to initiate a B2C payment flow.
       operationId: createCheckoutSession
       parameters:
       - description: Checkout session to create
@@ -11216,15 +11190,15 @@ paths:
           schema:
             $ref: '#/definitions/CheckoutSessionResponse'
         "400":
-          description: Invalid request
+          description: Bad Request
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "409":
-          description: Idempotency key conflict
+          description: Conflict
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
-          description: Server error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
@@ -11233,8 +11207,33 @@ paths:
       tags:
       - Checkout
   /checkout/sessions/{id}:
+    delete:
+      operationId: deleteCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete checkout session
+      tags:
+      - Checkout
     get:
-      description: Retrieve a checkout session by ID.
       operationId: getCheckoutSession
       parameters:
       - description: Checkout session ID
@@ -11250,11 +11249,11 @@ paths:
           schema:
             $ref: '#/definitions/CheckoutSessionResponse'
         "404":
-          description: Not found
+          description: Not Found
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
-          description: Server error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
@@ -11262,12 +11261,75 @@ paths:
       summary: Get checkout session
       tags:
       - Checkout
+  /checkout/sessions/{id}/cleanup:
+    post:
+      operationId: testCleanupCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: '[TEST ONLY] Cleanup (fail) a checkout session manually'
+      tags:
+      - Checkout
+  /checkout/sessions/{id}/complete:
+    post:
+      consumes:
+      - application/json
+      operationId: testCompleteCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Provider result (optional)
+        in: body
+        name: result
+        schema:
+          $ref: '#/definitions/types.CheckoutProviderResult'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: '[TEST ONLY] Complete a checkout session manually'
+      tags:
+      - Checkout
   /checkout/sessions/search:
     post:
       consumes:
       - application/json
-      description: Use when listing or searching checkout sessions. Returns a paginated
-        list; supports filtering by customer IDs, statuses, and other fields.
       operationId: queryCheckoutSessions
       parameters:
       - description: Filter
@@ -11284,11 +11346,11 @@ paths:
           schema:
             $ref: '#/definitions/ListCheckoutSessionsResponse'
         "400":
-          description: Invalid filter
+          description: Bad Request
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
-          description: Server error
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
