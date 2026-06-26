@@ -130,9 +130,8 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 // handlePaymentPaid dispatches payment_paid / payment_captured events.
 //
 // Priority:
-//  1. EntityIntegrationMapping lookup (Moyasar payment ID → FlexPrice payment ID) → checkout session flow
-//  2. flexprice_payment_id in metadata → lifecycle-managed payment (CUSTOMER or INVOICE autopay)
-//  3. invoice_id in payment body      → Moyasar invoice-link flow (external / manual pay)
+//  1. flexprice_payment_id in metadata → lifecycle-managed payment (CUSTOMER or INVOICE autopay)
+//  2. invoice_id in payment body      → Moyasar invoice-link flow (external / manual pay)
 func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.MoyasarPayment, environmentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_paid webhook",
 		"moyasar_payment_id", payment.ID,
@@ -142,57 +141,20 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 		"environment_id", environmentID,
 	)
 
-	// Primary path: EntityIntegrationMapping lookup (Moyasar payment ID → FlexPrice payment ID).
-	// Moyasar uses the same ID at creation and in webhooks.
-	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
-		ctx,
-		&types.EntityIntegrationMappingFilter{
-			ProviderEntityIDs: []string{payment.ID},
-			ProviderTypes:     []string{"moyasar"},
-			EntityType:        types.IntegrationEntityTypePayment,
-		},
-	)
-	if err == nil && mappings != nil && len(mappings.Items) > 0 {
-		paymentID := mappings.Items[0].EntityID
-		sessions, sessErr := services.CheckoutSessionService.List(ctx, &types.CheckoutSessionFilter{
-			QueryFilter:        types.NewDefaultQueryFilter(),
-			CheckoutPaymentIDs: []string{paymentID},
-			CheckoutStatuses:   []types.CheckoutStatus{types.CheckoutStatusPending, types.CheckoutStatusInitiated},
-		})
-		if sessErr == nil && sessions != nil && len(sessions.Items) > 0 {
-			sessionID := sessions.Items[0].ID
-			providerResult := &types.CheckoutProviderResult{
-				ProviderPaymentIntentID: payment.ID,
-			}
-			if completeErr := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, providerResult); completeErr != nil {
-				if ierr.IsAlreadyExists(completeErr) {
-					h.logger.Info(ctx, "checkout session already completed, skipping", "session_id", sessionID)
-					return nil
-				}
-				h.logger.Error(ctx, "failed to complete checkout session", "error", completeErr, "session_id", sessionID)
-				return completeErr
-			}
-			h.logger.Info(ctx, "checkout session completed via Moyasar EntityIntegrationMapping", "session_id", sessionID)
-			return nil
-		} else if sessErr != nil {
-			h.logger.Info(ctx, "failed to list checkout sessions for Moyasar payment, falling through to legacy path",
-				"error", sessErr, "payment_id", paymentID, "moyasar_payment_id", payment.ID)
-		}
-	}
-
-	// Legacy path: flexprice_payment_id in metadata → lifecycle-managed payment.
+	// Path 1: lifecycle-managed payment — flexprice_payment_id is the anchor
 	if payment.Metadata != nil {
 		if flexpricePaymentID := payment.Metadata["flexprice_payment_id"]; flexpricePaymentID != "" {
 			return h.handlePaymentLifecycle(ctx, payment, flexpricePaymentID, services)
 		}
 	}
 
-	// Moyasar invoice-link flow.
+	// Path 2: Moyasar invoice-link flow (customer paid via hosted invoice page)
 	if payment.InvoiceID != "" {
 		return h.handleInvoicePayment(ctx, payment, services)
 	}
 
-	h.logger.Info(ctx, "webhook payment has no known anchor, skipping", "moyasar_payment_id", payment.ID)
+	h.logger.Info(ctx, "webhook payment has no known anchor, skipping",
+		"moyasar_payment_id", payment.ID)
 	return nil
 }
 
