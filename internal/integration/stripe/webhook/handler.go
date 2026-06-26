@@ -793,94 +793,57 @@ func (h *Handler) handleSubscriptionCancellation(ctx context.Context, event *str
 }
 
 func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *stripeapi.Event, environmentID string, services *ServiceDependencies) error {
+	// Parse webhook to get checkout session data
 	var checkoutSession stripeapi.CheckoutSession
-	if err := json.Unmarshal(event.Data.Raw, &checkoutSession); err != nil {
+	err := json.Unmarshal(event.Data.Raw, &checkoutSession)
+	if err != nil {
 		h.logger.Error(ctx, "failed to parse checkout session from webhook, skipping event", "error", err, "event_id", event.ID)
 		return nil
 	}
 
-	h.logger.Info(ctx, "received checkout.session.completed webhook",
-		"checkout_session_id", checkoutSession.ID,
-		"event_id", event.ID)
-
-	var providerPaymentIntentID string
-	if checkoutSession.PaymentIntent != nil {
-		providerPaymentIntentID = checkoutSession.PaymentIntent.ID
-	}
-
-	// Primary path: EntityIntegrationMapping lookup (cs_xxx → FlexPrice payment ID).
-	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
-		ctx,
-		&types.EntityIntegrationMappingFilter{
-			ProviderEntityIDs: []string{checkoutSession.ID},
-			ProviderTypes:     []string{"stripe"},
-			EntityType:        types.IntegrationEntityTypePayment,
-		},
-	)
-	if err == nil && mappings != nil && len(mappings.Items) > 0 {
-		paymentID := mappings.Items[0].EntityID
-		if routed, routeErr := h.routeToCheckoutSession(ctx, paymentID, &types.CheckoutProviderResult{
-			ProviderPaymentIntentID: providerPaymentIntentID,
-		}, services); routed {
-			return routeErr
-		}
-	}
-
-	// Fallback: legacy path for sessions created before EntityIntegrationMapping was in place.
+	// get flexprice_payment_id from metadata
 	flexpricePaymentID := checkoutSession.Metadata["flexprice_payment_id"]
 	if flexpricePaymentID == "" {
-		h.logger.Info(ctx, "no lookup succeeded for checkout session webhook, skipping", "event_id", event.ID)
+		h.logger.Info(ctx, "no flexprice_payment_id found in checkout session metadata", "event_id", event.ID)
 		return nil
 	}
 
+	// get payment from database
 	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
 		return nil
 	}
+
+	// check if payment is already succeeded
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
 		return nil
 	}
 
+	// Get payment intent if it exists
 	var paymentIntent *stripeapi.PaymentIntent
 	if checkoutSession.PaymentIntent != nil {
-		paymentIntent, err = h.paymentSvc.GetPaymentIntent(ctx, checkoutSession.PaymentIntent.ID, environmentID)
+		paymentIntentID := checkoutSession.PaymentIntent.ID
+		paymentIntent, err = h.paymentSvc.GetPaymentIntent(ctx, paymentIntentID, environmentID)
 		if err != nil {
-			h.logger.Error(ctx, "failed to fetch payment intent, continuing without it", "error", err, "event_id", event.ID)
+			h.logger.Error(ctx, "failed to fetch payment intent, continuing without it",
+				"error", err,
+				"payment_intent_id", paymentIntentID,
+				"event_id", event.ID)
 			paymentIntent = nil
 		}
 	}
-	return h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService)
-}
 
-// routeToCheckoutSession finds the active checkout session for a payment and completes it.
-// Returns (true, nil) on success or conflict (already-completed).
-// Returns (true, err) when CompleteCheckoutSession fails for any other reason — still routed to
-// prevent fallthrough to the legacy path, but the error propagates to the caller so Stripe retries.
-// Returns (false, nil) when no matching session is found (fall through to legacy path).
-func (h *Handler) routeToCheckoutSession(ctx context.Context, paymentID string, providerResult *types.CheckoutProviderResult, services *ServiceDependencies) (bool, error) {
-	sessions, err := services.CheckoutSessionService.List(ctx, &types.CheckoutSessionFilter{
-		QueryFilter:        types.NewDefaultQueryFilter(),
-		CheckoutPaymentIDs: []string{paymentID},
-		CheckoutStatuses:   []types.CheckoutStatus{types.CheckoutStatusPending, types.CheckoutStatusInitiated},
-	})
+	// Call HandleFlexPriceCheckoutPayment with optional payment intent
+	err = h.paymentSvc.HandleFlexPriceCheckoutPayment(ctx, paymentIntent, payment, services.CustomerService, services.InvoiceService, services.PaymentService)
 	if err != nil {
-		h.logger.Error(ctx, "failed to list checkout sessions for payment", "error", err, "payment_id", paymentID)
-		return false, nil
+		h.logger.Error(ctx, "failed to handle FlexPrice checkout payment, skipping event",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"event_id", event.ID)
+		return nil
 	}
-	if sessions == nil || len(sessions.Items) == 0 {
-		return false, nil
-	}
-	sessionID := sessions.Items[0].ID
-	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, providerResult); err != nil {
-		if ierr.IsAlreadyExists(err) {
-			h.logger.Info(ctx, "checkout session already completed by concurrent request, skipping", "session_id", sessionID)
-			return true, nil
-		}
-		h.logger.Error(ctx, "failed to complete checkout session", "error", err, "session_id", sessionID)
-		return true, err // still routed; don't fall through to legacy path, but propagate error
-	}
-	h.logger.Info(ctx, "checkout session completed via EntityIntegrationMapping routing", "session_id", sessionID)
-	return true, nil
+
+	return nil
 }
