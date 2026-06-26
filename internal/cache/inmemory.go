@@ -16,14 +16,14 @@ const DefaultExpiration = 30 * time.Minute
 // DefaultCleanupInterval is how often expired items are removed from the cache
 const DefaultCleanupInterval = 1 * time.Hour
 
-// inMemoryCache implements the Cache interface using github.com/patrickmn/go-cache
-type inMemoryCache struct {
+// InMemoryCache implements the Cache interface using github.com/patrickmn/go-cache
+type InMemoryCache struct {
 	cache *goCache.Cache
 	cfg   *config.Configuration
 }
 
 // Global cache instance
-var globalCache *inMemoryCache
+var globalCache *InMemoryCache
 
 // InitializeInMemoryCache initializes the global cache instance
 func InitializeInMemoryCache() {
@@ -33,27 +33,23 @@ func InitializeInMemoryCache() {
 	}
 
 	if globalCache == nil {
-		globalCache = &inMemoryCache{
+		globalCache = &InMemoryCache{
 			cache: goCache.New(DefaultExpiration, DefaultCleanupInterval),
 			cfg:   cfg,
 		}
 	}
 }
 
-// NewInMemoryCache creates a new inMemoryCache instance
-func NewInMemoryCache() InMemoryCache {
+// NewInMemoryCache creates a new InMemoryCache instance
+func NewInMemoryCache() Cache {
 	if globalCache == nil {
 		InitializeInMemoryCache()
 	}
 	return globalCache
 }
 
-func (c *inMemoryCache) IsEnabled() bool {
-	return c.cfg.Cache.Enabled && c.cfg.Cache.InMemory.Enabled
-}
-
 // GetCache returns the global cache instance
-func GetInMemoryCache() InMemoryCache {
+func GetInMemoryCache() *InMemoryCache {
 	if globalCache == nil {
 		InitializeInMemoryCache()
 	}
@@ -61,53 +57,44 @@ func GetInMemoryCache() InMemoryCache {
 }
 
 // Get retrieves a value from the cache
-func (c *inMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
-	if c == nil || !c.IsEnabled() {
+func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
+	if !c.cfg.Cache.Enabled {
 		return nil, false
 	}
 	return c.cache.Get(key)
 }
 
-func (c *inMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
-	if c == nil {
-		return nil, false
-	}
+func (c *InMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
 	return c.cache.Get(key)
 }
 
-func (c *inMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
-	if c == nil {
-		return
-	}
+func (c *InMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	c.cache.Set(key, value, expiration)
 }
 
-func (c *inMemoryCache) ForceCacheDelete(_ context.Context, key string) {
-	if c == nil {
-		return
-	}
+func (c *InMemoryCache) ForceCacheDelete(_ context.Context, key string) {
 	c.cache.Delete(key)
 }
 
 // Set adds a value to the cache with the specified expiration
-func (c *inMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
-	if c == nil || !c.IsEnabled() {
+func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
+	if !c.cfg.Cache.Enabled {
 		return
 	}
 	c.cache.Set(key, value, expiration)
 }
 
 // Delete removes a key from the cache
-func (c *inMemoryCache) Delete(_ context.Context, key string) {
-	if c == nil || !c.IsEnabled() {
+func (c *InMemoryCache) Delete(_ context.Context, key string) {
+	if !c.cfg.Cache.Enabled {
 		return
 	}
 	c.cache.Delete(key)
 }
 
 // DeleteByPrefix removes all keys with the given prefix
-func (c *inMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
-	if c == nil || !c.IsEnabled() {
+func (c *InMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
+	if !c.cfg.Cache.Enabled {
 		return
 	}
 	// Get all items from the cache
@@ -122,8 +109,8 @@ func (c *inMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
 }
 
 // Flush removes all items from the cache
-func (c *inMemoryCache) Flush(_ context.Context) {
-	if c == nil || !c.IsEnabled() {
+func (c *InMemoryCache) Flush(_ context.Context) {
+	if !c.cfg.Cache.Enabled {
 		return
 	}
 	c.cache.Flush()

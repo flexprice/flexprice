@@ -23,10 +23,10 @@ type customerRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CustomerQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewCustomerRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCustomer.Repository {
+func NewCustomerRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCustomer.Repository {
 	return &customerRepository{
 		client:    client,
 		log:       log,

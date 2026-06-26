@@ -23,10 +23,10 @@ type workflowExecutionRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts WorkflowExecutionQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewWorkflowExecutionRepository(client postgres.IClient, log *logger.Logger, c cache.InMemoryCache) domainWorkflowExecution.Repository {
+func NewWorkflowExecutionRepository(client postgres.IClient, log *logger.Logger, c cache.Cache) domainWorkflowExecution.Repository {
 	return &workflowExecutionRepository{
 		client:    client,
 		log:       log,

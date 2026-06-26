@@ -27,10 +27,10 @@ type subscriptionRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts SubscriptionQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainSub.Repository {
 	return &subscriptionRepository{
 		client:    client,
 		logger:    logger,

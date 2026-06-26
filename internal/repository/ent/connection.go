@@ -19,10 +19,10 @@ type connectionRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts ConnectionQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewConnectionRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainConnection.Repository {
+func NewConnectionRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainConnection.Repository {
 	return &connectionRepository{
 		client:    client,
 		log:       log,

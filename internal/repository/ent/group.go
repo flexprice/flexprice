@@ -18,11 +18,11 @@ import (
 type groupRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 	queryOpts GroupQueryOptions
 }
 
-func NewGroupRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainGroup.Repository {
+func NewGroupRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainGroup.Repository {
 	return &groupRepository{
 		client:    client,
 		log:       log,

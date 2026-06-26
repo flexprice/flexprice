@@ -18,10 +18,10 @@ type secretRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SecretQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewSecretRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainSecret.Repository {
+func NewSecretRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainSecret.Repository {
 	return &secretRepository{
 		client:    client,
 		log:       log,

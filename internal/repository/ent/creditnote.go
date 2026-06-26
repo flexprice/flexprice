@@ -23,10 +23,10 @@ type creditnoteRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CreditNoteQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCreditNote.Repository {
+func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCreditNote.Repository {
 	return &creditnoteRepository{
 		client:    client,
 		log:       log,

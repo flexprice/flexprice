@@ -20,10 +20,10 @@ type priceUnitRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PriceUnitQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPriceUnit.Repository {
+func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPriceUnit.Repository {
 	return &priceUnitRepository{
 		client:    client,
 		log:       log,

@@ -19,11 +19,11 @@ type taxAssociationRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts TaxAssociationQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
 // NewTaxAssociationRepository creates a new tax association repository
-func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainTaxConfig.Repository {
+func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainTaxConfig.Repository {
 	return &taxAssociationRepository{
 		client:    client,
 		logger:    logger,

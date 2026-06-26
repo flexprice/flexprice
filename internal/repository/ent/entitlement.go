@@ -21,10 +21,10 @@ type entitlementRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts EntitlementQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainEntitlement.Repository {
+func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainEntitlement.Repository {
 	return &entitlementRepository{
 		client:    client,
 		log:       log,

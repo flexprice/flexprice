@@ -18,11 +18,11 @@ type creditnoteLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CreditNoteLineItemQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
 // NewCreditNoteLineItemRepository creates a new credit note line item repository
-func NewCreditNoteLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCreditNote.CreditNoteLineItemRepository {
+func NewCreditNoteLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCreditNote.CreditNoteLineItemRepository {
 	return &creditnoteLineItemRepository{
 		client:    client,
 		log:       log,

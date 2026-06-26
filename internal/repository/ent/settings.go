@@ -20,10 +20,10 @@ import (
 type settingsRepository struct {
 	client postgres.IClient
 	log    *logger.Logger
-	cache  cache.InMemoryCache
+	cache  cache.Cache
 }
 
-func NewSettingsRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainSettings.Repository {
+func NewSettingsRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainSettings.Repository {
 	return &settingsRepository{
 		client: client,
 		log:    log,

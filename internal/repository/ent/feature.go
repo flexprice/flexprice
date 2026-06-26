@@ -20,10 +20,10 @@ type featureRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts FeatureQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainFeature.Repository {
+func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainFeature.Repository {
 	return &featureRepository{
 		client:    client,
 		log:       log,

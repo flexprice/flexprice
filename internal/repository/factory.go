@@ -23,7 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/group"
-	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -44,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -56,11 +56,10 @@ import (
 type RepositoryParams struct {
 	fx.In
 
-	Logger        *logger.Logger
-	EntClient     postgres.IClient
-	ClickHouseDB  *clickhouse.ClickHouseStore
-	InMemoryCache cache.InMemoryCache
-	RedisCache    cache.RedisCache
+	Logger       *logger.Logger
+	EntClient    postgres.IClient
+	ClickHouseDB *clickhouse.ClickHouseStore
+	Cache        cache.Cache
 }
 
 func NewEventRepository(p RepositoryParams) events.Repository {
@@ -80,7 +79,7 @@ func NewRawEventRepository(p RepositoryParams) events.RawEventRepository {
 }
 
 func NewMeterRepository(p RepositoryParams) meter.Repository {
-	return entRepo.NewMeterRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewMeterRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewUserRepository(p RepositoryParams) user.Repository {
@@ -92,15 +91,15 @@ func NewAuthRepository(p RepositoryParams) auth.Repository {
 }
 
 func NewPriceRepository(p RepositoryParams) price.Repository {
-	return entRepo.NewPriceRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPriceRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCustomerRepository(p RepositoryParams) customer.Repository {
-	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
-	return entRepo.NewPlanRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPlanRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
@@ -108,15 +107,15 @@ func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
-	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItemRepository {
-	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.SubscriptionPhaseRepository {
-	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
@@ -124,11 +123,11 @@ func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.Subscrip
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
-	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
-	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
@@ -136,27 +135,27 @@ func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 }
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
-	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
-	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
-	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
-	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {
-	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
-	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {
@@ -164,79 +163,79 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 }
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
-	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
-	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCostsheetRepository(p RepositoryParams) costsheet.Repository {
-	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
-	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCouponRepository(p RepositoryParams) coupon.Repository {
-	return entRepo.NewCouponRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCouponAssociationRepository(p RepositoryParams) coupon_association.Repository {
-	return entRepo.NewCouponAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponAssociationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCouponApplicationRepository(p RepositoryParams) coupon_application.Repository {
-	return entRepo.NewCouponApplicationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponApplicationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
-	return entRepo.NewCreditNoteRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditNoteRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
-	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewConnectionRepository(p RepositoryParams) connection.Repository {
-	return entRepo.NewConnectionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewConnectionRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegrationmapping.Repository {
-	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
-	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
-	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
-	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
-	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {
-	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Repository {
-	return entRepo.NewAddonAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAddonAssociationRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
-	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
-	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {
@@ -248,7 +247,7 @@ func NewSystemEventDomainRepository(repo *entRepo.SystemEventRepository) domains
 }
 
 func NewGroupRepository(p RepositoryParams) group.Repository {
-	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
@@ -272,7 +271,7 @@ func NewAnalyticsBenchmarkRepository(p RepositoryParams) events.AnalyticsBenchma
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
-	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {

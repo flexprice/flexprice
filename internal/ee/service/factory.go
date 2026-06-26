@@ -1,7 +1,6 @@
 package service
 
 import (
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
@@ -59,14 +58,12 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger        *logger.Logger
-	Config        *config.Configuration
-	DB            postgres.IClient
-	PDFGenerator  pdf.Generator
-	S3            s3.Service
-	TracingSvc    *tracing.Service
-	InMemoryCache cache.InMemoryCache
-	RedisCache    cache.RedisCache
+	Logger       *logger.Logger
+	Config       *config.Configuration
+	DB           postgres.IClient
+	PDFGenerator pdf.Generator
+	S3           s3.Service
+	TracingSvc   *tracing.Service
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -145,8 +142,6 @@ func NewServiceParams(
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
 	tracingSvc *tracing.Service,
-	inMemoryCache cache.InMemoryCache,
-	redisCache cache.RedisCache,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -212,8 +207,6 @@ func NewServiceParams(
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
 		TracingSvc:                   tracingSvc,
-		InMemoryCache:                inMemoryCache,
-		RedisCache:                   redisCache,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

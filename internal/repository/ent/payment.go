@@ -19,10 +19,10 @@ type paymentRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PaymentQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPayment.Repository {
+func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPayment.Repository {
 	return &paymentRepository{
 		client:    client,
 		log:       log,

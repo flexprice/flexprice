@@ -23,10 +23,10 @@ type entityIntegrationMappingRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts EntityIntegrationMappingQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.Cache
 }
 
-func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainEntityIntegrationMapping.Repository {
+func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainEntityIntegrationMapping.Repository {
 	return &entityIntegrationMappingRepository{
 		client:    client,
 		log:       log,
