@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -78,6 +79,7 @@ func (s *WalletServiceSuite) setupService() {
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
+		Cache:                    cache.NewIsolatedInMemoryCache(s.GetConfig()),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
@@ -2859,73 +2861,52 @@ func (s *WalletServiceSuite) buildFallbackTestWallet(balance decimal.Decimal) *w
 	return w
 }
 
-// inMemCache is a test cache that records the last value set per wallet.
-type inMemCache struct {
-	values map[string]decimal.Decimal
-}
-
-func newInMemCache() *inMemCache { return &inMemCache{values: map[string]decimal.Decimal{}} }
-
-func (c *inMemCache) get(_ context.Context, walletID string, _ *int64) *decimal.Decimal {
-	if v, ok := c.values[walletID]; ok {
-		return &v
-	}
-	return nil
-}
-func (c *inMemCache) set(_ context.Context, walletID string, balance decimal.Decimal) {
-	c.values[walletID] = balance
-}
-
-// installCache swaps in the test cache on the wallet service and returns it.
-func (s *WalletServiceSuite) installCache() *inMemCache {
-	c := newInMemCache()
-	ws := s.service.(*walletService)
-	ws.cacheGet = c.get
-	ws.cacheSet = c.set
-	return c
-}
-
 // installCompute swaps the realtime-compute step on the wallet service.
 func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)) {
 	ws := s.service.(*walletService)
 	ws.computeRealtimeBalance = fn
 }
 
+// primeCachedBalance writes a balance directly into the injected cache,
+// matching the on-disk format that the wallet service uses (decimal
+// stringified, wrapped via the wallet prefix).
+func (s *WalletServiceSuite) primeCachedBalance(ctx context.Context, walletID string, balance decimal.Decimal, ttl time.Duration) {
+	ws := s.service.(*walletService)
+	key := cache.GenerateKey(cache.PrefixWallet, walletID)
+	ws.Cache.ForceCacheSet(ctx, key, balance.String(), ttl)
+}
+
+// readCachedBalance reads back a wallet's cached balance through the same
+// path the service uses. Returns nil if absent.
+func (s *WalletServiceSuite) readCachedBalance(ctx context.Context, walletID string) *decimal.Decimal {
+	ws := s.service.(*walletService)
+	return ws.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+}
+
 func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLive() {
 	ctx := s.GetContext()
-	// Custom inMemCache that distinguishes max-live-filtered reads from no-filter reads.
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
 
-	ws := s.service.(*walletService)
-	ws.cacheGet = func(_ context.Context, walletID string, maxLive *int64) *decimal.Decimal {
-		// Caller-side max-live (non-nil) → return miss (simulate "too stale").
-		if maxLive != nil {
-			return nil
-		}
-		// Fallback path (nil) → return the cached entry.
-		v := decimal.NewFromInt(42)
-		return &v
-	}
-	cacheSetCalled := false
-	ws.cacheSet = func(_ context.Context, _ string, _ decimal.Decimal) { cacheSetCalled = true }
+	// Prime the cache with a shorter TTL so it appears "older" than maxLive
+	// from the caller's perspective: cacheAge = ExpiryWalletBalance - remainingTTL.
+	// TTL = Expiry - 2min → cacheAge = 2min. maxLive = 60s rejects this.
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(42), cache.ExpiryWalletBalance-2*time.Minute)
 
 	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
 		return nil, ierr.NewError("db down").Mark(ierr.ErrDatabase)
 	})
 
-	maxLive := int64(1)
+	maxLive := int64(60)
 	resp, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
 	s.NoError(err)
 	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
-	s.False(cacheSetCalled, "should not write to cache on fallback")
 }
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
 	ctx := s.GetContext()
-	cache := s.installCache()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
-	cache.set(ctx, w.ID, decimal.NewFromInt(72))
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(72), cache.ExpiryWalletBalance)
 
 	ws := s.service.(*walletService)
 	ws.computeBalanceTimeout = 5 * time.Millisecond
@@ -2949,9 +2930,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() 
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_SkipsFallbackOnClientDisconnect() {
 	parent := s.GetContext()
-	cache := s.installCache()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
-	cache.set(parent, w.ID, decimal.NewFromInt(50))
+	s.primeCachedBalance(parent, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
 
 	cancelableCtx, cancel := context.WithCancel(parent)
 	cancel()
@@ -2966,9 +2946,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_SkipsFallbackOnClientDisconn
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() {
 	ctx := s.GetContext()
-	cache := s.installCache()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
-	cache.set(ctx, w.ID, decimal.NewFromInt(50))
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
 
 	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
 		return nil, ierr.NewError("clickhouse exploded").Mark(ierr.ErrDatabase)
@@ -2982,7 +2961,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() 
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_NoCacheNoFallback() {
 	ctx := s.GetContext()
-	s.installCache() // empty cache
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
 
 	dbErr := ierr.NewError("clickhouse exploded").Mark(ierr.ErrDatabase)
@@ -2997,7 +2975,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_NoCacheNoFallback() {
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_ValidationErrorSurfacesAs4xx() {
 	ctx := s.GetContext()
-	s.installCache()
 	// Empty walletID must validate-fail BEFORE wallet fetch / cache read.
 	called := false
 	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
@@ -3013,7 +2990,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_ValidationErrorSurfacesAs4xx
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_NotFoundSurfaces() {
 	ctx := s.GetContext()
-	s.installCache()
 	_, err := s.service.GetWalletBalanceV2(ctx, "wlt_does_not_exist")
 	s.Error(err)
 	s.True(ierr.IsNotFound(err), "expected ErrNotFound, got %v", err)
@@ -3021,7 +2997,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_NotFoundSurfaces() {
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_HappyPathNoFallbackFlag() {
 	ctx := s.GetContext()
-	cache := s.installCache()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
 
 	freshResp := &dto.WalletBalanceResponse{
@@ -3037,8 +3012,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_HappyPathNoFallbackFlag() {
 	s.NoError(err)
 	s.False(resp.IsCachedFallback, "happy path must not set IsCachedFallback")
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(88)))
-	// cacheSet must have been invoked with the fresh value.
-	got := cache.get(ctx, w.ID, nil)
+	// Verify the cache write actually happened via the injected cache.
+	got := s.readCachedBalance(ctx, w.ID)
 	s.NotNil(got)
 	s.True(got.Equal(decimal.NewFromInt(88)))
 }

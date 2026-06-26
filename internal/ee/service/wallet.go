@@ -123,9 +123,9 @@ type walletService struct {
 
 	// Test seams. Defaulted in NewWalletService; production code must not
 	// override these. Tests in package service may set them via type assertion.
+	// The cache is intentionally NOT a seam — it comes from ServiceParams and
+	// tests inject an isolated InMemoryCache there.
 	computeBalanceTimeout  time.Duration
-	cacheGet               func(ctx context.Context, walletID string, maxLive *int64) *decimal.Decimal
-	cacheSet               func(ctx context.Context, walletID string, balance decimal.Decimal)
 	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
 }
 
@@ -138,8 +138,6 @@ func NewWalletService(params ServiceParams) WalletService {
 
 	// Test seams. Production code must not override these.
 	s.computeBalanceTimeout = walletBalanceComputeTimeout
-	s.cacheGet = s.getWalletRealtimeBalanceFromCache
-	s.cacheSet = s.setWalletRealtimeBalanceToCache
 	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
 	return s
 }
@@ -2631,7 +2629,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// POST_PAID wallets: balance doesn't deplete with usage, real-time balance = wallet balance
 	if w.WalletType == types.WalletTypePostPaid {
 		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(w.Balance, w.ConversionRate)
-		s.cacheSet(ctx, walletID, w.Balance)
+		s.setWalletRealtimeBalanceToCache(ctx, walletID, w.Balance)
 		return &dto.WalletBalanceResponse{
 			Wallet:                w,
 			RealTimeBalance:       lo.ToPtr(w.Balance),
@@ -2651,7 +2649,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
-			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 		}
 		return resp, nil
 	}
@@ -2662,8 +2660,8 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		return nil, err
 	}
 
-	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
-		s.Logger.Warn(ctx, "wallet balance fallback to cache",
+	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil); cached != nil {
+		s.Logger.Error(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
@@ -2855,7 +2853,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 
 	// Caller-driven cache read (honors maxLiveSeconds). A hit is the happy
 	// path for this endpoint: the caller asked for cached data, we have it.
-	if cached := s.cacheGet(ctx, walletID, maxLiveSeconds); cached != nil {
+	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds); cached != nil {
 		s.Logger.Info(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
 			"cached_balance", cached,
@@ -2872,7 +2870,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err == nil {
 		if resp != nil && resp.RealTimeBalance != nil {
-			s.cacheSet(ctx, walletID, *resp.RealTimeBalance)
+			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 		}
 		return resp, nil
 	}
@@ -2882,8 +2880,8 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return nil, err
 	}
 
-	if cached := s.cacheGet(ctx, walletID, nil); cached != nil {
-		s.Logger.Warn(ctx, "wallet balance fallback to cache",
+	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil); cached != nil {
+		s.Logger.Error(ctx, "wallet balance fallback to cache",
 			"wallet_id", walletID,
 			"tenant_id", types.GetTenantID(ctx),
 			"environment_id", types.GetEnvironmentID(ctx),
@@ -3453,47 +3451,40 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 }
 
 func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
+	if s.Cache == nil {
+		return
+	}
 	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
-		return
-	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	redisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
+	s.Cache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
-	if walletID == "" {
-		return
-	}
-
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
+	if walletID == "" || s.Cache == nil {
 		return
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	redisCache.Delete(ctx, cacheKey)
+	s.Cache.Delete(ctx, cacheKey)
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
+	if s.Cache == nil {
+		return nil
+	}
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
-		return nil
-	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {
-		cachedValue, remainingTTL, found := redisCache.ForceCacheGetWithTTL(ctx, cacheKey)
+		cachedValue, remainingTTL, found := s.Cache.ForceCacheGetWithTTL(ctx, cacheKey)
 		if !found {
 			return nil
 		}
@@ -3520,7 +3511,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	}
 
 	// Default path: no max-live check
-	cachedValue, found := redisCache.ForceCacheGet(ctx, cacheKey)
+	cachedValue, found := s.Cache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
 	}

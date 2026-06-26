@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
@@ -63,6 +64,7 @@ type ServiceParams struct {
 	PDFGenerator pdf.Generator
 	S3           s3.Service
 	TracingSvc   *tracing.Service
+	Cache        cache.Cache
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -140,6 +142,7 @@ func NewServiceParams(
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
 	tracingSvc *tracing.Service,
+	cacheInstance cache.Cache,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -204,6 +207,7 @@ func NewServiceParams(
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
 		TracingSvc:                   tracingSvc,
+		Cache:                        cacheInstance,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

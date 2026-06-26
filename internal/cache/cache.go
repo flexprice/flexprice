@@ -29,6 +29,12 @@ type Cache interface {
 	// ForceCacheGet retrieves a value from the cache without checking if the cache is enabled
 	ForceCacheGet(ctx context.Context, key string) (interface{}, bool)
 
+	// ForceCacheGetWithTTL retrieves a value and its remaining TTL from the
+	// cache without checking if the cache is enabled. Returns (value, ttl,
+	// found). A returned ttl of 0 means "found but no TTL information
+	// available" (e.g. driver returned the value but the TTL lookup failed).
+	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
+
 	// ForceCacheSet adds a value to the cache without checking if the cache is enabled
 	ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration)
 }
