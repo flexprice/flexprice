@@ -133,6 +133,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
 		SetResult((*types.CheckoutResult)(s.Result)).
 		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
+		SetExpiresAt(s.ExpiresAt).
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
