@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -376,21 +376,6 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, balance)
 }
 
-// GetWalletBalanceForceCached godoc
-// @Summary Get cached wallet balance
-// @ID getWalletBalanceForceCached
-// @Description Use when a low-latency balance read is acceptable (e.g. high-frequency polling or display-only views). Returns the cached wallet balance, recomputing if cache is stale per x-max-live.
-// @Tags Wallets
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Wallet ID"
-// @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
-// @Success 200 {object} dto.WalletBalanceResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /wallets/{id}/balance/cached [get]
 func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {
