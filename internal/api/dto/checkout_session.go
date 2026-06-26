@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
@@ -102,15 +103,13 @@ type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 // PaymentAction is derived from ProviderResult; the raw ProviderResult is omitted
 // from the response because it contains sensitive gateway tokens.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
-	// Shallow-copy so we don't mutate the caller's domain object.
-	copy := *s
-	resp := &CheckoutSessionResponse{CheckoutSession: &copy}
-	if s.ProviderResult != nil {
-		resp.PaymentAction = (*types.CheckoutProviderResult)(s.ProviderResult).PaymentAction()
-		resp.CheckoutSession.ProviderResult = nil
+	session := lo.FromPtr(s)
+	paymentAction := (*types.CheckoutProviderResult)(session.ProviderResult).PaymentAction()
+	session.ProviderResult = nil
+	session.Result = nil
+	session.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
+	return &CheckoutSessionResponse{
+		CheckoutSession: lo.ToPtr(session),
+		PaymentAction:   paymentAction,
 	}
-	// Strip internal fields from the API response.
-	resp.CheckoutSession.Result = nil
-	resp.CheckoutSession.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
-	return resp
 }
