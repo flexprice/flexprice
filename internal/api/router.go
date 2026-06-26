@@ -6,10 +6,10 @@ import (
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -411,13 +411,13 @@ func NewRouter(
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
-			checkoutSessions.POST("", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Create)
+			checkoutSessions.POST("", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Create)
 			checkoutSessions.POST("/search", handlers.CheckoutSession.Query)
 			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
-			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
+			checkoutSessions.DELETE("/:id", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Delete)
 			// TODO: remove after testing — manual lifecycle triggers for local E2E testing
-			checkoutSessions.POST("/:id/complete", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestComplete)
-			checkoutSessions.POST("/:id/cleanup", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.TestCleanup)
+			checkoutSessions.POST("/:id/complete", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.TestComplete)
+			checkoutSessions.POST("/:id/cleanup", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.TestCleanup)
 		}
 
 		entitlement := v1Private.Group("/entitlements")
