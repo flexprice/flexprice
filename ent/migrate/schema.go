@@ -35,7 +35,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{AddonsColumns[1], AddonsColumns[7], AddonsColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))",
 				},
 			},
 		},
@@ -146,7 +146,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{AuthsColumns[1]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 			{
@@ -252,7 +252,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CostsheetsColumns[1], CostsheetsColumns[7], CostsheetsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))",
 				},
 			},
 			{
@@ -303,7 +303,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CouponsColumns[1], CouponsColumns[7], CouponsColumns[21]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "coupon_code IS NOT NULL AND coupon_code != '' AND status = 'published'",
+					Where: "((coupon_code IS NOT NULL) AND ((coupon_code)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},
@@ -522,7 +522,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "plan_id IS NOT NULL",
+					Where: "(plan_id IS NOT NULL)",
 				},
 			},
 			{
@@ -530,7 +530,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "subscription_id IS NOT NULL",
+					Where: "(subscription_id IS NOT NULL)",
 				},
 			},
 		},
@@ -603,7 +603,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CreditNotesColumns[1], CreditNotesColumns[7], CreditNotesColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "credit_note_number IS NOT NULL AND credit_note_number != '' AND status = 'published'",
+					Where: "((credit_note_number IS NOT NULL) AND ((credit_note_number)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 			{
@@ -611,7 +611,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CreditNotesColumns[1], CreditNotesColumns[7], CreditNotesColumns[18]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "idempotency_key IS NOT NULL AND idempotency_key != ''",
+					Where: "((idempotency_key IS NOT NULL) AND ((idempotency_key)::text <> ''::text))",
 				},
 			},
 			{
@@ -704,7 +704,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "(external_id IS NOT NULL AND external_id != '') AND status = 'published'",
+					Where: "((external_id IS NOT NULL) AND ((external_id)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 			{
@@ -717,7 +717,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "email IS NOT NULL AND email != '' AND status = 'published'",
+					Where: "((email IS NOT NULL) AND ((email)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 			{
@@ -774,7 +774,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[8], EntitlementsColumns[9], EntitlementsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 			{
@@ -797,7 +797,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EntitlementsColumns[9], EntitlementsColumns[8], EntitlementsColumns[10], EntitlementsColumns[19], EntitlementsColumns[20]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "entity_type = 'SUBSCRIPTION' AND status = 'published'",
+					Where: "(((entity_type)::text = 'SUBSCRIPTION'::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},
@@ -829,7 +829,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 			{
@@ -909,7 +909,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[7], FeaturesColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "(lookup_key IS NOT NULL AND lookup_key != '') AND status = 'published'",
+					Where: "((lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 			{
@@ -917,7 +917,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{FeaturesColumns[1], FeaturesColumns[7], FeaturesColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "meter_id IS NOT NULL",
+					Where: "(meter_id IS NOT NULL)",
 				},
 			},
 			{
@@ -968,7 +968,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{GroupsColumns[1], GroupsColumns[7], GroupsColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))",
 				},
 			},
 			{
@@ -1075,7 +1075,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[8], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 			{
@@ -1098,7 +1098,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[38]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'",
+					Where: "((invoice_number IS NOT NULL) AND ((invoice_number)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 			{
@@ -1114,7 +1114,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[32], InvoicesColumns[33]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "invoice_status != 'VOIDED' AND subscription_id IS NOT NULL",
+					Where: "(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))",
 				},
 			},
 		},
@@ -1311,7 +1311,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[7], PaymentsColumns[13], PaymentsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "payment_gateway IS NOT NULL AND gateway_payment_id IS NOT NULL",
+					Where: "((payment_gateway IS NOT NULL) AND (gateway_payment_id IS NOT NULL))",
 				},
 			},
 		},
@@ -1362,7 +1362,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{PaymentAttemptsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "gateway_attempt_id IS NOT NULL",
+					Where: "(gateway_attempt_id IS NOT NULL)",
 				},
 			},
 		},
@@ -1396,7 +1396,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{PaymentMethodsColumns[1], PaymentMethodsColumns[7], PaymentMethodsColumns[8], PaymentMethodsColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 		},
@@ -1428,7 +1428,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PlansColumns[1], PlansColumns[7], PlansColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))",
 				},
 			},
 			{
@@ -1502,7 +1502,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[31]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != '' AND end_date IS NULL",
+					Where: "(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text) AND (end_date IS NULL))",
 				},
 			},
 			{
@@ -1525,7 +1525,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[34], PricesColumns[40]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 		},
@@ -1558,7 +1558,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7], PriceUnitsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 		},
@@ -1747,7 +1747,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[9], SubscriptionsColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "((status)::text = 'published'::text)",
 				},
 			},
 			{
@@ -1770,7 +1770,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND subscription_type IN ('standalone','delegated_invoicing','parent','grouped_invoicing')",
+					Where: "(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))",
 				},
 			},
 		},
@@ -2000,7 +2000,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionSchedulesColumns[2], SubscriptionSchedulesColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			},
 			{
@@ -2008,7 +2008,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionSchedulesColumns[10], SubscriptionSchedulesColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			},
 			{
@@ -2021,7 +2021,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{SubscriptionSchedulesColumns[16], SubscriptionSchedulesColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			},
 		},
@@ -2217,7 +2217,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{TaxRatesColumns[1], TaxRatesColumns[7], TaxRatesColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "(code IS NOT NULL AND code != '' and status = 'published')",
+					Where: "((code IS NOT NULL) AND ((code)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},
@@ -2272,7 +2272,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{UsersColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND email IS NOT NULL AND email != ''",
+					Where: "(((status)::text = 'published'::text) AND (email IS NOT NULL) AND ((email)::text <> ''::text))",
 				},
 			},
 			{
@@ -2393,7 +2393,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[8], WalletTransactionsColumns[10], WalletTransactionsColumns[21], WalletTransactionsColumns[20]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "credits_available > 0 AND type = 'credit'",
+					Where: "((credits_available > (0)::numeric) AND ((type)::text = 'credit'::text))",
 				},
 			},
 			{
@@ -2401,7 +2401,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'",
+					Where: "((idempotency_key IS NOT NULL) AND ((idempotency_key)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},

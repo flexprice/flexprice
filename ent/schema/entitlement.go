@@ -101,7 +101,7 @@ func (Entitlement) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "feature_id").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
@@ -109,6 +109,6 @@ func (Entitlement) Indexes() []ent.Index {
 
 		// Index for time-based queries on subscription-scoped entitlements
 		index.Fields("entity_id", "entity_type", "feature_id", "start_date", "end_date").
-			Annotations(entsql.IndexWhere("entity_type = 'SUBSCRIPTION' AND status = 'published'")),
+			Annotations(entsql.IndexWhere("(((entity_type)::text = 'SUBSCRIPTION'::text) AND ((status)::text = 'published'::text))")),
 	}
 }

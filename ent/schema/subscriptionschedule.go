@@ -88,7 +88,7 @@ func (SubscriptionSchedule) Indexes() []ent.Index {
 		index.Fields("status", "schedule_type").
 			Annotations(
 				entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			),
 
@@ -96,7 +96,7 @@ func (SubscriptionSchedule) Indexes() []ent.Index {
 		index.Fields("scheduled_at", "status").
 			Annotations(
 				entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			),
 
@@ -108,7 +108,7 @@ func (SubscriptionSchedule) Indexes() []ent.Index {
 			Unique().
 			Annotations(
 				entsql.IndexAnnotation{
-					Where: "status = 'pending'",
+					Where: "((status)::text = 'pending'::text)",
 				},
 			),
 	}
