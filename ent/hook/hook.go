@@ -69,6 +69,18 @@ func (f BillingSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingSequenceMutation", m)
 }
 
+// The CheckoutSessionFunc type is an adapter to allow the use of ordinary
+// function as CheckoutSession mutator.
+type CheckoutSessionFunc func(context.Context, *ent.CheckoutSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CheckoutSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CheckoutSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CheckoutSessionMutation", m)
+}
+
 // The ConnectionFunc type is an adapter to allow the use of ordinary
 // function as Connection mutator.
 type ConnectionFunc func(context.Context, *ent.ConnectionMutation) (ent.Value, error)

@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -96,6 +97,7 @@ type Stores struct {
 	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
+	CheckoutSessionRepo          domainCheckout.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -248,6 +250,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
+		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -303,6 +306,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
+	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
