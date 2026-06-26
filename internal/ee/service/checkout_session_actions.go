@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
-	domainMapping "github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -100,16 +99,13 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	}
 
 	// Record ProviderSessionID → FlexPrice PaymentID so incoming webhooks can route back.
-	mapping := &domainMapping.EntityIntegrationMapping{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+	mappingSvc := NewEntityIntegrationMappingService(s.ServiceParams)
+	if _, err := mappingSvc.CreateEntityIntegrationMapping(ctx, dto.CreateEntityIntegrationMappingRequest{
 		EntityID:         payResp.ID,
 		EntityType:       types.IntegrationEntityTypePayment,
 		ProviderType:     session.PaymentProvider.String(),
 		ProviderEntityID: resp.ProviderSessionID,
-		EnvironmentID:    session.EnvironmentID,
-		BaseModel:        types.GetDefaultBaseModel(ctx),
-	}
-	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
