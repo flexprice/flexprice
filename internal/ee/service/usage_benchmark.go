@@ -20,7 +20,7 @@ import (
 // UsageBenchmarkService publishes benchmark trigger events and consumes them
 // to compare two analytics pipelines. Two event kinds share the topic:
 //   - "subscription": GetFeatureUsageBySubscription vs GetMeterUsageBySubscription
-//   - "analytics":    featureUsageTracking GetDetailedUsageAnalytics vs meterUsage GetDetailedAnalytics
+//   - "analytics":    meterUsage GetDetailedAnalytics with FINAL vs without FINAL (perf + result diff)
 type UsageBenchmarkService interface {
 	// PublishEvent sends a thin benchmark trigger to Kafka. Non-blocking best-effort.
 	PublishEvent(ctx context.Context, event *events.UsageBenchmarkEvent) error
@@ -37,7 +37,7 @@ type usageBenchmarkService struct {
 	ServiceParams
 	pubSub             pubsub.PubSub
 	benchRepo          events.UsageBenchmarkRepository
-	analyticsBenchRepo events.AnalyticsBenchmarkRepository
+	meterUsageBenchRepo events.MeterUsageBenchmarkRepository
 
 	// Injected analytics services for the analytics-kind benchmark path.
 	// Optional — if nil, the analytics dispatch silently no-ops. NewUsageBenchmarkService
@@ -50,14 +50,14 @@ type usageBenchmarkService struct {
 func NewUsageBenchmarkService(
 	params ServiceParams,
 	benchRepo events.UsageBenchmarkRepository,
-	analyticsBenchRepo events.AnalyticsBenchmarkRepository,
+	meterUsageBenchRepo events.MeterUsageBenchmarkRepository,
 	featureUsageTrackingService FeatureUsageTrackingService,
 	meterUsageService MeterUsageService,
 ) UsageBenchmarkService {
 	return &usageBenchmarkService{
 		ServiceParams:               params,
 		benchRepo:                   benchRepo,
-		analyticsBenchRepo:          analyticsBenchRepo,
+		meterUsageBenchRepo:         meterUsageBenchRepo,
 		pubSub:                      params.UsageBenchmarkPubSub.PubSub,
 		featureUsageTrackingService: featureUsageTrackingService,
 		meterUsageService:           meterUsageService,
@@ -67,13 +67,13 @@ func NewUsageBenchmarkService(
 // NewUsageBenchmarkServiceForTest builds a minimal service using injected deps (test only).
 func NewUsageBenchmarkServiceForTest(
 	benchRepo events.UsageBenchmarkRepository,
-	analyticsBenchRepo events.AnalyticsBenchmarkRepository,
+	meterUsageBenchRepo events.MeterUsageBenchmarkRepository,
 	ps pubsub.PubSub,
 ) *usageBenchmarkService {
 	return &usageBenchmarkService{
 		pubSub:             ps,
 		benchRepo:          benchRepo,
-		analyticsBenchRepo: analyticsBenchRepo,
+		meterUsageBenchRepo: meterUsageBenchRepo,
 	}
 }
 

@@ -95,8 +95,17 @@ type GeminiConfig struct {
 }
 
 type CacheConfig struct {
-	Enabled bool   `mapstructure:"enabled" validate:"required"`
-	Type    string `mapstructure:"type" validate:"required"`
+	Enabled  bool                `mapstructure:"enabled" validate:"required"`
+	InMemory InMemoryCacheConfig `mapstructure:"inmemory" validate:"required"`
+	Redis    RedisCacheConfig    `mapstructure:"redis" validate:"required"`
+}
+
+type InMemoryCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
+}
+
+type RedisCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
 }
 
 type S3Config struct {

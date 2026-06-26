@@ -22,10 +22,10 @@ type taxappliedRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts TaxAppliedQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainTaxApplied.Repository {
+func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainTaxApplied.Repository {
 	return &taxappliedRepository{
 		client:    client,
 		log:       log,

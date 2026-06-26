@@ -22,10 +22,10 @@ type addonAssociationRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts AddonAssociationQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainAddonAssociation.Repository {
+func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainAddonAssociation.Repository {
 	return &addonAssociationRepository{
 		client:    client,
 		log:       log,

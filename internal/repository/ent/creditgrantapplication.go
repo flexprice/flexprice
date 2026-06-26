@@ -19,10 +19,10 @@ type creditGrantApplicationRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CreditGrantApplicationQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewCreditGrantApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domain.Repository {
+func NewCreditGrantApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domain.Repository {
 	return &creditGrantApplicationRepository{
 		client:    client,
 		log:       log,

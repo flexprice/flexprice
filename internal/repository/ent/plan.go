@@ -20,10 +20,10 @@ type planRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PlanQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPlan.Repository {
+func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPlan.Repository {
 	return &planRepository{
 		client:    client,
 		log:       log,

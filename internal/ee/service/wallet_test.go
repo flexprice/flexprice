@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -78,6 +79,7 @@ func (s *WalletServiceSuite) setupService() {
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
+		RedisCache:               testutil.NewInMemoryRedis(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
@@ -2836,6 +2838,184 @@ func (s *CheckWalletBalanceAlertSuite) TestMultipleWallets_EachProcessedIndepend
 
 	s.Equal(0, s.countWalletAlertLogs(wC.ID), "wallet C should have no alert logs")
 	s.Equal(1, s.countAutoTopupInvoices(), "exactly one auto top-up invoice for wallet C")
+}
+
+// --- Wallet balance fallback ---
+
+// buildFallbackTestWallet creates an active PRE_PAID wallet with a known balance
+// for use across the fallback tests.
+func (s *WalletServiceSuite) buildFallbackTestWallet(balance decimal.Decimal) *wallet.Wallet {
+	ctx := s.GetContext()
+	w := &wallet.Wallet{
+		ID:             "wlt_fallback_" + types.GenerateUUIDWithPrefix("test"),
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		Balance:        balance,
+		CreditBalance:  balance,
+		WalletStatus:   types.WalletStatusActive,
+		WalletType:     types.WalletTypePrePaid,
+		Config:         types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
+		ConversionRate: decimal.NewFromInt(1),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
+	return w
+}
+
+// installCompute swaps the realtime-compute step on the wallet service.
+func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)) {
+	ws := s.service.(*walletService)
+	ws.computeRealtimeBalance = fn
+}
+
+// primeCachedBalance writes a balance directly into the injected cache,
+// matching the on-disk format that the wallet service uses (decimal
+// stringified, wrapped via the wallet prefix).
+func (s *WalletServiceSuite) primeCachedBalance(ctx context.Context, walletID string, balance decimal.Decimal, ttl time.Duration) {
+	ws := s.service.(*walletService)
+	key := cache.GenerateKey(cache.PrefixWallet, walletID)
+	ws.RedisCache.ForceCacheSet(ctx, key, balance.String(), ttl)
+}
+
+// readCachedBalance reads back a wallet's cached balance through the same
+// path the service uses. Returns nil if absent.
+func (s *WalletServiceSuite) readCachedBalance(ctx context.Context, walletID string) *decimal.Decimal {
+	ws := s.service.(*walletService)
+	return ws.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLive() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+
+	// Prime the cache with a shorter TTL so it appears "older" than maxLive
+	// from the caller's perspective: cacheAge = ExpiryWalletBalance - remainingTTL.
+	// TTL = Expiry - 2min → cacheAge = 2min. maxLive = 60s rejects this.
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(42), cache.ExpiryWalletBalance-2*time.Minute)
+
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, ierr.NewError("db down").Mark(ierr.ErrDatabase)
+	})
+
+	maxLive := int64(60)
+	resp, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
+	s.NoError(err)
+	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
+	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(72), cache.ExpiryWalletBalance)
+
+	ws := s.service.(*walletService)
+	ws.computeBalanceTimeout = 5 * time.Millisecond
+	s.installCompute(func(cctx context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		select {
+		case <-cctx.Done():
+			return nil, cctx.Err()
+		case <-time.After(200 * time.Millisecond):
+			s.FailNow("compute should have been canceled by deadline")
+			return nil, nil
+		}
+	})
+
+	resp, err := s.service.GetWalletBalanceV2(ctx, w.ID)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
+	s.NotNil(resp.RealTimeBalance)
+	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(72)), "balance=%s", resp.RealTimeBalance.String())
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_SkipsFallbackOnClientDisconnect() {
+	parent := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+	s.primeCachedBalance(parent, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
+
+	cancelableCtx, cancel := context.WithCancel(parent)
+	cancel()
+
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, context.Canceled
+	})
+
+	_, err := s.service.GetWalletBalanceV2(cancelableCtx, w.ID)
+	s.Error(err, "expected error surfaced when parent ctx is canceled")
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
+
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, ierr.NewError("clickhouse exploded").Mark(ierr.ErrDatabase)
+	})
+
+	resp, err := s.service.GetWalletBalanceV2(ctx, w.ID)
+	s.NoError(err)
+	s.True(resp.IsCachedFallback)
+	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(50)))
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_NoCacheNoFallback() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+
+	dbErr := ierr.NewError("clickhouse exploded").Mark(ierr.ErrDatabase)
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, dbErr
+	})
+
+	_, err := s.service.GetWalletBalanceV2(ctx, w.ID)
+	s.Error(err)
+	s.True(ierr.IsDatabase(err), "expected ErrDatabase, got %v", err)
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_ValidationErrorSurfacesAs4xx() {
+	ctx := s.GetContext()
+	// Empty walletID must validate-fail BEFORE wallet fetch / cache read.
+	called := false
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		called = true
+		return nil, nil
+	})
+
+	_, err := s.service.GetWalletBalanceV2(ctx, "")
+	s.Error(err)
+	s.True(ierr.IsValidation(err), "expected ErrValidation, got %v", err)
+	s.False(called, "compute must not run on validation failure")
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_NotFoundSurfaces() {
+	ctx := s.GetContext()
+	_, err := s.service.GetWalletBalanceV2(ctx, "wlt_does_not_exist")
+	s.Error(err)
+	s.True(ierr.IsNotFound(err), "expected ErrNotFound, got %v", err)
+}
+
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_HappyPathNoFallbackFlag() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+
+	freshResp := &dto.WalletBalanceResponse{
+		Wallet:                w,
+		RealTimeBalance:       lo.ToPtr(decimal.NewFromInt(88)),
+		RealTimeCreditBalance: lo.ToPtr(decimal.NewFromInt(88)),
+	}
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return freshResp, nil
+	})
+
+	resp, err := s.service.GetWalletBalanceV2(ctx, w.ID)
+	s.NoError(err)
+	s.False(resp.IsCachedFallback, "happy path must not set IsCachedFallback")
+	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(88)))
+	// Verify the cache write actually happened via the injected cache.
+	got := s.readCachedBalance(ctx, w.ID)
+	s.NotNil(got)
+	s.True(got.Equal(decimal.NewFromInt(88)))
 }
 
 // ---------------------------------------------------------------------------

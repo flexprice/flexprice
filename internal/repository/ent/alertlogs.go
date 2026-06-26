@@ -22,10 +22,10 @@ type alertLogsRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts AlertLogQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainAlertLogs.Repository {
+func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainAlertLogs.Repository {
 	return &alertLogsRepository{
 		client:    client,
 		log:       log,
