@@ -11,16 +11,16 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
-type AnalyticsBenchmarkRepository struct {
+type MeterUsageBenchmarkRepository struct {
 	store  *ich.ClickHouseStore
 	logger *logger.Logger
 }
 
-func NewAnalyticsBenchmarkRepository(store *ich.ClickHouseStore, logger *logger.Logger) events.AnalyticsBenchmarkRepository {
-	return &AnalyticsBenchmarkRepository{store: store, logger: logger}
+func NewMeterUsageBenchmarkRepository(store *ich.ClickHouseStore, logger *logger.Logger) events.MeterUsageBenchmarkRepository {
+	return &MeterUsageBenchmarkRepository{store: store, logger: logger}
 }
 
-func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records []*events.AnalyticsBenchmarkRecord) error {
+func (r *MeterUsageBenchmarkRepository) BulkInsert(ctx context.Context, records []*events.MeterUsageBenchmarkRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -30,7 +30,7 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 	}))
 
 	stmt, err := r.store.GetConn().PrepareBatch(ctx, `
-		INSERT INTO analytics_benchmark (
+		INSERT INTO meter_usage_benchmark (
 			tenant_id, environment_id, event_id,
 			start_time, end_time,
 			external_customer_id, external_customer_ids,
@@ -51,12 +51,12 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 	`)
 	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to prepare analytics_benchmark insert").
+			WithHint("Failed to prepare meter_usage_benchmark insert").
 			Mark(ierr.ErrDatabase)
 	}
 
 	rowsInserted := 0
-	var firstInserted *events.AnalyticsBenchmarkRecord
+	var firstInserted *events.MeterUsageBenchmarkRecord
 
 	now := time.Now().UTC()
 	for _, record := range records {
@@ -137,7 +137,7 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			record.CreatedAt,
 		); err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to append analytics_benchmark row").
+				WithHint("Failed to append meter_usage_benchmark row").
 				Mark(ierr.ErrDatabase)
 		}
 
@@ -153,11 +153,11 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 
 	if err := stmt.Send(); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to send analytics_benchmark insert").
+			WithHint("Failed to send meter_usage_benchmark insert").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debug(ctx, "inserted analytics_benchmark batch",
+	r.logger.Debug(ctx, "inserted meter_usage_benchmark batch",
 		"rows", len(records),
 		"event_id", firstInserted.EventID,
 		"tenant_id", firstInserted.TenantID,

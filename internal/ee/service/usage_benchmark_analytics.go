@@ -84,9 +84,9 @@ func runInstrumentedMeterCall(
 // processAnalyticsMessage handles analytics-kind benchmark events. It replays
 // the captured request against meter_usage twice (no-FINAL and FINAL), captures
 // wall-clock + server-side counters for each side, and writes one row to
-// analytics_benchmark.
+// meter_usage_benchmark.
 func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg *message.Message, evt *events.UsageBenchmarkEvent) error {
-	if s.analyticsBenchRepo == nil {
+	if s.meterUsageBenchRepo == nil {
 		if s.Logger != nil {
 			s.Logger.Info(ctx, "usage benchmark: analytics repo not wired, skipping analytics event")
 		}
@@ -99,7 +99,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 		return nil
 	}
 
-	var req dto.GetUsageAnalyticsRequest
+	var req *dto.GetUsageAnalyticsRequest
 	if err := json.Unmarshal(evt.AnalyticsRequest, &req); err != nil {
 		if s.Logger != nil {
 			s.Logger.Error(ctx, "usage benchmark: failed to unmarshal analytics request", "error", err)
@@ -120,7 +120,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 
 	runSide := func(useFinal bool) (*dto.GetUsageAnalyticsResponse, error, meterQueryStats) {
 		return runInstrumentedMeterCall(ctx, func(callCtx context.Context) (*dto.GetUsageAnalyticsResponse, error) {
-			return s.callAnalyticsMeterPipeline(callCtx, &req, useFinal)
+			return s.callAnalyticsMeterPipeline(callCtx, req, useFinal)
 		})
 	}
 
@@ -148,7 +148,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 		)
 	}
 
-	parsed := extractRequestFields(&req, evt.AnalyticsRequest)
+	parsed := extractRequestFields(req, evt.AnalyticsRequest)
 	startTime := evt.StartTime
 	if startTime.IsZero() {
 		startTime = req.StartTime
@@ -165,7 +165,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 		firstSide,
 	)
 
-	if err := s.analyticsBenchRepo.BulkInsert(ctx, []*events.AnalyticsBenchmarkRecord{rec}); err != nil {
+	if err := s.meterUsageBenchRepo.BulkInsert(ctx, []*events.MeterUsageBenchmarkRecord{rec}); err != nil {
 		if s.Logger != nil {
 			s.Logger.Error(ctx, "usage benchmark: failed to insert analytics benchmark row",
 				"event_id", eventID, "error", err,
@@ -203,7 +203,7 @@ func (s *usageBenchmarkService) callAnalyticsMeterPipeline(
 	return s.meterUsageService.GetDetailedAnalytics(ctx, params)
 }
 
-// buildBenchmarkRecord assembles the single analytics_benchmark row for one
+// buildBenchmarkRecord assembles the single meter_usage_benchmark row for one
 // benchmark trigger event. Pure function so the per-case tests can drive it
 // directly.
 func buildBenchmarkRecord(
@@ -214,7 +214,7 @@ func buildBenchmarkRecord(
 	nofinalResp *dto.GetUsageAnalyticsResponse, nofinalErr error, nofinalStats meterQueryStats,
 	finalResp *dto.GetUsageAnalyticsResponse, finalErr error, finalStats meterQueryStats,
 	firstSide string,
-) *events.AnalyticsBenchmarkRecord {
+) *events.MeterUsageBenchmarkRecord {
 	nofinalUsage, nofinalCost, nofinalItems := summarizeResponse(nofinalResp)
 	finalUsage, finalCost, finalItems := summarizeResponse(finalResp)
 
@@ -236,7 +236,7 @@ func buildBenchmarkRecord(
 		resultsMatch = 1
 	}
 
-	return &events.AnalyticsBenchmarkRecord{
+	return &events.MeterUsageBenchmarkRecord{
 		TenantID:      evt.TenantID,
 		EnvironmentID: evt.EnvironmentID,
 		EventID:       eventID,

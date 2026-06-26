@@ -1,6 +1,4 @@
-DROP TABLE IF EXISTS flexprice.analytics_benchmark;
-
-CREATE TABLE flexprice.analytics_benchmark
+CREATE TABLE IF NOT EXISTS flexprice.meter_usage_benchmark
 (
     tenant_id              LowCardinality(String) NOT NULL,
     environment_id         LowCardinality(String) NOT NULL,

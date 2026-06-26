@@ -7,12 +7,12 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// AnalyticsBenchmarkRecord is one row in the analytics_benchmark ClickHouse table.
+// MeterUsageBenchmarkRecord is one row in the meter_usage_benchmark ClickHouse table.
 // One row per benchmark trigger event: the consumer runs the captured analytics
 // request against meter_usage twice (no-FINAL and FINAL) and writes both sides'
 // wall-clock duration, server-side query counters, and result totals so a SQL
 // diff is one row away.
-type AnalyticsBenchmarkRecord struct {
+type MeterUsageBenchmarkRecord struct {
 	TenantID      string    `ch:"tenant_id"`
 	EnvironmentID string    `ch:"environment_id"`
 	EventID       string    `ch:"event_id"`
@@ -78,10 +78,10 @@ type AnalyticsBenchmarkRecord struct {
 	CreatedAt time.Time `ch:"created_at"`
 }
 
-// AnalyticsBenchmarkRepository persists analytics benchmark comparison rows.
-type AnalyticsBenchmarkRepository interface {
+// MeterUsageBenchmarkRepository persists meter_usage FINAL-vs-no-FINAL comparison rows.
+type MeterUsageBenchmarkRepository interface {
 	// BulkInsert writes all rows in one batched statement. Callers typically
 	// pass a single-element slice (one row per benchmark trigger event) but the
 	// batched signature is preserved for future flexibility.
-	BulkInsert(ctx context.Context, records []*AnalyticsBenchmarkRecord) error
+	BulkInsert(ctx context.Context, records []*MeterUsageBenchmarkRecord) error
 }
