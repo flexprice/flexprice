@@ -3442,9 +3442,6 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 }
 
 func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
-	if s.RedisCache == nil {
-		return
-	}
 	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
@@ -3455,17 +3452,14 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
-	if walletID == "" || s.RedisCache == nil {
+	if walletID == "" {
 		return
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	s.RedisCache.Delete(ctx, cacheKey)
+	s.RedisCache.ForceCacheDelete(ctx, cacheKey)
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
-	if s.RedisCache == nil {
-		return nil
-	}
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
