@@ -110,11 +110,17 @@ func newTestRouter(t *testing.T, tenantID string, svc *mockTenantService) *gin.E
 // focus purely on tenant suspension rather than RBAC rules.
 func newPermissiveRBACService(t *testing.T) *rbac.RBACService {
 	t.Helper()
+	return newRBACServiceWithRoles(t, "{}")
+}
+
+// newRBACServiceWithRoles creates a real *rbac.RBACService from a raw JSON roles definition.
+func newRBACServiceWithRoles(t *testing.T, rolesJSON string) *rbac.RBACService {
+	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "roles-*.json")
 	if err != nil {
 		t.Fatalf("create temp roles file: %v", err)
 	}
-	if _, err := f.WriteString("{}"); err != nil {
+	if _, err := f.WriteString(rolesJSON); err != nil {
 		t.Fatalf("write temp roles file: %v", err)
 	}
 	f.Close()
@@ -128,10 +134,41 @@ func newPermissiveRBACService(t *testing.T) *rbac.RBACService {
 	return svc
 }
 
+// newRBACRouter builds a router that seeds the given userType and roles into context,
+// runs TenantStatusMiddleware, then gates POST /test behind RequirePermission.
+func newRBACRouter(t *testing.T, rbacSvc *rbac.RBACService, tenantStatus types.TenantInternalStatus, userType string, roles []string) *gin.Engine {
+	t.Helper()
+	log := newTestLogger(t)
+	permMW := NewPermissionMiddleware(rbacSvc, log)
+	svc := &mockTenantService{status: tenantStatus}
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	r.Use(func(c *gin.Context) {
+		ctx := c.Request.Context()
+		ctx = context.WithValue(ctx, types.CtxTenantID, "tenant-rbac")
+		if userType != "" {
+			ctx = context.WithValue(ctx, types.CtxUserType, userType)
+		}
+		if roles != nil {
+			ctx = context.WithValue(ctx, types.CtxRoles, roles)
+		}
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+
+	r.Use(TenantStatusMiddleware(svc, log))
+	r.POST("/test", permMW.RequirePermission("event", "write"), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	return r
+}
+
 func TestTenantStatusMiddleware(t *testing.T) {
 	testCases := []struct {
 		name               string
-		skip               string
 		method             string
 		tenantID           string
 		status             types.TenantInternalStatus
@@ -166,7 +203,6 @@ func TestTenantStatusMiddleware(t *testing.T) {
 		},
 		{
 			name:       "suspended tenant write is blocked by RequirePermission",
-			skip:       "permission check temporarily disabled in RequirePermission middleware (see PR #1857)",
 			method:     http.MethodPost,
 			tenantID:   "tenant-3",
 			status:     types.TenantInternalStatusSuspended,
@@ -201,9 +237,6 @@ func TestTenantStatusMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.skip != "" {
-				t.Skip(tc.skip)
-			}
 			svc := &mockTenantService{status: tc.status, err: tc.svcErr}
 			router := newTestRouter(t, tc.tenantID, svc)
 
@@ -222,8 +255,122 @@ func TestTenantStatusMiddleware(t *testing.T) {
 			if tc.wantErrMsg != "" {
 				var body map[string]string
 				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-				assert.Equal(t, tc.wantErrMsg, body["error"])
+				assert.Equal(t, tc.wantErrMsg, body["message"])
 			}
+		})
+	}
+}
+
+// rolesJSON with event_ingestor role that allows event writes.
+const testRolesJSON = `{
+	"event_ingestor": {
+		"name": "Event Ingestor",
+		"permissions": { "event": ["write"] }
+	}
+}`
+
+func TestRequirePermission_ServiceAccountRBAC(t *testing.T) {
+	testCases := []struct {
+		name         string
+		userType     string
+		roles        []string
+		tenantStatus types.TenantInternalStatus
+		wantCode     int
+		wantErrMsg   string
+	}{
+		{
+			name:         "service account with required role is allowed",
+			userType:     string(types.UserTypeServiceAccount),
+			roles:        []string{"event_ingestor"},
+			tenantStatus: types.TenantInternalStatusActive,
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "service account without required role is logged but allowed",
+			userType:     string(types.UserTypeServiceAccount),
+			roles:        []string{"some_other_role"},
+			tenantStatus: types.TenantInternalStatusActive,
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "JWT user (empty userType) bypasses RBAC",
+			userType:     "",
+			roles:        nil,
+			tenantStatus: types.TenantInternalStatusActive,
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "user-type DB API key bypasses RBAC",
+			userType:     string(types.UserTypeUser),
+			roles:        []string{"event_ingestor"},
+			tenantStatus: types.TenantInternalStatusActive,
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "config API key (empty userType) bypasses RBAC",
+			userType:     "",
+			roles:        []string{},
+			tenantStatus: types.TenantInternalStatusActive,
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "suspended tenant blocks service account with valid role",
+			userType:     string(types.UserTypeServiceAccount),
+			roles:        []string{"event_ingestor"},
+			tenantStatus: types.TenantInternalStatusSuspended,
+			wantCode:     http.StatusForbidden,
+			wantErrMsg:   "tenant account is suspended",
+		},
+		{
+			name:         "suspended tenant blocks JWT user",
+			userType:     "",
+			roles:        nil,
+			tenantStatus: types.TenantInternalStatusSuspended,
+			wantCode:     http.StatusForbidden,
+			wantErrMsg:   "tenant account is suspended",
+		},
+	}
+
+	rbacSvc := newRBACServiceWithRoles(t, testRolesJSON)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := newRBACRouter(t, rbacSvc, tc.tenantStatus, tc.userType, tc.roles)
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/test", nil)
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.wantCode, w.Code)
+
+			if tc.wantErrMsg != "" {
+				var body map[string]string
+				assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+				assert.Equal(t, tc.wantErrMsg, body["message"])
+			}
+		})
+	}
+}
+
+func TestIsServiceAccount(t *testing.T) {
+	testCases := []struct {
+		name     string
+		userType string
+		want     bool
+	}{
+		{"service_account type returns true", string(types.UserTypeServiceAccount), true},
+		{"user type returns false", string(types.UserTypeUser), false},
+		{"empty string returns false", "", false},
+		{"arbitrary string returns false", "admin", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.userType != "" {
+				ctx = context.WithValue(ctx, types.CtxUserType, tc.userType)
+			}
+			assert.Equal(t, tc.want, types.IsServiceAccount(ctx))
 		})
 	}
 }

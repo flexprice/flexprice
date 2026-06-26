@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -113,6 +114,7 @@ type ServiceParams struct {
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
 	WorkflowExecutionRepo        workflowexecution.Repository
+	CheckoutSessionRepo          domainCheckout.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -197,6 +199,7 @@ func NewServiceParams(
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
+	checkoutSessionRepo domainCheckout.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -261,5 +264,6 @@ func NewServiceParams(
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,
+		CheckoutSessionRepo:          checkoutSessionRepo,
 	}
 }
