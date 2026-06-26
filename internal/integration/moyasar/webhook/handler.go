@@ -175,7 +175,7 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 			h.logger.Info(ctx, "checkout session completed via Moyasar EntityIntegrationMapping", "session_id", sessionID)
 			return nil
 		} else if sessErr != nil {
-			h.logger.Warn(ctx, "failed to list checkout sessions for Moyasar payment, falling through to legacy path",
+			h.logger.Info(ctx, "failed to list checkout sessions for Moyasar payment, falling through to legacy path",
 				"error", sessErr, "payment_id", paymentID, "moyasar_payment_id", payment.ID)
 		}
 	}
