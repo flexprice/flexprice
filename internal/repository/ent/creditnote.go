@@ -101,7 +101,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 				WithReportableDetails(map[string]any{
 					"creditnote_id": cn.ID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
 			WithHint("credit note creation failed").
