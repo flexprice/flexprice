@@ -108,6 +108,8 @@ type BaseServiceTestSuite struct {
 	publisher           publisher.EventPublisher
 	webhookPublisher    webhookPublisher.WebhookPublisher
 	db                  postgres.IClient
+	inMemoryCache       cache.InMemoryCache
+	redisCache          cache.RedisCache
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -136,9 +138,6 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	if err != nil {
 		s.T().Fatalf("failed to create logger: %v", err)
 	}
-
-	// Initialize cache
-	cache.Initialize(cfg, s.logger)
 }
 
 func (s *BaseServiceTestSuite) setupDependencies() {
@@ -253,6 +252,10 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 	}
 
+	// Cache stores
+	s.inMemoryCache = cache.NewInMemoryCache()
+	s.redisCache = NewInMemoryRedis()
+
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
@@ -336,6 +339,16 @@ func (s *BaseServiceTestSuite) GetPublisher() publisher.EventPublisher {
 // GetWebhookPublisher returns the test webhook publisher
 func (s *BaseServiceTestSuite) GetWebhookPublisher() webhookPublisher.WebhookPublisher {
 	return s.webhookPublisher
+}
+
+// GetInMemoryCache returns the test in-memory cache
+func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
+	return s.inMemoryCache
+}
+
+// GetRedisCache returns the test Redis cache
+func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
+	return s.redisCache
 }
 
 // GetDB returns the test database client

@@ -1,375 +1,199 @@
 package service
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
 
-// TestUsageBenchmark_CanonicalGroupKey verifies the group key is stable across
-// map iteration orders for the same Source+Properties combination.
-func TestUsageBenchmark_CanonicalGroupKey(t *testing.T) {
-	cases := []struct {
-		name string
-		item dto.UsageAnalyticItem
-		want string
-	}{
-		{
-			name: "empty item",
-			item: dto.UsageAnalyticItem{},
-			want: "",
-		},
-		{
-			name: "source only",
-			item: dto.UsageAnalyticItem{Source: "stripe"},
-			want: "source=stripe",
-		},
-		{
-			name: "sources slice sorted",
-			item: dto.UsageAnalyticItem{Sources: []string{"stripe", "api", "import"}},
-			want: "sources=api,import,stripe",
-		},
-		{
-			name: "properties sorted",
-			item: dto.UsageAnalyticItem{
-				Source: "api",
-				Properties: map[string]string{
-					"region": "us-east-1",
-					"model":  "gpt-4",
-				},
-			},
-			want: "source=api|properties.model=gpt-4|properties.region=us-east-1",
-		},
-		{
-			name: "properties only no source",
-			item: dto.UsageAnalyticItem{
-				Properties: map[string]string{"x": "1"},
-			},
-			want: "properties.x=1",
-		},
+func TestPickNoFinalFirst_Deterministic(t *testing.T) {
+	id := "event-stable-id"
+	first := pickNoFinalFirst(id)
+	for i := 0; i < 100; i++ {
+		require.Equal(t, first, pickNoFinalFirst(id), "must be deterministic for same id")
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := canonicalGroupKey(&tc.item)
-			require.Equal(t, tc.want, got)
-		})
-	}
-
-	t.Run("stable across iterations", func(t *testing.T) {
-		item := dto.UsageAnalyticItem{
-			Source: "api",
-			Properties: map[string]string{
-				"a": "1", "b": "2", "c": "3", "d": "4", "e": "5",
-			},
-		}
-		first := canonicalGroupKey(&item)
-		for i := 0; i < 100; i++ {
-			require.Equal(t, first, canonicalGroupKey(&item))
-		}
-	})
 }
 
-// TestUsageBenchmark_JoinAnalyticsResults verifies the three-tier emission:
-//   - one summary row per event with response.TotalCost from each pipeline,
-//   - one feature row per (feature_id, group_key) on each side,
-//   - one line_item row per (feature_id, sub_line_item_id, group_key) on each side.
-//
-// Outer-join semantics still hold at the feature/line_item tier (feature-side
-// only → feature_only; meter-side only → meter_only; both → matched).
-func TestUsageBenchmark_JoinAnalyticsResults(t *testing.T) {
-	featureResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(15), // 10 + 5
+func TestPickNoFinalFirst_RoughlyBalanced(t *testing.T) {
+	const n = 1000
+	trueCount := 0
+	for i := 0; i < n; i++ {
+		if pickNoFinalFirst(fmt.Sprintf("event-id-%d", i)) {
+			trueCount++
+		}
+	}
+	require.GreaterOrEqual(t, trueCount, 400, "should be roughly half true")
+	require.LessOrEqual(t, trueCount, 600, "should be roughly half true")
+}
+
+func TestBuildBenchmarkRecord_BothSucceedAndMatch(t *testing.T) {
+	usage := decimal.NewFromFloat(12.5)
+	cost := decimal.NewFromFloat(99.99)
+
+	resp := &dto.GetUsageAnalyticsResponse{
+		TotalCost: cost,
+		Currency:  "USD",
 		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_1", Source: "api", TotalUsage: decimal.NewFromInt(100), TotalCost: decimal.NewFromInt(10), EventCount: 5},
-			{FeatureID: "feat_2", Source: "stripe", TotalUsage: decimal.NewFromInt(50), TotalCost: decimal.NewFromInt(5), EventCount: 2},
+			{TotalUsage: decimal.NewFromFloat(7.5)},
+			{TotalUsage: decimal.NewFromFloat(5)},
 		},
 	}
-	meterResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(11), // 10 + 1
+	nofinalStats := meterQueryStats{durationMs: 10, scanRows: 100, scanBytes: 1024, readDiskBytes: 256, memPeakBytes: 2048, resultRows: 2}
+	finalStats := meterQueryStats{durationMs: 30, scanRows: 100, scanBytes: 1024, readDiskBytes: 256, memPeakBytes: 4096, resultRows: 2}
+
+	evt := &events.UsageBenchmarkEvent{TenantID: "t1", EnvironmentID: "e1"}
+	parsed := parsedRequestFields{ExternalCustomerID: "cust1"}
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	rec := buildBenchmarkRecord(
+		evt, "evt1", parsed, start, end,
+		resp, nil, nofinalStats,
+		resp, nil, finalStats,
+		"nofinal",
+	)
+
+	require.Equal(t, "t1", rec.TenantID)
+	require.Equal(t, "e1", rec.EnvironmentID)
+	require.Equal(t, "evt1", rec.EventID)
+	require.Equal(t, "cust1", rec.ExternalCustomerID)
+	require.Equal(t, "USD", rec.Currency)
+	require.Equal(t, "nofinal", rec.FirstSide)
+	require.Equal(t, start, rec.StartTime)
+	require.Equal(t, end, rec.EndTime)
+
+	require.True(t, rec.NoFinalTotalUsage.Equal(usage), "got %s want %s", rec.NoFinalTotalUsage, usage)
+	require.True(t, rec.FinalTotalUsage.Equal(usage))
+	require.True(t, rec.UsageDiff.IsZero())
+	require.True(t, rec.NoFinalTotalCost.Equal(cost))
+	require.True(t, rec.FinalTotalCost.Equal(cost))
+	require.True(t, rec.CostDiff.IsZero())
+	require.Equal(t, uint64(2), rec.NoFinalItemCount)
+	require.Equal(t, uint64(2), rec.FinalItemCount)
+	require.Equal(t, uint8(1), rec.ResultsMatch)
+
+	require.Equal(t, float64(10), rec.NoFinalDurationMs)
+	require.Equal(t, float64(30), rec.FinalDurationMs)
+	require.Equal(t, float64(20), rec.DurationDiffMs)
+	require.Equal(t, int64(0), rec.ScanRowsDiff)
+	require.Equal(t, int64(2048), rec.MemPeakDiffBytes)
+	require.Equal(t, uint64(100), rec.NoFinalScanRows)
+	require.Equal(t, uint64(4096), rec.FinalMemPeakBytes)
+	require.Equal(t, uint64(2), rec.FinalResultRows)
+
+	require.Empty(t, rec.NoFinalError)
+	require.Empty(t, rec.FinalError)
+}
+
+func TestBuildBenchmarkRecord_BothSucceedWithDiff(t *testing.T) {
+	nofinalResp := &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.NewFromFloat(100),
+		Currency:  "USD",
+		Items:     []dto.UsageAnalyticItem{{TotalUsage: decimal.NewFromFloat(10)}},
+	}
+	finalResp := &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.NewFromFloat(95),
+		Currency:  "USD",
+		Items:     []dto.UsageAnalyticItem{{TotalUsage: decimal.NewFromFloat(9)}},
+	}
+
+	rec := buildBenchmarkRecord(
+		&events.UsageBenchmarkEvent{TenantID: "t1"}, "evt1", parsedRequestFields{},
+		time.Time{}, time.Time{},
+		nofinalResp, nil, meterQueryStats{},
+		finalResp, nil, meterQueryStats{},
+		"final",
+	)
+
+	require.True(t, rec.UsageDiff.Equal(decimal.NewFromFloat(1)), "10 - 9 = 1 got %s", rec.UsageDiff)
+	require.True(t, rec.CostDiff.Equal(decimal.NewFromFloat(5)), "100 - 95 = 5 got %s", rec.CostDiff)
+	require.Equal(t, uint8(0), rec.ResultsMatch, "diffs make results_match=0")
+	require.Equal(t, "final", rec.FirstSide)
+}
+
+func TestBuildBenchmarkRecord_ItemCountMismatch(t *testing.T) {
+	resp := &dto.GetUsageAnalyticsResponse{
+		Items: []dto.UsageAnalyticItem{{TotalUsage: decimal.NewFromFloat(5)}},
+	}
+	respDouble := &dto.GetUsageAnalyticsResponse{
 		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_1", Source: "api", TotalUsage: decimal.NewFromInt(99), TotalCost: decimal.NewFromInt(10), EventCount: 5},
-			{FeatureID: "feat_3", Source: "import", TotalUsage: decimal.NewFromInt(7), TotalCost: decimal.NewFromInt(1), EventCount: 1},
+			{TotalUsage: decimal.NewFromFloat(2.5)},
+			{TotalUsage: decimal.NewFromFloat(2.5)},
 		},
 	}
 
-	records := joinAnalyticsResults(featureResp, meterResp)
+	rec := buildBenchmarkRecord(
+		&events.UsageBenchmarkEvent{}, "evt1", parsedRequestFields{},
+		time.Time{}, time.Time{},
+		resp, nil, meterQueryStats{},
+		respDouble, nil, meterQueryStats{},
+		"nofinal",
+	)
 
-	// Bucket records by row_type for tier-specific assertions.
-	byType := make(map[events.AnalyticsBenchmarkRowType][]*events.AnalyticsBenchmarkRecord)
-	for _, r := range records {
-		byType[r.RowType] = append(byType[r.RowType], r)
-	}
-
-	// --- summary tier: 1 row carrying response.TotalCost from each side ---
-	summary := byType[events.AnalyticsBenchmarkRowSummary]
-	require.Len(t, summary, 1)
-	require.True(t, summary[0].FeatureTotalCost.Equal(decimal.NewFromInt(15)))
-	require.True(t, summary[0].MeterTotalCost.Equal(decimal.NewFromInt(11)))
-	require.True(t, summary[0].CostDiff.Equal(decimal.NewFromInt(4)))
-	require.Equal(t, uint64(2), summary[0].FeatureItemCount)
-	require.Equal(t, uint64(2), summary[0].MeterItemCount)
-	require.Equal(t, events.AnalyticsBenchmarkMatchMatched, summary[0].MatchStatus)
-	require.Equal(t, events.AnalyticsBenchmarkDiffMaterial, summary[0].DiffReason)
-
-	// --- feature tier: outer-joined by (feature_id, group_key) ---
-	featureRows := byType[events.AnalyticsBenchmarkRowFeature]
-	require.Len(t, featureRows, 3)
-
-	byKey := make(map[string]*events.AnalyticsBenchmarkRecord, len(featureRows))
-	for _, r := range featureRows {
-		byKey[r.FeatureID+"|"+r.GroupKey] = r
-	}
-
-	matched := byKey["feat_1|source=api"]
-	require.NotNil(t, matched)
-	require.Equal(t, events.AnalyticsBenchmarkMatchMatched, matched.MatchStatus)
-	require.True(t, matched.FeatureTotalUsage.Equal(decimal.NewFromInt(100)))
-	require.True(t, matched.MeterTotalUsage.Equal(decimal.NewFromInt(99)))
-	require.True(t, matched.UsageDiff.Equal(decimal.NewFromInt(1)))
-	require.Equal(t, uint64(5), matched.FeatureEventCount)
-	require.Equal(t, uint64(5), matched.MeterEventCount)
-	// cost matches exactly → diff_reason = none
-	require.Equal(t, events.AnalyticsBenchmarkDiffNone, matched.DiffReason)
-
-	featureOnly := byKey["feat_2|source=stripe"]
-	require.NotNil(t, featureOnly)
-	require.Equal(t, events.AnalyticsBenchmarkMatchFeatureOnly, featureOnly.MatchStatus)
-	require.True(t, featureOnly.FeatureTotalUsage.Equal(decimal.NewFromInt(50)))
-	require.True(t, featureOnly.MeterTotalUsage.IsZero())
-	require.Equal(t, events.AnalyticsBenchmarkDiffUnmatched, featureOnly.DiffReason)
-
-	meterOnly := byKey["feat_3|source=import"]
-	require.NotNil(t, meterOnly)
-	require.Equal(t, events.AnalyticsBenchmarkMatchMeterOnly, meterOnly.MatchStatus)
-	require.True(t, meterOnly.MeterTotalUsage.Equal(decimal.NewFromInt(7)))
-	require.Equal(t, events.AnalyticsBenchmarkDiffUnmatched, meterOnly.DiffReason)
-
-	// --- line_item tier: same shape as feature tier here since no sub_line_item_id ---
-	lineItems := byType[events.AnalyticsBenchmarkRowLineItem]
-	require.Len(t, lineItems, 3)
+	require.True(t, rec.UsageDiff.IsZero(), "usage totals match")
+	require.Equal(t, uint64(1), rec.NoFinalItemCount)
+	require.Equal(t, uint64(2), rec.FinalItemCount)
+	require.Equal(t, uint8(0), rec.ResultsMatch, "item count diff blocks match")
 }
 
-// TestUsageBenchmark_FeatureRowAggregatesLineItemSplits is the "h100" case: one
-// feature billed across two sub_line_item_ids. Both sides emit two items each
-// (different prices). The feature row must SUM them; the summary row's
-// response.TotalCost must match the sum.
-func TestUsageBenchmark_FeatureRowAggregatesLineItemSplits(t *testing.T) {
-	featureResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(1118), // 921 + 197
-		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_x", SubLineItemID: "li_1", PriceID: "p1", MeterID: "m_x", TotalUsage: decimal.NewFromInt(27659), TotalCost: decimal.NewFromInt(921), EventCount: 27659},
-			{FeatureID: "feat_x", SubLineItemID: "li_2", PriceID: "p2", MeterID: "m_x", TotalUsage: decimal.NewFromInt(2954), TotalCost: decimal.NewFromInt(197), EventCount: 2954},
-		},
-	}
-	meterResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(1500), // pretend meter pipeline disagrees
-		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_x", SubLineItemID: "li_1", PriceID: "p1", MeterID: "m_x", TotalUsage: decimal.NewFromInt(30613), TotalCost: decimal.NewFromInt(1000), EventCount: 30613},
-			{FeatureID: "feat_x", SubLineItemID: "li_2", PriceID: "p2", MeterID: "m_x", TotalUsage: decimal.NewFromInt(30613), TotalCost: decimal.NewFromInt(500), EventCount: 30613},
-		},
+func TestBuildBenchmarkRecord_NoFinalFails(t *testing.T) {
+	finalResp := &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.NewFromFloat(42),
+		Currency:  "EUR",
 	}
 
-	records := joinAnalyticsResults(featureResp, meterResp)
+	rec := buildBenchmarkRecord(
+		&events.UsageBenchmarkEvent{}, "evt1", parsedRequestFields{},
+		time.Time{}, time.Time{},
+		nil, errors.New("boom"), meterQueryStats{},
+		finalResp, nil, meterQueryStats{},
+		"final",
+	)
 
-	var feature *events.AnalyticsBenchmarkRecord
-	for _, r := range records {
-		if r.RowType == events.AnalyticsBenchmarkRowFeature && r.FeatureID == "feat_x" {
-			feature = r
-			break
-		}
-	}
-	require.NotNil(t, feature, "expected one aggregated feature row for feat_x")
-
-	// Feature row aggregates both line-item splits on each side.
-	require.True(t, feature.FeatureTotalCost.Equal(decimal.NewFromInt(1118)),
-		"feature aggregated cost should be 921+197=1118, got %s", feature.FeatureTotalCost)
-	require.True(t, feature.MeterTotalCost.Equal(decimal.NewFromInt(1500)),
-		"meter aggregated cost should be 1000+500=1500, got %s", feature.MeterTotalCost)
-	require.True(t, feature.CostDiff.Equal(decimal.NewFromInt(-382)))
-	require.Equal(t, uint64(2), feature.FeatureItemCount)
-	require.Equal(t, uint64(2), feature.MeterItemCount)
-	// >1 item on either side → multi_item flag (look at line_item rows for detail)
-	require.Equal(t, events.AnalyticsBenchmarkDiffMultiItem, feature.DiffReason)
+	require.Equal(t, "boom", rec.NoFinalError)
+	require.Empty(t, rec.FinalError)
+	require.True(t, rec.NoFinalTotalCost.IsZero())
+	require.True(t, rec.FinalTotalCost.Equal(decimal.NewFromFloat(42)))
+	require.Equal(t, "EUR", rec.Currency)
+	require.Equal(t, uint8(0), rec.ResultsMatch)
 }
 
-// TestUsageBenchmark_MultiFeatureMeterTagged covers the multi-feature-meter
-// attribution case (the 144-meters-with-2-features finding): one meter, two
-// features. Feature side has both; meter side has only the one its 1:1
-// MeterToFeature map picked. The diff_reason on the resulting rows must surface
-// as multi_feature_meter so we can filter out this known false positive.
-func TestUsageBenchmark_MultiFeatureMeterTagged(t *testing.T) {
-	featureResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(15),
-		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_a", MeterID: "m_shared", TotalUsage: decimal.NewFromInt(100), TotalCost: decimal.NewFromInt(10), EventCount: 5},
-			{FeatureID: "feat_b", MeterID: "m_shared", TotalUsage: decimal.NewFromInt(50), TotalCost: decimal.NewFromInt(5), EventCount: 3},
-		},
-	}
-	meterResp := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.NewFromInt(12),
-		Items: []dto.UsageAnalyticItem{
-			{FeatureID: "feat_a", MeterID: "m_shared", TotalUsage: decimal.NewFromInt(150), TotalCost: decimal.NewFromInt(12), EventCount: 8},
-		},
-	}
+func TestBuildBenchmarkRecord_FinalFails(t *testing.T) {
+	nofinalResp := &dto.GetUsageAnalyticsResponse{Currency: "USD"}
 
-	records := joinAnalyticsResults(featureResp, meterResp)
+	rec := buildBenchmarkRecord(
+		&events.UsageBenchmarkEvent{}, "evt1", parsedRequestFields{},
+		time.Time{}, time.Time{},
+		nofinalResp, nil, meterQueryStats{},
+		nil, errors.New("kaboom"), meterQueryStats{},
+		"nofinal",
+	)
 
-	var aRow, bRow *events.AnalyticsBenchmarkRecord
-	for _, r := range records {
-		if r.RowType != events.AnalyticsBenchmarkRowFeature {
-			continue
-		}
-		switch r.FeatureID {
-		case "feat_a":
-			aRow = r
-		case "feat_b":
-			bRow = r
-		}
-	}
-	require.NotNil(t, aRow)
-	require.NotNil(t, bRow)
-	// feat_a: matched but diff is non-zero AND m_shared has multiple features →
-	// multi_feature_meter wins over material.
-	require.Equal(t, events.AnalyticsBenchmarkDiffMultiFeatureMeter, aRow.DiffReason)
-	// feat_b: meter side missing entirely → unmatched (takes priority over
-	// multi_feature_meter).
-	require.Equal(t, events.AnalyticsBenchmarkDiffUnmatched, bRow.DiffReason)
+	require.Empty(t, rec.NoFinalError)
+	require.Equal(t, "kaboom", rec.FinalError)
+	require.Equal(t, "USD", rec.Currency, "falls back to no-FINAL response")
+	require.Equal(t, uint8(0), rec.ResultsMatch)
 }
 
-// TestUsageBenchmark_ExtractRequestFields verifies request fields promote correctly.
-func TestUsageBenchmark_ExtractRequestFields(t *testing.T) {
-	req := &dto.GetUsageAnalyticsRequest{
-		ExternalCustomerID:  "cust_1",
-		ExternalCustomerIDs: []string{"cust_2", "cust_3"},
-		FeatureIDs:          []string{"feat_a"},
-		Sources:             []string{"stripe"},
-		GroupBy:             []string{"source", "feature_id"},
-		WindowSize:          "HOUR",
-		Expand:              []string{"price", "meter"},
-		PropertyFilters:     map[string][]string{"model": {"gpt-4"}},
-		IncludeChildren:     true,
-	}
-	raw, err := json.Marshal(req)
-	require.NoError(t, err)
+func TestBuildBenchmarkRecord_BothFail(t *testing.T) {
+	rec := buildBenchmarkRecord(
+		&events.UsageBenchmarkEvent{}, "evt1", parsedRequestFields{},
+		time.Time{}, time.Time{},
+		nil, errors.New("a"), meterQueryStats{},
+		nil, errors.New("b"), meterQueryStats{},
+		"final",
+	)
 
-	got := extractRequestFields(req, raw)
-	require.Equal(t, "cust_1", got.ExternalCustomerID)
-	require.Equal(t, []string{"cust_2", "cust_3"}, got.ExternalCustomerIDs)
-	require.Equal(t, []string{"feat_a"}, got.FeatureIDs)
-	require.Equal(t, []string{"stripe"}, got.Sources)
-	require.Equal(t, []string{"source", "feature_id"}, got.GroupBy)
-	require.Equal(t, "HOUR", got.WindowSize)
-	require.Equal(t, []string{"price", "meter"}, got.Expand)
-	require.Equal(t, uint8(1), got.IncludeChildren)
-	require.Equal(t, uint8(1), got.HasPropertyFilters)
-	require.NotEmpty(t, got.RequestJSON)
-}
-
-// TestUsageBenchmark_DispatchByKind verifies the ProcessMessageForTest dispatcher
-// routes subscription-kind and empty-kind events to the subscription path, and
-// analytics-kind events to the analytics path. We use a stub repo to detect which
-// codepath was hit without invoking real pipelines.
-func TestUsageBenchmark_DispatchByKind(t *testing.T) {
-	t.Run("empty kind treated as subscription", func(t *testing.T) {
-		stub := &stubSubscriptionBenchRepo{}
-		svc := &usageBenchmarkService{benchRepo: stub}
-
-		evt := events.UsageBenchmarkEvent{
-			SubscriptionID: "sub_1",
-			StartTime:      time.Now().Add(-time.Hour),
-			EndTime:        time.Now(),
-			TenantID:       "tenant_1",
-			EnvironmentID:  "env_1",
-		}
-		payload, err := json.Marshal(evt)
-		require.NoError(t, err)
-		msg := message.NewMessage("test-1", payload)
-		msg.Metadata.Set("tenant_id", evt.TenantID)
-		msg.Metadata.Set("environment_id", evt.EnvironmentID)
-
-		require.NoError(t, svc.ProcessMessageForTest(msg))
-		require.Equal(t, 1, stub.calls, "subscription benchRepo.Insert should be called for empty Kind")
-	})
-
-	t.Run("explicit subscription kind", func(t *testing.T) {
-		stub := &stubSubscriptionBenchRepo{}
-		svc := &usageBenchmarkService{benchRepo: stub}
-
-		evt := events.UsageBenchmarkEvent{
-			Kind:           events.UsageBenchmarkKindSubscription,
-			SubscriptionID: "sub_2",
-			StartTime:      time.Now().Add(-time.Hour),
-			EndTime:        time.Now(),
-			TenantID:       "tenant_1",
-			EnvironmentID:  "env_1",
-		}
-		payload, err := json.Marshal(evt)
-		require.NoError(t, err)
-		msg := message.NewMessage("test-2", payload)
-
-		require.NoError(t, svc.ProcessMessageForTest(msg))
-		require.Equal(t, 1, stub.calls)
-	})
-
-	t.Run("analytics kind routes to analytics path", func(t *testing.T) {
-		stubAnalytics := &stubAnalyticsBenchRepo{}
-		svc := &usageBenchmarkService{
-			analyticsBenchRepo: stubAnalytics,
-			// no featureUsageTrackingService / meterUsageService → both sides return empty
-		}
-
-		req := dto.GetUsageAnalyticsRequest{
-			ExternalCustomerID: "cust_1",
-			StartTime:          time.Now().Add(-time.Hour),
-			EndTime:            time.Now(),
-		}
-		raw, err := json.Marshal(&req)
-		require.NoError(t, err)
-
-		evt := events.UsageBenchmarkEvent{
-			Kind:             events.UsageBenchmarkKindAnalytics,
-			TenantID:         "tenant_1",
-			EnvironmentID:    "env_1",
-			StartTime:        req.StartTime,
-			EndTime:          req.EndTime,
-			AnalyticsRequest: raw,
-		}
-		payload, err := json.Marshal(evt)
-		require.NoError(t, err)
-		msg := message.NewMessage("test-3", payload)
-
-		require.NoError(t, svc.ProcessMessageForTest(msg))
-		// Both pipelines return nil → no records → BulkInsert NOT called.
-		require.Equal(t, 0, stubAnalytics.calls)
-	})
-}
-
-// --- test stubs ---
-
-type stubSubscriptionBenchRepo struct {
-	calls int
-}
-
-func (s *stubSubscriptionBenchRepo) Insert(_ context.Context, _ *events.UsageBenchmarkRecord) error {
-	s.calls++
-	return nil
-}
-
-type stubAnalyticsBenchRepo struct {
-	calls int
-	rows  int
-}
-
-func (s *stubAnalyticsBenchRepo) BulkInsert(_ context.Context, records []*events.AnalyticsBenchmarkRecord) error {
-	s.calls++
-	s.rows += len(records)
-	return nil
+	require.Equal(t, "a", rec.NoFinalError)
+	require.Equal(t, "b", rec.FinalError)
+	require.Empty(t, rec.Currency)
+	require.True(t, rec.NoFinalTotalUsage.IsZero())
+	require.True(t, rec.FinalTotalUsage.IsZero())
+	require.Equal(t, uint8(0), rec.ResultsMatch)
 }

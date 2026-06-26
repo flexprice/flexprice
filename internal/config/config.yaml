@@ -250,7 +250,10 @@ flexprice_s3_exports:
 
 cache:
   enabled: false
-  type: "inmemory"
+  inmemory:
+    enabled: false
+  redis:
+    enabled: false
 
 event_processing:
   enabled: true
@@ -436,4 +439,4 @@ onboarding_events:
 
 # Checkout base URL for the checkout page
 checkout:
-  base_url: "http://localhost:3000"
+  base_url: ""

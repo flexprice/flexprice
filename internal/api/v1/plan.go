@@ -6,9 +6,9 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -21,6 +21,7 @@ type PlanHandler struct {
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
 	temporalService    temporalservice.TemporalService
+	redisCache         cache.RedisCache
 	cfg                *config.Configuration
 	log                *logger.Logger
 }
@@ -30,6 +31,7 @@ func NewPlanHandler(
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
 	temporalService temporalservice.TemporalService,
+	redisCache cache.RedisCache,
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) *PlanHandler {
@@ -38,6 +40,7 @@ func NewPlanHandler(
 		entitlementService: entitlementService,
 		creditGrantService: creditGrantService,
 		temporalService:    temporalService,
+		redisCache:         redisCache,
 		cfg:                cfg,
 		log:                log,
 	}
@@ -291,15 +294,14 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 	// Acquire plan-level lock (Redis SetNX, 2h TTL)
-	redisCache := cache.GetRedisCache()
-	if redisCache == nil {
+	if h.redisCache == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
 			Mark(ierr.ErrServiceUnavailable))
 		return
 	}
 	lockKey := priceSyncLockKey(id)
-	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	acquired, err := h.redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
 		c.Error(ierr.NewError("failed to acquire price sync lock").
@@ -421,15 +423,14 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 	}
 
 	// Acquire plan-level lock (Redis SetNX, 2h TTL)
-	redisCache := cache.GetRedisCache()
-	if redisCache == nil {
+	if h.redisCache == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
 			Mark(ierr.ErrServiceUnavailable))
 		return
 	}
 	lockKey := priceSyncLockKey(id)
-	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	acquired, err := h.redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
 		c.Error(ierr.NewError("failed to acquire price sync lock").

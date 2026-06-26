@@ -434,7 +434,6 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new checkout session to initiate a B2C payment flow.",
                 "consumes": [
                     "application/json"
                 ],
@@ -465,19 +464,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "409": {
-                        "description": "Idempotency key conflict",
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Server error",
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -492,7 +491,6 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when listing or searching checkout sessions. Returns a paginated list; supports filtering by customer IDs, statuses, and other fields.",
                 "consumes": [
                     "application/json"
                 ],
@@ -523,13 +521,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid filter",
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Server error",
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -544,7 +542,6 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve a checkout session by ID.",
                 "produces": [
                     "application/json"
                 ],
@@ -570,13 +567,157 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not found",
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Server error",
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Delete checkout session",
+                "operationId": "deleteCheckoutSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Checkout session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/checkout/sessions/{id}/cleanup": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "[TEST ONLY] Cleanup (fail) a checkout session manually",
+                "operationId": "testCleanupCheckoutSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Checkout session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/checkout/sessions/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "[TEST ONLY] Complete a checkout session manually",
+                "operationId": "testCompleteCheckoutSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Checkout session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Provider result (optional)",
+                        "name": "result",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/types.CheckoutProviderResult"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12135,6 +12276,30 @@ const docTemplate = `{
                 }
             }
         },
+        "checkout.JSONBCheckoutConfiguration": {
+            "type": "object",
+            "properties": {
+                "create_subscription_params": {
+                    "$ref": "#/definitions/types.CreateSubscriptionParams"
+                }
+            }
+        },
+        "checkout.JSONBCheckoutProviderResult": {
+            "type": "object",
+            "properties": {
+                "create_subscription_result": {
+                    "$ref": "#/definitions/types.ProviderSubscriptionResult"
+                }
+            }
+        },
+        "checkout.JSONBCheckoutResult": {
+            "type": "object",
+            "properties": {
+                "create_subscription_result": {
+                    "$ref": "#/definitions/types.CreateSubscriptionResult"
+                }
+            }
+        },
         "costsheet.Filter": {
             "type": "object",
             "properties": {
@@ -13170,7 +13335,7 @@ const docTemplate = `{
                     "description": "Configuration holds the immutable caller inputs set at creation time.\nOnly the sub-struct matching Action is populated; the others are nil.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.CheckoutConfiguration"
+                            "$ref": "#/definitions/checkout.JSONBCheckoutConfiguration"
                         }
                     ]
                 },
@@ -13205,10 +13370,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "payment_action": {
                     "$ref": "#/definitions/PaymentAction"
@@ -13225,7 +13387,7 @@ const docTemplate = `{
                     "description": "ProviderResult holds the external provider response (session URL,\npayment intent ID, etc.). Set after the provider call in the create\nstep. Source of truth for deriving PaymentActions in API responses.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.CheckoutProviderResult"
+                            "$ref": "#/definitions/checkout.JSONBCheckoutProviderResult"
                         }
                     ]
                 },
@@ -13233,7 +13395,7 @@ const docTemplate = `{
                     "description": "Result holds the Flexprice entity IDs created during the apply step.\nNil until the session reaches completed status.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.CheckoutResult"
+                            "$ref": "#/definitions/checkout.JSONBCheckoutResult"
                         }
                     ]
                 },
@@ -18248,6 +18410,9 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "voided_at": {
+                    "type": "string"
                 }
             }
         },
@@ -21073,7 +21238,13 @@ const docTemplate = `{
                 "payment_status": {
                     "type": "string"
                 },
+                "refunded_at": {
+                    "type": "string"
+                },
                 "succeeded_at": {
+                    "type": "string"
+                },
+                "voided_at": {
                     "type": "string"
                 }
             }
@@ -23932,10 +24103,12 @@ const docTemplate = `{
         "types.PaymentDestinationType": {
             "type": "string",
             "enum": [
-                "INVOICE"
+                "INVOICE",
+                "CUSTOMER"
             ],
             "x-enum-varnames": [
-                "PaymentDestinationTypeInvoice"
+                "PaymentDestinationTypeInvoice",
+                "PaymentDestinationTypeCustomer"
             ]
         },
         "types.PaymentGatewayType": {
@@ -23984,7 +24157,8 @@ const docTemplate = `{
                 "OVERPAID",
                 "FAILED",
                 "REFUNDED",
-                "PARTIALLY_REFUNDED"
+                "PARTIALLY_REFUNDED",
+                "VOIDED"
             ],
             "x-enum-varnames": [
                 "PaymentStatusInitiated",
@@ -23994,7 +24168,8 @@ const docTemplate = `{
                 "PaymentStatusOverpaid",
                 "PaymentStatusFailed",
                 "PaymentStatusRefunded",
-                "PaymentStatusPartiallyRefunded"
+                "PaymentStatusPartiallyRefunded",
+                "PaymentStatusVoided"
             ]
         },
         "types.PaymentTerms": {
@@ -25449,7 +25624,10 @@ const docTemplate = `{
                 "subscription.renewal.due",
                 "invoice.communication.triggered",
                 "credit_note.created",
-                "credit_note.updated"
+                "credit_note.updated",
+                "checkout.session.initiated",
+                "checkout.session.completed",
+                "checkout.session.failed"
             ],
             "x-enum-varnames": [
                 "WebhookEventSubscriptionCreated",
@@ -25493,7 +25671,10 @@ const docTemplate = `{
                 "WebhookEventSubscriptionRenewalDue",
                 "WebhookEventInvoiceCommunicationTriggered",
                 "WebhookEventCreditNoteCreated",
-                "WebhookEventCreditNoteUpdated"
+                "WebhookEventCreditNoteUpdated",
+                "WebhookEventCheckoutSessionInitiated",
+                "WebhookEventCheckoutSessionCompleted",
+                "WebhookEventCheckoutSessionFailed"
             ]
         },
         "types.WindowSize": {
@@ -26376,51 +26557,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.CheckoutCouponInput": {
-            "type": "object",
-            "properties": {
-                "coupon_code": {
-                    "type": "string"
-                },
-                "price_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CheckoutCreditGrant": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CheckoutLineItem": {
-            "type": "object",
-            "properties": {
-                "price_id": {
-                    "type": "string"
-                },
-                "quantity": {
-                    "type": "integer"
-                }
-            }
-        },
         "types.CheckoutPaymentProvider": {
             "type": "string",
             "enum": [
@@ -26435,14 +26571,6 @@ const docTemplate = `{
             "properties": {
                 "create_subscription_result": {
                     "$ref": "#/definitions/types.ProviderSubscriptionResult"
-                }
-            }
-        },
-        "types.CheckoutResult": {
-            "type": "object",
-            "properties": {
-                "create_subscription_result": {
-                    "$ref": "#/definitions/types.CreateSubscriptionResult"
                 }
             }
         },
@@ -26534,38 +26662,15 @@ const docTemplate = `{
         },
         "types.CreateSubscriptionParams": {
             "type": "object",
-            "required": [
-                "billing_period",
-                "currency",
-                "plan_id"
-            ],
             "properties": {
-                "billing_cycle": {
-                    "$ref": "#/definitions/types.BillingCycle"
-                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "billing_period_count": {
-                    "type": "integer"
-                },
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutCreditGrant"
-                    }
                 },
                 "currency": {
                     "type": "string"
                 },
                 "end_date": {
                     "type": "string"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutLineItem"
-                    }
                 },
                 "lookup_key": {
                     "type": "string"
@@ -26581,12 +26686,6 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
-                },
-                "subscription_coupons": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutCouponInput"
-                    }
                 }
             }
         },

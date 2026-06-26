@@ -16,40 +16,45 @@ const DefaultExpiration = 30 * time.Minute
 // DefaultCleanupInterval is how often expired items are removed from the cache
 const DefaultCleanupInterval = 1 * time.Hour
 
-// InMemoryCache implements the Cache interface using github.com/patrickmn/go-cache
-type InMemoryCache struct {
+// inMemoryCache implements the Cache interface using github.com/patrickmn/go-cache
+type inMemoryCache struct {
 	cache *goCache.Cache
 	cfg   *config.Configuration
 }
 
 // Global cache instance
-var globalCache *InMemoryCache
+var globalCache *inMemoryCache
 
 // InitializeInMemoryCache initializes the global cache instance
-func InitializeInMemoryCache() {
+func InitializeInMemoryCache() InMemoryCache {
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	if globalCache == nil {
-		globalCache = &InMemoryCache{
+		globalCache = &inMemoryCache{
 			cache: goCache.New(DefaultExpiration, DefaultCleanupInterval),
 			cfg:   cfg,
 		}
 	}
+	return globalCache
 }
 
-// NewInMemoryCache creates a new InMemoryCache instance
-func NewInMemoryCache() Cache {
+// NewInMemoryCache creates a new inMemoryCache instance
+func NewInMemoryCache() InMemoryCache {
 	if globalCache == nil {
 		InitializeInMemoryCache()
 	}
 	return globalCache
 }
 
+func (c *inMemoryCache) IsEnabled() bool {
+	return c.cfg.Cache.Enabled && c.cfg.Cache.InMemory.Enabled
+}
+
 // GetCache returns the global cache instance
-func GetInMemoryCache() *InMemoryCache {
+func GetInMemoryCache() InMemoryCache {
 	if globalCache == nil {
 		InitializeInMemoryCache()
 	}
@@ -57,44 +62,53 @@ func GetInMemoryCache() *InMemoryCache {
 }
 
 // Get retrieves a value from the cache
-func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
-	if !c.cfg.Cache.Enabled {
+func (c *inMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
+	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}
 	return c.cache.Get(key)
 }
 
-func (c *InMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
+func (c *inMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
+	if c == nil {
+		return nil, false
+	}
 	return c.cache.Get(key)
 }
 
-func (c *InMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+func (c *inMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	if c == nil {
+		return
+	}
 	c.cache.Set(key, value, expiration)
 }
 
-func (c *InMemoryCache) ForceCacheDelete(_ context.Context, key string) {
+func (c *inMemoryCache) ForceCacheDelete(_ context.Context, key string) {
+	if c == nil {
+		return
+	}
 	c.cache.Delete(key)
 }
 
 // Set adds a value to the cache with the specified expiration
-func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
-	if !c.cfg.Cache.Enabled {
+func (c *inMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
+	if c == nil || !c.IsEnabled() {
 		return
 	}
 	c.cache.Set(key, value, expiration)
 }
 
 // Delete removes a key from the cache
-func (c *InMemoryCache) Delete(_ context.Context, key string) {
-	if !c.cfg.Cache.Enabled {
+func (c *inMemoryCache) Delete(_ context.Context, key string) {
+	if c == nil || !c.IsEnabled() {
 		return
 	}
 	c.cache.Delete(key)
 }
 
 // DeleteByPrefix removes all keys with the given prefix
-func (c *InMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
-	if !c.cfg.Cache.Enabled {
+func (c *inMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
+	if c == nil || !c.IsEnabled() {
 		return
 	}
 	// Get all items from the cache
@@ -109,8 +123,8 @@ func (c *InMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
 }
 
 // Flush removes all items from the cache
-func (c *InMemoryCache) Flush(_ context.Context) {
-	if !c.cfg.Cache.Enabled {
+func (c *inMemoryCache) Flush(_ context.Context) {
+	if c == nil || !c.IsEnabled() {
 		return
 	}
 	c.cache.Flush()
