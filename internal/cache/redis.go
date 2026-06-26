@@ -58,11 +58,13 @@ func InitializeRedisCache(cfg *config.Configuration, log *logger.Logger) RedisCa
 		log.Error(context.Background(), "Failed to create Redis client", "error", err)
 		return nil
 	}
-	return &redisCacheImpl{
+	rc := &redisCacheImpl{
 		client: client.GetClient(),
 		config: cfg,
 		log:    log,
 	}
+	redisCache = rc
+	return rc
 }
 
 // GetRedisCache returns the global Redis cache instance
