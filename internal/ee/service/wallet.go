@@ -2876,7 +2876,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 
 	resp, err := s.computeRealtimeBalance(ctx, w)
 	if err != nil {
-		return resp, nil
+		return nil, err
 	}
 
 	if resp != nil && resp.RealTimeBalance != nil {
