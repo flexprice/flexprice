@@ -19,11 +19,11 @@ type subscriptionPhaseRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SubscriptionPhaseQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
 // NewSubscriptionPhaseRepository creates a new subscription phase repository
-func NewSubscriptionPhaseRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) subscription.SubscriptionPhaseRepository {
+func NewSubscriptionPhaseRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) subscription.SubscriptionPhaseRepository {
 	return &subscriptionPhaseRepository{
 		client:    client,
 		log:       log,

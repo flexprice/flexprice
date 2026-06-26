@@ -56,6 +56,8 @@ import (
 
 // Stores holds all the repository interfaces for testing
 type Stores struct {
+	InMemoryCache                cache.InMemoryCache
+	RedisCache                   cache.RedisCache
 	CreditGrantRepo              creditgrant.Repository
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	SubscriptionRepo             subscription.Repository
@@ -136,9 +138,6 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	if err != nil {
 		s.T().Fatalf("failed to create logger: %v", err)
 	}
-
-	// Initialize cache
-	cache.Initialize(cfg, s.logger)
 }
 
 func (s *BaseServiceTestSuite) setupDependencies() {
@@ -252,6 +251,10 @@ func (s *BaseServiceTestSuite) setupStores() {
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 	}
+
+	// Cache stores
+	s.stores.InMemoryCache = cache.NewInMemoryCache()
+	s.stores.RedisCache = NewInMemoryRedis()
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)

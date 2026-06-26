@@ -185,10 +185,10 @@ type couponAssociationRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CouponAssociationQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCouponAssociation.Repository {
+func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCouponAssociation.Repository {
 	return &couponAssociationRepository{
 		client:    client,
 		log:       log,

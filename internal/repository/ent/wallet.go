@@ -23,10 +23,10 @@ type walletRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts WalletTransactionQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) walletdomain.Repository {
 	return &walletRepository{
 		client: client,
 		logger: logger,
