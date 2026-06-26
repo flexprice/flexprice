@@ -3255,8 +3255,9 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	}
 
 	resp := &dto.CustomerEntitlementsResponse{
-		CustomerID: customerID,
-		Features:   []*dto.AggregatedFeature{},
+		CustomerID:    customerID,
+		Subscriptions: []*dto.SubscriptionResponse{},
+		Features:      []*dto.AggregatedFeature{},
 	}
 
 	// 1. Get active subscriptions for the customer
@@ -3320,10 +3321,17 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		SubscriptionID: subscriptions[0].ID,
 	})
 
+	// Build subscription responses
+	subscriptionResponses := make([]*dto.SubscriptionResponse, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		subscriptionResponses = append(subscriptionResponses, &dto.SubscriptionResponse{Subscription: sub})
+	}
+
 	// Build final response
 	response := &dto.CustomerEntitlementsResponse{
-		CustomerID: customerID,
-		Features:   aggregatedFeatures,
+		CustomerID:    customerID,
+		Subscriptions: subscriptionResponses,
+		Features:      aggregatedFeatures,
 	}
 
 	return response, nil
