@@ -142,21 +142,20 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 	}
 
 	// Archive all entities created during fulfillment.
-	// Treat IsNotFound as success: partial failure in a prior cleanup run is safe to ignore.
 	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
 		res := session.Result.CreateSubscriptionResult
 		if res.PaymentID != "" {
-			if err := s.PaymentRepo.Delete(ctx, res.PaymentID); err != nil && !ierr.IsNotFound(err) {
+			if err := s.PaymentRepo.Delete(ctx, res.PaymentID); err != nil {
 				s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", res.PaymentID, "error", err)
 			}
 		}
 		if res.InvoiceID != "" {
-			if err := s.InvoiceRepo.Delete(ctx, res.InvoiceID); err != nil && !ierr.IsNotFound(err) {
+			if err := s.InvoiceRepo.Delete(ctx, res.InvoiceID); err != nil {
 				s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", res.InvoiceID, "error", err)
 			}
 		}
 		if res.SubscriptionID != "" {
-			if err := s.SubRepo.Delete(ctx, res.SubscriptionID); err != nil && !ierr.IsNotFound(err) {
+			if err := s.SubRepo.Delete(ctx, res.SubscriptionID); err != nil {
 				s.Logger.Error(ctx, "failed to archive checkout subscription", "subscription_id", res.SubscriptionID, "error", err)
 			}
 		}
@@ -334,6 +333,3 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 		Gateway: gateway,
 	})
 }
-
-// ensure interface compliance at compile time
-var _ CheckoutSessionService = (*checkoutSessionService)(nil)
