@@ -82,7 +82,12 @@ func (p CheckoutPaymentProvider) Validate() error {
 
 // SessionExpiry returns the default lifetime for a checkout session with this provider.
 func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
-	return 15 * time.Minute
+	switch p {
+	case CheckoutPaymentProviderRazorpay:
+		return 15 * time.Minute
+	default:
+		return 30 * time.Minute // Default to 30 minutes
+	}
 }
 
 type PaymentActionType string
