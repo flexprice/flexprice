@@ -144,7 +144,7 @@ func (s *CheckoutSessionServiceSuite) createCheckoutReq(customerID, planID strin
 	return dto.CreateCheckoutSessionRequest{
 		CustomerID:      customerID,
 		Action:          types.CheckoutActionCreateSubscription,
-		PaymentProvider: types.CheckoutPaymentProviderStripe,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				PlanID:        planID,
@@ -218,7 +218,7 @@ func (s *CheckoutSessionServiceSuite) TestCreate_ValidationError_NoPlanID() {
 	req := dto.CreateCheckoutSessionRequest{
 		CustomerID:      cust.ID,
 		Action:          types.CheckoutActionCreateSubscription,
-		PaymentProvider: types.CheckoutPaymentProviderStripe,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				Currency:      "USD",
@@ -407,7 +407,7 @@ func (s *CheckoutSessionServiceSuite) TestCleanup_NoEntities() {
 	fakeSession := &dto.CreateCheckoutSessionRequest{
 		CustomerID:      cust.ID,
 		Action:          types.CheckoutActionCreateSubscription,
-		PaymentProvider: types.CheckoutPaymentProviderStripe,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				PlanID:        "any_plan",
