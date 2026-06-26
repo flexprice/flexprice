@@ -156,6 +156,59 @@ data:
       rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
 
+    # The blocks below were previously absent from this ConfigMap, so on GKE (where the
+    # mounted ConfigMap replaces the baked config.yaml) their FLEXPRICE_* env overrides were
+    # ignored by viper Unmarshal and the consumers silently never started — diverging from the
+    # AWS web_consumer task def. Rendered here so they can be configured per-deployment.
+    event_processing_replay:
+      enabled: {{ .Values.eventProcessingReplay.enabled }}
+      topic: {{ .Values.eventProcessingReplay.topic | quote }}
+      rate_limit: {{ .Values.eventProcessingReplay.rateLimit }}
+      consumer_group: {{ .Values.eventProcessingReplay.consumerGroup | quote }}
+
+    feature_usage_tracking_replay:
+      enabled: {{ .Values.featureUsageTrackingReplay.enabled }}
+      topic: {{ .Values.featureUsageTrackingReplay.topic | quote }}
+      rate_limit: {{ .Values.featureUsageTrackingReplay.rateLimit }}
+      consumer_group: {{ .Values.featureUsageTrackingReplay.consumerGroup | quote }}
+
+    meter_usage_tracking:
+      enabled: {{ .Values.meterUsageTracking.enabled }}
+      topic: {{ .Values.meterUsageTracking.topic | quote }}
+      rate_limit: {{ .Values.meterUsageTracking.rateLimit }}
+      consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
+
+    meter_usage_tracking_lazy:
+      enabled: {{ .Values.meterUsageTrackingLazy.enabled }}
+      topic: {{ .Values.meterUsageTrackingLazy.topic | quote }}
+      rate_limit: {{ .Values.meterUsageTrackingLazy.rateLimit }}
+      consumer_group: {{ .Values.meterUsageTrackingLazy.consumerGroup | quote }}
+
+    costsheet_usage_tracking:
+      enabled: {{ .Values.costsheetUsageTracking.enabled }}
+      topic: {{ .Values.costsheetUsageTracking.topic | quote }}
+      rate_limit: {{ .Values.costsheetUsageTracking.rateLimit }}
+      consumer_group: {{ .Values.costsheetUsageTracking.consumerGroup | quote }}
+
+    costsheet_usage_tracking_lazy:
+      enabled: {{ .Values.costsheetUsageTrackingLazy.enabled }}
+      topic: {{ .Values.costsheetUsageTrackingLazy.topic | quote }}
+      rate_limit: {{ .Values.costsheetUsageTrackingLazy.rateLimit }}
+      consumer_group: {{ .Values.costsheetUsageTrackingLazy.consumerGroup | quote }}
+
+    raw_event_consumption:
+      enabled: {{ .Values.rawEventConsumption.enabled }}
+      topic: {{ .Values.rawEventConsumption.topic | quote }}
+      output_topic: {{ .Values.rawEventConsumption.outputTopic | quote }}
+      rate_limit: {{ .Values.rawEventConsumption.rateLimit }}
+      consumer_group: {{ .Values.rawEventConsumption.consumerGroup | quote }}
+
+    usage_benchmark:
+      enabled: {{ .Values.usageBenchmark.enabled }}
+      topic: {{ .Values.usageBenchmark.topic | quote }}
+      rate_limit: {{ .Values.usageBenchmark.rateLimit }}
+      consumer_group: {{ .Values.usageBenchmark.consumerGroup | quote }}
+
     onboarding_events:
       enabled: {{ .Values.onboardingEvents.enabled }}
       topic: {{ .Values.onboardingEvents.topic | quote }}

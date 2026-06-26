@@ -803,6 +803,50 @@ rawEventConsumption:
   consumerGroup: "raw_events_consumer"
   rateLimit: 100
 
+# Consumer blocks below are off by default (a deployment opts in per-env). They are rendered
+# into the ConfigMap so they can actually be configured on GKE; defaults mirror config.yaml.
+eventProcessingReplay:
+  enabled: false
+  topic: "events_backfill"
+  rateLimit: 1
+  consumerGroup: "v1_event_processing_replay"
+
+featureUsageTrackingReplay:
+  enabled: false
+  topic: "events_backfill"
+  rateLimit: 1
+  consumerGroup: "v1_feature_tracking_service_replay"
+
+meterUsageTracking:
+  enabled: false
+  topic: "events"
+  rateLimit: 1
+  consumerGroup: "v1_meter_usage_tracking_service"
+
+meterUsageTrackingLazy:
+  enabled: false
+  topic: "events_lazy"
+  rateLimit: 1
+  consumerGroup: "v1_meter_usage_tracking_service_lazy"
+
+costsheetUsageTracking:
+  enabled: false
+  topic: "events"
+  rateLimit: 1
+  consumerGroup: "v1_costsheet_usage_tracking_service"
+
+costsheetUsageTrackingLazy:
+  enabled: false
+  topic: "events_lazy"
+  rateLimit: 1
+  consumerGroup: "v1_costsheet_usage_tracking_service_lazy"
+
+usageBenchmark:
+  enabled: false
+  topic: "benchmarking"
+  rateLimit: 10
+  consumerGroup: "v1_usage_benchmark_service"
+
 # DynamoDB configuration
 dynamodb:
   inUse: false
