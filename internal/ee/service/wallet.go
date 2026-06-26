@@ -2663,11 +2663,6 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			if ctx.Err() != nil {
 				return nil, err
 			}
-			// Cached fallback is intended only for the internal compute timeout
-			// we set above; let other errors surface to the caller.
-			if computeCtx.Err() == nil {
-				return nil, err
-			}
 			s.Logger.Error(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
@@ -2908,11 +2903,6 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			// Parent context was canceled or its deadline exceeded, the caller
 			// has given up, so propagate instead of serving stale cached data.
 			if ctx.Err() != nil {
-				return nil, err
-			}
-			// Cached fallback is intended only for the internal compute timeout
-			// we set above; let other errors surface to the caller.
-			if computeCtx.Err() == nil {
 				return nil, err
 			}
 			s.Logger.Error(ctx, "wallet balance fallback to cache",
@@ -3501,6 +3491,10 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 }
 
 func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
+	if s.RedisCache == nil {
+		return
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
@@ -3511,7 +3505,7 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
-	if walletID == "" {
+	if walletID == "" || s.RedisCache == nil {
 		return
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
@@ -3519,6 +3513,10 @@ func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
+	if s.RedisCache == nil {
+		return nil
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
