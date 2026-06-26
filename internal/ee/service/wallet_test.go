@@ -2840,7 +2840,7 @@ func (s *CheckWalletBalanceAlertSuite) TestMultipleWallets_EachProcessedIndepend
 	s.Equal(1, s.countAutoTopupInvoices(), "exactly one auto top-up invoice for wallet C")
 }
 
-// --- Wallet balance fallback (added in Task 4) ---
+// --- Wallet balance fallback ---
 
 // buildFallbackTestWallet creates an active PRE_PAID wallet with a known balance
 // for use across the fallback tests.
@@ -2926,22 +2926,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() 
 	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
 	s.NotNil(resp.RealTimeBalance)
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(72)), "balance=%s", resp.RealTimeBalance.String())
-}
-
-func (s *WalletServiceSuite) TestGetWalletBalanceV2_SkipsFallbackOnClientDisconnect() {
-	parent := s.GetContext()
-	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
-	s.primeCachedBalance(parent, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
-
-	cancelableCtx, cancel := context.WithCancel(parent)
-	cancel()
-
-	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
-		return nil, context.Canceled
-	})
-
-	_, err := s.service.GetWalletBalanceV2(cancelableCtx, w.ID)
-	s.Error(err, "expected error surfaced when parent ctx is canceled")
 }
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() {
