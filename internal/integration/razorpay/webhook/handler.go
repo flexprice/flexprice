@@ -7,11 +7,11 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -321,59 +321,45 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
-		h.logger.Info(ctx, "payment_link.paid webhook missing payment_link ID, skipping", "event_type", event.Event)
+		h.logger.Error(ctx, "payment_link.paid webhook missing payment_link ID", "event_type", event.Event, "payment_link_id", paymentLinkID)
 		return nil
 	}
-
-	var providerPaymentIntentID string
-	if event.Payload.Payment.Entity.ID != "" {
-		providerPaymentIntentID = event.Payload.Payment.Entity.ID
-	}
-
-	h.logger.Info(ctx, "received payment_link.paid webhook",
-		"payment_link_id", paymentLinkID,
-		"payment_id", providerPaymentIntentID,
-		"event_type", event.Event)
 
 	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(
 		ctx,
 		&types.EntityIntegrationMappingFilter{
 			ProviderEntityIDs: []string{paymentLinkID},
-			ProviderTypes:     []string{"razorpay"},
+			ProviderTypes:     []string{string(types.CheckoutPaymentProviderRazorpay)},
 			EntityType:        types.IntegrationEntityTypePayment,
 		},
 	)
 	if err != nil || mappings == nil || len(mappings.Items) == 0 {
-		h.logger.Info(ctx, "no EntityIntegrationMapping for Razorpay payment link, skipping",
-			"payment_link_id", paymentLinkID)
+		h.logger.Error(ctx, "no EntityIntegrationMapping found for Razorpay payment link", "payment_link_id", paymentLinkID)
 		return nil
 	}
 
-	paymentID := mappings.Items[0].EntityID
-	sessions, err := services.CheckoutSessionService.List(ctx, &types.CheckoutSessionFilter{
-		QueryFilter:        types.NewDefaultQueryFilter(),
-		CheckoutPaymentIDs: []string{paymentID},
-		CheckoutStatuses:   []types.CheckoutStatus{types.CheckoutStatusPending, types.CheckoutStatusInitiated},
-	})
+	filter := types.NewDefaultCheckoutSessionFilter()
+	filter.CheckoutPaymentIDs = []string{mappings.Items[0].EntityID}
+	filter.CheckoutStatuses = []types.CheckoutStatus{types.CheckoutStatusPending}
+	filter.Limit = lo.ToPtr(1)
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	sessions, err := services.CheckoutSessionService.List(ctx, filter)
+
 	if err != nil || sessions == nil || len(sessions.Items) == 0 {
-		h.logger.Info(ctx, "no active checkout session for Razorpay payment, skipping",
-			"payment_id", paymentID)
 		return nil
 	}
 
 	sessionID := sessions.Items[0].ID
-	providerResult := &types.CheckoutProviderResult{
-		ProviderPaymentIntentID: providerPaymentIntentID,
+	req := &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: event.Payload.Payment.Entity.ID,
 	}
-	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, providerResult); err != nil {
-		if ierr.IsAlreadyExists(err) {
-			h.logger.Info(ctx, "checkout session already completed, skipping", "session_id", sessionID)
-			return nil
-		}
+	err = services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, req)
+
+	if err != nil {
 		h.logger.Error(ctx, "failed to complete checkout session", "error", err, "session_id", sessionID)
 		return err
 	}
-	h.logger.Info(ctx, "checkout session completed via Razorpay payment_link.paid", "session_id", sessionID)
 	return nil
 }
 
