@@ -2928,6 +2928,22 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() 
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(72)), "balance=%s", resp.RealTimeBalance.String())
 }
 
+func (s *WalletServiceSuite) TestGetWalletBalanceV2_SkipsFallbackOnClientDisconnect() {
+	parent := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+	s.primeCachedBalance(parent, w.ID, decimal.NewFromInt(50), cache.ExpiryWalletBalance)
+
+	cancelableCtx, cancel := context.WithCancel(parent)
+	cancel()
+
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		return nil, context.Canceled
+	})
+
+	_, err := s.service.GetWalletBalanceV2(cancelableCtx, w.ID)
+	s.Error(err, "expected error surfaced when parent ctx is canceled")
+}
+
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnDBError() {
 	ctx := s.GetContext()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))

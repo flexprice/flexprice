@@ -2658,6 +2658,16 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 
 		resp, err := s.computeRealtimeBalance(computeCtx, w)
 		if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			// Cached fallback is intended only for the internal compute timeout
+			// we set above; let other errors surface to the caller.
+			if computeCtx.Err() == nil {
+				return nil, err
+			}
 			s.Logger.Error(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
@@ -2895,6 +2905,16 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 
 		resp, err := s.computeRealtimeBalance(computeCtx, w)
 		if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			// Cached fallback is intended only for the internal compute timeout
+			// we set above; let other errors surface to the caller.
+			if computeCtx.Err() == nil {
+				return nil, err
+			}
 			s.Logger.Error(ctx, "wallet balance fallback to cache",
 				"wallet_id", walletID,
 				"tenant_id", types.GetTenantID(ctx),
