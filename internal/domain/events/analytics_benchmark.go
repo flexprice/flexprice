@@ -7,57 +7,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// AnalyticsBenchmarkMatchStatus is the join-side discriminator for analytics benchmark rows.
-type AnalyticsBenchmarkMatchStatus string
-
-const (
-	AnalyticsBenchmarkMatchMatched     AnalyticsBenchmarkMatchStatus = "matched"
-	AnalyticsBenchmarkMatchFeatureOnly AnalyticsBenchmarkMatchStatus = "feature_only"
-	AnalyticsBenchmarkMatchMeterOnly   AnalyticsBenchmarkMatchStatus = "meter_only"
-)
-
-// AnalyticsBenchmarkRowType tiers benchmark rows by granularity so debugging can
-// drill from "did billing match?" down to "where exactly did it differ?".
-type AnalyticsBenchmarkRowType string
-
-const (
-	// AnalyticsBenchmarkRowSummary: 1 row per event_id with response.TotalCost
-	// from each pipeline — the authoritative "did billing match?" signal.
-	AnalyticsBenchmarkRowSummary AnalyticsBenchmarkRowType = "summary"
-	// AnalyticsBenchmarkRowFeature: 1 row per (event_id, feature_id, group_key)
-	// with items aggregated across line-item splits — robust to duplicate
-	// feature_ids and order-independent.
-	AnalyticsBenchmarkRowFeature AnalyticsBenchmarkRowType = "feature"
-	// AnalyticsBenchmarkRowLineItem: 1 row per
-	// (event_id, feature_id, sub_line_item_id, group_key) — granular drill-down.
-	AnalyticsBenchmarkRowLineItem AnalyticsBenchmarkRowType = "line_item"
-)
-
-// AnalyticsBenchmarkDiffReason classifies the cost_diff on each row so spurious
-// mismatches (data-shape edge cases that don't affect billing) can be filtered
-// out from real bugs.
-type AnalyticsBenchmarkDiffReason string
-
-const (
-	// AnalyticsBenchmarkDiffNone: cost_diff is exactly zero.
-	AnalyticsBenchmarkDiffNone AnalyticsBenchmarkDiffReason = "none"
-	// AnalyticsBenchmarkDiffUnmatched: one side produced no item for this key.
-	AnalyticsBenchmarkDiffUnmatched AnalyticsBenchmarkDiffReason = "unmatched"
-	// AnalyticsBenchmarkDiffMultiFeatureMeter: the feature is one of multiple
-	// features mapped to the same meter. The meter pipeline's runtime
-	// meter→feature lookup is 1:1 and can attribute to a different feature than
-	// the ingest-time snapshot in feature_usage — diff is expected, not a bug.
-	AnalyticsBenchmarkDiffMultiFeatureMeter AnalyticsBenchmarkDiffReason = "multi_feature_meter"
-	// AnalyticsBenchmarkDiffMultiItem: multiple items collapsed at this row's
-	// granularity on one side (look at a finer row_type for the real story).
-	AnalyticsBenchmarkDiffMultiItem AnalyticsBenchmarkDiffReason = "multi_item"
-	// AnalyticsBenchmarkDiffMaterial: non-zero cost_diff with no above
-	// explanation — this is a real bug.
-	AnalyticsBenchmarkDiffMaterial AnalyticsBenchmarkDiffReason = "material"
-)
-
 // AnalyticsBenchmarkRecord is one row in the analytics_benchmark ClickHouse table.
-// Multiple rows per event_id at different RowType granularities.
+// One row per benchmark trigger event: the consumer runs the captured analytics
+// request against meter_usage twice (no-FINAL and FINAL) and writes both sides'
+// wall-clock duration, server-side query counters, and result totals so a SQL
+// diff is one row away.
 type AnalyticsBenchmarkRecord struct {
 	TenantID      string    `ch:"tenant_id"`
 	EnvironmentID string    `ch:"environment_id"`
@@ -65,7 +19,7 @@ type AnalyticsBenchmarkRecord struct {
 	StartTime     time.Time `ch:"start_time"`
 	EndTime       time.Time `ch:"end_time"`
 
-	// Parsed request fields
+	// Request fields (verbatim from the captured analytics request).
 	ExternalCustomerID  string   `ch:"external_customer_id"`
 	ExternalCustomerIDs []string `ch:"external_customer_ids"`
 	FeatureIDs          []string `ch:"feature_ids"`
@@ -77,40 +31,57 @@ type AnalyticsBenchmarkRecord struct {
 	HasPropertyFilters  uint8    `ch:"has_property_filters"`
 	RequestJSON         string   `ch:"request_json"`
 
-	// Per-item row
-	RowType       AnalyticsBenchmarkRowType     `ch:"row_type"`
-	FeatureID     string                        `ch:"feature_id"`
-	MeterID       string                        `ch:"meter_id"`
-	SubLineItemID string                        `ch:"sub_line_item_id"`
-	GroupKey      string                        `ch:"group_key"`
-	MatchStatus   AnalyticsBenchmarkMatchStatus `ch:"match_status"`
-	DiffReason    AnalyticsBenchmarkDiffReason  `ch:"diff_reason"`
+	// No-FINAL perf (server-side counters aggregated across main + N points sub-queries).
+	NoFinalDurationMs    float64 `ch:"nofinal_duration_ms"`
+	NoFinalScanRows      uint64  `ch:"nofinal_scan_rows"`
+	NoFinalScanBytes     uint64  `ch:"nofinal_scan_bytes"`
+	NoFinalReadDiskBytes uint64  `ch:"nofinal_read_disk_bytes"`
+	NoFinalMemPeakBytes  uint64  `ch:"nofinal_mem_peak_bytes"`
+	NoFinalResultRows    uint64  `ch:"nofinal_result_rows"`
 
-	// Price ids used by each pipeline (empty when that side did not match).
-	FeaturePriceID string `ch:"feature_price_id"`
-	MeterPriceID   string `ch:"meter_price_id"`
+	// FINAL perf (same shape).
+	FinalDurationMs    float64 `ch:"final_duration_ms"`
+	FinalScanRows      uint64  `ch:"final_scan_rows"`
+	FinalScanBytes     uint64  `ch:"final_scan_bytes"`
+	FinalReadDiskBytes uint64  `ch:"final_read_disk_bytes"`
+	FinalMemPeakBytes  uint64  `ch:"final_mem_peak_bytes"`
+	FinalResultRows    uint64  `ch:"final_result_rows"`
 
-	// How many response items contributed to each side of this row.
-	FeatureItemCount uint64 `ch:"feature_item_count"`
-	MeterItemCount   uint64 `ch:"meter_item_count"`
+	// Pre-computed signed diffs (final - nofinal). FINAL can be lighter on small
+	// ranges (fewer parts to merge), so Int64 not UInt64.
+	DurationDiffMs    float64 `ch:"duration_diff_ms"`
+	ScanRowsDiff      int64   `ch:"scan_rows_diff"`
+	ScanBytesDiff     int64   `ch:"scan_bytes_diff"`
+	ReadDiskBytesDiff int64   `ch:"read_disk_bytes_diff"`
+	MemPeakDiffBytes  int64   `ch:"mem_peak_diff_bytes"`
 
-	FeatureTotalUsage decimal.Decimal `ch:"feature_total_usage"`
-	MeterTotalUsage   decimal.Decimal `ch:"meter_total_usage"`
+	// Per-side totals + diffs. Totals come from response.TotalCost and
+	// sum(items[i].TotalUsage). Sign: nofinal - final (matches the historical
+	// shape so downstream queries keep working).
+	NoFinalTotalUsage decimal.Decimal `ch:"nofinal_total_usage"`
+	FinalTotalUsage   decimal.Decimal `ch:"final_total_usage"`
 	UsageDiff         decimal.Decimal `ch:"usage_diff"`
+	NoFinalTotalCost  decimal.Decimal `ch:"nofinal_total_cost"`
+	FinalTotalCost    decimal.Decimal `ch:"final_total_cost"`
+	CostDiff          decimal.Decimal `ch:"cost_diff"`
+	NoFinalItemCount  uint64          `ch:"nofinal_item_count"`
+	FinalItemCount    uint64          `ch:"final_item_count"`
+	ResultsMatch      uint8           `ch:"results_match"`
 
-	FeatureTotalCost decimal.Decimal `ch:"feature_total_cost"`
-	MeterTotalCost   decimal.Decimal `ch:"meter_total_cost"`
-	CostDiff         decimal.Decimal `ch:"cost_diff"`
+	NoFinalError string `ch:"nofinal_error"`
+	FinalError   string `ch:"final_error"`
 
-	FeatureEventCount uint64 `ch:"feature_event_count"`
-	MeterEventCount   uint64 `ch:"meter_event_count"`
-
+	// "nofinal" or "final" — which side ran first this round. Lets us detect
+	// or filter cache-warmth bias post-hoc.
+	FirstSide string    `ch:"first_side"`
 	Currency  string    `ch:"currency"`
 	CreatedAt time.Time `ch:"created_at"`
 }
 
 // AnalyticsBenchmarkRepository persists analytics benchmark comparison rows.
 type AnalyticsBenchmarkRepository interface {
-	// BulkInsert writes all rows from a single trigger event in one batched statement.
+	// BulkInsert writes all rows in one batched statement. Callers typically
+	// pass a single-element slice (one row per benchmark trigger event) but the
+	// batched signature is preserved for future flexibility.
 	BulkInsert(ctx context.Context, records []*AnalyticsBenchmarkRecord) error
 }
