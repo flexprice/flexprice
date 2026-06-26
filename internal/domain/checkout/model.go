@@ -111,7 +111,7 @@ type CheckoutSession struct {
 
 	// Configuration holds the immutable caller inputs set at creation time.
 	// Only the sub-struct matching Action is populated; the others are nil.
-	Configuration JSONBCheckoutConfiguration `db:"configuration,jsonb" json:"configuration"`
+	Configuration JSONBCheckoutConfiguration `db:"configuration,jsonb" json:"configuration,omitempty"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
