@@ -31,6 +31,14 @@ func (j JSONBCheckoutConfiguration) Value() (driver.Value, error) {
 	return json.Marshal(j)
 }
 
+func ToJSONBCheckoutConfiguration(c types.CheckoutConfiguration) JSONBCheckoutConfiguration {
+	return JSONBCheckoutConfiguration(c)
+}
+
+func (j JSONBCheckoutConfiguration) ToCheckoutConfiguration() types.CheckoutConfiguration {
+	return types.CheckoutConfiguration(j)
+}
+
 // JSONBCheckoutResult wraps CheckoutResult for JSONB storage.
 type JSONBCheckoutResult types.CheckoutResult
 
@@ -54,6 +62,14 @@ func (j *JSONBCheckoutResult) Value() (driver.Value, error) {
 	return json.Marshal(j)
 }
 
+func ToJSONBCheckoutResult(r *types.CheckoutResult) *JSONBCheckoutResult {
+	return (*JSONBCheckoutResult)(r)
+}
+
+func (j *JSONBCheckoutResult) ToCheckoutResult() *types.CheckoutResult {
+	return (*types.CheckoutResult)(j)
+}
+
 // JSONBCheckoutProviderResult wraps CheckoutProviderResult for JSONB storage.
 type JSONBCheckoutProviderResult types.CheckoutProviderResult
 
@@ -75,6 +91,14 @@ func (j *JSONBCheckoutProviderResult) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return json.Marshal(j)
+}
+
+func ToJSONBCheckoutProviderResult(r *types.CheckoutProviderResult) *JSONBCheckoutProviderResult {
+	return (*JSONBCheckoutProviderResult)(r)
+}
+
+func (j *JSONBCheckoutProviderResult) ToProviderResult() *types.CheckoutProviderResult {
+	return (*types.CheckoutProviderResult)(j)
 }
 
 // CheckoutSession is a single-use session that drives a B2C payment flow.

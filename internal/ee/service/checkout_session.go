@@ -227,7 +227,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	session.CheckoutStatus = types.CheckoutStatusCompleted
 	session.CompletedAt = &now
 	if providerResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(providerResult)
 	}
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
 	return nil

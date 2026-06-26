@@ -57,7 +57,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, cu
 		Action:          r.Action,
 		CheckoutStatus:  types.CheckoutStatusInitiated,
 		PaymentProvider: r.PaymentProvider,
-		Configuration:   domainCheckout.JSONBCheckoutConfiguration(r.Configuration),
+		Configuration:   domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
 		IdempotencyKey:  r.IdempotencyKey,
 		SuccessURL:      r.SuccessURL,
 		FailureURL:      r.FailureURL,
@@ -104,7 +104,7 @@ type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 // from the response because it contains sensitive gateway tokens.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
 	session := lo.FromPtr(s)
-	paymentAction := (*types.CheckoutProviderResult)(session.ProviderResult).PaymentAction()
+	paymentAction := session.ProviderResult.ToProviderResult().PaymentAction()
 	session.ProviderResult = nil
 	session.Result = nil
 	session.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
