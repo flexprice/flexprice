@@ -615,6 +615,10 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 }
 
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	existing, err := s.EntitlementRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err

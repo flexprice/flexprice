@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -59,14 +60,8 @@ func (r *CreateEntitlementRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	case types.FeatureTypeConfig:
-		if len(r.ConfigValue) > 0 {
-			for k := range r.ConfigValue {
-				if k == "" {
-					return ierr.NewError("config_value keys must not be empty").
-						WithHint("All keys in config_value must be non-empty strings").
-						Mark(ierr.ErrValidation)
-				}
-			}
+		if err := validateConfigValue(r.ConfigValue); err != nil {
+			return err
 		}
 	}
 
@@ -133,6 +128,23 @@ type UpdateEntitlementRequest struct {
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`
 	StaticValue      string                            `json:"static_value"`
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
+}
+
+// Validate validates the update entitlement request
+func (r *UpdateEntitlementRequest) Validate() error {
+	return validateConfigValue(r.ConfigValue)
+}
+
+// validateConfigValue checks that all keys in a config_value map are non-empty, non-whitespace strings.
+func validateConfigValue(configValue map[string]interface{}) error {
+	for k := range configValue {
+		if strings.TrimSpace(k) == "" {
+			return ierr.NewError("config_value keys must not be empty or whitespace").
+				WithHint("All keys in config_value must be non-empty, non-whitespace strings").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 // EntitlementResponse represents the response for an entitlement

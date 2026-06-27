@@ -1026,25 +1026,21 @@ func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
 
 	result := aggregateConfigEntitlementsForBilling(ents)
 	s.True(result.IsEnabled)
-	// addon overrides plan's webhook_url
-	s.Equal("https://addon.example.com", result.ConfigValue["webhook_url"])
-	// plan's timeout is preserved
-	s.Equal("30", result.ConfigValue["timeout"])
-	// addon's rate_limit is added
-	s.Equal("100", result.ConfigValue["rate_limit"])
-	// disabled entitlement's value must not be merged
-	s.Len(result.ConfigValue, 3)
+	// both enabled entitlements returned as separate entries — no key collision
+	s.Len(result.ConfigValues, 2)
+	s.Equal(map[string]interface{}{"webhook_url": "https://plan.example.com", "timeout": "30"}, result.ConfigValues[0])
+	s.Equal(map[string]interface{}{"webhook_url": "https://addon.example.com", "rate_limit": "100"}, result.ConfigValues[1])
 
-	// all disabled → isEnabled false, configValue nil
+	// all disabled → isEnabled false, configValues nil
 	disabled := []*entitlement.Entitlement{
 		{IsEnabled: false, ConfigValue: map[string]interface{}{"key": "val"}},
 	}
 	r2 := aggregateConfigEntitlementsForBilling(disabled)
 	s.False(r2.IsEnabled)
-	s.Nil(r2.ConfigValue)
+	s.Nil(r2.ConfigValues)
 
 	// empty slice
 	r3 := aggregateConfigEntitlementsForBilling(nil)
 	s.False(r3.IsEnabled)
-	s.Nil(r3.ConfigValue)
+	s.Nil(r3.ConfigValues)
 }

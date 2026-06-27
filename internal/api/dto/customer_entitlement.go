@@ -53,7 +53,7 @@ type AggregatedEntitlement struct {
 	IsSoftLimit      bool                              `json:"is_soft_limit"`
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
 	StaticValues     []string                          `json:"static_values,omitempty"`
-	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
+	ConfigValues     []map[string]any                  `json:"config_values,omitempty"`
 }
 
 // EntitlementSourceType defines the type of entitlement source

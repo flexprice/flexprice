@@ -3089,23 +3089,20 @@ func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlem
 
 func aggregateConfigEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	isEnabled := false
-	var configValue map[string]any
+	var configValues []map[string]any
 
 	for _, e := range entitlements {
 		if e.IsEnabled {
 			isEnabled = true
-			for k, v := range e.ConfigValue {
-				if configValue == nil {
-					configValue = make(map[string]any)
-				}
-				configValue[k] = v
+			if len(e.ConfigValue) > 0 {
+				configValues = append(configValues, e.ConfigValue)
 			}
 		}
 	}
 
 	return &dto.AggregatedEntitlement{
-		IsEnabled:   isEnabled,
-		ConfigValue: configValue,
+		IsEnabled:    isEnabled,
+		ConfigValues: configValues,
 	}
 }
 
