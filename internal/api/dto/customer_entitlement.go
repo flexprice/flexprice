@@ -35,8 +35,9 @@ func (r *GetCustomerEntitlementsRequest) Validate() error {
 
 // CustomerEntitlementsResponse represents the response for customer entitlements
 type CustomerEntitlementsResponse struct {
-	CustomerID string               `json:"customer_id"`
-	Features   []*AggregatedFeature `json:"features"`
+	CustomerID    string                  `json:"customer_id"`
+	Subscriptions []*SubscriptionResponse `json:"subscriptions"`
+	Features      []*AggregatedFeature    `json:"features"`
 }
 
 // AggregatedFeature represents a feature with its aggregated entitlements
