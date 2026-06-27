@@ -116,4 +116,5 @@ const (
 	WebhookEventCheckoutSessionInitiated WebhookEventName = "checkout.session.initiated"
 	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
+	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
 )

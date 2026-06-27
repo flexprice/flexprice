@@ -62,32 +62,31 @@ func (a CheckoutAction) Validate() error {
 type CheckoutPaymentProvider string
 
 const (
-	CheckoutPaymentProviderStripe CheckoutPaymentProvider = "stripe"
+	CheckoutPaymentProviderRazorpay CheckoutPaymentProvider = "razorpay"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
 
 func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
-		CheckoutPaymentProviderStripe,
+		CheckoutPaymentProviderRazorpay,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: stripe").
+			WithHint("Allowed values: razorpay").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
 	return nil
 }
 
-// SessionExpiry returns how long checkout sessions remain valid for this provider.
+// SessionExpiry returns the default lifetime for a checkout session with this provider.
 func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
 	switch p {
-	case CheckoutPaymentProviderStripe:
-		// Stripe Checkout Sessions expire 24 hours after creation by default.
-		return 24 * time.Hour
+	case CheckoutPaymentProviderRazorpay:
+		return 15 * time.Minute
 	default:
-		return 30 * time.Minute
+		return 30 * time.Minute // Default to 30 minutes
 	}
 }
 
@@ -109,6 +108,13 @@ func (t PaymentActionType) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// PaymentAction is the customer-facing next step to complete payment.
+// Surfaced in CheckoutSessionResponse; the full CheckoutProviderResult is never exposed.
+type PaymentAction struct {
+	Type PaymentActionType `json:"type"`
+	URL  string            `json:"url"`
 }
 
 // ── Filter ───────────────────────────────────────────────────────────────────
@@ -152,4 +158,11 @@ func (f *CheckoutSessionFilter) Validate() error {
 	}
 
 	return nil
+}
+
+// CheckoutSessionCleanupResult holds per-run counts from CleanupAllExpiredSessions.
+type CheckoutSessionCleanupResult struct {
+	Total     int
+	Succeeded int
+	Failed    int
 }

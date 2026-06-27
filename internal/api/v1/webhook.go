@@ -43,6 +43,7 @@ type WebhookHandler struct {
 	planService                     interfaces.PlanService
 	subscriptionService             interfaces.SubscriptionService
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
+	checkoutSessionService          interfaces.CheckoutSessionService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
 }
@@ -59,6 +60,7 @@ func NewWebhookHandler(
 	planService interfaces.PlanService,
 	subscriptionService interfaces.SubscriptionService,
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
+	checkoutSessionService interfaces.CheckoutSessionService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
 ) *WebhookHandler {
@@ -73,6 +75,7 @@ func NewWebhookHandler(
 		planService:                     planService,
 		subscriptionService:             subscriptionService,
 		entityIntegrationMappingService: entityIntegrationMappingService,
+		checkoutSessionService:          checkoutSessionService,
 		db:                              db,
 		webhookService:                  webhookService,
 	}
@@ -242,6 +245,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -404,6 +408,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -504,6 +509,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -846,10 +852,11 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &nomodwebhook.ServiceDependencies{
-		CustomerService: h.customerService,
-		PaymentService:  h.paymentService,
-		InvoiceService:  h.invoiceService,
-		PlanService:     h.planService,
+		CustomerService:        h.customerService,
+		PaymentService:         h.paymentService,
+		InvoiceService:         h.invoiceService,
+		PlanService:            h.planService,
+		CheckoutSessionService: h.checkoutSessionService,
 	}
 
 	// Handle the event
@@ -993,6 +1000,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 

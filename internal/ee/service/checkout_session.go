@@ -9,29 +9,18 @@ import (
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-type CheckoutSessionService interface {
-	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
-	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
-	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
-	Delete(ctx context.Context, id string) error
-	// CleanupCheckoutSession archives all entities created during fulfillment (subscription,
-	// invoice, payment) and marks the session as failed with the given reason.
-	// Pass reason=nil when cleaning up without an error (e.g. session expiry).
-	CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error
-	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
-	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
-	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
-}
+type CheckoutSessionService = interfaces.CheckoutSessionService
 
 type checkoutSessionService struct {
 	ServiceParams
 }
 
-func NewCheckoutSessionService(params ServiceParams) CheckoutSessionService {
+func NewCheckoutSessionService(params ServiceParams) interfaces.CheckoutSessionService {
 	return &checkoutSessionService{ServiceParams: params}
 }
 
@@ -40,16 +29,30 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 		return nil, err
 	}
 
-	session := req.ToCheckoutSession(ctx)
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.CustomerExternalID)
+	if err != nil {
+		return nil, err
+	}
+
+	if customer.Status != types.StatusPublished {
+		return nil, ierr.NewError("customer is not active").
+			WithHint("The customer must be active to create a checkout session").
+			WithReportableDetails(map[string]any{"customer_id": customer.ID, "status": customer.Status}).
+			Mark(ierr.ErrValidation)
+	}
+
+	session := req.ToCheckoutSession(ctx, customer.ID)
 
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		// TODO: on ErrAlreadyExists (idempotency key conflict), consider fetching and returning
+		// the existing session transparently (HTTP 200) instead of propagating 409
 		return nil, err
 	}
 
 	if err := s.executeCheckoutAction(ctx, session); err != nil {
 		// Best-effort cleanup: archive entities + mark session failed.
 		// Log cleanup errors but return the original fulfillment error.
-		if cleanupErr := s.CleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
+		if cleanupErr := s.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after fulfillment error",
 				"session_id", session.ID,
 				"error", cleanupErr,
@@ -120,8 +123,28 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 	return s.CheckoutSessionRepo.Delete(ctx, id)
 }
 
-func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
-	// Archive all entities created during fulfillment.
+func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, sessionID string, reason error) error {
+	if sessionID == "" {
+		return ierr.NewError("session ID is required").
+			WithHint("checkout session ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.cleanupCheckoutSession(ctx, session, reason)
+}
+
+func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
+	// Guard: already in a terminal state — idempotent no-op.
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusCompleted, types.CheckoutStatusFailed, types.CheckoutStatusExpired:
+		return nil
+	}
+
+	// Soft-delete (archive) all entities created during fulfillment.
+	// Each repo.Delete sets status=archived; errors are non-fatal.
 	if session.Result != nil && session.Result.CreateSubscriptionResult != nil {
 		res := session.Result.CreateSubscriptionResult
 		if res.PaymentID != "" {
@@ -141,13 +164,64 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 		}
 	}
 
-	// Mark session failed.
-	session.CheckoutStatus = types.CheckoutStatusFailed
+	// Terminal status depends on whether this is a natural expiry or an error.
 	if reason != nil {
-		errMsg := reason.Error()
-		session.FailureReason = &errMsg
+		session.CheckoutStatus = types.CheckoutStatusFailed
+		msg := reason.Error()
+		session.FailureReason = &msg
+	} else {
+		session.CheckoutStatus = types.CheckoutStatusExpired
 	}
-	return s.CheckoutSessionRepo.Update(ctx, session)
+
+	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
+		return err
+	}
+
+	// Publish the appropriate lifecycle webhook.
+	resp := dto.ToCheckoutSessionResponse(session)
+	if reason != nil {
+		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionFailed)
+	} else {
+		s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionExpired)
+	}
+	return nil
+}
+
+const cleanupExpiredBatchSize = 1000
+
+func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error) {
+	cutoff := time.Now().UTC()
+	if effectiveDate != nil {
+		cutoff = effectiveDate.UTC()
+	}
+
+	result := &types.CheckoutSessionCleanupResult{}
+
+	for {
+		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, 0)
+		if err != nil {
+			return result, err
+		}
+
+		for _, sess := range sessions {
+			result.Total++
+			sessCtx := context.WithValue(ctx, types.CtxTenantID, sess.TenantID)
+			sessCtx = context.WithValue(sessCtx, types.CtxEnvironmentID, sess.EnvironmentID)
+			if err := s.cleanupCheckoutSession(sessCtx, sess, nil); err != nil {
+				s.Logger.Error(ctx, "failed to cleanup expired checkout session",
+					"session_id", sess.ID, "error", err)
+				result.Failed++
+				continue
+			}
+			result.Succeeded++
+		}
+
+		if len(sessions) < cleanupExpiredBatchSize {
+			break
+		}
+	}
+
+	return result, nil
 }
 
 func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error {
@@ -157,37 +231,54 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
+	// Fetch session for completeCheckoutAction context (subscription/invoice/payment IDs).
 	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 
-	if session.CheckoutStatus != types.CheckoutStatusPending &&
-		session.CheckoutStatus != types.CheckoutStatusInitiated {
-		return ierr.NewError("checkout session cannot be completed").
-			WithHintf("session is in %s status; must be pending or initiated", session.CheckoutStatus).
-			Mark(ierr.ErrValidation)
+	// Fast-path guard: already in a terminal state — nothing to do.
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusCompleted, types.CheckoutStatusFailed, types.CheckoutStatusExpired:
+		return ierr.NewError("checkout session already in terminal state").
+			WithHintf("session %s is %s", sessionID, session.CheckoutStatus).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
+	// Run sub-steps idempotently before claiming the session.
+	// Safe to run in parallel with a duplicate webhook — each step is conditional.
 	if err := s.completeCheckoutAction(ctx, session, providerResult); err != nil {
 		return err
 	}
 
+	// Atomic claim: only one concurrent caller gets n > 0.
 	now := time.Now().UTC()
+	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, providerResult)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		// Another process completed it simultaneously — idempotent no-op.
+		return ierr.NewError("checkout session already completed by concurrent request").
+			WithHintf("session %s was claimed by another process", sessionID).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
 	session.CheckoutStatus = types.CheckoutStatusCompleted
 	session.CompletedAt = &now
 	if providerResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
-	}
-	if err := s.CheckoutSessionRepo.Update(ctx, session); err != nil {
-		return err
+		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(providerResult)
 	}
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
 	return nil
 }
 
 func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, session *dto.CheckoutSessionResponse, eventName types.WebhookEventName) {
-	payload, err := json.Marshal(webhookDto.NewCheckoutSessionWebhookPayload(session, eventName))
+	internal := webhookDto.InternalCheckoutSessionEvent{
+		SessionID: session.ID,
+		TenantID:  types.GetTenantID(ctx),
+	}
+	payload, err := json.Marshal(internal)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to marshal checkout webhook payload", "event_name", eventName, "error", err)
 		return
@@ -271,8 +362,8 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv *invoice.Invoice, provider types.CheckoutPaymentProvider) (*dto.PaymentResponse, error) {
 	var gateway types.PaymentGatewayType
 	switch provider {
-	case types.CheckoutPaymentProviderStripe:
-		gateway = types.PaymentGatewayTypeStripe
+	case types.CheckoutPaymentProviderRazorpay:
+		gateway = types.PaymentGatewayTypeRazorpay
 	default:
 		return nil, ierr.NewError("unsupported payment provider for checkout").
 			WithHint("No gateway mapping exists for this provider").
@@ -286,6 +377,3 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 		Gateway: gateway,
 	})
 }
-
-// ensure interface compliance at compile time
-var _ CheckoutSessionService = (*checkoutSessionService)(nil)

@@ -2,6 +2,7 @@ package payload
 
 import (
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/tracing"
 )
 
@@ -11,17 +12,18 @@ import (
 // previously read .Sentry should use .Tracing. The field name is kept short
 // because builders only use it for CaptureException today.
 type Services struct {
-	InvoiceService      service.InvoiceService
-	PlanService         service.PlanService
-	PriceService        service.PriceService
-	EntitlementService  service.EntitlementService
-	FeatureService      service.FeatureService
-	SubscriptionService service.SubscriptionService
-	WalletService       service.WalletService
-	CustomerService     service.CustomerService
-	PaymentService      service.PaymentService
-	Tracing             *tracing.Service
-	CreditNoteService   service.CreditNoteService
+	InvoiceService         service.InvoiceService
+	PlanService            service.PlanService
+	PriceService           service.PriceService
+	EntitlementService     service.EntitlementService
+	FeatureService         service.FeatureService
+	SubscriptionService    service.SubscriptionService
+	WalletService          service.WalletService
+	CustomerService        service.CustomerService
+	PaymentService         service.PaymentService
+	Tracing                *tracing.Service
+	CreditNoteService      service.CreditNoteService
+	CheckoutSessionService interfaces.CheckoutSessionService
 }
 
 // NewServices creates a new Services container
@@ -37,18 +39,20 @@ func NewServices(
 	paymentService service.PaymentService,
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
+	checkoutSessionService interfaces.CheckoutSessionService,
 ) *Services {
 	return &Services{
-		InvoiceService:      invoiceService,
-		PlanService:         planService,
-		PriceService:        priceService,
-		EntitlementService:  entitlementService,
-		FeatureService:      featureService,
-		SubscriptionService: subscriptionService,
-		WalletService:       walletService,
-		CustomerService:     customerService,
-		PaymentService:      paymentService,
-		Tracing:             tracingSvc,
-		CreditNoteService:   creditNoteService,
+		InvoiceService:         invoiceService,
+		PlanService:            planService,
+		PriceService:           priceService,
+		EntitlementService:     entitlementService,
+		FeatureService:         featureService,
+		SubscriptionService:    subscriptionService,
+		WalletService:          walletService,
+		CustomerService:        customerService,
+		PaymentService:         paymentService,
+		Tracing:                tracingSvc,
+		CreditNoteService:      creditNoteService,
+		CheckoutSessionService: checkoutSessionService,
 	}
 }

@@ -156,6 +156,20 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewAlertPayloadBuilder(f.services)
 	}
 
+	// checkout session builders
+	f.builders[types.WebhookEventCheckoutSessionInitiated] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionCompleted] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionFailed] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionExpired] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+
 	return f
 }
 

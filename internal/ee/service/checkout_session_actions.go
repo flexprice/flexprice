@@ -7,23 +7,18 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
-	s.Logger.Debug(ctx, "executeCheckoutAction: starting", "session_id", session.ID, "action", session.Action)
 	switch session.Action {
 	case types.CheckoutActionCreateSubscription:
-		s.Logger.Debug(ctx, "executeCheckoutAction: creating draft subscription", "session_id", session.ID)
 		subResp, invResp, err := s.createDraftSubscription(ctx, session)
 		if err != nil {
-			s.Logger.Error(ctx, "executeCheckoutAction: createDraftSubscription failed", "session_id", session.ID, "error", err)
 			return err
 		}
-		s.Logger.Debug(ctx, "executeCheckoutAction: draft subscription created", "sub_id", subResp.ID, "inv_id", invResp.ID)
 
-		// Stage sub and invoice IDs immediately so CleanupCheckoutSession can
-		// archive them if the payment step below fails.
 		result := types.CheckoutResult{
 			CreateSubscriptionResult: &types.CreateSubscriptionResult{
 				SubscriptionID: subResp.ID,
@@ -36,10 +31,16 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 		if err != nil {
 			return err
 		}
-
 		result.CreateSubscriptionResult.PaymentID = payResp.ID
 		session.CheckoutInvoiceID = &invResp.ID
 		session.CheckoutPaymentID = &payResp.ID
+
+		// Contact the payment gateway and get the hosted checkout URL.
+		providerResult, err := s.callCheckoutProvider(ctx, session, payResp)
+		if err != nil {
+			return err
+		}
+		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 		session.CheckoutStatus = types.CheckoutStatusPending
 
 	default:
@@ -50,6 +51,71 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 	}
 
 	return s.CheckoutSessionRepo.Update(ctx, session)
+}
+
+// callCheckoutProvider contacts the payment gateway, tightens ExpiresAt if the provider URL
+// expires sooner, and records an EntityIntegrationMapping (ProviderSessionID → FlexPrice PaymentID).
+func (s *checkoutSessionService) callCheckoutProvider(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	payResp *dto.PaymentResponse,
+) (*types.CheckoutProviderResult, error) {
+	customerSvc := NewCustomerService(s.ServiceParams)
+	invoiceSvc := NewInvoiceService(s.ServiceParams)
+	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, session.PaymentProvider, customerSvc, invoiceSvc)
+	if err != nil {
+		return nil, err
+	}
+
+	req := interfaces.CheckoutProviderRequest{
+		InvoiceID:     *session.CheckoutInvoiceID,
+		CustomerID:    session.CustomerID,
+		Amount:        payResp.Amount,
+		Currency:      payResp.Currency,
+		PaymentID:     payResp.ID,
+		EnvironmentID: session.EnvironmentID,
+	}
+	if len(session.Metadata) > 0 {
+		req.Metadata = map[string]string(session.Metadata)
+	}
+	if session.SuccessURL != nil {
+		req.SuccessURL = *session.SuccessURL
+	}
+	if session.FailureURL != nil {
+		req.FailureURL = *session.FailureURL
+	}
+	if session.CancelURL != nil {
+		req.CancelURL = *session.CancelURL
+	}
+
+	resp, err := provider.CreatePaymentLink(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Tighten session expiry if the provider URL expires sooner.
+	if resp.ExpiresAt != nil && resp.ExpiresAt.Before(session.ExpiresAt) {
+		session.ExpiresAt = *resp.ExpiresAt
+	}
+
+	// Record ProviderSessionID → FlexPrice PaymentID so incoming webhooks can route back.
+	mappingSvc := NewEntityIntegrationMappingService(s.ServiceParams)
+	if _, err := mappingSvc.CreateEntityIntegrationMapping(ctx, dto.CreateEntityIntegrationMappingRequest{
+		EntityID:         payResp.ID,
+		EntityType:       types.IntegrationEntityTypePayment,
+		ProviderType:     session.PaymentProvider.String(),
+		ProviderEntityID: resp.ProviderSessionID,
+	}); err != nil {
+		return nil, err
+	}
+
+	return &types.CheckoutProviderResult{
+		NextAction:              &resp.NextAction,
+		ProviderSessionID:       resp.ProviderSessionID,
+		ProviderPaymentIntentID: resp.ProviderPaymentIntentID,
+		ExpiresAt:               resp.ExpiresAt,
+		ProviderMetadata:        resp.ProviderMetadata,
+	}, nil
 }
 
 func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
@@ -72,39 +138,46 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 	}
 	res := session.Result.CreateSubscriptionResult
 
-	// 1. Activate subscription: draft → active (no billing side effects needed)
+	// 1. Activate subscription: only update if still in draft.
 	sub, err := s.SubRepo.Get(ctx, res.SubscriptionID)
 	if err != nil {
 		return err
 	}
-	sub.SubscriptionStatus = types.SubscriptionStatusActive
-	if err := s.SubRepo.Update(ctx, sub); err != nil {
-		return err
+	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+		sub.SubscriptionStatus = types.SubscriptionStatusActive
+		if err := s.SubRepo.Update(ctx, sub); err != nil {
+			return err
+		}
 	}
 
-	// 2. Finalize the draft invoice (assigns invoice number, seals it)
+	// 2. Finalize the draft invoice (idempotent: check status first).
 	invSvc := NewInvoiceService(s.ServiceParams)
-	if err := invSvc.FinalizeInvoice(ctx, res.InvoiceID); err != nil {
+	invResp, err := invSvc.GetInvoice(ctx, res.InvoiceID)
+	if err != nil {
 		return err
 	}
+	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
+		if err := invSvc.FinalizeInvoice(ctx, res.InvoiceID); err != nil {
+			return err
+		}
+	}
 
-	// 3. Mark the checkout payment as SUCCEEDED, storing the gateway payment ID
+	// 3. Mark the checkout payment as SUCCEEDED, storing the gateway payment ID.
 	statusStr := string(types.PaymentStatusSucceeded)
 	now := time.Now().UTC()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,
 	}
-	if providerResult != nil && providerResult.CreateSubscriptionResult != nil {
-		if id := providerResult.CreateSubscriptionResult.PaymentIntentID; id != "" {
-			updateReq.GatewayPaymentID = &id
-		}
+	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
+		id := providerResult.ProviderPaymentIntentID
+		updateReq.GatewayPaymentID = &id
 	}
 	paySvc := NewPaymentService(s.ServiceParams)
 	if _, err := paySvc.UpdatePayment(ctx, res.PaymentID, updateReq); err != nil {
 		return err
 	}
 
-	// 4. Reconcile invoice payment status (marks invoice as paid)
+	// 4. Reconcile invoice payment status (marks invoice as paid — already idempotent).
 	return invSvc.ReconcilePaymentStatus(ctx, res.InvoiceID, types.PaymentStatusSucceeded, nil)
 }

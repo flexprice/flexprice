@@ -205,6 +205,24 @@ type CreditAdjustmentService interface {
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 }
 
+type CheckoutSessionService interface {
+	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
+	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
+	Delete(ctx context.Context, id string) error
+	// CleanupCheckoutSession fetches the session by ID, archives all fulfillment entities
+	// (subscription, invoice, payment), and marks the session failed or expired.
+	// Pass reason=nil to mark as expired; pass a non-nil error to mark as failed.
+	CleanupCheckoutSession(ctx context.Context, sessionID string, reason error) error
+	// CleanupAllExpiredSessions finds all active sessions whose ExpiresAt is before
+	// effectiveDate (defaults to now) and archives them in batches of 1000.
+	// Returns total/succeeded/failed counts.
+	CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error)
+	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
+	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
+	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
+}
+
 type ServiceDependencies struct {
 	CustomerService                 CustomerService
 	PaymentService                  PaymentService
@@ -214,5 +232,6 @@ type ServiceDependencies struct {
 	EntityIntegrationMappingService EntityIntegrationMappingService
 	PriceUnitService                PriceUnitService
 	CreditAdjustmentService         CreditAdjustmentService
+	CheckoutSessionService          CheckoutSessionService
 	DB                              postgres.IClient
 }
