@@ -127,6 +127,28 @@ func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessio
 	return true, nil
 }
 
+func (s *InMemoryCheckoutSessionStore) ListExpiredCheckoutSessions(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*domainCheckout.CheckoutSession, error) {
+	items, err := s.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var expired []*domainCheckout.CheckoutSession
+	for _, item := range items {
+		if (item.CheckoutStatus == types.CheckoutStatusInitiated || item.CheckoutStatus == types.CheckoutStatusPending) &&
+			!item.ExpiresAt.IsZero() && item.ExpiresAt.Before(effectiveDate) {
+			expired = append(expired, item)
+		}
+	}
+	if offset >= len(expired) {
+		return nil, nil
+	}
+	expired = expired[offset:]
+	if limit > 0 && len(expired) > limit {
+		expired = expired[:limit]
+	}
+	return expired, nil
+}
+
 func (s *InMemoryCheckoutSessionStore) GetByIdempotencyKey(ctx context.Context, key string) (*domainCheckout.CheckoutSession, error) {
 	items, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {

@@ -205,10 +205,9 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 	}
 
 	result := &CheckoutSessionCleanupResult{}
-	offset := 0
 
 	for {
-		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, offset)
+		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, 0)
 		if err != nil {
 			return result, err
 		}
@@ -229,7 +228,6 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 		if len(sessions) < cleanupExpiredBatchSize {
 			break
 		}
-		offset += cleanupExpiredBatchSize
 	}
 
 	return result, nil
