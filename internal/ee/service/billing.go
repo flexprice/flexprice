@@ -3089,7 +3089,7 @@ func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlem
 
 func aggregateConfigEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	isEnabled := false
-	var configValues []map[string]any
+	configValues := make([]map[string]any, 0)
 
 	for _, e := range entitlements {
 		if e.IsEnabled {
