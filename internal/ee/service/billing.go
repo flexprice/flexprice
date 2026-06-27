@@ -3285,6 +3285,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	// Collect all entitlements from all subscriptions
 	allEntitlements := make([]*dto.EntitlementResponse, 0)
+	allSubscriptions := make([]*dto.SubscriptionResponse, 0, len(subscriptions))
 
 	// Process each subscription to get its entitlements (including both plan and addon entitlements)
 	for _, sub := range subscriptions {
@@ -3313,6 +3314,8 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		} else {
 			allEntitlements = append(allEntitlements, subEntitlements...)
 		}
+
+		allSubscriptions = append(allSubscriptions, &dto.SubscriptionResponse{Subscription: sub})
 	}
 
 	// Use the generic aggregation function
@@ -3321,16 +3324,10 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		SubscriptionID: subscriptions[0].ID,
 	})
 
-	// Build subscription responses
-	subscriptionResponses := make([]*dto.SubscriptionResponse, 0, len(subscriptions))
-	for _, sub := range subscriptions {
-		subscriptionResponses = append(subscriptionResponses, &dto.SubscriptionResponse{Subscription: sub})
-	}
-
 	// Build final response
 	response := &dto.CustomerEntitlementsResponse{
 		CustomerID:    customerID,
-		Subscriptions: subscriptionResponses,
+		Subscriptions: allSubscriptions,
 		Features:      aggregatedFeatures,
 	}
 
