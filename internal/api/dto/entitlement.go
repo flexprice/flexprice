@@ -60,15 +60,10 @@ func (r *CreateEntitlementRequest) Validate() error {
 		}
 	case types.FeatureTypeConfig:
 		if len(r.ConfigValue) > 0 {
-			for k, v := range r.ConfigValue {
+			for k := range r.ConfigValue {
 				if k == "" {
 					return ierr.NewError("config_value keys must not be empty").
 						WithHint("All keys in config_value must be non-empty strings").
-						Mark(ierr.ErrValidation)
-				}
-				if s, ok := v.(string); ok && s == "" {
-					return ierr.NewError("config_value values must not be empty").
-						WithHintf("Value for key %q is empty", k).
 						Mark(ierr.ErrValidation)
 				}
 			}
@@ -120,14 +115,12 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		UsageResetPeriod:    r.UsageResetPeriod,
 		IsSoftLimit:         r.IsSoftLimit,
 		StaticValue:         r.StaticValue,
+		ConfigValue:         r.ConfigValue,
 		ParentEntitlementID: r.ParentEntitlementID,
 		StartDate:           r.StartDate,
 		EndDate:             r.EndDate,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
-	}
-	if r.FeatureType == types.FeatureTypeConfig {
-		ent.ConfigValue = r.ConfigValue
 	}
 	return ent
 }

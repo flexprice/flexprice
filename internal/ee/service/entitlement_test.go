@@ -1007,3 +1007,44 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlementWithConfig() {
 		s.Equal("us-east-1", ent.Entitlement.ConfigValue["region"])
 	})
 }
+
+func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
+	ents := []*entitlement.Entitlement{
+		{
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://plan.example.com", "timeout": "30"},
+		},
+		{
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://addon.example.com", "rate_limit": "100"},
+		},
+		{
+			IsEnabled:   false,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://disabled.example.com"},
+		},
+	}
+
+	result := aggregateConfigEntitlementsForBilling(ents)
+	s.True(result.IsEnabled)
+	// addon overrides plan's webhook_url
+	s.Equal("https://addon.example.com", result.ConfigValue["webhook_url"])
+	// plan's timeout is preserved
+	s.Equal("30", result.ConfigValue["timeout"])
+	// addon's rate_limit is added
+	s.Equal("100", result.ConfigValue["rate_limit"])
+	// disabled entitlement's value must not be merged
+	s.Len(result.ConfigValue, 3)
+
+	// all disabled → isEnabled false, configValue nil
+	disabled := []*entitlement.Entitlement{
+		{IsEnabled: false, ConfigValue: map[string]interface{}{"key": "val"}},
+	}
+	r2 := aggregateConfigEntitlementsForBilling(disabled)
+	s.False(r2.IsEnabled)
+	s.Nil(r2.ConfigValue)
+
+	// empty slice
+	r3 := aggregateConfigEntitlementsForBilling(nil)
+	s.False(r3.IsEnabled)
+	s.Nil(r3.ConfigValue)
+}
