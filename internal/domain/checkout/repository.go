@@ -39,7 +39,7 @@ type Repository interface {
 	// Never returns an error for the already-terminal case.
 	MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error)
 
-	// ListExpired returns active (initiated|pending) sessions whose ExpiresAt is before
+	// ListExpiredCheckoutSessions returns active (initiated|pending) sessions whose ExpiresAt is before
 	// effectiveDate within the tenant+environment in ctx, ordered by expires_at asc.
-	ListExpired(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*CheckoutSession, error)
+	ListExpiredCheckoutSessions(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*CheckoutSession, error)
 }

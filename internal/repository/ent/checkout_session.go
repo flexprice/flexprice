@@ -316,7 +316,9 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 	return n > 0, nil
 }
 
-func (r *checkoutSessionRepository) ListExpired(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*domainCheckout.CheckoutSession, error) {
+// ListExpiredCheckoutSessions returns active (initiated|pending) sessions whose ExpiresAt is before
+// effectiveDate within the tenant+environment in ctx, ordered by expires_at asc.
+func (r *checkoutSessionRepository) ListExpiredCheckoutSessions(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*domainCheckout.CheckoutSession, error) {
 	span := StartRepositorySpan(ctx, "checkout_session", "list_expired", map[string]interface{}{
 		"effective_date": effectiveDate,
 		"limit":          limit,
@@ -326,8 +328,6 @@ func (r *checkoutSessionRepository) ListExpired(ctx context.Context, effectiveDa
 
 	query := r.client.Reader(ctx).CheckoutSession.Query().
 		Where(
-			entCheckout.TenantID(types.GetTenantID(ctx)),
-			entCheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
 			entCheckout.StatusNotIn(string(types.StatusDeleted)),
 			entCheckout.CheckoutStatusIn(
 				types.CheckoutStatusInitiated,

@@ -272,7 +272,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
-		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), tenantService, environmentService, params.Logger),
+		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
