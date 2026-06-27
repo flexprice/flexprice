@@ -17,6 +17,7 @@ const (
 	FeatureTypeMetered FeatureType = "metered"
 	FeatureTypeBoolean FeatureType = "boolean"
 	FeatureTypeStatic  FeatureType = "static"
+	FeatureTypeConfig  FeatureType = "config"
 )
 
 func (f FeatureType) String() string {
@@ -32,6 +33,7 @@ func (f FeatureType) Validate() error {
 		FeatureTypeMetered,
 		FeatureTypeBoolean,
 		FeatureTypeStatic,
+		FeatureTypeConfig,
 	}
 	if !lo.Contains(allowed, f) {
 		return ierr.NewError("invalid feature type").
@@ -42,6 +44,7 @@ func (f FeatureType) Validate() error {
 					string(FeatureTypeMetered),
 					string(FeatureTypeBoolean),
 					string(FeatureTypeStatic),
+					string(FeatureTypeConfig),
 				},
 			}).
 			Mark(ierr.ErrValidation)

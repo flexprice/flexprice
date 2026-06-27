@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -26,6 +27,7 @@ type CreateEntitlementRequest struct {
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
+	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -57,6 +59,16 @@ func (r *CreateEntitlementRequest) Validate() error {
 				WithHint("Static value is required for static features").
 				Mark(ierr.ErrValidation)
 		}
+	case types.FeatureTypeConfig:
+		if err := validateConfigValue(r.ConfigValue); err != nil {
+			return err
+		}
+	}
+
+	if r.FeatureType != types.FeatureTypeConfig && len(r.ConfigValue) > 0 {
+		return ierr.NewError("config_value is only supported for config features").
+			WithHint("Remove config_value or change the feature type to config").
+			Mark(ierr.ErrValidation)
 	}
 
 	// either you pass planId or entityType and entityId
@@ -87,7 +99,7 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		r.EntityID = r.PlanID
 	}
 
-	return &entitlement.Entitlement{
+	ent := &entitlement.Entitlement{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
 		EntityType:          r.EntityType,
 		EntityID:            r.EntityID,
@@ -98,12 +110,14 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		UsageResetPeriod:    r.UsageResetPeriod,
 		IsSoftLimit:         r.IsSoftLimit,
 		StaticValue:         r.StaticValue,
+		ConfigValue:         r.ConfigValue,
 		ParentEntitlementID: r.ParentEntitlementID,
 		StartDate:           r.StartDate,
 		EndDate:             r.EndDate,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
+	return ent
 }
 
 // UpdateEntitlementRequest represents the request to update an existing entitlement
@@ -113,6 +127,24 @@ type UpdateEntitlementRequest struct {
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`
 	StaticValue      string                            `json:"static_value"`
+	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
+}
+
+// Validate validates the update entitlement request
+func (r *UpdateEntitlementRequest) Validate() error {
+	return validateConfigValue(r.ConfigValue)
+}
+
+// validateConfigValue checks that all keys in a config_value map are non-empty, non-whitespace strings.
+func validateConfigValue(configValue map[string]interface{}) error {
+	for k := range configValue {
+		if strings.TrimSpace(k) == "" {
+			return ierr.NewError("config_value keys must not be empty or whitespace").
+				WithHint("All keys in config_value must be non-empty, non-whitespace strings").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 // EntitlementResponse represents the response for an entitlement

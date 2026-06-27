@@ -822,3 +822,225 @@ func (s *EntitlementServiceSuite) TestCreateBulkEntitlement() {
 		s.Contains(err.Error(), "too many entitlements in bulk request")
 	})
 }
+
+func (s *EntitlementServiceSuite) TestConfigEntitlement() {
+	configFeature := &feature.Feature{
+		ID:        "feat-config",
+		Name:      "Config Feature",
+		Type:      types.FeatureTypeConfig,
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().FeatureRepo.Create(s.GetContext(), configFeature)
+	s.NoError(err)
+
+	testPlan := &plan.Plan{
+		ID:        "plan-config",
+		Name:      "Config Plan",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+	s.NoError(err)
+
+	s.Run("Create config entitlement with config_value", func() {
+		req := dto.CreateEntitlementRequest{
+			PlanID:      testPlan.ID,
+			FeatureID:   configFeature.ID,
+			FeatureType: types.FeatureTypeConfig,
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{
+				"webhook_url": "https://example.com/hook",
+				"retry_count": "3",
+			},
+		}
+
+		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal(types.FeatureTypeConfig, resp.Entitlement.FeatureType)
+		s.True(resp.Entitlement.IsEnabled)
+		s.Equal("https://example.com/hook", resp.Entitlement.ConfigValue["webhook_url"])
+		s.Equal("3", resp.Entitlement.ConfigValue["retry_count"])
+	})
+
+	s.Run("Create config entitlement without config_value is allowed", func() {
+		req := dto.CreateEntitlementRequest{
+			PlanID:      testPlan.ID,
+			FeatureID:   configFeature.ID,
+			FeatureType: types.FeatureTypeConfig,
+			IsEnabled:   true,
+		}
+
+		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Empty(resp.Entitlement.ConfigValue)
+	})
+
+	s.Run("config_value rejected for non-config feature type", func() {
+		boolFeature := &feature.Feature{
+			ID:        "feat-bool-cv",
+			Name:      "Bool Feature",
+			Type:      types.FeatureTypeBoolean,
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		}
+		err := s.GetStores().FeatureRepo.Create(s.GetContext(), boolFeature)
+		s.NoError(err)
+
+		req := dto.CreateEntitlementRequest{
+			PlanID:      testPlan.ID,
+			FeatureID:   boolFeature.ID,
+			FeatureType: types.FeatureTypeBoolean,
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{"key": "val"},
+		}
+
+		resp, err := s.service.CreateEntitlement(s.GetContext(), req)
+		s.Error(err)
+		s.Nil(resp)
+	})
+}
+
+func (s *EntitlementServiceSuite) TestUpdateEntitlementConfigValue() {
+	configFeature := &feature.Feature{
+		ID:        "feat-config-upd",
+		Name:      "Config Feature Update",
+		Type:      types.FeatureTypeConfig,
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().FeatureRepo.Create(s.GetContext(), configFeature)
+	s.NoError(err)
+
+	testPlan := &plan.Plan{
+		ID:        "plan-config-upd",
+		Name:      "Config Plan Update",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+	s.NoError(err)
+
+	ent := &entitlement.Entitlement{
+		ID:          "ent-config-1",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
+		FeatureID:   configFeature.ID,
+		FeatureType: types.FeatureTypeConfig,
+		IsEnabled:   true,
+		ConfigValue: map[string]interface{}{"env": "staging"},
+		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err = s.GetStores().EntitlementRepo.Create(s.GetContext(), ent)
+	s.NoError(err)
+
+	s.Run("Update config_value replaces existing value", func() {
+		req := dto.UpdateEntitlementRequest{
+			ConfigValue: map[string]interface{}{
+				"env":         "production",
+				"webhook_url": "https://prod.example.com/hook",
+			},
+		}
+
+		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+		s.Equal("https://prod.example.com/hook", resp.Entitlement.ConfigValue["webhook_url"])
+	})
+
+	s.Run("Update without config_value leaves existing config_value intact", func() {
+		isEnabled := false
+		req := dto.UpdateEntitlementRequest{
+			IsEnabled: &isEnabled,
+		}
+
+		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.False(resp.Entitlement.IsEnabled)
+		// config_value must still be what the previous sub-test set
+		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+	})
+}
+
+func (s *EntitlementServiceSuite) TestCreateBulkEntitlementWithConfig() {
+	configFeature := &feature.Feature{
+		ID:        "feat-config-bulk",
+		Name:      "Config Feature Bulk",
+		Type:      types.FeatureTypeConfig,
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err := s.GetStores().FeatureRepo.Create(s.GetContext(), configFeature)
+	s.NoError(err)
+
+	testPlan := &plan.Plan{
+		ID:        "plan-config-bulk",
+		Name:      "Config Plan Bulk",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	err = s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+	s.NoError(err)
+
+	s.Run("Bulk create includes config entitlement with config_value", func() {
+		req := dto.CreateBulkEntitlementRequest{
+			Items: []dto.CreateEntitlementRequest{
+				{
+					PlanID:      testPlan.ID,
+					FeatureID:   configFeature.ID,
+					FeatureType: types.FeatureTypeConfig,
+					IsEnabled:   true,
+					ConfigValue: map[string]interface{}{
+						"rate_limit": "100",
+						"region":     "us-east-1",
+					},
+				},
+			},
+		}
+
+		resp, err := s.service.CreateBulkEntitlement(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Len(resp.Items, 1)
+
+		ent := resp.Items[0]
+		s.Equal(types.FeatureTypeConfig, ent.Entitlement.FeatureType)
+		s.True(ent.Entitlement.IsEnabled)
+		s.Equal("100", ent.Entitlement.ConfigValue["rate_limit"])
+		s.Equal("us-east-1", ent.Entitlement.ConfigValue["region"])
+	})
+}
+
+func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
+	ents := []*entitlement.Entitlement{
+		{
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://plan.example.com", "timeout": "30"},
+		},
+		{
+			IsEnabled:   true,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://addon.example.com", "rate_limit": "100"},
+		},
+		{
+			IsEnabled:   false,
+			ConfigValue: map[string]interface{}{"webhook_url": "https://disabled.example.com"},
+		},
+	}
+
+	result := aggregateConfigEntitlementsForBilling(ents)
+	s.True(result.IsEnabled)
+	// both enabled entitlements returned as separate entries — no key collision
+	s.Len(result.ConfigValues, 2)
+	s.Equal(map[string]interface{}{"webhook_url": "https://plan.example.com", "timeout": "30"}, result.ConfigValues[0])
+	s.Equal(map[string]interface{}{"webhook_url": "https://addon.example.com", "rate_limit": "100"}, result.ConfigValues[1])
+
+	// all disabled → isEnabled false, configValues nil
+	disabled := []*entitlement.Entitlement{
+		{IsEnabled: false, ConfigValue: map[string]interface{}{"key": "val"}},
+	}
+	r2 := aggregateConfigEntitlementsForBilling(disabled)
+	s.False(r2.IsEnabled)
+	s.Len(r2.ConfigValues, 0)
+
+	// empty slice
+	r3 := aggregateConfigEntitlementsForBilling(nil)
+	s.False(r3.IsEnabled)
+	s.Len(r3.ConfigValues, 0)
+}

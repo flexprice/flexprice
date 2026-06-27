@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -57,7 +58,9 @@ type Entitlement struct {
 	// Start date for time-bound entitlements (subscription-scoped only)
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// End date for time-bound entitlements (subscription-scoped only)
-	EndDate            *time.Time `json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// ConfigValue holds the value of the "config_value" field.
+	ConfigValue        map[string]interface{} `json:"config_value,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -67,6 +70,8 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case entitlement.FieldConfigValue:
+			values[i] = new([]byte)
 		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit:
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder:
@@ -222,6 +227,14 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 				e.EndDate = new(time.Time)
 				*e.EndDate = value.Time
 			}
+		case entitlement.FieldConfigValue:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field config_value", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &e.ConfigValue); err != nil {
+					return fmt.Errorf("unmarshal field config_value: %w", err)
+				}
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -332,6 +345,9 @@ func (e *Entitlement) String() string {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("config_value=")
+	builder.WriteString(fmt.Sprintf("%v", e.ConfigValue))
 	builder.WriteByte(')')
 	return builder.String()
 }

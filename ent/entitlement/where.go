@@ -1375,6 +1375,16 @@ func EndDateNotNil() predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldNotNull(FieldEndDate))
 }
 
+// ConfigValueIsNil applies the IsNil predicate on the "config_value" field.
+func ConfigValueIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldConfigValue))
+}
+
+// ConfigValueNotNil applies the NotNil predicate on the "config_value" field.
+func ConfigValueNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldConfigValue))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Entitlement) predicate.Entitlement {
 	return predicate.Entitlement(sql.AndPredicates(predicates...))
