@@ -129,7 +129,8 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 
 // AddNoPublishHandlerWithDLQ is like AddNoPublishHandler but opts the handler into
 // per-consumer-group DLQ routing. consumerGroup is used only as a log/trace label;
-// dlqTopic comes from config/env and an empty value disables DLQ for this env.
+// dlqTopic comes from config/env. An empty dlqTopic disables the per-consumer DLQ
+// and routes poisoned messages to the legacy shared DLQ fallback instead (never dropped).
 func (r *Router) AddNoPublishHandlerWithDLQ(
 	handlerName string,
 	topicName string,

@@ -50,7 +50,9 @@ func newRoutingDLQPublisher(inner, fallback message.Publisher, fallbackTopic str
 }
 
 // Register opts a handler into per-consumer-group DLQ routing. An empty dlqTopic
-// records the handler but disables DLQ publishing for it (per-env opt-out).
+// disables the per-consumer DLQ for this handler — poisoned messages then fall
+// back to the legacy shared DLQ (same as handlers that never registered), so the
+// message is never dropped. Use a distinct topic per env to fully isolate it.
 func (p *routingDLQPublisher) Register(handlerName, consumerGroup, dlqTopic string) {
 	p.routes[handlerName] = dlqTopic
 	p.consumerGroups[handlerName] = consumerGroup
@@ -67,9 +69,9 @@ func (p *routingDLQPublisher) Publish(_ string, msgs ...*message.Message) error 
 
 		dlqTopic := p.routes[handlerName]
 		if dlqTopic == "" {
-			// No per-consumer DLQ topic for this handler (never opted in, or
-			// opted in with an empty topic). Fall back to the legacy shared DLQ
-			// so the message is not lost.
+			// No per-consumer DLQ topic for this handler — either it never opted
+			// in, or it registered with an empty topic. Both cases fall back to
+			// the legacy shared DLQ so the message is not lost.
 			if err := p.publishFallback(ctx, handlerName, msg); err != nil {
 				return err
 			}
@@ -91,7 +93,10 @@ func (p *routingDLQPublisher) Publish(_ string, msgs ...*message.Message) error 
 			"error", reason,
 		)
 
-		p.tracing.CaptureException(ctx, newDLQError(handlerName, consumerGroup, dlqTopic, reason))
+		// tracing is optional (nil in unit tests / when disabled); guard before use.
+		if p.tracing != nil {
+			p.tracing.CaptureException(ctx, newDLQError(handlerName, consumerGroup, dlqTopic, reason))
+		}
 
 		if err := p.inner.Publish(dlqTopic, msg); err != nil {
 			p.logger.Error(ctx, "failed to publish message to DLQ topic",

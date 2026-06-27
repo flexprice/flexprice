@@ -144,9 +144,10 @@ type KafkaConfig struct {
 	ConsumerGroup string   `mapstructure:"consumer_group" validate:"required"`
 	Topic         string   `mapstructure:"topic" validate:"required"`
 	TopicLazy     string   `mapstructure:"topic_lazy" validate:"required"`
-	// Deprecated: no longer used by the pubsub router. DLQ routing is now
-	// per-consumer-group via the dlq_topic fields on the event_processing*
-	// configs (see EventProcessingConfig.DLQTopic and friends).
+	// TopicDLQ is the legacy shared dead-letter topic. It is now the fallback DLQ
+	// for consumers without a per-consumer-group topic_dlq (see the TopicDLQ fields
+	// on the event_processing* / *_usage_tracking configs). Empty falls back to an
+	// in-memory queue (non-durable).
 	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
 	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	UseSASL       bool                 `mapstructure:"use_sasl"`
@@ -395,8 +396,9 @@ type EventProcessingConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventPostProcessingConfig struct {
@@ -418,8 +420,9 @@ type EventProcessingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_lazy_backfill"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventProcessingReplayConfig struct {
@@ -439,8 +442,9 @@ type FeatureUsageTrackingConfig struct {
 	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
 	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
 	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type FeatureUsageTrackingLazyConfig struct {
@@ -451,8 +455,9 @@ type FeatureUsageTrackingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type FeatureUsageTrackingReplayConfig struct {
@@ -468,8 +473,9 @@ type MeterUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -482,8 +488,9 @@ type MeterUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 // UsageBenchmarkConfig configures the usage benchmarking consumer
@@ -633,8 +640,9 @@ type CostSheetUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type CostSheetUsageTrackingLazyConfig struct {
@@ -642,8 +650,9 @@ type CostSheetUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`
-	// DLQTopic is the per-consumer-group dead-letter Kafka topic. Empty disables DLQ for this env.
-	DLQTopic string `mapstructure:"dlq_topic" default:""`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type CheckoutConfig struct {
@@ -797,15 +806,15 @@ func NewConfig() (*Configuration, error) {
 
 	// Explicitly bind the per-consumer-group DLQ topics. Both key segments contain
 	// underscores, which AutomaticEnv+Unmarshal cannot disambiguate, so without these
-	// binds the FLEXPRICE_*_DLQ_TOPIC envs would be ignored.
-	_ = v.BindEnv("event_processing.dlq_topic", "FLEXPRICE_EVENT_PROCESSING_DLQ_TOPIC")
-	_ = v.BindEnv("event_processing_lazy.dlq_topic", "FLEXPRICE_EVENT_PROCESSING_LAZY_DLQ_TOPIC")
-	_ = v.BindEnv("feature_usage_tracking.dlq_topic", "FLEXPRICE_FEATURE_USAGE_TRACKING_DLQ_TOPIC")
-	_ = v.BindEnv("feature_usage_tracking_lazy.dlq_topic", "FLEXPRICE_FEATURE_USAGE_TRACKING_LAZY_DLQ_TOPIC")
-	_ = v.BindEnv("meter_usage_tracking.dlq_topic", "FLEXPRICE_METER_USAGE_TRACKING_DLQ_TOPIC")
-	_ = v.BindEnv("meter_usage_tracking_lazy.dlq_topic", "FLEXPRICE_METER_USAGE_TRACKING_LAZY_DLQ_TOPIC")
-	_ = v.BindEnv("costsheet_usage_tracking.dlq_topic", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_DLQ_TOPIC")
-	_ = v.BindEnv("costsheet_usage_tracking_lazy.dlq_topic", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_LAZY_DLQ_TOPIC")
+	// binds the FLEXPRICE_*_TOPIC_DLQ envs would be ignored.
+	_ = v.BindEnv("event_processing.topic_dlq", "FLEXPRICE_EVENT_PROCESSING_TOPIC_DLQ")
+	_ = v.BindEnv("event_processing_lazy.topic_dlq", "FLEXPRICE_EVENT_PROCESSING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("feature_usage_tracking.topic_dlq", "FLEXPRICE_FEATURE_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("feature_usage_tracking_lazy.topic_dlq", "FLEXPRICE_FEATURE_USAGE_TRACKING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("meter_usage_tracking.topic_dlq", "FLEXPRICE_METER_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("meter_usage_tracking_lazy.topic_dlq", "FLEXPRICE_METER_USAGE_TRACKING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("costsheet_usage_tracking.topic_dlq", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("costsheet_usage_tracking_lazy.topic_dlq", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_LAZY_TOPIC_DLQ")
 
 	// Explicitly bind deployment.mode — the helm ConfigMap is one shared object across the
 	// api/consumer/worker Deployments, so it cannot carry a per-component mode; the only
