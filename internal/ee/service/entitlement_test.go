@@ -1037,10 +1037,10 @@ func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
 	}
 	r2 := aggregateConfigEntitlementsForBilling(disabled)
 	s.False(r2.IsEnabled)
-	s.Nil(r2.ConfigValues)
+	s.Len(r2.ConfigValues, 0)
 
 	// empty slice
 	r3 := aggregateConfigEntitlementsForBilling(nil)
 	s.False(r3.IsEnabled)
-	s.Nil(r3.ConfigValues)
+	s.Len(r3.ConfigValues, 0)
 }
