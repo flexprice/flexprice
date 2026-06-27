@@ -159,3 +159,10 @@ func (f *CheckoutSessionFilter) Validate() error {
 
 	return nil
 }
+
+// CheckoutSessionCleanupResult holds per-run counts from CleanupAllExpiredSessions.
+type CheckoutSessionCleanupResult struct {
+	Total     int
+	Succeeded int
+	Failed    int
+}

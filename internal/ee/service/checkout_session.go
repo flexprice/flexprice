@@ -9,40 +9,18 @@ import (
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-// CheckoutSessionCleanupResult holds per-run counts from CleanupAllExpiredSessions.
-type CheckoutSessionCleanupResult struct {
-	Total     int
-	Succeeded int
-	Failed    int
-}
-
-type CheckoutSessionService interface {
-	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
-	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
-	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
-	Delete(ctx context.Context, id string) error
-	// CleanupCheckoutSession archives all entities created during fulfillment (subscription,
-	// invoice, payment) and marks the session as failed with the given reason.
-	// Pass reason=nil when cleaning up without an error (e.g. session expiry).
-	CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error
-	// CleanupAllExpiredSessions finds all active sessions whose ExpiresAt is before
-	// effectiveDate (defaults to now) within the tenant+environment in ctx, and
-	// archives them in batches of 1000. Returns total/succeeded/failed counts.
-	CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*CheckoutSessionCleanupResult, error)
-	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
-	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
-	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
-}
+type CheckoutSessionService = interfaces.CheckoutSessionService
 
 type checkoutSessionService struct {
 	ServiceParams
 }
 
-func NewCheckoutSessionService(params ServiceParams) CheckoutSessionService {
+func NewCheckoutSessionService(params ServiceParams) interfaces.CheckoutSessionService {
 	return &checkoutSessionService{ServiceParams: params}
 }
 
@@ -74,7 +52,7 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 	if err := s.executeCheckoutAction(ctx, session); err != nil {
 		// Best-effort cleanup: archive entities + mark session failed.
 		// Log cleanup errors but return the original fulfillment error.
-		if cleanupErr := s.CleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
+		if cleanupErr := s.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
 			s.Logger.Error(ctx, "checkout cleanup failed after fulfillment error",
 				"session_id", session.ID,
 				"error", cleanupErr,
@@ -145,7 +123,20 @@ func (s *checkoutSessionService) Delete(ctx context.Context, id string) error {
 	return s.CheckoutSessionRepo.Delete(ctx, id)
 }
 
-func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
+func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, sessionID string, reason error) error {
+	if sessionID == "" {
+		return ierr.NewError("session ID is required").
+			WithHint("checkout session ID cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	session, err := s.CheckoutSessionRepo.Get(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	return s.cleanupCheckoutSession(ctx, session, reason)
+}
+
+func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
 	// Guard: already in a terminal state — idempotent no-op.
 	switch session.CheckoutStatus {
 	case types.CheckoutStatusCompleted, types.CheckoutStatusFailed, types.CheckoutStatusExpired:
@@ -198,13 +189,13 @@ func (s *checkoutSessionService) CleanupCheckoutSession(ctx context.Context, ses
 
 const cleanupExpiredBatchSize = 1000
 
-func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*CheckoutSessionCleanupResult, error) {
+func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error) {
 	cutoff := time.Now().UTC()
 	if effectiveDate != nil {
 		cutoff = effectiveDate.UTC()
 	}
 
-	result := &CheckoutSessionCleanupResult{}
+	result := &types.CheckoutSessionCleanupResult{}
 
 	for {
 		sessions, err := s.CheckoutSessionRepo.ListExpiredCheckoutSessions(ctx, cutoff, cleanupExpiredBatchSize, 0)
@@ -216,7 +207,7 @@ func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, 
 			result.Total++
 			sessCtx := context.WithValue(ctx, types.CtxTenantID, sess.TenantID)
 			sessCtx = context.WithValue(sessCtx, types.CtxEnvironmentID, sess.EnvironmentID)
-			if err := s.CleanupCheckoutSession(sessCtx, sess, nil); err != nil {
+			if err := s.cleanupCheckoutSession(sessCtx, sess, nil); err != nil {
 				s.Logger.Error(ctx, "failed to cleanup expired checkout session",
 					"session_id", sess.ID, "error", err)
 				result.Failed++
