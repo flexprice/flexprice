@@ -16,7 +16,7 @@ import (
 )
 
 // max active prices per entity is 3000
-const MAX_ACTIVE_PRICES = 3000
+const MAX_ACTIVE_PRICES = 5000
 
 // JSONB types for complex fields
 // JSONBTiers are the tiers for the price when BillingModel is TIERED
