@@ -274,7 +274,11 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 }
 
 func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, session *dto.CheckoutSessionResponse, eventName types.WebhookEventName) {
-	payload, err := json.Marshal(webhookDto.NewCheckoutSessionWebhookPayload(session, eventName))
+	internal := webhookDto.InternalCheckoutSessionEvent{
+		SessionID: session.ID,
+		TenantID:  types.GetTenantID(ctx),
+	}
+	payload, err := json.Marshal(internal)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to marshal checkout webhook payload", "event_name", eventName, "error", err)
 		return
