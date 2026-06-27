@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
@@ -45,6 +46,7 @@ func providePayloadBuilderFactory(
 	paymentService service.PaymentService,
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
+	checkoutSessionService interfaces.CheckoutSessionService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -58,6 +60,7 @@ func providePayloadBuilderFactory(
 		paymentService,
 		tracingSvc,
 		creditNoteService,
+		checkoutSessionService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }
