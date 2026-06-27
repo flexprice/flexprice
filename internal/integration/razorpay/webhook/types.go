@@ -15,7 +15,9 @@ const (
 	EventPaymentAuthorized RazorpayEventType = "payment.authorized"
 
 	// Payment link events
-	EventPaymentLinkPaid RazorpayEventType = "payment_link.paid"
+	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
+	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
+	EventPaymentLinkExpired   RazorpayEventType = "payment_link.expired"
 )
 
 // RazorpayPaymentMethod represents the payment method used in Razorpay
