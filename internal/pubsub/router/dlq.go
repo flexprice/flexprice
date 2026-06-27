@@ -116,7 +116,7 @@ func (p *routingDLQPublisher) Publish(_ string, msgs ...*message.Message) error 
 // or the in-memory queue). Mirrors the pre-routing behavior; intentionally no
 // OTel exception capture so the old, quieter semantics are preserved.
 func (p *routingDLQPublisher) publishFallback(ctx context.Context, handlerName string, msg *message.Message) error {
-	p.logger.Warn(ctx, "no per-consumer DLQ topic configured, using fallback shared DLQ",
+	p.logger.Info(ctx, "no per-consumer DLQ topic configured, using fallback shared DLQ",
 		"handler_name", handlerName,
 		"fallback_topic", p.fallbackTopic,
 		"message_uuid", msg.UUID,
