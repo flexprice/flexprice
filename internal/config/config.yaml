@@ -257,7 +257,8 @@ event_processing:
   topic: "events"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
-  # Per-consumer-group dead-letter topic. Empty disables DLQ. Create the topic
+  # Per-consumer-group dead-letter topic. Empty falls back to the legacy shared
+  # DLQ (kafka.topic_dlq) — messages are never dropped. Create the topic
   # (or enable auto.create.topics.enable) before enabling in an environment.
   topic_dlq: "v1_event_processing_dlq"
 

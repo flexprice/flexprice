@@ -69,7 +69,7 @@ func TestAddNoPublishHandlerWithDLQ_EmptyTopicStillRegistered(t *testing.T) {
 		"event_consumption_replay_handler",
 		"events_backfill",
 		"v1_event_processing_replay",
-		"", // DLQ disabled for this env
+		"", // empty topic → falls back to the legacy shared DLQ
 		nil,
 		func(*message.Message) error { return nil },
 	)
