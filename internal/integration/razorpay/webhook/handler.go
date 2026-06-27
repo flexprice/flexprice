@@ -321,7 +321,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
-		h.logger.Error(ctx, "payment_link.paid webhook missing payment_link ID", "event_type", event.Event, "payment_link_id", paymentLinkID)
+		h.logger.Info(ctx, "payment_link.paid webhook missing payment_link ID", "event_type", event.Event, "payment_link_id", paymentLinkID)
 		return nil
 	}
 
@@ -333,8 +333,14 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 			EntityType:        types.IntegrationEntityTypePayment,
 		},
 	)
-	if err != nil || mappings == nil || len(mappings.Items) == 0 {
-		h.logger.Error(ctx, "no EntityIntegrationMapping found for Razorpay payment link", "payment_link_id", paymentLinkID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get EntityIntegrationMapping for Razorpay payment link",
+			"error", err,
+			"payment_link_id", paymentLinkID)
+		return nil
+	}
+	if mappings == nil || len(mappings.Items) == 0 {
+		h.logger.Info(ctx, "no EntityIntegrationMapping found for Razorpay payment link", "payment_link_id", paymentLinkID)
 		return nil
 	}
 
