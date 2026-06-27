@@ -412,12 +412,8 @@ func NewRouter(
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
 			checkoutSessions.POST("", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Create)
-			checkoutSessions.POST("/search", handlers.CheckoutSession.Query)
 			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
-			checkoutSessions.DELETE("/:id", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Delete)
-			// TODO: remove after testing — manual lifecycle triggers for local E2E testing
-			checkoutSessions.POST("/:id/complete", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.TestComplete)
-			checkoutSessions.POST("/:id/cleanup", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.TestCleanup)
+			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
 		}
 
 		entitlement := v1Private.Group("/entitlements")

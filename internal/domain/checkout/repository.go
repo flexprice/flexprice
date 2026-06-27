@@ -2,6 +2,7 @@ package checkout
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -31,4 +32,14 @@ type Repository interface {
 
 	// Delete soft-deletes a checkout session by setting status to archived.
 	Delete(ctx context.Context, id string) error
+
+	// MarkCompleted atomically transitions the session from pending/initiated to completed.
+	// Returns (true, nil) if this call claimed the transition.
+	// Returns (false, nil) if the session was already in a terminal state — idempotent no-op.
+	// Never returns an error for the already-terminal case.
+	MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error)
+
+	// ListExpiredCheckoutSessions returns active (initiated|pending) sessions whose ExpiresAt is before
+	// effectiveDate within the tenant+environment in ctx, ordered by expires_at asc.
+	ListExpiredCheckoutSessions(ctx context.Context, effectiveDate time.Time, limit, offset int) ([]*CheckoutSession, error)
 }

@@ -85,12 +85,37 @@ type CreateSubscriptionResult struct {
 
 // ── JSONB provider_result structs ────────────────────────────────────────────
 
+// CheckoutProviderResult is the flat, action-agnostic provider response stored in
+// checkout_sessions.provider_result. It is never serialized to API callers directly —
+// use PaymentAction() to extract the safe-to-expose action.
 type CheckoutProviderResult struct {
-	CreateSubscriptionResult *ProviderSubscriptionResult `json:"create_subscription_result,omitempty"`
+	// NextAction is what the customer must do to complete payment.
+	NextAction *PaymentAction `json:"next_action,omitempty"`
+
+	// ProviderSessionID is stored in EntityIntegrationMapping at link creation.
+	//   Stripe:   Checkout Session ID  (cs_xxx)
+	//   Razorpay: Payment Link ID      (plink_xxx)
+	//   Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)
+	//   Moyasar:  Payment ID
+	ProviderSessionID string `json:"provider_session_id,omitempty"`
+
+	// ProviderPaymentIntentID is the provider-side charge/intent ID.
+	// Stripe returns this at link creation (pi_xxx); others populate it from the webhook payload.
+	ProviderPaymentIntentID string `json:"provider_payment_intent_id,omitempty"`
+
+	// ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,
+	// executeCheckoutAction tightens the session expiry to match.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// ProviderMetadata holds provider-specific data not needed for business logic.
+	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
-type ProviderSubscriptionResult struct {
-	SessionID       string `json:"session_id"`
-	SessionURL      string `json:"session_url"`
-	PaymentIntentID string `json:"payment_intent_id"`
+// PaymentAction extracts the safe-to-expose action from a provider result.
+// All other fields in CheckoutProviderResult are sensitive gateway data.
+func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
+	if r == nil {
+		return nil
+	}
+	return r.NextAction
 }

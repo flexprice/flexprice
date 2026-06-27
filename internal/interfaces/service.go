@@ -205,6 +205,13 @@ type CreditAdjustmentService interface {
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 }
 
+// CheckoutSessionService defines the minimal interface needed by webhook handlers
+// to complete checkout sessions. The full service lives in internal/ee/service.
+type CheckoutSessionService interface {
+	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
+	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
+}
+
 type ServiceDependencies struct {
 	CustomerService                 CustomerService
 	PaymentService                  PaymentService
@@ -214,5 +221,6 @@ type ServiceDependencies struct {
 	EntityIntegrationMappingService EntityIntegrationMappingService
 	PriceUnitService                PriceUnitService
 	CreditAdjustmentService         CreditAdjustmentService
+	CheckoutSessionService          CheckoutSessionService
 	DB                              postgres.IClient
 }

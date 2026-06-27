@@ -1232,3 +1232,20 @@ func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
 	}
 	return f.s3Client, nil
 }
+
+// GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
+// Returns ErrValidation for providers that do not support hosted checkout.
+func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
+	switch provider {
+	case types.CheckoutPaymentProviderRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
+	default:
+		return nil, ierr.NewError("payment provider not supported for checkout").
+			WithHintf("%s does not support hosted checkout sessions", provider).
+			Mark(ierr.ErrValidation)
+	}
+}
