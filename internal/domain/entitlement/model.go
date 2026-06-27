@@ -24,6 +24,7 @@ type Entitlement struct {
 	StaticValue         string                            `json:"static_value"`
 	EnvironmentID       string                            `json:"environment_id"`
 	DisplayOrder        int                               `json:"display_order"`
+	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
@@ -146,6 +147,7 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		StaticValue:         e.StaticValue,
 		EnvironmentID:       e.EnvironmentID,
 		DisplayOrder:        e.DisplayOrder,
+		ConfigValue:         e.ConfigValue,
 		ParentEntitlementID: e.ParentEntitlementID,
 		StartDate:           e.StartDate,
 		EndDate:             e.EndDate,
