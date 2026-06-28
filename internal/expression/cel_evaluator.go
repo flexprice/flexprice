@@ -1,7 +1,11 @@
 package expression
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/google/cel-go/cel"
@@ -23,36 +27,64 @@ var reservedIds = map[string]struct{}{
 
 // Evaluator evaluates CEL expressions to compute quantity from event properties.
 type Evaluator interface {
-	EvaluateQuantity(expr string, properties map[string]interface{}) (decimal.Decimal, error)
+	EvaluateQuantity(expr string, properties map[string]any) (decimal.Decimal, error)
+	// Validate parses and compiles the expression so structural errors surface at
+	// definition time (e.g. when a meter is created) rather than per-event at runtime.
+	Validate(expr string) error
+}
+
+var (
+	defaultEvaluatorOnce sync.Once
+	defaultEvaluator     *CELEvaluator
+)
+
+// cacheEntry holds the compiled program and the identifiers extracted from the expression.
+type cacheEntry struct {
+	prg         cel.Program
+	identifiers []string
 }
 
 // CELEvaluator implements Evaluator using CEL with caching of compiled programs.
 type CELEvaluator struct {
-	cache sync.Map // expression string -> *cel.Program
+	cache  sync.Map // expression string -> *cacheEntry
+	parser *parser.Parser
 }
 
 // NewCELEvaluator creates a new CEL-based expression evaluator.
 func NewCELEvaluator() *CELEvaluator {
-	return &CELEvaluator{}
+	defaultEvaluatorOnce.Do(func() {
+		p, err := parser.NewParser()
+		if err != nil {
+			panic(fmt.Sprintf("cel parser init: %v", err))
+		}
+		defaultEvaluator = &CELEvaluator{
+			parser: p,
+		}
+	})
+
+	return defaultEvaluator
 }
 
 // EvaluateQuantity evaluates the CEL expression with the given properties and returns the result as a decimal.
 // Property names are used directly in the expression (e.g., token * duration * pixel).
 // Missing properties are treated as 0.
-func (e *CELEvaluator) EvaluateQuantity(expr string, properties map[string]interface{}) (decimal.Decimal, error) {
+func (e *CELEvaluator) EvaluateQuantity(expr string, properties map[string]any) (decimal.Decimal, error) {
 	if expr == "" {
 		return decimal.Zero, fmt.Errorf("expression is empty")
 	}
 
-	prg, err := e.getOrCompile(expr)
+	entry, err := e.getOrCompile(expr)
 	if err != nil {
 		return decimal.Zero, err
 	}
 
-	// Build activation: pre-fill missing identifiers with 0
-	activation := e.buildActivation(expr, properties)
+	// Build activation: coerce properties to float64, pre-fill missing identifiers with 0
+	activation, err := e.buildActivation(entry.identifiers, properties)
+	if err != nil {
+		return decimal.Zero, err
+	}
 
-	out, _, err := prg.Eval(activation)
+	out, _, err := entry.prg.Eval(activation)
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("CEL eval: %w", err)
 	}
@@ -69,25 +101,46 @@ func (e *CELEvaluator) EvaluateQuantity(expr string, properties map[string]inter
 	return toDecimal(out.Value())
 }
 
-// getOrCompile returns a cached program or compiles and caches the expression.
-func (e *CELEvaluator) getOrCompile(expr string) (cel.Program, error) {
+// Validate parses and compiles the expression so that syntax, missing-identifier,
+// and structural errors surface at definition time instead of at event-processing
+// time. It does not evaluate the expression.
+//
+// Unlike EvaluateQuantity, Validate compiles directly without touching the program
+// cache: it runs at meter creation, which may be called with many one-off (or
+// invalid) expressions, and caching those would grow the shared cache unbounded.
+func (e *CELEvaluator) Validate(expr string) error {
+	if expr == "" {
+		return fmt.Errorf("expression is empty")
+	}
+	_, err := e.compile(expr)
+	return err
+}
+
+// getOrCompile returns a cached entry or compiles and caches the expression.
+func (e *CELEvaluator) getOrCompile(expr string) (*cacheEntry, error) {
 	if cached, ok := e.cache.Load(expr); ok {
-		return cached.(cel.Program), nil
+		return cached.(*cacheEntry), nil
 	}
 
-	prg, err := e.compile(expr)
+	entry, err := e.compile(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	e.cache.Store(expr, prg)
-	return prg, nil
+	e.cache.Store(expr, entry)
+	return entry, nil
 }
 
 // compile parses the expression, extracts identifiers, and compiles a CEL program.
-func (e *CELEvaluator) compile(expr string) (cel.Program, error) {
-	source := common.NewStringSource(expr, "expression")
-	parsed, errs := parser.Parse(source)
+//
+// Every identifier is declared as a double and every integer literal is promoted to
+// a double before type-checking, so all arithmetic is real-valued: `total / 1000`
+// evaluates to 1.5, not a silently-truncated 1. Because the environment is fully
+// typed, non-numeric expressions (e.g. string concatenation, a boolean result, or
+// modulo on doubles) are rejected here at compile time rather than per-event.
+func (e *CELEvaluator) compile(expr string) (*cacheEntry, error) {
+	source := common.NewStringSource(expr, "meterQuantityExpression")
+	parsed, errs := e.parser.Parse(source)
 	if errs != nil && len(errs.GetErrors()) > 0 {
 		return nil, fmt.Errorf("parse: %s", errs.ToDisplayString())
 	}
@@ -97,10 +150,13 @@ func (e *CELEvaluator) compile(expr string) (cel.Program, error) {
 		return nil, fmt.Errorf("expression has no variable identifiers")
 	}
 
-	// Build env with each identifier as Dyn
-	opts := make([]cel.EnvOption, 0, len(identifiers))
+	// Declare every identifier as a double. ClearMacros keeps the env's parser
+	// consistent with e.parser (which has no macros) so identifier extraction and
+	// compilation see the same AST.
+	opts := make([]cel.EnvOption, 0, len(identifiers)+1)
+	opts = append(opts, cel.ClearMacros())
 	for _, id := range identifiers {
-		opts = append(opts, cel.Variable(id, cel.DynType))
+		opts = append(opts, cel.Variable(id, cel.DoubleType))
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -108,17 +164,41 @@ func (e *CELEvaluator) compile(expr string) (cel.Program, error) {
 		return nil, fmt.Errorf("env: %w", err)
 	}
 
-	ast, iss := env.Compile(expr)
+	ast, iss := env.Parse(expr)
+	if iss != nil && iss.Err() != nil {
+		return nil, fmt.Errorf("parse: %w", iss.Err())
+	}
+
+	// Promote integer literals to doubles so they mix with the double-typed
+	// variables (CEL has no double*int overload), then type-check the result.
+	promoteIntLiteralsToDouble(ast.NativeRep().Expr())
+
+	checked, iss := env.Check(ast)
 	if iss != nil && iss.Err() != nil {
 		return nil, fmt.Errorf("compile: %w", iss.Err())
 	}
 
-	prg, err := env.Program(ast)
+	prg, err := env.Program(checked)
 	if err != nil {
 		return nil, fmt.Errorf("program: %w", err)
 	}
 
-	return prg, nil
+	return &cacheEntry{prg: prg, identifiers: identifiers}, nil
+}
+
+// promoteIntLiteralsToDouble rewrites every integer literal in the AST to the
+// equivalent double literal, in place. This lets users write natural expressions
+// like `tokens * 2` even though all variables are double-typed.
+func promoteIntLiteralsToDouble(root celast.Expr) {
+	fac := celast.NewExprFactory()
+	celast.PostOrderVisit(root, celast.NewExprVisitor(func(e celast.Expr) {
+		if e.Kind() != celast.LiteralKind {
+			return
+		}
+		if iv, ok := e.AsLiteral().(types.Int); ok {
+			e.SetKindCase(fac.NewLiteral(e.ID(), types.Double(float64(iv))))
+		}
+	}))
 }
 
 // extractIdentifiers walks the AST and collects unique identifier names (excluding reserved).
@@ -143,63 +223,87 @@ func extractIdentifiers(expr celast.Expr) []string {
 	return ids
 }
 
-// buildActivation creates the activation map from properties, pre-filling missing identifiers with 0.
-// We need the identifiers from the expression - we'll extract them again or pass them.
-// For simplicity, we merge properties with a default 0 for any key we might need.
-// Actually we don't know identifiers at eval time without re-parsing. We could:
-// 1. Store identifiers per expression in cache (expression -> (program, identifiers))
-// 2. Or just pass properties as-is and let CEL error on missing - then catch and retry with 0?
-// 3. Or pre-fill all keys from properties, and for any activation lookup failure we can't easily fix.
-//
-// The simplest: pass properties as-is. If a key is missing, CEL will return an error.
-// We can document that users should ensure all keys exist, or we add a get(key, default) function.
-// For MVP: clone properties and ensure we have at least empty values. Actually CEL might
-// treat missing key as "no such attribute" error. Let me check - we need to pre-fill.
-//
-// We need to store identifiers alongside the program. Let me change the cache to store (program, identifiers).
-type cacheEntry struct {
-	prg         *cel.Program
-	identifiers []string
+// buildActivation creates the activation map for the expression's identifiers.
+// Only the identifiers referenced by the expression are populated (unused properties
+// are ignored). Each referenced property is coerced to a float64 (matching the
+// double-typed variables), so values arriving as strings (e.g. "2") participate in
+// arithmetic. Missing identifiers are pre-filled with 0. A property that is present
+// but not numeric is a hard error, since only numeric math is meaningful for a
+// quantity (and would otherwise fail with an opaque CEL type error).
+func (e *CELEvaluator) buildActivation(identifiers []string, properties map[string]any) (map[string]any, error) {
+	activation := make(map[string]any, len(identifiers))
+	for _, id := range identifiers {
+		raw, ok := properties[id]
+		if !ok {
+			activation[id] = 0.0
+			continue
+		}
+		f, ok := toFloat(raw)
+		if !ok {
+			return nil, fmt.Errorf("property %q is not numeric: %v", id, raw)
+		}
+		activation[id] = f
+	}
+	return activation, nil
 }
 
-func (e *CELEvaluator) buildActivation(expr string, properties map[string]interface{}) map[string]interface{} {
-	// Get identifiers - we need them. Re-parse to extract (or store in cache).
-	// For now re-parse - it's fast. Alternatively we could change getOrCompile to return identifiers too.
-	source := common.NewStringSource(expr, "expression")
-	parsed, errs := parser.Parse(source)
-	if errs != nil && len(errs.GetErrors()) > 0 {
-		if properties != nil {
-			return properties
+// toFloat coerces a property value to float64, including numeric strings like "2".
+// Returns ok=false for values that cannot represent a number.
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		return f, err == nil
+	case string:
+		s := strings.TrimSpace(n)
+		if s == "" {
+			return 0, false
 		}
-		return map[string]interface{}{}
+		f, err := strconv.ParseFloat(s, 64)
+		return f, err == nil
+	default:
+		return 0, false
 	}
-	identifiers := extractIdentifiers(parsed.Expr())
-
-	activation := make(map[string]interface{}, len(identifiers))
-	if properties != nil {
-		for k, v := range properties {
-			activation[k] = v
-		}
-	}
-
-	// Pre-fill missing identifiers with 0
-	for _, id := range identifiers {
-		if _, ok := activation[id]; !ok {
-			activation[id] = 0
-		}
-	}
-
-	return activation
 }
 
 // toDecimal converts CEL result (from ref.Val.Value()) to decimal.Decimal.
-func toDecimal(val interface{}) (decimal.Decimal, error) {
+func toDecimal(val any) (decimal.Decimal, error) {
 	if val == nil {
 		return decimal.Zero, fmt.Errorf("expression result is nil")
 	}
 
 	switch v := val.(type) {
 	case float64:
+		// decimal.NewFromFloat panics on ±Inf/NaN, which is exactly what a float
+		// division-by-zero produces (e.g. a missing/zero divisor). Surface a clean
+		// error instead of panicking the consumer/worker goroutine.
+		if math.IsInf(v, 0) || math.IsNaN(v) {
+			return decimal.Zero, fmt.Errorf("expression produced a non-finite result (division by zero?)")
+		}
 		return decimal.NewFromFloat(v), nil
 	case int64:
 		return decimal.NewFromInt(v), nil
