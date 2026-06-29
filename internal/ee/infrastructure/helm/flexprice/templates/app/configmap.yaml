@@ -47,6 +47,7 @@ data:
       db: {{ .Values.redisConfig.db | default 0 }}
       use_tls: {{ .Values.redisConfig.useTLS | default false }}
       timeout: {{ .Values.redisConfig.timeout | default "5s" | quote }}
+      pool_size: {{ .Values.redisConfig.poolSize | default 10 }}
 
     kafka:
       brokers:
@@ -76,7 +77,8 @@ data:
     
     logging:
       level: {{ .Values.logging.level | quote }}
-    
+      format: {{ .Values.logging.format | default "json" | quote }}
+
     sentry:
       enabled: {{ .Values.sentry.enabled }}
       environment: {{ .Values.sentry.environment | quote }}
@@ -266,7 +268,12 @@ data:
       from_address: {{ .Values.email.fromAddress | quote }}
       reply_to: {{ .Values.email.replyTo | quote }}
       calendar_url: {{ .Values.email.calendarUrl | quote }}
-    
+      # resend_api_key is a secret — rendered EMPTY here so the key exists in config.yaml;
+      # the env FLEXPRICE_EMAIL_RESEND_API_KEY (injected from the secret) then fills it via
+      # AutomaticEnv. Without this key the env was ignored on GKE (silent empty → email broken).
+      resend_api_key: {{ .Values.email.resendApiKey | quote }}
+      zapier_webhook_url: {{ .Values.email.zapierWebhookUrl | quote }}
+
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
