@@ -22,6 +22,10 @@ type Target struct {
 	// for environments whose cert does not cover the host (e.g. preprod).
 	// Can also be forced for all targets via FLEXPRICE_INSECURE_SKIP_VERIFY.
 	Insecure bool `json:"insecure"`
+	// Enabled controls whether this target is included in a run. Targets with
+	// enabled=false (or the field absent) are skipped. When ALL targets have
+	// enabled=false the suite exits with an error.
+	Enabled bool `json:"enabled"`
 }
 
 // skipTLSVerify reports whether TLS verification should be skipped for this
@@ -121,6 +125,9 @@ func loadTargets() ([]Target, error) {
 }
 
 // parseTargets decodes and validates a JSON array of targets.
+// Targets with enabled=false are filtered out unless NONE have enabled=true,
+// in which case all targets without the field set to false are included
+// (backwards-compat: files that omit the field entirely run all targets).
 func parseTargets(data []byte, source string) ([]Target, error) {
 	var targets []Target
 	if err := json.Unmarshal(data, &targets); err != nil {
@@ -128,6 +135,28 @@ func parseTargets(data []byte, source string) ([]Target, error) {
 	}
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("%s contains no targets", source)
+	}
+
+	// If any target has enabled=true, filter to only those.
+	hasExplicitEnabled := false
+	for _, t := range targets {
+		if t.Enabled {
+			hasExplicitEnabled = true
+			break
+		}
+	}
+	if hasExplicitEnabled {
+		filtered := targets[:0]
+		for _, t := range targets {
+			if t.Enabled {
+				filtered = append(filtered, t)
+			}
+		}
+		targets = filtered
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("%s: no targets have enabled=true", source)
 	}
 	for i, t := range targets {
 		if t.APIKey == "" {
