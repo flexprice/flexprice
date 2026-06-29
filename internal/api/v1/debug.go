@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -22,16 +21,15 @@ func NewDebugHandler(clients *postgres.EntClients) *DebugHandler {
 // LagProbeResponse is the JSON shape returned by LagProbe.
 type LagProbeResponse struct {
 	ReaderIsReplica bool   `json:"reader_is_replica"`
-	ReaderLSN       string `json:"reader_lsn"`
-	WriterLSN       string `json:"writer_lsn"`
+	WriterReachable bool   `json:"writer_reachable"`
 	IsDistinct      bool   `json:"is_distinct"`
 	Warning         string `json:"warning,omitempty"`
 }
 
-// LagProbe queries pg_is_in_recovery() on the reader and pg_current_wal_lsn()
-// on the writer to determine whether the two endpoints are distinct instances.
+// LagProbe checks whether the reader endpoint is a real Aurora replica.
+// Uses only pg_is_in_recovery() — no replication privileges required.
 //
-// @Summary WAL lag probe
+// @Summary Lag probe — confirms reader/writer are distinct instances
 // @Tags Debug
 // @Produce json
 // @Success 200 {object} LagProbeResponse
@@ -39,32 +37,21 @@ type LagProbeResponse struct {
 func (h *DebugHandler) LagProbe(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var writerLSN string
-	err := h.clients.WriterDB.QueryRowContext(ctx, "SELECT pg_current_wal_lsn()::text").Scan(&writerLSN)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "writer WAL query failed: " + err.Error()})
-		return
-	}
+	// Confirm writer is reachable with an unprivileged query.
+	var writerOne int
+	writerErr := h.clients.WriterDB.QueryRowContext(ctx, "SELECT 1").Scan(&writerOne)
 
+	// Check whether the reader is in recovery (i.e. a replica).
 	var readerIsReplica bool
-	var readerLSN sql.NullString
-	err = h.clients.ReaderDB.QueryRowContext(ctx,
-		"SELECT pg_is_in_recovery(), pg_last_wal_replay_lsn()::text",
-	).Scan(&readerIsReplica, &readerLSN)
+	err := h.clients.ReaderDB.QueryRowContext(ctx, "SELECT pg_is_in_recovery()").Scan(&readerIsReplica)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "reader WAL query failed: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "reader query failed: " + err.Error()})
 		return
-	}
-
-	readerLSNStr := "N/A (primary)"
-	if readerLSN.Valid {
-		readerLSNStr = readerLSN.String
 	}
 
 	resp := LagProbeResponse{
 		ReaderIsReplica: readerIsReplica,
-		ReaderLSN:       readerLSNStr,
-		WriterLSN:       writerLSN,
+		WriterReachable: writerErr == nil,
 		IsDistinct:      readerIsReplica,
 	}
 	if !readerIsReplica {
