@@ -115,12 +115,7 @@ func (b BillingCycle) Validate() error {
 }
 
 func CalculateCalendarBillingAnchor(startDate time.Time, billingPeriod BillingPeriod, timezone string) time.Time {
-	loc := time.UTC
-	if timezone != "" && timezone != "UTC" {
-		if l, err := time.LoadLocation(timezone); err == nil {
-			loc = l
-		}
-	}
+	loc := loadTimezone(timezone)
 	now := startDate.In(loc)
 
 	switch billingPeriod {

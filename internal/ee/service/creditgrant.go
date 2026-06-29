@@ -1028,15 +1028,21 @@ func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodSta
 // CalculateCreditGrantPeriods calculates all billing periods for a credit grant from an initial period start until an end date.
 // This function decouples credit grant period calculations from subscription cron processing.
 // Parameters:
+//
 //   - grant: The credit grant for which to calculate periods
+//
 //   - initialPeriodStart: Start of the first period
+//
 //   - endDate: Calculate periods until this date (typically grant end date or current time)
+//
+//   - timezone: customer's IANA timezone for local boundary computation (empty/"UTC" = UTC)
 //
 // Returns an array of Period structs and an error if calculation fails.
 func CalculateCreditGrantPeriods(
 	grant creditgrant.CreditGrant,
 	initialPeriodStart time.Time,
 	endDate *time.Time,
+	timezone string,
 ) ([]types.Period, error) {
 	// Convert credit grant period to billing period
 	billingPeriod, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grant.Period))
@@ -1051,6 +1057,7 @@ func CalculateCreditGrantPeriods(
 		Anchor:             lo.FromPtr(grant.CreditGrantAnchor),
 		PeriodCount:        lo.FromPtr(grant.PeriodCount),
 		BillingPeriod:      billingPeriod,
+		Timezone:           timezone,
 	})
 }
 
