@@ -198,3 +198,75 @@ func TestCELEvaluator_ValidateDoesNotCache(t *testing.T) {
 		t.Fatal("EvaluateQuantity should cache the compiled expression")
 	}
 }
+
+func TestCELEvaluator_MathFunctions(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	tests := []struct {
+		name       string
+		expr       string
+		properties map[string]interface{}
+		want       decimal.Decimal
+		wantErr    bool
+	}{
+		// max
+		{name: "max two literals", expr: "max(a, 3)", properties: map[string]interface{}{"a": 2}, want: decimal.NewFromInt(3)},
+		{name: "max picks larger field", expr: "max(api_calls, floor_value)", properties: map[string]interface{}{"api_calls": 7, "floor_value": 10}, want: decimal.NewFromInt(10)},
+
+		// min
+		{name: "min two literals", expr: "min(a, 5)", properties: map[string]interface{}{"a": 8}, want: decimal.NewFromInt(5)},
+		{name: "min vs quota", expr: "min(usage, quota)", properties: map[string]interface{}{"usage": 120, "quota": 100}, want: decimal.NewFromInt(100)},
+
+		// abs
+		{name: "abs of negative", expr: "abs(x)", properties: map[string]interface{}{"x": -7.5}, want: decimal.NewFromFloat(7.5)},
+		{name: "abs of positive", expr: "abs(x)", properties: map[string]interface{}{"x": 3}, want: decimal.NewFromInt(3)},
+
+		// ceil / floor / round
+		{name: "ceil rounds up", expr: "ceil(seconds / 60)", properties: map[string]interface{}{"seconds": 61}, want: decimal.NewFromInt(2)},
+		{name: "floor truncates", expr: "floor(x)", properties: map[string]interface{}{"x": 2.9}, want: decimal.NewFromInt(2)},
+		{name: "round half away from zero positive", expr: "round(x)", properties: map[string]interface{}{"x": 0.5}, want: decimal.NewFromInt(1)},
+		{name: "round half away from zero negative", expr: "round(x)", properties: map[string]interface{}{"x": -0.5}, want: decimal.NewFromInt(-1)},
+
+		// pow / sqrt / log
+		{name: "pow integer", expr: "pow(base, 10)", properties: map[string]interface{}{"base": 2}, want: decimal.NewFromInt(1024)},
+		{name: "pow zero zero is one", expr: "pow(a, b)", properties: map[string]interface{}{"a": 0, "b": 0}, want: decimal.NewFromInt(1)},
+		{name: "sqrt of four", expr: "sqrt(x)", properties: map[string]interface{}{"x": 4}, want: decimal.NewFromInt(2)},
+		{name: "log of one is zero", expr: "log(x)", properties: map[string]interface{}{"x": 1}, want: decimal.Zero},
+
+		// Composition: nested + arithmetic
+		{name: "compose floor + min + multiplication", expr: "floor(min(a, b) * c)", properties: map[string]interface{}{"a": 5.7, "b": 6.0, "c": 1.5}, want: decimal.NewFromInt(8)},
+		{name: "ceil of api calls divided", expr: "ceil(api_calls / 1000)", properties: map[string]interface{}{"api_calls": 1500}, want: decimal.NewFromInt(2)},
+
+		// Error: non-finite results caught by toDecimal guard
+		{name: "sqrt of negative is NaN", expr: "sqrt(x)", properties: map[string]interface{}{"x": -1}, wantErr: true},
+		{name: "pow overflow is infinity", expr: "pow(big, 2)", properties: map[string]interface{}{"big": 1e308}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := eval.EvaluateQuantity(tt.expr, tt.properties)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, tt.want.Equal(got), "expected %s, got %s", tt.want.String(), got.String())
+		})
+	}
+}
+
+func TestCELEvaluator_MathFunctions_Validate(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	t.Run("valid call to new function", func(t *testing.T) {
+		require.NoError(t, eval.Validate("max(tokens, 100) * unit_cost"))
+	})
+	t.Run("wrong arity rejected at validation", func(t *testing.T) {
+		// max takes exactly two doubles; one-arg call is a compile-time error.
+		require.Error(t, eval.Validate("max(tokens)"))
+	})
+	t.Run("unknown function rejected", func(t *testing.T) {
+		// Sanity-check that we didn't accidentally register everything in math.
+		require.Error(t, eval.Validate("tan(theta)"))
+	})
+}

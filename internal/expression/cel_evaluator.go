@@ -12,6 +12,7 @@ import (
 	"github.com/google/cel-go/common"
 	celast "github.com/google/cel-go/common/ast"
 	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/parser"
 	"github.com/shopspring/decimal"
 )
@@ -48,6 +49,45 @@ type cacheEntry struct {
 type CELEvaluator struct {
 	cache  sync.Map // expression string -> *cacheEntry
 	parser *parser.Parser
+}
+
+// mathEnvOpts registers stdlib-backed math helpers in every per-expression
+// env. Each function takes/returns CEL double; the existing toDecimal
+// non-finite guard turns sqrt(-1)/pow overflow into a clean error.
+var mathEnvOpts = []cel.EnvOption{
+	binaryDoubleFn("max", math.Max),
+	binaryDoubleFn("min", math.Min),
+	binaryDoubleFn("pow", math.Pow),
+	unaryDoubleFn("abs", math.Abs),
+	unaryDoubleFn("ceil", math.Ceil),
+	unaryDoubleFn("floor", math.Floor),
+	unaryDoubleFn("round", math.Round),
+	unaryDoubleFn("sqrt", math.Sqrt),
+	unaryDoubleFn("log", math.Log),
+}
+
+func unaryDoubleFn(name string, fn func(float64) float64) cel.EnvOption {
+	return cel.Function(name,
+		cel.Overload(name+"_double",
+			[]*cel.Type{cel.DoubleType},
+			cel.DoubleType,
+			cel.UnaryBinding(func(v ref.Val) ref.Val {
+				return types.Double(fn(float64(v.(types.Double))))
+			}),
+		),
+	)
+}
+
+func binaryDoubleFn(name string, fn func(a, b float64) float64) cel.EnvOption {
+	return cel.Function(name,
+		cel.Overload(name+"_double_double",
+			[]*cel.Type{cel.DoubleType, cel.DoubleType},
+			cel.DoubleType,
+			cel.BinaryBinding(func(a, b ref.Val) ref.Val {
+				return types.Double(fn(float64(a.(types.Double)), float64(b.(types.Double))))
+			}),
+		),
+	)
 }
 
 // NewCELEvaluator creates a new CEL-based expression evaluator.
@@ -153,8 +193,9 @@ func (e *CELEvaluator) compile(expr string) (*cacheEntry, error) {
 	// Declare every identifier as a double. ClearMacros keeps the env's parser
 	// consistent with e.parser (which has no macros) so identifier extraction and
 	// compilation see the same AST.
-	opts := make([]cel.EnvOption, 0, len(identifiers)+1)
+	opts := make([]cel.EnvOption, 0, len(identifiers)+1+len(mathEnvOpts))
 	opts = append(opts, cel.ClearMacros())
+	opts = append(opts, mathEnvOpts...)
 	for _, id := range identifiers {
 		opts = append(opts, cel.Variable(id, cel.DoubleType))
 	}
