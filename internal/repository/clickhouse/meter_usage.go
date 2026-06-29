@@ -124,7 +124,7 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	query := aggregator.GetQuery(ctx, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
 
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	if windowExpr != "" {
 		return r.executeWindowedQuery(ctx, query, args, params)
 	}
@@ -144,7 +144,7 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 	query := BuildMultiMeterQuery(aggExpr, countExpr, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
 
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	if windowExpr != "" {
 		return r.executeMultiMeterWindowedQuery(ctx, query, args, params)
 	}

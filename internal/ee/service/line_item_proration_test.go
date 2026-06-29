@@ -149,7 +149,7 @@ func (s *LineItemProrationServiceSuite) setupTestData() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, s.td.sub))

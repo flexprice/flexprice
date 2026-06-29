@@ -157,7 +157,7 @@ func (s *FixedChargeBillingSuite) TestFlatFee_Advance_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -226,7 +226,7 @@ func (s *FixedChargeBillingSuite) TestFlatFee_Arrear_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -300,7 +300,7 @@ func (s *FixedChargeBillingSuite) TestPackage_Advance_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -374,7 +374,7 @@ func (s *FixedChargeBillingSuite) TestPackage_Arrear_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -452,7 +452,7 @@ func (s *FixedChargeBillingSuite) TestTieredSlab_Advance_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -530,7 +530,7 @@ func (s *FixedChargeBillingSuite) TestTieredVolume_Advance_Monthly() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -601,7 +601,7 @@ func (s *FixedChargeBillingSuite) TestFlatFee_Annual_Advance() {
 		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -694,7 +694,7 @@ func (s *FixedChargeBillingSuite) TestMixedPlan_FlatFeeAndTieredSlab_Advance() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}

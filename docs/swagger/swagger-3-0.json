@@ -576,64 +576,6 @@
         "x-codegen-request-body-name": "session"
       }
     },
-    "/checkout/sessions/search": {
-      "post": {
-        "tags": [
-          "Checkout"
-        ],
-        "summary": "Search checkout sessions",
-        "operationId": "queryCheckoutSessions",
-        "requestBody": {
-          "description": "Filter",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/types.CheckoutSessionFilter"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListCheckoutSessionsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "filter"
-      }
-    },
     "/checkout/sessions/{id}": {
       "get": {
         "tags": [
@@ -738,132 +680,6 @@
             "ApiKeyAuth": []
           }
         ]
-      }
-    },
-    "/checkout/sessions/{id}/cleanup": {
-      "post": {
-        "tags": [
-          "Checkout"
-        ],
-        "summary": "[TEST ONLY] Cleanup (fail) a checkout session manually",
-        "operationId": "testCleanupCheckoutSession",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Checkout session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckoutSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ]
-      }
-    },
-    "/checkout/sessions/{id}/complete": {
-      "post": {
-        "tags": [
-          "Checkout"
-        ],
-        "summary": "[TEST ONLY] Complete a checkout session manually",
-        "operationId": "testCompleteCheckoutSession",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Checkout session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Provider result (optional)",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/types.CheckoutProviderResult"
-              }
-            }
-          },
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckoutSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "result"
       }
     },
     "/costs": {
@@ -14444,8 +14260,28 @@
       "checkout.JSONBCheckoutProviderResult": {
         "type": "object",
         "properties": {
-          "create_subscription_result": {
-            "$ref": "#/components/schemas/types.ProviderSubscriptionResult"
+          "expires_at": {
+            "type": "string",
+            "description": "ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,\nexecuteCheckoutAction tightens the session expiry to match.",
+            "format": "date-time"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/types.PaymentAction"
+          },
+          "provider_metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "ProviderMetadata holds provider-specific data not needed for business logic."
+          },
+          "provider_payment_intent_id": {
+            "type": "string",
+            "description": "ProviderPaymentIntentID is the provider-side charge/intent ID.\nStripe returns this at link creation (pi_xxx); others populate it from the webhook payload."
+          },
+          "provider_session_id": {
+            "type": "string",
+            "description": "ProviderSessionID is stored in EntityIntegrationMapping at link creation.\n  Stripe:   Checkout Session ID  (cs_xxx)\n  Razorpay: Payment Link ID      (plink_xxx)\n  Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)\n  Moyasar:  Payment ID"
           }
         }
       },
@@ -14936,6 +14772,15 @@
       "AggregatedEntitlement": {
         "type": "object",
         "properties": {
+          "config_values": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object"
+              }
+            }
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -14944,7 +14789,6 @@
           },
           "static_values": {
             "type": "array",
-            "description": "For static/SLA features",
             "items": {
               "type": "string"
             }
@@ -15462,7 +15306,7 @@
             "$ref": "#/components/schemas/types.Metadata"
           },
           "payment_action": {
-            "$ref": "#/components/schemas/PaymentAction"
+            "$ref": "#/components/schemas/types.PaymentAction"
           },
           "payment_provider": {
             "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
@@ -16101,7 +15945,7 @@
       "CreateCheckoutSessionRequest": {
         "required": [
           "action",
-          "customer_id",
+          "customer_external_id",
           "payment_provider"
         ],
         "type": "object",
@@ -16115,7 +15959,7 @@
           "configuration": {
             "$ref": "#/components/schemas/types.CheckoutConfiguration"
           },
-          "customer_id": {
+          "customer_external_id": {
             "type": "string"
           },
           "failure_url": {
@@ -16430,6 +16274,10 @@
             "items": {
               "$ref": "#/components/schemas/TaxRateOverride"
             }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")\nDefaults to \"UTC\" if not provided"
           }
         },
         "description": "Request object for creating a new customer in the system"
@@ -16441,6 +16289,10 @@
         ],
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "end_date": {
             "type": "string",
             "format": "date-time"
@@ -17298,10 +17150,6 @@
             "type": "string",
             "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided."
           },
-          "customer_timezone": {
-            "type": "string",
-            "description": "Timezone of the customer.\nIf not set, the default value is UTC."
-          },
           "enable_true_up": {
             "type": "boolean",
             "description": "Enable Commitment True Up Fee"
@@ -17410,6 +17258,10 @@
             "items": {
               "$ref": "#/components/schemas/TaxRateOverride"
             }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone of the customer.\nIf not set, the default value is UTC."
           },
           "trial_period_days": {
             "type": "integer",
@@ -17961,6 +17813,12 @@
             "items": {
               "$ref": "#/components/schemas/AggregatedFeature"
             }
+          },
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionResponse"
+            }
           }
         }
       },
@@ -18116,6 +17974,10 @@
           "tenant_id": {
             "type": "string"
           },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\").\nDefaults to \"UTC\". Inherited by subscriptions at creation time."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -18235,6 +18097,10 @@
           "addon": {
             "$ref": "#/components/schemas/AddonResponse"
           },
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -18317,6 +18183,10 @@
       "EntitlementSource": {
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "entitlement_id": {
             "type": "string"
           },
@@ -19011,6 +18881,9 @@
             "example": "2024-11-09T00:00:00Z",
             "format": "date-time"
           },
+          "timezone": {
+            "type": "string"
+          },
           "window_size": {
             "$ref": "#/components/schemas/types.WindowSize"
           }
@@ -19156,6 +19029,9 @@
             "type": "string",
             "example": "2024-03-13T00:00:00Z",
             "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
           },
           "window_size": {
             "$ref": "#/components/schemas/types.WindowSize"
@@ -19863,20 +19739,6 @@
           }
         }
       },
-      "ListCheckoutSessionsResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CheckoutSessionResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/types.PaginationResponse"
-          }
-        }
-      },
       "ListCostsheetResponse": {
         "type": "object",
         "properties": {
@@ -20169,17 +20031,6 @@
           },
           "transform_quantity": {
             "$ref": "#/components/schemas/price.TransformQuantity"
-          }
-        }
-      },
-      "PaymentAction": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "$ref": "#/components/schemas/types.PaymentActionType"
-          },
-          "url": {
-            "type": "string"
           }
         }
       },
@@ -21753,9 +21604,6 @@
             "type": "string",
             "description": "CustomerID is the identifier for the customer in our system"
           },
-          "customer_timezone": {
-            "type": "string"
-          },
           "enable_true_up": {
             "type": "boolean"
           },
@@ -21856,6 +21704,9 @@
             "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
           },
           "tenant_id": {
+            "type": "string"
+          },
+          "timezone": {
             "type": "string"
           },
           "trial_end": {
@@ -21977,9 +21828,6 @@
             "type": "string",
             "description": "CustomerID is the identifier for the customer in our system"
           },
-          "customer_timezone": {
-            "type": "string"
-          },
           "enable_true_up": {
             "type": "boolean"
           },
@@ -22083,6 +21931,9 @@
             "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
           },
           "tenant_id": {
+            "type": "string"
+          },
+          "timezone": {
             "type": "string"
           },
           "trial_end": {
@@ -22894,6 +22745,10 @@
           "name": {
             "type": "string",
             "description": "name is the updated name or company name for the customer"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "timezone is the updated IANA timezone name for the customer (e.g. \"Asia/Kolkata\", \"America/New_York\")"
           }
         },
         "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated"
@@ -22901,6 +22756,10 @@
       "UpdateEntitlementRequest": {
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -23661,6 +23520,10 @@
           "id": {
             "type": "string"
           },
+          "is_cached_fallback": {
+            "type": "boolean",
+            "description": "IsCachedFallback is true whenever the response is sourced from cache:\neither an explicit cache request, or fallback after a real-time failure.\nClients should treat the absence of this field as if it were true and\nonly trust freshness when the server explicitly emits false."
+          },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
           },
@@ -24149,6 +24012,10 @@
           },
           "tenant_id": {
             "type": "string"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\").\nDefaults to \"UTC\". Inherited by subscriptions at creation time."
           },
           "updated_at": {
             "type": "string",
@@ -25432,12 +25299,14 @@
         "enum": [
           "metered",
           "boolean",
-          "static"
+          "static",
+          "config"
         ],
         "x-enum-varnames": [
           "FeatureTypeMetered",
           "FeatureTypeBoolean",
-          "FeatureTypeStatic"
+          "FeatureTypeStatic",
+          "FeatureTypeConfig"
         ],
         "x-speakeasy-name-override": "FeatureType"
       },
@@ -27419,7 +27288,8 @@
           "credit_note.updated",
           "checkout.session.initiated",
           "checkout.session.completed",
-          "checkout.session.failed"
+          "checkout.session.failed",
+          "checkout.session.expired"
         ],
         "x-enum-varnames": [
           "WebhookEventSubscriptionCreated",
@@ -27466,7 +27336,8 @@
           "WebhookEventCreditNoteUpdated",
           "WebhookEventCheckoutSessionInitiated",
           "WebhookEventCheckoutSessionCompleted",
-          "WebhookEventCheckoutSessionFailed"
+          "WebhookEventCheckoutSessionFailed",
+          "WebhookEventCheckoutSessionExpired"
         ],
         "x-speakeasy-name-override": "WebhookEventName"
       },
@@ -28345,91 +28216,12 @@
       "types.CheckoutPaymentProvider": {
         "type": "string",
         "enum": [
-          "stripe"
+          "razorpay"
         ],
         "x-enum-varnames": [
-          "CheckoutPaymentProviderStripe"
+          "CheckoutPaymentProviderRazorpay"
         ],
         "x-speakeasy-name-override": "CheckoutPaymentProvider"
-      },
-      "types.CheckoutProviderResult": {
-        "type": "object",
-        "properties": {
-          "create_subscription_result": {
-            "$ref": "#/components/schemas/types.ProviderSubscriptionResult"
-          }
-        },
-        "x-speakeasy-name-override": "CheckoutProviderResult"
-      },
-      "types.CheckoutSessionFilter": {
-        "type": "object",
-        "properties": {
-          "actions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutAction"
-            }
-          },
-          "checkout_invoice_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "checkout_payment_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "checkout_statuses": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutStatus"
-            }
-          },
-          "customer_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "expand": {
-            "type": "string"
-          },
-          "expires_at_lt": {
-            "type": "string"
-          },
-          "limit": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "offset": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "order": {
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ]
-          },
-          "payment_providers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
-            }
-          },
-          "sort": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          }
-        },
-        "x-speakeasy-name-override": "CheckoutSessionFilter"
       },
       "types.CheckoutStatus": {
         "type": "string",
@@ -28518,6 +28310,18 @@
         },
         "x-speakeasy-name-override": "Metadata"
       },
+      "types.PaymentAction": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentActionType"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAction"
+      },
       "types.PaymentActionType": {
         "type": "string",
         "enum": [
@@ -28529,21 +28333,6 @@
           "PaymentActionTypePaymentLink"
         ],
         "x-speakeasy-name-override": "PaymentActionType"
-      },
-      "types.ProviderSubscriptionResult": {
-        "type": "object",
-        "properties": {
-          "payment_intent_id": {
-            "type": "string"
-          },
-          "session_id": {
-            "type": "string"
-          },
-          "session_url": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "ProviderSubscriptionResult"
       },
       "types.TimeOfDayBucket": {
         "type": "object",

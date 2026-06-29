@@ -847,7 +847,7 @@ func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	// Line items: monthly fixed (same cadence as sub), quarterly fixed (longer cadence, start Jan 1)
@@ -984,7 +984,7 @@ func (s *BillingServiceSuite) setupScenario1DailySub(ctx context.Context) (*subs
 		BillingPeriod:      types.BILLING_PERIOD_DAILY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone, // full amounts in tests
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -1074,7 +1074,7 @@ func (s *BillingServiceSuite) setupScenario2MonthlySub(ctx context.Context) (*su
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone, // full amounts in tests
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -1248,7 +1248,7 @@ func (s *BillingServiceSuite) setupSubWithFixedLineItemsForPeriodTests(
 		BillingPeriod:      subBillingPeriod,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -3682,7 +3682,7 @@ func (s *BillingServiceSuite) TestApplyProrationToLineItem_RuntimeSafetyNet_Mixe
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorCreateProrations, // mixed + proration -> safety net
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -3870,7 +3870,7 @@ func (s *BillingServiceSuite) TestClassifyLineItems_MultiCadencePRD() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		LineItems:          []*subscription.SubscriptionLineItem{liM, liQ, liH},
@@ -3992,7 +3992,7 @@ func (s *BillingServiceSuite) setupMultiCadenceSubMQH(ctx context.Context, start
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4069,7 +4069,7 @@ func (s *BillingServiceSuite) TestMultiCadence_Stress_AllSamePeriod() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4209,7 +4209,7 @@ func (s *BillingServiceSuite) setupMultiCadenceSubMQA(ctx context.Context, start
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4317,7 +4317,7 @@ func (s *BillingServiceSuite) setupMultiCadenceSubQA(ctx context.Context, start 
 		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4555,7 +4555,7 @@ func (s *BillingServiceSuite) TestMultiCadence_MidMonthStart() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4664,7 +4664,7 @@ func (s *BillingServiceSuite) setupMultiCadenceSubMQHA(ctx context.Context, star
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -4761,7 +4761,7 @@ func (s *BillingServiceSuite) TestMultiCadence_SingleQuarterlyLine() {
 		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
-		CustomerTimezone:   "UTC",
+		Timezone:   "UTC",
 		ProrationBehavior:  types.ProrationBehaviorNone,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}

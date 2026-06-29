@@ -88,8 +88,8 @@ const (
 	FieldCollectionMethod = "collection_method"
 	// FieldGatewayPaymentMethodID holds the string denoting the gateway_payment_method_id field in the database.
 	FieldGatewayPaymentMethodID = "gateway_payment_method_id"
-	// FieldCustomerTimezone holds the string denoting the customer_timezone field in the database.
-	FieldCustomerTimezone = "customer_timezone"
+	// FieldTimezone holds the string denoting the timezone field in the database.
+	FieldTimezone = "timezone"
 	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
 	FieldProrationBehavior = "proration_behavior"
 	// FieldEnableTrueUp holds the string denoting the enable_true_up field in the database.
@@ -221,7 +221,7 @@ var Columns = []string{
 	FieldPaymentBehavior,
 	FieldCollectionMethod,
 	FieldGatewayPaymentMethodID,
-	FieldCustomerTimezone,
+	FieldTimezone,
 	FieldProrationBehavior,
 	FieldEnableTrueUp,
 	FieldInvoicingCustomerID,
@@ -293,8 +293,8 @@ var (
 	DefaultPaymentBehavior types.PaymentBehavior
 	// DefaultCollectionMethod holds the default value on creation for the "collection_method" field.
 	DefaultCollectionMethod types.CollectionMethod
-	// DefaultCustomerTimezone holds the default value on creation for the "customer_timezone" field.
-	DefaultCustomerTimezone string
+	// DefaultTimezone holds the default value on creation for the "timezone" field.
+	DefaultTimezone string
 	// DefaultProrationBehavior holds the default value on creation for the "proration_behavior" field.
 	DefaultProrationBehavior types.ProrationBehavior
 	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
@@ -490,9 +490,9 @@ func ByGatewayPaymentMethodID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGatewayPaymentMethodID, opts...).ToFunc()
 }
 
-// ByCustomerTimezone orders the results by the customer_timezone field.
-func ByCustomerTimezone(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCustomerTimezone, opts...).ToFunc()
+// ByTimezone orders the results by the timezone field.
+func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
 }
 
 // ByProrationBehavior orders the results by the proration_behavior field.

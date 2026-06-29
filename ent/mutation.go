@@ -50357,7 +50357,7 @@ type SubscriptionMutation struct {
 	payment_behavior           *types.PaymentBehavior
 	collection_method          *types.CollectionMethod
 	gateway_payment_method_id  *string
-	customer_timezone          *string
+	timezone                   *string
 	proration_behavior         *types.ProrationBehavior
 	enable_true_up             *bool
 	parent_subscription_id     *string
@@ -52030,40 +52030,40 @@ func (m *SubscriptionMutation) ResetGatewayPaymentMethodID() {
 	delete(m.clearedFields, subscription.FieldGatewayPaymentMethodID)
 }
 
-// SetCustomerTimezone sets the "customer_timezone" field.
-func (m *SubscriptionMutation) SetCustomerTimezone(s string) {
-	m.customer_timezone = &s
+// SetTimezone sets the "timezone" field.
+func (m *SubscriptionMutation) SetTimezone(s string) {
+	m.timezone = &s
 }
 
-// CustomerTimezone returns the value of the "customer_timezone" field in the mutation.
-func (m *SubscriptionMutation) CustomerTimezone() (r string, exists bool) {
-	v := m.customer_timezone
+// Timezone returns the value of the "timezone" field in the mutation.
+func (m *SubscriptionMutation) Timezone() (r string, exists bool) {
+	v := m.timezone
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCustomerTimezone returns the old "customer_timezone" field's value of the Subscription entity.
+// OldTimezone returns the old "timezone" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldCustomerTimezone(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldTimezone(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCustomerTimezone is only allowed on UpdateOne operations")
+		return v, errors.New("OldTimezone is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCustomerTimezone requires an ID field in the mutation")
+		return v, errors.New("OldTimezone requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCustomerTimezone: %w", err)
+		return v, fmt.Errorf("querying old value for OldTimezone: %w", err)
 	}
-	return oldValue.CustomerTimezone, nil
+	return oldValue.Timezone, nil
 }
 
-// ResetCustomerTimezone resets all changes to the "customer_timezone" field.
-func (m *SubscriptionMutation) ResetCustomerTimezone() {
-	m.customer_timezone = nil
+// ResetTimezone resets all changes to the "timezone" field.
+func (m *SubscriptionMutation) ResetTimezone() {
+	m.timezone = nil
 }
 
 // SetProrationBehavior sets the "proration_behavior" field.
@@ -52974,8 +52974,8 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.gateway_payment_method_id != nil {
 		fields = append(fields, subscription.FieldGatewayPaymentMethodID)
 	}
-	if m.customer_timezone != nil {
-		fields = append(fields, subscription.FieldCustomerTimezone)
+	if m.timezone != nil {
+		fields = append(fields, subscription.FieldTimezone)
 	}
 	if m.proration_behavior != nil {
 		fields = append(fields, subscription.FieldProrationBehavior)
@@ -53081,8 +53081,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.CollectionMethod()
 	case subscription.FieldGatewayPaymentMethodID:
 		return m.GatewayPaymentMethodID()
-	case subscription.FieldCustomerTimezone:
-		return m.CustomerTimezone()
+	case subscription.FieldTimezone:
+		return m.Timezone()
 	case subscription.FieldProrationBehavior:
 		return m.ProrationBehavior()
 	case subscription.FieldEnableTrueUp:
@@ -53180,8 +53180,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldCollectionMethod(ctx)
 	case subscription.FieldGatewayPaymentMethodID:
 		return m.OldGatewayPaymentMethodID(ctx)
-	case subscription.FieldCustomerTimezone:
-		return m.OldCustomerTimezone(ctx)
+	case subscription.FieldTimezone:
+		return m.OldTimezone(ctx)
 	case subscription.FieldProrationBehavior:
 		return m.OldProrationBehavior(ctx)
 	case subscription.FieldEnableTrueUp:
@@ -53459,12 +53459,12 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGatewayPaymentMethodID(v)
 		return nil
-	case subscription.FieldCustomerTimezone:
+	case subscription.FieldTimezone:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetCustomerTimezone(v)
+		m.SetTimezone(v)
 		return nil
 	case subscription.FieldProrationBehavior:
 		v, ok := value.(types.ProrationBehavior)
@@ -53835,8 +53835,8 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 	case subscription.FieldGatewayPaymentMethodID:
 		m.ResetGatewayPaymentMethodID()
 		return nil
-	case subscription.FieldCustomerTimezone:
-		m.ResetCustomerTimezone()
+	case subscription.FieldTimezone:
+		m.ResetTimezone()
 		return nil
 	case subscription.FieldProrationBehavior:
 		m.ResetProrationBehavior()

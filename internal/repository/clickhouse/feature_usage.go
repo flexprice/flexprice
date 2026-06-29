@@ -2356,7 +2356,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 }
 
 func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor, params.UsageParams.CustomerTimezone)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor, params.UsageParams.Timezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params.UsageParams)
 

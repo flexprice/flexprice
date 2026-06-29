@@ -38,8 +38,8 @@ type MeterUsageQueryParams struct {
 	AggregationType     types.AggregationType
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
-	// CustomerTimezone is the customer's IANA timezone name. See UsageParams.CustomerTimezone.
-	CustomerTimezone string
+	// Timezone is the customer's IANA timezone name. See UsageParams.Timezone.
+	Timezone string
 	// GroupBy is the group_by dimension list. Allowed entries:
 	//   - "source"        — group by event source column
 	//   - "properties.X"  — group by JSON property X

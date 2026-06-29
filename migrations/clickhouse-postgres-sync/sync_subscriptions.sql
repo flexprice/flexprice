@@ -13,7 +13,7 @@ INSERT INTO flexprice.subscriptions (
     version, metadata, pause_status, active_pause_id,
     billing_cycle, commitment_amount, overage_factor,
     payment_behavior, collection_method, gateway_payment_method_id,
-    customer_timezone, proration_behavior, enable_true_up,
+    timezone, proration_behavior, enable_true_up,
     invoicing_customer_id, commitment_duration, parent_subscription_id, payment_terms,
     created_at, updated_at
 )
@@ -28,7 +28,7 @@ SELECT
     version, CAST(metadata AS Nullable(String)), pause_status, active_pause_id,
     billing_cycle, commitment_amount, overage_factor,
     payment_behavior, collection_method, gateway_payment_method_id,
-    customer_timezone, proration_behavior, enable_true_up,
+    timezone, proration_behavior, enable_true_up,
     invoicing_customer_id, commitment_duration, parent_subscription_id, payment_terms,
     created_at, updated_at
 FROM postgresql(

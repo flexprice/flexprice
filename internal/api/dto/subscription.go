@@ -501,7 +501,7 @@ type CreateSubscriptionRequest struct {
 
 	// Timezone of the customer.
 	// If not set, the default value is UTC.
-	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
+	Timezone string `json:"timezone" validate:"omitempty,timezone"`
 
 	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
 	// For monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date
@@ -1276,8 +1276,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		initialStatus = types.SubscriptionStatusActive
 	}
 
-	if r.CustomerTimezone == "" {
-		r.CustomerTimezone = "UTC"
+	if r.Timezone == "" {
+		r.Timezone = "UTC"
 	}
 
 	// Determine subscription start and end dates based on phases
@@ -1346,7 +1346,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
-		CustomerTimezone:   r.CustomerTimezone,
+		Timezone:           r.Timezone,
 		ProrationBehavior:  r.ProrationBehavior,
 
 		// New payment behavior fields

@@ -102,10 +102,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	sub := req.ToSubscription(ctx)
 	// Always inherit timezone from the customer record.
-	// The customer_timezone field in the API request is intentionally ignored.
-	sub.CustomerTimezone = customer.Timezone
-	if sub.CustomerTimezone == "" {
-		sub.CustomerTimezone = "UTC"
+	// The timezone field in the API request is intentionally ignored.
+	sub.Timezone = customer.Timezone
+	if sub.Timezone == "" {
+		sub.Timezone = "UTC"
 	}
 	s.overRideSubscriptionBasedOnIntegration(ctx, sub, &req)
 
@@ -144,7 +144,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if req.BillingAnchor != nil {
 		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor)
 	} else if sub.BillingCycle == types.BillingCycleCalendar {
-		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.CustomerTimezone)
+		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.Timezone)
 	} else {
 		sub.BillingAnchor = sub.StartDate
 	}
@@ -157,7 +157,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		Unit:                sub.BillingPeriodCount,
 		Period:              sub.BillingPeriod,
 		SubscriptionEndDate: sub.EndDate,
-		Timezone:            sub.CustomerTimezone,
+		Timezone:            sub.Timezone,
 	})
 	if err != nil {
 		return nil, err
@@ -574,7 +574,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 
 	// Calculate billing anchor
 	if sub.BillingCycle == types.BillingCycleCalendar {
-		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.CustomerTimezone)
+		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.Timezone)
 	} else {
 		// default to start date for anniversary billing
 		sub.BillingAnchor = sub.StartDate
@@ -587,7 +587,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		Unit:                sub.BillingPeriodCount,
 		Period:              sub.BillingPeriod,
 		SubscriptionEndDate: sub.EndDate,
-		Timezone:            sub.CustomerTimezone,
+		Timezone:            sub.Timezone,
 	})
 	if err != nil {
 		return nil, err
@@ -1454,7 +1454,7 @@ func (s *subscriptionService) handleEntitlementProration(
 		sub.CurrentPeriodStart,
 		sub.CurrentPeriodEnd,
 		sub.StartDate, // Proration date is the start date
-		sub.CustomerTimezone,
+		sub.Timezone,
 		sub.BillingCycle,
 		sub.BillingAnchor,
 		sub.BillingPeriod,
@@ -3051,7 +3051,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			Unit:                sub.BillingPeriodCount,
 			Period:              sub.BillingPeriod,
 			SubscriptionEndDate: sub.EndDate,
-			Timezone:            sub.CustomerTimezone,
+			Timezone:            sub.Timezone,
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate next billing date",
@@ -4982,7 +4982,7 @@ func addonPeriodEndForStartDate(sub *subscription.Subscription, startDate time.T
 		Anchor:           sub.BillingAnchor,
 		PeriodCount:      sub.BillingPeriodCount,
 		BillingPeriod:    sub.BillingPeriod,
-		Timezone:         sub.CustomerTimezone,
+		Timezone:         sub.Timezone,
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -6975,7 +6975,7 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 			Unit:                sub.BillingPeriodCount,
 			Period:              sub.BillingPeriod,
 			SubscriptionEndDate: sub.EndDate,
-			Timezone:            sub.CustomerTimezone,
+			Timezone:            sub.Timezone,
 		})
 		if err != nil {
 			return nil, err
@@ -7519,7 +7519,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		PaymentBehavior:        parent.PaymentBehavior,
 		CollectionMethod:       parent.CollectionMethod,
 		GatewayPaymentMethodID: parent.GatewayPaymentMethodID,
-		CustomerTimezone:       parent.CustomerTimezone,
+		Timezone:       parent.Timezone,
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,

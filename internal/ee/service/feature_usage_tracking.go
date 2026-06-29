@@ -746,7 +746,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			BillingAnchor:      sub.BillingAnchor,
 			PeriodUnit:         sub.BillingPeriodCount,
 			PeriodType:         sub.BillingPeriod,
-			Timezone:           sub.CustomerTimezone,
+			Timezone:           sub.Timezone,
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate period id",
@@ -3276,7 +3276,7 @@ func (s *featureUsageTrackingService) getTotalUsageForWeightedSumAggregation(
 		BillingAnchor:      subscription.BillingAnchor,
 		Unit:               subscription.BillingPeriodCount,
 		Period:             subscription.BillingPeriod,
-		Timezone:           subscription.CustomerTimezone,
+		Timezone:           subscription.Timezone,
 	})
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).

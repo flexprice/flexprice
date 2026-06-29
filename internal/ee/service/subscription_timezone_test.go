@@ -244,8 +244,8 @@ func (s *SubscriptionTimezoneTestSuite) TestTimezoneAwareBillingPeriods() {
 			s.Require().NotNil(resp)
 
 			// 1. Timezone is inherited from the customer
-			s.Equal(tc.timezone, resp.CustomerTimezone,
-				"CustomerTimezone should equal the customer's timezone")
+			s.Equal(tc.timezone, resp.Timezone,
+				"Timezone should equal the customer's timezone")
 
 			// 2. Period start matches the expected UTC instant
 			s.True(resp.CurrentPeriodStart.UTC().Equal(tc.expectedStart),

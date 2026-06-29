@@ -268,7 +268,7 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				subscription.BillingPeriod,
 				subscription.BillingPeriodCount,
 				*coupon.DurationInPeriods,
-				subscription.CustomerTimezone,
+				subscription.Timezone,
 			)
 			if err != nil {
 				return err

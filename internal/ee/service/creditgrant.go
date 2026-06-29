@@ -604,7 +604,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 				Anchor:             subscription.BillingAnchor,
 				PeriodCount:        subscription.BillingPeriodCount,
 				BillingPeriod:      subscription.BillingPeriod,
-				Timezone:           subscription.CustomerTimezone,
+				Timezone:           subscription.Timezone,
 			})
 			if err != nil {
 				return nil, err
@@ -950,7 +950,7 @@ func (s *creditGrantService) processCatchUpApplications(
 // createNextPeriodApplication creates a new CGA entry with scheduled status for the next period
 func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, currentPeriodEnd time.Time) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	// Calculate next period dates
-	nextPeriodStart, nextPeriodEnd, err := CalculateNextCreditGrantPeriod(lo.FromPtr(grant), currentPeriodEnd, subscription.CustomerTimezone)
+	nextPeriodStart, nextPeriodEnd, err := CalculateNextCreditGrantPeriod(lo.FromPtr(grant), currentPeriodEnd, subscription.Timezone)
 	if err != nil {
 		s.Logger.Error(ctx, "Failed to calculate next period",
 			"grant_id", grant.ID,

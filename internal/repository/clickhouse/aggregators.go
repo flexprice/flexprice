@@ -308,7 +308,7 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -360,7 +360,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.CustomerTimezone)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -410,7 +410,7 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	groupByClause := ""
 
@@ -457,7 +457,7 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -516,7 +516,7 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -575,7 +575,7 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	windowClause := ""
 	groupByClause := ""
 
@@ -623,7 +623,7 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -697,7 +697,7 @@ func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -749,7 +749,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.CustomerTimezone)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -843,7 +843,7 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 type WeightedSumAggregator struct{}
 
 func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""

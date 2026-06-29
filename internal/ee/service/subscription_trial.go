@@ -177,7 +177,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		Unit:                sub.BillingPeriodCount,
 		Period:              sub.BillingPeriod,
 		SubscriptionEndDate: sub.EndDate,
-		Timezone:            sub.CustomerTimezone,
+		Timezone:            sub.Timezone,
 	})
 	if err != nil {
 		return nil, err
