@@ -220,11 +220,9 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 	throttle := middleware.NewThrottle(cfg.FeatureUsageTracking.RateLimit, time.Second)
 
 	// Add the handler
-	router.AddNoPublishHandlerWithDLQ(
+	router.AddNoPublishHandler(
 		"feature_usage_tracking_handler",
 		cfg.FeatureUsageTracking.Topic,
-		cfg.FeatureUsageTracking.ConsumerGroup,
-		cfg.FeatureUsageTracking.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -273,11 +271,9 @@ func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.R
 	throttle := middleware.NewThrottle(cfg.FeatureUsageTrackingLazy.RateLimit, time.Second)
 
 	// Add the handler
-	router.AddNoPublishHandlerWithDLQ(
+	router.AddNoPublishHandler(
 		"feature_usage_tracking_lazy_handler",
 		cfg.FeatureUsageTrackingLazy.Topic,
-		cfg.FeatureUsageTrackingLazy.ConsumerGroup,
-		cfg.FeatureUsageTrackingLazy.TopicDLQ,
 		s.lazyPubSub,
 		s.processMessage,
 		throttle.Middleware,
