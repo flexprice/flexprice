@@ -39,6 +39,9 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 		r.lastResult().Details = fmt.Sprintf("cust_id=%s, external_id=%s", *customer.ID, r.externalCustID)
 		return nil
 	})
+	r.assertRouting("Create Customer: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
+	})
 
 	// ── Create Subscription ─────────────────────────────────────────────
 	// SDK: client.Subscriptions.CreateSubscription(ctx, types.CreateSubscriptionRequest{...})
@@ -104,6 +107,9 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 		r.lastResult().Details = details
 		return nil
 	})
+	r.assertRouting("Create Subscription: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
+	})
 
 	// ── Verify Subscription Active ──────────────────────────────────────
 	// SDK: client.Subscriptions.GetSubscription(ctx, subID)
@@ -155,6 +161,9 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 
 		r.lastResult().Details = "status=ACTIVE"
 		return nil
+	})
+	r.assertRouting("Verify Subscription: reads pinned to writer", RoutingExpectation{
+		WriterPinnedMin: 1,
 	})
 
 	// ── Verify Subscription Entitlements ─────────────────────────────────

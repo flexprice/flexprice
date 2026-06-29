@@ -51,6 +51,9 @@ func (r *SanityRunner) runBillingSteps(ctx context.Context) {
 		r.lastResult().Details = fmt.Sprintf("ent_id=%s, plan-level, metered, limit=1000 tokens, soft limit", *ent.ID)
 		return nil
 	})
+	r.assertRouting("Create Entitlement: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
+	})
 
 	// ── Verify Plan Entitlements ────────────────────────────────────────
 	// SDK: client.Entitlements.GetPlanEntitlements(ctx, planID)
@@ -114,6 +117,9 @@ func (r *SanityRunner) runBillingSteps(ctx context.Context) {
 			return fmt.Errorf("entitlement for Feature A (%s) not found on plan via any method", r.featureAID)
 		}
 		return nil
+	})
+	r.assertRouting("Verify Entitlements: reads pinned after write", RoutingExpectation{
+		WriterPinnedMin: 1,
 	})
 
 skipTax:

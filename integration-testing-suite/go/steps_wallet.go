@@ -46,6 +46,9 @@ func (r *SanityRunner) runWalletSteps(ctx context.Context) {
 			*wallet.ID, derefStr(wallet.Currency), r.customerID)
 		return nil
 	})
+	r.assertRouting("Create Wallet: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
+	})
 
 	// ── Top-Up Wallet ──────────────────────────────────────────────────
 	// SDK: client.Wallets.TopUpWallet(ctx, walletID, types.TopUpWalletRequest{...})
@@ -69,6 +72,9 @@ func (r *SanityRunner) runWalletSteps(ctx context.Context) {
 
 		r.lastResult().Details = "500 credits added"
 		return nil
+	})
+	r.assertRouting("Top-Up Wallet: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
 	})
 
 	// ── Verify Wallet Balance ──────────────────────────────────────────
@@ -96,5 +102,8 @@ func (r *SanityRunner) runWalletSteps(ctx context.Context) {
 		}
 		r.lastResult().Details = details
 		return nil
+	})
+	r.assertRouting("Verify Wallet Balance: reads pinned after write", RoutingExpectation{
+		WriterPinnedMin: 1,
 	})
 }

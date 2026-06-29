@@ -105,6 +105,9 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		r.lastResult().Details = fmt.Sprintf("feat_id=%s, meter_id=%s, event=%s", *feature.ID, r.meterAID, r.eventNameA)
 		return nil
 	})
+	r.assertRouting("Create Feature: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
+	})
 
 	// ── Create Metered Feature B (ungrouped) ────────────────────────────
 	// SDK: client.Features.CreateFeature(ctx, types.CreateFeatureRequest{...})
@@ -172,6 +175,9 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		r.lastResult().EntityID = *plan.ID
 		r.lastResult().Details = fmt.Sprintf("plan_id=%s, name=%s", *plan.ID, derefStr(plan.Name))
 		return nil
+	})
+	r.assertRouting("Create Plan: writer called", RoutingExpectation{
+		WriterCallsMin: 1,
 	})
 
 	// ── Add Recurring Price 1 (grouped) ─────────────────────────────────
