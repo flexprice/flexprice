@@ -3631,6 +3631,247 @@ func (s *MeterUsageServiceSuite) TestMeterUsage_CancelledSubInsideWindow_Attribu
 }
 
 // ---------------------------------------------------------------------------
+// Stale-meter filter — GetDetailedAnalytics restricts to meters on at least
+// one subscription line item that overlaps the query window. The ingestion
+// pipeline no longer validates that an event's matching meter is on an active
+// subscription, so meter_usage can carry rows for "stale" meters that fanned
+// out from a shared event_name. Reads must not surface those.
+// ---------------------------------------------------------------------------
+
+// TestGetDetailedAnalytics_StaleMeterExplicit_FilteredOut covers the case the
+// user reported in production: two meters fired for the same event_name, only
+// one of them is on the customer's subscription, but the caller passed both
+// in MeterIDs. The stale one must be filtered out.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_StaleMeterExplicit_FilteredOut() {
+	ctx := s.GetContext()
+
+	// Subscribed meter — linked to s.sub via a line item.
+	subscribed := s.createMeterWithAggregation(ctx, "mtr_subscribed_explicit", "ev_shared", types.AggregationCount)
+	p := s.createPriceForMeter(ctx, "pr_subscribed_explicit", subscribed.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_subscribed_explicit", subscribed.ID, p.ID)
+
+	// Stale meter — exists and has rows in meter_usage but is NOT on any line
+	// item for this customer (mimics the shared-event_name fan-out).
+	stale := s.createMeterWithAggregation(ctx, "mtr_stale_explicit", "ev_shared", types.AggregationCount)
+
+	// Same event timestamp on both meters (the two-rows-per-event pattern).
+	ts := s.periodStart.Add(24 * time.Hour)
+	s.insertMeterUsageFull(ctx, subscribed.ID, s.customer.ExternalID, "", "ev_shared", ts, 1, "", nil)
+	s.insertMeterUsageFull(ctx, stale.ID, s.customer.ExternalID, "", "ev_shared", ts, 1, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{subscribed.ID, stale.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	subscribedSeen, staleSeen := false, false
+	for _, item := range resp.Items {
+		switch item.MeterID {
+		case subscribed.ID:
+			subscribedSeen = true
+		case stale.ID:
+			staleSeen = true
+		}
+	}
+	s.True(subscribedSeen, "subscribed meter must appear in response")
+	s.False(staleSeen, "stale meter (not on any line item) must be filtered out even when explicitly requested")
+}
+
+// TestGetDetailedAnalytics_StaleMeterImplicit_FilteredOut: same as above but
+// the caller passes an empty MeterIDs — exercises the "auto-fill from active
+// set" branch of the filter (no explicit caller list).
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_StaleMeterImplicit_FilteredOut() {
+	ctx := s.GetContext()
+
+	subscribed := s.createMeterWithAggregation(ctx, "mtr_subscribed_impl", "ev_impl", types.AggregationCount)
+	p := s.createPriceForMeter(ctx, "pr_subscribed_impl", subscribed.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_subscribed_impl", subscribed.ID, p.ID)
+
+	stale := s.createMeterWithAggregation(ctx, "mtr_stale_impl", "ev_impl", types.AggregationCount)
+
+	ts := s.periodStart.Add(24 * time.Hour)
+	s.insertMeterUsageFull(ctx, subscribed.ID, s.customer.ExternalID, "", "ev_impl", ts, 1, "", nil)
+	s.insertMeterUsageFull(ctx, stale.ID, s.customer.ExternalID, "", "ev_impl", ts, 1, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		// No MeterIDs — filter auto-fills from sub line items.
+		StartTime: s.periodStart,
+		EndTime:   s.periodEnd,
+	})
+	s.NoError(err)
+
+	subscribedSeen, staleSeen := false, false
+	for _, item := range resp.Items {
+		switch item.MeterID {
+		case subscribed.ID:
+			subscribedSeen = true
+		case stale.ID:
+			staleSeen = true
+		}
+	}
+	s.True(subscribedSeen, "subscribed meter must appear in response")
+	s.False(staleSeen, "stale meter must not appear when caller omits MeterIDs")
+}
+
+// TestGetDetailedAnalytics_CancelledMidWindowMeterOnly_PreCancelUsageReturned
+// proves the filter is window-aware (not just "currently Active+Trialing"):
+// a meter that lives ONLY on a subscription cancelled mid-window must still
+// contribute its pre-cancellation usage, even though that subscription is no
+// longer in Active/Trialing status. Without the GetPeriodEnd / CancelledAt
+// clamp in the filter, a naive "active subscriptions only" pass would drop
+// this meter and silently lose valid analytics data.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_CancelledMidWindowMeterOnly_PreCancelUsageReturned() {
+	ctx := s.GetContext()
+
+	cancelledAt := s.periodStart.Add(72 * time.Hour)
+	cancelledSub := &subscription.Subscription{
+		ID:                 "sub_mid_cancel_unique_meter",
+		CustomerID:         s.customer.ID,
+		PlanID:             "plan_1",
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusCancelled,
+		CurrentPeriodStart: s.periodStart,
+		CurrentPeriodEnd:   s.periodEnd,
+		BillingAnchor:      s.periodStart,
+		StartDate:          s.periodStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		CancelledAt:        &cancelledAt,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cancelledSub))
+
+	// Meter lives ONLY on the cancelled subscription — no line item ties it
+	// to s.sub (the suite's active subscription). SUM aggregation lets us
+	// distinguish the two event quantities (100 pre-cancel, 50 post-cancel)
+	// rather than just count rows.
+	onlyMeter := s.createMeterWithAggregation(ctx, "mtr_cancel_only", "ev_cancel_only", types.AggregationSum)
+	pCancel := s.createPriceForMeter(ctx, "pr_cancel_only", onlyMeter.ID, decimal.NewFromInt(1))
+	cancelledLI := &subscription.SubscriptionLineItem{
+		ID:             "li_cancel_only",
+		SubscriptionID: cancelledSub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        pCancel.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        onlyMeter.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, cancelledLI))
+
+	// Pre-cancellation event (24h after start → before 72h cancellation).
+	s.insertMeterUsageFull(ctx, onlyMeter.ID, s.customer.ExternalID, "", "ev_cancel_only",
+		s.periodStart.Add(24*time.Hour), 100, "", nil)
+	// Post-cancellation event (96h after start → after 72h cancellation).
+	s.insertMeterUsageFull(ctx, onlyMeter.ID, s.customer.ExternalID, "", "ev_cancel_only",
+		s.periodStart.Add(96*time.Hour), 50, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{onlyMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	var seen bool
+	var totalUsage decimal.Decimal
+	for _, item := range resp.Items {
+		if item.MeterID == onlyMeter.ID {
+			seen = true
+			totalUsage = item.TotalUsage
+		}
+	}
+	s.True(seen, "meter on cancelled-mid-window subscription must still appear in response (window-aware filter)")
+	s.True(totalUsage.Equal(decimal.NewFromInt(100)),
+		"only pre-cancellation event qty (100) should count; post-cancel qty (50) is clamped out — got %s", totalUsage)
+}
+
+// TestGetDetailedAnalytics_OnlyPreWindowCancelledSubs_ReturnsEmpty: when every
+// subscription the customer has was cancelled before the query window started,
+// the filter produces an empty active-meter set and we return empty without
+// hitting any per-subscription query. This is the early-return at the bottom
+// of the filter block (params.MeterIDs becomes empty after intersection).
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_OnlyPreWindowCancelledSubs_ReturnsEmpty() {
+	ctx := s.GetContext()
+
+	// Use a fresh customer so the suite's default active s.sub doesn't shadow
+	// the "only-cancelled-subs" condition.
+	cust := &customer.Customer{
+		ID:         "cust_only_cancelled",
+		ExternalID: "ext_only_cancelled",
+		Name:       "Only Cancelled Customer",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	cancelledAt := s.periodStart.Add(-180 * 24 * time.Hour)
+	cancelledStart := s.periodStart.Add(-200 * 24 * time.Hour)
+	cancelledSub := &subscription.Subscription{
+		ID:                 "sub_only_cancelled",
+		CustomerID:         cust.ID,
+		PlanID:             "plan_1",
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusCancelled,
+		CurrentPeriodStart: cancelledStart,
+		CurrentPeriodEnd:   cancelledStart.Add(30 * 24 * time.Hour),
+		BillingAnchor:      cancelledStart,
+		StartDate:          cancelledStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		CancelledAt:        &cancelledAt,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cancelledSub))
+
+	li := &subscription.SubscriptionLineItem{
+		ID:             "li_only_cancelled",
+		SubscriptionID: cancelledSub.ID,
+		CustomerID:     cust.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      cancelledStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// Events inside the query window — must NOT be attributed because no
+	// subscription is in-window.
+	s.insertMeterUsage(ctx, s.meterAPI.ID, cust.ExternalID,
+		s.periodStart.Add(24*time.Hour), 100)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: cust.ExternalID,
+		MeterIDs:           []string{s.meterAPI.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Empty(resp.Items, "no subscription overlaps the query window → empty response")
+}
+
+// ---------------------------------------------------------------------------
 // skipSyntheticZeros — suppress zero-usage line-item injection under filters.
 //
 // When PropertyFilters or Sources are present, the SQL result is a deliberate
@@ -4055,4 +4296,64 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_UserGroupByFansOutSourceAndPr
 	s.Equal("eu-west", sdkItem.Properties["region"])
 	s.True(sdkItem.TotalUsage.Equal(decimal.NewFromInt(50)),
 		"sdk/eu-west total: expected 50, got %s", sdkItem.TotalUsage)
+}
+
+// TestBucketedMeter_FanOutOmitsEmptyPropertyValues pins parity with the
+// feature-side scan: when the user requests group_by on a property that's
+// missing from the event, the fan-out result must NOT include that property
+// key with an empty-string value. Feature side already filters this at scan
+// time (clickhouse/feature_usage.go:1175, 1630); meter side was leaving stray
+// empty-string entries that polluted the response and made cross-pipeline
+// comparison noisy.
+//
+// Setup: HOUR bucketed MAX meter, one event with only "region" property set.
+// Request groups by region AND missing_prop (a property the event doesn't carry).
+// Expected: Properties carries {"region": "us-east"} and does NOT carry
+// "missing_prop" at all (not even with "").
+func (s *MeterUsageServiceSuite) TestBucketedMeter_FanOutOmitsEmptyPropertyValues() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_empty_props",
+		Name:      "Bucketed MAX empty property filter",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_empty_props", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_empty_props", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Single event carries "region" but not "missing_prop".
+	s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "api",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 42,
+		map[string]interface{}{"region": "us-east"})
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeHour,
+		GroupBy:            []string{"properties.region", "properties.missing_prop"},
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_empty_props" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	s.Equal("us-east", item.Properties["region"])
+	_, present := item.Properties["missing_prop"]
+	s.False(present,
+		"missing property must be omitted from Properties (feature-side parity); got %v", item.Properties)
 }

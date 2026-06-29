@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -96,6 +97,7 @@ type Stores struct {
 	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
+	CheckoutSessionRepo          domainCheckout.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -106,6 +108,8 @@ type BaseServiceTestSuite struct {
 	publisher           publisher.EventPublisher
 	webhookPublisher    webhookPublisher.WebhookPublisher
 	db                  postgres.IClient
+	inMemoryCache       cache.InMemoryCache
+	redisCache          cache.RedisCache
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -134,9 +138,6 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	if err != nil {
 		s.T().Fatalf("failed to create logger: %v", err)
 	}
-
-	// Initialize cache
-	cache.Initialize(cfg, s.logger)
 }
 
 func (s *BaseServiceTestSuite) setupDependencies() {
@@ -168,6 +169,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.SubscriptionRepo,
 		s.stores.InvoiceRepo,
 		s.stores.PaymentRepo,
+		nil, // paymentMethodRepo — not needed in unit tests
 		s.stores.PriceRepo,
 		s.stores.EntityIntegrationMappingRepo,
 		s.stores.MeterRepo,
@@ -247,7 +249,12 @@ func (s *BaseServiceTestSuite) setupStores() {
 		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
+		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 	}
+
+	// Cache stores
+	s.inMemoryCache = cache.NewInMemoryCache()
+	s.redisCache = NewInMemoryRedis()
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
@@ -302,6 +309,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
+	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
@@ -331,6 +339,16 @@ func (s *BaseServiceTestSuite) GetPublisher() publisher.EventPublisher {
 // GetWebhookPublisher returns the test webhook publisher
 func (s *BaseServiceTestSuite) GetWebhookPublisher() webhookPublisher.WebhookPublisher {
 	return s.webhookPublisher
+}
+
+// GetInMemoryCache returns the test in-memory cache
+func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
+	return s.inMemoryCache
+}
+
+// GetRedisCache returns the test Redis cache
+func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
+	return s.redisCache
 }
 
 // GetDB returns the test database client

@@ -192,11 +192,11 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 		// This ensures entitlement proration matches price proration
 		// Example: Subscription starts Dec 26, billing anchor is Jan 1
 		// Previous billing date is Dec 1, so we prorate based on 6/31 days
-		previousBillingDate, err := types.PreviousBillingDate(
-			params.BillingAnchor,
-			params.BillingPeriodCount,
-			params.BillingPeriod,
-		)
+		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
+			BillingAnchor: params.BillingAnchor,
+			Unit:          params.BillingPeriodCount,
+			Period:        params.BillingPeriod,
+		})
 		if err != nil {
 			// Fallback to subscription period start if calculation fails
 			c.logger.Info(context.Background(), "failed to calculate previous billing date for calendar proration, using fallback",

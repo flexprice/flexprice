@@ -7,23 +7,22 @@ import (
 
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-// validateAPIKey validates the API key and returns roles array if valid
-// First checks the config, then the database
-func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID string, roles []string, valid bool) {
+// validateAPIKey validates the API key against the config first, then the database.
+func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
 	if apiKey == "" {
-		return "", "", "", nil, false
+		return "", "", "", "", nil, false
 	}
 
 	// First check in config
 	tenantID, userID, valid = auth.ValidateAPIKey(cfg, apiKey)
 	if valid {
-		return tenantID, userID, "", []string{}, true // Empty roles = full access for config keys
+		return tenantID, userID, "", "", []string{}, true // Empty roles = full access for config keys
 	}
 
 	// If not found in config, check in database
@@ -31,15 +30,15 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 		secret, err := secretService.VerifyAPIKey(ctx, apiKey)
 		if err == nil && secret != nil {
 			// Return roles from the secret for RBAC permission checks
-			return secret.TenantID, secret.CreatedBy, secret.EnvironmentID, secret.Roles, true
+			return secret.TenantID, secret.CreatedBy, secret.EnvironmentID, secret.UserType, secret.Roles, true
 		}
 	}
 
-	return "", "", "", nil, false
+	return "", "", "", "", nil, false
 }
 
-// setContextValues sets the tenant ID, user ID, environment ID, and roles in the context
-func setContextValues(c *gin.Context, tenantID, userID, environmentID string, roles []string) {
+// setContextValues sets the tenant ID, user ID, environment ID, roles, and caller type in the context
+func setContextValues(c *gin.Context, tenantID, userID, environmentID, userType string, roles []string) {
 	ctx := c.Request.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, userID)
@@ -47,6 +46,10 @@ func setContextValues(c *gin.Context, tenantID, userID, environmentID string, ro
 	// Set roles for RBAC permission checks
 	if roles != nil {
 		ctx = context.WithValue(ctx, types.CtxRoles, roles)
+	}
+
+	if userType != "" {
+		ctx = context.WithValue(ctx, types.CtxUserType, userType)
 	}
 
 	// Set additional headers for downstream handlers
@@ -70,7 +73,7 @@ func GuestAuthenticateMiddleware(c *gin.Context) {
 func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.SecretService, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if !valid {
 			logger.Debug(c.Request.Context(), "invalid api key")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
@@ -78,7 +81,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 			return
 		}
 
-		setContextValues(c, tenantID, userID, environmentID, roles)
+		setContextValues(c, tenantID, userID, environmentID, userType, roles)
 		c.Next()
 	}
 }
@@ -92,9 +95,9 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 	return func(c *gin.Context) {
 		// First check for API key
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
-			setContextValues(c, tenantID, userID, environmentID, roles)
+			setContextValues(c, tenantID, userID, environmentID, userType, roles)
 			c.Next()
 			return
 		}
@@ -130,7 +133,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		// JWT users have empty roles = full access
-		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, []string{})
+		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{})
 		c.Next()
 	}
 }

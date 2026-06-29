@@ -47,8 +47,8 @@ func (s *RawEventConsumptionSuite) SetupTest() {
 	}
 
 	s.svc = &rawEventConsumptionService{
-		ServiceParams: params,
-		outputPubSub:  s.outputPubSub,
+		ServiceParams:  params,
+		outputPubSub:   s.outputPubSub,
 		tracingService: tracing.NewService(s.GetConfig(), s.GetLogger()),
 	}
 

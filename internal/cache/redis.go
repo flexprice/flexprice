@@ -21,19 +21,19 @@ const (
 	ScanCount = 100
 )
 
-// RedisCache implements the Cache interface using Redis.
+// redisCacheImpl implements the Cache interface using Redis.
 // The client is a UniversalClient so it works for both standalone and cluster deployments.
-type RedisCache struct {
+type redisCacheImpl struct {
 	client redis.UniversalClient
 	config *config.Configuration
 	log    *logger.Logger
 }
 
 // Redis cache instance
-var redisCache *RedisCache
+var redisCache *redisCacheImpl
 
 // NewRedisCache creates a new Redis cache
-func NewRedisCache() *RedisCache {
+func NewRedisCache() RedisCache {
 	if redisCache == nil {
 		cfg, err := config.NewConfig()
 		if err != nil {
@@ -49,24 +49,26 @@ func NewRedisCache() *RedisCache {
 // InitializeRedisCache initializes the global Redis cache instance using the
 // provided configuration and logger. Dependencies are explicit; callers should
 // pass through the values wired by Initialize rather than relying on globals.
-func InitializeRedisCache(cfg *config.Configuration, log *logger.Logger) {
+func InitializeRedisCache(cfg *config.Configuration, log *logger.Logger) RedisCache {
 	if redisCache != nil {
-		return
+		return redisCache
 	}
 	client, err := redisClient.NewClient(cfg, log)
 	if err != nil {
 		log.Error(context.Background(), "Failed to create Redis client", "error", err)
-		return
+		return nil
 	}
-	redisCache = &RedisCache{
+	rc := &redisCacheImpl{
 		client: client.GetClient(),
 		config: cfg,
 		log:    log,
 	}
+	redisCache = rc
+	return rc
 }
 
 // GetRedisCache returns the global Redis cache instance
-func GetRedisCache() *RedisCache {
+func GetRedisCache() RedisCache {
 	if redisCache == nil {
 		cfg, err := config.NewConfig()
 		if err != nil {
@@ -80,18 +82,20 @@ func GetRedisCache() *RedisCache {
 }
 
 // Helper function to add prefix to key
-func (c *RedisCache) GetRedisKey(key string) string {
+func (c *redisCacheImpl) GetRedisKey(key string) string {
 	if c.config.Redis.KeyPrefix == "" {
 		return key
 	}
 	return c.config.Redis.KeyPrefix + ":" + key
 }
 
-// Get retrieves a value from the cache
-func (c *RedisCache) Get(ctx context.Context, key string) (interface{}, bool) {
+func (c *redisCacheImpl) IsEnabled() bool {
+	return c.config.Cache.Enabled && c.config.Cache.Redis.Enabled
+}
 
-	if !c.config.Cache.Enabled {
-		c.log.Debug(ctx, "Cache is disabled")
+// Get retrieves a value from the cache
+func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool) {
+	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}
 
@@ -111,10 +115,8 @@ func (c *RedisCache) Get(ctx context.Context, key string) (interface{}, bool) {
 }
 
 // Set adds a value to the cache with the specified expiration
-func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
-
-	if !c.config.Cache.Enabled {
-		c.log.Debug(ctx, "Cache is disabled")
+func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	if c == nil || !c.IsEnabled() {
 		return
 	}
 	// Use default expiration if none specified
@@ -146,8 +148,10 @@ func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, exp
 }
 
 // Delete removes a key from the cache with retry
-func (c *RedisCache) Delete(ctx context.Context, key string) {
-
+func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
+	if c == nil || !c.IsEnabled() {
+		return
+	}
 	redisKey := c.GetRedisKey(key)
 	err := c.delete(ctx, redisKey)
 	if err != nil {
@@ -168,13 +172,17 @@ func (c *RedisCache) Delete(ctx context.Context, key string) {
 }
 
 // delete is a helper function to perform the actual deletion
-func (c *RedisCache) delete(ctx context.Context, key string) error {
-	return c.client.Del(ctx, key).Err()
+func (c *redisCacheImpl) delete(ctx context.Context, key string) error {
+	return c.client.Unlink(ctx, key).Err()
 }
 
 // TrySetNX sets key to value with expiration only if the key does not exist (lock acquire).
 // Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
-func (c *RedisCache) TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	if c == nil || !c.IsEnabled() {
+		return false, nil
+	}
+
 	redisKey := c.GetRedisKey(key)
 	var strValue string
 	switch v := value.(type) {
@@ -194,8 +202,28 @@ func (c *RedisCache) TrySetNX(ctx context.Context, key string, value interface{}
 	return ok, nil
 }
 
+// AcquireLock acquires a lock on a key with the given expiration time.
+// Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
+func (c *redisCacheImpl) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	if c == nil {
+		return false, nil
+	}
+
+	redisKey := c.GetRedisKey(key)
+	// For acquire lock, we use a fixed value of "1"
+	// This is because we don't need to store any value in the lock key
+	ok, err := c.client.SetNX(ctx, redisKey, "1", expiration).Result()
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 // DeleteByPrefix removes all keys with the given prefix
-func (c *RedisCache) DeleteByPrefix(ctx context.Context, prefix string) {
+func (c *redisCacheImpl) DeleteByPrefix(ctx context.Context, prefix string) {
+	if c == nil || !c.IsEnabled() {
+		return
+	}
 
 	// TODO: This needs to be implemented properly
 	// Use SCAN to iterate through keys matching the pattern
@@ -228,14 +256,21 @@ func (c *RedisCache) DeleteByPrefix(ctx context.Context, prefix string) {
 }
 
 // Flush removes all items from the cache
-func (c *RedisCache) Flush(ctx context.Context) {
+func (c *redisCacheImpl) Flush(ctx context.Context) {
+	if c == nil || !c.IsEnabled() {
+		return
+	}
 	if err := c.client.FlushDB(ctx).Err(); err != nil {
 		c.log.Error(ctx, "Redis FLUSHDB error", "error", err)
 	}
 }
 
 // Get value from cache bypassing configuration checks
-func (c *RedisCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
+func (c *redisCacheImpl) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
+	if c == nil {
+		return nil, false
+	}
+
 	redisKey := c.GetRedisKey(key)
 	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
@@ -251,7 +286,11 @@ func (c *RedisCache) ForceCacheGet(ctx context.Context, key string) (interface{}
 }
 
 // ForceCacheGetWithTTL retrieves a value and its remaining TTL from the cache bypassing configuration checks
-func (c *RedisCache) ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool) {
+func (c *redisCacheImpl) ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool) {
+	if c == nil {
+		return nil, 0, false
+	}
+
 	redisKey := c.GetRedisKey(key)
 	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
@@ -273,7 +312,11 @@ func (c *RedisCache) ForceCacheGetWithTTL(ctx context.Context, key string) (inte
 }
 
 // Set value from cache bypassing configuration checks
-func (c *RedisCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+func (c *redisCacheImpl) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	if c == nil {
+		return
+	}
+
 	// Use default expiration if none specified
 	if expiration == 0 {
 		expiration = ExpiryDefaultRedis
@@ -299,5 +342,15 @@ func (c *RedisCache) ForceCacheSet(ctx context.Context, key string, value interf
 
 	if err := c.client.Set(ctx, redisKey, strValue, expiration).Err(); err != nil {
 		c.log.Error(ctx, "Redis SET error", "key", redisKey, "error", err)
+	}
+}
+
+func (c *redisCacheImpl) ForceCacheDelete(ctx context.Context, key string) {
+	if c == nil {
+		return
+	}
+	redisKey := c.GetRedisKey(key)
+	if err := c.client.Unlink(ctx, redisKey).Err(); err != nil {
+		c.log.Error(ctx, "Redis UNLINK error", "key", redisKey, "error", err)
 	}
 }

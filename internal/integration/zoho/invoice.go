@@ -62,16 +62,21 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = req.InvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err == nil && len(mappings) > 0 {
 		zohoID := mappings[0].ProviderEntityID
 		status := "draft"
+		zohoInvNumber := ""
 		if mappings[0].Metadata != nil {
 			if s, ok := mappings[0].Metadata["zoho_status"].(string); ok && s != "" {
 				status = s
 			}
+			if invNumber, ok := mappings[0].Metadata["zoho_invoice_number"].(string); ok {
+				zohoInvNumber = invNumber
+			}
 		}
-		if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoID); werr != nil {
+		if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoID, zohoInvNumber); werr != nil {
 			s.logger.Info(ctx, "failed to update FlexPrice invoice metadata from existing Zoho mapping",
 				"error", werr,
 				"invoice_id", req.InvoiceID,
@@ -112,12 +117,6 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	//if flexInvoice.DueDate != nil {
-	//	reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
-	//}
-	if flexInvoice.InvoiceNumber != nil {
-		reqPayload.ReferenceNumber = *flexInvoice.InvoiceNumber
-	}
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -140,9 +139,10 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		EnvironmentID:    flexInvoice.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			"synced_at":         time.Now().UTC().Format(time.RFC3339),
-			"zoho_status":       zohoInv.Status,
-			"flexprice_invoice": req.InvoiceID,
+			"synced_at":           time.Now().UTC().Format(time.RFC3339),
+			"zoho_status":         zohoInv.Status,
+			"flexprice_invoice":   req.InvoiceID,
+			"zoho_invoice_number": zohoInv.InvoiceNumber,
 		},
 	}
 	mapping.TenantID = flexInvoice.TenantID
@@ -150,7 +150,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
-	if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoInv.InvoiceID); werr != nil {
+	if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoInv.InvoiceID, zohoInv.InvoiceNumber); werr != nil {
 		s.logger.Info(ctx, "failed to update FlexPrice invoice metadata from Zoho sync",
 			"error", werr,
 			"invoice_id", req.InvoiceID,
@@ -166,9 +166,12 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 }
 
 // writeZohoInvoiceMetadata stores the Zoho Books invoice id on the FlexPrice invoice metadata.
-func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *invoice.Invoice, zohoInvoiceID string) error {
+func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *invoice.Invoice, zohoInvoiceID, zohoInvoiceNumber string) error {
 	if flex == nil || zohoInvoiceID == "" {
 		return nil
+	}
+	if zohoInvoiceNumber != "" {
+		flex.InvoiceNumber = lo.ToPtr(zohoInvoiceNumber)
 	}
 	if flex.Metadata == nil {
 		flex.Metadata = make(types.Metadata)

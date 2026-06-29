@@ -11,51 +11,52 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
-type AnalyticsBenchmarkRepository struct {
+type MeterUsageBenchmarkRepository struct {
 	store  *ich.ClickHouseStore
 	logger *logger.Logger
 }
 
-func NewAnalyticsBenchmarkRepository(store *ich.ClickHouseStore, logger *logger.Logger) events.AnalyticsBenchmarkRepository {
-	return &AnalyticsBenchmarkRepository{store: store, logger: logger}
+func NewMeterUsageBenchmarkRepository(store *ich.ClickHouseStore, logger *logger.Logger) events.MeterUsageBenchmarkRepository {
+	return &MeterUsageBenchmarkRepository{store: store, logger: logger}
 }
 
-func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records []*events.AnalyticsBenchmarkRecord) error {
+func (r *MeterUsageBenchmarkRepository) BulkInsert(ctx context.Context, records []*events.MeterUsageBenchmarkRecord) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	// Attach settings to context
 	ctx = clickhouse.Context(ctx, clickhouse.WithSettings(clickhouse.Settings{
 		"max_memory_usage": 90000000000,
 	}))
 
 	stmt, err := r.store.GetConn().PrepareBatch(ctx, `
-		INSERT INTO analytics_benchmark (
+		INSERT INTO meter_usage_benchmark (
 			tenant_id, environment_id, event_id,
 			start_time, end_time,
 			external_customer_id, external_customer_ids,
 			feature_ids, sources, group_by, window_size, expand,
 			include_children, has_property_filters, request_json,
-			row_type,
-			feature_id, meter_id, sub_line_item_id, group_key, match_status,
-			diff_reason,
-			feature_price_id, meter_price_id,
-			feature_item_count, meter_item_count,
-			feature_total_usage, meter_total_usage, usage_diff,
-			feature_total_cost, meter_total_cost, cost_diff,
-			feature_event_count, meter_event_count,
-			currency, created_at
+			nofinal_duration_ms, nofinal_scan_rows, nofinal_scan_bytes,
+			nofinal_read_disk_bytes, nofinal_mem_peak_bytes, nofinal_result_rows,
+			final_duration_ms, final_scan_rows, final_scan_bytes,
+			final_read_disk_bytes, final_mem_peak_bytes, final_result_rows,
+			duration_diff_ms, scan_rows_diff, scan_bytes_diff,
+			read_disk_bytes_diff, mem_peak_diff_bytes,
+			nofinal_total_usage, final_total_usage, usage_diff,
+			nofinal_total_cost, final_total_cost, cost_diff,
+			nofinal_item_count, final_item_count, results_match,
+			nofinal_error, final_error,
+			first_side, currency, created_at
 		)
 	`)
 	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to prepare analytics_benchmark insert").
+			WithHint("Failed to prepare meter_usage_benchmark insert").
 			Mark(ierr.ErrDatabase)
 	}
 
 	rowsInserted := 0
-	var firstInserted *events.AnalyticsBenchmarkRecord
+	var firstInserted *events.MeterUsageBenchmarkRecord
 
 	now := time.Now().UTC()
 	for _, record := range records {
@@ -87,18 +88,6 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			expand = []string{}
 		}
 
-		// Default row_type to line_item for backwards-compat when callers don't set it.
-		rowType := record.RowType
-		if rowType == "" {
-			rowType = events.AnalyticsBenchmarkRowLineItem
-		}
-		// Default diff_reason to none (the column has a default but the binary
-		// protocol requires every column be supplied per row).
-		diffReason := record.DiffReason
-		if diffReason == "" {
-			diffReason = events.AnalyticsBenchmarkDiffNone
-		}
-
 		if err := stmt.Append(
 			record.TenantID,
 			record.EnvironmentID,
@@ -115,30 +104,40 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			record.IncludeChildren,
 			record.HasPropertyFilters,
 			record.RequestJSON,
-			string(rowType),
-			record.FeatureID,
-			record.MeterID,
-			record.SubLineItemID,
-			record.GroupKey,
-			string(record.MatchStatus),
-			string(diffReason),
-			record.FeaturePriceID,
-			record.MeterPriceID,
-			record.FeatureItemCount,
-			record.MeterItemCount,
-			record.FeatureTotalUsage,
-			record.MeterTotalUsage,
+			record.NoFinalDurationMs,
+			record.NoFinalScanRows,
+			record.NoFinalScanBytes,
+			record.NoFinalReadDiskBytes,
+			record.NoFinalMemPeakBytes,
+			record.NoFinalResultRows,
+			record.FinalDurationMs,
+			record.FinalScanRows,
+			record.FinalScanBytes,
+			record.FinalReadDiskBytes,
+			record.FinalMemPeakBytes,
+			record.FinalResultRows,
+			record.DurationDiffMs,
+			record.ScanRowsDiff,
+			record.ScanBytesDiff,
+			record.ReadDiskBytesDiff,
+			record.MemPeakDiffBytes,
+			record.NoFinalTotalUsage,
+			record.FinalTotalUsage,
 			record.UsageDiff,
-			record.FeatureTotalCost,
-			record.MeterTotalCost,
+			record.NoFinalTotalCost,
+			record.FinalTotalCost,
 			record.CostDiff,
-			record.FeatureEventCount,
-			record.MeterEventCount,
+			record.NoFinalItemCount,
+			record.FinalItemCount,
+			record.ResultsMatch,
+			record.NoFinalError,
+			record.FinalError,
+			record.FirstSide,
 			record.Currency,
 			record.CreatedAt,
 		); err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to append analytics_benchmark row").
+				WithHint("Failed to append meter_usage_benchmark row").
 				Mark(ierr.ErrDatabase)
 		}
 
@@ -154,11 +153,11 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 
 	if err := stmt.Send(); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to send analytics_benchmark insert").
+			WithHint("Failed to send meter_usage_benchmark insert").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debug(ctx, "inserted analytics_benchmark batch",
+	r.logger.Debug(ctx, "inserted meter_usage_benchmark batch",
 		"rows", len(records),
 		"event_id", firstInserted.EventID,
 		"tenant_id", firstInserted.TenantID,

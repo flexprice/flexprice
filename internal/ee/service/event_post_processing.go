@@ -532,16 +532,16 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	for _, sub := range subscriptions {
 		// Calculate the period ID for this subscription (epoch-ms of period start)
-		periodID, err := types.CalculatePeriodID(
-			event.Timestamp,
-			sub.StartDate,
-			sub.CurrentPeriodStart,
-			sub.CurrentPeriodEnd,
-			sub.BillingAnchor,
-			sub.BillingPeriodCount,
-			sub.BillingPeriod,
-			sub.CustomerTimezone,
-		)
+		periodID, err := types.CalculatePeriodID(&types.CalculatePeriodIDParams{
+			EventTimestamp:     event.Timestamp,
+			SubStart:           sub.StartDate,
+			CurrentPeriodStart: sub.CurrentPeriodStart,
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd,
+			BillingAnchor:      sub.BillingAnchor,
+			PeriodUnit:         sub.BillingPeriodCount,
+			PeriodType:         sub.BillingPeriod,
+			Timezone:           sub.CustomerTimezone,
+		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate period id",
 				"event_id", event.ID,

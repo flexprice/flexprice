@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -533,11 +532,11 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 	if subscription.BillingCycle == types.BillingCycleAnniversary {
 		periodStart = subscription.BillingAnchor
 	} else {
-		previousBillingDate, err := types.PreviousBillingDate(
-			subscription.BillingAnchor,
-			subscription.BillingPeriodCount,
-			subscription.BillingPeriod,
-		)
+		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
+			BillingAnchor: subscription.BillingAnchor,
+			Unit:          subscription.BillingPeriodCount,
+			Period:        subscription.BillingPeriod,
+		})
 		if err != nil {
 			// Fallback to current period start if calculation fails
 			s.serviceParams.Logger.Info(context.Background(), "failed to calculate period start for proration, using fallback",

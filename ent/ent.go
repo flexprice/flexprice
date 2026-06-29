@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -32,12 +33,14 @@ import (
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -124,6 +127,7 @@ func checkColumn(table, column string) error {
 			alertlogs.Table:                alertlogs.ValidColumn,
 			auth.Table:                     auth.ValidColumn,
 			billingsequence.Table:          billingsequence.ValidColumn,
+			checkoutsession.Table:          checkoutsession.ValidColumn,
 			connection.Table:               connection.ValidColumn,
 			costsheet.Table:                costsheet.ValidColumn,
 			coupon.Table:                   coupon.ValidColumn,
@@ -139,12 +143,14 @@ func checkColumn(table, column string) error {
 			environment.Table:              environment.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
+			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
 			invoice.Table:                  invoice.ValidColumn,
 			invoicelineitem.Table:          invoicelineitem.ValidColumn,
 			invoicesequence.Table:          invoicesequence.ValidColumn,
 			meter.Table:                    meter.ValidColumn,
 			payment.Table:                  payment.ValidColumn,
 			paymentattempt.Table:           paymentattempt.ValidColumn,
+			paymentmethod.Table:            paymentmethod.ValidColumn,
 			plan.Table:                     plan.ValidColumn,
 			price.Table:                    price.ValidColumn,
 			priceunit.Table:                priceunit.ValidColumn,

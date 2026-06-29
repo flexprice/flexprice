@@ -172,6 +172,21 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  checkout.JSONBCheckoutConfiguration:
+    properties:
+      create_subscription_params:
+        $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  checkout.JSONBCheckoutProviderResult:
+    properties:
+      create_subscription_result:
+        $ref: '#/definitions/types.ProviderSubscriptionResult'
+    type: object
+  checkout.JSONBCheckoutResult:
+    properties:
+      create_subscription_result:
+        $ref: '#/definitions/types.CreateSubscriptionResult'
+    type: object
   costsheet.Filter:
     properties:
       costsheetIDs:
@@ -843,6 +858,103 @@ definitions:
     x-enum-varnames:
     - ChangedSubscriptionActionCreated
     - ChangedSubscriptionActionUpdated
+  CheckoutSessionResponse:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/types.CheckoutAction'
+        description: |-
+          Action is the billing operation this session will perform.
+          Immutable after creation; determines which sub-struct inside
+          Configuration is populated.
+      cancel_url:
+        type: string
+      cancelled_at:
+        type: string
+      checkout_invoice_id:
+        description: |-
+          CheckoutInvoiceID and CheckoutPaymentID are set once the apply step
+          creates the corresponding Flexprice entities (completed sessions only).
+        type: string
+      checkout_payment_id:
+        type: string
+      checkout_status:
+        allOf:
+        - $ref: '#/definitions/types.CheckoutStatus'
+        description: |-
+          CheckoutStatus tracks the session lifecycle. Starts at "initiated"
+          when the session row is inserted; advances to "pending" once the
+          provider call succeeds; settles to completed/failed/expired.
+      completed_at:
+        type: string
+      configuration:
+        allOf:
+        - $ref: '#/definitions/checkout.JSONBCheckoutConfiguration'
+        description: |-
+          Configuration holds the immutable caller inputs set at creation time.
+          Only the sub-struct matching Action is populated; the others are nil.
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer_id:
+        type: string
+      environment_id:
+        type: string
+      expires_at:
+        description: |-
+          ExpiresAt is required. A Temporal timer fires at this time for any
+          session still in initiated|pending, marking it expired. The caller
+          must create a new session after expiry (expire-and-restart model).
+        type: string
+      failure_reason:
+        description: FailureReason is a human-readable string set on failed sessions.
+        type: string
+      failure_url:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        description: |-
+          IdempotencyKey is caller-supplied. It is unique only while the session
+          is active (initiated|pending). The same key may be reused once the
+          session reaches a terminal state (completed|failed|expired).
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      payment_action:
+        $ref: '#/definitions/PaymentAction'
+      payment_provider:
+        allOf:
+        - $ref: '#/definitions/types.CheckoutPaymentProvider'
+        description: PaymentProvider is required and immutable after creation.
+      provider_result:
+        allOf:
+        - $ref: '#/definitions/checkout.JSONBCheckoutProviderResult'
+        description: |-
+          ProviderResult holds the external provider response (session URL,
+          payment intent ID, etc.). Set after the provider call in the create
+          step. Source of truth for deriving PaymentActions in API responses.
+      result:
+        allOf:
+        - $ref: '#/definitions/checkout.JSONBCheckoutResult'
+        description: |-
+          Result holds the Flexprice entity IDs created during the apply step.
+          Nil until the session reaches completed status.
+      status:
+        $ref: '#/definitions/types.Status'
+      success_url:
+        description: |-
+          Redirect URLs sent to the payment provider. The provider redirects the
+          user browser to the appropriate URL after the payment flow completes.
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   CloneEnvironmentRequest:
     properties:
       name:
@@ -1056,7 +1168,7 @@ definitions:
   CouponAssociationResponse:
     properties:
       coupon:
-        $ref: '#/definitions/Coupon'
+        $ref: '#/definitions/CouponResponse'
       coupon_id:
         type: string
       created_at:
@@ -1081,6 +1193,8 @@ definitions:
       subscription_id:
         description: Mandatory
         type: string
+      subscription_line_item:
+        $ref: '#/definitions/SubscriptionLineItemResponse'
       subscription_line_item_id:
         description: Optional
         type: string
@@ -1252,6 +1366,33 @@ definitions:
         items:
           $ref: '#/definitions/PriceResponse'
         type: array
+    type: object
+  CreateCheckoutSessionRequest:
+    properties:
+      action:
+        $ref: '#/definitions/types.CheckoutAction'
+      cancel_url:
+        type: string
+      configuration:
+        $ref: '#/definitions/types.CheckoutConfiguration'
+      customer_id:
+        type: string
+      failure_url:
+        type: string
+      idempotency_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      payment_provider:
+        $ref: '#/definitions/types.CheckoutPaymentProvider'
+      success_url:
+        type: string
+    required:
+    - action
+    - customer_id
+    - payment_provider
     type: object
   CreateCostsheetRequest:
     properties:
@@ -3629,11 +3770,23 @@ definitions:
             type: string
           type: array
         type: object
+      group_by:
+        description: |-
+          GroupBy lists the analytics group_by dimensions.
+            - "source"        — group by event source column
+            - "properties.X"  — group by JSON property X
+        items:
+          type: string
+        type: array
       group_by_property:
         description: |-
           GroupByProperty is the property name in event.properties to group by before aggregating.
           When set, aggregation is applied per unique value of this property within each bucket,
           then the per-group results are summed to produce the bucket total.
+
+          Deprecated: prefer GroupBy []string{"properties.<X>"} for parity with
+          other analytics endpoints. ToUsageParams translates this field into
+          GroupBy when GroupBy is otherwise empty.
         type: string
       multiplier:
         type: string
@@ -4202,6 +4355,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCheckoutSessionsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CheckoutSessionResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCostsheetResponse:
     properties:
       items:
@@ -4407,6 +4569,13 @@ definitions:
     required:
     - price_id
     type: object
+  PaymentAction:
+    properties:
+      type:
+        $ref: '#/definitions/types.PaymentActionType'
+      url:
+        type: string
+    type: object
   PaymentAttemptResponse:
     properties:
       attempt_number:
@@ -4489,6 +4658,8 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+      voided_at:
         type: string
     type: object
   PlanResponse:
@@ -4879,11 +5050,17 @@ definitions:
         items:
           type: string
         type: array
+      service_account_name:
+        description: name of the service account (populated for service_account user_type)
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       type:
         $ref: '#/definitions/types.SecretType'
       updated_at:
+        type: string
+      user_id:
+        description: user or service account this key belongs to
         type: string
       user_type:
         allOf:
@@ -4925,7 +5102,7 @@ definitions:
         - $ref: '#/definitions/SubModifyCouponAction'
         description: Required. "add" to attach a coupon; "remove" to detach an existing
           association.
-      association_id:
+      coupon_association_id:
         description: Required when action="remove". ID of the CouponAssociation to
           soft-delete.
         type: string
@@ -5009,11 +5186,11 @@ definitions:
         - $ref: '#/definitions/SubModifyTaxAction'
         description: Required. "add" to attach a tax rate; "remove" to detach an existing
           association.
-      association_id:
-        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
-        type: string
       effective_date:
         description: Optional. When to apply the change; defaults to now if omitted.
+        type: string
+      tax_association_id:
+        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
         type: string
       tax_rate_id:
         description: Required when action="add". ID of the active tax rate to attach.
@@ -6535,7 +6712,11 @@ definitions:
         type: string
       payment_status:
         type: string
+      refunded_at:
+        type: string
       succeeded_at:
+        type: string
+      voided_at:
         type: string
     type: object
   UpdatePaymentStatusRequest:
@@ -7833,6 +8014,10 @@ definitions:
     - CouponCadenceForever
   types.CouponFilter:
     properties:
+      coupon_codes:
+        items:
+          type: string
+        type: array
       coupon_ids:
         items:
           type: string
@@ -8612,9 +8797,11 @@ definitions:
   types.PaymentDestinationType:
     enum:
     - INVOICE
+    - CUSTOMER
     type: string
     x-enum-varnames:
     - PaymentDestinationTypeInvoice
+    - PaymentDestinationTypeCustomer
   types.PaymentGatewayType:
     enum:
     - stripe
@@ -8655,6 +8842,7 @@ definitions:
     - FAILED
     - REFUNDED
     - PARTIALLY_REFUNDED
+    - VOIDED
     type: string
     x-enum-varnames:
     - PaymentStatusInitiated
@@ -8665,6 +8853,7 @@ definitions:
     - PaymentStatusFailed
     - PaymentStatusRefunded
     - PaymentStatusPartiallyRefunded
+    - PaymentStatusVoided
   types.PaymentTerms:
     enum:
     - 15 NET
@@ -9295,6 +9484,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_ids:
+        items:
+          type: string
+        type: array
+      subscription_line_item_ids:
         description: Specific filters
         items:
           type: string
@@ -9724,6 +9917,9 @@ definitions:
     - invoice.communication.triggered
     - credit_note.created
     - credit_note.updated
+    - checkout.session.initiated
+    - checkout.session.completed
+    - checkout.session.failed
     type: string
     x-enum-varnames:
     - WebhookEventSubscriptionCreated
@@ -9768,6 +9964,9 @@ definitions:
     - WebhookEventInvoiceCommunicationTriggered
     - WebhookEventCreditNoteCreated
     - WebhookEventCreditNoteUpdated
+    - WebhookEventCheckoutSessionInitiated
+    - WebhookEventCheckoutSessionCompleted
+    - WebhookEventCheckoutSessionFailed
   types.WindowSize:
     enum:
     - MINUTE
@@ -10417,6 +10616,117 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.CheckoutAction:
+    enum:
+    - create_subscription
+    type: string
+    x-enum-varnames:
+    - CheckoutActionCreateSubscription
+  types.CheckoutConfiguration:
+    properties:
+      create_subscription_params:
+        $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  types.CheckoutPaymentProvider:
+    enum:
+    - stripe
+    type: string
+    x-enum-varnames:
+    - CheckoutPaymentProviderStripe
+  types.CheckoutProviderResult:
+    properties:
+      create_subscription_result:
+        $ref: '#/definitions/types.ProviderSubscriptionResult'
+    type: object
+  types.CheckoutSessionFilter:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/types.CheckoutAction'
+        type: array
+      checkout_invoice_ids:
+        items:
+          type: string
+        type: array
+      checkout_payment_ids:
+        items:
+          type: string
+        type: array
+      checkout_statuses:
+        items:
+          $ref: '#/definitions/types.CheckoutStatus'
+        type: array
+      customer_ids:
+        items:
+          type: string
+        type: array
+      expand:
+        type: string
+      expires_at_lt:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      payment_providers:
+        items:
+          $ref: '#/definitions/types.CheckoutPaymentProvider'
+        type: array
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.CheckoutStatus:
+    enum:
+    - initiated
+    - pending
+    - completed
+    - failed
+    - expired
+    type: string
+    x-enum-varnames:
+    - CheckoutStatusInitiated
+    - CheckoutStatusPending
+    - CheckoutStatusCompleted
+    - CheckoutStatusFailed
+    - CheckoutStatusExpired
+  types.CreateSubscriptionParams:
+    properties:
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      currency:
+        type: string
+      end_date:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      plan_id:
+        type: string
+      start_date:
+        type: string
+    type: object
+  types.CreateSubscriptionResult:
+    properties:
+      invoice_id:
+        type: string
+      payment_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -10429,6 +10739,23 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  types.PaymentActionType:
+    enum:
+    - checkout_url
+    - payment_link
+    type: string
+    x-enum-varnames:
+    - PaymentActionTypeCheckoutURL
+    - PaymentActionTypePaymentLink
+  types.ProviderSubscriptionResult:
+    properties:
+      payment_intent_id:
+        type: string
+      session_id:
+        type: string
+      session_url:
+        type: string
     type: object
   types.TimeOfDayBucket:
     properties:
@@ -10843,6 +11170,194 @@ paths:
       summary: Query alert logs
       tags:
       - Alerts
+  /checkout/sessions:
+    post:
+      consumes:
+      - application/json
+      operationId: createCheckoutSession
+      parameters:
+      - description: Checkout session to create
+        in: body
+        name: session
+        required: true
+        schema:
+          $ref: '#/definitions/CreateCheckoutSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create checkout session
+      tags:
+      - Checkout
+  /checkout/sessions/{id}:
+    delete:
+      operationId: deleteCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete checkout session
+      tags:
+      - Checkout
+    get:
+      operationId: getCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get checkout session
+      tags:
+      - Checkout
+  /checkout/sessions/{id}/cleanup:
+    post:
+      operationId: testCleanupCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: '[TEST ONLY] Cleanup (fail) a checkout session manually'
+      tags:
+      - Checkout
+  /checkout/sessions/{id}/complete:
+    post:
+      consumes:
+      - application/json
+      operationId: testCompleteCheckoutSession
+      parameters:
+      - description: Checkout session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Provider result (optional)
+        in: body
+        name: result
+        schema:
+          $ref: '#/definitions/types.CheckoutProviderResult'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CheckoutSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: '[TEST ONLY] Complete a checkout session manually'
+      tags:
+      - Checkout
+  /checkout/sessions/search:
+    post:
+      consumes:
+      - application/json
+      operationId: queryCheckoutSessions
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.CheckoutSessionFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCheckoutSessionsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Search checkout sessions
+      tags:
+      - Checkout
   /costs:
     post:
       consumes:
@@ -11335,6 +11850,10 @@ paths:
         in: query
         name: active_only
         type: boolean
+      - description: 'Comma-separated fields: coupon, subscription_line_items, subscription_line_items.prices'
+        in: query
+        name: expand
+        type: string
       - description: Page size
         in: query
         name: limit

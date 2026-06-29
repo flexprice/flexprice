@@ -105,13 +105,13 @@ type StripeInvoiceSyncResponse struct {
 
 // CreateSetupIntentRequest represents a request to create a Setup Intent session
 type CreateSetupIntentRequest struct {
-	Provider           string         `json:"provider" binding:"required"`    // Payment provider: "stripe", "razorpay", etc.
-	Usage              string         `json:"usage,omitempty"`                // "on_session" or "off_session" (default: "off_session")
-	PaymentMethodTypes []string       `json:"payment_method_types,omitempty"` // defaults to ["card"]
-	SuccessURL         string         `json:"success_url,omitempty"`          // User-configurable success redirect URL
-	CancelURL          string         `json:"cancel_url,omitempty"`           // User-configurable cancel redirect URL
-	SetDefault         bool           `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
-	Metadata           types.Metadata `json:"metadata,omitempty"`
+	Provider           types.SecretProvider `json:"provider" binding:"required"`    // Payment provider: "stripe", "moyasar", etc.
+	Usage              string               `json:"usage,omitempty"`                // "on_session" or "off_session" (default: "off_session")
+	PaymentMethodTypes []string             `json:"payment_method_types,omitempty"` // defaults to ["card"]
+	SuccessURL         string               `json:"success_url,omitempty"`          // User-configurable success redirect URL
+	CancelURL          string               `json:"cancel_url,omitempty"`           // User-configurable cancel redirect URL
+	SetDefault         bool                 `json:"set_default,omitempty"`          // Whether to set the payment method as default when setup succeeds
+	Metadata           types.Metadata       `json:"metadata,omitempty"`
 }
 
 // SetupIntentResponse represents a response from creating a Setup Intent session
@@ -175,7 +175,6 @@ type ListPaymentMethodsRequest struct {
 
 // Validate validates the create Setup Intent request
 func (r *CreateSetupIntentRequest) Validate() error {
-	// Validate provider parameter
 	if r.Provider == "" {
 		return errors.NewError("provider is required").
 			WithHint("Please provide a payment provider").
@@ -183,13 +182,12 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	}
 
 	switch r.Provider {
-	case string(types.PaymentMethodProviderStripe):
+	case types.SecretProviderStripe, types.SecretProviderMoyasar:
 	default:
 		return errors.NewError("unsupported payment provider").
-			WithHint("Currently only 'stripe' provider is supported").
+			WithHint("Supported providers: stripe, moyasar").
 			WithReportableDetails(map[string]interface{}{
-				"provider":            r.Provider,
-				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe},
+				"provider": r.Provider,
 			}).
 			Mark(errors.ErrValidation)
 	}
@@ -203,12 +201,12 @@ func (r *CreateSetupIntentRequest) Validate() error {
 
 	// Validate payment method types
 	if len(r.PaymentMethodTypes) > 0 {
-		for _, pmType := range r.PaymentMethodTypes {
-			if pmType != "card" && pmType != "us_bank_account" && pmType != "sepa_debit" {
+		for _, paymentMethodType := range r.PaymentMethodTypes {
+			if paymentMethodType != "card" && paymentMethodType != "us_bank_account" && paymentMethodType != "sepa_debit" {
 				return errors.NewError("unsupported payment method type").
 					WithHint("Supported payment method types: card, us_bank_account, sepa_debit").
 					WithReportableDetails(map[string]interface{}{
-						"payment_method_type": pmType,
+						"payment_method_type": paymentMethodType,
 					}).
 					Mark(errors.ErrValidation)
 			}

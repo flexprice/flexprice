@@ -136,11 +136,8 @@ const (
 	SubscriptionModifyTypeQuantityChange   SubscriptionModifyType = "quantity_change"
 	SubscriptionModifyTypeGroupedInvoicing SubscriptionModifyType = "grouped_invoicing"
 	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
-)
-
-const (
-	SubscriptionModifyTypeCoupon SubscriptionModifyType = "coupon"
-	SubscriptionModifyTypeTax    SubscriptionModifyType = "tax"
+	SubscriptionModifyTypeCoupon           SubscriptionModifyType = "coupon"
+	SubscriptionModifyTypeTax              SubscriptionModifyType = "tax"
 )
 
 // SubModifyCouponAction is the action to perform on a coupon association.
@@ -204,7 +201,7 @@ type SubModifyCouponParams struct {
 	// Required for action="add". Coupon code of the coupon to attach.
 	CouponCode *string `json:"coupon_code,omitempty"`
 	// Required when action="remove". ID of the CouponAssociation to soft-delete.
-	AssociationID *string `json:"association_id,omitempty"`
+	CouponAssociationID *string `json:"coupon_association_id,omitempty"`
 	// Optional. When the coupon association starts; defaults to now.
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// Optional. When the coupon association ends.
@@ -229,8 +226,8 @@ func (r *SubModifyCouponParams) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	case SubModifyCouponActionRemove:
-		if r.AssociationID == nil || *r.AssociationID == "" {
-			return ierr.NewError("association_id is required for action 'remove'").
+		if r.CouponAssociationID == nil || *r.CouponAssociationID == "" {
+			return ierr.NewError("coupon_association_id is required for action 'remove'").
 				WithHint("Provide the coupon association ID to remove").
 				Mark(ierr.ErrValidation)
 		}
@@ -250,7 +247,7 @@ type SubModifyTaxParams struct {
 	// Required when action="add". ID of the active tax rate to attach.
 	TaxRateID *string `json:"tax_rate_id,omitempty"`
 	// Required when action="remove". ID of the TaxAssociation to soft-delete.
-	AssociationID *string `json:"association_id,omitempty"`
+	TaxAssociationID *string `json:"tax_association_id,omitempty"`
 	// Optional. When to apply the change; defaults to now if omitted.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
@@ -264,8 +261,8 @@ func (r *SubModifyTaxParams) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	case SubModifyTaxActionRemove:
-		if r.AssociationID == nil || *r.AssociationID == "" {
-			return ierr.NewError("association_id is required for action 'remove'").
+		if r.TaxAssociationID == nil || *r.TaxAssociationID == "" {
+			return ierr.NewError("tax_association_id is required for action 'remove'").
 				WithHint("Provide the tax association ID to remove").
 				Mark(ierr.ErrValidation)
 		}

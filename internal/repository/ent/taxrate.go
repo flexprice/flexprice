@@ -23,10 +23,10 @@ type taxrateRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts TaxRateQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewTaxRateRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainTaxRate.Repository {
+func NewTaxRateRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainTaxRate.Repository {
 	return &taxrateRepository{
 		client:    client,
 		log:       log,

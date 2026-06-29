@@ -371,7 +371,14 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
 		endDate = item.EndDate
 	}
-	periods, err := types.CalculateBillingPeriods(item.StartDate, &endDate, item.StartDate, periodCount, item.BillingPeriod, in.Timezone)
+	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
+		InitialPeriodStart: item.StartDate,
+		EndDate:            &endDate,
+		Anchor:             item.StartDate,
+		PeriodCount:        periodCount,
+		BillingPeriod:      item.BillingPeriod,
+		Timezone:           in.Timezone,
+	})
 	if err != nil {
 		return FindMatchingLineItemPeriodResult{}, err
 	}
@@ -2080,7 +2087,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Calculate next period for advance charges
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  nextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
@@ -3098,6 +3105,25 @@ func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	}
 }
 
+func aggregateConfigEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
+	isEnabled := false
+	configValues := make([]map[string]any, 0)
+
+	for _, e := range entitlements {
+		if e.IsEnabled {
+			isEnabled = true
+			if len(e.ConfigValue) > 0 {
+				configValues = append(configValues, e.ConfigValue)
+			}
+		}
+	}
+
+	return &dto.AggregatedEntitlement{
+		IsEnabled:    isEnabled,
+		ConfigValues: configValues,
+	}
+}
+
 func aggregateStaticEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	isEnabled := false
 	staticValues := []string{}
@@ -3184,6 +3210,7 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 			IsEnabled:      ent.IsEnabled,
 			UsageLimit:     ent.UsageLimit,
 			StaticValue:    ent.StaticValue,
+			ConfigValue:    ent.ConfigValue,
 		}
 
 		// Add source to feature sources
@@ -3223,6 +3250,7 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 				UsageResetPeriod: types.EntitlementUsageResetPeriod(entResp.UsageResetPeriod),
 				IsSoftLimit:      entResp.IsSoftLimit,
 				StaticValue:      entResp.StaticValue,
+				ConfigValue:      entResp.ConfigValue,
 			}
 			domainEntitlements = append(domainEntitlements, domainEnt)
 		}
@@ -3236,6 +3264,8 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 			aggregatedEntitlement = aggregateBooleanEntitlementsForBilling(domainEntitlements)
 		case types.FeatureTypeStatic:
 			aggregatedEntitlement = aggregateStaticEntitlementsForBilling(domainEntitlements)
+		case types.FeatureTypeConfig:
+			aggregatedEntitlement = aggregateConfigEntitlementsForBilling(domainEntitlements)
 		default:
 			// Skip unknown feature types
 			continue
@@ -3266,8 +3296,9 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	}
 
 	resp := &dto.CustomerEntitlementsResponse{
-		CustomerID: customerID,
-		Features:   []*dto.AggregatedFeature{},
+		CustomerID:    customerID,
+		Subscriptions: []*dto.SubscriptionResponse{},
+		Features:      []*dto.AggregatedFeature{},
 	}
 
 	// 1. Get active subscriptions for the customer
@@ -3295,6 +3326,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	// Collect all entitlements from all subscriptions
 	allEntitlements := make([]*dto.EntitlementResponse, 0)
+	allSubscriptions := make([]*dto.SubscriptionResponse, 0, len(subscriptions))
 
 	// Process each subscription to get its entitlements (including both plan and addon entitlements)
 	for _, sub := range subscriptions {
@@ -3323,6 +3355,8 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		} else {
 			allEntitlements = append(allEntitlements, subEntitlements...)
 		}
+
+		allSubscriptions = append(allSubscriptions, &dto.SubscriptionResponse{Subscription: sub})
 	}
 
 	// Use the generic aggregation function
@@ -3333,8 +3367,9 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	// Build final response
 	response := &dto.CustomerEntitlementsResponse{
-		CustomerID: customerID,
-		Features:   aggregatedFeatures,
+		CustomerID:    customerID,
+		Subscriptions: allSubscriptions,
+		Features:      aggregatedFeatures,
 	}
 
 	return response, nil
@@ -3643,7 +3678,14 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			if resetPeriod == "" {
 				continue
 			}
-			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod, sub.CustomerTimezone)
+			nextUsageResetAt, err := types.GetNextUsageResetAt(&types.GetNextUsageResetAtParams{
+				CurrentTime:                 currentTime,
+				SubscriptionStart:           sub.StartDate,
+				SubscriptionEnd:             sub.EndDate,
+				BillingAnchor:               sub.BillingAnchor,
+				EntitlementUsageResetPeriod: resetPeriod,
+				Timezone:                    sub.CustomerTimezone,
+			})
 			if err != nil {
 				s.Logger.Info(ctx, "failed to get next usage reset at for feature",
 					"feature_id", featureID,
@@ -3661,6 +3703,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		types.FeatureTypeMetered: 1,
 		types.FeatureTypeStatic:  2,
 		types.FeatureTypeBoolean: 3,
+		types.FeatureTypeConfig:  4,
 	}
 
 	sort.SliceStable(features, func(i, j int) bool {

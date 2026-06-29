@@ -111,17 +111,32 @@ type WalletService interface {
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
 }
 
+// walletBalanceComputeTimeout bounds the realtime-balance computation in
+// GetWalletBalanceV2 / GetWalletBalanceFromCache. On exceedance the wrapper
+// falls back to the last cached balance (if any), otherwise surfaces the
+// timeout as the original error.
+const walletBalanceComputeTimeout = 80 * time.Second
+
 type walletService struct {
 	ServiceParams
 	idempGen *idempotency.Generator
+
+	// Test seams. Defaulted in NewWalletService; Tests in package service may set them via type assertion.
+	computeBalanceTimeout  time.Duration
+	computeRealtimeBalance func(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error)
 }
 
 // NewWalletService creates a new instance of WalletService
 func NewWalletService(params ServiceParams) WalletService {
-	return &walletService{
+	s := &walletService{
 		ServiceParams: params,
 		idempGen:      idempotency.NewGenerator(),
 	}
+
+	// Test seams. Production code must not override these.
+	s.computeBalanceTimeout = walletBalanceComputeTimeout
+	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
+	return s
 }
 
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
@@ -2622,6 +2637,82 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
+	// PRE_PAID: try real-time compute under a deadline so a hung or slow DB
+	// trips fallback instead of starving the request. On any failure (timeout
+	// or otherwise) fall back to the last cached balance if available.
+
+	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+
+	if cached != nil {
+		// Calculate the timeout duration based on the context deadline
+		var timeoutDuration time.Duration
+		currentTimeout, ok := ctx.Deadline()
+		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
+			timeoutDuration = time.Until(currentTimeout)
+		} else {
+			timeoutDuration = s.computeBalanceTimeout
+		}
+
+		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		defer cancel()
+
+		resp, err := s.computeRealtimeBalance(computeCtx, w)
+		if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			s.Logger.Error(ctx, "wallet balance fallback to cache",
+				"wallet_id", walletID,
+				"tenant_id", types.GetTenantID(ctx),
+				"environment_id", types.GetEnvironmentID(ctx),
+				"endpoint", "real_time",
+				"error", err.Error(),
+			)
+			return s.buildResponseFromCachedBalance(w, *cached), nil
+		}
+
+		if resp != nil && resp.RealTimeBalance != nil {
+			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
+		}
+		return resp, nil
+	}
+
+	// if no cached balance, compute the real-time balance and set the cache
+
+	resp, err := s.computeRealtimeBalance(ctx, w)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp != nil && resp.RealTimeBalance != nil {
+		s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
+	}
+	return resp, nil
+}
+
+// buildResponseFromCachedBalance builds a WalletBalanceResponse from a cached
+// real-time balance and flags IsCachedFallback so callers know the data is
+// not freshly computed. Shared by V2 fallback and FromCache (hit + fallback).
+func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance decimal.Decimal) *dto.WalletBalanceResponse {
+	rt := balance
+	credit := s.GetCreditsFromCurrencyAmount(rt, w.ConversionRate)
+	zero := decimal.Zero
+	return &dto.WalletBalanceResponse{
+		Wallet:                w,
+		RealTimeBalance:       &rt,
+		RealTimeCreditBalance: &credit,
+		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+		CurrentPeriodUsage:    &zero,
+		IsCachedFallback:      true,
+	}
+}
+
+// computeRealtimeBalanceDefault is the production implementation of the
+// realtime-balance computation. Defaulted into the computeRealtimeBalance
+// field by NewWalletService; tests may override the field to inject failures.
+func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
 	// PRE_PAID wallets: calculate pending usage charges that will consume prepaid balance
 	var totalPendingCharges decimal.Decimal
 	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
@@ -2647,7 +2738,6 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
-
 			filteredSubscriptions = append(filteredSubscriptions, sub)
 		}
 
@@ -2731,8 +2821,6 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
 
-	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
-
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
 		RealTimeBalance:       &realTimeBalance,
@@ -2781,150 +2869,69 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		}, nil
 	}
 
-	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
-	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
-
-	totalPendingCharges := decimal.Zero
-	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds)
-	if cachedBalance != nil {
-		s.Logger.Info(ctx, "using cached real-time balance",
+	// Caller-driven cache read (honors maxLiveSeconds). A hit is the happy
+	// path for this endpoint: the caller asked for cached data, we have it.
+	if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds); cached != nil {
+		s.Logger.Debug(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
-			"cached_balance", cachedBalance,
+			"cached_balance", cached,
 		)
-		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(*cachedBalance, w.ConversionRate)
-		return &dto.WalletBalanceResponse{
-			Wallet:                w,
-			RealTimeBalance:       cachedBalance,
-			RealTimeCreditBalance: &realTimeCreditBalance,
-			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-			CurrentPeriodUsage:    &totalPendingCharges,
-		}, nil
+		return s.buildResponseFromCachedBalance(w, *cached), nil
 	}
-	if shouldIncludeUsage {
 
-		// STEP 1: Get all active subscriptions to calculate current usage
-		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		subscriptions, err := subscriptionService.ListByCustomerID(ctx, w.CustomerID)
+	// attempt to fetch older cached balance
+	// if no cached balance is not found within the max live seconds
+	// then, compute the real-time balance and set the cache if successful
+
+	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
+
+	if cached != nil {
+		// Calculate the timeout duration based on the context deadline
+		var timeoutDuration time.Duration
+		currentTimeout, ok := ctx.Deadline()
+		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
+			timeoutDuration = time.Until(currentTimeout)
+		} else {
+			timeoutDuration = s.computeBalanceTimeout
+		}
+
+		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		defer cancel()
+
+		resp, err := s.computeRealtimeBalance(computeCtx, w)
 		if err != nil {
-			return nil, err
-		}
-
-		// Filter subscriptions by currency
-		filteredSubscriptions := make([]*subscription.Subscription, 0)
-		for _, sub := range subscriptions {
-			if sub.Currency != w.Currency {
-				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
-				continue
-			}
-			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
-				continue
-			}
-
-			filteredSubscriptions = append(filteredSubscriptions, sub)
-		}
-
-		billingService := NewBillingService(s.ServiceParams)
-		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
-
-		// Calculate total pending charges (usage)
-		for _, sub := range filteredSubscriptions {
-
-			// Get current period
-			periodStart := sub.CurrentPeriodStart
-			periodEnd := sub.CurrentPeriodEnd
-
-			/*
-				// Get usage for subscription using raw events table
-				usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-					SubscriptionID: sub.ID,
-					StartTime:      periodStart,
-					EndTime:        periodEnd,
-				})
-
-			*/
-
-			usageReq := &dto.GetUsageBySubscriptionRequest{
-				SubscriptionID: sub.ID,
-				StartTime:      periodStart,
-				EndTime:        periodEnd,
-				Source:         string(types.UsageSourceWallet),
-			}
-
-			var usage *dto.GetUsageBySubscriptionResponse
-			var err error
-			if useMeterUsage {
-				usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
-			} else {
-				usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
-			}
-			if err != nil {
+			// Parent context was canceled or its deadline exceeded, the caller
+			// has given up, so propagate instead of serving stale cached data.
+			if ctx.Err() != nil {
 				return nil, err
 			}
-			if s.Config != nil && s.Config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
-				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
-			}
-			// Calculate usage charges for the resolved usage data
-			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-				Subscription: sub,
-				Usage:        usage,
-				PeriodStart:  periodStart,
-				PeriodEnd:    periodEnd,
-			})
-			if err != nil {
-				return nil, err
-			}
-
-			s.Logger.Info(ctx, "subscription charges details",
-				"subscription_id", sub.ID,
-				"usage_total", featureUsageResult.TotalAmount,
-				"num_usage_charges", len(featureUsageResult.LineItems))
-
-			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
+			s.Logger.Error(ctx, "wallet balance fallback to cache",
+				"wallet_id", walletID,
+				"tenant_id", types.GetTenantID(ctx),
+				"environment_id", types.GetEnvironmentID(ctx),
+				"endpoint", "real_time",
+				"error", err.Error(),
+			)
+			return s.buildResponseFromCachedBalance(w, *cached), nil
 		}
+
+		if resp != nil && resp.RealTimeBalance != nil {
+			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
+		}
+		return resp, nil
 	}
 
-	// Account for unpaid invoices (same as GetWalletBalance)
-	invoiceService := NewInvoiceService(s.ServiceParams)
-	resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
-		CustomerID: w.CustomerID,
-		Currency:   w.Currency,
-	})
+	// if no cached balance, compute the real-time balance and set the cache
+
+	resp, err := s.computeRealtimeBalance(ctx, w)
 	if err != nil {
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
-	} else {
-		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
+	if resp != nil && resp.RealTimeBalance != nil {
+		s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 	}
-
-	// Calculate real-time balance
-	realTimeBalance := w.Balance.Sub(totalPendingCharges)
-
-	s.Logger.Debug(ctx, "detailed balance calculation",
-		"wallet_id", w.ID,
-		"current_balance", w.Balance,
-		"pending_charges", totalPendingCharges,
-		"real_time_balance", realTimeBalance,
-		"credit_balance", w.CreditBalance)
-
-	// Convert real-time balance to credit balance
-	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
-
-	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
-
-	return &dto.WalletBalanceResponse{
-		Wallet:                w,
-		RealTimeBalance:       &realTimeBalance,
-		RealTimeCreditBalance: &realTimeCreditBalance,
-		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-		CurrentPeriodUsage:    &totalPendingCharges,
-		UnpaidInvoicesAmount:  lo.ToPtr(resp.TotalUnpaidUsageCharges),
-	}, nil
+	return resp, nil
 }
 
 func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string, req *dto.ManualBalanceDebitRequest) (*dto.WalletResponse, error) {
@@ -3484,47 +3491,42 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 }
 
 func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
+	if s.RedisCache == nil {
+		return
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
-		return
-	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	redisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
+	s.RedisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
-	if walletID == "" {
-		return
-	}
-
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
+	if walletID == "" || s.RedisCache == nil {
 		return
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	redisCache.Delete(ctx, cacheKey)
+	s.RedisCache.ForceCacheDelete(ctx, cacheKey)
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
+	if s.RedisCache == nil {
+		return nil
+	}
+
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	redisCache := cache.NewRedisCache()
-	if redisCache == nil {
-		return nil
-	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {
-		cachedValue, remainingTTL, found := redisCache.ForceCacheGetWithTTL(ctx, cacheKey)
+		cachedValue, remainingTTL, found := s.RedisCache.ForceCacheGetWithTTL(ctx, cacheKey)
 		if !found {
 			return nil
 		}
@@ -3535,7 +3537,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 		if cacheAge > maxAge {
 			// Cache entry is too old, treat as miss
-			s.Logger.Info(ctx, "cache entry exceeds max-live, treating as miss",
+			s.Logger.Debug(ctx, "cache entry exceeds max-live, treating as miss",
 				"wallet_id", walletID,
 				"cache_age_seconds", cacheAge.Seconds(),
 				"max_live_seconds", *maxLiveSeconds,
@@ -3551,7 +3553,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	}
 
 	// Default path: no max-live check
-	cachedValue, found := redisCache.ForceCacheGet(ctx, cacheKey)
+	cachedValue, found := s.RedisCache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
 	}

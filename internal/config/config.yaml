@@ -34,6 +34,28 @@ kafka:
   client_id: "flexprice-client-local"
   route_tenants_on_lazy_mode: []
 
+# Optional SECOND Kafka cluster for the AWS→GCP migration (GCP-CUTOVER-STEPWISE.md).
+# `kafka` above = this deployment's own/local cluster (consumed AND always written).
+# `kafka_secondary` below = the other cloud's cluster. Dual-write is PRESENCE-BASED:
+#   single cluster (today):  kafka_secondary absent  -> writes local only
+#   dual-write (migration):  kafka_secondary set     -> writes local + secondary
+# Writes are independent (one failing does not block the other). Consumers/webhooks/DLQ
+# always read the local `kafka` cluster. Per deployment:
+#   AWS box: kafka=MSK, kafka_secondary=GMK ;  GCP box: kafka=GMK, kafka_secondary=MSK.
+# Set via FLEXPRICE_KAFKA_SECONDARY_* env. kafka_secondary mirrors the kafka block:
+# kafka_secondary:
+#   brokers: ""
+#   consumer_group: "flexprice-consumer"
+#   topic: "events"
+#   topic_lazy: "events_lazy"
+#   topic_dlq: "events_dlq"
+#   tls: true
+#   use_sasl: true
+#   sasl_mechanism: "OAUTHBEARER"
+#   sasl_oauth_scopes: []   # defaults to https://www.googleapis.com/auth/cloud-platform
+#   client_id: "flexprice-client"
+#   route_tenants_on_lazy_mode: []
+
 clickhouse:
   address: 127.0.0.1:9000 # For local mode
   # Will be overridden by FLEXPRICE_CLICKHOUSE_ADDRESS env var in Docker
@@ -228,19 +250,27 @@ flexprice_s3_exports:
 
 cache:
   enabled: false
-  type: "inmemory"
+  inmemory:
+    enabled: false
+  redis:
+    enabled: false
 
 event_processing:
   enabled: true
   topic: "events"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
+  # Per-consumer-group dead-letter topic. Empty falls back to the legacy shared
+  # DLQ (kafka.topic_dlq) — messages are never dropped. Create the topic
+  # (or enable auto.create.topics.enable) before enabling in an environment.
+  topic_dlq: "v1_event_processing_dlq"
 
 event_processing_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 12
   consumer_group: "v1_event_processing_lazy"
+  topic_dlq: "v1_event_processing_lazy_dlq"
 
 event_processing_replay:
   enabled: true
@@ -267,12 +297,14 @@ feature_usage_tracking:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
+  topic_dlq: "v1_feature_tracking_service_dlq"
 
 feature_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_lazy"
+  topic_dlq: "v1_feature_tracking_service_lazy_dlq"
 
 feature_usage_tracking_replay:
   enabled: true
@@ -285,12 +317,14 @@ meter_usage_tracking:
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
+  topic_dlq: "v1_meter_usage_tracking_service_dlq"
 
 meter_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
+  topic_dlq: "v1_meter_usage_tracking_service_lazy_dlq"
 
 usage_benchmark:
   enabled: false
@@ -303,12 +337,14 @@ costsheet_usage_tracking:
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service"
+  topic_dlq: "v1_costsheet_usage_tracking_service_dlq"
 
 costsheet_usage_tracking_lazy:
   enabled: false
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"
+  topic_dlq: "v1_costsheet_usage_tracking_service_lazy_dlq"
 
 wallet_balance_alert:
   enabled: true
@@ -322,9 +358,9 @@ feature_flag:
   # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
   force_v1_for_tenant: ""
   # Switch /invoices/preview to use meter-usage
-  enable_meter_usage_for_preview_invoice: false
+  enable_meter_usage_for_preview_invoice: true
   # Switch /events/analytics to use meter-usage
-  enable_meter_usage_for_analytics: false
+  enable_meter_usage_for_analytics: true
   # Per-tenant rollout overrides for meter-usage. Resolution order per tenant:
   #   disabled_tenants > enabled_tenants > global enable_* flag above.
   meter_usage_for_preview_invoice_enabled_tenants: []
@@ -342,6 +378,10 @@ gemini:
 
 whop:
   base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
+
+webhook_logging:
+  tenant_ids: []
+  environment_ids: []
 
 
 email:
@@ -407,3 +447,7 @@ onboarding_events:
   rate_limit: 10
   consumer_group: "onboarding_events_consumer"
   max_retries: 3
+
+# Checkout base URL for the checkout page
+checkout:
+  base_url: ""

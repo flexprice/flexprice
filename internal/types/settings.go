@@ -679,6 +679,11 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 	}
 }
 
+// DefaultTimezone is the fallback IANA timezone used when a customer has no
+// timezone set. All billing-period math and reset-window math degrade to UTC
+// when the timezone is empty or equal to this value.
+const DefaultTimezone = "UTC"
+
 // timezoneAbbreviationMap maps common three-letter timezone abbreviations to IANA timezone identifiers
 var timezoneAbbreviationMap = map[string]string{
 	// Indian Standard Time

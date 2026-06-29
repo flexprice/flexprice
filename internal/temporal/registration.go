@@ -45,11 +45,13 @@ type WorkerConfig struct {
 
 // cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
 type cronActivityBundle struct {
-	creditGrant           *cronActivities.CreditGrantActivities
-	subscription          *cronActivities.SubscriptionCronActivities
-	walletCreditExpiry    *cronActivities.WalletCreditExpiryActivities
-	webhookOutboundRetry  *cronActivities.WebhookOutboundRetryActivities
-	paddleInvoicePullSync *cronActivities.PaddleInvoicePullSyncActivities
+	creditGrant                  *cronActivities.CreditGrantActivities
+	subscription                 *cronActivities.SubscriptionCronActivities
+	walletCreditExpiry           *cronActivities.WalletCreditExpiryActivities
+	webhookOutboundRetry         *cronActivities.WebhookOutboundRetryActivities
+	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
+	moyasarAuthPaymentSettlement *cronActivities.MoyasarAuthPaymentSettlementActivities
+	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -175,9 +177,11 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	// Moyasar activities
+	moyasarInvoiceService := service.NewInvoiceService(params)
 	moyasarInvoiceSyncActivities := moyasarActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		moyasarInvoiceService,
 		params.Logger,
 	)
 
@@ -262,11 +266,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	cronBundle := &cronActivityBundle{
-		creditGrant:           cronActivities.NewCreditGrantActivities(creditGrantService),
-		subscription:          cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
-		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
-		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
-		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService),
+		subscription:                 cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
+		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
+		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
+		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -493,6 +499,8 @@ func buildWorkerConfig(
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
+			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
+			cronWorkflows.CheckoutSessionExpiryWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -504,6 +512,9 @@ func buildWorkerConfig(
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 			cron.subscription.ProcessAutoInvoiceThresholdBillingActivity,
 			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
+			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
+			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
+			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
 		)
 	}
 	return WorkerConfig{

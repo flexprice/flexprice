@@ -24,6 +24,8 @@ type Tx struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// CheckoutSession is the client for interacting with the CheckoutSession builders.
+	CheckoutSession *CheckoutSessionClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -54,6 +56,8 @@ type Tx struct {
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
+	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -66,6 +70,8 @@ type Tx struct {
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
 	PaymentAttempt *PaymentAttemptClient
+	// PaymentMethod is the client for interacting with the PaymentMethod builders.
+	PaymentMethod *PaymentMethodClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -244,6 +250,7 @@ func (tx *Tx) init() {
 	tx.AlertLogs = NewAlertLogsClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
+	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
 	tx.Coupon = NewCouponClient(tx.config)
@@ -259,12 +266,14 @@ func (tx *Tx) init() {
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.IncomingWebhookEvent = NewIncomingWebhookEventClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
+	tx.PaymentMethod = NewPaymentMethodClient(tx.config)
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)

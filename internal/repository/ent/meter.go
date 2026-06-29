@@ -19,10 +19,10 @@ type meterRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts MeterQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainMeter.Repository {
+func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainMeter.Repository {
 	return &meterRepository{
 		client:    client,
 		logger:    logger,

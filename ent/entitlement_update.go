@@ -313,6 +313,18 @@ func (eu *EntitlementUpdate) ClearEndDate() *EntitlementUpdate {
 	return eu
 }
 
+// SetConfigValue sets the "config_value" field.
+func (eu *EntitlementUpdate) SetConfigValue(m map[string]interface{}) *EntitlementUpdate {
+	eu.mutation.SetConfigValue(m)
+	return eu
+}
+
+// ClearConfigValue clears the value of the "config_value" field.
+func (eu *EntitlementUpdate) ClearConfigValue() *EntitlementUpdate {
+	eu.mutation.ClearConfigValue()
+	return eu
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return eu.mutation
@@ -477,6 +489,12 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.EndDateCleared() {
 		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
+	}
+	if value, ok := eu.mutation.ConfigValue(); ok {
+		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
+	}
+	if eu.mutation.ConfigValueCleared() {
+		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -782,6 +800,18 @@ func (euo *EntitlementUpdateOne) ClearEndDate() *EntitlementUpdateOne {
 	return euo
 }
 
+// SetConfigValue sets the "config_value" field.
+func (euo *EntitlementUpdateOne) SetConfigValue(m map[string]interface{}) *EntitlementUpdateOne {
+	euo.mutation.SetConfigValue(m)
+	return euo
+}
+
+// ClearConfigValue clears the value of the "config_value" field.
+func (euo *EntitlementUpdateOne) ClearConfigValue() *EntitlementUpdateOne {
+	euo.mutation.ClearConfigValue()
+	return euo
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return euo.mutation
@@ -976,6 +1006,12 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.EndDateCleared() {
 		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
+	}
+	if value, ok := euo.mutation.ConfigValue(); ok {
+		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
+	}
+	if euo.mutation.ConfigValueCleared() {
+		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

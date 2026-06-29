@@ -54,6 +54,8 @@ const (
 	FieldStartDate = "start_date"
 	// FieldEndDate holds the string denoting the end_date field in the database.
 	FieldEndDate = "end_date"
+	// FieldConfigValue holds the string denoting the config_value field in the database.
+	FieldConfigValue = "config_value"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -81,6 +83,7 @@ var Columns = []string{
 	FieldParentEntitlementID,
 	FieldStartDate,
 	FieldEndDate,
+	FieldConfigValue,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"

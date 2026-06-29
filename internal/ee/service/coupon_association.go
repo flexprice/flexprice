@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type CouponAssociationService interface {
@@ -100,6 +102,16 @@ func (s *couponAssociationService) ListCouponAssociations(ctx context.Context, f
 	if filter == nil {
 		filter = types.NewCouponAssociationFilter()
 	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
+	expand := filter.GetExpand()
+	if !expand.IsEmpty() {
+		if err := expand.Validate(types.CouponAssociationExpandConfig); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := filter.Validate(); err != nil {
 		return nil, err
@@ -116,8 +128,72 @@ func (s *couponAssociationService) ListCouponAssociations(ctx context.Context, f
 	}
 
 	items := make([]*dto.CouponAssociationResponse, len(associations))
+
+	var couponsByID map[string]*coupon.Coupon
+	if expand.Has(types.ExpandCoupon) {
+		couponIDs := lo.Uniq(lo.Map(associations, func(ca *coupon_association.CouponAssociation, _ int) string {
+			return ca.CouponID
+		}))
+		if len(couponIDs) > 0 {
+			couponFilter := types.NewNoLimitCouponFilter()
+			couponFilter.CouponIDs = couponIDs
+			couponFilter.Status = lo.ToPtr(types.StatusPublished)
+			coupons, err := s.CouponRepo.List(ctx, couponFilter)
+			if err != nil {
+				return nil, err
+			}
+			couponsByID = make(map[string]*coupon.Coupon, len(coupons))
+			for _, c := range coupons {
+				couponsByID[c.ID] = c
+			}
+			s.Logger.Debug(ctx, "fetched coupons for coupon associations", "count", len(coupons))
+		}
+	}
+
+	var lineItemsByID map[string]*dto.SubscriptionLineItemResponse
+	if expand.Has(types.ExpandSubscriptionLineItems) {
+		lineItemIDs := lo.Uniq(lo.FilterMap(associations, func(ca *coupon_association.CouponAssociation, _ int) (string, bool) {
+			if ca.SubscriptionLineItemID != nil && *ca.SubscriptionLineItemID != "" {
+				return *ca.SubscriptionLineItemID, true
+			}
+			return "", false
+		}))
+		if len(lineItemIDs) > 0 {
+			subService := NewSubscriptionService(s.ServiceParams)
+			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+			liFilter.SubscriptionLineItemIDs = lineItemIDs
+			liFilter.Status = lo.ToPtr(types.StatusPublished)
+			nested := expand.GetNested(types.ExpandSubscriptionLineItems)
+			if !nested.IsEmpty() {
+				liFilter.Expand = lo.ToPtr(nested.String())
+			}
+			lineItemsResp, err := subService.ListSubscriptionLineItems(ctx, liFilter)
+			if err != nil {
+				return nil, err
+			}
+			lineItemsByID = make(map[string]*dto.SubscriptionLineItemResponse, len(lineItemsResp.Items))
+			for _, li := range lineItemsResp.Items {
+				if li != nil && li.SubscriptionLineItem != nil {
+					lineItemsByID[li.SubscriptionLineItem.ID] = li
+				}
+			}
+			s.Logger.Debug(ctx, "fetched subscription line items for coupon associations", "count", len(lineItemsResp.Items))
+		}
+	}
+
 	for i, ca := range associations {
-		items[i] = s.toCouponAssociationResponse(ca)
+		item := s.toCouponAssociationResponse(ca)
+		if expand.Has(types.ExpandCoupon) {
+			if c, ok := couponsByID[ca.CouponID]; ok {
+				item.Coupon = dto.NewCouponResponse(c)
+			}
+		}
+		if expand.Has(types.ExpandSubscriptionLineItems) && ca.SubscriptionLineItemID != nil {
+			if li, ok := lineItemsByID[*ca.SubscriptionLineItemID]; ok {
+				item.SubscriptionLineItem = li
+			}
+		}
+		items[i] = item
 	}
 
 	return &dto.ListCouponAssociationsResponse{
@@ -238,7 +314,7 @@ func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_associ
 func computeCouponEndDate(startDate, billingAnchor time.Time, period types.BillingPeriod, periodCount, n int, timezone string) (time.Time, error) {
 	current := startDate
 	for i := 0; i < n; i++ {
-		next, err := types.NextBillingDate(types.NextBillingDateParams{
+		next, err := types.NextBillingDate(&types.NextBillingDateParams{
 			CurrentPeriodStart: current,
 			BillingAnchor:      billingAnchor,
 			Unit:               periodCount,

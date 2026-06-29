@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -12,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -19,6 +21,7 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
@@ -40,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Factory manages different payment integration providers and storage providers
@@ -51,6 +55,7 @@ type Factory struct {
 	subscriptionRepo             subscription.Repository
 	invoiceRepo                  invoice.Repository
 	paymentRepo                  payment.Repository
+	paymentMethodRepo            paymentmethod.Repository
 	priceRepo                    price.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	entityIntegrationMappingSvc  interfaces.EntityIntegrationMappingService
@@ -64,6 +69,7 @@ type Factory struct {
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
+	lifecycle       *payments.PaymentLifecycle
 }
 
 // NewFactory creates a new integration factory
@@ -75,6 +81,7 @@ func NewFactory(
 	subscriptionRepo subscription.Repository,
 	invoiceRepo invoice.Repository,
 	paymentRepo payment.Repository,
+	paymentMethodRepo paymentmethod.Repository,
 	priceRepo price.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	meterRepo meter.Repository,
@@ -90,6 +97,7 @@ func NewFactory(
 		subscriptionRepo:             subscriptionRepo,
 		invoiceRepo:                  invoiceRepo,
 		paymentRepo:                  paymentRepo,
+		paymentMethodRepo:            paymentMethodRepo,
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		entityIntegrationMappingSvc:  NewEntityIntegrationMappingAdapter(entityIntegrationMappingRepo),
@@ -106,6 +114,7 @@ func NewFactory(
 func (f *Factory) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
 	f.paymentService = paymentService
 	f.invoiceService = invoiceService
+	f.lifecycle = payments.NewPaymentLifecycle(paymentService, invoiceService, f.logger)
 }
 
 // GetStripeIntegration returns a complete Stripe integration setup
@@ -567,15 +576,20 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		moyasarClient,
 		paymentSvc,
 		f.entityIntegrationMappingRepo,
+		f.paymentMethodRepo,
+		f.lifecycle,
 		f.logger,
 	)
 
 	return &MoyasarIntegration{
-		Client:         moyasarClient,
-		CustomerSvc:    customerSvc,
-		PaymentSvc:     paymentSvc,
-		InvoiceSyncSvc: invoiceSyncSvc,
-		WebhookHandler: webhookHandler,
+		Client:            moyasarClient,
+		CustomerSvc:       customerSvc,
+		PaymentSvc:        paymentSvc,
+		InvoiceSyncSvc:    invoiceSyncSvc,
+		WebhookHandler:    webhookHandler,
+		Lifecycle:         f.lifecycle,
+		PaymentMethodRepo: f.paymentMethodRepo,
+		Logger:            f.logger,
 	}, nil
 }
 
@@ -814,15 +828,152 @@ func (n *NomodIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID s
 
 // MoyasarIntegration contains all Moyasar integration services
 type MoyasarIntegration struct {
-	Client         moyasar.MoyasarClient
-	CustomerSvc    moyasar.MoyasarCustomerService
-	PaymentSvc     *moyasar.PaymentService
-	InvoiceSyncSvc *moyasar.InvoiceSyncService
-	WebhookHandler *moyasarwebhook.Handler
+	Client            moyasar.MoyasarClient
+	CustomerSvc       moyasar.MoyasarCustomerService
+	PaymentSvc        *moyasar.PaymentService
+	InvoiceSyncSvc    *moyasar.InvoiceSyncService
+	WebhookHandler    *moyasarwebhook.Handler
+	Lifecycle            *payments.PaymentLifecycle
+	PaymentMethodRepo paymentmethod.Repository
+	Logger            *logger.Logger
 }
 
 func (m *MoyasarIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
 	return fmt.Errorf("invoice pull sync not supported for moyasar")
+}
+
+// VoidOrRefundAuthPayment attempts to void an AUTH payment in Moyasar.
+// If void fails, it falls back to a full refund.
+// Returns (voided, refunded, err).
+func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) (voided bool, refunded bool, err error) {
+	if m.Lifecycle == nil {
+		return false, false, ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
+	}
+
+	// Try void first
+	if _, voidErr := m.Client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
+		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		}); lifecycleErr != nil {
+			return false, false, lifecycleErr
+		}
+		return true, false, nil
+	} else {
+		// Log void failure so we can distinguish transient vs permanent failures in observability
+		m.Logger.Info(ctx, "void attempt failed, falling back to refund",
+			"flexprice_payment_id", flexpricePaymentID,
+			"gateway_payment_id", gatewayPaymentID,
+			"error", voidErr.Error(),
+		)
+	}
+
+	// Void failed — try full refund (amount=0 means full refund)
+	if _, refundErr := m.Client.RefundPayment(ctx, gatewayPaymentID, 0); refundErr != nil {
+		return false, false, refundErr
+	}
+	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   gatewayPaymentID,
+		RefundedAt:         time.Now().UTC(),
+	}); lifecycleErr != nil {
+		return false, false, lifecycleErr
+	}
+	return false, true, nil
+}
+
+// InitiateTokenization creates a Flexprice AUTH payment record for card tokenization.
+// Returns the flexprice_payment_id (anchor for webhook reconciliation) and the
+// Moyasar publishable key (needed by Moyasar.js on the frontend).
+func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerID string) (flexpricePaymentID string, publishableKey string, err error) {
+	if m.Lifecycle == nil {
+		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
+	}
+
+	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
+		DestinationID:     customerID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           string(types.SecretProviderMoyasar),
+		Amount:            decimal.NewFromInt(1),
+		Currency:          moyasar.DefaultCurrency,
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	config, err := m.Client.GetMoyasarConfig(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	return flexpricePaymentID, config.PublishableKey, nil
+}
+
+// ChargeInvoiceWithToken charges an invoice using the customer's default saved Moyasar token.
+// Returns (true, nil) if the charge was initiated, (false, nil) if no active token exists
+// (caller should fall through to invoice-link flow), or (false, err) on failure.
+func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoiceID, customerID string, amount decimal.Decimal, currency, moyasarInvoiceID string) (charged bool, err error) {
+	if m.Lifecycle == nil || m.PaymentMethodRepo == nil {
+		return false, ierr.NewError("lifecycle or payment method repo not initialised").Mark(ierr.ErrInternal)
+	}
+
+	gateway := string(types.SecretProviderMoyasar)
+	paymentMethod, err := m.PaymentMethodRepo.GetDefaultForCustomer(ctx, customerID, gateway)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil // No saved token — fall through to invoice-link flow
+		}
+		return false, err
+	}
+	if paymentMethod.PaymentMethodStatus != types.PaymentMethodStatusActive {
+		return false, nil // Token exists but not active — fall through
+	}
+
+	flexpricePaymentID, err := m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     invoiceID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           gateway,
+		Amount:            amount,
+		Currency:          currency,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	chargeResp, err := m.PaymentSvc.ChargeSavedPaymentMethod(
+		ctx,
+		customerID,
+		paymentMethod.GatewayMethodID,
+		amount,
+		currency,
+		"",
+		moyasarInvoiceID,
+		flexpricePaymentID,
+	)
+	if err != nil {
+		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   "",
+			FailedAt:           time.Now().UTC(),
+			ErrorMessage:       err.Error(),
+		}); failErr != nil {
+			m.Logger.Error(ctx, "failed to record payment failure after charge error",
+				"flexprice_payment_id", flexpricePaymentID,
+				"error", failErr,
+			)
+		}
+		return false, err
+	}
+
+	// Transition to PENDING now that Moyasar accepted the charge
+	if err := m.Lifecycle.ConfirmGatewayPayment(ctx, flexpricePaymentID, chargeResp.ID); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // WhopIntegration contains all Whop integration services
@@ -1080,4 +1231,21 @@ func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
 		)
 	}
 	return f.s3Client, nil
+}
+
+// GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
+// Returns ErrValidation for providers that do not support hosted checkout.
+func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
+	switch provider {
+	case types.CheckoutPaymentProviderRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
+	default:
+		return nil, ierr.NewError("payment provider not supported for checkout").
+			WithHintf("%s does not support hosted checkout sessions", provider).
+			Mark(ierr.ErrValidation)
+	}
 }

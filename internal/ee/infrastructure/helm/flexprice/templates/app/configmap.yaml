@@ -156,6 +156,59 @@ data:
       rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
 
+    # The blocks below were previously absent from this ConfigMap, so on GKE (where the
+    # mounted ConfigMap replaces the baked config.yaml) their FLEXPRICE_* env overrides were
+    # ignored by viper Unmarshal and the consumers silently never started — diverging from the
+    # AWS web_consumer task def. Rendered here so they can be configured per-deployment.
+    event_processing_replay:
+      enabled: {{ .Values.eventProcessingReplay.enabled }}
+      topic: {{ .Values.eventProcessingReplay.topic | quote }}
+      rate_limit: {{ .Values.eventProcessingReplay.rateLimit }}
+      consumer_group: {{ .Values.eventProcessingReplay.consumerGroup | quote }}
+
+    feature_usage_tracking_replay:
+      enabled: {{ .Values.featureUsageTrackingReplay.enabled }}
+      topic: {{ .Values.featureUsageTrackingReplay.topic | quote }}
+      rate_limit: {{ .Values.featureUsageTrackingReplay.rateLimit }}
+      consumer_group: {{ .Values.featureUsageTrackingReplay.consumerGroup | quote }}
+
+    meter_usage_tracking:
+      enabled: {{ .Values.meterUsageTracking.enabled }}
+      topic: {{ .Values.meterUsageTracking.topic | quote }}
+      rate_limit: {{ .Values.meterUsageTracking.rateLimit }}
+      consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
+
+    meter_usage_tracking_lazy:
+      enabled: {{ .Values.meterUsageTrackingLazy.enabled }}
+      topic: {{ .Values.meterUsageTrackingLazy.topic | quote }}
+      rate_limit: {{ .Values.meterUsageTrackingLazy.rateLimit }}
+      consumer_group: {{ .Values.meterUsageTrackingLazy.consumerGroup | quote }}
+
+    costsheet_usage_tracking:
+      enabled: {{ .Values.costsheetUsageTracking.enabled }}
+      topic: {{ .Values.costsheetUsageTracking.topic | quote }}
+      rate_limit: {{ .Values.costsheetUsageTracking.rateLimit }}
+      consumer_group: {{ .Values.costsheetUsageTracking.consumerGroup | quote }}
+
+    costsheet_usage_tracking_lazy:
+      enabled: {{ .Values.costsheetUsageTrackingLazy.enabled }}
+      topic: {{ .Values.costsheetUsageTrackingLazy.topic | quote }}
+      rate_limit: {{ .Values.costsheetUsageTrackingLazy.rateLimit }}
+      consumer_group: {{ .Values.costsheetUsageTrackingLazy.consumerGroup | quote }}
+
+    raw_event_consumption:
+      enabled: {{ .Values.rawEventConsumption.enabled }}
+      topic: {{ .Values.rawEventConsumption.topic | quote }}
+      output_topic: {{ .Values.rawEventConsumption.outputTopic | quote }}
+      rate_limit: {{ .Values.rawEventConsumption.rateLimit }}
+      consumer_group: {{ .Values.rawEventConsumption.consumerGroup | quote }}
+
+    usage_benchmark:
+      enabled: {{ .Values.usageBenchmark.enabled }}
+      topic: {{ .Values.usageBenchmark.topic | quote }}
+      rate_limit: {{ .Values.usageBenchmark.rateLimit }}
+      consumer_group: {{ .Values.usageBenchmark.consumerGroup | quote }}
+
     onboarding_events:
       enabled: {{ .Values.onboardingEvents.enabled }}
       topic: {{ .Values.onboardingEvents.topic | quote }}
@@ -163,11 +216,24 @@ data:
       consumer_group: {{ .Values.onboardingEvents.consumerGroup | quote }}
       max_retries: {{ .Values.onboardingEvents.maxRetries }}
 
+    {{- with .Values.walletBalanceAlert }}
+    wallet_balance_alert:
+      # Rendered only when a deployment sets walletBalanceAlert; otherwise the section
+      # is omitted and the app's Go struct defaults apply (topic "wallet_alert"). Per-
+      # field defaults mirror the struct so partial overrides stay safe — no chart
+      # values.yaml default needed. enabled gates only the consumer; publish fires regardless.
+      enabled: {{ .enabled | default false }}
+      topic: {{ .topic | default "wallet_alert" | quote }}
+      rate_limit: {{ .rateLimit | default 1 }}
+      consumer_group: {{ .consumerGroup | default "v1_wallet_alert_service" | quote }}
+    {{- end }}
+
     webhook:
       enabled: {{ .Values.webhook.enabled }}
       topic: {{ .Values.webhook.topic | quote }}
       pubsub: {{ .Values.webhook.pubsub | quote }}
       consumer_group: {{ .Values.webhook.consumerGroup | quote }}
+      rate_limit: {{ .Values.webhook.rateLimit }}
       max_retries: {{ .Values.webhook.maxRetries }}
       initial_interval: {{ .Values.webhook.initialInterval | quote }}
       max_interval: {{ .Values.webhook.maxInterval | quote }}
@@ -178,10 +244,22 @@ data:
         enabled: {{ .Values.webhook.svixConfig.enabled }}
         base_url: {{ .Values.webhook.svixConfig.baseUrl | quote }}
     {{- end }}
-    
+
+    # Integration events: consumed from the SAME system_events topic as webhooks,
+    # but under an independent consumer group. Rendered here because viper does not
+    # apply Go `default` tags on Unmarshal (same class as event_processing) — without
+    # this block enabled resolves to false and the integration-events consumer never starts.
+    integration_events:
+      enabled: {{ .Values.integrationEvents.enabled }}
+      consumer_group: {{ .Values.integrationEvents.consumerGroup | quote }}
+      rate_limit: {{ .Values.integrationEvents.rateLimit }}
+
     billing:
       tenant_id: {{ .Values.billing.tenantId | quote }}
       environment_id: {{ .Values.billing.environmentId | quote }}
+
+    checkout:
+      base_url: {{ .Values.checkout.baseUrl | quote }}
     
     email:
       enabled: {{ .Values.email.enabled }}
@@ -192,7 +270,13 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
-    
+      # Rendered with per-field defaults (Go zero value) so deployments that don't set
+      # them are unchanged; per-env values opt in. The app otherwise resolves these to
+      # false (not the config.yaml baked default), diverging from AWS prod where they are on.
+      enable_meter_usage_for_analytics: {{ .Values.featureFlag.enableMeterUsageForAnalytics | default false }}
+      enable_meter_usage_for_preview_invoice: {{ .Values.featureFlag.enableMeterUsageForPreviewInvoice | default false }}
+      enable_usage_benchmark: {{ .Values.featureFlag.enableUsageBenchmark | default false }}
+
     secrets:
       encryption_key: {{ .Values.secrets.encryptionKey | quote }}
     

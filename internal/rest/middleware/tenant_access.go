@@ -26,7 +26,7 @@ func TenantStatusMiddleware(tenantService service.TenantService, logger *logger.
 		if err != nil {
 			logger.Error(c.Request.Context(), "tenant status: failed to load tenant", "tenant_id", tenantID, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to verify tenant access",
+				"message": "failed to verify tenant access",
 			})
 			c.Abort()
 			return

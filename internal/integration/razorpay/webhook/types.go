@@ -13,6 +13,11 @@ const (
 	EventPaymentCaptured   RazorpayEventType = "payment.captured"
 	EventPaymentFailed     RazorpayEventType = "payment.failed"
 	EventPaymentAuthorized RazorpayEventType = "payment.authorized"
+
+	// Payment link events
+	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
+	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
+	EventPaymentLinkExpired   RazorpayEventType = "payment_link.expired"
 )
 
 // RazorpayPaymentMethod represents the payment method used in Razorpay
@@ -40,12 +45,25 @@ type RazorpayWebhookEvent struct {
 
 // RazorpayWebhookPayload represents the payload of a Razorpay webhook
 type RazorpayWebhookPayload struct {
-	Payment PayloadPayment `json:"payment"`
+	Payment     PayloadPayment     `json:"payment"`
+	PaymentLink PayloadPaymentLink `json:"payment_link"`
 }
 
 // PayloadPayment represents the payment entity in the webhook payload
 type PayloadPayment struct {
 	Entity Payment `json:"entity"`
+}
+
+// PayloadPaymentLink represents the payment_link entity in the webhook payload
+type PayloadPaymentLink struct {
+	Entity PaymentLinkEntity `json:"entity"`
+}
+
+// PaymentLinkEntity represents a Razorpay payment link
+type PaymentLinkEntity struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	Description string `json:"description"`
 }
 
 // Payment represents a Razorpay payment

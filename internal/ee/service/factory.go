@@ -1,11 +1,13 @@
 package service
 
 import (
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -57,12 +59,14 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger       *logger.Logger
-	Config       *config.Configuration
-	DB           postgres.IClient
-	PDFGenerator pdf.Generator
-	S3           s3.Service
-	TracingSvc   *tracing.Service
+	Logger        *logger.Logger
+	Config        *config.Configuration
+	DB            postgres.IClient
+	PDFGenerator  pdf.Generator
+	S3            s3.Service
+	TracingSvc    *tracing.Service
+	InMemoryCache cache.InMemoryCache
+	RedisCache    cache.RedisCache
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -113,6 +117,7 @@ type ServiceParams struct {
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
 	WorkflowExecutionRepo        workflowexecution.Repository
+	CheckoutSessionRepo          domainCheckout.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -140,6 +145,8 @@ func NewServiceParams(
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
 	tracingSvc *tracing.Service,
+	inMemoryCache cache.InMemoryCache,
+	redisCache cache.RedisCache,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -197,6 +204,7 @@ func NewServiceParams(
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
+	checkoutSessionRepo domainCheckout.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -204,6 +212,8 @@ func NewServiceParams(
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
 		TracingSvc:                   tracingSvc,
+		InMemoryCache:                inMemoryCache,
+		RedisCache:                   redisCache,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
@@ -261,5 +271,6 @@ func NewServiceParams(
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,
+		CheckoutSessionRepo:          checkoutSessionRepo,
 	}
 }

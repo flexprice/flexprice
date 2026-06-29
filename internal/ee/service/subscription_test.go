@@ -4709,7 +4709,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 
 	// Calculate the expected next period
 	expectedNextPeriodStart := periodEnd
-	expectedNextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	expectedNextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  expectedNextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
@@ -4779,7 +4779,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// But we can verify that the subscription period was updated correctly
 	// by manually updating it as we would in a real scenario
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: nextPeriodStart,
 		BillingAnchor:      sub.BillingAnchor,
 		Unit:               sub.BillingPeriodCount,

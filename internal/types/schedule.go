@@ -22,6 +22,8 @@ const (
 	ScheduleIDSubscriptionAutoInvoiceThresholdBilling ScheduleID = "subscription-auto-invoice-threshold-billing"
 	ScheduleIDOutboundWebhookStaleRetry               ScheduleID = "webhook-stale-retry"
 	ScheduleIDPaddleInvoicePullSync                   ScheduleID = "paddle-invoice-pull-sync"
+	ScheduleIDMoyasarAuthPaymentSettlement             ScheduleID = "moyasar-auth-payment-settlement"
+	ScheduleIDCheckoutSessionExpiry                    ScheduleID = "checkout-session-expiry"
 )
 
 // String returns the raw schedule id.
@@ -40,6 +42,8 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDSubscriptionAutoInvoiceThresholdBilling,
 		ScheduleIDOutboundWebhookStaleRetry,
 		ScheduleIDPaddleInvoicePullSync,
+		ScheduleIDMoyasarAuthPaymentSettlement,
+		ScheduleIDCheckoutSessionExpiry,
 	}
 }
 

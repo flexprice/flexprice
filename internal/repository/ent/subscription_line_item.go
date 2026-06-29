@@ -25,11 +25,11 @@ type subscriptionLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SubscriptionLineItemQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
 // NewSubscriptionLineItemRepository creates a new subscription line item repository
-func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) subscription.LineItemRepository {
+func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) subscription.LineItemRepository {
 	return &subscriptionLineItemRepository{
 		client:    client,
 		log:       log,
@@ -710,6 +710,11 @@ func (o SubscriptionLineItemQueryOptions) GetFieldResolver(field string) (string
 
 // applyEntityQueryOptions applies subscription line item-specific filters to the query
 func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionLineItemFilter, query SubscriptionLineItemQuery) (SubscriptionLineItemQuery, error) {
+	// Apply subscription line item IDs filter if specified
+	if len(f.SubscriptionLineItemIDs) > 0 {
+		query = query.Where(subscriptionlineitem.IDIn(f.SubscriptionLineItemIDs...))
+	}
+
 	// Apply subscription IDs filter if specified
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscriptionlineitem.SubscriptionIDIn(f.SubscriptionIDs...))

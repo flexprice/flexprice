@@ -20,14 +20,14 @@ import (
 // costsheetRepository implements the costsheet.Repository interface using Ent ORM.
 // It provides methods for managing costsheet records in the database.
 type costsheetRepository struct {
-	client postgres.IClient // Database client for executing queries
-	logger *logger.Logger   // Logger for tracking operations
-	cache  cache.Cache      // Cache for performance optimization
+	client postgres.IClient    // Database client for executing queries
+	logger *logger.Logger      // Logger for tracking operations
+	cache  cache.InMemoryCache // Cache for performance optimization
 }
 
 // NewCostsheetRepository creates a new instance of the Ent-based costsheet repository.
 // It initializes the repository with the provided database client, logger, and cache.
-func NewCostsheetRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainCostsheet.Repository {
+func NewCostsheetRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainCostsheet.Repository {
 	return &costsheetRepository{
 		client: client,
 		logger: logger,

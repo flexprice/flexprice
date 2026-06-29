@@ -220,9 +220,11 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 	throttle := middleware.NewThrottle(cfg.FeatureUsageTracking.RateLimit, time.Second)
 
 	// Add the handler
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"feature_usage_tracking_handler",
 		cfg.FeatureUsageTracking.Topic,
+		cfg.FeatureUsageTracking.ConsumerGroup,
+		cfg.FeatureUsageTracking.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -271,9 +273,11 @@ func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.R
 	throttle := middleware.NewThrottle(cfg.FeatureUsageTrackingLazy.RateLimit, time.Second)
 
 	// Add the handler
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"feature_usage_tracking_lazy_handler",
 		cfg.FeatureUsageTrackingLazy.Topic,
+		cfg.FeatureUsageTrackingLazy.ConsumerGroup,
+		cfg.FeatureUsageTrackingLazy.TopicDLQ,
 		s.lazyPubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -734,16 +738,16 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		}
 
 		// Calculate the period ID for this subscription
-		periodID, err := types.CalculatePeriodID(
-			event.Timestamp,
-			sub.StartDate,
-			sub.CurrentPeriodStart,
-			sub.CurrentPeriodEnd,
-			sub.BillingAnchor,
-			sub.BillingPeriodCount,
-			sub.BillingPeriod,
-			sub.CustomerTimezone,
-		)
+		periodID, err := types.CalculatePeriodID(&types.CalculatePeriodIDParams{
+			EventTimestamp:     event.Timestamp,
+			SubStart:           sub.StartDate,
+			CurrentPeriodStart: sub.CurrentPeriodStart,
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd,
+			BillingAnchor:      sub.BillingAnchor,
+			PeriodUnit:         sub.BillingPeriodCount,
+			PeriodType:         sub.BillingPeriod,
+			Timezone:           sub.CustomerTimezone,
+		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate period id",
 				"event_id", event.ID,
@@ -3267,7 +3271,7 @@ func (s *featureUsageTrackingService) getTotalUsageForWeightedSumAggregation(
 	periodStart := time.UnixMilli(int64(periodID))
 
 	// Calculate the period end using the subscription's billing configuration
-	periodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	periodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: periodStart,
 		BillingAnchor:      subscription.BillingAnchor,
 		Unit:               subscription.BillingPeriodCount,

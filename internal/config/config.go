@@ -19,10 +19,16 @@ import (
 )
 
 type Configuration struct {
-	Deployment                 DeploymentConfig                 `validate:"required"`
-	Server                     ServerConfig                     `validate:"required"`
-	Auth                       AuthConfig                       `validate:"required"`
-	Kafka                      KafkaConfig                      `validate:"required"`
+	Deployment DeploymentConfig `validate:"required"`
+	Server     ServerConfig     `validate:"required"`
+	Auth       AuthConfig       `validate:"required"`
+	Kafka      KafkaConfig      `validate:"required"`
+	// KafkaSecondary is the optional second Kafka cluster the source event publisher also
+	// writes to during the AWS→GCP migration (the "other" cloud's cluster). When set
+	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
+	// when nil, publishing is single-cluster. The `kafka` block is this deployment's own
+	// local cluster — consumed AND always written. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	KafkaSecondary             *KafkaConfig                     `mapstructure:"kafka_secondary" validate:"omitempty"`
 	ClickHouse                 ClickHouseConfig                 `validate:"required"`
 	Logging                    LoggingConfig                    `validate:"required"`
 	Postgres                   PostgresConfig                   `validate:"required"`
@@ -57,6 +63,7 @@ type Configuration struct {
 	OAuth                      OAuthConfig                      `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
+	Checkout                   CheckoutConfig                   `mapstructure:"checkout" validate:"omitempty"`
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
@@ -65,6 +72,13 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+	WebhookLogging             WebhookLoggingConfig             `mapstructure:"webhook_logging" validate:"omitempty"`
+}
+
+// WebhookLoggingConfig controls which inbound webhook requests are persisted to the DB.
+type WebhookLoggingConfig struct {
+	TenantIDs      []string `mapstructure:"tenant_ids"`
+	EnvironmentIDs []string `mapstructure:"environment_ids"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -81,8 +95,17 @@ type GeminiConfig struct {
 }
 
 type CacheConfig struct {
-	Enabled bool   `mapstructure:"enabled" validate:"required"`
-	Type    string `mapstructure:"type" validate:"required"`
+	Enabled  bool                `mapstructure:"enabled" validate:"required"`
+	InMemory InMemoryCacheConfig `mapstructure:"inmemory" validate:"required"`
+	Redis    RedisCacheConfig    `mapstructure:"redis" validate:"required"`
+}
+
+type InMemoryCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
+}
+
+type RedisCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
 }
 
 type S3Config struct {
@@ -126,10 +149,14 @@ type SupabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers       []string             `mapstructure:"brokers" validate:"required"`
-	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
-	Topic         string               `mapstructure:"topic" validate:"required"`
-	TopicLazy     string               `mapstructure:"topic_lazy" validate:"required"`
+	Brokers       []string `mapstructure:"brokers" validate:"required"`
+	ConsumerGroup string   `mapstructure:"consumer_group" validate:"required"`
+	Topic         string   `mapstructure:"topic" validate:"required"`
+	TopicLazy     string   `mapstructure:"topic_lazy" validate:"required"`
+	// TopicDLQ is the legacy shared dead-letter topic. It is now the fallback DLQ
+	// for consumers without a per-consumer-group topic_dlq (see the TopicDLQ fields
+	// on the event_processing* / *_usage_tracking configs). Empty falls back to an
+	// in-memory queue (non-durable).
 	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
 	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	UseSASL       bool                 `mapstructure:"use_sasl"`
@@ -378,6 +405,9 @@ type EventProcessingConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventPostProcessingConfig struct {
@@ -399,6 +429,9 @@ type EventProcessingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_lazy_backfill"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventProcessingReplayConfig struct {
@@ -418,6 +451,9 @@ type FeatureUsageTrackingConfig struct {
 	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
 	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
 	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type FeatureUsageTrackingLazyConfig struct {
@@ -428,6 +464,9 @@ type FeatureUsageTrackingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type FeatureUsageTrackingReplayConfig struct {
@@ -443,6 +482,9 @@ type MeterUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -455,6 +497,9 @@ type MeterUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 // UsageBenchmarkConfig configures the usage benchmarking consumer
@@ -604,6 +649,9 @@ type CostSheetUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
 }
 
 type CostSheetUsageTrackingLazyConfig struct {
@@ -611,6 +659,13 @@ type CostSheetUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`
+	// TopicDLQ is the per-consumer-group dead-letter Kafka topic. Empty disables the
+	// per-consumer DLQ and falls back to the legacy shared DLQ (kafka.topic_dlq).
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
+}
+
+type CheckoutConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"required,url"`
 }
 
 type CustomerPortalConfig struct {
@@ -668,6 +723,14 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
 	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
 
+	// Redis cluster_mode/key_prefix are supplied only as env vars by the Helm chart
+	// (they are not rendered into config.yaml). viper's Unmarshal does not consult
+	// AutomaticEnv for keys absent from the config file, so without these explicit
+	// binds ClusterMode silently resolves to false and a single-node client is used
+	// against a cluster-mode endpoint, causing "MOVED" errors on every off-slot key.
+	_ = v.BindEnv("redis.cluster_mode", "FLEXPRICE_REDIS_CLUSTER_MODE")
+	_ = v.BindEnv("redis.key_prefix", "FLEXPRICE_REDIS_KEY_PREFIX")
+
 	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
 	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
 	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
@@ -709,8 +772,67 @@ func NewConfig() (*Configuration, error) {
 
 	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// Explicitly bind auth.secret — the helm ConfigMap's rendered config.yaml omits this key,
+	// so on GKE deployments it stays empty and supabase/JWT token validation fails (login
+	// broken, and an empty key makes tokens forgeable). The FLEXPRICE_AUTH_SECRET env is
+	// injected from the secret; this bind makes Unmarshal actually read it.
+	_ = v.BindEnv("auth.secret", "FLEXPRICE_AUTH_SECRET")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
+
+	// Explicitly bind the Svix auth token. The helm ConfigMap renders webhook.svix_config
+	// {enabled, base_url} but NOT auth_token (it's a secret), and the chart injects the token
+	// as FLEXPRICE_SVIX_API_KEY. Without this bind, webhook.svix_config.auth_token stays empty
+	// on GKE (AutomaticEnv+Unmarshal won't map FLEXPRICE_SVIX_API_KEY to it), so the Svix client
+	// is created with an empty key and every call 401s. Same class as auth.secret above.
+	_ = v.BindEnv("webhook.svix_config.auth_token", "FLEXPRICE_SVIX_API_KEY")
+
+	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
+	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
+	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
+	// are silently ignored and dual-write never turns on. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	_ = v.BindEnv("kafka_secondary.brokers", "FLEXPRICE_KAFKA_SECONDARY_BROKERS")
+	_ = v.BindEnv("kafka_secondary.consumer_group", "FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP")
+	_ = v.BindEnv("kafka_secondary.topic", "FLEXPRICE_KAFKA_SECONDARY_TOPIC")
+	_ = v.BindEnv("kafka_secondary.topic_lazy", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_LAZY")
+	_ = v.BindEnv("kafka_secondary.topic_dlq", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_DLQ")
+	_ = v.BindEnv("kafka_secondary.tls", "FLEXPRICE_KAFKA_SECONDARY_TLS")
+	_ = v.BindEnv("kafka_secondary.use_sasl", "FLEXPRICE_KAFKA_SECONDARY_USE_SASL")
+	_ = v.BindEnv("kafka_secondary.sasl_mechanism", "FLEXPRICE_KAFKA_SECONDARY_SASL_MECHANISM")
+	_ = v.BindEnv("kafka_secondary.sasl_user", "FLEXPRICE_KAFKA_SECONDARY_SASL_USER")
+	_ = v.BindEnv("kafka_secondary.sasl_password", "FLEXPRICE_KAFKA_SECONDARY_SASL_PASSWORD")
+	_ = v.BindEnv("kafka_secondary.sasl_oauth_scopes", "FLEXPRICE_KAFKA_SECONDARY_SASL_OAUTH_SCOPES")
+	_ = v.BindEnv("kafka_secondary.client_id", "FLEXPRICE_KAFKA_SECONDARY_CLIENT_ID")
+	_ = v.BindEnv("kafka_secondary.route_tenants_on_lazy_mode", "FLEXPRICE_KAFKA_SECONDARY_ROUTE_TENANTS_ON_LAZY_MODE")
+
+	// Explicitly bind the PRIMARY kafka SASL credentials. The helm ConfigMap renders the
+	// kafka block without sasl_user/sasl_password, so on a GKE deployment whose primary
+	// cluster uses a password mechanism (e.g. AWS MSK SCRAM-SHA-512) these stay empty and
+	// SCRAM auth fails. The FLEXPRICE_KAFKA_SASL_{USER,PASSWORD} envs are injected by the
+	// chart; these binds make Unmarshal read them. (OAUTHBEARER/GMK needs neither.)
+	_ = v.BindEnv("kafka.sasl_user", "FLEXPRICE_KAFKA_SASL_USER")
+	_ = v.BindEnv("kafka.sasl_password", "FLEXPRICE_KAFKA_SASL_PASSWORD")
+
+	// Explicitly bind the per-consumer-group DLQ topics. Both key segments contain
+	// underscores, which AutomaticEnv+Unmarshal cannot disambiguate, so without these
+	// binds the FLEXPRICE_*_TOPIC_DLQ envs would be ignored.
+	_ = v.BindEnv("event_processing.topic_dlq", "FLEXPRICE_EVENT_PROCESSING_TOPIC_DLQ")
+	_ = v.BindEnv("event_processing_lazy.topic_dlq", "FLEXPRICE_EVENT_PROCESSING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("feature_usage_tracking.topic_dlq", "FLEXPRICE_FEATURE_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("feature_usage_tracking_lazy.topic_dlq", "FLEXPRICE_FEATURE_USAGE_TRACKING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("meter_usage_tracking.topic_dlq", "FLEXPRICE_METER_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("meter_usage_tracking_lazy.topic_dlq", "FLEXPRICE_METER_USAGE_TRACKING_LAZY_TOPIC_DLQ")
+	_ = v.BindEnv("costsheet_usage_tracking.topic_dlq", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_TOPIC_DLQ")
+	_ = v.BindEnv("costsheet_usage_tracking_lazy.topic_dlq", "FLEXPRICE_COSTSHEET_USAGE_TRACKING_LAZY_TOPIC_DLQ")
+
+	// Explicitly bind deployment.mode — the helm ConfigMap is one shared object across the
+	// api/consumer/worker Deployments, so it cannot carry a per-component mode; the only
+	// per-component signal is the FLEXPRICE_DEPLOYMENT_MODE env each Deployment sets. Since
+	// deployment.mode is absent from the rendered config.yaml and was not bound, AutomaticEnv+
+	// Unmarshal ignored the env and every pod fell back to ModeLocal (running API + Temporal +
+	// Kafka consumers regardless of role — e.g. the api consuming prod topics). This bind makes
+	// Unmarshal honor the per-Deployment env. See infrastructure/docs/gcp-mumbai-gmk-consumer-runbook.md.
+	_ = v.BindEnv("deployment.mode", "FLEXPRICE_DEPLOYMENT_MODE")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -756,6 +878,16 @@ func NewConfig() (*Configuration, error) {
 			return nil, fmt.Errorf("failed to parse FLEXPRICE_USER_ENV_MAPPING JSON: %v", err)
 		}
 		cfg.EnvAccess.UserEnvMapping = userEnvMapping
+	}
+
+	// Parse webhook logging tenant/environment ID lists from env vars.
+	// Viper cannot split comma-separated env vars into []string reliably,
+	// so we read os.Getenv directly and split manually.
+	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_TENANT_IDS"); raw != "" {
+		cfg.WebhookLogging.TenantIDs = strings.Split(raw, ",")
+	}
+	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_ENVIRONMENT_IDS"); raw != "" {
+		cfg.WebhookLogging.EnvironmentIDs = strings.Split(raw, ",")
 	}
 
 	return &cfg, nil

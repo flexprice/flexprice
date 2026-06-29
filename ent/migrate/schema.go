@@ -188,6 +188,64 @@ var (
 			},
 		},
 	}
+	// CheckoutSessionsColumns holds the columns for the "checkout_sessions" table.
+	CheckoutSessionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "action", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "checkout_status", Type: field.TypeString, Default: "initiated", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "payment_provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "checkout_invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "checkout_payment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "configuration", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "result", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "provider_result", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "success_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "failure_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "cancel_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
+		{Name: "failure_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// CheckoutSessionsTable holds the schema information for the "checkout_sessions" table.
+	CheckoutSessionsTable = &schema.Table{
+		Name:       "checkout_sessions",
+		Columns:    CheckoutSessionsColumns,
+		PrimaryKey: []*schema.Column{CheckoutSessionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_checkout_session_idempotency_key_active",
+				Unique:  true,
+				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[17]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "idempotency_key IS NOT NULL AND checkout_status IN ('initiated', 'pending')",
+				},
+			},
+			{
+				Name:    "idx_checkout_session_customer",
+				Unique:  false,
+				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[8]},
+			},
+			{
+				Name:    "idx_checkout_session_expiry",
+				Unique:  false,
+				Columns: []*schema.Column{CheckoutSessionsColumns[21]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "checkout_status IN ('initiated', 'pending')",
+				},
+			},
+		},
+	}
 	// ConnectionsColumns holds the columns for the "connections" table.
 	ConnectionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -754,6 +812,7 @@ var (
 		{Name: "parent_entitlement_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "config_value", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -764,7 +823,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[21]},
+				Columns:    []*schema.Column{EntitlementsColumns[22]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -976,6 +1035,46 @@ var (
 				Name:    "group_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{GroupsColumns[1], GroupsColumns[7]},
+			},
+		},
+	}
+	// IncomingWebhookEventsColumns holds the columns for the "incoming_webhook_events" table.
+	IncomingWebhookEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "method", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "path", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "headers", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "body", Type: field.TypeString, Nullable: true, Size: 2147483647},
+	}
+	// IncomingWebhookEventsTable holds the schema information for the "incoming_webhook_events" table.
+	IncomingWebhookEventsTable = &schema.Table{
+		Name:       "incoming_webhook_events",
+		Columns:    IncomingWebhookEventsColumns,
+		PrimaryKey: []*schema.Column{IncomingWebhookEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_incoming_webhook_events_tenant_env_provider_created",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[1], IncomingWebhookEventsColumns[7], IncomingWebhookEventsColumns[8], IncomingWebhookEventsColumns[3]},
+			},
+			{
+				Name:    "idx_incoming_webhook_events_tenant_env_created",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[1], IncomingWebhookEventsColumns[7], IncomingWebhookEventsColumns[3]},
+			},
+			{
+				Name:    "idx_incoming_webhook_events_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[11]},
 			},
 		},
 	}
@@ -1247,6 +1346,7 @@ var (
 		{Name: "succeeded_at", Type: field.TypeTime, Nullable: true},
 		{Name: "failed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "refunded_at", Type: field.TypeTime, Nullable: true},
+		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 	}
@@ -1323,6 +1423,40 @@ var (
 				Columns: []*schema.Column{PaymentAttemptsColumns[10]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "gateway_attempt_id IS NOT NULL",
+				},
+			},
+		},
+	}
+	// PaymentMethodsColumns holds the columns for the "payment_methods" table.
+	PaymentMethodsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "gateway", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "gateway_method_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "payment_method_status", Type: field.TypeString, Default: "ACTIVE", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "method_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// PaymentMethodsTable holds the schema information for the "payment_methods" table.
+	PaymentMethodsTable = &schema.Table{
+		Name:       "payment_methods",
+		Columns:    PaymentMethodsColumns,
+		PrimaryKey: []*schema.Column{PaymentMethodsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentmethod_tenant_id_environment_id_customer_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentMethodsColumns[1], PaymentMethodsColumns[7], PaymentMethodsColumns[8], PaymentMethodsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
 				},
 			},
 		},
@@ -2429,6 +2563,7 @@ var (
 		AlertLogsTable,
 		AuthsTable,
 		BillingSequencesTable,
+		CheckoutSessionsTable,
 		ConnectionsTable,
 		CostsheetsTable,
 		CouponsTable,
@@ -2444,12 +2579,14 @@ var (
 		EnvironmentsTable,
 		FeaturesTable,
 		GroupsTable,
+		IncomingWebhookEventsTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,
 		MetersTable,
 		PaymentsTable,
 		PaymentAttemptsTable,
+		PaymentMethodsTable,
 		PlansTable,
 		PricesTable,
 		PriceUnitsTable,

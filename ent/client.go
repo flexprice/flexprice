@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -35,12 +36,14 @@ import (
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -81,6 +84,8 @@ type Client struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// CheckoutSession is the client for interacting with the CheckoutSession builders.
+	CheckoutSession *CheckoutSessionClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -111,6 +116,8 @@ type Client struct {
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
+	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -123,6 +130,8 @@ type Client struct {
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
 	PaymentAttempt *PaymentAttemptClient
+	// PaymentMethod is the client for interacting with the PaymentMethod builders.
+	PaymentMethod *PaymentMethodClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -181,6 +190,7 @@ func (c *Client) init() {
 	c.AlertLogs = NewAlertLogsClient(c.config)
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
+	c.CheckoutSession = NewCheckoutSessionClient(c.config)
 	c.Connection = NewConnectionClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
 	c.Coupon = NewCouponClient(c.config)
@@ -196,12 +206,14 @@ func (c *Client) init() {
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
 	c.Group = NewGroupClient(c.config)
+	c.IncomingWebhookEvent = NewIncomingWebhookEventClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
 	c.Meter = NewMeterClient(c.config)
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
+	c.PaymentMethod = NewPaymentMethodClient(c.config)
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
@@ -320,6 +332,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AlertLogs:                NewAlertLogsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
+		CheckoutSession:          NewCheckoutSessionClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -335,12 +348,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Environment:              NewEnvironmentClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
 		Group:                    NewGroupClient(cfg),
+		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
 		Invoice:                  NewInvoiceClient(cfg),
 		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
 		Meter:                    NewMeterClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
+		PaymentMethod:            NewPaymentMethodClient(cfg),
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
@@ -386,6 +401,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AlertLogs:                NewAlertLogsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
+		CheckoutSession:          NewCheckoutSessionClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -401,12 +417,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Environment:              NewEnvironmentClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
 		Group:                    NewGroupClient(cfg),
+		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
 		Invoice:                  NewInvoiceClient(cfg),
 		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
 		Meter:                    NewMeterClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
+		PaymentMethod:            NewPaymentMethodClient(cfg),
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
@@ -458,15 +476,16 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
-		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
-		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
-		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
-		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntityIntegrationMapping,
+		c.Environment, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
+		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -477,15 +496,16 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
-		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
-		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
-		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
-		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntityIntegrationMapping,
+		c.Environment, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
+		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -504,6 +524,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Auth.mutate(ctx, m)
 	case *BillingSequenceMutation:
 		return c.BillingSequence.mutate(ctx, m)
+	case *CheckoutSessionMutation:
+		return c.CheckoutSession.mutate(ctx, m)
 	case *ConnectionMutation:
 		return c.Connection.mutate(ctx, m)
 	case *CostsheetMutation:
@@ -534,6 +556,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Feature.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
+	case *IncomingWebhookEventMutation:
+		return c.IncomingWebhookEvent.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
@@ -546,6 +570,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Payment.mutate(ctx, m)
 	case *PaymentAttemptMutation:
 		return c.PaymentAttempt.mutate(ctx, m)
+	case *PaymentMethodMutation:
+		return c.PaymentMethod.mutate(ctx, m)
 	case *PlanMutation:
 		return c.Plan.mutate(ctx, m)
 	case *PriceMutation:
@@ -1271,6 +1297,139 @@ func (c *BillingSequenceClient) mutate(ctx context.Context, m *BillingSequenceMu
 		return (&BillingSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BillingSequence mutation op: %q", m.Op())
+	}
+}
+
+// CheckoutSessionClient is a client for the CheckoutSession schema.
+type CheckoutSessionClient struct {
+	config
+}
+
+// NewCheckoutSessionClient returns a client for the CheckoutSession from the given config.
+func NewCheckoutSessionClient(c config) *CheckoutSessionClient {
+	return &CheckoutSessionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `checkoutsession.Hooks(f(g(h())))`.
+func (c *CheckoutSessionClient) Use(hooks ...Hook) {
+	c.hooks.CheckoutSession = append(c.hooks.CheckoutSession, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `checkoutsession.Intercept(f(g(h())))`.
+func (c *CheckoutSessionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CheckoutSession = append(c.inters.CheckoutSession, interceptors...)
+}
+
+// Create returns a builder for creating a CheckoutSession entity.
+func (c *CheckoutSessionClient) Create() *CheckoutSessionCreate {
+	mutation := newCheckoutSessionMutation(c.config, OpCreate)
+	return &CheckoutSessionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CheckoutSession entities.
+func (c *CheckoutSessionClient) CreateBulk(builders ...*CheckoutSessionCreate) *CheckoutSessionCreateBulk {
+	return &CheckoutSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CheckoutSessionClient) MapCreateBulk(slice any, setFunc func(*CheckoutSessionCreate, int)) *CheckoutSessionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CheckoutSessionCreateBulk{err: fmt.Errorf("calling to CheckoutSessionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CheckoutSessionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CheckoutSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CheckoutSession.
+func (c *CheckoutSessionClient) Update() *CheckoutSessionUpdate {
+	mutation := newCheckoutSessionMutation(c.config, OpUpdate)
+	return &CheckoutSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CheckoutSessionClient) UpdateOne(cs *CheckoutSession) *CheckoutSessionUpdateOne {
+	mutation := newCheckoutSessionMutation(c.config, OpUpdateOne, withCheckoutSession(cs))
+	return &CheckoutSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CheckoutSessionClient) UpdateOneID(id string) *CheckoutSessionUpdateOne {
+	mutation := newCheckoutSessionMutation(c.config, OpUpdateOne, withCheckoutSessionID(id))
+	return &CheckoutSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CheckoutSession.
+func (c *CheckoutSessionClient) Delete() *CheckoutSessionDelete {
+	mutation := newCheckoutSessionMutation(c.config, OpDelete)
+	return &CheckoutSessionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CheckoutSessionClient) DeleteOne(cs *CheckoutSession) *CheckoutSessionDeleteOne {
+	return c.DeleteOneID(cs.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CheckoutSessionClient) DeleteOneID(id string) *CheckoutSessionDeleteOne {
+	builder := c.Delete().Where(checkoutsession.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CheckoutSessionDeleteOne{builder}
+}
+
+// Query returns a query builder for CheckoutSession.
+func (c *CheckoutSessionClient) Query() *CheckoutSessionQuery {
+	return &CheckoutSessionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCheckoutSession},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CheckoutSession entity by its id.
+func (c *CheckoutSessionClient) Get(ctx context.Context, id string) (*CheckoutSession, error) {
+	return c.Query().Where(checkoutsession.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CheckoutSessionClient) GetX(ctx context.Context, id string) *CheckoutSession {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CheckoutSessionClient) Hooks() []Hook {
+	return c.hooks.CheckoutSession
+}
+
+// Interceptors returns the client interceptors.
+func (c *CheckoutSessionClient) Interceptors() []Interceptor {
+	return c.inters.CheckoutSession
+}
+
+func (c *CheckoutSessionClient) mutate(ctx context.Context, m *CheckoutSessionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CheckoutSessionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CheckoutSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CheckoutSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CheckoutSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CheckoutSession mutation op: %q", m.Op())
 	}
 }
 
@@ -3509,6 +3668,139 @@ func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, erro
 	}
 }
 
+// IncomingWebhookEventClient is a client for the IncomingWebhookEvent schema.
+type IncomingWebhookEventClient struct {
+	config
+}
+
+// NewIncomingWebhookEventClient returns a client for the IncomingWebhookEvent from the given config.
+func NewIncomingWebhookEventClient(c config) *IncomingWebhookEventClient {
+	return &IncomingWebhookEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `incomingwebhookevent.Hooks(f(g(h())))`.
+func (c *IncomingWebhookEventClient) Use(hooks ...Hook) {
+	c.hooks.IncomingWebhookEvent = append(c.hooks.IncomingWebhookEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `incomingwebhookevent.Intercept(f(g(h())))`.
+func (c *IncomingWebhookEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IncomingWebhookEvent = append(c.inters.IncomingWebhookEvent, interceptors...)
+}
+
+// Create returns a builder for creating a IncomingWebhookEvent entity.
+func (c *IncomingWebhookEventClient) Create() *IncomingWebhookEventCreate {
+	mutation := newIncomingWebhookEventMutation(c.config, OpCreate)
+	return &IncomingWebhookEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IncomingWebhookEvent entities.
+func (c *IncomingWebhookEventClient) CreateBulk(builders ...*IncomingWebhookEventCreate) *IncomingWebhookEventCreateBulk {
+	return &IncomingWebhookEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IncomingWebhookEventClient) MapCreateBulk(slice any, setFunc func(*IncomingWebhookEventCreate, int)) *IncomingWebhookEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IncomingWebhookEventCreateBulk{err: fmt.Errorf("calling to IncomingWebhookEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IncomingWebhookEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IncomingWebhookEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IncomingWebhookEvent.
+func (c *IncomingWebhookEventClient) Update() *IncomingWebhookEventUpdate {
+	mutation := newIncomingWebhookEventMutation(c.config, OpUpdate)
+	return &IncomingWebhookEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IncomingWebhookEventClient) UpdateOne(iwe *IncomingWebhookEvent) *IncomingWebhookEventUpdateOne {
+	mutation := newIncomingWebhookEventMutation(c.config, OpUpdateOne, withIncomingWebhookEvent(iwe))
+	return &IncomingWebhookEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IncomingWebhookEventClient) UpdateOneID(id string) *IncomingWebhookEventUpdateOne {
+	mutation := newIncomingWebhookEventMutation(c.config, OpUpdateOne, withIncomingWebhookEventID(id))
+	return &IncomingWebhookEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IncomingWebhookEvent.
+func (c *IncomingWebhookEventClient) Delete() *IncomingWebhookEventDelete {
+	mutation := newIncomingWebhookEventMutation(c.config, OpDelete)
+	return &IncomingWebhookEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IncomingWebhookEventClient) DeleteOne(iwe *IncomingWebhookEvent) *IncomingWebhookEventDeleteOne {
+	return c.DeleteOneID(iwe.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IncomingWebhookEventClient) DeleteOneID(id string) *IncomingWebhookEventDeleteOne {
+	builder := c.Delete().Where(incomingwebhookevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IncomingWebhookEventDeleteOne{builder}
+}
+
+// Query returns a query builder for IncomingWebhookEvent.
+func (c *IncomingWebhookEventClient) Query() *IncomingWebhookEventQuery {
+	return &IncomingWebhookEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIncomingWebhookEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IncomingWebhookEvent entity by its id.
+func (c *IncomingWebhookEventClient) Get(ctx context.Context, id string) (*IncomingWebhookEvent, error) {
+	return c.Query().Where(incomingwebhookevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IncomingWebhookEventClient) GetX(ctx context.Context, id string) *IncomingWebhookEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IncomingWebhookEventClient) Hooks() []Hook {
+	return c.hooks.IncomingWebhookEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *IncomingWebhookEventClient) Interceptors() []Interceptor {
+	return c.inters.IncomingWebhookEvent
+}
+
+func (c *IncomingWebhookEventClient) mutate(ctx context.Context, m *IncomingWebhookEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IncomingWebhookEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IncomingWebhookEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IncomingWebhookEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IncomingWebhookEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IncomingWebhookEvent mutation op: %q", m.Op())
+	}
+}
+
 // InvoiceClient is a client for the Invoice schema.
 type InvoiceClient struct {
 	config
@@ -4400,6 +4692,139 @@ func (c *PaymentAttemptClient) mutate(ctx context.Context, m *PaymentAttemptMuta
 		return (&PaymentAttemptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown PaymentAttempt mutation op: %q", m.Op())
+	}
+}
+
+// PaymentMethodClient is a client for the PaymentMethod schema.
+type PaymentMethodClient struct {
+	config
+}
+
+// NewPaymentMethodClient returns a client for the PaymentMethod from the given config.
+func NewPaymentMethodClient(c config) *PaymentMethodClient {
+	return &PaymentMethodClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentmethod.Hooks(f(g(h())))`.
+func (c *PaymentMethodClient) Use(hooks ...Hook) {
+	c.hooks.PaymentMethod = append(c.hooks.PaymentMethod, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentmethod.Intercept(f(g(h())))`.
+func (c *PaymentMethodClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentMethod = append(c.inters.PaymentMethod, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentMethod entity.
+func (c *PaymentMethodClient) Create() *PaymentMethodCreate {
+	mutation := newPaymentMethodMutation(c.config, OpCreate)
+	return &PaymentMethodCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentMethod entities.
+func (c *PaymentMethodClient) CreateBulk(builders ...*PaymentMethodCreate) *PaymentMethodCreateBulk {
+	return &PaymentMethodCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentMethodClient) MapCreateBulk(slice any, setFunc func(*PaymentMethodCreate, int)) *PaymentMethodCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentMethodCreateBulk{err: fmt.Errorf("calling to PaymentMethodClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentMethodCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentMethodCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentMethod.
+func (c *PaymentMethodClient) Update() *PaymentMethodUpdate {
+	mutation := newPaymentMethodMutation(c.config, OpUpdate)
+	return &PaymentMethodUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentMethodClient) UpdateOne(pm *PaymentMethod) *PaymentMethodUpdateOne {
+	mutation := newPaymentMethodMutation(c.config, OpUpdateOne, withPaymentMethod(pm))
+	return &PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentMethodClient) UpdateOneID(id string) *PaymentMethodUpdateOne {
+	mutation := newPaymentMethodMutation(c.config, OpUpdateOne, withPaymentMethodID(id))
+	return &PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentMethod.
+func (c *PaymentMethodClient) Delete() *PaymentMethodDelete {
+	mutation := newPaymentMethodMutation(c.config, OpDelete)
+	return &PaymentMethodDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentMethodClient) DeleteOne(pm *PaymentMethod) *PaymentMethodDeleteOne {
+	return c.DeleteOneID(pm.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentMethodClient) DeleteOneID(id string) *PaymentMethodDeleteOne {
+	builder := c.Delete().Where(paymentmethod.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentMethodDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentMethod.
+func (c *PaymentMethodClient) Query() *PaymentMethodQuery {
+	return &PaymentMethodQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentMethod},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentMethod entity by its id.
+func (c *PaymentMethodClient) Get(ctx context.Context, id string) (*PaymentMethod, error) {
+	return c.Query().Where(paymentmethod.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentMethodClient) GetX(ctx context.Context, id string) *PaymentMethod {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentMethodClient) Hooks() []Hook {
+	return c.hooks.PaymentMethod
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentMethodClient) Interceptors() []Interceptor {
+	return c.inters.PaymentMethod
+}
+
+func (c *PaymentMethodClient) mutate(ctx context.Context, m *PaymentMethodMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentMethodCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentMethodUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentMethodDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentMethod mutation op: %q", m.Op())
 	}
 }
 
@@ -7471,25 +7896,27 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
-		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
-		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
-		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, CheckoutSession,
+		Connection, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, EntityIntegrationMapping, Environment, Feature, Group,
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, ScheduledTask,
+		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
-		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
-		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
-		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, CheckoutSession,
+		Connection, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, EntityIntegrationMapping, Environment, Feature, Group,
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
+		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, ScheduledTask,
+		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

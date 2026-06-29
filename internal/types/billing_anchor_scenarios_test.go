@@ -124,7 +124,7 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.current,
 				BillingAnchor:      tt.anchor,
 				Unit:               unit,

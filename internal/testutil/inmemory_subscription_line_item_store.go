@@ -50,6 +50,11 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 		return false
 	}
 
+	// Filter by subscription line item IDs
+	if len(f.SubscriptionLineItemIDs) > 0 && !lo.Contains(f.SubscriptionLineItemIDs, item.ID) {
+		return false
+	}
+
 	// Filter by entity type (when set)
 	if f.EntityType != nil && item.EntityType != *f.EntityType {
 		return false

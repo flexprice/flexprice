@@ -598,14 +598,14 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			expiryDate = lo.ToPtr(subscription.CurrentPeriodEnd)
 		} else {
 
-			periods, err := types.CalculateBillingPeriods(
-				subscription.StartDate,
-				subscription.EndDate,
-				subscription.BillingAnchor,
-				subscription.BillingPeriodCount,
-				subscription.BillingPeriod,
-				subscription.CustomerTimezone,
-			)
+			periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
+				InitialPeriodStart: subscription.StartDate,
+				EndDate:            subscription.EndDate,
+				Anchor:             subscription.BillingAnchor,
+				PeriodCount:        subscription.BillingPeriodCount,
+				BillingPeriod:      subscription.BillingPeriod,
+				Timezone:           subscription.CustomerTimezone,
+			})
 			if err != nil {
 				return nil, err
 			}
@@ -1011,7 +1011,7 @@ func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodSta
 
 	// Calculate next period end using the anchor for consistent cycle calculation
 	// We pass nil for subscriptionEndDate because we handle that at a higher level during application
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: nextPeriodStart,
 		BillingAnchor:      lo.FromPtr(grant.CreditGrantAnchor),
 		Unit:               lo.FromPtr(grant.PeriodCount),
@@ -1045,14 +1045,13 @@ func CalculateCreditGrantPeriods(
 	}
 
 	// Call the reusable period calculation function
-	return types.CalculateBillingPeriods(
-		initialPeriodStart,
-		endDate,
-		lo.FromPtr(grant.CreditGrantAnchor),
-		lo.FromPtr(grant.PeriodCount),
-		billingPeriod,
-		"",
-	)
+	return types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
+		InitialPeriodStart: initialPeriodStart,
+		EndDate:            endDate,
+		Anchor:             lo.FromPtr(grant.CreditGrantAnchor),
+		PeriodCount:        lo.FromPtr(grant.PeriodCount),
+		BillingPeriod:      billingPeriod,
+	})
 }
 
 // generateIdempotencyKey creates a unique key for the credit grant application based on grant and period

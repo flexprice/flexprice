@@ -255,7 +255,7 @@ func (s *SubscriptionTrialInvoicePaidSuite) TestTrialEndPaidInvoice_ActivatesAnd
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
 	// processSubscriptionTrialEnd already advanced the period before creating the invoice.
-	firstPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	firstPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: trialEnd,
 		BillingAnchor:      anchor,
 		Unit:               1,
@@ -326,7 +326,7 @@ func (s *SubscriptionTrialInvoicePaidSuite) TestTrialEndPaidInvoice_IdempotentWh
 	}
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
-	firstPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	firstPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: trialEnd,
 		BillingAnchor:      anchor,
 		Unit:               1,

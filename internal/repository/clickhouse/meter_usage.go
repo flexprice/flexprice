@@ -412,7 +412,8 @@ func (r *MeterUsageRepository) GetUsageForBucketedMetersDetailed(ctx context.Con
 		for i, d := range dims {
 			if d.IsSource() {
 				res.Source = dimVals[i]
-			} else if d.IsProperty() {
+			} else if d.IsProperty() && dimVals[i] != "" {
+				// Drop missing-key dims (JSONExtractString returns "" when the key isn't present)
 				res.Properties[d.PropertyName] = dimVals[i]
 			}
 		}
@@ -644,7 +645,9 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
 					start := len("JSONExtractString(properties, '")
 					end := strings.Index(col[start:], "'")
-					if end > 0 {
+					if end > 0 && value != "" {
+						// Skip missing-key dims so the response doesn't carry
+						// stray empty entries — matches feature-side parity.
 						propName := col[start : start+end]
 						result.Properties[propName] = value
 					}

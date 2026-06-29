@@ -116,7 +116,7 @@ func TestNextbillingDate_Monthly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -217,7 +217,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -362,7 +362,7 @@ func TestNextBillingDate_Annual_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -500,7 +500,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -581,7 +581,7 @@ func TestNextBillingDate_Weekly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriodStart,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -677,7 +677,7 @@ func TestNextBillingDate_Weekly_CalendarBilling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriodStart,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -771,7 +771,7 @@ func TestNextBillingDate_Daily_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -850,7 +850,7 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -931,7 +931,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -993,7 +993,7 @@ func TestNextBillingDate_Quarterly_Calendar_BackwardCompat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -1043,7 +1043,7 @@ func TestNextBillingDate_HalfYearly_Calendar_BackwardCompat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -1116,7 +1116,7 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: tt.currentPeriod,
 				BillingAnchor:      tt.billingAnchor,
 				Unit:               tt.unit,
@@ -1160,7 +1160,7 @@ func TestNextBillingDate_Quarterly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart:  tt.current,
 				BillingAnchor:       tt.anchor,
 				Unit:                1,
@@ -1205,7 +1205,7 @@ func TestNextBillingDate_HalfYearly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart:  tt.current,
 				BillingAnchor:       tt.anchor,
 				Unit:                1,
@@ -1646,7 +1646,7 @@ func TestCalculatePeriodID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CalculatePeriodID(tt.eventTimestamp, tt.subStart, tt.periodStart, tt.periodEnd, tt.anchor, tt.unit, tt.period, "")
+			got, err := CalculatePeriodID(&CalculatePeriodIDParams{EventTimestamp: tt.eventTimestamp, SubStart: tt.subStart, CurrentPeriodStart: tt.periodStart, CurrentPeriodEnd: tt.periodEnd, BillingAnchor: tt.anchor, PeriodUnit: tt.unit, PeriodType: tt.period})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("CalculatePeriodID() error = nil, wantErr %v", tt.wantErr)
@@ -1773,14 +1773,13 @@ func TestGetNextUsageResetAt_Never(t *testing.T) {
 	subscriptionStart := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 	billingAnchor := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-	resetTime, err := GetNextUsageResetAt(
-		currentTime,
-		subscriptionStart,
-		nil,
-		billingAnchor,
-		ENTITLEMENT_USAGE_RESET_PERIOD_NEVER,
-		"",
-	)
+	resetTime, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+		CurrentTime:                 currentTime,
+		SubscriptionStart:           subscriptionStart,
+		SubscriptionEnd:             nil,
+		BillingAnchor:               billingAnchor,
+		EntitlementUsageResetPeriod: ENTITLEMENT_USAGE_RESET_PERIOD_NEVER,
+	})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1859,14 +1858,13 @@ func TestGetNextUsageResetAt_Daily(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetNextUsageResetAt(
-				tt.currentTime,
-				tt.subscriptionStart,
-				tt.subscriptionEnd,
-				tt.billingAnchor,
-				ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
-				"",
-			)
+			got, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+				CurrentTime:                 tt.currentTime,
+				SubscriptionStart:           tt.subscriptionStart,
+				SubscriptionEnd:             tt.subscriptionEnd,
+				BillingAnchor:               tt.billingAnchor,
+				EntitlementUsageResetPeriod: ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -2035,14 +2033,14 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetNextUsageResetAt(
-				tt.currentTime,
-				tt.subscriptionStart,
-				tt.subscriptionEnd,
-				tt.billingAnchor,
-				ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
-				tt.timezone,
-			)
+			got, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+				CurrentTime:                 tt.currentTime,
+				SubscriptionStart:           tt.subscriptionStart,
+				SubscriptionEnd:             tt.subscriptionEnd,
+				BillingAnchor:               tt.billingAnchor,
+				EntitlementUsageResetPeriod: ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+				Timezone:                    tt.timezone,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -2065,14 +2063,13 @@ func TestGetNextUsageResetAt_UnsupportedPeriod(t *testing.T) {
 	billingAnchor := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 	// Test with an unsupported period (WEEKLY is available but not implemented in our simplified version)
-	_, err := GetNextUsageResetAt(
-		currentTime,
-		subscriptionStart,
-		nil,
-		billingAnchor,
-		ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY, // This should trigger the default case
-		"",
-	)
+	_, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+		CurrentTime:                 currentTime,
+		SubscriptionStart:           subscriptionStart,
+		SubscriptionEnd:             nil,
+		BillingAnchor:               billingAnchor,
+		EntitlementUsageResetPeriod: ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY, // This should trigger the default case
+	})
 
 	if err == nil {
 		t.Errorf("expected error for unsupported period, got nil")
@@ -2129,14 +2126,13 @@ func TestGetNextUsageResetAt_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetNextUsageResetAt(
-				tt.currentTime,
-				tt.subscriptionStart,
-				tt.subscriptionEnd,
-				tt.billingAnchor,
-				tt.resetPeriod,
-				"",
-			)
+			got, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+				CurrentTime:                 tt.currentTime,
+				SubscriptionStart:           tt.subscriptionStart,
+				SubscriptionEnd:             tt.subscriptionEnd,
+				BillingAnchor:               tt.billingAnchor,
+				EntitlementUsageResetPeriod: tt.resetPeriod,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")
@@ -2254,8 +2250,8 @@ func TestCalculateBillingPeriods_Timezone(t *testing.T) {
 			billingPeriod:       BILLING_PERIOD_MONTHLY,
 			timezone:            "America/New_York",
 			wantPeriodCount:     2,
-			wantFirstPeriodEnd:  time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC),   // EST midnight March 1
-			wantSecondPeriodEnd: time.Date(2024, time.April, 1, 4, 0, 0, 0, time.UTC),   // EDT midnight April 1
+			wantFirstPeriodEnd:  time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC), // EST midnight March 1
+			wantSecondPeriodEnd: time.Date(2024, time.April, 1, 4, 0, 0, 0, time.UTC), // EDT midnight April 1
 		},
 	}
 
@@ -2652,7 +2648,7 @@ func TestNextBillingDate_IST(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := NextBillingDate(NextBillingDateParams{
+			got, err := NextBillingDate(&NextBillingDateParams{
 				CurrentPeriodStart: c.currentPeriodStart,
 				BillingAnchor:      c.billingAnchor,
 				Unit:               c.unit,

@@ -41,6 +41,7 @@ import (
 	"go.uber.org/fx"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -99,7 +100,8 @@ func main() {
 			pyroscope.NewPyroscopeService,
 
 			// Cache
-			cache.Initialize,
+			cache.InitializeInMemoryCache,
+			cache.NewRedisCache,
 
 			// Postgres
 			postgres.NewEntClients,
@@ -119,6 +121,7 @@ func main() {
 
 			// Producers and Consumers
 			kafka.NewProducer,
+			kafka.NewSecondaryProducer,
 			kafka.NewConsumer,
 
 			// Event Publisher
@@ -137,7 +140,7 @@ func main() {
 			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
 			repository.NewUsageBenchmarkRepository,
-			repository.NewAnalyticsBenchmarkRepository,
+			repository.NewMeterUsageBenchmarkRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -154,6 +157,7 @@ func main() {
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
 			repository.NewPaymentRepository,
+			repository.NewPaymentMethodRepository,
 			repository.NewTaskRepository,
 			repository.NewTaxAppliedRepository,
 			repository.NewSecretRepository,
@@ -176,12 +180,14 @@ func main() {
 			repository.NewSubscriptionScheduleRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
+			repository.NewIncomingWebhookEventRepository,
 			repository.NewSystemEventRepository,
 			repository.NewSystemEventDomainRepository,
 			repository.NewGroupRepository,
 			repository.NewScheduledTaskRepository,
 			repository.NewPriceUnitRepository,
 			repository.NewWorkflowExecutionRepository,
+			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
 
 			// PubSub
@@ -232,6 +238,7 @@ func main() {
 			service.NewMeterUsageTrackingService,
 			service.NewUsageBenchmarkService,
 			service.NewMeterUsageService,
+			service.NewCheckoutSessionService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
 			service.NewCustomerService,
@@ -303,6 +310,7 @@ func main() {
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	redisCache cache.RedisCache,
 	meterService service.MeterService,
 	eventService service.EventService,
 	eventPostProcessingService service.EventPostProcessingService,
@@ -357,6 +365,7 @@ func provideHandlers(
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
+	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	usageBenchmarkService service.UsageBenchmarkService,
@@ -371,7 +380,7 @@ func provideHandlers(
 		Price:                    v1.NewPriceHandler(priceService, logger),
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, entityIntegrationMappingService, logger),
-		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, cfg, logger),
+		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, redisCache, cfg, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		SubscriptionModification: v1.NewSubscriptionModificationHandler(subscriptionModificationService, logger),
@@ -398,11 +407,11 @@ func provideHandlers(
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
@@ -413,6 +422,7 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
+		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }
 
@@ -424,6 +434,7 @@ func provideRouter(
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
+	webhookRequestRepo incomingwebhookevent.Repository,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -433,6 +444,7 @@ func provideRouter(
 		envAccessService,
 		rbacService,
 		tenantService,
+		webhookRequestRepo,
 	)
 }
 

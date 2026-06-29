@@ -6,6 +6,15 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// ScopedPayment identifies a payment along with its tenant/environment so a
+// cron running outside any tenant scope can re-establish context per payment.
+type ScopedPayment struct {
+	PaymentID        string
+	TenantID         string
+	EnvironmentID    string
+	GatewayPaymentID string
+}
+
 // Repository defines the interface for payment persistence
 type Repository interface {
 	// Payment operations
@@ -23,4 +32,9 @@ type Repository interface {
 	UpdateAttempt(ctx context.Context, attempt *PaymentAttempt) error
 	ListAttempts(ctx context.Context, paymentID string) ([]*PaymentAttempt, error)
 	GetLatestAttempt(ctx context.Context, paymentID string) (*PaymentAttempt, error)
+
+	// ListScopedByDestinationStatusGateway returns payments across all tenants and
+	// environments matching the given destination type, payment status, and gateway.
+	// Used by reconciliation crons that run outside any tenant scope.
+	ListScopedByDestinationStatusGateway(ctx context.Context, destinationType types.PaymentDestinationType, status types.PaymentStatus, gateway types.PaymentGatewayType) ([]ScopedPayment, error)
 }

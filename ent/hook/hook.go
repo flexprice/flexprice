@@ -69,6 +69,18 @@ func (f BillingSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingSequenceMutation", m)
 }
 
+// The CheckoutSessionFunc type is an adapter to allow the use of ordinary
+// function as CheckoutSession mutator.
+type CheckoutSessionFunc func(context.Context, *ent.CheckoutSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CheckoutSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CheckoutSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CheckoutSessionMutation", m)
+}
+
 // The ConnectionFunc type is an adapter to allow the use of ordinary
 // function as Connection mutator.
 type ConnectionFunc func(context.Context, *ent.ConnectionMutation) (ent.Value, error)
@@ -249,6 +261,18 @@ func (f GroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMutation", m)
 }
 
+// The IncomingWebhookEventFunc type is an adapter to allow the use of ordinary
+// function as IncomingWebhookEvent mutator.
+type IncomingWebhookEventFunc func(context.Context, *ent.IncomingWebhookEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IncomingWebhookEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IncomingWebhookEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IncomingWebhookEventMutation", m)
+}
+
 // The InvoiceFunc type is an adapter to allow the use of ordinary
 // function as Invoice mutator.
 type InvoiceFunc func(context.Context, *ent.InvoiceMutation) (ent.Value, error)
@@ -319,6 +343,18 @@ func (f PaymentAttemptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentAttemptMutation", m)
+}
+
+// The PaymentMethodFunc type is an adapter to allow the use of ordinary
+// function as PaymentMethod mutator.
+type PaymentMethodFunc func(context.Context, *ent.PaymentMethodMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PaymentMethodFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PaymentMethodMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentMethodMutation", m)
 }
 
 // The PlanFunc type is an adapter to allow the use of ordinary

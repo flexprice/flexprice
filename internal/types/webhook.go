@@ -110,3 +110,11 @@ const (
 	WebhookEventCreditNoteCreated WebhookEventName = "credit_note.created"
 	WebhookEventCreditNoteUpdated WebhookEventName = "credit_note.updated"
 )
+
+// checkout session event names
+const (
+	WebhookEventCheckoutSessionInitiated WebhookEventName = "checkout.session.initiated"
+	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
+	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
+	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
+)
