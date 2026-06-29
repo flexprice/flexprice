@@ -24,6 +24,19 @@ func newHTTPClient(insecure bool) *http.Client {
 	return c
 }
 
+// newHTTPClientWithCapture wraps the base HTTP client transport with a RoutingCapture
+// that injects X-Debug-DB-Routing: true on every request and captures response headers.
+func newHTTPClientWithCapture(insecure bool, capture *RoutingCapture) *http.Client {
+	base := newHTTPClient(insecure)
+	inner := base.Transport
+	if inner == nil {
+		inner = http.DefaultTransport
+	}
+	capture.inner = inner
+	base.Transport = capture
+	return base
+}
+
 // RawClient provides thin HTTP helpers for API resources that are not
 // exposed by the generated Speakeasy Go SDK.
 type RawClient struct {

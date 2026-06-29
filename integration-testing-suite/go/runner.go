@@ -23,6 +23,7 @@ type StepResult struct {
 	RawHTTP     bool   // true = raw HTTP because SDK does not expose this resource
 	SDKFallback bool   // true = SDK was tried first but failed, fell back to raw HTTP
 	SkipReason  string
+	Routing     RoutingHeaders // DB routing decisions captured from response headers
 }
 
 // SanityRunner orchestrates the end-to-end sanity test.
@@ -32,6 +33,10 @@ type SanityRunner struct {
 	results []StepResult
 	step    int
 	phase   string
+
+	// DB routing capture (nil when not enabled).
+	routingCapture *RoutingCapture
+	lagProbeOK     bool // true when the lag-probe endpoint confirmed reader != writer
 
 	// Tracks SDK coverage.
 	sdkCovered []string // API calls that the SDK DOES cover
@@ -101,6 +106,10 @@ func (r *SanityRunner) run(name string, sdkMethod string, missingFromSDK bool, f
 		r.results[idx].Passed = true
 	}
 
+	if r.routingCapture != nil {
+		r.results[idx].Routing = r.routingCapture.Last()
+	}
+
 	// Track SDK coverage.
 	if missingFromSDK {
 		r.sdkMissing = append(r.sdkMissing, sdkMethod)
@@ -152,6 +161,32 @@ func (r *SanityRunner) markSDKFallback(sdkMethod string, sdkErr error) {
 		res.Details = failNote + "\n        " + res.Details
 	} else {
 		res.Details = failNote
+	}
+}
+
+// assertRouting checks routing decisions of the most recent step against exp.
+// Skipped silently when routingCapture is nil or lagProbeOK is false.
+func (r *SanityRunner) assertRouting(name string, exp RoutingExpectation) {
+	if r.routingCapture == nil || !r.lagProbeOK {
+		return
+	}
+	// Default: no upper bound
+	if exp.WriterPinnedMax == 0 {
+		exp.WriterPinnedMax = -1
+	}
+	if exp.ReaderMax == 0 {
+		exp.ReaderMax = -1
+	}
+	rh := r.routingCapture.Last()
+	if err := exp.check(rh); err != nil {
+		r.step++
+		r.results = append(r.results, StepResult{
+			StepNumber: r.step,
+			StepName:   fmt.Sprintf("ROUTING VIOLATION: %s", name),
+			Phase:      r.phase,
+			Passed:     false,
+			Error:      fmt.Errorf("%w | reader=%d writer_pinned=%d writer_tx=%d writer_calls=%d", err, rh.Reader, rh.WriterPinned, rh.WriterTx, rh.WriterCalls),
+		})
 	}
 }
 
