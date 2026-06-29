@@ -228,24 +228,24 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(ctx context.Context, 
 	periodStart := lo.FromPtr(cg.StartDate)
 	var periodEnd *time.Time = nil
 
-	if cg.Cadence == types.CreditGrantCadenceRecurring {
-		var err error
-		var calculatedPeriodEnd time.Time
-		_, calculatedPeriodEnd, err = CalculateNextCreditGrantPeriod(cg, periodStart, "")
-		if err != nil {
-			return nil, err
-		}
-		periodEnd = lo.ToPtr(calculatedPeriodEnd)
-	}
-
 	// 4. Fetch subscription to get current status for subscription_status_at_application
-	var subscriptionStatus types.SubscriptionStatus
+	var subscription *subscription.Subscription
 	if cg.SubscriptionID != nil && lo.FromPtr(cg.SubscriptionID) != "" {
 		sub, err := s.SubRepo.Get(ctx, lo.FromPtr(cg.SubscriptionID))
 		if err != nil {
 			return nil, err
 		}
-		subscriptionStatus = sub.SubscriptionStatus
+		subscription = sub
+	}
+
+	if cg.Cadence == types.CreditGrantCadenceRecurring {
+		var err error
+		var calculatedPeriodEnd time.Time
+		_, calculatedPeriodEnd, err = CalculateNextCreditGrantPeriod(cg, periodStart, subscription.Timezone)
+		if err != nil {
+			return nil, err
+		}
+		periodEnd = lo.ToPtr(calculatedPeriodEnd)
 	}
 
 	// 5. Create the first CGA record in Pending status
@@ -264,7 +264,7 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(ctx context.Context, 
 		PeriodEnd:                       periodEnd,
 		ApplicationReason:               applicationReason,
 		Credits:                         cg.Credits,
-		SubscriptionStatusAtApplication: subscriptionStatus,
+		SubscriptionStatusAtApplication: subscription.SubscriptionStatus,
 		IdempotencyKey:                  s.generateIdempotencyKey(lo.ToPtr(cg), lo.ToPtr(periodStart), periodEnd),
 	}
 
