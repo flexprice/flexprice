@@ -259,7 +259,21 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 
 	// Create a new background context instead of using the message context
 	// This prevents the event generation from being cancelled when the HTTP request completes
+	start := time.Now()
 	bgCtx := types.WithWriterPinning(context.Background())
+	bgCtx = types.WithRoutingStats(bgCtx)
+	defer func() {
+		if stats := types.GetRoutingStats(bgCtx); stats != nil {
+			s.Logger.Debug(bgCtx, "db_routing_summary",
+				"entrypoint", "kafka",
+				"reader", stats.Reader.Load(),
+				"writer_pinned", stats.WriterPinned.Load(),
+				"writer_tx", stats.WriterTx.Load(),
+				"writer_calls", stats.WriterCalls.Load(),
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		}
+	}()
 
 	// Copy tenant ID from original context to background context
 	bgCtx = context.WithValue(bgCtx, types.CtxTenantID, eventMsg.TenantID)

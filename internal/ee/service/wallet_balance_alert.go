@@ -203,7 +203,21 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 	)
 
 	// Create context with tenant and environment IDs
+	start := time.Now()
 	ctx := types.WithWriterPinning(context.Background())
+	ctx = types.WithRoutingStats(ctx)
+	defer func() {
+		if stats := types.GetRoutingStats(ctx); stats != nil {
+			s.Logger.Debug(ctx, "db_routing_summary",
+				"entrypoint", "kafka",
+				"reader", stats.Reader.Load(),
+				"writer_pinned", stats.WriterPinned.Load(),
+				"writer_tx", stats.WriterTx.Load(),
+				"writer_calls", stats.WriterCalls.Load(),
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		}
+	}()
 	if event.TenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	}

@@ -185,7 +185,21 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 // processMessage processes a single webhook message from the system_events topic:
 // 1) unmarshal and verify, 2) call deliverSvix/deliverNative to send to Svix or native HTTP.
 func (h *handler) processMessage(msg *message.Message) error {
+	start := time.Now()
 	ctx := types.WithWriterPinning(msg.Context())
+	ctx = types.WithRoutingStats(ctx)
+	defer func() {
+		if stats := types.GetRoutingStats(ctx); stats != nil {
+			h.logger.Debug(ctx, "db_routing_summary",
+				"entrypoint", "kafka",
+				"reader", stats.Reader.Load(),
+				"writer_pinned", stats.WriterPinned.Load(),
+				"writer_tx", stats.WriterTx.Load(),
+				"writer_calls", stats.WriterCalls.Load(),
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		}
+	}()
 
 	h.logger.Debug(context.Background(), "context",
 		"tenant_id", types.GetTenantID(ctx),

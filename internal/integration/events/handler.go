@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/ent"
@@ -146,7 +147,21 @@ func (h *handler) processIntegrationError(err error, event *types.WebhookEvent, 
 // processMessage unmarshals types.WebhookEvent (same envelope as customer webhooks).
 // It dispatches to event-specific processors; unknown events are ACKed and ignored.
 func (h *handler) processMessage(msg *message.Message) error {
+	start := time.Now()
 	ctx := types.WithWriterPinning(msg.Context())
+	ctx = types.WithRoutingStats(ctx)
+	defer func() {
+		if stats := types.GetRoutingStats(ctx); stats != nil {
+			h.deps.Logger.Debug(ctx, "db_routing_summary",
+				"entrypoint", "kafka",
+				"reader", stats.Reader.Load(),
+				"writer_pinned", stats.WriterPinned.Load(),
+				"writer_tx", stats.WriterTx.Load(),
+				"writer_calls", stats.WriterCalls.Load(),
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		}
+	}()
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
 		h.deps.Logger.Error(context.Background(), "integration_events: failed to unmarshal WebhookEvent, dropping message",

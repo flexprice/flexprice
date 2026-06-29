@@ -197,7 +197,22 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 
 	// Build a context from the message's own context so cancellation/tracing propagates,
 	// then attach tenant and environment IDs so the settings repo can scope its query.
-	ctx := types.SetTenantID(types.WithWriterPinning(msg.Context()), tenantID)
+	start := time.Now()
+	ctx := types.WithWriterPinning(msg.Context())
+	ctx = types.SetTenantID(ctx, tenantID)
+	ctx = types.WithRoutingStats(ctx)
+	defer func() {
+		if stats := types.GetRoutingStats(ctx); stats != nil {
+			s.Logger.Debug(ctx, "db_routing_summary",
+				"entrypoint", "kafka",
+				"reader", stats.Reader.Load(),
+				"writer_pinned", stats.WriterPinned.Load(),
+				"writer_tx", stats.WriterTx.Load(),
+				"writer_calls", stats.WriterCalls.Load(),
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		}
+	}()
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 
 	// Fetch the ingestion filter once per batch (one DB read per Kafka message).
