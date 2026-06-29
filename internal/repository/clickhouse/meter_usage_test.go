@@ -211,22 +211,22 @@ func (s *MeterUsageQuerySuite) TestFinalClause_Disabled() {
 // --- Window size tests (using shared helpers from aggregators.go) ---
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Day() {
-	result := formatWindowSize(types.WindowSizeDay, "")
-	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
+	result := formatWindowSize(types.WindowSizeDay, types.DefaultTimezone)
+	assert.Equal(s.T(), "toStartOfDay(timestamp, 'UTC')", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Hour() {
-	result := formatWindowSize(types.WindowSizeHour, "")
-	assert.Equal(s.T(), "toStartOfHour(timestamp)", result)
+	result := formatWindowSize(types.WindowSizeHour, types.DefaultTimezone)
+	assert.Equal(s.T(), "toStartOfHour(timestamp, 'UTC')", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Month() {
-	result := formatWindowSize(types.WindowSizeMonth, "")
-	assert.Equal(s.T(), "toStartOfMonth(timestamp)", result)
+	result := formatWindowSize(types.WindowSizeMonth, types.DefaultTimezone)
+	assert.Equal(s.T(), "toStartOfMonth(timestamp, 'UTC')", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Empty() {
-	result := formatWindowSize(types.WindowSize(""), "")
+	result := formatWindowSize(types.WindowSize(""), types.DefaultTimezone)
 	assert.Equal(s.T(), "", result)
 }
 
@@ -239,33 +239,33 @@ func (s *MeterUsageQuerySuite) TestWindowSize_BucketableSizes() {
 		window types.WindowSize
 		expect string
 	}{
-		{types.WindowSize15Min, "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"},
-		{types.WindowSize30Min, "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"},
-		{types.WindowSize3Hour, "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"},
-		{types.WindowSize6Hour, "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"},
-		{types.WindowSize12Hour, "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"},
+		{types.WindowSize15Min, "toStartOfInterval(timestamp, INTERVAL 15 MINUTE, 'UTC')"},
+		{types.WindowSize30Min, "toStartOfInterval(timestamp, INTERVAL 30 MINUTE, 'UTC')"},
+		{types.WindowSize3Hour, "toStartOfInterval(timestamp, INTERVAL 3 HOUR, 'UTC')"},
+		{types.WindowSize6Hour, "toStartOfInterval(timestamp, INTERVAL 6 HOUR, 'UTC')"},
+		{types.WindowSize12Hour, "toStartOfInterval(timestamp, INTERVAL 12 HOUR, 'UTC')"},
 	}
 	for _, c := range cases {
-		assert.Equal(s.T(), c.expect, formatWindowSize(c.window, ""), "window %s", c.window)
+		assert.Equal(s.T(), c.expect, formatWindowSize(c.window, types.DefaultTimezone), "window %s", c.window)
 	}
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_WithBillingAnchor() {
 	anchor := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, &anchor, "")
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, &anchor, types.DefaultTimezone)
 	assert.Contains(s.T(), result, "addDays")
 	assert.Contains(s.T(), result, "toStartOfMonth")
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_MonthNoBillingAnchor() {
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, nil, "")
-	assert.Equal(s.T(), "toStartOfMonth(timestamp)", result)
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, nil, types.DefaultTimezone)
+	assert.Equal(s.T(), "toStartOfMonth(timestamp, 'UTC')", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_DayIgnoresBillingAnchor() {
 	anchor := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor, "")
-	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor, types.DefaultTimezone)
+	assert.Equal(s.T(), "toStartOfDay(timestamp, 'UTC')", result)
 }
 
 func TestFormatWindowSizeTimezone(t *testing.T) {
@@ -280,14 +280,14 @@ func TestFormatWindowSizeTimezone(t *testing.T) {
 			name:     "empty tz with WindowSizeDay",
 			window:   types.WindowSizeDay,
 			tz:       "",
-			expected: "toStartOfDay(timestamp)",
+			expected: "toStartOfDay(timestamp, 'UTC')",
 		},
 		{
 			// Case 2: Explicit "UTC" + WindowSizeDay → same as empty
 			name:     "UTC tz with WindowSizeDay",
 			window:   types.WindowSizeDay,
-			tz:       "UTC",
-			expected: "toStartOfDay(timestamp)",
+			tz:       types.DefaultTimezone,
+			expected: "toStartOfDay(timestamp, 'UTC')",
 		},
 		{
 			// Case 3: IST non-UTC tz + WindowSizeDay → include tz argument
@@ -308,7 +308,7 @@ func TestFormatWindowSizeTimezone(t *testing.T) {
 			name:     "invalid tz falls back to UTC with WindowSizeDay",
 			window:   types.WindowSizeDay,
 			tz:       "Not/ATimezone",
-			expected: "toStartOfDay(timestamp)",
+			expected: "toStartOfDay(timestamp, 'UTC')",
 		},
 	}
 

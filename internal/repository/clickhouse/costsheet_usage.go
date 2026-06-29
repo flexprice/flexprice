@@ -731,7 +731,7 @@ func (r *CostSheetUsageRepository) getSumBucketAnalytics(ctx context.Context, co
 // getMaxBucketTotals calculates totals using bucket-based aggregation for MAX features
 func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costSheetID, externalCustomerID string, params *events.UsageAnalyticsParams, featureInfo *events.MaxBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
 	// Build bucket window expression
-	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, "")
+	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, types.DefaultTimezone)
 
 	// Build group by columns
 	groupByColumns := []string{"bucket_start", "feature_id", "price_id", "meter_id"}
@@ -915,7 +915,7 @@ func (r *CostSheetUsageRepository) getMaxBucketPointsForGroup(ctx context.Contex
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, formatWindowSize(featureInfo.BucketSize, ""), windowExpr)
+		AND sign != 0`, formatWindowSize(featureInfo.BucketSize, types.DefaultTimezone), windowExpr)
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1032,4 +1032,3 @@ func (r *CostSheetUsageRepository) getMaxBucketPointsForGroup(ctx context.Contex
 
 	return points, nil
 }
-

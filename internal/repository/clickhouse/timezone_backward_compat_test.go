@@ -1,7 +1,6 @@
 package clickhouse
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -10,13 +9,12 @@ import (
 )
 
 // Backward-compatibility invariant for analytics/usage window bucketing:
-//
-// Before the timezone feature, ClickHouse window expressions never carried a
-// timezone argument (always UTC). For customers without a timezone (empty) — and
-// for the explicit "UTC" value — the generated SQL must be byte-identical to the
-// legacy expression: no timezone literal, identical to each other.
+// a customer with no timezone (empty) must behave identically to an explicit
+// "UTC" customer. Both normalize to the explicit 'UTC' argument, which ClickHouse
+// treats identically to omitting it — so unset customers keep UTC bucketing.
 
 var allWindowSizes = []types.WindowSize{
+	types.WindowSizeMinute,
 	types.WindowSize15Min,
 	types.WindowSize30Min,
 	types.WindowSizeHour,
@@ -28,24 +26,32 @@ var allWindowSizes = []types.WindowSize{
 	types.WindowSizeMonth,
 }
 
-// TestBackwardCompat_FormatWindowSize_UTCEmitsNoTimezone asserts that empty and
-// "UTC" produce identical, timezone-free SQL for every window size.
-func TestBackwardCompat_FormatWindowSize_UTCEmitsNoTimezone(t *testing.T) {
+// Empty tz (legacy) and explicit "UTC" must produce identical SQL for every window.
+func TestBackwardCompat_FormatWindowSize_EmptyEqualsUTC(t *testing.T) {
 	for _, w := range allWindowSizes {
 		t.Run(string(w), func(t *testing.T) {
-			empty := formatWindowSize(w, "")
-			utc := formatWindowSize(w, "UTC")
-
-			assert.Equal(t, empty, utc, "empty and UTC must produce identical SQL")
-			assert.NotContains(t, empty, "'", "UTC/empty path must not emit a timezone literal: %s", empty)
+			assert.Equal(t, formatWindowSize(w, "UTC"), formatWindowSize(w, ""),
+				"empty and UTC must produce identical SQL")
 		})
 	}
 }
 
-// TestBackwardCompat_FormatWindowSize_NonUTCDiffersFromUTC is the complement: a
-// real timezone must change the SQL (so the UTC invariant above is meaningful).
+// A malformed timezone must fall back to the UTC form, never reach ClickHouse raw.
+func TestBackwardCompat_FormatWindowSize_InvalidFallsBackToUTC(t *testing.T) {
+	for _, w := range allWindowSizes {
+		t.Run(string(w), func(t *testing.T) {
+			assert.Equal(t, formatWindowSize(w, "UTC"), formatWindowSize(w, "Not/AZone"))
+		})
+	}
+}
+
+// Complement: a real non-UTC timezone must change the SQL (so the invariant above
+// is meaningful). MINUTE is excluded — minute buckets are timezone-invariant.
 func TestBackwardCompat_FormatWindowSize_NonUTCDiffersFromUTC(t *testing.T) {
 	for _, w := range allWindowSizes {
+		if w == types.WindowSizeMinute {
+			continue
+		}
 		t.Run(string(w), func(t *testing.T) {
 			utc := formatWindowSize(w, "UTC")
 			ist := formatWindowSize(w, "Asia/Kolkata")
@@ -55,9 +61,18 @@ func TestBackwardCompat_FormatWindowSize_NonUTCDiffersFromUTC(t *testing.T) {
 	}
 }
 
-// TestBackwardCompat_FormatWindowSizeWithBillingAnchor_UTCEmitsNoTimezone asserts the
-// billing-anchor variant is also unchanged for UTC/empty customers.
-func TestBackwardCompat_FormatWindowSizeWithBillingAnchor_UTCEmitsNoTimezone(t *testing.T) {
+// MINUTE buckets are timezone-invariant: same expression regardless of tz, and no
+// tz argument. Guards against the regression where a missing MINUTE case fell
+// through to day-level bucketing.
+func TestFormatWindowSize_MinuteIsTimezoneInvariant(t *testing.T) {
+	want := "toStartOfMinute(timestamp)"
+	assert.Equal(t, want, formatWindowSize(types.WindowSizeMinute, ""))
+	assert.Equal(t, want, formatWindowSize(types.WindowSizeMinute, "UTC"))
+	assert.Equal(t, want, formatWindowSize(types.WindowSizeMinute, "Asia/Kolkata"))
+}
+
+// Billing-anchor variant: empty tz and explicit UTC must produce identical SQL.
+func TestBackwardCompat_FormatWindowSizeWithBillingAnchor_EmptyEqualsUTC(t *testing.T) {
 	anchor := time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC)
 	cases := []struct {
 		name   string
@@ -71,10 +86,10 @@ func TestBackwardCompat_FormatWindowSizeWithBillingAnchor_UTCEmitsNoTimezone(t *
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			empty := formatWindowSizeWithBillingAnchor(c.window, c.anchor, "")
-			utc := formatWindowSizeWithBillingAnchor(c.window, c.anchor, "UTC")
-			assert.Equal(t, empty, utc, "empty and UTC must produce identical SQL")
-			assert.NotContains(t, strings.TrimSpace(empty), "'UTC'", "must not emit a UTC literal")
+			assert.Equal(t,
+				formatWindowSizeWithBillingAnchor(c.window, c.anchor, "UTC"),
+				formatWindowSizeWithBillingAnchor(c.window, c.anchor, ""),
+				"empty and UTC must produce identical SQL")
 		})
 	}
 }

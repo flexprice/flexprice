@@ -129,6 +129,7 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 				BillingAnchor:      tt.anchor,
 				Unit:               unit,
 				Period:             tt.period,
+				Timezone:           DefaultTimezone,
 			})
 			if err != nil {
 				t.Fatalf("NextBillingDate() error = %v", err)
