@@ -160,3 +160,17 @@ func (r *InMemoryRedis) ForceCacheDelete(ctx context.Context, key string) {
 	defer r.mu.Unlock()
 	delete(r.values, key)
 }
+
+func (r *InMemoryRedis) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.values[key]; ok {
+		return false, nil
+	}
+	var exp time.Time
+	if expiration > 0 {
+		exp = time.Now().Add(expiration)
+	}
+	r.values[key] = inMemoryRedisEntry{value: "1", expiration: exp}
+	return true, nil
+}
