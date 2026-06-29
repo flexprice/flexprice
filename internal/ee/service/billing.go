@@ -369,7 +369,13 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
 		endDate = item.EndDate
 	}
-	periods, err := types.CalculateBillingPeriods(item.StartDate, &endDate, item.StartDate, periodCount, item.BillingPeriod)
+	periods, err := types.CalculateBillingPeriods(types.CalculateBillingPeriodsParams{
+		InitialPeriodStart: item.StartDate,
+		EndDate:            &endDate,
+		Anchor:             item.StartDate,
+		PeriodCount:        periodCount,
+		BillingPeriod:      item.BillingPeriod,
+	})
 	if err != nil {
 		return FindMatchingLineItemPeriodResult{}, err
 	}
@@ -2072,13 +2078,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Calculate next period for advance charges
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(
-		nextPeriodStart,
-		sub.BillingAnchor,
-		sub.BillingPeriodCount,
-		sub.BillingPeriod,
-		sub.EndDate,
-	)
+	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+		CurrentPeriodStart:  nextPeriodStart,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+	})
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("failed to calculate next billing date").
@@ -3646,7 +3652,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			if resetPeriod == "" {
 				continue
 			}
-			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod)
+			nextUsageResetAt, err := types.GetNextUsageResetAt(types.GetNextUsageResetAtParams{
+				CurrentTime:                 currentTime,
+				SubscriptionStart:           sub.StartDate,
+				SubscriptionEnd:             sub.EndDate,
+				BillingAnchor:               sub.BillingAnchor,
+				EntitlementUsageResetPeriod: resetPeriod,
+			})
 			if err != nil {
 				s.Logger.Info(ctx, "failed to get next usage reset at for feature",
 					"feature_id", featureID,
