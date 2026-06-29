@@ -187,6 +187,10 @@ type PostgresConfig struct {
 	// Reader endpoint configuration for read replicas
 	ReaderHost string `mapstructure:"reader_host"`
 	ReaderPort int    `mapstructure:"reader_port"`
+
+	// DBRoutingDebug enables the /internal/debug/lag-probe endpoint.
+	// Set via FLEXPRICE_POSTGRES_DB_ROUTING_DEBUG=true or postgres.db_routing_debug in config.yaml.
+	DBRoutingDebug bool `mapstructure:"db_routing_debug"`
 }
 
 type APIKeyConfig struct {

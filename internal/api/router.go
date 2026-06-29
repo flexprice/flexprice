@@ -1,8 +1,6 @@
 package api
 
 import (
-	"os"
-
 	"github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
@@ -730,9 +728,10 @@ func NewRouter(
 		workflows.GET("/:workflow_id/:run_id", handlers.Workflow.GetWorkflowDetails)
 	}
 
-	// Debug endpoints — only registered when FLEXPRICE_DB_ROUTING_DEBUG=true.
-	if os.Getenv("FLEXPRICE_DB_ROUTING_DEBUG") == "true" && handlers.Debug != nil {
-		debugGroup := router.Group("/internal/debug")
+	// Debug endpoints — only registered when postgres.db_routing_debug=true (FLEXPRICE_POSTGRES_DB_ROUTING_DEBUG).
+	// Mounted under the private group so all standard auth middleware applies.
+	if cfg.Postgres.DBRoutingDebug && handlers.Debug != nil {
+		debugGroup := private.Group("/internal/debug")
 		debugGroup.POST("/lag-probe", handlers.Debug.LagProbe)
 	}
 

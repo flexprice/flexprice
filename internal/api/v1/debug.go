@@ -31,7 +31,11 @@ type LagProbeResponse struct {
 // LagProbe queries pg_is_in_recovery() on the reader and pg_current_wal_lsn()
 // on the writer to determine whether the two endpoints are distinct instances.
 //
-// POST /internal/debug/lag-probe
+// @Summary WAL lag probe
+// @Tags Debug
+// @Produce json
+// @Success 200 {object} LagProbeResponse
+// @Router /internal/debug/lag-probe [post]
 func (h *DebugHandler) LagProbe(c *gin.Context) {
 	ctx := c.Request.Context()
 
