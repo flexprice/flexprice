@@ -118,14 +118,14 @@ func formatWindowSize(windowSize types.WindowSize, tz string) string {
 
 	// Validate tz early so interval cases can use it too.
 	// Empty / "UTC" → no timezone suffix; invalid IANA name → fall back to UTC.
-	if tz != "" && tz != "UTC" {
+	if tz != "" && tz != types.DefaultTimezone {
 		if _, err := time.LoadLocation(tz); err != nil {
-			tz = "UTC"
+			tz = types.DefaultTimezone
 		}
 	}
 
 	// Effective UTC when tz is blank or "UTC"
-	utc := tz == "" || tz == "UTC"
+	utc := tz == "" || tz == types.DefaultTimezone
 
 	// Sub-hourly and multi-hour interval sizes: toStartOfInterval supports an
 	// optional timezone third argument (ClickHouse 22.x+).
@@ -212,13 +212,13 @@ func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAncho
 		anchorDay := billingAnchor.Day()
 
 		// Defense-in-depth: treat invalid IANA names as UTC.
-		if tz != "" && tz != "UTC" {
+		if tz != "" && tz != types.DefaultTimezone {
 			if _, err := time.LoadLocation(tz); err != nil {
-				tz = "UTC"
+				tz = types.DefaultTimezone
 			}
 		}
 
-		if tz != "" && tz != "UTC" {
+		if tz != "" && tz != types.DefaultTimezone {
 			// Timezone-aware custom monthly window: wrap timestamp with toTimezone before date arithmetic
 			return fmt.Sprintf("addDays(toStartOfMonth(addDays(toTimezone(timestamp, '%s'), -%d), '%s'), %d)", tz, anchorDay-1, tz, anchorDay-1)
 		}

@@ -733,7 +733,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 
 	customerTimezone := sub.Timezone
 	if customerTimezone == "" {
-		customerTimezone = "UTC"
+		customerTimezone = types.DefaultTimezone
 	}
 
 	prorationParams := proration.ProrationParams{
@@ -753,7 +753,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		ProrationStrategy:  types.StrategySecondBased,
 		Currency:           sub.Currency,
 		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:   customerTimezone,
+		Timezone:           customerTimezone,
 	}
 
 	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
@@ -1018,7 +1018,7 @@ func (s *subscriptionModificationService) previewQuantityChangeProration(
 
 	customerTimezone := sub.Timezone
 	if customerTimezone == "" {
-		customerTimezone = "UTC"
+		customerTimezone = types.DefaultTimezone
 	}
 
 	prorationParams := proration.ProrationParams{
@@ -1038,7 +1038,7 @@ func (s *subscriptionModificationService) previewQuantityChangeProration(
 		ProrationStrategy:  types.StrategySecondBased,
 		Currency:           sub.Currency,
 		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:   customerTimezone,
+		Timezone:           customerTimezone,
 	}
 
 	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
@@ -1215,7 +1215,7 @@ func (s *subscriptionModificationService) createInheritedSubscription(ctx contex
 		PaymentBehavior:        parent.PaymentBehavior,
 		CollectionMethod:       parent.CollectionMethod,
 		GatewayPaymentMethodID: parent.GatewayPaymentMethodID,
-		Timezone:       parent.Timezone,
+		Timezone:               parent.Timezone,
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,

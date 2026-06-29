@@ -126,6 +126,15 @@ func (r *CreateCustomerRequest) Validate() error {
 		return err
 	}
 
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != "" && r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Validate tax rate overrides if provided
 	if len(r.TaxRateOverrides) > 0 {
 		for i, taxRate := range r.TaxRateOverrides {
@@ -154,7 +163,7 @@ func (r *CreateCustomerRequest) Validate() error {
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
 	tz := r.Timezone
 	if tz == "" {
-		tz = "UTC"
+		tz = types.DefaultTimezone
 	}
 	return &customer.Customer{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
@@ -177,6 +186,15 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != nil && *r.Timezone != "" && *r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(*r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

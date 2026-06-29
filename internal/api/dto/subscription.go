@@ -1277,7 +1277,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 	}
 
 	if r.Timezone == "" {
-		r.Timezone = "UTC"
+		r.Timezone = types.DefaultTimezone
 	}
 
 	// Determine subscription start and end dates based on phases

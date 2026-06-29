@@ -105,7 +105,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// The timezone field in the API request is intentionally ignored.
 	sub.Timezone = customer.Timezone
 	if sub.Timezone == "" {
-		sub.Timezone = "UTC"
+		sub.Timezone = types.DefaultTimezone
 	}
 	s.overRideSubscriptionBasedOnIntegration(ctx, sub, &req)
 
@@ -7519,7 +7519,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		PaymentBehavior:        parent.PaymentBehavior,
 		CollectionMethod:       parent.CollectionMethod,
 		GatewayPaymentMethodID: parent.GatewayPaymentMethodID,
-		Timezone:       parent.Timezone,
+		Timezone:               parent.Timezone,
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,

@@ -366,7 +366,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		InvoiceNumberPrefix:                    "INV",
 		InvoiceNumberFormat:                    InvoiceNumberFormatYYYYMM,
 		InvoiceNumberStartSequence:             1,
-		InvoiceNumberTimezone:                  "UTC",
+		InvoiceNumberTimezone:                  DefaultTimezone,
 		InvoiceNumberSeparator:                 "-",
 		InvoiceNumberSuffixLength:              5,
 		DueDateDays:                            lo.ToPtr(1),
