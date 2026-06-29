@@ -584,7 +584,7 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 	result *events.MeterUsageDetailedResult,
 	groupByResult *DetailedGroupByResult,
 ) (string, []interface{}) {
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, types.DefaultTimezone)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	if windowExpr == "" {
 		return "", nil
 	}

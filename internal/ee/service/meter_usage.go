@@ -937,6 +937,20 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
+	// Bucket the time-series in the customer's local timezone so analytics align
+	// with their billing periods. Auto-derived from the primary customer record;
+	// never supplied by the request. A lookup miss or empty timezone leaves it
+	// empty, which the query builder treats as UTC (today's behaviour) — a tz
+	// lookup must never fail the analytics query.
+	if params.ExternalCustomerID != "" {
+		if cust, err := s.CustomerRepo.GetByLookupKey(ctx, params.ExternalCustomerID); err != nil {
+			s.logger.Debug(ctx, "could not resolve customer timezone for detailed analytics; defaulting to UTC",
+				"external_customer_id", params.ExternalCustomerID, "error", err)
+		} else if cust != nil {
+			params.Timezone = cust.Timezone
+		}
+	}
+
 	// feature_id ≡ meter_id (1:1). Rewrite at entry so the SQL builder accepts
 	// it; the converter restores FeatureID via the meter→feature lookup.
 	if len(params.GroupBy) > 0 {

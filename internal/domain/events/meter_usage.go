@@ -90,6 +90,10 @@ type MeterUsageDetailedAnalyticsParams struct {
 	WindowSize       types.WindowSize
 	BillingAnchor    *time.Time
 	UseFinal         bool
+	// Timezone is the IANA timezone used to bucket the time-series, auto-derived
+	// server-side from the primary customer's record (never from the request).
+	// Empty falls back to UTC bucketing.
+	Timezone string
 	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
 	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
 	Expand []string
