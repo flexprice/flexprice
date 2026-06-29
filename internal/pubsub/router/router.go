@@ -17,11 +17,10 @@ import (
 
 // Router manages all message routing
 type Router struct {
-	router    *message.Router
-	logger    *logger.Logger
-	tracing   *tracing.Service
-	config    *config.Webhook
-	dlqRouter *routingDLQPublisher
+	router  *message.Router
+	logger  *logger.Logger
+	tracing *tracing.Service
+	config  *config.Webhook
 }
 
 // NewRouter creates a new message router
@@ -34,38 +33,28 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 		return nil, err
 	}
 
-	// Always create a Kafka publisher for the DLQ. The actual DLQ topic is chosen
-	// per-handler at publish time by routingDLQPublisher, so no topic is needed
-	// at construction — only the broker config.
-	kafkaPub, err := createDLQPublisher(cfg, logger)
+	// Create publisher for PoisonQueue middleware
+	var poisonQueuePublisher message.Publisher
+	var dlqTopicName string
+
+	if cfg.Kafka.TopicDLQ != "" {
+		// Use real Kafka DLQ when configured (on the deployment's local/consume cluster)
+		var err error
+		poisonQueuePublisher, err = createDLQPublisher(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
-
-	// Legacy shared DLQ fallback for handlers without a per-consumer DLQ topic.
-	// When cfg.Kafka.TopicDLQ is set, reuse the Kafka publisher pointed at that
-	// single shared topic; otherwise fall back to the ephemeral in-memory queue.
-	var fallbackPub message.Publisher
-	var fallbackTopic string
-	if cfg.Kafka.TopicDLQ != "" {
-		fallbackPub = kafkaPub
-		fallbackTopic = cfg.Kafka.TopicDLQ
-		logger.Info(context.Background(), "DLQ fallback using shared Kafka topic", "fallback_topic", fallbackTopic)
+		dlqTopicName = cfg.Kafka.TopicDLQ
+		logger.Info(context.Background(), "DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
 	} else {
-		fallbackPub = getTempDLQ()
-		fallbackTopic = "poison_queue"
-		logger.Info(context.Background(), "DLQ fallback using in-memory queue (no kafka.topic_dlq configured)")
+		// Use in-memory DLQ (original behavior) when not configured
+		poisonQueuePublisher = getTempDLQ()
+		dlqTopicName = "poison_queue"
+		logger.Info(context.Background(), "DLQ using in-memory queue (no topic_dlq configured)")
 	}
 
-	// routingDLQPublisher reads the poisoned handler name from message metadata
-	// and routes to the per-consumer-group DLQ topic registered for it. Handlers
-	// without a configured topic fall back to the legacy shared DLQ above.
-	dlqRouter := newRoutingDLQPublisher(kafkaPub, fallbackPub, fallbackTopic, logger, tracingSvc)
-
-	// PoisonQueue middleware (unchanged position). The "_dlq_placeholder" topic is
-	// required by the constructor but ignored at runtime since routingDLQPublisher
-	// always routes by handler name.
-	poisonQueue, err := middleware.PoisonQueue(dlqRouter, "_dlq_placeholder")
+	// PoisonQueue middleware (always present, just with different publisher)
+	poisonQueue, err := middleware.PoisonQueue(poisonQueuePublisher, dlqTopicName)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +83,10 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	)
 
 	return &Router{
-		router:    router,
-		logger:    logger,
-		tracing:   tracingSvc,
-		config:    &cfg.Webhook,
-		dlqRouter: dlqRouter,
+		router:  router,
+		logger:  logger,
+		tracing: tracingSvc,
+		config:  &cfg.Webhook,
 	}, nil
 }
 
@@ -123,25 +111,8 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 		return nil, err
 	}
 
-	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", kc.Brokers)
+	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", kc.Brokers, "dlq_topic", kc.TopicDLQ)
 	return publisher, nil
-}
-
-// AddNoPublishHandlerWithDLQ is like AddNoPublishHandler but opts the handler into
-// per-consumer-group DLQ routing. consumerGroup is used only as a log/trace label;
-// dlqTopic comes from config/env. An empty dlqTopic disables the per-consumer DLQ
-// and routes poisoned messages to the legacy shared DLQ fallback instead (never dropped).
-func (r *Router) AddNoPublishHandlerWithDLQ(
-	handlerName string,
-	topicName string,
-	consumerGroup string,
-	dlqTopic string,
-	subscriber message.Subscriber,
-	handlerFunc func(msg *message.Message) error,
-	middlewares ...message.HandlerMiddleware,
-) {
-	r.dlqRouter.Register(handlerName, consumerGroup, dlqTopic)
-	r.AddNoPublishHandler(handlerName, topicName, subscriber, handlerFunc, middlewares...)
 }
 
 // AddNoPublishHandler adds a handler that doesn't publish messages
@@ -191,8 +162,7 @@ func (r *Router) Close() error {
 	return r.router.Close()
 }
 
-// getTempDLQ returns a temporary in-memory DLQ used as the legacy shared-DLQ
-// fallback when kafka.topic_dlq is not configured (original behavior).
+// getTempDLQ returns a temporary in-memory DLQ (original behavior when topic_dlq not configured)
 func getTempDLQ() *gochannel.GoChannel {
 	return gochannel.NewGoChannel(
 		gochannel.Config{
