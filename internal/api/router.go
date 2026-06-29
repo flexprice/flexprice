@@ -731,7 +731,7 @@ func NewRouter(
 	// Debug endpoints — only registered when postgres.db_routing_debug=true (FLEXPRICE_POSTGRES_DB_ROUTING_DEBUG).
 	// Mounted under the private group so all standard auth middleware applies.
 	if cfg.Postgres.DBRoutingDebug && handlers.Debug != nil {
-		debugGroup := private.Group("/internal/debug")
+		debugGroup := v1Private.Group("/internal/debug")
 		debugGroup.POST("/lag-probe", handlers.Debug.LagProbe)
 	}
 

@@ -24,12 +24,11 @@ func (r *SanityRunner) runRoutingSteps(ctx context.Context) {
 		}
 		isDistinct, _ := resp["is_distinct"].(bool)
 		readerIsReplica, _ := resp["reader_is_replica"].(bool)
-		writerLSN, _ := resp["writer_lsn"].(string)
-		readerLSN, _ := resp["reader_lsn"].(string)
+		writerReachable, _ := resp["writer_reachable"].(bool)
 
 		r.lastResult().Details = fmt.Sprintf(
-			"reader_is_replica=%v is_distinct=%v writer_lsn=%s reader_lsn=%s",
-			readerIsReplica, isDistinct, writerLSN, readerLSN,
+			"reader_is_replica=%v is_distinct=%v writer_reachable=%v",
+			readerIsReplica, isDistinct, writerReachable,
 		)
 
 		if !isDistinct {
@@ -96,7 +95,7 @@ func (r *SanityRunner) runRoutingSteps(ctx context.Context) {
 
 	if routingCustID != "" {
 		r.run("Get customer by external ID immediately (read-after-write)", "raw GET /customers", true, func() error {
-			rawResp, _, err := r.raw.Get(ctx, fmt.Sprintf("/customers/by-ext-id/%s", extID))
+			rawResp, _, err := r.raw.Get(ctx, fmt.Sprintf("/customers/external/%s", extID))
 			if err != nil {
 				return fmt.Errorf("get by external_id failed (stale read?): %w", err)
 			}
@@ -165,7 +164,7 @@ func (r *SanityRunner) runRoutingSteps(ctx context.Context) {
 			if res.custID == "" {
 				continue
 			}
-			rawResp, _, err := r.raw.Get(ctx, fmt.Sprintf("/customers/by-ext-id/%s", res.extID))
+			rawResp, _, err := r.raw.Get(ctx, fmt.Sprintf("/customers/external/%s", res.extID))
 			if err != nil {
 				return fmt.Errorf("concurrent customer %s not found after create: %w", res.extID, err)
 			}
