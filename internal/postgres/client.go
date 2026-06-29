@@ -80,6 +80,8 @@ type EntClients struct {
 	Writer    *ent.Client
 	Reader    *ent.Client
 	HasReader bool
+	WriterDB  *sql.DB // raw connection for debug/lag-probe queries
+	ReaderDB  *sql.DB // raw connection for debug/lag-probe queries
 }
 
 // NewEntClients creates both writer and reader Ent clients
@@ -123,6 +125,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 
 	// Initialize reader client
 	var readerClient *ent.Client
+	var readerDB *sql.DB
 	hasReader := config.Postgres.HasSeparateReader()
 
 	if hasReader {
@@ -130,7 +133,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		readerDSN := config.Postgres.GetReaderDSN()
 
 		// Open reader PostgreSQL connection
-		readerDB, err := sql.Open("postgres", readerDSN)
+		readerDB, err = sql.Open("postgres", readerDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to postgres reader: %w", err)
 		}
@@ -163,6 +166,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	} else {
 		// Use writer client as reader if no separate reader is configured
 		readerClient = writerClient
+		readerDB = writerDB
 		logger.Debug(context.Background(), "no separate reader configured, using writer for reads")
 	}
 
@@ -178,6 +182,8 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		Writer:    writerClient,
 		Reader:    readerClient,
 		HasReader: hasReader,
+		WriterDB:  writerDB,
+		ReaderDB:  readerDB,
 	}, nil
 }
 
@@ -271,16 +277,19 @@ func (c *Client) TxFromContext(ctx context.Context) *ent.Tx {
 //
 // Use this for: Create, Update, Delete, Save, Exec operations
 func (c *Client) Writer(ctx context.Context) *ent.Client {
-	// A write is about to happen: pin this unit of work to the writer so all
-	// subsequent reads on this context see the write (read-your-writes).
+	// A write is about to happen: pin this unit of work to the writer.
 	types.PinWriter(ctx)
 
-	// If in a transaction, return the transaction client (which is on writer)
+	if s := types.GetRoutingStats(ctx); s != nil {
+		s.WriterCalls.Add(1)
+	}
+	if c.logger != nil {
+		c.logger.Debug(ctx, "db_write", "request_id", types.GetRequestID(ctx), "pinned_after", true)
+	}
+
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return tx.Client()
 	}
-
-	// Always return writer for write operations
 	return c.writerClient
 }
 
@@ -289,23 +298,46 @@ func (c *Client) Writer(ctx context.Context) *ent.Client {
 //
 // Use this for: Get, List, Count, Query operations
 func (c *Client) Reader(ctx context.Context) *ent.Client {
-	// Priority 1: If in a transaction, use transaction client for read-your-writes consistency
+	// Priority 1: transaction
 	if tx := c.TxFromContext(ctx); tx != nil {
+		if s := types.GetRoutingStats(ctx); s != nil {
+			s.WriterTx.Add(1)
+		}
+		if c.logger != nil {
+			c.logger.Debug(ctx, "db_routing", "target", "writer_via_tx", "request_id", types.GetRequestID(ctx))
+		}
 		return tx.Client()
 	}
 
-	// Priority 2: If force writer flag is set, use writer for read-after-write consistency
+	// Priority 2: explicit ForceWriter
 	if types.ShouldForceWriter(ctx) {
+		if s := types.GetRoutingStats(ctx); s != nil {
+			s.WriterForced.Add(1)
+		}
+		if c.logger != nil {
+			c.logger.Debug(ctx, "db_routing", "target", "writer_forced", "request_id", types.GetRequestID(ctx))
+		}
 		return c.writerClient
 	}
 
-	// Priority 3: If a write already happened in this unit of work, use writer
-	// so the just-written rows are visible despite replica lag
+	// Priority 3: writer pin (a write already happened in this unit of work)
 	if types.IsWriterPinned(ctx) {
+		if s := types.GetRoutingStats(ctx); s != nil {
+			s.WriterPinned.Add(1)
+		}
+		if c.logger != nil {
+			c.logger.Debug(ctx, "db_routing", "target", "writer_pinned", "request_id", types.GetRequestID(ctx))
+		}
 		return c.writerClient
 	}
 
-	// Priority 4: Default to reader for scalability
+	// Priority 4: replica
+	if s := types.GetRoutingStats(ctx); s != nil {
+		s.Reader.Add(1)
+	}
+	if c.logger != nil {
+		c.logger.Debug(ctx, "db_routing", "target", "reader", "request_id", types.GetRequestID(ctx))
+	}
 	return c.readerClient
 }
 
