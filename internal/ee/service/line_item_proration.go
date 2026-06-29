@@ -77,9 +77,9 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 	sub := req.Subscription
 	prorationSvc := NewProrationService(s.params)
 
-	customerTimezone := sub.CustomerTimezone
+	customerTimezone := sub.Timezone
 	if customerTimezone == "" {
-		customerTimezone = "UTC"
+		customerTimezone = types.DefaultTimezone
 	}
 
 	summary := &LineItemProrationSummary{
@@ -187,7 +187,7 @@ func (s *lineItemProrationService) buildProrationParams(
 		ProrationStrategy:  types.StrategySecondBased,
 		Currency:           sub.Currency,
 		PlanDisplayName:    item.DisplayName,
-		CustomerTimezone:   customerTimezone,
+		Timezone:           customerTimezone,
 	}
 
 	switch entry.Action {

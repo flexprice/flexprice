@@ -111,6 +111,10 @@ type UsageParams struct {
 	// - Custom business cycles (fiscal months, quarterly periods)
 	// - Multi-tenant billing with different anchor dates per customer
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
+	// Timezone is the customer's IANA timezone name used to align
+	// window function queries (daily/monthly resets) with local time.
+	// Empty string or "UTC" means standard UTC windows (default for all existing data).
+	Timezone string `json:"timezone,omitempty"`
 	// GroupBy lists the analytics group_by dimensions.
 	//   - "source"        — group by event source
 	//   - "properties.X"  — group by JSON property X

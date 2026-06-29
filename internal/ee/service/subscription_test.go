@@ -4709,7 +4709,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 
 	// Calculate the expected next period
 	expectedNextPeriodStart := periodEnd
-	expectedNextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	expectedNextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  expectedNextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
@@ -4779,7 +4779,12 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// But we can verify that the subscription period was updated correctly
 	// by manually updating it as we would in a real scenario
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{CurrentPeriodStart: nextPeriodStart, BillingAnchor: sub.BillingAnchor, Unit: sub.BillingPeriodCount, Period: sub.BillingPeriod})
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: nextPeriodStart,
+		BillingAnchor:      sub.BillingAnchor,
+		Unit:               sub.BillingPeriodCount,
+		Period:             sub.BillingPeriod,
+	})
 	s.NoError(err)
 
 	sub.CurrentPeriodStart = nextPeriodStart
@@ -5163,21 +5168,21 @@ func (s *SubscriptionServiceSuite) TestSubscriptionAnchor_CalendarAndAnniversary
 			startDate:     time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
 			billingPeriod: types.BILLING_PERIOD_MONTHLY,
 			billingCycle:  types.BillingCycleCalendar,
-			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC), types.BILLING_PERIOD_MONTHLY),
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC), types.BILLING_PERIOD_MONTHLY, ""),
 		},
 		{
 			name:          "calendar billing, monthly, end of month",
 			startDate:     time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC),
 			billingPeriod: types.BILLING_PERIOD_MONTHLY,
 			billingCycle:  types.BillingCycleCalendar,
-			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC), types.BILLING_PERIOD_MONTHLY),
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC), types.BILLING_PERIOD_MONTHLY, ""),
 		},
 		{
 			name:          "calendar billing, annual, leap year",
 			startDate:     time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC),
 			billingPeriod: types.BILLING_PERIOD_ANNUAL,
 			billingCycle:  types.BillingCycleCalendar,
-			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), types.BILLING_PERIOD_ANNUAL),
+			expectAnchor:  types.CalculateCalendarBillingAnchor(time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), types.BILLING_PERIOD_ANNUAL, ""),
 		},
 		{
 			name:          "anniversary billing, monthly",

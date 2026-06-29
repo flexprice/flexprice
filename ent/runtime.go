@@ -752,6 +752,10 @@ func init() {
 	customerDescName := customerFields[2].Descriptor()
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
+	// customerDescTimezone is the schema descriptor for timezone field.
+	customerDescTimezone := customerFields[10].Descriptor()
+	// customer.DefaultTimezone holds the default value on creation for the timezone field.
+	customer.DefaultTimezone = customerDescTimezone.Default.(string)
 	entitlementMixin := schema.Entitlement{}.Mixin()
 	entitlementMixinFields0 := entitlementMixin[0].Fields()
 	_ = entitlementMixinFields0
@@ -1797,10 +1801,10 @@ func init() {
 	subscriptionDescCollectionMethod := subscriptionFields[28].Descriptor()
 	// subscription.DefaultCollectionMethod holds the default value on creation for the collection_method field.
 	subscription.DefaultCollectionMethod = types.CollectionMethod(subscriptionDescCollectionMethod.Default.(string))
-	// subscriptionDescCustomerTimezone is the schema descriptor for customer_timezone field.
-	subscriptionDescCustomerTimezone := subscriptionFields[30].Descriptor()
-	// subscription.DefaultCustomerTimezone holds the default value on creation for the customer_timezone field.
-	subscription.DefaultCustomerTimezone = subscriptionDescCustomerTimezone.Default.(string)
+	// subscriptionDescTimezone is the schema descriptor for timezone field.
+	subscriptionDescTimezone := subscriptionFields[30].Descriptor()
+	// subscription.DefaultTimezone holds the default value on creation for the timezone field.
+	subscription.DefaultTimezone = subscriptionDescTimezone.Default.(string)
 	// subscriptionDescProrationBehavior is the schema descriptor for proration_behavior field.
 	subscriptionDescProrationBehavior := subscriptionFields[31].Descriptor()
 	// subscription.DefaultProrationBehavior holds the default value on creation for the proration_behavior field.

@@ -28,6 +28,7 @@ type FindMatchingLineItemPeriodInput struct {
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	InvoiceCadence types.InvoiceCadence
+	Timezone       string
 }
 
 // FindMatchingLineItemPeriodResult is the result of FindMatchingLineItemPeriodForInvoice.
@@ -187,6 +188,7 @@ func (s *billingService) CalculateFixedCharges(
 				PeriodStart:    periodStart,
 				PeriodEnd:      periodEnd,
 				InvoiceCadence: item.InvoiceCadence,
+				Timezone:       sub.Timezone,
 			})
 			if err != nil {
 				return nil, err
@@ -369,12 +371,13 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
 		endDate = item.EndDate
 	}
-	periods, err := types.CalculateBillingPeriods(types.CalculateBillingPeriodsParams{
+	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 		InitialPeriodStart: item.StartDate,
 		EndDate:            &endDate,
 		Anchor:             item.StartDate,
 		PeriodCount:        periodCount,
 		BillingPeriod:      item.BillingPeriod,
+		Timezone:           in.Timezone,
 	})
 	if err != nil {
 		return FindMatchingLineItemPeriodResult{}, err
@@ -522,6 +525,7 @@ func (s *billingService) CalculateUsageCharges(
 					BillingAnchor:       &sub.BillingAnchor,
 					Filters:             meter.ToFilterMap(),
 					Meter:               meter,
+					Timezone:            sub.Timezone,
 				}
 				usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
 				if err != nil {
@@ -600,6 +604,7 @@ func (s *billingService) CalculateUsageCharges(
 							WindowSize:          types.WindowSizeDay, // Use daily window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							Timezone:            sub.Timezone,
 						}
 
 						// Get usage data with daily windows
@@ -662,6 +667,7 @@ func (s *billingService) CalculateUsageCharges(
 							WindowSize:          types.WindowSizeMonth, // Use monthly window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							Timezone:            sub.Timezone,
 						}
 
 						// Get usage data with monthly windows
@@ -784,6 +790,7 @@ func (s *billingService) CalculateUsageCharges(
 							BillingAnchor:       &sub.BillingAnchor,
 							Meter:               meter,
 							Filters:             meter.ToFilterMap(),
+							Timezone:            sub.Timezone,
 						}
 
 						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
@@ -1372,6 +1379,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							WindowSize:          types.WindowSizeDay, // Use daily window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							Timezone:            sub.Timezone,
 						}
 
 						// Get usage data with daily windows
@@ -1434,6 +1442,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							WindowSize:          types.WindowSizeMonth, // Use monthly window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							Timezone:            sub.Timezone,
 						}
 
 						// Get usage data with monthly windows
@@ -2078,12 +2087,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Calculate next period for advance charges
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  nextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
 		Period:              sub.BillingPeriod,
 		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.Timezone,
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -2560,6 +2570,7 @@ func (s *billingService) ClassifyLineItems(
 				PeriodStart:    currentPeriodStart,
 				PeriodEnd:      currentPeriodEnd,
 				InvoiceCadence: item.InvoiceCadence,
+				Timezone:       sub.Timezone,
 			})
 			hasPeriodInCurrentWindow := errCurrent == nil && resCurrent.Ok
 			var hasPeriodInNextWindow bool
@@ -2569,6 +2580,7 @@ func (s *billingService) ClassifyLineItems(
 					PeriodStart:    nextPeriodStart,
 					PeriodEnd:      nextPeriodEnd,
 					InvoiceCadence: types.InvoiceCadenceAdvance,
+					Timezone:       sub.Timezone,
 				})
 				hasPeriodInNextWindow = errNext == nil && resNext.Ok
 			}
@@ -3499,6 +3511,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeDay,
+						Timezone:            sub.Timezone,
 					}
 
 					// Get usage data with daily windows
@@ -3514,7 +3527,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					// Pick the last bucket (today's usage) if available
 					dailyUsage := decimal.Zero
-					today := time.Now().In(sub.CurrentPeriodStart.Location())
+					usageLoc := time.UTC
+					if sub.Timezone != "" && sub.Timezone != types.DefaultTimezone {
+						if loc, err := time.LoadLocation(sub.Timezone); err == nil {
+							usageLoc = loc
+						}
+					}
+					today := time.Now().In(usageLoc)
 					todayStart := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
 					todayEnd := todayStart.AddDate(0, 0, 1)
@@ -3551,6 +3570,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeMonth,
 						BillingAnchor:       &sub.BillingAnchor,
+						Timezone:            sub.Timezone,
 					}
 
 					// Get usage data for current month
@@ -3566,7 +3586,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					// Get the current month's usage (last bucket if available)
 					monthlyUsage := decimal.Zero
-					currentTime := time.Now().In(sub.CurrentPeriodStart.Location())
+					usageLoc2 := time.UTC
+					if sub.Timezone != "" && sub.Timezone != types.DefaultTimezone {
+						if loc, err := time.LoadLocation(sub.Timezone); err == nil {
+							usageLoc2 = loc
+						}
+					}
+					currentTime := time.Now().In(usageLoc2)
 					if len(usageResult.Results) > 0 {
 						// Find the current month's bucket
 						for _, result := range usageResult.Results {
@@ -3652,12 +3678,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			if resetPeriod == "" {
 				continue
 			}
-			nextUsageResetAt, err := types.GetNextUsageResetAt(types.GetNextUsageResetAtParams{
+			nextUsageResetAt, err := types.GetNextUsageResetAt(&types.GetNextUsageResetAtParams{
 				CurrentTime:                 currentTime,
 				SubscriptionStart:           sub.StartDate,
 				SubscriptionEnd:             sub.EndDate,
 				BillingAnchor:               sub.BillingAnchor,
 				EntitlementUsageResetPeriod: resetPeriod,
+				Timezone:                    sub.Timezone,
 			})
 			if err != nil {
 				s.Logger.Info(ctx, "failed to get next usage reset at for feature",

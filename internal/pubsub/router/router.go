@@ -41,9 +41,9 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 		// Use real Kafka DLQ when configured (on the deployment's local/consume cluster)
 		var err error
 		poisonQueuePublisher, err = createDLQPublisher(cfg, logger)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
 		dlqTopicName = cfg.Kafka.TopicDLQ
 		logger.Info(context.Background(), "DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
 	} else {

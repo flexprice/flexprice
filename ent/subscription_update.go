@@ -457,16 +457,16 @@ func (su *SubscriptionUpdate) ClearGatewayPaymentMethodID() *SubscriptionUpdate 
 	return su
 }
 
-// SetCustomerTimezone sets the "customer_timezone" field.
-func (su *SubscriptionUpdate) SetCustomerTimezone(s string) *SubscriptionUpdate {
-	su.mutation.SetCustomerTimezone(s)
+// SetTimezone sets the "timezone" field.
+func (su *SubscriptionUpdate) SetTimezone(s string) *SubscriptionUpdate {
+	su.mutation.SetTimezone(s)
 	return su
 }
 
-// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCustomerTimezone(s *string) *SubscriptionUpdate {
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableTimezone(s *string) *SubscriptionUpdate {
 	if s != nil {
-		su.SetCustomerTimezone(*s)
+		su.SetTimezone(*s)
 	}
 	return su
 }
@@ -1036,8 +1036,8 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if su.mutation.GatewayPaymentMethodIDCleared() {
 		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
 	}
-	if value, ok := su.mutation.CustomerTimezone(); ok {
-		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	if value, ok := su.mutation.Timezone(); ok {
+		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
 	}
 	if value, ok := su.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
@@ -1852,16 +1852,16 @@ func (suo *SubscriptionUpdateOne) ClearGatewayPaymentMethodID() *SubscriptionUpd
 	return suo
 }
 
-// SetCustomerTimezone sets the "customer_timezone" field.
-func (suo *SubscriptionUpdateOne) SetCustomerTimezone(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetCustomerTimezone(s)
+// SetTimezone sets the "timezone" field.
+func (suo *SubscriptionUpdateOne) SetTimezone(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetTimezone(s)
 	return suo
 }
 
-// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCustomerTimezone(s *string) *SubscriptionUpdateOne {
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableTimezone(s *string) *SubscriptionUpdateOne {
 	if s != nil {
-		suo.SetCustomerTimezone(*s)
+		suo.SetTimezone(*s)
 	}
 	return suo
 }
@@ -2461,8 +2461,8 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	if suo.mutation.GatewayPaymentMethodIDCleared() {
 		_spec.ClearField(subscription.FieldGatewayPaymentMethodID, field.TypeString)
 	}
-	if value, ok := suo.mutation.CustomerTimezone(); ok {
-		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	if value, ok := suo.mutation.Timezone(); ok {
+		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)

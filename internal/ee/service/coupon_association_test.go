@@ -21,14 +21,14 @@ type CouponAssociationServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	service  CouponAssociationService
 	testData struct {
-		customer              *customer.Customer
-		plan                  *plan.Plan
-		subscription          *subscription.Subscription
-		price                 *price.Price
-		lineItem              *subscription.SubscriptionLineItem
-		coupon                *coupon_domain.Coupon
-		subLevelAssociation   *coupon_association.CouponAssociation
-		lineItemAssociation   *coupon_association.CouponAssociation
+		customer            *customer.Customer
+		plan                *plan.Plan
+		subscription        *subscription.Subscription
+		price               *price.Price
+		lineItem            *subscription.SubscriptionLineItem
+		coupon              *coupon_domain.Coupon
+		subLevelAssociation *coupon_association.CouponAssociation
+		lineItemAssociation *coupon_association.CouponAssociation
 	}
 }
 

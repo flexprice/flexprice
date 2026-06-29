@@ -38,6 +38,8 @@ type MeterUsageQueryParams struct {
 	AggregationType     types.AggregationType
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
+	// Timezone is the customer's IANA timezone name. See UsageParams.Timezone.
+	Timezone string
 	// GroupBy is the group_by dimension list. Allowed entries:
 	//   - "source"        — group by event source column
 	//   - "properties.X"  — group by JSON property X
@@ -88,6 +90,10 @@ type MeterUsageDetailedAnalyticsParams struct {
 	WindowSize       types.WindowSize
 	BillingAnchor    *time.Time
 	UseFinal         bool
+	// Timezone is the IANA timezone used to bucket the time-series, auto-derived
+	// server-side from the primary customer's record (never from the request).
+	// Empty falls back to UTC bucketing.
+	Timezone string
 	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
 	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
 	Expand []string

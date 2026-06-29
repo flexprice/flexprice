@@ -150,6 +150,7 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		PriceID:             req.PriceID,
 		MeterID:             req.MeterID,
 		BillingAnchor:       req.BillingAnchor,
+		Timezone:    req.Timezone,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation

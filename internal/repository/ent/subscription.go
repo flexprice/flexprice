@@ -86,7 +86,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
 		SetEnvironmentID(sub.EnvironmentID).
-		SetCustomerTimezone(sub.CustomerTimezone).
+		SetTimezone(sub.Timezone).
 		SetProrationBehavior(sub.ProrationBehavior).
 		SetVersion(1).
 		SetMetadata(sub.Metadata).

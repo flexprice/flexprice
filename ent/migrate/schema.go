@@ -750,6 +750,7 @@ var (
 		{Name: "address_state", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "address_postal_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "address_country", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(2)"}},
+		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -1777,7 +1778,7 @@ var (
 		{Name: "payment_behavior", Type: field.TypeString, Default: "default_active", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "collection_method", Type: field.TypeString, Default: "charge_automatically", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "gateway_payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "customer_timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
 		{Name: "enable_true_up", Type: field.TypeBool, Default: false},
 		{Name: "parent_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},

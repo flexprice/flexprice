@@ -865,7 +865,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		StartDate:          &effectiveDate,
 		Metadata:           lo.Assign(currentSub.Metadata, req.Metadata),
 		ProrationBehavior:  req.ProrationBehavior,
-		CustomerTimezone:   currentSub.CustomerTimezone,
+		Timezone:           currentSub.Timezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
 		OverageFactor:      currentSub.OverageFactor,
 		PaymentTerms:       currentSub.PaymentTerms,
@@ -1014,7 +1014,7 @@ func (s *subscriptionChangeService) handleSubscriptionChangeEntitlementProration
 		oldSub.CurrentPeriodStart,
 		oldSub.CurrentPeriodEnd,
 		effectiveDate, // Change date
-		newSub.CustomerTimezone,
+		newSub.Timezone,
 		newSub.BillingCycle,
 		newSub.BillingAnchor,
 		newSub.BillingPeriod,
