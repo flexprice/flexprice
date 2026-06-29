@@ -366,7 +366,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		InvoiceNumberPrefix:                    "INV",
 		InvoiceNumberFormat:                    InvoiceNumberFormatYYYYMM,
 		InvoiceNumberStartSequence:             1,
-		InvoiceNumberTimezone:                  "UTC",
+		InvoiceNumberTimezone:                  DefaultTimezone,
 		InvoiceNumberSeparator:                 "-",
 		InvoiceNumberSuffixLength:              5,
 		DueDateDays:                            lo.ToPtr(1),
@@ -678,6 +678,11 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			Mark(ierr.ErrValidation)
 	}
 }
+
+// DefaultTimezone is the fallback IANA timezone used when a customer has no
+// timezone set. All billing-period math and reset-window math degrade to UTC
+// when the timezone is empty or equal to this value.
+const DefaultTimezone = "UTC"
 
 // timezoneAbbreviationMap maps common three-letter timezone abbreviations to IANA timezone identifiers
 var timezoneAbbreviationMap = map[string]string{

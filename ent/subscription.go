@@ -93,8 +93,8 @@ type Subscription struct {
 	CollectionMethod types.CollectionMethod `json:"collection_method,omitempty"`
 	// Gateway payment method ID for this subscription
 	GatewayPaymentMethodID string `json:"gateway_payment_method_id,omitempty"`
-	// CustomerTimezone holds the value of the "customer_timezone" field.
-	CustomerTimezone string `json:"customer_timezone,omitempty"`
+	// Timezone holds the value of the "timezone" field.
+	Timezone string `json:"timezone,omitempty"`
 	// ProrationBehavior holds the value of the "proration_behavior" field.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	// Enable Commitment True Up Fee
@@ -227,7 +227,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion, subscription.FieldSyncedPriceSequence:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldCustomerTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID, subscription.FieldParentSubscriptionID, subscription.FieldPaymentTerms, subscription.FieldSubscriptionType:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID, subscription.FieldParentSubscriptionID, subscription.FieldPaymentTerms, subscription.FieldSubscriptionType:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -479,11 +479,11 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.GatewayPaymentMethodID = value.String
 			}
-		case subscription.FieldCustomerTimezone:
+		case subscription.FieldTimezone:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field customer_timezone", values[i])
+				return fmt.Errorf("unexpected type %T for field timezone", values[i])
 			} else if value.Valid {
-				s.CustomerTimezone = value.String
+				s.Timezone = value.String
 			}
 		case subscription.FieldProrationBehavior:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -739,8 +739,8 @@ func (s *Subscription) String() string {
 	builder.WriteString("gateway_payment_method_id=")
 	builder.WriteString(s.GatewayPaymentMethodID)
 	builder.WriteString(", ")
-	builder.WriteString("customer_timezone=")
-	builder.WriteString(s.CustomerTimezone)
+	builder.WriteString("timezone=")
+	builder.WriteString(s.Timezone)
 	builder.WriteString(", ")
 	builder.WriteString("proration_behavior=")
 	builder.WriteString(fmt.Sprintf("%v", s.ProrationBehavior))

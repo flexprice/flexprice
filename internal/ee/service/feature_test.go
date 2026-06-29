@@ -1108,7 +1108,6 @@ func (s *FeatureServiceSuite) TestDeleteFeature() {
 	}
 }
 
-
 func (s *FeatureServiceSuite) TestFeature_ToReportingValue() {
 	// apiCalls feature has ReportingUnit: thousand tokens, conversion_rate 0.001
 	// Formula: display = unit_value / conversion_rate, rounded to 2 decimals

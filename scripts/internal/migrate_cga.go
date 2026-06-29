@@ -165,7 +165,7 @@ func MigrateCGA() error {
 
 		periodStart := cga.ScheduledFor
 		// Use credit grant's period config instead of subscription's billing period
-		_, periodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), periodStart)
+		_, periodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), periodStart, "")
 		if err != nil {
 			log.Warnw("Failed to calculate period_end", "cga_id", cga.ID, "error", err)
 			cgasSkipped++

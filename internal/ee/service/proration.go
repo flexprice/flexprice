@@ -489,7 +489,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 
 		ProrationDate:     effectiveDate,
 		ProrationBehavior: behavior,
-		CustomerTimezone:  subscription.CustomerTimezone,
+		Timezone:  subscription.Timezone,
 		ProrationStrategy: types.StrategySecondBased,
 		Currency:          price.Currency,
 		PlanDisplayName:   item.PlanDisplayName,
@@ -532,7 +532,7 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 	if subscription.BillingCycle == types.BillingCycleAnniversary {
 		periodStart = subscription.BillingAnchor
 	} else {
-		previousBillingDate, err := types.PreviousBillingDate(types.PreviousBillingDateParams{
+		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
 			BillingAnchor: subscription.BillingAnchor,
 			Unit:          subscription.BillingPeriodCount,
 			Period:        subscription.BillingPeriod,
@@ -562,7 +562,7 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 		NewPricePerUnit:       price.Amount,
 		ProrationDate:         item.GetPeriodStart(periodStart),
 		ProrationBehavior:     behavior,
-		CustomerTimezone:      subscription.CustomerTimezone,
+		Timezone:      subscription.Timezone,
 		OriginalAmountPaid:    decimal.Zero,
 		PreviousCreditsIssued: decimal.Zero,
 		ProrationStrategy:     types.StrategySecondBased,
@@ -665,7 +665,7 @@ func (s *prorationService) CalculateEntitlementProration(
 		PeriodStart:        periodStart,
 		PeriodEnd:          periodEnd,
 		ProrationDate:      prorationDate,
-		CustomerTimezone:   customerTimezone,
+		Timezone:   customerTimezone,
 		BillingCycle:       billingCycle,
 		BillingAnchor:      billingAnchor,
 		BillingPeriod:      billingPeriod,
@@ -719,7 +719,7 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 		// For calendar billing, use calendar period end
 		// CalculateCalendarBillingAnchor returns the START of the NEXT period,
 		// which is the END of the current period
-		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod)
+		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod, customerTimezone)
 		logger.Debug(ctx, "using calendar period end for proration",
 			"period_end", periodEnd)
 	} else {

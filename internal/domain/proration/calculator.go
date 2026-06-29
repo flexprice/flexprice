@@ -46,10 +46,10 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	}
 
 	// Load customer timezone
-	loc, err := time.LoadLocation(params.CustomerTimezone)
+	loc, err := time.LoadLocation(params.Timezone)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHintf("failed to load customer timezone '%s': %v", params.CustomerTimezone, err).
+			WithHintf("failed to load customer timezone '%s': %v", params.Timezone, err).
 			Mark(ierr.ErrSystem)
 	}
 
@@ -292,7 +292,7 @@ func validateParams(params ProrationParams) error {
 	if params.CurrentPeriodEnd.Before(params.CurrentPeriodStart) {
 		return fmt.Errorf("billing period end date cannot be before start date")
 	}
-	if params.CustomerTimezone == "" {
+	if params.Timezone == "" {
 		return fmt.Errorf("customer timezone is required")
 	}
 

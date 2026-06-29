@@ -228,24 +228,24 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(ctx context.Context, 
 	periodStart := lo.FromPtr(cg.StartDate)
 	var periodEnd *time.Time = nil
 
-	if cg.Cadence == types.CreditGrantCadenceRecurring {
-		var err error
-		var calculatedPeriodEnd time.Time
-		_, calculatedPeriodEnd, err = CalculateNextCreditGrantPeriod(cg, periodStart)
-		if err != nil {
-			return nil, err
-		}
-		periodEnd = lo.ToPtr(calculatedPeriodEnd)
-	}
-
 	// 4. Fetch subscription to get current status for subscription_status_at_application
-	var subscriptionStatus types.SubscriptionStatus
+	var subscription *subscription.Subscription
 	if cg.SubscriptionID != nil && lo.FromPtr(cg.SubscriptionID) != "" {
 		sub, err := s.SubRepo.Get(ctx, lo.FromPtr(cg.SubscriptionID))
 		if err != nil {
 			return nil, err
 		}
-		subscriptionStatus = sub.SubscriptionStatus
+		subscription = sub
+	}
+
+	if cg.Cadence == types.CreditGrantCadenceRecurring {
+		var err error
+		var calculatedPeriodEnd time.Time
+		_, calculatedPeriodEnd, err = CalculateNextCreditGrantPeriod(cg, periodStart, subscription.Timezone)
+		if err != nil {
+			return nil, err
+		}
+		periodEnd = lo.ToPtr(calculatedPeriodEnd)
 	}
 
 	// 5. Create the first CGA record in Pending status
@@ -264,7 +264,7 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(ctx context.Context, 
 		PeriodEnd:                       periodEnd,
 		ApplicationReason:               applicationReason,
 		Credits:                         cg.Credits,
-		SubscriptionStatusAtApplication: subscriptionStatus,
+		SubscriptionStatusAtApplication: subscription.SubscriptionStatus,
 		IdempotencyKey:                  s.generateIdempotencyKey(lo.ToPtr(cg), lo.ToPtr(periodStart), periodEnd),
 	}
 
@@ -598,12 +598,13 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			expiryDate = lo.ToPtr(subscription.CurrentPeriodEnd)
 		} else {
 
-			periods, err := types.CalculateBillingPeriods(types.CalculateBillingPeriodsParams{
+			periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 				InitialPeriodStart: subscription.StartDate,
 				EndDate:            subscription.EndDate,
 				Anchor:             subscription.BillingAnchor,
 				PeriodCount:        subscription.BillingPeriodCount,
 				BillingPeriod:      subscription.BillingPeriod,
+				Timezone:           subscription.Timezone,
 			})
 			if err != nil {
 				return nil, err
@@ -949,7 +950,7 @@ func (s *creditGrantService) processCatchUpApplications(
 // createNextPeriodApplication creates a new CGA entry with scheduled status for the next period
 func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, currentPeriodEnd time.Time) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	// Calculate next period dates
-	nextPeriodStart, nextPeriodEnd, err := CalculateNextCreditGrantPeriod(lo.FromPtr(grant), currentPeriodEnd)
+	nextPeriodStart, nextPeriodEnd, err := CalculateNextCreditGrantPeriod(lo.FromPtr(grant), currentPeriodEnd, subscription.Timezone)
 	if err != nil {
 		s.Logger.Error(ctx, "Failed to calculate next period",
 			"grant_id", grant.ID,
@@ -1002,7 +1003,7 @@ func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, gr
 	return nextPeriodCGA, nil
 }
 
-func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodStart time.Time) (time.Time, time.Time, error) {
+func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodStart time.Time, timezone string) (time.Time, time.Time, error) {
 	billingPeriod, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grant.Period))
 	if err != nil {
 		return time.Time{}, time.Time{}, err
@@ -1010,11 +1011,12 @@ func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodSta
 
 	// Calculate next period end using the anchor for consistent cycle calculation
 	// We pass nil for subscriptionEndDate because we handle that at a higher level during application
-	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: nextPeriodStart,
 		BillingAnchor:      lo.FromPtr(grant.CreditGrantAnchor),
 		Unit:               lo.FromPtr(grant.PeriodCount),
 		Period:             billingPeriod,
+		Timezone:           timezone,
 	})
 	if err != nil {
 		return time.Time{}, time.Time{}, err
@@ -1026,15 +1028,21 @@ func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodSta
 // CalculateCreditGrantPeriods calculates all billing periods for a credit grant from an initial period start until an end date.
 // This function decouples credit grant period calculations from subscription cron processing.
 // Parameters:
+//
 //   - grant: The credit grant for which to calculate periods
+//
 //   - initialPeriodStart: Start of the first period
+//
 //   - endDate: Calculate periods until this date (typically grant end date or current time)
+//
+//   - timezone: customer's IANA timezone for local boundary computation (empty/"UTC" = UTC)
 //
 // Returns an array of Period structs and an error if calculation fails.
 func CalculateCreditGrantPeriods(
 	grant creditgrant.CreditGrant,
 	initialPeriodStart time.Time,
 	endDate *time.Time,
+	timezone string,
 ) ([]types.Period, error) {
 	// Convert credit grant period to billing period
 	billingPeriod, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grant.Period))
@@ -1043,12 +1051,13 @@ func CalculateCreditGrantPeriods(
 	}
 
 	// Call the reusable period calculation function
-	return types.CalculateBillingPeriods(types.CalculateBillingPeriodsParams{
+	return types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 		InitialPeriodStart: initialPeriodStart,
 		EndDate:            endDate,
 		Anchor:             lo.FromPtr(grant.CreditGrantAnchor),
 		PeriodCount:        lo.FromPtr(grant.PeriodCount),
 		BillingPeriod:      billingPeriod,
+		Timezone:           timezone,
 	})
 }
 

@@ -80,6 +80,12 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(2)",
 			}).
 			Optional(),
+		field.String("timezone").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default("UTC").
+			Optional(),
 	}
 }
 

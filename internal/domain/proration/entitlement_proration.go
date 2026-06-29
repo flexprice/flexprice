@@ -14,10 +14,10 @@ import (
 // EntitlementProrationParams holds input for calculating entitlement proration
 type EntitlementProrationParams struct {
 	// Period information
-	PeriodStart      time.Time // Start of the billing period
-	PeriodEnd        time.Time // End of the billing period
-	ProrationDate    time.Time // Date from which to prorate (start date or change date)
-	CustomerTimezone string    // Customer's timezone for accurate calculation
+	PeriodStart   time.Time // Start of the billing period
+	PeriodEnd     time.Time // End of the billing period
+	ProrationDate time.Time // Date from which to prorate (start date or change date)
+	Timezone      string    // Customer's timezone for accurate calculation
 
 	// Billing cycle information (for calendar billing proration)
 	BillingCycle       types.BillingCycle  // Anniversary or Calendar
@@ -176,10 +176,10 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 	params EntitlementProrationParams,
 ) (decimal.Decimal, error) {
 	// Load customer timezone
-	loc, err := time.LoadLocation(params.CustomerTimezone)
+	loc, err := time.LoadLocation(params.Timezone)
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).
-			WithHintf("failed to load customer timezone '%s'", params.CustomerTimezone).
+			WithHintf("failed to load customer timezone '%s'", params.Timezone).
 			Mark(ierr.ErrSystem)
 	}
 
@@ -192,7 +192,7 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 		// This ensures entitlement proration matches price proration
 		// Example: Subscription starts Dec 26, billing anchor is Jan 1
 		// Previous billing date is Dec 1, so we prorate based on 6/31 days
-		previousBillingDate, err := types.PreviousBillingDate(types.PreviousBillingDateParams{
+		previousBillingDate, err := types.PreviousBillingDate(&types.PreviousBillingDateParams{
 			BillingAnchor: params.BillingAnchor,
 			Unit:          params.BillingPeriodCount,
 			Period:        params.BillingPeriod,
@@ -315,7 +315,7 @@ func (c *EntitlementProrationCalculator) validateParams(params EntitlementProrat
 			Mark(ierr.ErrValidation)
 	}
 
-	if params.CustomerTimezone == "" {
+	if params.Timezone == "" {
 		return ierr.NewError("customer timezone is required").
 			WithHint("Provide a valid timezone").
 			Mark(ierr.ErrValidation)

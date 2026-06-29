@@ -4637,7 +4637,7 @@
           "Subscriptions"
         ],
         "summary": "Execute subscription modification",
-        "description": "Execute a mid-cycle subscription modification (inheritance or quantity change).",
+        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax).",
         "operationId": "executeSubscriptionModify",
         "parameters": [
           {
@@ -4725,7 +4725,7 @@
           "Subscriptions"
         ],
         "summary": "Preview subscription modification",
-        "description": "Preview the impact of a mid-cycle subscription modification without committing changes.",
+        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax) without committing changes.",
         "operationId": "previewSubscriptionModify",
         "parameters": [
           {
@@ -5345,6 +5345,50 @@
           }
         }
       },
+      "checkout.JSONBCheckoutConfiguration": {
+        "type": "object",
+        "properties": {
+          "create_subscription_params": {
+            "$ref": "#/components/schemas/types.CreateSubscriptionParams"
+          }
+        }
+      },
+      "checkout.JSONBCheckoutProviderResult": {
+        "type": "object",
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "description": "ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,\nexecuteCheckoutAction tightens the session expiry to match.",
+            "format": "date-time"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/types.PaymentAction"
+          },
+          "provider_metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "ProviderMetadata holds provider-specific data not needed for business logic."
+          },
+          "provider_payment_intent_id": {
+            "type": "string",
+            "description": "ProviderPaymentIntentID is the provider-side charge/intent ID.\nStripe returns this at link creation (pi_xxx); others populate it from the webhook payload."
+          },
+          "provider_session_id": {
+            "type": "string",
+            "description": "ProviderSessionID is stored in EntityIntegrationMapping at link creation.\n  Stripe:   Checkout Session ID  (cs_xxx)\n  Razorpay: Payment Link ID      (plink_xxx)\n  Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)\n  Moyasar:  Payment ID"
+          }
+        }
+      },
+      "checkout.JSONBCheckoutResult": {
+        "type": "object",
+        "properties": {
+          "create_subscription_result": {
+            "$ref": "#/components/schemas/types.CreateSubscriptionResult"
+          }
+        }
+      },
       "costsheet.Filter": {
         "type": "object",
         "properties": {
@@ -5824,6 +5868,15 @@
       "AggregatedEntitlement": {
         "type": "object",
         "properties": {
+          "config_values": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object"
+              }
+            }
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -5832,7 +5885,6 @@
           },
           "static_values": {
             "type": "array",
-            "description": "For static/SLA features",
             "items": {
               "type": "string"
             }
@@ -5926,6 +5978,20 @@
           }
         }
       },
+      "AttributedToCustomerResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/errors.ErrorResponse"
+          },
+          "meter_usage": {
+            "$ref": "#/components/schemas/MeterUsageAttribution"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.DebugTrackerStatus"
+          }
+        }
+      },
       "BillingCycleInfo": {
         "type": "object",
         "properties": {
@@ -5970,6 +6036,49 @@
           "start_time": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BucketSummary": {
+        "type": "object",
+        "properties": {
+          "base_charge": {
+            "type": "string"
+          },
+          "bucket_id": {
+            "type": "string"
+          },
+          "commitment_type": {
+            "type": "string"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "computed_overage": {
+            "type": "string"
+          },
+          "computed_true_up": {
+            "type": "string"
+          },
+          "computed_utilized": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the bucket's own price (the line item's price for the\nout-of-bucket row)."
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "SubscriptionLineItemID is the line item this bucket is configured on."
+          },
+          "total_usage": {
+            "type": "string"
           }
         }
       },
@@ -6027,6 +6136,7 @@
         "properties": {
           "cancel_at": {
             "type": "string",
+            "description": "CancelAt is the exact date/time when the subscription should be cancelled.\nRequired for cancellation_type \"scheduled_date\"; optional for \"immediate\" (past dates only — backdated cancellation).\nFor \"scheduled_date\", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).\nFor \"immediate\", accepts past/current dates only; use \"scheduled_date\" for future dates.",
             "format": "date-time"
           },
           "cancel_immediately_inovice_policy": {
@@ -6198,11 +6308,19 @@
           "action": {
             "$ref": "#/components/schemas/ChangedSubscriptionAction"
           },
+          "current_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
           "id": {
             "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
+          },
+          "trial_end": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -6217,6 +6335,102 @@
           "ChangedSubscriptionActionCreated",
           "ChangedSubscriptionActionUpdated"
         ]
+      },
+      "CheckoutSessionResponse": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/types.CheckoutAction"
+          },
+          "cancel_url": {
+            "type": "string"
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checkout_invoice_id": {
+            "type": "string",
+            "description": "CheckoutInvoiceID and CheckoutPaymentID are set once the apply step\ncreates the corresponding Flexprice entities (completed sessions only)."
+          },
+          "checkout_payment_id": {
+            "type": "string"
+          },
+          "checkout_status": {
+            "$ref": "#/components/schemas/types.CheckoutStatus"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/checkout.JSONBCheckoutConfiguration"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "ExpiresAt is required. A Temporal timer fires at this time for any\nsession still in initiated|pending, marking it expired. The caller\nmust create a new session after expiry (expire-and-restart model).",
+            "format": "date-time"
+          },
+          "failure_reason": {
+            "type": "string",
+            "description": "FailureReason is a human-readable string set on failed sessions."
+          },
+          "failure_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "IdempotencyKey is caller-supplied. It is unique only while the session\nis active (initiated|pending). The same key may be reused once the\nsession reaches a terminal state (completed|failed|expired)."
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "payment_action": {
+            "$ref": "#/components/schemas/types.PaymentAction"
+          },
+          "payment_provider": {
+            "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
+          },
+          "provider_result": {
+            "$ref": "#/components/schemas/checkout.JSONBCheckoutProviderResult"
+          },
+          "result": {
+            "$ref": "#/components/schemas/checkout.JSONBCheckoutResult"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "success_url": {
+            "type": "string",
+            "description": "Redirect URLs sent to the payment provider. The provider redirects the\nuser browser to the appropriate URL after the payment flow completes."
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
       },
       "CloneEnvironmentRequest": {
         "type": "object",
@@ -6275,6 +6489,35 @@
           "name": {
             "type": "string",
             "description": "Name is required and must be different from the source plan's name"
+          }
+        }
+      },
+      "CommitmentBucketRequest": {
+        "type": "object",
+        "properties": {
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "id": {
+            "type": "string"
+          },
+          "overage_factor": {
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/CreatePriceRequest"
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "true_up_enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -6489,7 +6732,7 @@
         "type": "object",
         "properties": {
           "coupon": {
-            "$ref": "#/components/schemas/Coupon"
+            "$ref": "#/components/schemas/CouponResponse"
           },
           "coupon_id": {
             "type": "string"
@@ -6529,6 +6772,9 @@
             "type": "string",
             "description": "Mandatory"
           },
+          "subscription_line_item": {
+            "$ref": "#/components/schemas/SubscriptionLineItemResponse"
+          },
           "subscription_line_item_id": {
             "type": "string",
             "description": "Optional"
@@ -6557,6 +6803,9 @@
           },
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
+          },
+          "coupon_code": {
+            "type": "string"
           },
           "created_at": {
             "type": "string",
@@ -6789,6 +7038,46 @@
           }
         }
       },
+      "CreateCheckoutSessionRequest": {
+        "required": [
+          "action",
+          "customer_external_id",
+          "payment_provider"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/types.CheckoutAction"
+          },
+          "cancel_url": {
+            "type": "string"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/types.CheckoutConfiguration"
+          },
+          "customer_external_id": {
+            "type": "string"
+          },
+          "failure_url": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "payment_provider": {
+            "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
+          },
+          "success_url": {
+            "type": "string"
+          }
+        }
+      },
       "CreateCostsheetRequest": {
         "required": [
           "name"
@@ -6837,6 +7126,9 @@
           },
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
+          },
+          "coupon_code": {
+            "type": "string"
           },
           "currency": {
             "type": "string"
@@ -7078,6 +7370,10 @@
             "items": {
               "$ref": "#/components/schemas/TaxRateOverride"
             }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")\nDefaults to \"UTC\" if not provided"
           }
         },
         "description": "Request object for creating a new customer in the system"
@@ -7089,6 +7385,10 @@
         ],
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "end_date": {
             "type": "string",
             "format": "date-time"
@@ -7234,6 +7534,10 @@
         ],
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered units deducted from raw usage."
+          },
           "amount": {
             "type": "string",
             "description": "amount is the monetary amount for this line item"
@@ -7313,6 +7617,14 @@
           "quantity": {
             "type": "string",
             "description": "quantity is the quantity of units for this line item"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "subscription_id overrides the invoice's subscription_id for this specific line item.\nUsed for grouped invoicing where child line items belong to child subscriptions."
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this line item to the subscription_line_item that generated it."
           }
         }
       },
@@ -7820,6 +8132,12 @@
           "commitment_quantity": {
             "type": "number"
           },
+          "commitment_time_buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
+            }
+          },
           "commitment_true_up_enabled": {
             "type": "boolean"
           },
@@ -7909,6 +8227,7 @@
           },
           "coupons": {
             "type": "array",
+            "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
             }
@@ -7926,10 +8245,6 @@
           "customer_id": {
             "type": "string",
             "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided."
-          },
-          "customer_timezone": {
-            "type": "string",
-            "description": "Timezone of the customer.\nIf not set, the default value is UTC."
           },
           "enable_true_up": {
             "type": "boolean",
@@ -7963,7 +8278,8 @@
               "items": {
                 "type": "string"
               }
-            }
+            },
+            "description": "Deprecated: use SubscriptionCoupons instead."
           },
           "line_items": {
             "type": "array",
@@ -8022,6 +8338,13 @@
             "type": "string",
             "format": "date-time"
           },
+          "subscription_coupons": {
+            "type": "array",
+            "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
+          },
           "subscription_status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
           },
@@ -8031,6 +8354,10 @@
             "items": {
               "$ref": "#/components/schemas/TaxRateOverride"
             }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone of the customer.\nIf not set, the default value is UTC."
           },
           "trial_period_days": {
             "type": "integer",
@@ -8080,6 +8407,11 @@
           "currency": {
             "type": "string"
           },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate sets when this association expires. Must be after StartDate when both are provided.",
+            "format": "date-time"
+          },
           "entity_id": {
             "type": "string"
           },
@@ -8097,6 +8429,11 @@
           },
           "priority": {
             "type": "integer"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
+            "format": "date-time"
           },
           "tax_rate_code": {
             "type": "string"
@@ -8155,6 +8492,10 @@
             "type": "string",
             "description": "Required when type is \"user\""
           },
+          "name": {
+            "type": "string",
+            "description": "Display name; optional for service accounts"
+          },
           "roles": {
             "type": "array",
             "description": "Required when type is \"service_account\"",
@@ -8175,6 +8516,15 @@
             "description": "Empty for service accounts"
           },
           "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
             "type": "string"
           },
           "password": {
@@ -8559,6 +8909,12 @@
             "items": {
               "$ref": "#/components/schemas/AggregatedFeature"
             }
+          },
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionResponse"
+            }
           }
         }
       },
@@ -8714,6 +9070,10 @@
           "tenant_id": {
             "type": "string"
           },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\").\nDefaults to \"UTC\". Inherited by subscriptions at creation time."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -8747,6 +9107,9 @@
       "DebugTracker": {
         "type": "object",
         "properties": {
+          "attributed_to_customer": {
+            "$ref": "#/components/schemas/AttributedToCustomerResult"
+          },
           "customer_lookup": {
             "$ref": "#/components/schemas/CustomerLookupResult"
           },
@@ -8805,11 +9168,34 @@
           }
         }
       },
+      "DelinkIntegrationMappingRequest": {
+        "required": [
+          "entity_id",
+          "entity_type",
+          "provider_type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.IntegrationEntityType"
+          },
+          "provider_type": {
+            "type": "string"
+          }
+        }
+      },
       "EntitlementResponse": {
         "type": "object",
         "properties": {
           "addon": {
             "$ref": "#/components/schemas/AddonResponse"
+          },
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
           },
           "created_at": {
             "type": "string",
@@ -8893,6 +9279,10 @@
       "EntitlementSource": {
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "entitlement_id": {
             "type": "string"
           },
@@ -8959,6 +9349,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
           },
           "provider_entity_id": {
             "type": "string"
@@ -9028,6 +9422,9 @@
         ],
         "type": "object",
         "properties": {
+          "coupon_params": {
+            "$ref": "#/components/schemas/SubModifyCouponParams"
+          },
           "grouped_invoicing_params": {
             "$ref": "#/components/schemas/SubModifyGroupedInvoicingParams"
           },
@@ -9036,6 +9433,12 @@
           },
           "quantity_change_params": {
             "$ref": "#/components/schemas/SubModifyQuantityChangeRequest"
+          },
+          "tax_params": {
+            "$ref": "#/components/schemas/SubModifyTaxParams"
+          },
+          "trial_end_params": {
+            "$ref": "#/components/schemas/SubModifyTrialEndRequest"
           },
           "type": {
             "$ref": "#/components/schemas/SubscriptionModifyType"
@@ -9444,6 +9847,10 @@
       "GetUsageAnalyticsRequest": {
         "type": "object",
         "properties": {
+          "breakdown_bucket": {
+            "type": "boolean",
+            "description": "BreakdownBucket when true augments each time-series point with BucketID/PriceID\nand appends a BucketSummaries rollup to each item. Requires WindowSize to be set\nand the item to be linked to a subscription line item that has CommitmentTimeBuckets.\nDefault: false (opt-in, backward compatible)."
+          },
           "end_time": {
             "type": "string",
             "format": "date-time"
@@ -9570,6 +9977,9 @@
             "example": "2024-11-09T00:00:00Z",
             "format": "date-time"
           },
+          "timezone": {
+            "type": "string"
+          },
           "window_size": {
             "$ref": "#/components/schemas/types.WindowSize"
           }
@@ -9692,9 +10102,16 @@
               }
             }
           },
+          "group_by": {
+            "type": "array",
+            "description": "GroupBy lists the analytics group_by dimensions.\n  - \"source\"        — group by event source column\n  - \"properties.X\"  — group by JSON property X",
+            "items": {
+              "type": "string"
+            }
+          },
           "group_by_property": {
             "type": "string",
-            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
+            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.\n\nDeprecated: prefer GroupBy []string{\"properties.<X>\"} for parity with\nother analytics endpoints. ToUsageParams translates this field into\nGroupBy when GroupBy is otherwise empty."
           },
           "multiplier": {
             "type": "string"
@@ -9708,6 +10125,9 @@
             "type": "string",
             "example": "2024-03-13T00:00:00Z",
             "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
           },
           "window_size": {
             "$ref": "#/components/schemas/types.WindowSize"
@@ -9830,6 +10250,42 @@
           }
         }
       },
+      "InheritanceAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "InheritanceActionAdd",
+          "InheritanceActionRemove"
+        ]
+      },
+      "IntegrationConfigEntry": {
+        "type": "object",
+        "properties": {
+          "base_config": {
+            "$ref": "#/components/schemas/types.SyncConfig"
+          },
+          "current_config": {
+            "$ref": "#/components/schemas/types.SyncConfig"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          }
+        }
+      },
+      "IntegrationConfigResponse": {
+        "type": "object",
+        "properties": {
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationConfigEntry"
+            }
+          }
+        }
+      },
       "InvoiceCoupon": {
         "required": [
           "coupon_id"
@@ -9901,6 +10357,10 @@
       "InvoiceLineItemResponse": {
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.\nNil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity."
+          },
           "amount": {
             "type": "string"
           },
@@ -9993,6 +10453,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this invoice line item to the subscription_line_item that generated it."
           },
           "tenant_id": {
             "type": "string"
@@ -10275,6 +10739,13 @@
             "type": "number",
             "description": "CommitmentQuantity is the minimum quantity committed for this line item"
           },
+          "commitment_time_buckets": {
+            "type": "array",
+            "description": "CommitmentTimeBuckets defines per-bucket commitment + inline price for\nwindows whose start UTC hour falls within each configured bucket. Each\nbucket carries its own price (materialized by the service). Requires\nIsWindowCommitment=true.",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
+            }
+          },
           "commitment_type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           },
@@ -10371,6 +10842,34 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CostsheetResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListCouponAssociationsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CouponAssociationResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListEntityIntegrationMappingsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityIntegrationMappingResponse"
             }
           },
           "pagination": {
@@ -10543,6 +11042,20 @@
             "type": "string",
             "example": "2024-03-20T15:04:05Z",
             "format": "date-time"
+          }
+        }
+      },
+      "MeterUsageAttribution": {
+        "type": "object",
+        "properties": {
+          "external_customer_id": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "qty_total": {
+            "type": "string"
           }
         }
       },
@@ -10748,6 +11261,10 @@
           },
           "updated_by": {
             "type": "string"
+          },
+          "voided_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -10834,6 +11351,17 @@
           "name": {
             "type": "string",
             "description": "name of the plan"
+          }
+        }
+      },
+      "PointBucket": {
+        "type": "object",
+        "properties": {
+          "bucket_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
           }
         }
       },
@@ -10988,6 +11516,10 @@
           },
           "pricing_unit": {
             "$ref": "#/components/schemas/PriceUnitResponse"
+          },
+          "sequence": {
+            "type": "integer",
+            "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
           },
           "start_date": {
             "type": "string",
@@ -11274,6 +11806,10 @@
               "type": "string"
             }
           },
+          "service_account_name": {
+            "type": "string",
+            "description": "name of the service account (populated for service_account user_type)"
+          },
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
@@ -11283,6 +11819,10 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "user or service account this key belongs to"
           },
           "user_type": {
             "$ref": "#/components/schemas/types.UserType"
@@ -11314,6 +11854,54 @@
           }
         }
       },
+      "SubModifyCouponAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "SubModifyCouponActionAdd",
+          "SubModifyCouponActionRemove"
+        ]
+      },
+      "SubModifyCouponParams": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/SubModifyCouponAction"
+          },
+          "coupon_association_id": {
+            "type": "string",
+            "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete."
+          },
+          "coupon_code": {
+            "type": "string",
+            "description": "Required for action=\"add\". Coupon code of the coupon to attach."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "Optional. When the coupon association ends.",
+            "format": "date-time"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "Optional. When the coupon association starts; defaults to now.",
+            "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "Optional. Apply at subscription level. Mutually exclusive with SubscriptionLineItemID."
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "Optional. Apply at a specific line item. Mutually exclusive with SubscriptionID."
+          }
+        }
+      },
       "SubModifyGroupedInvoicingParams": {
         "required": [
           "action"
@@ -11338,8 +11926,19 @@
       "SubModifyInheritanceRequest": {
         "type": "object",
         "properties": {
+          "action": {
+            "$ref": "#/components/schemas/InheritanceAction"
+          },
           "external_customer_ids_to_inherit_subscription": {
             "type": "array",
+            "description": "ExternalCustomerIDsToInheritSubscription is used for action=\"add\".",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_ids_to_remove": {
+            "type": "array",
+            "description": "ExternalCustomerIDsToRemove is used for action=\"remove\".",
             "items": {
               "type": "string"
             }
@@ -11358,6 +11957,57 @@
             "items": {
               "$ref": "#/components/schemas/LineItemQuantityChange"
             }
+          }
+        }
+      },
+      "SubModifyTaxAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "SubModifyTaxActionAdd",
+          "SubModifyTaxActionRemove"
+        ]
+      },
+      "SubModifyTaxParams": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/SubModifyTaxAction"
+          },
+          "effective_date": {
+            "type": "string",
+            "description": "Optional. When to apply the change; defaults to now if omitted.",
+            "format": "date-time"
+          },
+          "tax_association_id": {
+            "type": "string",
+            "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete."
+          },
+          "tax_rate_id": {
+            "type": "string",
+            "description": "Required when action=\"add\". ID of the active tax rate to attach."
+          }
+        }
+      },
+      "SubModifyTrialEndRequest": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/TrialEndAction"
+          },
+          "new_trial_end": {
+            "type": "string",
+            "description": "NewTrialEnd is the new trial end date. Required when action is \"scheduled_date\".",
+            "format": "date-time"
           }
         }
       },
@@ -11504,6 +12154,32 @@
         },
         "description": "Request object for changing a subscription plan (upgrade/downgrade)"
       },
+      "SubscriptionCouponInput": {
+        "required": [
+          "coupon_code"
+        ],
+        "type": "object",
+        "properties": {
+          "coupon_code": {
+            "type": "string",
+            "description": "CouponCode is the coupon's human-readable code (case-insensitive). Required."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is when the coupon ends; overrides duration_in_periods calculation.",
+            "format": "date-time"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the price ID of the line item to target; omit for subscription-level."
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is when the coupon starts; defaults to subscription/phase StartDate.",
+            "format": "date-time"
+          }
+        }
+      },
       "SubscriptionEntitlementsResponse": {
         "type": "object",
         "properties": {
@@ -11590,6 +12266,12 @@
           },
           "commitment_quantity": {
             "type": "string"
+          },
+          "commitment_time_buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.TimeOfDayBucket"
+            }
           },
           "commitment_true_up_enabled": {
             "type": "boolean"
@@ -11709,12 +12391,18 @@
         "enum": [
           "inheritance",
           "quantity_change",
-          "grouped_invoicing"
+          "grouped_invoicing",
+          "trial_end",
+          "coupon",
+          "tax"
         ],
         "x-enum-varnames": [
           "SubscriptionModifyTypeInheritance",
           "SubscriptionModifyTypeQuantityChange",
-          "SubscriptionModifyTypeGroupedInvoicing"
+          "SubscriptionModifyTypeGroupedInvoicing",
+          "SubscriptionModifyTypeTrialEnd",
+          "SubscriptionModifyTypeCoupon",
+          "SubscriptionModifyTypeTax"
         ]
       },
       "SubscriptionPhaseCreateRequest": {
@@ -11725,7 +12413,7 @@
         "properties": {
           "coupons": {
             "type": "array",
-            "description": "Coupons represents subscription-level coupons to be applied to this phase",
+            "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
             }
@@ -11742,7 +12430,7 @@
                 "type": "string"
               }
             },
-            "description": "LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)"
+            "description": "Deprecated: use SubscriptionCoupons instead."
           },
           "line_items": {
             "type": "array",
@@ -11767,6 +12455,13 @@
           "start_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscription_coupons": {
+            "type": "array",
+            "description": "SubscriptionCoupons is the preferred way to attach coupons to this phase.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
           }
         }
       },
@@ -12005,9 +12700,6 @@
             "type": "string",
             "description": "CustomerID is the identifier for the customer in our system"
           },
-          "customer_timezone": {
-            "type": "string"
-          },
           "enable_true_up": {
             "type": "boolean"
           },
@@ -12103,7 +12795,14 @@
           "subscription_type": {
             "$ref": "#/components/schemas/types.SubscriptionType"
           },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
+          },
           "tenant_id": {
+            "type": "string"
+          },
+          "timezone": {
             "type": "string"
           },
           "trial_end": {
@@ -12225,9 +12924,6 @@
             "type": "string",
             "description": "CustomerID is the identifier for the customer in our system"
           },
-          "customer_timezone": {
-            "type": "string"
-          },
           "enable_true_up": {
             "type": "boolean"
           },
@@ -12305,6 +13001,10 @@
             "type": "string",
             "description": "PlanID is the identifier for the plan in our system"
           },
+          "plan_prices_out_of_sync": {
+            "type": "boolean",
+            "description": "PlanPricesOutOfSync is true when the subscription's synced_price_sequence\nis behind the plan's current max prices.sequence — i.e. plan-price\nchanges have not yet been reconciled into this subscription's line items."
+          },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
@@ -12322,7 +13022,14 @@
           "subscription_type": {
             "$ref": "#/components/schemas/types.SubscriptionType"
           },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
+          },
           "tenant_id": {
+            "type": "string"
+          },
+          "timezone": {
             "type": "string"
           },
           "trial_end": {
@@ -12682,6 +13389,11 @@
             "type": "string",
             "description": "Currency"
           },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is the optional date until which this association is active",
+            "format": "date-time"
+          },
           "entity_id": {
             "type": "string",
             "description": "ID of the entity this tax rate applies to"
@@ -12707,6 +13419,11 @@
           "priority": {
             "type": "integer",
             "description": "Priority for tax resolution (lower number = higher priority)"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is the date from which this association is active",
+            "format": "date-time"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -12948,6 +13665,17 @@
           }
         }
       },
+      "TrialEndAction": {
+        "type": "string",
+        "enum": [
+          "immediate",
+          "scheduled_date"
+        ],
+        "x-enum-varnames": [
+          "TrialEndActionImmediate",
+          "TrialEndActionScheduledDate"
+        ]
+      },
       "TriggerForceRunRequest": {
         "type": "object",
         "properties": {
@@ -13113,6 +13841,10 @@
           "name": {
             "type": "string",
             "description": "name is the updated name or company name for the customer"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "timezone is the updated IANA timezone name for the customer (e.g. \"Asia/Kolkata\", \"America/New_York\")"
           }
         },
         "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated"
@@ -13120,6 +13852,10 @@
       "UpdateEntitlementRequest": {
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "is_enabled": {
             "type": "boolean"
           },
@@ -13214,7 +13950,15 @@
           "payment_status": {
             "type": "string"
           },
+          "refunded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "succeeded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voided_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -13336,6 +14080,50 @@
           }
         }
       },
+      "UpdateServiceAccountRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateServiceAccountResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Empty for service accounts"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/TenantResponse"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.UserType"
+          }
+        }
+      },
       "UpdateSubscriptionLineItemRequest": {
         "type": "object",
         "properties": {
@@ -13358,6 +14146,13 @@
           },
           "commitment_quantity": {
             "type": "number"
+          },
+          "commitment_time_buckets": {
+            "type": "array",
+            "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
+            }
           },
           "commitment_true_up_enabled": {
             "type": "boolean"
@@ -13465,6 +14260,53 @@
           }
         }
       },
+      "UpdateUserRequest": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUserResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Empty for service accounts"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/TenantResponse"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.UserType"
+          }
+        }
+      },
       "UpdateWalletRequest": {
         "type": "object",
         "properties": {
@@ -13499,6 +14341,13 @@
           },
           "aggregation_type": {
             "$ref": "#/components/schemas/types.AggregationType"
+          },
+          "bucket_summaries": {
+            "type": "array",
+            "description": "BucketSummaries is populated only when BreakdownBucket=true. Contains one\nentry per defined CommitmentTimeBucket plus one for out-of-bucket usage.",
+            "items": {
+              "$ref": "#/components/schemas/BucketSummary"
+            }
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -13606,6 +14455,13 @@
       "UsageAnalyticPoint": {
         "type": "object",
         "properties": {
+          "buckets": {
+            "type": "array",
+            "description": "Buckets lists every commitment bucket this (possibly rolled-up) window\noverlaps — only populated when BreakdownBucket=true and the line item has\nCommitmentTimeBuckets. A coarse window can overlap more than one bucket, and\nonly partially, so this is a list. Empty when the window touches no bucket.\nIt is an informational HINT only: the point's single cost/computed_* totals\nmix all overlapped buckets and out-of-bucket time and CANNOT be split per\nbucket — read bucket_summaries for exact per-bucket cost.",
+            "items": {
+              "$ref": "#/components/schemas/PointBucket"
+            }
+          },
           "computed_commitment_utilized_amount": {
             "type": "string",
             "description": "Commitment breakdown (only populated for windowed commitments)"
@@ -13680,6 +14536,15 @@
           "id": {
             "type": "string"
           },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
           "roles": {
             "type": "array",
             "items": {
@@ -13750,6 +14615,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "is_cached_fallback": {
+            "type": "boolean",
+            "description": "IsCachedFallback is true whenever the response is sourced from cache:\neither an explicit cache request, or fallback after a real-time failure.\nClients should treat the absence of this field as if it were true and\nonly trust freshness when the server explicitly emits false."
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
@@ -14105,6 +14974,9 @@
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
           },
+          "coupon_code": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -14236,6 +15108,10 @@
           },
           "tenant_id": {
             "type": "string"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\").\nDefaults to \"UTC\". Inherited by subscriptions at creation time."
           },
           "updated_at": {
             "type": "string",
@@ -14771,6 +15647,22 @@
         ],
         "x-speakeasy-name-override": "BillingTier"
       },
+      "types.Bucket": {
+        "type": "object",
+        "properties": {
+          "hour": {
+            "maximum": 24,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minute": {
+            "maximum": 59,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "x-speakeasy-name-override": "Bucket"
+      },
       "types.CancelImmediatelyInvoicePolicy": {
         "type": "string",
         "enum": [
@@ -14876,6 +15768,12 @@
       "types.CouponFilter": {
         "type": "object",
         "properties": {
+          "coupon_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "coupon_ids": {
             "type": "array",
             "items": {
@@ -15173,13 +16071,17 @@
           "unprocessed",
           "not_found",
           "found",
-          "error"
+          "error",
+          "processing",
+          "attributed"
         ],
         "x-enum-varnames": [
           "DebugTrackerStatusUnprocessed",
           "DebugTrackerStatusNotFound",
           "DebugTrackerStatusFound",
-          "DebugTrackerStatusError"
+          "DebugTrackerStatusError",
+          "DebugTrackerStatusProcessing",
+          "DebugTrackerStatusAttributed"
         ],
         "x-speakeasy-name-override": "DebugTrackerStatus"
       },
@@ -15295,6 +16197,20 @@
         ],
         "x-speakeasy-name-override": "EntitlementUsageResetPeriod"
       },
+      "types.EntitySyncConfig": {
+        "type": "object",
+        "properties": {
+          "inbound": {
+            "type": "boolean",
+            "description": "Inbound from external provider to FlexPrice"
+          },
+          "outbound": {
+            "type": "boolean",
+            "description": "Outbound from FlexPrice to external provider"
+          }
+        },
+        "x-speakeasy-name-override": "EntitySyncConfig"
+      },
       "types.EntityType": {
         "type": "string",
         "enum": [
@@ -15388,13 +16304,15 @@
           "customer_lookup",
           "meter_lookup",
           "price_lookup",
-          "subscription_line_item_lookup"
+          "subscription_line_item_lookup",
+          "attributed_to_customer"
         ],
         "x-enum-varnames": [
           "FailurePointTypeCustomerLookup",
           "FailurePointTypeMeterLookup",
           "FailurePointTypePriceLookup",
-          "FailurePointTypeSubscriptionLineItemLookup"
+          "FailurePointTypeSubscriptionLineItemLookup",
+          "FailurePointTypeAttributedToCustomer"
         ],
         "x-speakeasy-name-override": "FailurePointType"
       },
@@ -15477,12 +16395,14 @@
         "enum": [
           "metered",
           "boolean",
-          "static"
+          "static",
+          "config"
         ],
         "x-enum-varnames": [
           "FeatureTypeMetered",
           "FeatureTypeBoolean",
-          "FeatureTypeStatic"
+          "FeatureTypeStatic",
+          "FeatureTypeConfig"
         ],
         "x-speakeasy-name-override": "FeatureType"
       },
@@ -15657,7 +16577,8 @@
           "SUBSCRIPTION_TRIAL_START",
           "PRORATION",
           "MANUAL",
-          "AUTO_INVOICE_THRESHOLD"
+          "AUTO_INVOICE_THRESHOLD",
+          "WALLET_AUTO_TOPUP"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -15667,7 +16588,8 @@
           "InvoiceBillingReasonSubscriptionTrialStart",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual",
-          "InvoiceBillingReasonAutoInvoiceThreshold"
+          "InvoiceBillingReasonAutoInvoiceThreshold",
+          "InvoiceBillingReasonWalletAutoTopup"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },
@@ -15693,6 +16615,13 @@
           "amount_remaining_gt": {
             "type": "number",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
+          },
+          "billing_reason": {
+            "$ref": "#/components/schemas/types.InvoiceBillingReason"
+          },
+          "currency": {
+            "type": "string",
+            "description": "currency filters invoices by their currency (ISO 4217 code, e.g. \"usd\", \"eur\").\nMatches on the invoices.currency column exactly."
           },
           "customer_id": {
             "type": "string",
@@ -15818,6 +16747,15 @@
         ],
         "x-speakeasy-name-override": "InvoiceStatus"
       },
+      "types.InvoiceSyncSettings": {
+        "type": "object",
+        "properties": {
+          "normalize_fixed_to": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceSyncSettings"
+      },
       "types.InvoiceType": {
         "type": "string",
         "enum": [
@@ -15898,10 +16836,12 @@
       "types.PaymentDestinationType": {
         "type": "string",
         "enum": [
-          "INVOICE"
+          "INVOICE",
+          "CUSTOMER"
         ],
         "x-enum-varnames": [
-          "PaymentDestinationTypeInvoice"
+          "PaymentDestinationTypeInvoice",
+          "PaymentDestinationTypeCustomer"
         ],
         "x-speakeasy-name-override": "PaymentDestinationType"
       },
@@ -15912,14 +16852,16 @@
           "razorpay",
           "nomod",
           "moyasar",
-          "paddle"
+          "paddle",
+          "whop"
         ],
         "x-enum-varnames": [
           "PaymentGatewayTypeStripe",
           "PaymentGatewayTypeRazorpay",
           "PaymentGatewayTypeNomod",
           "PaymentGatewayTypeMoyasar",
-          "PaymentGatewayTypePaddle"
+          "PaymentGatewayTypePaddle",
+          "PaymentGatewayTypeWhop"
         ],
         "x-speakeasy-name-override": "PaymentGatewayType"
       },
@@ -15951,7 +16893,8 @@
           "OVERPAID",
           "FAILED",
           "REFUNDED",
-          "PARTIALLY_REFUNDED"
+          "PARTIALLY_REFUNDED",
+          "VOIDED"
         ],
         "x-enum-varnames": [
           "PaymentStatusInitiated",
@@ -15961,7 +16904,8 @@
           "PaymentStatusOverpaid",
           "PaymentStatusFailed",
           "PaymentStatusRefunded",
-          "PaymentStatusPartiallyRefunded"
+          "PaymentStatusPartiallyRefunded",
+          "PaymentStatusVoided"
         ],
         "x-speakeasy-name-override": "PaymentStatus"
       },
@@ -16073,6 +17017,12 @@
           "allow_expired_prices": {
             "type": "boolean",
             "default": false
+          },
+          "billing_periods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.BillingPeriod"
+            }
           },
           "end_time": {
             "type": "string",
@@ -16362,6 +17312,34 @@
         ],
         "x-speakeasy-name-override": "S3EncryptionType"
       },
+      "types.S3ExportConfig": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "description": "S3 bucket name"
+          },
+          "compression": {
+            "$ref": "#/components/schemas/types.S3CompressionType"
+          },
+          "encryption": {
+            "$ref": "#/components/schemas/types.S3EncryptionType"
+          },
+          "is_flexprice_managed": {
+            "type": "boolean",
+            "description": "If true, use Flexprice-managed S3 credentials instead of user-provided"
+          },
+          "key_prefix": {
+            "type": "string",
+            "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")"
+          },
+          "region": {
+            "type": "string",
+            "description": "AWS region (e.g., \"us-west-2\")"
+          }
+        },
+        "x-speakeasy-name-override": "S3ExportConfig"
+      },
       "types.S3JobConfig": {
         "type": "object",
         "properties": {
@@ -16483,7 +17461,8 @@
           "zoho_books",
           "nomod",
           "moyasar",
-          "paddle"
+          "paddle",
+          "whop"
         ],
         "x-enum-comments": {
           "SecretProviderS3": "supports multiple connections per environment"
@@ -16499,7 +17478,8 @@
           "SecretProviderZohoBooks",
           "SecretProviderNomod",
           "SecretProviderMoyasar",
-          "SecretProviderPaddle"
+          "SecretProviderPaddle",
+          "SecretProviderWhop"
         ],
         "x-speakeasy-name-override": "SecretProvider"
       },
@@ -16816,6 +17796,12 @@
           },
           "subscription_ids": {
             "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscription_line_item_ids": {
+            "type": "array",
             "description": "Specific filters",
             "items": {
               "type": "string"
@@ -16873,6 +17859,39 @@
           "SubscriptionTypeGroupedInvoicing"
         ],
         "x-speakeasy-name-override": "SubscriptionType"
+      },
+      "types.SyncConfig": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "deal": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "invoice_sync_settings": {
+            "$ref": "#/components/schemas/types.InvoiceSyncSettings"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "quote": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "s3": {
+            "$ref": "#/components/schemas/types.S3ExportConfig"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          }
+        },
+        "x-speakeasy-name-override": "SyncConfig"
       },
       "types.TaskStatus": {
         "type": "string",
@@ -17362,7 +18381,11 @@
           "subscription.renewal.due",
           "invoice.communication.triggered",
           "credit_note.created",
-          "credit_note.updated"
+          "credit_note.updated",
+          "checkout.session.initiated",
+          "checkout.session.completed",
+          "checkout.session.failed",
+          "checkout.session.expired"
         ],
         "x-enum-varnames": [
           "WebhookEventSubscriptionCreated",
@@ -17406,7 +18429,11 @@
           "WebhookEventSubscriptionRenewalDue",
           "WebhookEventInvoiceCommunicationTriggered",
           "WebhookEventCreditNoteCreated",
-          "WebhookEventCreditNoteUpdated"
+          "WebhookEventCreditNoteUpdated",
+          "WebhookEventCheckoutSessionInitiated",
+          "WebhookEventCheckoutSessionCompleted",
+          "WebhookEventCheckoutSessionFailed",
+          "WebhookEventCheckoutSessionExpired"
         ],
         "x-speakeasy-name-override": "WebhookEventName"
       },
@@ -17422,7 +18449,6 @@
           "12HOUR",
           "DAY",
           "WEEK",
-          "MONTH",
           "MONTH"
         ],
         "x-enum-varnames": [
@@ -17435,8 +18461,7 @@
           "WindowSize12Hour",
           "WindowSizeDay",
           "WindowSizeWeek",
-          "WindowSizeMonth",
-          "DefaultWindowSize"
+          "WindowSizeMonth"
         ],
         "x-speakeasy-name-override": "WindowSize"
       },
@@ -17560,6 +18585,10 @@
       "invoice.InvoiceLineItem": {
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.\nNil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity."
+          },
           "amount": {
             "type": "string"
           },
@@ -17652,6 +18681,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this invoice line item to the subscription_line_item that generated it."
           },
           "tenant_id": {
             "type": "string"
@@ -17923,6 +18956,10 @@
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
           },
+          "sequence": {
+            "type": "integer",
+            "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
+          },
           "start_date": {
             "type": "string",
             "description": "StartDate is the start date of the price",
@@ -18016,6 +19053,12 @@
           },
           "commitment_quantity": {
             "type": "string"
+          },
+          "commitment_time_buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.TimeOfDayBucket"
+            }
           },
           "commitment_true_up_enabled": {
             "type": "boolean"
@@ -18247,6 +19290,100 @@
           }
         }
       },
+      "types.CheckoutAction": {
+        "type": "string",
+        "enum": [
+          "create_subscription"
+        ],
+        "x-enum-varnames": [
+          "CheckoutActionCreateSubscription"
+        ],
+        "x-speakeasy-name-override": "CheckoutAction"
+      },
+      "types.CheckoutConfiguration": {
+        "type": "object",
+        "properties": {
+          "create_subscription_params": {
+            "$ref": "#/components/schemas/types.CreateSubscriptionParams"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutConfiguration"
+      },
+      "types.CheckoutPaymentProvider": {
+        "type": "string",
+        "enum": [
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "CheckoutPaymentProviderRazorpay"
+        ],
+        "x-speakeasy-name-override": "CheckoutPaymentProvider"
+      },
+      "types.CheckoutStatus": {
+        "type": "string",
+        "enum": [
+          "initiated",
+          "pending",
+          "completed",
+          "failed",
+          "expired"
+        ],
+        "x-enum-varnames": [
+          "CheckoutStatusInitiated",
+          "CheckoutStatusPending",
+          "CheckoutStatusCompleted",
+          "CheckoutStatusFailed",
+          "CheckoutStatusExpired"
+        ],
+        "x-speakeasy-name-override": "CheckoutStatus"
+      },
+      "types.CreateSubscriptionParams": {
+        "type": "object",
+        "properties": {
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "x-speakeasy-name-override": "CreateSubscriptionParams"
+      },
+      "types.CreateSubscriptionResult": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "subscription_id": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CreateSubscriptionResult"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -18268,6 +19405,62 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.PaymentAction": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentActionType"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAction"
+      },
+      "types.PaymentActionType": {
+        "type": "string",
+        "enum": [
+          "checkout_url",
+          "payment_link"
+        ],
+        "x-enum-varnames": [
+          "PaymentActionTypeCheckoutURL",
+          "PaymentActionTypePaymentLink"
+        ],
+        "x-speakeasy-name-override": "PaymentActionType"
+      },
+      "types.TimeOfDayBucket": {
+        "type": "object",
+        "properties": {
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
+          },
+          "overage_factor": {
+            "type": "number"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item."
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "true_up_enabled": {
+            "type": "boolean"
+          }
+        },
+        "x-speakeasy-name-override": "TimeOfDayBucket"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

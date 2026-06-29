@@ -478,16 +478,16 @@ func (sc *SubscriptionCreate) SetNillableGatewayPaymentMethodID(s *string) *Subs
 	return sc
 }
 
-// SetCustomerTimezone sets the "customer_timezone" field.
-func (sc *SubscriptionCreate) SetCustomerTimezone(s string) *SubscriptionCreate {
-	sc.mutation.SetCustomerTimezone(s)
+// SetTimezone sets the "timezone" field.
+func (sc *SubscriptionCreate) SetTimezone(s string) *SubscriptionCreate {
+	sc.mutation.SetTimezone(s)
 	return sc
 }
 
-// SetNillableCustomerTimezone sets the "customer_timezone" field if the given value is not nil.
-func (sc *SubscriptionCreate) SetNillableCustomerTimezone(s *string) *SubscriptionCreate {
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableTimezone(s *string) *SubscriptionCreate {
 	if s != nil {
-		sc.SetCustomerTimezone(*s)
+		sc.SetTimezone(*s)
 	}
 	return sc
 }
@@ -823,9 +823,9 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultCollectionMethod
 		sc.mutation.SetCollectionMethod(v)
 	}
-	if _, ok := sc.mutation.CustomerTimezone(); !ok {
-		v := subscription.DefaultCustomerTimezone
-		sc.mutation.SetCustomerTimezone(v)
+	if _, ok := sc.mutation.Timezone(); !ok {
+		v := subscription.DefaultTimezone
+		sc.mutation.SetTimezone(v)
 	}
 	if _, ok := sc.mutation.ProrationBehavior(); !ok {
 		v := subscription.DefaultProrationBehavior
@@ -970,8 +970,8 @@ func (sc *SubscriptionCreate) check() error {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
 		}
 	}
-	if _, ok := sc.mutation.CustomerTimezone(); !ok {
-		return &ValidationError{Name: "customer_timezone", err: errors.New(`ent: missing required field "Subscription.customer_timezone"`)}
+	if _, ok := sc.mutation.Timezone(); !ok {
+		return &ValidationError{Name: "timezone", err: errors.New(`ent: missing required field "Subscription.timezone"`)}
 	}
 	if _, ok := sc.mutation.ProrationBehavior(); !ok {
 		return &ValidationError{Name: "proration_behavior", err: errors.New(`ent: missing required field "Subscription.proration_behavior"`)}
@@ -1179,9 +1179,9 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
 		_node.GatewayPaymentMethodID = value
 	}
-	if value, ok := sc.mutation.CustomerTimezone(); ok {
-		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
-		_node.CustomerTimezone = value
+	if value, ok := sc.mutation.Timezone(); ok {
+		_spec.SetField(subscription.FieldTimezone, field.TypeString, value)
+		_node.Timezone = value
 	}
 	if value, ok := sc.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
