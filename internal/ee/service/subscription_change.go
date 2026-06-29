@@ -865,7 +865,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		StartDate:          &effectiveDate,
 		Metadata:           lo.Assign(currentSub.Metadata, req.Metadata),
 		ProrationBehavior:  req.ProrationBehavior,
-		Timezone:   currentSub.Timezone,
+		Timezone:           currentSub.Timezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
 		OverageFactor:      currentSub.OverageFactor,
 		PaymentTerms:       currentSub.PaymentTerms,
