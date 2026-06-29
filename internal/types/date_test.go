@@ -2257,14 +2257,14 @@ func TestCalculateBillingPeriods_Timezone(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			periods, err := CalculateBillingPeriods(
-				tc.initialPeriodStart,
-				tc.endDate,
-				tc.anchor,
-				tc.periodCount,
-				tc.billingPeriod,
-				tc.timezone,
-			)
+			periods, err := CalculateBillingPeriods(&CalculateBillingPeriodsParams{
+				InitialPeriodStart: tc.initialPeriodStart,
+				EndDate:            tc.endDate,
+				Anchor:             tc.anchor,
+				PeriodCount:        tc.periodCount,
+				BillingPeriod:      tc.billingPeriod,
+				Timezone:           tc.timezone,
+			})
 			require.NoError(t, err)
 			require.Lenf(t, periods, tc.wantPeriodCount,
 				"got %d periods: %v", len(periods), periods)
@@ -2358,15 +2358,15 @@ func TestFindPeriodForDate_Timezone(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			period, err := FindPeriodForDate(
-				tc.target,
-				tc.knownStart,
-				tc.knownEnd,
-				tc.anchor,
-				tc.periodCount,
-				tc.billingPeriod,
-				tc.timezone,
-			)
+			period, err := FindPeriodForDate(&FindPeriodForDateParams{
+				Target:           tc.target,
+				KnownPeriodStart: tc.knownStart,
+				KnownPeriodEnd:   tc.knownEnd,
+				Anchor:           tc.anchor,
+				PeriodCount:      tc.periodCount,
+				BillingPeriod:    tc.billingPeriod,
+				Timezone:         tc.timezone,
+			})
 			require.NoError(t, err)
 			require.Truef(t, period.Start.Equal(tc.wantStart),
 				"period.Start: got %v, want %v", period.Start, tc.wantStart)
@@ -2453,16 +2453,16 @@ func TestCalculatePeriodID_Timezone(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := CalculatePeriodID(
-				tc.eventTimestamp,
-				tc.subStart,
-				tc.periodStart,
-				tc.periodEnd,
-				tc.anchor,
-				tc.unit,
-				tc.period,
-				tc.timezone,
-			)
+			got, err := CalculatePeriodID(&CalculatePeriodIDParams{
+				EventTimestamp:     tc.eventTimestamp,
+				SubStart:           tc.subStart,
+				CurrentPeriodStart: tc.periodStart,
+				CurrentPeriodEnd:   tc.periodEnd,
+				BillingAnchor:      tc.anchor,
+				PeriodUnit:         tc.unit,
+				PeriodType:         tc.period,
+				Timezone:           tc.timezone,
+			})
 			if tc.wantErr {
 				require.Error(t, err)
 				return
@@ -2541,14 +2541,14 @@ func TestGetNextUsageResetAt_Monthly_Timezone(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GetNextUsageResetAt(
-				tc.currentTime,
-				tc.subscriptionStart,
-				tc.subscriptionEnd,
-				tc.billingAnchor,
-				ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
-				tc.timezone,
-			)
+			got, err := GetNextUsageResetAt(&GetNextUsageResetAtParams{
+				CurrentTime:                 tc.currentTime,
+				SubscriptionStart:           tc.subscriptionStart,
+				SubscriptionEnd:             tc.subscriptionEnd,
+				BillingAnchor:               tc.billingAnchor,
+				EntitlementUsageResetPeriod: ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+				Timezone:                    tc.timezone,
+			})
 			if tc.wantErr {
 				require.Error(t, err)
 				return
