@@ -179,7 +179,7 @@ func TestNextBillingDateWithSubscriptionEndDate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriodStart, tt.billingAnchor, tt.unit, tt.billingPeriod, tt.subscriptionEndDate)
+			got, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: tt.currentPeriodStart, BillingAnchor: tt.billingAnchor, Unit: tt.unit, Period: tt.billingPeriod, SubscriptionEndDate: tt.subscriptionEndDate})
 			if err != nil {
 				t.Errorf("NextBillingDate() error = %v", err)
 				return
@@ -254,7 +254,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY, tt.subscriptionEndDate)
+			got, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: tt.currentPeriodStart, BillingAnchor: tt.billingAnchor, Unit: tt.unit, Period: BILLING_PERIOD_MONTHLY, SubscriptionEndDate: tt.subscriptionEndDate})
 			if err != nil {
 				t.Fatalf("NextBillingDate() error = %v", err)
 			}
@@ -266,14 +266,14 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 
 	t.Run("chain Apr1 anchor14 unit2 then next from Apr14", func(t *testing.T) {
 		anchor := time.Date(2024, 1, 14, 0, 0, 0, 0, time.UTC)
-		first, err := NextBillingDate(time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC), anchor, 2, BILLING_PERIOD_MONTHLY, nil)
+		first, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC), BillingAnchor: anchor, Unit: 2, Period: BILLING_PERIOD_MONTHLY})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !first.Equal(time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC)) {
 			t.Fatalf("first = %v", first)
 		}
-		second, err := NextBillingDate(first, anchor, 2, BILLING_PERIOD_MONTHLY, nil)
+		second, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: first, BillingAnchor: anchor, Unit: 2, Period: BILLING_PERIOD_MONTHLY})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +293,7 @@ func TestNextBillingDate_Monthly_Cliffing_AdvancePath(t *testing.T) {
 	anchor := time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC)
 	end := lo.ToPtr(time.Date(2024, 5, 10, 0, 0, 0, 0, time.UTC))
 
-	got, err := NextBillingDate(current, anchor, 1, BILLING_PERIOD_MONTHLY, end)
+	got, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: current, BillingAnchor: anchor, Unit: 1, Period: BILLING_PERIOD_MONTHLY, SubscriptionEndDate: end})
 	if err != nil {
 		t.Fatalf("NextBillingDate() error = %v", err)
 	}
@@ -311,7 +311,7 @@ func TestNextBillingDate_Monthly_Cliffing_FirstSnapSameCalendarDayAsEnd(t *testi
 	anchor := time.Date(2024, 1, 15, 14, 0, 0, 0, time.UTC)
 	end := lo.ToPtr(time.Date(2024, 4, 15, 9, 0, 0, 0, time.UTC))
 
-	got, err := NextBillingDate(current, anchor, 1, BILLING_PERIOD_MONTHLY, end)
+	got, err := NextBillingDate(NextBillingDateParams{CurrentPeriodStart: current, BillingAnchor: anchor, Unit: 1, Period: BILLING_PERIOD_MONTHLY, SubscriptionEndDate: end})
 	if err != nil {
 		t.Fatalf("NextBillingDate() error = %v", err)
 	}
@@ -327,7 +327,7 @@ func TestCalculateBillingPeriods_Monthly_FirstPeriodCliffedToSubscriptionEnd(t *
 	anchor := time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC)
 	subscriptionEnd := lo.ToPtr(time.Date(2024, 4, 12, 0, 0, 0, 0, time.UTC))
 
-	periods, err := CalculateBillingPeriods(start, subscriptionEnd, anchor, 1, BILLING_PERIOD_MONTHLY)
+	periods, err := CalculateBillingPeriods(CalculateBillingPeriodsParams{InitialPeriodStart: start, EndDate: subscriptionEnd, Anchor: anchor, PeriodCount: 1, BillingPeriod: BILLING_PERIOD_MONTHLY})
 	if err != nil {
 		t.Fatalf("CalculateBillingPeriods: %v", err)
 	}
