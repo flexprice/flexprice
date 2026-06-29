@@ -749,6 +749,13 @@ func NewConfig() (*Configuration, error) {
 	// broken, and an empty key makes tokens forgeable). The FLEXPRICE_AUTH_SECRET env is
 	// injected from the secret; this bind makes Unmarshal actually read it.
 	_ = v.BindEnv("auth.secret", "FLEXPRICE_AUTH_SECRET")
+	// Explicitly bind auth.supabase.* — same trap as auth.secret. The helm ConfigMap's
+	// rendered config.yaml carries only supabase.base_url (no service_key), so on GKE the
+	// service_key stays empty and every Supabase Admin call (e.g. user invite/create) fails
+	// with a swallowed 500. The FLEXPRICE_AUTH_SUPABASE_* envs are injected from the secret;
+	// these binds make Unmarshal actually read them.
+	_ = v.BindEnv("auth.supabase.service_key", "FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY")
+	_ = v.BindEnv("auth.supabase.base_url", "FLEXPRICE_AUTH_SUPABASE_BASE_URL")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
