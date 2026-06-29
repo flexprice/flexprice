@@ -49,6 +49,7 @@ postgres:
   port: 5432
   reader_host: "" # empty = use writer host; set FLEXPRICE_POSTGRES_READER_HOST to override
   reader_port: 0  # 0 = use writer port
+  db_routing_debug: true # enables /internal/debug/lag-probe and X-DB-Routing-* headers
   user: flexprice
   password: flexprice123
   dbname: flexprice

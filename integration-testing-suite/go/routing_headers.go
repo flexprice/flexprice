@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // RoutingHeaders holds the DB routing decision counts extracted from
@@ -69,12 +71,19 @@ func (e RoutingExpectation) check(rh RoutingHeaders) error {
 	return nil
 }
 
-// RoutingCapture is an http.RoundTripper that injects X-Debug-DB-Routing: true
-// on every request and captures the X-DB-Routing-* response headers.
+// RoutingCapture is an http.RoundTripper that:
+//  1. Injects X-Debug-DB-Routing: true on every request so the server emits
+//     X-DB-Routing-* response headers.
+//  2. When the server returns X-Writer-Pinned-Until: <epoch-ms> (indicating a
+//     write just happened), stores that expiry and injects X-Pin-To-Writer: true
+//     on all subsequent requests until the window expires — enabling cross-request
+//     read-after-write consistency validation.
+//  3. Captures the last set of X-DB-Routing-* headers for test assertions.
 type RoutingCapture struct {
-	inner http.RoundTripper
-	mu    sync.Mutex
-	last  RoutingHeaders
+	inner          http.RoundTripper
+	mu             sync.Mutex
+	last           RoutingHeaders
+	pinnedUntilMs  atomic.Int64 // epoch-ms; 0 = not pinned
 }
 
 func NewRoutingCapture(inner http.RoundTripper) *RoutingCapture {
@@ -88,6 +97,16 @@ func (rc *RoutingCapture) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
 	req.Header.Set("X-Debug-DB-Routing", "true")
 
+	// Cross-request writer pin: if a previous response told us to pin, and the
+	// window hasn't expired, tell the server to pre-pin this request's context.
+	if until := rc.pinnedUntilMs.Load(); until > 0 {
+		if time.Now().UnixMilli() < until {
+			req.Header.Set("X-Pin-To-Writer", "true")
+		} else {
+			rc.pinnedUntilMs.Store(0) // window expired, clear it
+		}
+	}
+
 	resp, err := rc.inner.RoundTrip(req)
 	if err != nil || resp == nil {
 		return resp, err
@@ -96,6 +115,13 @@ func (rc *RoutingCapture) RoundTrip(req *http.Request) (*http.Response, error) {
 	rc.mu.Lock()
 	rc.last = parseRoutingHeaders(resp.Header)
 	rc.mu.Unlock()
+
+	// If the server signals that a write just happened, store the pin expiry.
+	if v := resp.Header.Get("X-Writer-Pinned-Until"); v != "" {
+		if ms, err := strconv.ParseInt(v, 10, 64); err == nil && ms > 0 {
+			rc.pinnedUntilMs.Store(ms)
+		}
+	}
 
 	return resp, nil
 }
