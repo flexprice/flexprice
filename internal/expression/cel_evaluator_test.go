@@ -1,6 +1,9 @@
 package expression
 
 import (
+	"encoding/json"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -269,4 +272,47 @@ func TestCELEvaluator_MathFunctions_Validate(t *testing.T) {
 		// Sanity-check that we didn't accidentally register everything in math.
 		require.Error(t, eval.Validate("tan(theta)"))
 	})
+}
+
+func TestCELEvaluator_RejectsNonFiniteProperties(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	cases := []struct {
+		name string
+		val  any
+	}{
+		{"float64 NaN", math.NaN()},
+		{"float64 +Inf", math.Inf(1)},
+		{"float64 -Inf", math.Inf(-1)},
+		{"float32 NaN", float32(math.NaN())},
+		{"float32 +Inf", float32(math.Inf(1))},
+		{"json.Number Inf", json.Number("Inf")},
+		{"json.Number NaN", json.Number("NaN")},
+		{"string Inf", "Inf"},
+		{"string -Inf", "-Inf"},
+		{"string NaN", "NaN"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := eval.EvaluateQuantity("a + 1", map[string]interface{}{"a": c.val})
+			require.Error(t, err, "non-finite property must be rejected at the boundary")
+		})
+	}
+}
+
+func TestCELEvaluator_NonNumericErrorOmitsRawValue(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	// A property value that doubles as a PII proxy. The error must not echo it.
+	const piiValue = "secret@example.com"
+	_, err := eval.EvaluateQuantity("a * 2", map[string]interface{}{"a": piiValue})
+	require.Error(t, err)
+	if strings.Contains(err.Error(), piiValue) {
+		t.Fatalf("error message leaks raw property value: %v", err)
+	}
+	// Type info is allowed (and helpful for debugging) — confirm the message
+	// still identifies the property by name so operators can act on it.
+	if !strings.Contains(err.Error(), `"a"`) {
+		t.Fatalf("error message should name the property: %v", err)
+	}
 }

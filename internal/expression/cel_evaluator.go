@@ -281,7 +281,7 @@ func (e *CELEvaluator) buildActivation(identifiers []string, properties map[stri
 		}
 		f, ok := toFloat(raw)
 		if !ok {
-			return nil, fmt.Errorf("property %q is not numeric: %v", id, raw)
+			return nil, fmt.Errorf("property %q is not a finite number (type %T)", id, raw)
 		}
 		activation[id] = f
 	}
@@ -289,13 +289,16 @@ func (e *CELEvaluator) buildActivation(identifiers []string, properties map[stri
 }
 
 // toFloat coerces a property value to float64, including numeric strings like "2".
-// Returns ok=false for values that cannot represent a number.
+// Returns ok=false for values that cannot represent a finite number. NaN and
+// ±Inf are rejected at this boundary so they can't reach decimal math
+// (decimal.NewFromFloat panics on non-finite input, and downstream billing
+// totals should never accept these as legitimate quantities).
 func toFloat(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
-		return n, true
+		return finiteOk(n, nil)
 	case float32:
-		return float64(n), true
+		return finiteOk(float64(n), nil)
 	case int:
 		return float64(n), true
 	case int8:
@@ -318,17 +321,27 @@ func toFloat(v any) (float64, bool) {
 		return float64(n), true
 	case json.Number:
 		f, err := n.Float64()
-		return f, err == nil
+		return finiteOk(f, err)
 	case string:
 		s := strings.TrimSpace(n)
 		if s == "" {
 			return 0, false
 		}
 		f, err := strconv.ParseFloat(s, 64)
-		return f, err == nil
+		return finiteOk(f, err)
 	default:
 		return 0, false
 	}
+}
+
+// finiteOk returns (f, true) only if f is finite (not NaN, not ±Inf) and the
+// parse/convert producing it succeeded. Used by toFloat to reject non-finite
+// numeric inputs at the property boundary.
+func finiteOk(f float64, err error) (float64, bool) {
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
 }
 
 // toDecimal converts CEL result (from ref.Val.Value()) to decimal.Decimal.
