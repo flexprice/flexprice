@@ -43,8 +43,9 @@ func (c *MockPostgresClient) TxFromContext(ctx context.Context) *ent.Tx {
 	return nil
 }
 
-// Writer returns the writer client for write operations
+// Writer returns the writer client. Calls PinWriter to mirror the real client contract.
 func (c *MockPostgresClient) Writer(ctx context.Context) *ent.Client {
+	types.PinWriter(ctx)
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return tx.Client()
 	}
