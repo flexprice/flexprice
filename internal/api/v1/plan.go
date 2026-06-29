@@ -301,7 +301,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 	lockKey := priceSyncLockKey(id)
-	acquired, err := h.redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	acquired, err := h.redisCache.AcquireLock(c.Request.Context(), lockKey, cache.ExpiryPriceSyncLock)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
 		c.Error(ierr.NewError("failed to acquire price sync lock").
@@ -430,7 +430,7 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		return
 	}
 	lockKey := priceSyncLockKey(id)
-	acquired, err := h.redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	acquired, err := h.redisCache.AcquireLock(c.Request.Context(), lockKey, cache.ExpiryPriceSyncLock)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
 		c.Error(ierr.NewError("failed to acquire price sync lock").

@@ -202,6 +202,23 @@ func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interfa
 	return ok, nil
 }
 
+// AcquireLock acquires a lock on a key with the given expiration time.
+// Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
+func (c *redisCacheImpl) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	if c == nil {
+		return false, nil
+	}
+
+	redisKey := c.GetRedisKey(key)
+	// For acquire lock, we use a fixed value of "1"
+	// This is because we don't need to store any value in the lock key
+	ok, err := c.client.SetNX(ctx, redisKey, "1", expiration).Result()
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 // DeleteByPrefix removes all keys with the given prefix
 func (c *redisCacheImpl) DeleteByPrefix(ctx context.Context, prefix string) {
 	if c == nil || !c.IsEnabled() {
