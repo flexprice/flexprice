@@ -17,6 +17,7 @@ const debugRoutingRequestHeader = "X-Debug-DB-Routing"
 // FLEXPRICE_DB_ROUTING_DEBUG env var is set, emits X-DB-Routing-* response
 // headers for test assertion.
 func DBWriterPinMiddleware(log *logger.Logger) gin.HandlerFunc {
+	debugEnabledEnv := os.Getenv("FLEXPRICE_DB_ROUTING_DEBUG") == "true"
 	return func(c *gin.Context) {
 		ctx := types.WithWriterPinning(c.Request.Context())
 		ctx = types.WithRoutingStats(ctx)
@@ -48,8 +49,7 @@ func DBWriterPinMiddleware(log *logger.Logger) gin.HandlerFunc {
 			)
 		}
 
-		debugEnabled := c.GetHeader(debugRoutingRequestHeader) == "true" ||
-			os.Getenv("FLEXPRICE_DB_ROUTING_DEBUG") == "true"
+		debugEnabled := c.GetHeader(debugRoutingRequestHeader) == "true" || debugEnabledEnv
 		if debugEnabled {
 			c.Header("X-DB-Routing-Reader", fmt.Sprintf("%d", r))
 			c.Header("X-DB-Routing-Writer-Pinned", fmt.Sprintf("%d", wp))
