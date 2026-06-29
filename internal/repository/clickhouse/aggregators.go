@@ -111,78 +111,56 @@ func formatClickHouseDateTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05.000")
 }
 
+// normalizeCHTimezone returns a valid IANA timezone name for ClickHouse
+// toStartOf* functions, defaulting to UTC for empty, "UTC", or unresolvable
+// values. Passing an invalid name straight to ClickHouse would error the query,
+// so this is the single guard shared by both window formatters.
+func normalizeCHTimezone(tz string) string {
+	if tz == "" || tz == types.DefaultTimezone {
+		return types.DefaultTimezone
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		return types.DefaultTimezone
+	}
+	return tz
+}
+
+// formatWindowSize returns the ClickHouse expression that buckets `timestamp`
+// into the given window in the given timezone. "UTC" is a valid ClickHouse
+// timezone argument and yields identical results to omitting it, so the tz is
+// always passed — there is no UTC special-casing.
 func formatWindowSize(windowSize types.WindowSize, tz string) string {
 	if windowSize == "" {
 		return ""
 	}
-
-	// Validate tz early so interval cases can use it too.
-	// Empty / "UTC" → no timezone suffix; invalid IANA name → fall back to UTC.
-	if tz != "" && tz != types.DefaultTimezone {
-		if _, err := time.LoadLocation(tz); err != nil {
-			tz = types.DefaultTimezone
-		}
+	// Minute buckets are timezone-invariant (all real offsets are whole minutes).
+	if windowSize == types.WindowSizeMinute {
+		return "toStartOfMinute(timestamp)"
 	}
 
-	// Effective UTC when tz is blank or "UTC"
-	utc := tz == "" || tz == types.DefaultTimezone
-
-	// Sub-hourly and multi-hour interval sizes: toStartOfInterval supports an
-	// optional timezone third argument (ClickHouse 22.x+).
+	tz = normalizeCHTimezone(tz)
 	switch windowSize {
 	case types.WindowSize15Min:
-		if !utc {
-			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 15 MINUTE, '%s')", tz)
-		}
-		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 15 MINUTE, '%s')", tz)
 	case types.WindowSize30Min:
-		if !utc {
-			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 30 MINUTE, '%s')", tz)
-		}
-		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 30 MINUTE, '%s')", tz)
 	case types.WindowSize3Hour:
-		if !utc {
-			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 3 HOUR, '%s')", tz)
-		}
-		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 3 HOUR, '%s')", tz)
 	case types.WindowSize6Hour:
-		if !utc {
-			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 6 HOUR, '%s')", tz)
-		}
-		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 6 HOUR, '%s')", tz)
 	case types.WindowSize12Hour:
-		if !utc {
-			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 12 HOUR, '%s')", tz)
-		}
-		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
-	}
-
-	if utc {
-		switch windowSize {
-		case types.WindowSizeHour:
-			return "toStartOfHour(timestamp)"
-		case types.WindowSizeDay:
-			return "toStartOfDay(timestamp)"
-		case types.WindowSizeWeek:
-			return "toStartOfWeek(timestamp, 0)"
-		case types.WindowSizeMonth:
-			return "toStartOfMonth(timestamp)"
-		}
-		return "toStartOfDay(timestamp)"
-	}
-
-	// tz is a valid non-UTC IANA timezone (validated at the top of this function).
-	switch windowSize {
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 12 HOUR, '%s')", tz)
 	case types.WindowSizeHour:
 		return fmt.Sprintf("toStartOfHour(timestamp, '%s')", tz)
-	case types.WindowSizeDay:
-		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
 	case types.WindowSizeWeek:
 		return fmt.Sprintf("toStartOfWeek(timestamp, 0, '%s')", tz)
 	case types.WindowSizeMonth:
 		return fmt.Sprintf("toStartOfMonth(timestamp, '%s')", tz)
+	case types.WindowSizeDay:
+		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
+	default:
+		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
 	}
-	return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
 }
 
 // formatWindowSizeWithBillingAnchor formats window size with custom billing anchor for monthly periods.
@@ -210,27 +188,12 @@ func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAncho
 	if windowSize == types.WindowSizeMonth && billingAnchor != nil {
 		// Extract only the day component from billing anchor for simplicity
 		anchorDay := billingAnchor.Day()
+		tz = normalizeCHTimezone(tz)
 
-		// Defense-in-depth: treat invalid IANA names as UTC.
-		if tz != "" && tz != types.DefaultTimezone {
-			if _, err := time.LoadLocation(tz); err != nil {
-				tz = types.DefaultTimezone
-			}
-		}
-
-		if tz != "" && tz != types.DefaultTimezone {
-			// Timezone-aware custom monthly window: wrap timestamp with toTimezone before date arithmetic
-			return fmt.Sprintf("addDays(toStartOfMonth(addDays(toTimezone(timestamp, '%s'), -%d), '%s'), %d)", tz, anchorDay-1, tz, anchorDay-1)
-		}
-
-		// Generate the custom monthly window expression using day-level granularity
-		// This shifts the timestamp by the day offset, then uses toStartOfMonth,
-		// then shifts back by the same day offset to get the correct billing period
-		return fmt.Sprintf(`
-			addDays(
-				toStartOfMonth(addDays(timestamp, -%d)),
-				%d
-			)`, anchorDay-1, anchorDay-1)
+		// Custom monthly window anchored on anchorDay, computed in the customer's
+		// timezone. Shift by the day offset, snap to month start, shift back.
+		// "UTC" is a valid tz argument and reproduces the legacy (UTC) result.
+		return fmt.Sprintf("addDays(toStartOfMonth(addDays(toTimezone(timestamp, '%s'), -%d), '%s'), %d)", tz, anchorDay-1, tz, anchorDay-1)
 	}
 
 	// Fall back to standard window size formatting
