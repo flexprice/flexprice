@@ -1,14 +1,16 @@
 package api
 
 import (
+	"os"
+
 	"github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -57,6 +59,7 @@ type Handlers struct {
 	Dashboard                *v1.DashboardHandler
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
+	Debug                    *v1.DebugHandler
 
 	// Portal handlers
 	Onboarding     *v1.OnboardingHandler
@@ -725,6 +728,12 @@ func NewRouter(
 		workflows.GET("/:workflow_id/:run_id/summary", handlers.Workflow.GetWorkflowSummary)
 		workflows.GET("/:workflow_id/:run_id/timeline", handlers.Workflow.GetWorkflowTimeline)
 		workflows.GET("/:workflow_id/:run_id", handlers.Workflow.GetWorkflowDetails)
+	}
+
+	// Debug endpoints — only registered when FLEXPRICE_DB_ROUTING_DEBUG=true.
+	if os.Getenv("FLEXPRICE_DB_ROUTING_DEBUG") == "true" && handlers.Debug != nil {
+		debugGroup := router.Group("/internal/debug")
+		debugGroup.POST("/lag-probe", handlers.Debug.LagProbe)
 	}
 
 	return router

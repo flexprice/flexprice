@@ -349,6 +349,7 @@ func provideHandlers(
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
+	entClients *postgres.EntClients,
 	scheduledTaskService service.ScheduledTaskService,
 	rbacService *rbac.RBACService,
 	oauthService service.OAuthService,
@@ -413,6 +414,7 @@ func provideHandlers(
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
+		Debug:                    v1.NewDebugHandler(entClients),
 	}
 }
 
