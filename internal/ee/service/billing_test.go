@@ -1212,7 +1212,12 @@ func (s *BillingServiceSuite) setupSubWithFixedLineItemsForPeriodTests(
 	refStart time.Time,
 	specs []LineItemSpecForPeriodTests,
 ) (*subscription.Subscription, []*price.Price) {
-	firstPeriodEnd, err := types.NextBillingDate(refStart, refStart, 1, subBillingPeriod, nil)
+	firstPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+		CurrentPeriodStart: refStart,
+		BillingAnchor:      refStart,
+		Unit:               1,
+		Period:             subBillingPeriod,
+	})
 	s.Require().NoError(err)
 
 	cust := &customer.Customer{
@@ -1303,7 +1308,7 @@ func nextPeriodsForSub(refStart time.Time, subBillingPeriod types.BillingPeriod,
 	out := make([]periodWindow, 0, n)
 	start := refStart
 	for i := 0; i < n; i++ {
-		end, err := types.NextBillingDate(start, refStart, 1, subBillingPeriod, nil)
+		end, err := types.NextBillingDate(types.NextBillingDateParams{CurrentPeriodStart: start, BillingAnchor: refStart, Unit: 1, Period: subBillingPeriod, SubscriptionEndDate: nil})
 		if err != nil {
 			return out
 		}

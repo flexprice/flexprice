@@ -734,15 +734,15 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		}
 
 		// Calculate the period ID for this subscription
-		periodID, err := types.CalculatePeriodID(
-			event.Timestamp,
-			sub.StartDate,
-			sub.CurrentPeriodStart,
-			sub.CurrentPeriodEnd,
-			sub.BillingAnchor,
-			sub.BillingPeriodCount,
-			sub.BillingPeriod,
-		)
+		periodID, err := types.CalculatePeriodID(types.CalculatePeriodIDParams{
+			EventTimestamp:     event.Timestamp,
+			SubStart:           sub.StartDate,
+			CurrentPeriodStart: sub.CurrentPeriodStart,
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd,
+			BillingAnchor:      sub.BillingAnchor,
+			PeriodUnit:         sub.BillingPeriodCount,
+			PeriodType:         sub.BillingPeriod,
+		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate period id",
 				"event_id", event.ID,
@@ -3266,7 +3266,12 @@ func (s *featureUsageTrackingService) getTotalUsageForWeightedSumAggregation(
 	periodStart := time.UnixMilli(int64(periodID))
 
 	// Calculate the period end using the subscription's billing configuration
-	periodEnd, err := types.NextBillingDate(periodStart, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod, nil)
+	periodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
+		CurrentPeriodStart: periodStart,
+		BillingAnchor:      subscription.BillingAnchor,
+		Unit:               subscription.BillingPeriodCount,
+		Period:             subscription.BillingPeriod,
+	})
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).
 			WithHint("Failed to calculate period end for weighted sum aggregation").

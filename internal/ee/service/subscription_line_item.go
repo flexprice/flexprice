@@ -115,14 +115,14 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		}
 
 		// Find the billing period that contains effectiveDate so proration uses the right boundaries.
-		period, err := types.FindPeriodForDate(
-			effectiveDate,
-			sub.CurrentPeriodStart,
-			sub.CurrentPeriodEnd,
-			sub.BillingAnchor,
-			sub.BillingPeriodCount,
-			sub.BillingPeriod,
-		)
+		period, err := types.FindPeriodForDate(types.FindPeriodForDateParams{
+			Target:           effectiveDate,
+			KnownPeriodStart: sub.CurrentPeriodStart,
+			KnownPeriodEnd:   sub.CurrentPeriodEnd,
+			Anchor:           sub.BillingAnchor,
+			PeriodCount:      sub.BillingPeriodCount,
+			BillingPeriod:    sub.BillingPeriod,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -333,14 +333,14 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 			s.Logger.Info(ctx, "could not load subscription for delete proration",
 				"line_item_id", lineItemID, "error", err)
 		} else {
-			period, err := types.FindPeriodForDate(
-				effectiveFrom,
-				sub.CurrentPeriodStart,
-				sub.CurrentPeriodEnd,
-				sub.BillingAnchor,
-				sub.BillingPeriodCount,
-				sub.BillingPeriod,
-			)
+			period, err := types.FindPeriodForDate(types.FindPeriodForDateParams{
+				Target:           effectiveFrom,
+				KnownPeriodStart: sub.CurrentPeriodStart,
+				KnownPeriodEnd:   sub.CurrentPeriodEnd,
+				Anchor:           sub.BillingAnchor,
+				PeriodCount:      sub.BillingPeriodCount,
+				BillingPeriod:    sub.BillingPeriod,
+			})
 			if err != nil {
 				s.Logger.Info(ctx, "could not find period for delete proration",
 					"line_item_id", lineItemID, "error", err)
