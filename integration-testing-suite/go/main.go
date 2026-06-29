@@ -97,7 +97,11 @@ func runTarget(t Target) targetOutcome {
 
 	// ── Initialize SDK client ───────────────────────────────────────────
 
-	httpClient := newHTTPClient(insecure)
+	// Create routing capture — shared between SDK and raw clients so that
+	// every outbound request injects X-Debug-DB-Routing and every response
+	// header is captured for routing assertions.
+	capture := NewRoutingCapture(nil)
+	httpClient := newHTTPClientWithCapture(insecure, capture)
 
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
@@ -110,9 +114,13 @@ func runTarget(t Target) targetOutcome {
 
 	// ── Run orchestrated sanity test ────────────────────────────────────
 
-	runner := &SanityRunner{client: client, raw: raw}
+	runner := &SanityRunner{client: client, raw: raw, routingCapture: capture}
 	ctx := contextWithTimeout()
 	start := time.Now()
+
+	// Phase 0: routing validation — must run first so lagProbeOK is set
+	// before any routing assertions in subsequent phases.
+	runner.runRoutingSteps(ctx)
 
 	// Phases 1-7: Full billing lifecycle.
 	runner.runCatalogSteps(ctx)
