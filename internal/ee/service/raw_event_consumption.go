@@ -197,7 +197,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 
 	// Build a context from the message's own context so cancellation/tracing propagates,
 	// then attach tenant and environment IDs so the settings repo can scope its query.
-	ctx := types.SetTenantID(msg.Context(), tenantID)
+	ctx := types.SetTenantID(types.WithWriterPinning(msg.Context()), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 
 	// Fetch the ingestion filter once per batch (one DB read per Kafka message).

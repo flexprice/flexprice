@@ -362,7 +362,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	event.EventName = strings.TrimSpace(event.EventName)
 
 	// Create a background context with tenant ID
-	ctx := context.Background()
+	ctx := types.WithWriterPinning(context.Background())
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}

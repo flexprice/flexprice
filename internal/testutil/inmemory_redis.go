@@ -131,7 +131,11 @@ func (r *InMemoryRedis) TrySetNX(ctx context.Context, key string, value interfac
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.values[key]; ok {
-		return false, nil
+		if !r.values[key].expiration.IsZero() && time.Now().After(r.values[key].expiration) {
+			delete(r.values, key)
+		} else {
+			return false, nil
+		}
 	}
 	var exp time.Time
 	if expiration > 0 {
@@ -141,11 +145,33 @@ func (r *InMemoryRedis) TrySetNX(ctx context.Context, key string, value interfac
 	return true, nil
 }
 
+func (r *InMemoryRedis) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.values[key]; ok {
+		if !r.values[key].expiration.IsZero() && time.Now().After(r.values[key].expiration) {
+			delete(r.values, key)
+		} else {
+			return false, nil
+		}
+	}
+	var exp time.Time
+	if expiration > 0 {
+		exp = time.Now().Add(expiration)
+	}
+	r.values[key] = inMemoryRedisEntry{value: "1", expiration: exp}
+	return true, nil
+}
+
 func (r *InMemoryRedis) TrySetNXWithTTL(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, time.Duration, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.values[key]; ok {
-		return false, 0, nil
+		if !r.values[key].expiration.IsZero() && time.Now().After(r.values[key].expiration) {
+			delete(r.values, key)
+		} else {
+			return false, time.Until(r.values[key].expiration), nil
+		}
 	}
 	var exp time.Time
 	if expiration > 0 {
@@ -159,18 +185,4 @@ func (r *InMemoryRedis) ForceCacheDelete(ctx context.Context, key string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.values, key)
-}
-
-func (r *InMemoryRedis) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.values[key]; ok {
-		return false, nil
-	}
-	var exp time.Time
-	if expiration > 0 {
-		exp = time.Now().Add(expiration)
-	}
-	r.values[key] = inMemoryRedisEntry{value: "1", expiration: exp}
-	return true, nil
 }

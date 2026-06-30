@@ -93,6 +93,7 @@ func NewRouter(
 	// Add our custom middleware in order
 	router.Use(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
+		middleware.DBWriterPinMiddleware,     // Per-request read-your-writes pin for DB routing
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
 	)
@@ -245,6 +246,7 @@ func NewRouter(
 
 			// New endpoints for entitlements and usage
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
+			customer.GET("/external/:external_id/entitlements", handlers.Customer.GetCustomerEntitlementsByExternalID)
 			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)
 			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
 			customer.GET("/:id/grants/upcoming", handlers.Customer.GetUpcomingCreditGrantApplications)
