@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -2902,29 +2904,17 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		}
 	}
 
-	// Apply Coupons if any - both subscription level and line item level
-	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+	// Apply Coupons if any - both subscription level and line item level.
+	// Selection mechanics (fetch active associations + split sub/line + price mapping) are shared
+	// with the analytics path via selectSubscriptionCoupons; billing supplies its own validation
+	// predicate (ValidateCoupon over the eager-loaded coupon).
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
-
-	// Get all coupon associations (both subscription-level and line item-level) that are active during the subscription's current billing period
-	// Using a single query to fetch both types
-	allCouponsFilter := types.NewCouponAssociationFilter()
-	allCouponsFilter.SubscriptionIDs = []string{sub.ID}
-	allCouponsFilter.ActiveOnly = true
-	allCouponsFilter.PeriodStart = &sub.CurrentPeriodStart
-	allCouponsFilter.PeriodEnd = &sub.CurrentPeriodEnd
-	allCouponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, allCouponsFilter)
+	keep := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
+	}
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, keep)
 	if err != nil {
 		return nil, err
-	}
-	allCouponAssociations := allCouponAssociationsResponse.Items
-
-	// Build maps for efficient lookups
-	subLineItemIDToPriceIDMap := make(map[string]string)
-	for _, lineItem := range sub.LineItems {
-		if lineItem.PriceID != "" {
-			subLineItemIDToPriceIDMap[lineItem.ID] = lineItem.PriceID
-		}
 	}
 
 	// Build set of price IDs that appear in invoice line items
@@ -2935,44 +2925,29 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		}
 	}
 
-	// Process all coupon associations in a single loop
+	// Subscription-level coupons
 	validCoupons := make([]dto.InvoiceCoupon, 0)
-	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
-
-	for _, couponAssociation := range allCouponAssociations {
-		// Get coupon details for validation
-		coupon, err := s.CouponRepo.Get(ctx, couponAssociation.CouponID)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
-			continue
-		}
-
-		// Validate coupon
-		if err := couponValidationService.ValidateCoupon(ctx, *coupon, sub); err != nil {
-			s.Logger.Error(ctx, "failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
-			continue
-		}
-
-		if couponAssociation.SubscriptionLineItemID == nil {
-			// Subscription-level coupon
+	for _, assocs := range sel.SubLevel {
+		for _, assoc := range assocs {
 			validCoupons = append(validCoupons, dto.InvoiceCoupon{
-				CouponID:            couponAssociation.CouponID,
-				CouponAssociationID: &couponAssociation.ID,
+				CouponID:            assoc.CouponID,
+				CouponAssociationID: &assoc.ID,
 			})
-		} else {
-			// Line item-level coupon - only include if the line item is in the invoice
-			priceID, ok := subLineItemIDToPriceIDMap[*couponAssociation.SubscriptionLineItemID]
-			if !ok || priceID == "" {
-				continue
-			}
-			// Only add if this price ID appears in the invoice line items
-			if !invoiceLineItemPriceIDs[priceID] {
-				continue
-			}
+		}
+	}
+
+	// Line item-level coupons - only include if the line item's price appears in the invoice
+	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
+	for sliID, assocs := range sel.LineLevel {
+		priceID, ok := sel.SubLineItemIDToPriceID[sliID]
+		if !ok || priceID == "" || !invoiceLineItemPriceIDs[priceID] {
+			continue
+		}
+		for _, assoc := range assocs {
 			validLineItemCoupons = append(validLineItemCoupons, dto.InvoiceLineItemCoupon{
 				LineItemID:          priceID,
-				CouponID:            couponAssociation.CouponID,
-				CouponAssociationID: &couponAssociation.ID,
+				CouponID:            assoc.CouponID,
+				CouponAssociationID: &assoc.ID,
 			})
 		}
 	}
