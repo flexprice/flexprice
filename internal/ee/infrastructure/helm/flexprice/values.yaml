@@ -184,6 +184,10 @@ api:
 consumer:
   enabled: true
   replicaCount: 1
+  # Consumer-only env overrides (rendered after the shared flexprice.env, so these
+  # win for duplicate keys). For settings that differ on the consumer vs api/worker —
+  # e.g. FLEXPRICE_CACHE_ENABLED (cache enabled on the consumer only).
+  extraEnv: []
   resources:
     requests:
       cpu: "500m"
