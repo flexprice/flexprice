@@ -2127,6 +2127,13 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 		return
 	}
 
+	// Discounts require the coupon-association repo. If the service was constructed
+	// without it (e.g. a focused test), degrade gracefully to no discounts rather
+	// than panic — discounts are an enhancement on a read path.
+	if s.CouponAssociationRepo == nil {
+		return
+	}
+
 	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
 		return c.Type == types.CouponTypePercentage &&
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
