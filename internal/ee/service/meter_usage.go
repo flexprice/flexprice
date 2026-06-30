@@ -12,7 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
-	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
+	ca "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -2119,7 +2119,7 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 		return
 	}
 
-	keep := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
 		return c.Type == types.CouponTypePercentage &&
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
 			c.IsValid()
@@ -2164,7 +2164,7 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 
 		out := ApplyAnalyticsDiscounts(in)
 		item.TotalDiscount = out.TotalDiscount
-		item.NetCost = item.TotalCost.Sub(out.TotalDiscount)
+		item.NetCost = out.NetCost
 		for i := range item.Points {
 			if i < len(out.PointDiscounts) {
 				item.Points[i].Discount = out.PointDiscounts[i]
