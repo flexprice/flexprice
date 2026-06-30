@@ -6837,6 +6837,12 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			newEnt.StaticValue = parentEnt.StaticValue
 		}
 
+		if override.ConfigValue != nil {
+			newEnt.ConfigValue = override.ConfigValue
+		} else {
+			newEnt.ConfigValue = parentEnt.ConfigValue
+		}
+
 		// Validate based on feature type
 		switch parentEnt.FeatureType {
 		case types.FeatureTypeMetered:
