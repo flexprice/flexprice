@@ -26,6 +26,11 @@ type subscriptionCouponSelection struct {
 // splitAndOrderAssociations is the pure core: given subscriptions and their associations, keep
 // those matching the predicate, split into sub-level vs line-level, and order each slice
 // deterministically (StartDate, then ID) so compounding is stable.
+//
+// If keep is nil, all associations are accepted.
+//
+// subs[*].LineItems must be populated for SubLineItemIDToPriceID to be useful; callers needing
+// price-keyed lookups must fetch subscriptions with their line items eager-loaded.
 func splitAndOrderAssociations(
 	subs []*subscription.Subscription,
 	associations []*ca.CouponAssociation,
@@ -74,6 +79,9 @@ func splitAndOrderAssociations(
 
 // selectSubscriptionCoupons fetches active associations for the given subscriptions over
 // [start, end] (coupon eager-loaded) and returns the split selection filtered by keep.
+//
+// subs[*].LineItems must be populated for the returned SubLineItemIDToPriceID to be useful;
+// callers needing price-keyed lookups must fetch subscriptions with line items eager-loaded.
 func selectSubscriptionCoupons(
 	ctx context.Context, sp ServiceParams,
 	subs []*subscription.Subscription, start, end time.Time,
@@ -101,6 +109,12 @@ func selectSubscriptionCoupons(
 
 // projectAnalyticsCoupons converts the selection into the applicator's pure analyticsCoupon maps:
 // line coupons keyed by SubscriptionLineItemID, sub coupons keyed by SubscriptionID.
+//
+// The returned analyticsCoupon.Coupon is a SHARED pointer to the association's coupon and must
+// not be mutated by callers.
+//
+// SubLineItemIDToPriceID is NOT included in the returned pair; callers needing price-keyed
+// lookups should read sel.SubLineItemIDToPriceID directly.
 func projectAnalyticsCoupons(sel *subscriptionCouponSelection) (line, sub map[string][]analyticsCoupon) {
 	line = map[string][]analyticsCoupon{}
 	sub = map[string][]analyticsCoupon{}

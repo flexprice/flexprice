@@ -28,6 +28,7 @@ func TestSplitAndOrderAssociations(t *testing.T) {
 	assocs := []*ca.CouponAssociation{
 		{ID: "ca_b", SubscriptionID: "sub_1", StartDate: t1, Coupon: perc},                                  // sub-level, later
 		{ID: "ca_a", SubscriptionID: "sub_1", StartDate: t0, Coupon: perc},                                  // sub-level, earlier
+		{ID: "ca_c", SubscriptionID: "sub_1", StartDate: t0, Coupon: perc},                                  // sub-level, same StartDate as ca_a (ID tiebreak)
 		{ID: "ca_line", SubscriptionID: "sub_1", SubscriptionLineItemID: &sli, StartDate: t0, Coupon: perc}, // line-level
 		{ID: "ca_fixed", SubscriptionID: "sub_1", StartDate: t0, Coupon: fixed},                             // filtered out
 	}
@@ -35,7 +36,8 @@ func TestSplitAndOrderAssociations(t *testing.T) {
 	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool { return c.Type == types.CouponTypePercentage }
 	sel := splitAndOrderAssociations(subs, assocs, keep)
 
-	if got := sel.SubLevel["sub_1"]; len(got) != 2 || got[0].ID != "ca_a" || got[1].ID != "ca_b" {
+	// StartDate-tie (ca_a, ca_c at t0) broken by ID; ca_b at t1 sorts last.
+	if got := sel.SubLevel["sub_1"]; len(got) != 3 || got[0].ID != "ca_a" || got[1].ID != "ca_c" || got[2].ID != "ca_b" {
 		t.Fatalf("sub-level split/order wrong: %+v", got)
 	}
 	if got := sel.LineLevel["sli_1"]; len(got) != 1 || got[0].ID != "ca_line" {
