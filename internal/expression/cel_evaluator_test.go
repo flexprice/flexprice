@@ -243,6 +243,13 @@ func TestCELEvaluator_MathFunctions(t *testing.T) {
 		// Error: non-finite results caught by toDecimal guard
 		{name: "sqrt of negative is NaN", expr: "sqrt(x)", properties: map[string]interface{}{"x": -1}, wantErr: true},
 		{name: "pow overflow is infinity", expr: "pow(big, 2)", properties: map[string]interface{}{"big": 1e308}, wantErr: true},
+
+		// Sample use cases like pulse pricing
+		{name: "semi pulse: zero usage", expr: "duration < pulse ? pulse : 0", properties: map[string]interface{}{"duration": 100, "pulse": 10}, want: decimal.NewFromInt(0)},
+		{name: "semi pulse", expr: "duration < pulse ? pulse : 0", properties: map[string]interface{}{"duration": 8, "pulse": 10}, want: decimal.NewFromInt(10)},
+		{name: "full pulse: zero pulse", expr: "duration <= 10 ? 0 : ceil(duration / 15) * 15", properties: map[string]interface{}{"duration": 8}, want: decimal.NewFromInt(0)},
+		{name: "full pulse: usage greater than 10", expr: "duration <= 10 ? 0 : ceil(duration / 15) * 15", properties: map[string]interface{}{"duration": 12}, want: decimal.NewFromInt(15)},
+		{name: "full pulse: usage greater than pulse", expr: "duration <= 10 ? 0 : ceil(duration / 15) * 15", properties: map[string]interface{}{"duration": 18}, want: decimal.NewFromInt(30)},
 	}
 
 	for _, tt := range tests {
