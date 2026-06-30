@@ -3301,9 +3301,17 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		Features:      []*dto.AggregatedFeature{},
 	}
 
-	// 1. Get active subscriptions for the customer
+	// 1. Get active subscriptions for the customer (without line items — not needed for entitlements)
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	subscriptions, err := subscriptionService.ListByCustomerID(ctx, customerID)
+	subscriptions, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerID:  customerID,
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+		},
+		WithLineItems: false,
+	})
 	if err != nil {
 		return nil, err
 	}
