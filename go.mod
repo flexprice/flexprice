@@ -24,7 +24,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/google/cel-go v0.27.0
+	github.com/google/cel-go v0.28.1
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go v1.2.4
 	github.com/h2non/filetype v1.1.3
@@ -80,6 +80,7 @@ require (
 	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/sv-tools/openapi v0.4.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 

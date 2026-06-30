@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -46,6 +47,20 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 
 	if err := meter.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Compile the aggregation expression up-front so a malformed expression is
+	// rejected at meter creation instead of silently failing for every event later.
+	if meter.Aggregation.Expression != "" {
+		if err := expression.NewCELEvaluator().Validate(meter.Aggregation.Expression); err != nil {
+			return nil, ierr.NewError("invalid aggregation expression").
+				WithHint("The aggregation expression could not be compiled. Please check its syntax.").
+				WithReportableDetails(map[string]interface{}{
+					"expression": meter.Aggregation.Expression,
+					"error":      err.Error(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	if err := s.meterRepo.CreateMeter(ctx, meter); err != nil {

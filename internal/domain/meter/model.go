@@ -194,6 +194,26 @@ func (m *Meter) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
+	// CEL expression is only meaningful on aggregations that compute a numeric
+	// per-event qty and then aggregate over a window. Reject combinations that
+	// either ignore the qty (COUNT), need a discriminator string
+	// (COUNT_UNIQUE), or carry their own multi-field semantics
+	// (SUM_WITH_MULTIPLIER, WEIGHTED_SUM).
+	if m.Aggregation.Expression != "" {
+		if !m.Aggregation.Type.SupportsExpression() {
+			return ierr.NewError("aggregation type does not support expression").
+				WithHint("Use SUM, AVG, MAX or LATEST when providing an expression").
+				WithReportableDetails(map[string]interface{}{
+					"aggregation_type": m.Aggregation.Type,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if m.Aggregation.Field != "" {
+			return ierr.NewError("field and expression are mutually exclusive").
+				WithHint("Provide either field or expression, not both").
+				Mark(ierr.ErrValidation)
+		}
+	}
 	if m.Aggregation.Type == types.AggregationSumWithMultiplier {
 		if m.Aggregation.Multiplier == nil {
 			return ierr.NewError("multiplier is required for SUM_WITH_MULTIPLIER").
