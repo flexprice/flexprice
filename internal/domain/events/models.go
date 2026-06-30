@@ -61,6 +61,8 @@ type DetailedUsageAnalytic struct {
 	UnitPlural      string
 	TotalUsage      decimal.Decimal `swaggertype:"string"`
 	TotalCost       decimal.Decimal `swaggertype:"string"`
+	TotalDiscount   decimal.Decimal `swaggertype:"string"` // Percentage-coupon discount applied to TotalCost (analytics estimate)
+	NetCost         decimal.Decimal `swaggertype:"string"` // TotalCost - TotalDiscount
 	Currency        string
 	EventCount      uint64                // Number of events that contributed to this aggregation
 	Properties      map[string]string     // Stores property values for flexible grouping (e.g., org_id -> "org123")
@@ -86,6 +88,8 @@ type UsageAnalyticPoint struct {
 	WindowStart time.Time       // For bucketed features: which request window this bucket belongs to
 	Usage       decimal.Decimal `swaggertype:"string"`
 	Cost        decimal.Decimal `swaggertype:"string"`
+	Discount    decimal.Decimal `swaggertype:"string"` // Per-window discount
+	NetCost     decimal.Decimal `swaggertype:"string"` // Cost - Discount
 	EventCount  uint64          // Number of events in this time window
 
 	// BucketID is the commitment time bucket this window's start falls in (empty

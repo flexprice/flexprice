@@ -1316,6 +1316,8 @@ type AnalyticsData struct {
 	Subscriptions         []*subscription.Subscription
 	SubscriptionLineItems map[string]*subscription.SubscriptionLineItem // Map of line item ID -> line item
 	SubscriptionsMap      map[string]*subscription.Subscription         // Map of subscription ID -> subscription
+	LineItemCoupons       map[string][]analyticsCoupon                  // key: SubscriptionLineItemID
+	SubscriptionCoupons   map[string][]analyticsCoupon                  // key: SubscriptionID
 	Analytics             []*events.DetailedUsageAnalytic
 	Features              map[string]*feature.Feature
 	Meters                map[string]*meter.Meter
