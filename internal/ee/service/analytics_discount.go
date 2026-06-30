@@ -9,7 +9,9 @@ import (
 
 // analyticsCoupon is the applicator's pure view of a coupon association: the coupon plus the
 // active window from its association. It intentionally has no coupon_association dependency so
-// the applicator stays trivially unit-testable.
+// the applicator stays trivially unit-testable. Callers are responsible for validity/cadence/type
+// filtering: the applicator does NOT call IsValid and assumes only applicable percentage coupons
+// are passed in.
 type analyticsCoupon struct {
 	Coupon    *coupon.Coupon
 	StartDate time.Time
@@ -28,7 +30,9 @@ func (ac analyticsCoupon) activeAt(t time.Time) bool {
 	return true
 }
 
-// activeOverlaps reports whether the association window overlaps [start, end].
+// activeOverlaps reports whether the association window overlaps [start, end]. EndDate nil =
+// open-ended; both bounds inclusive (a coupon with EndDate == start is still considered active).
+// This matches the repo's CouponAssociation ActiveOnly filter (end_date >= period_start).
 func (ac analyticsCoupon) activeOverlaps(start, end time.Time) bool {
 	if ac.EndDate != nil && ac.EndDate.Before(start) {
 		return false
@@ -48,7 +52,7 @@ type discountInput struct {
 	LineCoupons    []analyticsCoupon // applied first
 	SubCoupons     []analyticsCoupon // applied after, compounding
 	RangeStart     time.Time         // used when Points is empty
-	RangeEnd       time.Time
+	RangeEnd       time.Time         // used when Points is empty
 }
 
 type discountOutput struct {
