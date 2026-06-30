@@ -756,6 +756,11 @@ func NewConfig() (*Configuration, error) {
 	// these binds make Unmarshal actually read them.
 	_ = v.BindEnv("auth.supabase.service_key", "FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY")
 	_ = v.BindEnv("auth.supabase.base_url", "FLEXPRICE_AUTH_SUPABASE_BASE_URL")
+	// Explicitly bind email.resend_api_key — same trap: the ConfigMap renders email
+	// {enabled, from_address, reply_to, calendar_url} but NOT resend_api_key (a secret, injected
+	// as FLEXPRICE_EMAIL_RESEND_API_KEY). Without this bind, transactional email (invoices,
+	// receipts, notifications) silently fails to send on GKE.
+	_ = v.BindEnv("email.resend_api_key", "FLEXPRICE_EMAIL_RESEND_API_KEY")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
