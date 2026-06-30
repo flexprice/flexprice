@@ -110,6 +110,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	router.AddNoPublishHandler(
 		"integration_events_handler",
 		topic,
+		h.deps.Config.Kafka.TopicDLQ,
 		h.deps.PubSub,
 		h.processMessage,
 	)

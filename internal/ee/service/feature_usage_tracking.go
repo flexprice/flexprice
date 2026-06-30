@@ -223,6 +223,7 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 	router.AddNoPublishHandler(
 		"feature_usage_tracking_handler",
 		cfg.FeatureUsageTracking.Topic,
+		cfg.FeatureUsageTracking.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -248,7 +249,8 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 	router.AddNoPublishHandler(
 		"feature_usage_tracking_backfill_handler",
 		cfg.FeatureUsageTracking.TopicBackfill,
-		s.backfillPubSub, // Use the dedicated Kafka backfill PubSub
+		cfg.Kafka.TopicDLQ,
+		s.backfillPubSub,
 		s.processMessage,
 		backfillThrottle.Middleware,
 	)
@@ -274,6 +276,7 @@ func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.R
 	router.AddNoPublishHandler(
 		"feature_usage_tracking_lazy_handler",
 		cfg.FeatureUsageTrackingLazy.Topic,
+		cfg.FeatureUsageTrackingLazy.TopicDLQ,
 		s.lazyPubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -305,7 +308,8 @@ func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter
 	router.AddNoPublishHandler(
 		"feature_usage_tracking_replay_handler",
 		cfg.FeatureUsageTrackingReplay.Topic,
-		s.replayPubSub, // Use the dedicated Kafka replay PubSub
+		cfg.Kafka.TopicDLQ,
+		s.replayPubSub,
 		s.processMessage,
 		replayThrottle.Middleware,
 	)

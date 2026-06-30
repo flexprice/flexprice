@@ -260,12 +260,17 @@ event_processing:
   topic: "events"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
+  # Per-consumer-group dead-letter topic. Empty falls back to the legacy shared
+  # DLQ (kafka.topic_dlq) — messages are never dropped. Create the topic
+  # (or enable auto.create.topics.enable) before enabling in an environment.
+  topic_dlq: "event_processing_dlq"
 
 event_processing_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 12
   consumer_group: "v1_event_processing_lazy"
+  topic_dlq: "event_processing_lazy_dlq"
 
 event_processing_replay:
   enabled: true
@@ -292,12 +297,14 @@ feature_usage_tracking:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
+  topic_dlq: "feature_tracking_service_dlq"
 
 feature_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_lazy"
+  topic_dlq: "feature_tracking_service_lazy_dlq"
 
 feature_usage_tracking_replay:
   enabled: true
@@ -310,12 +317,14 @@ meter_usage_tracking:
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
+  topic_dlq: "meter_usage_tracking_service_dlq"
 
 meter_usage_tracking_lazy:
   enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
+  topic_dlq: "meter_usage_tracking_service_lazy_dlq"
 
 usage_benchmark:
   enabled: false
@@ -328,12 +337,14 @@ costsheet_usage_tracking:
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service"
+  topic_dlq: "costsheet_usage_tracking_service_dlq"
 
 costsheet_usage_tracking_lazy:
   enabled: false
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"
+  topic_dlq: "costsheet_usage_tracking_service_lazy_dlq"
 
 wallet_balance_alert:
   enabled: true

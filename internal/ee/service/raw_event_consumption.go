@@ -100,6 +100,7 @@ func (s *rawEventConsumptionService) RegisterHandler(
 	router.AddNoPublishHandler(
 		"raw_event_consumption_handler",
 		cfg.RawEventConsumption.Topic,
+		cfg.Kafka.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
