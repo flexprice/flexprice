@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
@@ -97,11 +99,22 @@ func runTarget(t Target) targetOutcome {
 
 	// ── Initialize SDK client ───────────────────────────────────────────
 
-	// Create routing capture — shared between SDK and raw clients so that
-	// every outbound request injects X-Debug-DB-Routing and every response
-	// header is captured for routing assertions.
-	capture := NewRoutingCapture(nil)
-	httpClient := newHTTPClientWithCapture(insecure, capture)
+	// currentStep is an atomic shared between SanityRunner and TrafficLogger so
+	// every HTTP call is tagged with the step number it belongs to.
+	var currentStep atomic.Int32
+
+	// Transport chain: RoutingCapture → TrafficLogger → real transport.
+	// RoutingCapture enriches the request (adds X-Debug-DB-Routing / X-Pin-To-Writer),
+	// then TrafficLogger logs the enriched request + full response for the HTML report.
+	base := newHTTPClient(insecure)
+	inner := base.Transport
+	if inner == nil {
+		inner = http.DefaultTransport
+	}
+	trafficLogger := NewTrafficLogger(inner, &currentStep)
+	capture := NewRoutingCapture(trafficLogger)
+	base.Transport = capture
+	httpClient := base
 
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
@@ -114,7 +127,13 @@ func runTarget(t Target) targetOutcome {
 
 	// ── Run orchestrated sanity test ────────────────────────────────────
 
-	runner := &SanityRunner{client: client, raw: raw, routingCapture: capture}
+	runner := &SanityRunner{
+		client:         client,
+		raw:            raw,
+		routingCapture: capture,
+		trafficLogger:  trafficLogger,
+		currentStep:    &currentStep, // shared pointer — runner.run() updates it, trafficLogger reads it
+	}
 	ctx := contextWithTimeout()
 	start := time.Now()
 
@@ -136,6 +155,21 @@ func runTarget(t Target) targetOutcome {
 	// ── Print per-target report ─────────────────────────────────────────
 
 	runner.printReport(totalDuration)
+
+	// ── Generate HTML report ─────────────────────────────────────────────
+	reportPath := fmt.Sprintf("sanity-report-%s.html", time.Now().Format("20060102-150405"))
+	if runner.trafficLogger != nil {
+		if err := generateHTMLReport(
+			runner.results,
+			runner.trafficLogger.Calls(),
+			totalDuration,
+			reportPath,
+		); err != nil {
+			fmt.Printf("\n⚠  Failed to write HTML report: %v\n", err)
+		} else {
+			fmt.Printf("\nHTML report written → %s\n", reportPath)
+		}
+	}
 
 	return runner.outcome(t, totalDuration)
 }

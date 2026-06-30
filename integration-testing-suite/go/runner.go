@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 )
+
 
 // StepResult captures the outcome of a single orchestration step.
 type StepResult struct {
@@ -37,6 +39,10 @@ type SanityRunner struct {
 	// DB routing capture (nil when not enabled).
 	routingCapture *RoutingCapture
 	lagProbeOK     bool // true when the lag-probe endpoint confirmed reader != writer
+
+	// Traffic logging for the HTML report.
+	trafficLogger *TrafficLogger
+	currentStep   *atomic.Int32 // shared pointer with trafficLogger; kept in sync with step
 
 	// Tracks SDK coverage.
 	sdkCovered []string // API calls that the SDK DOES cover
@@ -84,6 +90,9 @@ func (r *SanityRunner) setPhase(name string) {
 // missingFromSDK flags that this resource is not in the generated Speakeasy SDK.
 func (r *SanityRunner) run(name string, sdkMethod string, missingFromSDK bool, fn func() error) {
 	r.step++
+	if r.currentStep != nil {
+		r.currentStep.Store(int32(r.step)) // TrafficLogger reads this to tag call records
+	}
 	start := time.Now()
 
 	// Append first so that lastResult() works inside fn().
