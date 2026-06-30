@@ -60,7 +60,27 @@ func TestApplyAnalyticsDiscounts_NonWindowed(t *testing.T) {
 			if !out.NetCost.Equal(dec(tc.wantNet)) {
 				t.Fatalf("net: want %s got %s", tc.wantNet, out.NetCost)
 			}
+			if out.PointDiscounts != nil {
+				t.Errorf("non-windowed PointDiscounts should be nil, got %v", out.PointDiscounts)
+			}
 		})
+	}
+}
+
+func TestApplyAnalyticsDiscounts_OverlapBoundaryInclusive(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	// Coupon EndDate == RangeStart must still overlap (both bounds inclusive),
+	// so a 10% discount applies.
+	out := ApplyAnalyticsDiscounts(discountInput{
+		Currency:       "USD",
+		GrossTotalCost: dec("100.00"),
+		SubCoupons:     []analyticsCoupon{pctCoupon("10", t0.Add(-48*time.Hour), ptrTime(t0))},
+		RangeStart:     t0,
+		RangeEnd:       t1,
+	})
+	if !out.TotalDiscount.Equal(dec("10")) || !out.NetCost.Equal(dec("90")) {
+		t.Fatalf("boundary-inclusive: discount=%s net=%s", out.TotalDiscount, out.NetCost)
 	}
 }
 
@@ -103,6 +123,7 @@ func TestApplyAnalyticsDiscounts_StackingAndCurrency(t *testing.T) {
 		wantDiscount, wantNet string
 	}{
 		{"two sub 10% stack", "USD", "100.00", []analyticsCoupon{pctCoupon("10", t0, nil), pctCoupon("10", t0, nil)}, "19", "81"},
+		// 999999.99 * 1% = 9999.9999, rounds half-up to 10000.00
 		{"1% of large", "USD", "999999.99", []analyticsCoupon{pctCoupon("1", t0, nil)}, "10000.00", "989999.99"},
 		{"JPY zero-decimal", "JPY", "100", []analyticsCoupon{pctCoupon("33.33", t0, nil)}, "33", "67"},
 	}
