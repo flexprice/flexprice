@@ -979,10 +979,11 @@ billing:
 # Email configuration
 email:
   enabled: false
-  resendApiKey: "" # Set via secret
+  resendApiKey: "" # secret — bound via FLEXPRICE_EMAIL_RESEND_API_KEY (config.go BindEnv); not rendered in configmap
   fromAddress: ""
   replyTo: ""
   calendarUrl: ""
+  zapierWebhookUrl: "" # plain value (user-signup automation) — rendered into config.yaml
 
 # App URL configuration
 app:
