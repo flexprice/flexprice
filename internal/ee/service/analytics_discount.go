@@ -83,7 +83,17 @@ func compound(base decimal.Decimal, currency string, line, sub []analyticsCoupon
 // discounts for one analytic item. Pure: no DB, no service deps.
 func ApplyAnalyticsDiscounts(in discountInput) discountOutput {
 	if len(in.LineCoupons) == 0 && len(in.SubCoupons) == 0 {
-		return discountOutput{TotalDiscount: decimal.Zero, NetCost: in.GrossTotalCost}
+		if len(in.Points) == 0 {
+			return discountOutput{TotalDiscount: decimal.Zero, NetCost: in.GrossTotalCost}
+		}
+		// Windowed input with no applicable coupons: preserve per-point alignment by
+		// returning a zero-valued PointDiscounts slice (length == len(in.Points)), so the
+		// contract "PointDiscounts is nil only for non-windowed input" holds.
+		return discountOutput{
+			TotalDiscount:  decimal.Zero,
+			NetCost:        in.GrossTotalCost,
+			PointDiscounts: make([]decimal.Decimal, len(in.Points)),
+		}
 	}
 
 	if len(in.Points) == 0 {

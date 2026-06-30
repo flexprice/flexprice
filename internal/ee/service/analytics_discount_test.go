@@ -113,6 +113,32 @@ func TestApplyAnalyticsDiscounts_Windowed(t *testing.T) {
 	}
 }
 
+func TestApplyAnalyticsDiscounts_WindowedNoCoupons(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	rangeEnd := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	points := []pointCost{{Timestamp: t0, Cost: dec("50")}, {Timestamp: t1, Cost: dec("50")}}
+
+	out := ApplyAnalyticsDiscounts(discountInput{
+		Currency: "USD", GrossTotalCost: dec("100"), Points: points,
+		RangeStart: t0, RangeEnd: rangeEnd,
+	})
+	if out.PointDiscounts == nil {
+		t.Fatal("windowed input must return a non-nil PointDiscounts slice")
+	}
+	if len(out.PointDiscounts) != 2 {
+		t.Fatalf("PointDiscounts length: want 2 got %d", len(out.PointDiscounts))
+	}
+	for i, d := range out.PointDiscounts {
+		if !d.Equal(decimal.Zero) {
+			t.Fatalf("point %d discount: want 0 got %s", i, d)
+		}
+	}
+	if !out.TotalDiscount.Equal(decimal.Zero) || !out.NetCost.Equal(dec("100")) {
+		t.Fatalf("totals: discount=%s net=%s", out.TotalDiscount, out.NetCost)
+	}
+}
+
 func TestApplyAnalyticsDiscounts_StackingAndCurrency(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
