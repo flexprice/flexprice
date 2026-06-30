@@ -245,6 +245,7 @@ func NewRouter(
 
 			// New endpoints for entitlements and usage
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
+			customer.GET("/external/:external_id/entitlements", handlers.Customer.GetCustomerEntitlementsByExternalID)
 			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)
 			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
 			customer.GET("/:id/grants/upcoming", handlers.Customer.GetUpcomingCreditGrantApplications)

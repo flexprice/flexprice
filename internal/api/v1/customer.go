@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -298,6 +298,44 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 
 	// Call billing service instead of customer service
 	response, err := h.billing.GetCustomerEntitlements(c.Request.Context(), id, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get customer entitlements by external ID
+// @ID getCustomerEntitlementsByExternalID
+// @Description Use when checking entitlements by your app's customer id (e.g. feature gating at the edge). Supports optional filters (feature_ids, subscription_ids).
+// @Tags Customers
+// @Produce json
+// @Security ApiKeyAuth
+// @Param external_id path string true "Customer External ID"
+// @Success 200 {object} dto.CustomerEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/external/{external_id}/entitlements [get]
+func (h *CustomerHandler) GetCustomerEntitlementsByExternalID(c *gin.Context) {
+	externalID := c.Param("external_id")
+
+	customer, err := h.service.GetCustomerByLookupKey(c.Request.Context(), externalID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	var req dto.GetCustomerEntitlementsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid query parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.billing.GetCustomerEntitlements(c.Request.Context(), customer.ID, &req)
 	if err != nil {
 		c.Error(err)
 		return
