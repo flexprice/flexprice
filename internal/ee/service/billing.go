@@ -3352,8 +3352,6 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 			allEntitlements = append(allEntitlements, subEntitlements...)
 		}
 
-		// Line items are not needed in the entitlements response
-		sub.LineItems = nil
 		allSubscriptions = append(allSubscriptions, &dto.SubscriptionResponse{Subscription: sub})
 	}
 
