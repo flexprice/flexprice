@@ -1,0 +1,125 @@
+package service
+
+import (
+	"testing"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
+)
+
+func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
+
+func pctCoupon(pct string, start time.Time, end *time.Time) analyticsCoupon {
+	p := dec(pct)
+	return analyticsCoupon{
+		Coupon: &coupon.Coupon{
+			Type:          types.CouponTypePercentage,
+			PercentageOff: &p,
+		},
+		StartDate: start,
+		EndDate:   end,
+	}
+}
+
+func TestApplyAnalyticsDiscounts_NonWindowed(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	before := t0.Add(-48 * time.Hour)
+
+	tests := []struct {
+		name         string
+		gross        string
+		line         []analyticsCoupon
+		sub          []analyticsCoupon
+		wantDiscount string
+		wantNet      string
+	}{
+		{"no coupons", "100.00", nil, nil, "0", "100.00"},
+		{"single line 10%", "100.00", []analyticsCoupon{pctCoupon("10", t0, nil)}, nil, "10", "90"},
+		{"single sub 10%", "100.00", nil, []analyticsCoupon{pctCoupon("10", t0, nil)}, "10", "90"},
+		{"line 10% then sub 20%", "100.00", []analyticsCoupon{pctCoupon("10", t0, nil)}, []analyticsCoupon{pctCoupon("20", t0, nil)}, "28", "72"},
+		{"100% caps at zero", "100.00", []analyticsCoupon{pctCoupon("100", t0, nil)}, nil, "100", "0"},
+		{"33.33% rounds", "100.00", nil, []analyticsCoupon{pctCoupon("33.33", t0, nil)}, "33.33", "66.67"},
+		{"window before range -> none", "100.00", []analyticsCoupon{pctCoupon("10", before, ptrTime(t0.Add(-time.Hour)))}, nil, "0", "100.00"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := ApplyAnalyticsDiscounts(discountInput{
+				Currency:       "USD",
+				GrossTotalCost: dec(tc.gross),
+				LineCoupons:    tc.line,
+				SubCoupons:     tc.sub,
+				RangeStart:     t0,
+				RangeEnd:       t1,
+			})
+			if !out.TotalDiscount.Equal(dec(tc.wantDiscount)) {
+				t.Fatalf("discount: want %s got %s", tc.wantDiscount, out.TotalDiscount)
+			}
+			if !out.NetCost.Equal(dec(tc.wantNet)) {
+				t.Fatalf("net: want %s got %s", tc.wantNet, out.NetCost)
+			}
+		})
+	}
+}
+
+func TestApplyAnalyticsDiscounts_Windowed(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	rangeEnd := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	points := []pointCost{{Timestamp: t0, Cost: dec("50")}, {Timestamp: t1, Cost: dec("50")}}
+
+	out := ApplyAnalyticsDiscounts(discountInput{
+		Currency: "USD", GrossTotalCost: dec("100"), Points: points,
+		SubCoupons: []analyticsCoupon{pctCoupon("10", t0, nil)}, RangeStart: t0, RangeEnd: rangeEnd,
+	})
+	if !out.TotalDiscount.Equal(dec("10")) || !out.NetCost.Equal(dec("90")) {
+		t.Fatalf("all-active: discount=%s net=%s", out.TotalDiscount, out.NetCost)
+	}
+	if len(out.PointDiscounts) != 2 || !out.PointDiscounts[0].Equal(dec("5")) || !out.PointDiscounts[1].Equal(dec("5")) {
+		t.Fatalf("all-active point discounts: %v", out.PointDiscounts)
+	}
+
+	out = ApplyAnalyticsDiscounts(discountInput{
+		Currency: "USD", GrossTotalCost: dec("100"), Points: points,
+		SubCoupons: []analyticsCoupon{pctCoupon("10", t1, nil)}, RangeStart: t0, RangeEnd: rangeEnd,
+	})
+	if !out.PointDiscounts[0].Equal(decimal.Zero) || !out.PointDiscounts[1].Equal(dec("5")) {
+		t.Fatalf("partial point discounts: %v", out.PointDiscounts)
+	}
+	if !out.TotalDiscount.Equal(dec("5")) || !out.NetCost.Equal(dec("95")) {
+		t.Fatalf("partial: discount=%s net=%s", out.TotalDiscount, out.NetCost)
+	}
+}
+
+func TestApplyAnalyticsDiscounts_StackingAndCurrency(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name, currency, gross string
+		sub                   []analyticsCoupon
+		wantDiscount, wantNet string
+	}{
+		{"two sub 10% stack", "USD", "100.00", []analyticsCoupon{pctCoupon("10", t0, nil), pctCoupon("10", t0, nil)}, "19", "81"},
+		{"1% of large", "USD", "999999.99", []analyticsCoupon{pctCoupon("1", t0, nil)}, "10000.00", "989999.99"},
+		{"JPY zero-decimal", "JPY", "100", []analyticsCoupon{pctCoupon("33.33", t0, nil)}, "33", "67"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := ApplyAnalyticsDiscounts(discountInput{
+				Currency: tc.currency, GrossTotalCost: dec(tc.gross),
+				SubCoupons: tc.sub, RangeStart: t0, RangeEnd: t1,
+			})
+			if !out.TotalDiscount.Equal(dec(tc.wantDiscount)) {
+				t.Fatalf("discount: want %s got %s", tc.wantDiscount, out.TotalDiscount)
+			}
+			if !out.NetCost.Equal(dec(tc.wantNet)) {
+				t.Fatalf("net: want %s got %s", tc.wantNet, out.NetCost)
+			}
+		})
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
