@@ -11,6 +11,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -1128,6 +1130,9 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
+	// Apply percentage-coupon discounts (gross TotalCost preserved; net/discount stamped).
+	s.applyAnalyticsDiscounts(ctx, data, params)
+
 	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
@@ -2105,6 +2110,69 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // ---------------------------------------------------------------------------
 // Cost calculation (copied from feature_usage_tracking.go to remove dependency)
 // ---------------------------------------------------------------------------
+
+// applyAnalyticsDiscounts stamps percentage-coupon discounts onto each analytic item (and its
+// points), reusing the canonical coupon math. Short-circuits when there are no costed
+// subscriptions or no applicable coupons, so the common no-coupon case is free.
+func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *AnalyticsData, params *events.MeterUsageDetailedAnalyticsParams) {
+	if len(data.Analytics) == 0 || len(data.Subscriptions) == 0 {
+		return
+	}
+
+	keep := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return c.Type == types.CouponTypePercentage &&
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+			c.IsValid()
+	}
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, data.Subscriptions, params.StartTime, params.EndTime, keep)
+	if err != nil {
+		s.logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
+		return
+	}
+	data.LineItemCoupons, data.SubscriptionCoupons = projectAnalyticsCoupons(sel)
+	if len(data.LineItemCoupons) == 0 && len(data.SubscriptionCoupons) == 0 {
+		return
+	}
+
+	for _, item := range data.Analytics {
+		subID := item.SubscriptionID
+		if subID == "" {
+			if li := data.SubscriptionLineItems[item.SubLineItemID]; li != nil {
+				subID = li.SubscriptionID
+			}
+		}
+		lineCoupons := data.LineItemCoupons[item.SubLineItemID]
+		subCoupons := data.SubscriptionCoupons[subID]
+		if len(lineCoupons) == 0 && len(subCoupons) == 0 {
+			continue
+		}
+
+		in := discountInput{
+			Currency:       item.Currency,
+			GrossTotalCost: item.TotalCost,
+			LineCoupons:    lineCoupons,
+			SubCoupons:     subCoupons,
+			RangeStart:     params.StartTime,
+			RangeEnd:       params.EndTime,
+		}
+		if len(item.Points) > 0 {
+			in.Points = make([]pointCost, len(item.Points))
+			for i, p := range item.Points {
+				in.Points[i] = pointCost{Timestamp: p.Timestamp, Cost: p.Cost}
+			}
+		}
+
+		out := ApplyAnalyticsDiscounts(in)
+		item.TotalDiscount = out.TotalDiscount
+		item.NetCost = item.TotalCost.Sub(out.TotalDiscount)
+		for i := range item.Points {
+			if i < len(out.PointDiscounts) {
+				item.Points[i].Discount = out.PointDiscounts[i]
+				item.Points[i].NetCost = item.Points[i].Cost.Sub(out.PointDiscounts[i])
+			}
+		}
+	}
+}
 
 // calculateCosts calculates costs for all analytics items in the data.
 func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
