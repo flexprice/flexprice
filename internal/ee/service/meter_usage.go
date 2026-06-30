@@ -1131,7 +1131,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	}
 
 	// Apply percentage-coupon discounts (gross TotalCost preserved; net/discount stamped).
-	s.applyAnalyticsDiscounts(ctx, data, params)
+	applyAnalyticsDiscounts(ctx, s.ServiceParams, data, params.StartTime, params.EndTime)
 
 	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
@@ -1634,7 +1634,7 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			TotalUsage:      analytic.TotalUsage,
 			TotalCost:       analytic.TotalCost,
 			TotalDiscount:   analytic.TotalDiscount,
-			NetCost:         analytic.NetCost,
+			NetCost:         analytic.TotalCost.Sub(analytic.TotalDiscount),
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -1751,7 +1751,7 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					Usage:                            point.Usage,
 					Cost:                             point.Cost,
 					Discount:                         point.Discount,
-					NetCost:                          point.NetCost,
+					NetCost:                          point.Cost.Sub(point.Discount),
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -1784,8 +1784,11 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
 		response.TotalDiscount = response.TotalDiscount.Add(analytic.TotalDiscount)
-		response.TotalNetCost = response.TotalNetCost.Add(analytic.NetCost)
 	}
+
+	// Derive TotalNetCost from fully-summed TotalCost and TotalDiscount so the
+	// result is consistent even when the discount pass short-circuits (zero discount).
+	response.TotalNetCost = response.TotalCost.Sub(response.TotalDiscount)
 
 	sort.Slice(response.Items, func(i, j int) bool {
 		return response.Items[i].FeatureName < response.Items[j].FeatureName
@@ -2119,10 +2122,11 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // Cost calculation (copied from feature_usage_tracking.go to remove dependency)
 // ---------------------------------------------------------------------------
 
-// applyAnalyticsDiscounts stamps percentage-coupon discounts onto each analytic item (and its
-// points), reusing the canonical coupon math. Short-circuits when there are no costed
-// subscriptions or no applicable coupons, so the common no-coupon case is free.
-func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *AnalyticsData, params *events.MeterUsageDetailedAnalyticsParams) {
+// applyAnalyticsDiscounts stamps percentage-coupon discounts (TotalDiscount + per-point Discount)
+// onto each analytics item for ANY analytics endpoint. Net cost is derived in the response
+// builders from TotalCost - TotalDiscount, so callers need only run this pass. Short-circuits
+// when there are no costed subscriptions, no coupon repo, or no applicable coupons.
+func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) {
 	if len(data.Analytics) == 0 || len(data.Subscriptions) == 0 {
 		return
 	}
@@ -2130,7 +2134,7 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 	// Discounts require the coupon-association repo. If the service was constructed
 	// without it (e.g. a focused test), degrade gracefully to no discounts rather
 	// than panic — discounts are an enhancement on a read path.
-	if s.CouponAssociationRepo == nil {
+	if sp.CouponAssociationRepo == nil {
 		return
 	}
 
@@ -2139,9 +2143,9 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
 			c.IsValid()
 	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, data.Subscriptions, params.StartTime, params.EndTime, keep)
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, keep)
 	if err != nil {
-		s.logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
+		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return
 	}
 	data.LineItemCoupons, data.SubscriptionCoupons = projectAnalyticsCoupons(sel)
@@ -2167,8 +2171,8 @@ func (s *meterUsageService) applyAnalyticsDiscounts(ctx context.Context, data *A
 			GrossTotalCost: item.TotalCost,
 			LineCoupons:    lineCoupons,
 			SubCoupons:     subCoupons,
-			RangeStart:     params.StartTime,
-			RangeEnd:       params.EndTime,
+			RangeStart:     start,
+			RangeEnd:       end,
 		}
 		if len(item.Points) > 0 {
 			in.Points = make([]pointCost, len(item.Points))

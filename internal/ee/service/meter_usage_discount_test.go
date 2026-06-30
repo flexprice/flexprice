@@ -367,10 +367,9 @@ func (s *MeterUsageDiscountSuite) TestFixedCouponSkipped() {
 
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"fixed coupon should produce zero discount in analytics, got %s", item.TotalDiscount)
-	// Note: When no percentage discount applies, the service leaves NetCost=0 (zero value).
-	// This is production behavior: NetCost is only set when a qualifying discount is computed.
-	s.True(item.NetCost.Equal(decimal.Zero),
-		"NetCost should be zero when no applicable discount, got %s", item.NetCost)
+	// When no percentage discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
+	s.True(item.NetCost.Equal(item.TotalCost),
+		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
 }
 
 // Case 4: Once-cadence percentage coupon — skipped silently (analytics only applies
@@ -402,9 +401,9 @@ func (s *MeterUsageDiscountSuite) TestOnceCadenceCouponSkipped() {
 
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"once-cadence coupon should be skipped in analytics, got %s", item.TotalDiscount)
-	// Note: When no percentage discount applies, the service leaves NetCost=0 (zero value).
-	s.True(item.NetCost.Equal(decimal.Zero),
-		"NetCost should be zero when no applicable discount, got %s", item.NetCost)
+	// When no percentage discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
+	s.True(item.NetCost.Equal(item.TotalCost),
+		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
 }
 
 // Case 5: No coupons — regression guard; discount = 0.
@@ -422,13 +421,12 @@ func (s *MeterUsageDiscountSuite) TestNoCoupons() {
 
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"no coupon should produce zero discount, got %s", item.TotalDiscount)
-	// Note: When no discount applies, NetCost is left at its zero value by the service.
-	// This is production behavior: NetCost is only set when a qualifying discount is computed.
-	s.True(item.NetCost.Equal(decimal.Zero),
-		"NetCost should be zero when no applicable discount, got %s", item.NetCost)
+	// When no discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
+	s.True(item.NetCost.Equal(item.TotalCost),
+		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
 	s.True(resp.TotalDiscount.Equal(decimal.Zero), "resp.TotalDiscount should be 0")
-	// TotalNetCost is the sum of all item.NetCost values — also zero when no discount.
-	s.True(resp.TotalNetCost.Equal(decimal.Zero), "resp.TotalNetCost should be 0 when no discounts")
+	// TotalNetCost is derived as TotalCost - TotalDiscount — equals TotalCost when no discount.
+	s.True(resp.TotalNetCost.Equal(resp.TotalCost), "resp.TotalNetCost should equal TotalCost when no discounts")
 }
 
 // Case 6: Group-by source — two sources, one line-item 10% coupon.
