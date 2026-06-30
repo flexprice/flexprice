@@ -107,12 +107,12 @@ func (s *eventConsumptionService) RegisterHandler(
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
 
-	// Add the handler
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"event_consumption_handler",
 		cfg.EventProcessing.Topic,
 		s.pubSub,
 		s.processMessage,
+		cfg.EventProcessing.TopicDLQ,
 		throttle.Middleware,
 	)
 
@@ -135,12 +135,12 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventProcessingLazy.RateLimit, time.Second)
 
-	// Add the handler
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"event_consumption_lazy_handler",
 		cfg.EventProcessingLazy.Topic,
 		s.lazyPubSub,
 		s.processMessage,
+		cfg.EventProcessingLazy.TopicDLQ,
 		throttle.Middleware,
 	)
 

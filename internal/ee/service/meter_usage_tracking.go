@@ -151,11 +151,12 @@ func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router,
 
 	throttle := middleware.NewThrottle(cfg.MeterUsageTracking.RateLimit, time.Second)
 
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"meter_usage_tracking_handler",
 		cfg.MeterUsageTracking.Topic,
 		s.pubSub,
 		s.processMessage,
+		cfg.MeterUsageTracking.TopicDLQ,
 		throttle.Middleware,
 	)
 
@@ -178,11 +179,12 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 
 	throttle := middleware.NewThrottle(cfg.MeterUsageTrackingLazy.RateLimit, time.Second)
 
-	router.AddNoPublishHandler(
+	router.AddNoPublishHandlerWithDLQ(
 		"meter_usage_tracking_lazy_handler",
 		cfg.MeterUsageTrackingLazy.Topic,
 		s.lazyPubSub,
 		s.processMessage,
+		cfg.MeterUsageTrackingLazy.TopicDLQ,
 		throttle.Middleware,
 	)
 
