@@ -41,7 +41,6 @@ type InMemoryCache interface {
 type RedisCache interface {
 	InMemoryCache
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
-	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 	AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error)
 }
 
