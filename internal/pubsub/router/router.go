@@ -34,17 +34,12 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	}
 
 	var dlqPublisher message.Publisher
-	dlqTopic := cfg.Kafka.TopicDLQ
 
-	if dlqTopic != "" {
-		dlqPublisher, err = createDLQPublisher(cfg, logger)
-		if err != nil {
-			return nil, err
-		}
-		logger.Info(context.Background(), "DLQ publisher initialized", "dlq_topic", dlqTopic)
-	} else {
-		logger.Info(context.Background(), "no global topic_dlq configured — per-handler DLQ disabled unless overridden")
+	dlqPublisher, err = createDLQPublisher(cfg, logger)
+	if err != nil {
+		return nil, err
 	}
+	logger.Info(context.Background(), "DLQ publisher initialized")
 
 	router.AddMiddleware(
 		middleware.Recoverer,
