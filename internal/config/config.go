@@ -153,10 +153,9 @@ type KafkaConfig struct {
 	ConsumerGroup string   `mapstructure:"consumer_group" validate:"required"`
 	Topic         string   `mapstructure:"topic" validate:"required"`
 	TopicLazy     string   `mapstructure:"topic_lazy" validate:"required"`
-	// TopicDLQ is the legacy shared dead-letter topic. It is now the fallback DLQ
-	// for consumers without a per-consumer-group topic_dlq (see the TopicDLQ fields
-	// on the event_processing* / *_usage_tracking configs). Empty falls back to an
-	// in-memory queue (non-durable).
+	// TopicDLQ is the global fallback dead-letter Kafka topic used by handlers that
+	// do not define their own per-consumer-group topic_dlq. Empty disables DLQ for
+	// those handlers.
 	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
 	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	UseSASL       bool                 `mapstructure:"use_sasl"`

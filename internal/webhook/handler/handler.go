@@ -34,6 +34,7 @@ type Handler interface {
 type handler struct {
 	pubSub          pubsub.PubSub
 	config          *config.Webhook
+	dlqTopic        string
 	factory         payload.PayloadBuilderFactory
 	client          httpclient.Client
 	logger          *logger.Logger
@@ -56,6 +57,7 @@ func NewHandler(
 	return &handler{
 		pubSub:          pubSub,
 		config:          &cfg.Webhook,
+		dlqTopic:        cfg.Kafka.TopicDLQ,
 		factory:         factory,
 		client:          client,
 		logger:          logger,
@@ -81,6 +83,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 		h.config.Topic,
 		h.pubSub,
 		h.processMessage,
+		h.dlqTopic,
 		throttle.Middleware,
 	)
 	h.logger.Debug(context.Background(), "registered webhook handler",

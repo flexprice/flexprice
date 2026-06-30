@@ -161,7 +161,8 @@ func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Rou
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.CostSheetUsageTracking.RateLimit, time.Second)
 
-	router.AddNoPublishHandlerWithDLQ(
+	// Add the handler
+	router.AddNoPublishHandler(
 		"costsheet_usage_tracking_handler",
 		cfg.CostSheetUsageTracking.Topic,
 		s.pubSub,
@@ -186,7 +187,8 @@ func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.CostSheetUsageTrackingLazy.RateLimit, time.Second)
 
-	router.AddNoPublishHandlerWithDLQ(
+	// Add the handler
+	router.AddNoPublishHandler(
 		"costsheet_usage_tracking_lazy_handler",
 		cfg.CostSheetUsageTrackingLazy.Topic,
 		s.lazyPubSub,

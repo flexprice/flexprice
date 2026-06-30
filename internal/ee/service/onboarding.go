@@ -221,6 +221,7 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 		cfg.OnboardingEvents.Topic,
 		s.pubSub,
 		s.processMessage,
+		cfg.Kafka.TopicDLQ,
 		throttle.Middleware,
 	)
 

@@ -112,6 +112,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 		topic,
 		h.deps.PubSub,
 		h.processMessage,
+		h.deps.Config.Kafka.TopicDLQ,
 	)
 }
 
