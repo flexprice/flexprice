@@ -268,6 +268,7 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				subscription.BillingPeriod,
 				subscription.BillingPeriodCount,
 				*coupon.DurationInPeriods,
+				subscription.Timezone,
 			)
 			if err != nil {
 				return err
@@ -310,14 +311,15 @@ func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_associ
 // scheduling), then subtracts 1s so the result is strictly before the (n+1)th
 // period start — ensuring the ActiveOnly filter (end_date >= period_start) does
 // not match that next period.
-func computeCouponEndDate(startDate, billingAnchor time.Time, period types.BillingPeriod, periodCount, n int) (time.Time, error) {
+func computeCouponEndDate(startDate, billingAnchor time.Time, period types.BillingPeriod, periodCount, n int, timezone string) (time.Time, error) {
 	current := startDate
 	for i := 0; i < n; i++ {
-		next, err := types.NextBillingDate(types.NextBillingDateParams{
+		next, err := types.NextBillingDate(&types.NextBillingDateParams{
 			CurrentPeriodStart: current,
 			BillingAnchor:      billingAnchor,
 			Unit:               periodCount,
 			Period:             period,
+			Timezone:           timezone,
 		})
 		if err != nil {
 			return startDate, err

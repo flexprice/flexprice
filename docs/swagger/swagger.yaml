@@ -179,8 +179,34 @@ definitions:
     type: object
   checkout.JSONBCheckoutProviderResult:
     properties:
-      create_subscription_result:
-        $ref: '#/definitions/types.ProviderSubscriptionResult'
+      expires_at:
+        description: |-
+          ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,
+          executeCheckoutAction tightens the session expiry to match.
+        type: string
+      next_action:
+        allOf:
+        - $ref: '#/definitions/types.PaymentAction'
+        description: NextAction is what the customer must do to complete payment.
+      provider_metadata:
+        additionalProperties:
+          type: string
+        description: ProviderMetadata holds provider-specific data not needed for
+          business logic.
+        type: object
+      provider_payment_intent_id:
+        description: |-
+          ProviderPaymentIntentID is the provider-side charge/intent ID.
+          Stripe returns this at link creation (pi_xxx); others populate it from the webhook payload.
+        type: string
+      provider_session_id:
+        description: |-
+          ProviderSessionID is stored in EntityIntegrationMapping at link creation.
+            Stripe:   Checkout Session ID  (cs_xxx)
+            Razorpay: Payment Link ID      (plink_xxx)
+            Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)
+            Moyasar:  Payment ID
+        type: string
     type: object
   checkout.JSONBCheckoutResult:
     properties:
@@ -507,12 +533,16 @@ definitions:
     type: object
   AggregatedEntitlement:
     properties:
+      config_values:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
       is_enabled:
         type: boolean
       is_soft_limit:
         type: boolean
       static_values:
-        description: For static/SLA features
         items:
           type: string
         type: array
@@ -923,7 +953,7 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       payment_action:
-        $ref: '#/definitions/PaymentAction'
+        $ref: '#/definitions/types.PaymentAction'
       payment_provider:
         allOf:
         - $ref: '#/definitions/types.CheckoutPaymentProvider'
@@ -1375,7 +1405,7 @@ definitions:
         type: string
       configuration:
         $ref: '#/definitions/types.CheckoutConfiguration'
-      customer_id:
+      customer_external_id:
         type: string
       failure_url:
         type: string
@@ -1391,7 +1421,7 @@ definitions:
         type: string
     required:
     - action
-    - customer_id
+    - customer_external_id
     - payment_provider
     type: object
   CreateCostsheetRequest:
@@ -1645,11 +1675,19 @@ definitions:
         items:
           $ref: '#/definitions/TaxRateOverride'
         type: array
+      timezone:
+        description: |-
+          timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata", "America/New_York")
+          Defaults to "UTC" if not provided
+        type: string
     required:
     - external_id
     type: object
   CreateEntitlementRequest:
     properties:
+      config_value:
+        additionalProperties: true
+        type: object
       end_date:
         type: string
       entity_id:
@@ -2358,11 +2396,6 @@ definitions:
           customer_id is the flexprice customer id
           and it is prioritized over external_customer_id in case both are provided.
         type: string
-      customer_timezone:
-        description: |-
-          Timezone of the customer.
-          If not set, the default value is UTC.
-        type: string
       enable_true_up:
         description: Enable Commitment True Up Fee
         type: boolean
@@ -2469,6 +2502,11 @@ definitions:
         items:
           $ref: '#/definitions/TaxRateOverride'
         type: array
+      timezone:
+        description: |-
+          Timezone of the customer.
+          If not set, the default value is UTC.
+        type: string
       trial_period_days:
         description: |-
           TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
@@ -2921,6 +2959,10 @@ definitions:
         items:
           $ref: '#/definitions/AggregatedFeature'
         type: array
+      subscriptions:
+        items:
+          $ref: '#/definitions/SubscriptionResponse'
+        type: array
     type: object
   CustomerInvoiceSummary:
     properties:
@@ -3040,6 +3082,11 @@ definitions:
         $ref: '#/definitions/types.Status'
       tenant_id:
         type: string
+      timezone:
+        description: |-
+          Timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata").
+          Defaults to "UTC". Inherited by subscriptions at creation time.
+        type: string
       updated_at:
         type: string
       updated_by:
@@ -3119,6 +3166,9 @@ definitions:
     properties:
       addon:
         $ref: '#/definitions/AddonResponse'
+      config_value:
+        additionalProperties: true
+        type: object
       created_at:
         type: string
       created_by:
@@ -3171,6 +3221,9 @@ definitions:
     type: object
   EntitlementSource:
     properties:
+      config_value:
+        additionalProperties: true
+        type: object
       entitlement_id:
         type: string
       entity_id:
@@ -3672,6 +3725,8 @@ definitions:
       start_time:
         example: "2024-11-09T00:00:00Z"
         type: string
+      timezone:
+        type: string
       window_size:
         $ref: '#/definitions/types.WindowSize'
     required:
@@ -3796,6 +3851,8 @@ definitions:
         type: string
       start_time:
         example: "2024-03-13T00:00:00Z"
+        type: string
+      timezone:
         type: string
       window_size:
         $ref: '#/definitions/types.WindowSize'
@@ -4355,15 +4412,6 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  ListCheckoutSessionsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/CheckoutSessionResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
   ListCostsheetResponse:
     properties:
       items:
@@ -4568,13 +4616,6 @@ definitions:
           this line item
     required:
     - price_id
-    type: object
-  PaymentAction:
-    properties:
-      type:
-        $ref: '#/definitions/types.PaymentActionType'
-      url:
-        type: string
     type: object
   PaymentAttemptResponse:
     properties:
@@ -5776,8 +5817,6 @@ definitions:
       customer_id:
         description: CustomerID is the identifier for the customer in our system
         type: string
-      customer_timezone:
-        type: string
       enable_true_up:
         type: boolean
       end_date:
@@ -5864,6 +5903,8 @@ definitions:
           plan-price sync after a successful pass.
         type: integer
       tenant_id:
+        type: string
+      timezone:
         type: string
       trial_end:
         description: TrialEnd is the end date of the trial period
@@ -5975,8 +6016,6 @@ definitions:
       customer_id:
         description: CustomerID is the identifier for the customer in our system
         type: string
-      customer_timezone:
-        type: string
       enable_true_up:
         type: boolean
       end_date:
@@ -6071,6 +6110,8 @@ definitions:
           plan-price sync after a successful pass.
         type: integer
       tenant_id:
+        type: string
+      timezone:
         type: string
       trial_end:
         description: TrialEnd is the end date of the trial period
@@ -6644,9 +6685,16 @@ definitions:
       name:
         description: name is the updated name or company name for the customer
         type: string
+      timezone:
+        description: timezone is the updated IANA timezone name for the customer (e.g.
+          "Asia/Kolkata", "America/New_York")
+        type: string
     type: object
   UpdateEntitlementRequest:
     properties:
+      config_value:
+        additionalProperties: true
+        type: object
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -7226,6 +7274,13 @@ definitions:
         type: string
       id:
         type: string
+      is_cached_fallback:
+        description: |-
+          IsCachedFallback is true whenever the response is sourced from cache:
+          either an explicit cache request, or fallback after a real-time failure.
+          Clients should treat the absence of this field as if it were true and
+          only trust freshness when the server explicitly emits false.
+        type: boolean
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
@@ -7569,6 +7624,11 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
+        type: string
+      timezone:
+        description: |-
+          Timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata").
+          Defaults to "UTC". Inherited by subscriptions at creation time.
         type: string
       updated_at:
         type: string
@@ -8453,11 +8513,13 @@ definitions:
     - metered
     - boolean
     - static
+    - config
     type: string
     x-enum-varnames:
     - FeatureTypeMetered
     - FeatureTypeBoolean
     - FeatureTypeStatic
+    - FeatureTypeConfig
   types.FileType:
     enum:
     - CSV
@@ -9920,6 +9982,7 @@ definitions:
     - checkout.session.initiated
     - checkout.session.completed
     - checkout.session.failed
+    - checkout.session.expired
     type: string
     x-enum-varnames:
     - WebhookEventSubscriptionCreated
@@ -9967,6 +10030,7 @@ definitions:
     - WebhookEventCheckoutSessionInitiated
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
+    - WebhookEventCheckoutSessionExpired
   types.WindowSize:
     enum:
     - MINUTE
@@ -10629,62 +10693,10 @@ definitions:
     type: object
   types.CheckoutPaymentProvider:
     enum:
-    - stripe
+    - razorpay
     type: string
     x-enum-varnames:
-    - CheckoutPaymentProviderStripe
-  types.CheckoutProviderResult:
-    properties:
-      create_subscription_result:
-        $ref: '#/definitions/types.ProviderSubscriptionResult'
-    type: object
-  types.CheckoutSessionFilter:
-    properties:
-      actions:
-        items:
-          $ref: '#/definitions/types.CheckoutAction'
-        type: array
-      checkout_invoice_ids:
-        items:
-          type: string
-        type: array
-      checkout_payment_ids:
-        items:
-          type: string
-        type: array
-      checkout_statuses:
-        items:
-          $ref: '#/definitions/types.CheckoutStatus'
-        type: array
-      customer_ids:
-        items:
-          type: string
-        type: array
-      expand:
-        type: string
-      expires_at_lt:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      payment_providers:
-        items:
-          $ref: '#/definitions/types.CheckoutPaymentProvider'
-        type: array
-      sort:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
+    - CheckoutPaymentProviderRazorpay
   types.CheckoutStatus:
     enum:
     - initiated
@@ -10740,6 +10752,13 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.PaymentAction:
+    properties:
+      type:
+        $ref: '#/definitions/types.PaymentActionType'
+      url:
+        type: string
+    type: object
   types.PaymentActionType:
     enum:
     - checkout_url
@@ -10748,15 +10767,6 @@ definitions:
     x-enum-varnames:
     - PaymentActionTypeCheckoutURL
     - PaymentActionTypePaymentLink
-  types.ProviderSubscriptionResult:
-    properties:
-      payment_intent_id:
-        type: string
-      session_id:
-        type: string
-      session_url:
-        type: string
-    type: object
   types.TimeOfDayBucket:
     properties:
       commitment_type:
@@ -11259,103 +11269,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get checkout session
-      tags:
-      - Checkout
-  /checkout/sessions/{id}/cleanup:
-    post:
-      operationId: testCleanupCheckoutSession
-      parameters:
-      - description: Checkout session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/CheckoutSessionResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: '[TEST ONLY] Cleanup (fail) a checkout session manually'
-      tags:
-      - Checkout
-  /checkout/sessions/{id}/complete:
-    post:
-      consumes:
-      - application/json
-      operationId: testCompleteCheckoutSession
-      parameters:
-      - description: Checkout session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Provider result (optional)
-        in: body
-        name: result
-        schema:
-          $ref: '#/definitions/types.CheckoutProviderResult'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/CheckoutSessionResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: '[TEST ONLY] Complete a checkout session manually'
-      tags:
-      - Checkout
-  /checkout/sessions/search:
-    post:
-      consumes:
-      - application/json
-      operationId: queryCheckoutSessions
-      parameters:
-      - description: Filter
-        in: body
-        name: filter
-        required: true
-        schema:
-          $ref: '#/definitions/types.CheckoutSessionFilter'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/ListCheckoutSessionsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Search checkout sessions
       tags:
       - Checkout
   /costs:

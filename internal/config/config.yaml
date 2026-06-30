@@ -70,7 +70,7 @@ postgres:
   # Will be overridden by FLEXPRICE_POSTGRES_HOST env var in Docker
   port: 5432
   reader_host: "" # empty = use writer host; set FLEXPRICE_POSTGRES_READER_HOST to override
-  reader_port: 0  # 0 = use writer port
+  reader_port: 0 # 0 = use writer port
   user: flexprice
   password: flexprice123
   dbname: flexprice
@@ -112,15 +112,15 @@ sentry:
 # Set FLEXPRICE_OTEL_INSECURE=false (default) for TLS to SigNoz Cloud.
 otel:
   enabled: true
-  service_name: "flexprice-local"  # Override via FLEXPRICE_OTL_SERVICE_NAME or SERVICE_NAME
-  protocol: "grpc"                 # SigNoz Cloud uses gRPC/TLS — do not change
-  insecure: false                  # false = TLS (required for SigNoz Cloud)
+  service_name: "flexprice-local" # Override via FLEXPRICE_OTL_SERVICE_NAME or SERVICE_NAME
+  protocol: "grpc" # SigNoz Cloud uses gRPC/TLS — do not change
+  insecure: false # false = TLS (required for SigNoz Cloud)
 
   traces:
     enabled: false
-    endpoint: ""   # Set via FLEXPRICE_OTEL_TRACES_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
-    protocol: ""   # Empty = inherit top-level grpc. Override only for HTTP backends.
-    auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
+    endpoint: "" # Set via FLEXPRICE_OTEL_TRACES_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
+    protocol: "" # Empty = inherit top-level grpc. Override only for HTTP backends.
+    auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
     auth_value: ""
     sample_rate: 1.0
     # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
@@ -129,9 +129,9 @@ otel:
 
   logs:
     enabled: false
-    endpoint: ""   # Set via FLEXPRICE_OTEL_LOGS_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
-    protocol: ""   # Empty = inherit top-level grpc.
-    auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
+    endpoint: "" # Set via FLEXPRICE_OTEL_LOGS_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
+    protocol: "" # Empty = inherit top-level grpc.
+    auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
     auth_value: ""
 
 pyroscope:
@@ -382,7 +382,6 @@ whop:
 webhook_logging:
   tenant_ids: []
   environment_ids: []
-
 
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)

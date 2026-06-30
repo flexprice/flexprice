@@ -111,30 +111,55 @@ func formatClickHouseDateTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05.000")
 }
 
-func formatWindowSize(windowSize types.WindowSize) string {
-	switch windowSize {
-	case types.WindowSizeMinute:
-		return "toStartOfMinute(timestamp)"
-	case types.WindowSizeHour:
-		return "toStartOfHour(timestamp)"
-	case types.WindowSizeDay:
-		return "toStartOfDay(timestamp)"
-	case types.WindowSizeWeek:
-		return "toStartOfWeek(timestamp)"
-	case types.WindowSize15Min:
-		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
-	case types.WindowSize30Min:
-		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
-	case types.WindowSize3Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
-	case types.WindowSize6Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
-	case types.WindowSize12Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
-	case types.WindowSizeMonth:
-		return "toStartOfMonth(timestamp)"
-	default:
+// normalizeCHTimezone returns a valid IANA timezone name for ClickHouse
+// toStartOf* functions, defaulting to UTC for empty, "UTC", or unresolvable
+// values. Passing an invalid name straight to ClickHouse would error the query,
+// so this is the single guard shared by both window formatters.
+func normalizeCHTimezone(tz string) string {
+	if tz == "" || tz == types.DefaultTimezone {
+		return types.DefaultTimezone
+	}
+	if _, err := time.LoadLocation(tz); err != nil {
+		return types.DefaultTimezone
+	}
+	return tz
+}
+
+// formatWindowSize returns the ClickHouse expression that buckets `timestamp`
+// into the given window in the given timezone. "UTC" is a valid ClickHouse
+// timezone argument and yields identical results to omitting it, so the tz is
+// always passed — there is no UTC special-casing.
+func formatWindowSize(windowSize types.WindowSize, tz string) string {
+	if windowSize == "" {
 		return ""
+	}
+	// Minute buckets are timezone-invariant (all real offsets are whole minutes).
+	if windowSize == types.WindowSizeMinute {
+		return "toStartOfMinute(timestamp)"
+	}
+
+	tz = normalizeCHTimezone(tz)
+	switch windowSize {
+	case types.WindowSize15Min:
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 15 MINUTE, '%s')", tz)
+	case types.WindowSize30Min:
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 30 MINUTE, '%s')", tz)
+	case types.WindowSize3Hour:
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 3 HOUR, '%s')", tz)
+	case types.WindowSize6Hour:
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 6 HOUR, '%s')", tz)
+	case types.WindowSize12Hour:
+		return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 12 HOUR, '%s')", tz)
+	case types.WindowSizeHour:
+		return fmt.Sprintf("toStartOfHour(timestamp, '%s')", tz)
+	case types.WindowSizeWeek:
+		return fmt.Sprintf("toStartOfWeek(timestamp, 0, '%s')", tz)
+	case types.WindowSizeMonth:
+		return fmt.Sprintf("toStartOfMonth(timestamp, '%s')", tz)
+	case types.WindowSizeDay:
+		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
+	default:
+		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
 	}
 }
 
@@ -159,23 +184,20 @@ func formatWindowSize(windowSize types.WindowSize) string {
 // The generated ClickHouse expression shifts timestamps by the day offset,
 // applies toStartOfMonth(), then shifts back to create the correct billing periods.
 // This uses day-level granularity for simplicity and predictability.
-func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAnchor *time.Time) string {
+func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAnchor *time.Time, tz string) string {
 	if windowSize == types.WindowSizeMonth && billingAnchor != nil {
 		// Extract only the day component from billing anchor for simplicity
 		anchorDay := billingAnchor.Day()
+		tz = normalizeCHTimezone(tz)
 
-		// Generate the custom monthly window expression using day-level granularity
-		// This shifts the timestamp by the day offset, then uses toStartOfMonth,
-		// then shifts back by the same day offset to get the correct billing period
-		return fmt.Sprintf(`
-			addDays(
-				toStartOfMonth(addDays(timestamp, -%d)),
-				%d
-			)`, anchorDay-1, anchorDay-1)
+		// Custom monthly window anchored on anchorDay, computed in the customer's
+		// timezone. Shift by the day offset, snap to month start, shift back.
+		// "UTC" is a valid tz argument and reproduces the legacy (UTC) result.
+		return fmt.Sprintf("addDays(toStartOfMonth(addDays(toTimezone(timestamp, '%s'), -%d), '%s'), %d)", tz, anchorDay-1, tz, anchorDay-1)
 	}
 
 	// Fall back to standard window size formatting
-	return formatWindowSize(windowSize)
+	return formatWindowSize(windowSize, tz)
 }
 
 func buildFilterConditions(filters map[string][]string) string {
@@ -249,7 +271,7 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -301,7 +323,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -351,7 +373,7 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	groupByClause := ""
 
@@ -398,7 +420,7 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -457,7 +479,7 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -516,7 +538,7 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	windowClause := ""
 	groupByClause := ""
 
@@ -564,7 +586,7 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -638,7 +660,7 @@ func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -690,7 +712,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -784,7 +806,7 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 type WeightedSumAggregator struct{}
 
 func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""

@@ -35,8 +35,8 @@ type UsageBenchmarkService interface {
 
 type usageBenchmarkService struct {
 	ServiceParams
-	pubSub             pubsub.PubSub
-	benchRepo          events.UsageBenchmarkRepository
+	pubSub              pubsub.PubSub
+	benchRepo           events.UsageBenchmarkRepository
 	meterUsageBenchRepo events.MeterUsageBenchmarkRepository
 
 	// Injected analytics services for the analytics-kind benchmark path.
@@ -71,8 +71,8 @@ func NewUsageBenchmarkServiceForTest(
 	ps pubsub.PubSub,
 ) *usageBenchmarkService {
 	return &usageBenchmarkService{
-		pubSub:             ps,
-		benchRepo:          benchRepo,
+		pubSub:              ps,
+		benchRepo:           benchRepo,
 		meterUsageBenchRepo: meterUsageBenchRepo,
 	}
 }

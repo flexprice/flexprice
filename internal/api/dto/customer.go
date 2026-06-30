@@ -51,6 +51,10 @@ type CreateCustomerRequest struct {
 	// address_country is the two-letter ISO 3166-1 alpha-2 country code
 	AddressCountry string `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
 
+	// timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata", "America/New_York")
+	// Defaults to "UTC" if not provided
+	Timezone string `json:"timezone" validate:"omitempty,timezone"`
+
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -96,6 +100,9 @@ type UpdateCustomerRequest struct {
 	// address_country is the updated two-letter ISO 3166-1 alpha-2 country code
 	AddressCountry *string `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
 
+	// timezone is the updated IANA timezone name for the customer (e.g. "Asia/Kolkata", "America/New_York")
+	Timezone *string `json:"timezone" validate:"omitempty,timezone"`
+
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -117,6 +124,15 @@ type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name List
 func (r *CreateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != "" && r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate tax rate overrides if provided
@@ -145,6 +161,10 @@ func (r *CreateCustomerRequest) Validate() error {
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
+	tz := r.Timezone
+	if tz == "" {
+		tz = types.DefaultTimezone
+	}
 	return &customer.Customer{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
 		ExternalID:        r.ExternalID,
@@ -156,6 +176,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		AddressState:      r.AddressState,
 		AddressPostalCode: r.AddressPostalCode,
 		AddressCountry:    r.AddressCountry,
+		Timezone:          tz,
 		Metadata:          r.Metadata,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
@@ -165,6 +186,15 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != nil && *r.Timezone != "" && *r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(*r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil
