@@ -85,9 +85,9 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 func (r *Router) AddNoPublishHandler(
 	handlerName string,
 	topicName string,
+	topicDLQ string,
 	subscriber message.Subscriber,
 	handlerFunc func(msg *message.Message) error,
-	topicDLQ string,
 	middlewares ...message.HandlerMiddleware,
 ) {
 	handler := r.router.AddNoPublisherHandler(

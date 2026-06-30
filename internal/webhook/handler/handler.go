@@ -81,9 +81,9 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	router.AddNoPublishHandler(
 		"webhook_handler",
 		h.config.Topic,
+		h.dlqTopic,
 		h.pubSub,
 		h.processMessage,
-		h.dlqTopic,
 		throttle.Middleware,
 	)
 	h.logger.Debug(context.Background(), "registered webhook handler",

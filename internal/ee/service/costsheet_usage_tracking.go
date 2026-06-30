@@ -165,9 +165,9 @@ func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Rou
 	router.AddNoPublishHandler(
 		"costsheet_usage_tracking_handler",
 		cfg.CostSheetUsageTracking.Topic,
+		cfg.CostSheetUsageTracking.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
-		cfg.CostSheetUsageTracking.TopicDLQ,
 		throttle.Middleware,
 	)
 
@@ -191,9 +191,9 @@ func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter
 	router.AddNoPublishHandler(
 		"costsheet_usage_tracking_lazy_handler",
 		cfg.CostSheetUsageTrackingLazy.Topic,
+		cfg.CostSheetUsageTrackingLazy.TopicDLQ,
 		s.lazyPubSub,
 		s.processMessage,
-		cfg.CostSheetUsageTrackingLazy.TopicDLQ,
 		throttle.Middleware,
 	)
 

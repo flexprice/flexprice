@@ -177,9 +177,9 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 	router.AddNoPublishHandler(
 		"events_post_processing_handler",
 		cfg.EventPostProcessing.Topic,
+		cfg.Kafka.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
-		cfg.Kafka.TopicDLQ,
 		throttle.Middleware,
 	)
 
@@ -198,9 +198,9 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 	router.AddNoPublishHandler(
 		"events_post_processing_backfill_handler",
 		cfg.EventPostProcessing.TopicBackfill,
+		cfg.Kafka.TopicDLQ,
 		s.backfillPubSub,
 		s.processMessage,
-		cfg.Kafka.TopicDLQ,
 		backfillThrottle.Middleware,
 	)
 

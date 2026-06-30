@@ -147,9 +147,9 @@ func (s *usageBenchmarkService) RegisterHandler(router *pubsubRouter.Router, cfg
 	router.AddNoPublishHandler(
 		"usage_benchmark_handler",
 		cfg.UsageBenchmark.Topic,
+		cfg.Kafka.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
-		cfg.Kafka.TopicDLQ,
 		throttle.Middleware,
 	)
 
