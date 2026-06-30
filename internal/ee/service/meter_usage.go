@@ -1606,9 +1606,11 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	params *events.MeterUsageDetailedAnalyticsParams,
 ) *dto.GetUsageAnalyticsResponse {
 	response := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.Zero,
-		Currency:  data.Currency,
-		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
+		TotalCost:     decimal.Zero,
+		TotalDiscount: decimal.Zero,
+		TotalNetCost:  decimal.Zero,
+		Currency:      data.Currency,
+		Items:         make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
 
 	expandMap := make(map[string]bool, len(params.Expand))
@@ -1631,6 +1633,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      analytic.TotalUsage,
 			TotalCost:       analytic.TotalCost,
+			TotalDiscount:   analytic.TotalDiscount,
+			NetCost:         analytic.NetCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -1746,6 +1750,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					Timestamp:                        point.Timestamp,
 					Usage:                            point.Usage,
 					Cost:                             point.Cost,
+					Discount:                         point.Discount,
+					NetCost:                          point.NetCost,
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -1777,6 +1783,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.TotalDiscount = response.TotalDiscount.Add(analytic.TotalDiscount)
+		response.TotalNetCost = response.TotalNetCost.Add(analytic.NetCost)
 	}
 
 	sort.Slice(response.Items, func(i, j int) bool {
