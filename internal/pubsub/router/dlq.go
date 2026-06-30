@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ThreeDotsLabs/watermill"
 	watermillKafka "github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
@@ -50,7 +49,8 @@ func DynamicPoisonQueue(pub message.Publisher, log *logger.Logger) message.Handl
 			msg.Metadata.Set(middleware.PoisonedSubscriberKey, message.SubscriberNameFromCtx(msg.Context()))
 
 			if pubErr := pub.Publish(dlqTopic, msg); pubErr != nil {
-				return events, fmt.Errorf("handler error: %w; DLQ publish to %s failed: %v", err, dlqTopic, pubErr)
+				log.Error(context.Background(), "Failed to publish to DLQ topic", dlqTopic, "error", pubErr)
+				return events, nil
 			}
 
 			log.Info(context.Background(), "message published to DLQ",
