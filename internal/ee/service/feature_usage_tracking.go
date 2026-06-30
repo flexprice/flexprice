@@ -1635,6 +1635,9 @@ func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context
 		}
 	}
 
+	// Apply percentage-coupon discounts (gross TotalCost preserved; net derived in the builder).
+	applyAnalyticsDiscounts(ctx, s.ServiceParams, data, req.StartTime, req.EndTime)
+
 	// Aggregate results by requested grouping dimensions
 	data.Analytics = s.aggregateAnalyticsByGrouping(data.Analytics, data.Params.GroupBy)
 
@@ -3050,9 +3053,11 @@ func rollupBucketPoints(
 
 func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.Zero,
-		Currency:  "",
-		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
+		TotalCost:     decimal.Zero,
+		TotalDiscount: decimal.Zero,
+		TotalNetCost:  decimal.Zero,
+		Currency:      "",
+		Items:         make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
 
 	// Check which fields should be expanded
@@ -3087,6 +3092,8 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      totalUsage, // Now correctly uses sum of bucket maxes for bucketed MAX
 			TotalCost:       analytic.TotalCost,
+			TotalDiscount:   analytic.TotalDiscount,
+			NetCost:         analytic.TotalCost.Sub(analytic.TotalDiscount),
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -3210,6 +3217,8 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					Timestamp:                        point.Timestamp,
 					Usage:                            correctUsage,
 					Cost:                             point.Cost,
+					Discount:                         point.Discount,
+					NetCost:                          point.Cost.Sub(point.Discount),
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -3241,8 +3250,13 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.TotalDiscount = response.TotalDiscount.Add(analytic.TotalDiscount)
 		response.Currency = analytic.Currency
 	}
+
+	// Derive TotalNetCost from fully-summed TotalCost and TotalDiscount so the
+	// result is consistent even when the discount pass short-circuits (zero discount).
+	response.TotalNetCost = response.TotalCost.Sub(response.TotalDiscount)
 
 	// sort by feature name
 	sort.Slice(response.Items, func(i, j int) bool {
