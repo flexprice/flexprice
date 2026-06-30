@@ -1,3 +1,70 @@
+---
+layer: constitution
+repo: flexprice (Go backend)
+synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+synced_at: 2026-06-09T00:00:00Z
+---
+
+# Flexprice Backend — Constitution
+
+> Invariants that MUST hold in every PR. Violation = block merge.
+> Operational details → per-layer AGENTS.md files (load lazily by working in that directory).
+> Improvement notes → `.context/findings/` (never in this file).
+
+## Stack
+Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafka · Temporal
+
+## Directory map
+| Layer | Path | One-line rule |
+|---|---|---|
+| Domain | `internal/domain/` | Interfaces + models; zero external deps |
+| Repository | `internal/repository/` | Implements domain interfaces; DB access only |
+| Service | `internal/service/` | All business logic; orchestrates repos + services |
+| API | `internal/api/v1/` | Parse → validate → delegate to service → respond |
+| Temporal | `internal/temporal/` | Long-running workflows + activities |
+| Integration | `internal/integration/` | Third-party providers; factory pattern |
+
+## Hard invariants
+
+### Layering (never violate)
+- No business logic in `internal/api/v1/` — handlers call services, nothing more.
+- No DB calls from handlers — all data access through service → repository chain.
+- Domain interfaces in `internal/domain/`; implementations in `internal/repository/`.
+- All new deps registered in `cmd/server/main.go` via `fx.Provide()`.
+
+### Multi-tenancy (every entity, every query)
+- Every DB entity carries `tenant_id` + `environment_id`.
+- Every query filters on both. Missing filter = data leak = critical bug.
+- No cross-tenant reads. No shared mutable state between tenants.
+
+### Event processing (billing correctness)
+- All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
+- Event ordering: do not assume arrival order; use event timestamps, not insertion order.
+- Retries: every Kafka consumer and Temporal activity must be safe to retry.
+- Backfill: any new aggregation must handle historical events correctly.
+
+### ClickHouse
+- Every query bounded by `max_memory_usage = 90GB` (hardcoded — do not remove).
+- Analytics queries → ClickHouse. Transactional reads/writes → PostgreSQL.
+
+### Observability
+- Structured logging (zerolog); always propagate `ctx` for trace correlation.
+- No `fmt.Println` or bare `log.Print` in production paths.
+
+### Testing
+- Unit tests for all service-layer business logic.
+- Table-driven tests preferred.
+- Integration tests use real DB (testcontainers / docker compose); do not mock Ent client.
+- Test files alongside implementation (`internal/service/foo_test.go`).
+
+### Schema / migrations
+- Schema changes: `ent/schema/*.go` → `make generate-ent` → `make generate-migration`.
+- Never hand-edit generated Ent files.
+- ClickHouse migrations in `migrations/clickhouse/`.
+
+---
+<!-- Below this line: original Warp-targeted content preserved for reference. -->
+
 # AGENTS.md
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
