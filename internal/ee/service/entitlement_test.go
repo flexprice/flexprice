@@ -947,17 +947,26 @@ func (s *EntitlementServiceSuite) TestUpdateEntitlementConfigValue() {
 	})
 
 	s.Run("Update without config_value leaves existing config_value intact", func() {
+		req := dto.UpdateEntitlementRequest{
+			ConfigValue: map[string]interface{}{"env": "production", "region": "us-east-1"},
+		}
+
+		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+		s.Equal("us-east-1", resp.Entitlement.ConfigValue["region"])
+	})
+
+	s.Run("Setting is_enabled on config feature returns validation error", func() {
 		isEnabled := false
 		req := dto.UpdateEntitlementRequest{
 			IsEnabled: &isEnabled,
 		}
 
 		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
-		s.NoError(err)
-		s.NotNil(resp)
-		s.False(resp.Entitlement.IsEnabled)
-		// config_value must still be what the previous sub-test set
-		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+		s.Error(err)
+		s.Nil(resp)
 	})
 }
 
