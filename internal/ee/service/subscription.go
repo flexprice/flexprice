@@ -6837,6 +6837,12 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			newEnt.StaticValue = parentEnt.StaticValue
 		}
 
+		if override.ConfigValue != nil {
+			newEnt.ConfigValue = override.ConfigValue
+		} else {
+			newEnt.ConfigValue = parentEnt.ConfigValue
+		}
+
 		// Validate based on feature type
 		switch parentEnt.FeatureType {
 		case types.FeatureTypeMetered:
@@ -6855,6 +6861,11 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 					"parent_entitlement_id", parentEnt.ID,
 					"feature_id", parentEnt.FeatureID)
 			}
+			if override.ConfigValue != nil {
+				return ierr.NewError("config_value cannot be set for metered features").
+					WithHint("Only usage_limit and is_enabled can be overridden for metered features").
+					Mark(ierr.ErrValidation)
+			}
 		case types.FeatureTypeStatic:
 			// For static features, static_value is required
 			if newEnt.StaticValue == "" {
@@ -6865,6 +6876,22 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			if override.UsageLimit != nil {
 				return ierr.NewError("usage_limit cannot be set for static features").
 					WithHint("Only static_value and is_enabled can be overridden for static features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.ConfigValue != nil {
+				return ierr.NewError("config_value cannot be set for static features").
+					WithHint("Only static_value and is_enabled can be overridden for static features").
+					Mark(ierr.ErrValidation)
+			}
+		case types.FeatureTypeConfig:
+			if override.UsageLimit != nil {
+				return ierr.NewError("usage_limit cannot be set for config features").
+					WithHint("Only config_value and is_enabled can be overridden for config features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.StaticValue != nil {
+				return ierr.NewError("static_value cannot be set for config features").
+					WithHint("Only config_value and is_enabled can be overridden for config features").
 					Mark(ierr.ErrValidation)
 			}
 		}
