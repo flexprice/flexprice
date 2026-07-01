@@ -69,6 +69,11 @@ run-server:
 run-e2eprobe:
 	go run cmd/e2eprobe/main.go
 
+.PHONY: e2eprobe-docker-build
+e2eprobe-docker-build:
+	docker buildx build --platform linux/amd64,linux/arm64 \
+	  -f Dockerfile.e2eprobe -t flexprice/e2eprobe .
+
 .PHONY: run-server-local
 run-server-local: run-server
 

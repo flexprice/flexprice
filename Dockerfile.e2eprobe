@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:experimental
+# Build stage
+# Pin the builder to the runner's native arch ($BUILDPLATFORM) and
+# cross-compile to the requested $TARGETARCH. Avoids QEMU emulation of
+# the Go toolchain, which is 10-20x slower on multi-arch builds.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS builder
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+# TARGETARCH is provided automatically by buildx (e.g. amd64, arm64)
+ARG TARGETARCH
+ENV CGO_ENABLED=0 \
+    GOOS=linux
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o e2eprobe cmd/e2eprobe/main.go
+
+# Final stage
+FROM alpine:3.20
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+COPY --from=builder /app/e2eprobe .
+
+# Non-secret defaults that differ from the code defaults in
+# internal/e2eprobe/config.go, mirroring cmd/e2eprobe/.env.example so the
+# container behaves like `source .env.example`. Everything else already
+# matches the code defaults. Override any of these at runtime with -e.
+ENV E2EPROBE_EVENT_INGEST_RATE=1 \
+    E2EPROBE_EVENT_INGEST_SEED=42 \
+    E2EPROBE_OTEL_ENABLED=false \
+    E2EPROBE_HEARTBEAT_INTERVAL=1h \
+    E2EPROBE_CHECK_CANCEL_CUSTOMER_FLOW_INTERVAL=30m \
+    TZ=UTC
+
+# Required at runtime (not baked — keeps secrets out of image layers):
+#   E2EPROBE_API_HOST, E2EPROBE_API_KEY, E2EPROBE_TENANT_ID, E2EPROBE_ENVIRONMENT_ID
+
+EXPOSE 8765
+CMD ["./e2eprobe"]
