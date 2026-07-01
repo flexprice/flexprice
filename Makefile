@@ -69,6 +69,23 @@ run-server:
 run-e2eprobe:
 	go run cmd/e2eprobe/main.go
 
+E2EPROBE_IMAGE ?= flexprice/e2eprobe
+
+# Single-platform build loaded into the local Docker engine for testing.
+# (buildx cannot --load a multi-arch manifest into the default image store.)
+.PHONY: e2eprobe-docker-build
+e2eprobe-docker-build:
+	docker buildx build --load \
+	  -f Dockerfile.e2eprobe -t $(E2EPROBE_IMAGE) .
+
+# Multi-arch build pushed to a registry. Override the tag with
+# E2EPROBE_IMAGE=<registry>/e2eprobe:<tag>. buildx discards a multi-platform
+# result unless it is pushed, so --push is required here.
+.PHONY: e2eprobe-docker-push
+e2eprobe-docker-push:
+	docker buildx build --push --platform linux/amd64,linux/arm64 \
+	  -f Dockerfile.e2eprobe -t $(E2EPROBE_IMAGE) .
+
 .PHONY: run-server-local
 run-server-local: run-server
 

@@ -25,7 +25,7 @@ type Config struct {
 
 	// HeartbeatInterval controls how often a structured "e2eprobe.heartbeat" log
 	// line is emitted summarising run counts and success rate. Set to 0 to disable.
-	HeartbeatInterval time.Duration // E2EPROBE_HEARTBEAT_INTERVAL, default 5m
+	HeartbeatInterval time.Duration // E2EPROBE_HEARTBEAT_INTERVAL, default 1h
 
 	// JanitorMaxAge is the minimum age of an ephemeral entity before the janitor
 	// deletes it. Also controls the Flexprice-wide orphan scan sweep.
@@ -85,7 +85,7 @@ var checkDefaultIntervals = map[string]time.Duration{
 	"CYCLE_INVOICE_PROBE":            15 * time.Minute,
 	"ENTITLEMENT_AND_USAGE_PROBE":    5 * time.Minute,
 	"NEW_CUSTOMER_LIFECYCLE":         10 * time.Minute,
-	"CANCEL_CUSTOMER_FLOW":           10 * time.Minute,
+	"CANCEL_CUSTOMER_FLOW":           30 * time.Minute,
 	"SUBSCRIPTION_MODIFICATION_FLOW": 20 * time.Minute,
 	"LOW_WALLET_ALERT_LISTENER":      0, // listener — not a ticker
 	"JANITOR":                        1 * time.Hour,
@@ -98,19 +98,19 @@ func LoadConfig() (*Config, error) {
 		APIKey:          os.Getenv("E2EPROBE_API_KEY"),
 		Enabled:         getBool("E2EPROBE_ENABLED", true),
 		DryRun:          getBool("E2EPROBE_DRY_RUN", false),
-		EventIngestRate: getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 5),
-		EventIngestSeed: getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", time.Now().UnixNano()),
+		EventIngestRate: getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 1),
+		EventIngestSeed: getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", 42),
 		ListenerPort:    getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
 		TenantID:          os.Getenv("E2EPROBE_TENANT_ID"),
 		EnvironmentID:     os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
-		HeartbeatInterval: getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 5*time.Minute),
+		HeartbeatInterval: getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 1*time.Hour),
 		JanitorMaxAge:     getDuration(&warnings, "E2EPROBE_JANITOR_MAX_AGE", 1*time.Hour),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),
 		},
 		OTEL: OTELConfig{
-			Enabled: getBool("E2EPROBE_OTEL_ENABLED", true),
+			Enabled: getBool("E2EPROBE_OTEL_ENABLED", false),
 		},
 		Checks: make(map[string]CheckConfig, len(CheckNames)),
 	}

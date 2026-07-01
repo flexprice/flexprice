@@ -42,8 +42,11 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if !c.Enabled || c.DryRun || c.EventIngestRate != 5 || !c.OTEL.Enabled {
+	if !c.Enabled || c.DryRun || c.EventIngestRate != 1 || c.OTEL.Enabled {
 		t.Errorf("defaults mismatch: %+v", c)
+	}
+	if c.EventIngestSeed != 42 {
+		t.Errorf("EventIngestSeed=%d, want 42", c.EventIngestSeed)
 	}
 	if c.ListenerPort != 8765 {
 		t.Errorf("ListenerPort=%d, want 8765", c.ListenerPort)
@@ -59,8 +62,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 		t.Error("LOW_WALLET_ALERT_LISTENER missing")
 	}
 	cc, ok2 := c.Checks["CANCEL_CUSTOMER_FLOW"]
-	if !ok2 || cc.Interval != 10*time.Minute {
-		t.Errorf("CANCEL_CUSTOMER_FLOW default interval=%v, want 10m", cc.Interval)
+	if !ok2 || cc.Interval != 30*time.Minute {
+		t.Errorf("CANCEL_CUSTOMER_FLOW default interval=%v, want 30m", cc.Interval)
 	}
 	if c.JanitorMaxAge != 1*time.Hour {
 		t.Errorf("JanitorMaxAge=%v, want 1h", c.JanitorMaxAge)
@@ -119,14 +122,14 @@ func TestLoadConfig_HeartbeatInterval(t *testing.T) {
 	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
 	t.Setenv("E2EPROBE_API_KEY", "k")
 
-	t.Run("default is 5m", func(t *testing.T) {
+	t.Run("default is 1h", func(t *testing.T) {
 		t.Setenv("E2EPROBE_HEARTBEAT_INTERVAL", "")
 		c, err := LoadConfig()
 		if err != nil {
 			t.Fatalf("LoadConfig: %v", err)
 		}
-		if c.HeartbeatInterval != 5*time.Minute {
-			t.Errorf("HeartbeatInterval=%v, want 5m", c.HeartbeatInterval)
+		if c.HeartbeatInterval != 1*time.Hour {
+			t.Errorf("HeartbeatInterval=%v, want 1h", c.HeartbeatInterval)
 		}
 	})
 
