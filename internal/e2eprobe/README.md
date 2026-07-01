@@ -51,7 +51,7 @@ Adding a new probe: write `internal/e2eprobe/checks/<name>.go` implementing `Che
 | `E2EPROBE_SLACK_WEBHOOK_URL` | Slack webhook (empty disables) | empty |
 | `E2EPROBE_SLACK_CHANNEL` | Override channel | empty |
 | `E2EPROBE_OTEL_ENABLED` | Emit OTEL spans | `true` |
-| `E2EPROBE_HEARTBEAT_INTERVAL` | How often a structured heartbeat summary is logged (`0` disables) | `5m` |
+| `E2EPROBE_HEARTBEAT_INTERVAL` | How often a structured heartbeat summary is logged (`0` disables) | `1h` |
 | `E2EPROBE_JANITOR_MAX_AGE` | Minimum age of an ephemeral entity before the janitor deletes it (applies to both in-memory sweep and Flexprice orphan scan) | `1h` |
 | `E2EPROBE_CHECK_<NAME>_ENABLED` | Per-check kill switch | `true` |
 | `E2EPROBE_CHECK_<NAME>_INTERVAL` | Per-check interval override (Go duration) | per-check default |
@@ -71,7 +71,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | probe | cycle-invoice-probe | 15m | Auto-invoice freshness invariant |
 | probe | entitlement-and-usage-probe | 5m | Entitlements + usage rollup |
 | scenario | new-customer-lifecycle | 10m | Ephemeral customer/sub + events |
-| scenario | cancel-customer-flow | 10m | Cancel oldest ephemeral sub + delete its customer |
+| scenario | cancel-customer-flow | 30m | Cancel oldest ephemeral sub + delete its customer |
 | scenario | subscription-modification-flow | 20m | Add line item; verify |
 | listener | low-wallet-alert-listener | webhook | Asserts low-balance webhook payloads |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers from prior restarts and deletes them |
@@ -82,7 +82,7 @@ The listener exposes `POST http://<e2eprobe-host>:8765/webhook` (port configurab
 
 ## Operational signals
 
-Every `E2EPROBE_HEARTBEAT_INTERVAL` (default 5 minutes) the probe emits a single structured log line summarising activity since startup:
+Every `E2EPROBE_HEARTBEAT_INTERVAL` (default 1 hour) the probe emits a single structured log line summarising activity since startup:
 
 ```json
 {"level":"info","time":"2026-06-12T10:05:00.000Z","msg":"e2eprobe heartbeat","event":"e2eprobe.heartbeat","run_id":"e2eprobe-1749720000","uptime":"5m0s","total_runs":142,"total_failures":0,"success_rate":"100.00%","check.analytics-probe":"3/3","check.event-ingest-driver":"125/125","check.wallet-balance-probe":"3/3"}
@@ -98,7 +98,7 @@ One line per tick — not per check. Key fields:
 | `success_rate` | `(total_runs - total_failures) / total_runs × 100` |
 | `check.<name>` | `successes/total` for that individual check |
 
-**When to be concerned about silence:** If a heartbeat is missing for more than two intervals (10 minutes at default settings) the process has likely crashed or lost its log pipeline. Alert on the absence of `event=e2eprobe.heartbeat` in your log aggregator.
+**When to be concerned about silence:** If a heartbeat is missing for more than two intervals (2 hours at default settings) the process has likely crashed or lost its log pipeline. Alert on the absence of `event=e2eprobe.heartbeat` in your log aggregator.
 
 Set `E2EPROBE_HEARTBEAT_INTERVAL=0` to disable heartbeat logging entirely.
 

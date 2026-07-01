@@ -29,16 +29,10 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /app/e2eprobe .
 
-# Non-secret defaults that differ from the code defaults in
-# internal/e2eprobe/config.go, mirroring cmd/e2eprobe/.env.example so the
-# container behaves like `source .env.example`. Everything else already
-# matches the code defaults. Override any of these at runtime with -e.
-ENV E2EPROBE_EVENT_INGEST_RATE=1 \
-    E2EPROBE_EVENT_INGEST_SEED=42 \
-    E2EPROBE_OTEL_ENABLED=false \
-    E2EPROBE_HEARTBEAT_INTERVAL=1h \
-    E2EPROBE_CHECK_CANCEL_CUSTOMER_FLOW_INTERVAL=30m \
-    TZ=UTC
+# All e2eprobe defaults now live in internal/e2eprobe/config.go and match
+# cmd/e2eprobe/.env.example, so nothing needs baking here. Override any knob
+# at runtime with -e VAR=val.
+ENV TZ=UTC
 
 # Required at runtime (not baked — keeps secrets out of image layers):
 #   E2EPROBE_API_HOST, E2EPROBE_API_KEY, E2EPROBE_TENANT_ID, E2EPROBE_ENVIRONMENT_ID
