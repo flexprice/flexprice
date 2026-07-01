@@ -752,12 +752,14 @@ eventProcessing:
   topic: "events"
   rateLimit: 12
   consumerGroup: "flexprice-consumer"
+  topicDLQ: "event_processing_dlq"
 
 eventProcessingLazy:
   enabled: true
   topic: "events_lazy"
   rateLimit: 12
   consumerGroup: "v1_event_processing_lazy"
+  topicDLQ: "event_processing_lazy_dlq"
 
 eventPostProcessing:
   enabled: true
@@ -776,12 +778,14 @@ featureUsageTracking:
   topicBackfill: "events_post_processing_backfill"
   rateLimitBackfill: 1
   consumerGroupBackfill: "v1_feature_tracking_service_backfill"
+  topicDLQ: "feature_tracking_service_dlq"
 
 featureUsageTrackingLazy:
   enabled: true
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
+  topicDLQ: "feature_tracking_service_lazy_dlq"
 
 # Onboarding event-generator (POST /v1/portal/onboarding/events).
 # The app's OnboardingEvents.Topic resolves to empty if this is not rendered
@@ -822,24 +826,28 @@ meterUsageTracking:
   topic: "events"
   rateLimit: 1
   consumerGroup: "v1_meter_usage_tracking_service"
+  topicDLQ: "meter_usage_tracking_service_dlq"
 
 meterUsageTrackingLazy:
   enabled: false
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_meter_usage_tracking_service_lazy"
+  topicDLQ: "meter_usage_tracking_service_lazy_dlq"
 
 costsheetUsageTracking:
   enabled: false
   topic: "events"
   rateLimit: 1
   consumerGroup: "v1_costsheet_usage_tracking_service"
+  topicDLQ: "costsheet_usage_tracking_service_dlq"
 
 costsheetUsageTrackingLazy:
   enabled: false
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_costsheet_usage_tracking_service_lazy"
+  topicDLQ: "costsheet_usage_tracking_service_lazy_dlq"
 
 usageBenchmark:
   enabled: false
