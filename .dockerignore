@@ -8,6 +8,8 @@
 .idea
 api
 docs
+# but keep the generated swagger Go package — main.go imports it (blank import for swagger docs)
+!docs/swagger/docs.go
 node_modules
 tmp
 bin
