@@ -190,43 +190,35 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 }
 
 func (r *tenantRepository) SetCache(ctx context.Context, tenant *domainTenant.Tenant) {
-	span := cache.StartCacheSpan(ctx, "tenant", "set", map[string]interface{}{
-		"tenant_id": tenant.ID,
-	})
-	defer cache.FinishSpan(span)
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, tenant.ID)
+	// Tenant intentionally bypasses the cache.enabled flag (ForceCache*) so it is
+	// always available; do not switch these to r.cache.Set/Get/Delete.
 	r.cache.ForceCacheSet(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
 	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultRedis)
+	cache.RecordSet(ctx, "tenant", cache.SourceInMemory)
 }
 
 func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTenant.Tenant {
-	span := cache.StartCacheSpan(ctx, "tenant", "get", map[string]interface{}{
-		"tenant_id": key,
-	})
-	defer cache.FinishSpan(span)
-
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
 	// L1 first
 	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
+			cache.RecordHit(ctx, "tenant", cache.SourceInMemory)
 			return t
 		}
 	}
 	// L2 fallback
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
+			cache.RecordHit(ctx, "tenant", cache.SourceInMemory)
 			return t
 		}
 	}
+	cache.RecordMiss(ctx, "tenant", cache.SourceInMemory)
 	return nil
 }
 
 func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "tenant", "delete", map[string]interface{}{
-		"tenant_id": key,
-	})
-	defer cache.FinishSpan(span)
-
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
 	r.cache.ForceCacheDelete(ctx, cacheKey)
 	r.cache.Delete(ctx, cacheKey)
