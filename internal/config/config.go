@@ -564,6 +564,7 @@ type FeatureFlagConfig struct {
 	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
 	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
+	EnableMeterUsageForBilling        bool   `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
 	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
 
 	// Per-tenant overrides for the meter-usage rollout. Resolution order:
@@ -574,8 +575,21 @@ type FeatureFlagConfig struct {
 	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingEnabledTenants         []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingDisabledTenants        []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
 	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
 	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
+}
+
+// IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
+// billing service for a specific tenant.
+func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnableMeterUsageForBilling,
+		c.MeterUsageForBillingEnabledTenants,
+		c.MeterUsageForBillingDisabledTenants,
+	)
 }
 
 // IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
