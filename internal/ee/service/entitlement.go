@@ -626,11 +626,6 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 
 	// Update fields if provided
 	if req.IsEnabled != nil {
-		if existing.FeatureType == types.FeatureTypeConfig {
-			return nil, ierr.NewError("is_enabled cannot be set for config features").
-				WithHint("Only config_value can be updated for config features").
-				Mark(ierr.ErrValidation)
-		}
 		existing.IsEnabled = *req.IsEnabled
 	}
 	if req.UsageLimit != nil {
