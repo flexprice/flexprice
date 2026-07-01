@@ -680,40 +680,25 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domainEntitlement.Entitlement) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "set", map[string]interface{}{
-		"entitlement_id": entitlement.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlement.ID)
-	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), entitlement.ID)
+	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultRedis)
 }
 
-func (r *entitlementRepository) GetCache(ctx context.Context, key string) *domainEntitlement.Entitlement {
-	span := cache.StartCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
-		"entitlement_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainEntitlement.Entitlement)
+func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domainEntitlement.Entitlement {
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	e, ok := cache.UnmarshalCacheValue[domainEntitlement.Entitlement](value)
+	if !ok {
+		cache.RecordMiss(ctx, "entitlement", cache.SourceRedis)
+		return nil
+	}
+	return e
 }
 
 func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID string) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "delete", map[string]interface{}{
-		"entitlement_id": entitlementID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlementID)
+	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), entitlementID)
 	r.cache.Delete(ctx, cacheKey)
 }

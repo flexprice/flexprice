@@ -488,14 +488,12 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *t
 func (r *priceUnitRepository) SetCache(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) {
 	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), priceUnit.ID)
 	r.cache.Set(ctx, cacheKey, priceUnit, cache.ExpiryDefaultInMemory)
-	cache.RecordSet(ctx, "price_unit", cache.SourceInMemory)
 }
 
 func (r *priceUnitRepository) GetCache(ctx context.Context, id string) *domainPriceUnit.PriceUnit {
 	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
-		cache.RecordMiss(ctx, "price_unit", cache.SourceInMemory)
 		return nil
 	}
 	p, ok := cache.UnmarshalCacheValue[domainPriceUnit.PriceUnit](value)
@@ -503,7 +501,6 @@ func (r *priceUnitRepository) GetCache(ctx context.Context, id string) *domainPr
 		cache.RecordMiss(ctx, "price_unit", cache.SourceInMemory)
 		return nil
 	}
-	cache.RecordHit(ctx, "price_unit", cache.SourceInMemory)
 	return p
 }
 

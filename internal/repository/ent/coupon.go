@@ -527,46 +527,25 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 }
 
 func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "set", map[string]interface{}{
-		"coupon_id": coupon.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
 	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
-func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
-	span := cache.StartCacheSpan(ctx, "coupon", "get", map[string]interface{}{
-		"coupon_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return coupon
-		}
+func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainCoupon.Coupon](value)
+	if !ok {
+		cache.RecordMiss(ctx, "coupon", cache.SourceInMemory)
+		return nil
+	}
+	return c
 }
 
 func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "delete", map[string]interface{}{
-		"coupon_id": coupon.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

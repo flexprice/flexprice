@@ -929,41 +929,26 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 }
 
 func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
-	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
-		"wallet_id": wallet.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, wallet.ID)
-	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), wallet.ID)
+	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultRedis)
 }
 
-func (r *walletRepository) GetCache(ctx context.Context, key string) *walletdomain.Wallet {
-	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
-		"wallet_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*walletdomain.Wallet)
+func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	w, ok := cache.UnmarshalCacheValue[walletdomain.Wallet](value)
+	if !ok {
+		cache.RecordMiss(ctx, "wallet", cache.SourceRedis)
+		return nil
+	}
+	return w
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
-	span := cache.StartCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
-		"wallet_id": walletID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), walletID)
 	r.cache.Delete(ctx, cacheKey)
 }
 

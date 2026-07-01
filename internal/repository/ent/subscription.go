@@ -1056,41 +1056,26 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
-	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
-		"subscription_id": sub.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, sub.ID)
-	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), sub.ID)
+	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
 }
 
-func (r *subscriptionRepository) GetCache(ctx context.Context, key string) *domainSub.Subscription {
-	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
-		"subscription_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainSub.Subscription)
+func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	s, ok := cache.UnmarshalCacheValue[domainSub.Subscription](value)
+	if !ok {
+		cache.RecordMiss(ctx, "subscription", cache.SourceRedis)
+		return nil
+	}
+	return s
 }
 
 func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
-	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
-		"subscription_id": subID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
+	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), subID)
 	r.cache.Delete(ctx, cacheKey)
 }
 

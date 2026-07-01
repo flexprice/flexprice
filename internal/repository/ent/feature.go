@@ -595,14 +595,12 @@ func (o FeatureQueryOptions) GetFieldResolver(st string) (string, error) {
 func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
 	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), feature.ID)
 	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
-	cache.RecordSet(ctx, "feature", cache.SourceInMemory)
 }
 
 func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
 	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
-		cache.RecordMiss(ctx, "feature", cache.SourceInMemory)
 		return nil
 	}
 	f, ok := cache.UnmarshalCacheValue[domainFeature.Feature](value)
@@ -610,7 +608,6 @@ func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeat
 		cache.RecordMiss(ctx, "feature", cache.SourceInMemory)
 		return nil
 	}
-	cache.RecordHit(ctx, "feature", cache.SourceInMemory)
 	return f
 }
 

@@ -393,14 +393,12 @@ func (o MeterQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.M
 func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter) {
 	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), meter.ID)
 	r.cache.Set(ctx, cacheKey, meter, cache.ExpiryDefaultInMemory)
-	cache.RecordSet(ctx, "meter", cache.SourceInMemory)
 }
 
 func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.Meter {
 	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
-		cache.RecordMiss(ctx, "meter", cache.SourceInMemory)
 		return nil
 	}
 	m, ok := cache.UnmarshalCacheValue[domainMeter.Meter](value)
@@ -408,7 +406,6 @@ func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.
 		cache.RecordMiss(ctx, "meter", cache.SourceInMemory)
 		return nil
 	}
-	cache.RecordHit(ctx, "meter", cache.SourceInMemory)
 	return m
 }
 
