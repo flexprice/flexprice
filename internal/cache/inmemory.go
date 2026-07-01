@@ -11,7 +11,7 @@ import (
 )
 
 // DefaultExpiration is the default expiration time for cache entries
-const DefaultExpiration = 30 * time.Minute
+const DefaultExpiration = 2 * time.Minute
 
 // DefaultCleanupInterval is how often expired items are removed from the cache
 const DefaultCleanupInterval = 1 * time.Hour
@@ -62,8 +62,11 @@ func GetInMemoryCache() InMemoryCache {
 }
 
 // Get retrieves a value from the cache
-func (c *inMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
+func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool) {
 	if c == nil || !c.IsEnabled() {
+		return nil, false
+	}
+	if ctx.Err() != nil {
 		return nil, false
 	}
 	return c.cache.Get(key)
@@ -73,6 +76,9 @@ func (c *inMemoryCache) ForceCacheGet(ctx context.Context, key string) (interfac
 	if c == nil {
 		return nil, false
 	}
+	if ctx.Err() != nil {
+		return nil, false
+	}
 	return c.cache.Get(key)
 }
 
@@ -80,35 +86,50 @@ func (c *inMemoryCache) ForceCacheSet(ctx context.Context, key string, value int
 	if c == nil {
 		return
 	}
+	if ctx.Err() != nil {
+		return
+	}
 	c.cache.Set(key, value, expiration)
 }
 
-func (c *inMemoryCache) ForceCacheDelete(_ context.Context, key string) {
+func (c *inMemoryCache) ForceCacheDelete(ctx context.Context, key string) {
 	if c == nil {
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	c.cache.Delete(key)
 }
 
 // Set adds a value to the cache with the specified expiration
-func (c *inMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
+func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	if c == nil || !c.IsEnabled() {
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	c.cache.Set(key, value, expiration)
 }
 
 // Delete removes a key from the cache
-func (c *inMemoryCache) Delete(_ context.Context, key string) {
+func (c *inMemoryCache) Delete(ctx context.Context, key string) {
 	if c == nil || !c.IsEnabled() {
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	c.cache.Delete(key)
 }
 
 // DeleteByPrefix removes all keys with the given prefix
-func (c *inMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
+func (c *inMemoryCache) DeleteByPrefix(ctx context.Context, prefix string) {
 	if c == nil || !c.IsEnabled() {
+		return
+	}
+	if ctx.Err() != nil {
 		return
 	}
 	// Get all items from the cache
@@ -123,7 +144,7 @@ func (c *inMemoryCache) DeleteByPrefix(_ context.Context, prefix string) {
 }
 
 // Flush removes all items from the cache
-func (c *inMemoryCache) Flush(_ context.Context) {
+func (c *inMemoryCache) Flush(ctx context.Context) {
 	if c == nil || !c.IsEnabled() {
 		return
 	}
