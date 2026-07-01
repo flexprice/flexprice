@@ -73,12 +73,22 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | new-customer-lifecycle | 10m | Ephemeral customer/sub + events |
 | scenario | cancel-customer-flow | 10m | Cancel oldest ephemeral sub + delete its customer |
 | scenario | subscription-modification-flow | 20m | Add line item; verify |
-| listener | low-wallet-alert-listener | webhook | Asserts low-balance webhook payloads |
+| listener | low-wallet-alert-listener | webhook | Asserts low-balance webhook payloads and tracks per-wallet, per-alert-type receipts |
+| probe | low-balance-alert-probe | 5m | Actively drives the canary wallet across its low-balance threshold and asserts the webhook lands within 2m (Slack-pages on absence) |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers from prior restarts and deletes them |
 
-## Webhook wiring (low-wallet-alert-listener)
+## Webhook pipeline verification (low-balance-alert-probe + low-wallet-alert-listener)
 
-The listener exposes `POST http://<e2eprobe-host>:8765/webhook` (port configurable). Wire Flexprice's webhook delivery to it for low-balance alerts. Until wired, the listener sits idle.
+The listener exposes `POST http://<e2eprobe-host>:8765/webhook` (port configurable). Flexprice must be pointed at that URL — either via `webhook.tenants.<tenant_id>.endpoint` in the Flexprice config (native HTTP delivery) or via a Svix endpoint subscribed to `wallet.credit_balance.dropped` / `wallet.ongoing_balance.dropped` (when Svix is enabled).
+
+`seed-ensure` provisions a dedicated `e2eprobe-cust-alert-canary` persistent customer with one wallet initially topped up to **$30** and alert thresholds `{info=25, warning=10, critical=0}` all enabled. The three pre-funded seed wallets carry the same thresholds but sit at $100 with no draining — they exist as a safety net only.
+
+`low-balance-alert-probe` alternates between two legs on the canary wallet:
+
+1. **Drop leg** (wallet state = `ok`): ingest one `e2eprobe_sum` event (default `amount=600`, priced at `$0.01/unit` = `$6.00` of current-period usage) to push ongoing balance below the info threshold, then poll the listener's receipt map for up to **2 minutes**. This grace absorbs typical Kafka + Svix/native-HTTP propagation delay; only truly missing webhooks page.
+2. **Recovery leg** (wallet state = `in_alarm`): top-up back to `$30` so Flexprice's binary alert state machine can re-arm.
+
+A missing webhook in the drop leg fails the check → routes through the standard reporter chain → posts to Slack. Full cycle time at defaults: 10 minutes per verification.
 
 ## Operational signals
 

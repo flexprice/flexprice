@@ -72,6 +72,7 @@ var CheckNames = []string{
 	"CANCEL_CUSTOMER_FLOW",
 	"SUBSCRIPTION_MODIFICATION_FLOW",
 	"LOW_WALLET_ALERT_LISTENER",
+	"LOW_BALANCE_ALERT_PROBE",
 	"JANITOR",
 }
 
@@ -88,6 +89,7 @@ var checkDefaultIntervals = map[string]time.Duration{
 	"CANCEL_CUSTOMER_FLOW":           10 * time.Minute,
 	"SUBSCRIPTION_MODIFICATION_FLOW": 20 * time.Minute,
 	"LOW_WALLET_ALERT_LISTENER":      0, // listener — not a ticker
+	"LOW_BALANCE_ALERT_PROBE":        5 * time.Minute,
 	"JANITOR":                        1 * time.Hour,
 }
 

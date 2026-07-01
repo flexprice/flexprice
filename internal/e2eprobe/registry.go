@@ -12,6 +12,12 @@ type Seeds struct {
 	PlanIDs               []string
 	FeatureIDs            []string
 	MeterIDs              map[string]string // event_name -> meter ID
+
+	// AlertCanaryExternalCustomerID is the persistent ext customer id that
+	// owns the low-balance alert-webhook canary wallet. Kept out of
+	// PreFundedCustomerIDs so wallet_debit_verification / wallet_balance_probe
+	// don't top it up or read it. Consumed only by LowBalanceAlertProbe.
+	AlertCanaryExternalCustomerID string
 }
 
 type EphemeralEntity struct {
@@ -42,12 +48,13 @@ func (r *registry) LoadSeeds(s Seeds) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.seeds = Seeds{
-		PersistentCustomerIDs: append([]string(nil), s.PersistentCustomerIDs...),
-		PreFundedCustomerIDs:  append([]string(nil), s.PreFundedCustomerIDs...),
-		PersistentSubIDs:      append([]string(nil), s.PersistentSubIDs...),
-		PlanIDs:               append([]string(nil), s.PlanIDs...),
-		FeatureIDs:            append([]string(nil), s.FeatureIDs...),
-		MeterIDs:              copyStringMap(s.MeterIDs),
+		PersistentCustomerIDs:         append([]string(nil), s.PersistentCustomerIDs...),
+		PreFundedCustomerIDs:          append([]string(nil), s.PreFundedCustomerIDs...),
+		PersistentSubIDs:              append([]string(nil), s.PersistentSubIDs...),
+		PlanIDs:                       append([]string(nil), s.PlanIDs...),
+		FeatureIDs:                    append([]string(nil), s.FeatureIDs...),
+		MeterIDs:                      copyStringMap(s.MeterIDs),
+		AlertCanaryExternalCustomerID: s.AlertCanaryExternalCustomerID,
 	}
 }
 
@@ -55,12 +62,13 @@ func (r *registry) Seeds() Seeds {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return Seeds{
-		PersistentCustomerIDs: append([]string(nil), r.seeds.PersistentCustomerIDs...),
-		PreFundedCustomerIDs:  append([]string(nil), r.seeds.PreFundedCustomerIDs...),
-		PersistentSubIDs:      append([]string(nil), r.seeds.PersistentSubIDs...),
-		PlanIDs:               append([]string(nil), r.seeds.PlanIDs...),
-		FeatureIDs:            append([]string(nil), r.seeds.FeatureIDs...),
-		MeterIDs:              copyStringMap(r.seeds.MeterIDs),
+		PersistentCustomerIDs:         append([]string(nil), r.seeds.PersistentCustomerIDs...),
+		PreFundedCustomerIDs:          append([]string(nil), r.seeds.PreFundedCustomerIDs...),
+		PersistentSubIDs:              append([]string(nil), r.seeds.PersistentSubIDs...),
+		PlanIDs:                       append([]string(nil), r.seeds.PlanIDs...),
+		FeatureIDs:                    append([]string(nil), r.seeds.FeatureIDs...),
+		MeterIDs:                      copyStringMap(r.seeds.MeterIDs),
+		AlertCanaryExternalCustomerID: r.seeds.AlertCanaryExternalCustomerID,
 	}
 }
 
