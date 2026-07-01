@@ -54,18 +54,18 @@ func TestSeedEnsure(t *testing.T) {
 				// subs and wallets are empty — they'll be created
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     0,  // all 9 found via Query
-			wantCustomersCreated:    0,  // all 10 already present
-			wantPlansCreated:        0,  // plan found via Query
+			wantFeaturesCreated:     0, // all 9 found via Query
+			wantCustomersCreated:    1, // 10 pre-populated; alert canary still needs creating
+			wantPlansCreated:        0, // plan found via Query
 			wantPricesCreated:       10, // base + 9 usage prices
-			wantSubsCreated:         10, // one per persistent customer
-			wantWalletsCreated:      3,  // one per pre-funded customer
-			wantPersistentCustomers: 10,
+			wantSubsCreated:         11, // 10 persistent + 1 alert canary
+			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
+			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
 			wantMeterIDs:            9,
 			wantFeatureIDs:          9,
 			wantPlanIDs:             1,
-			wantSubIDs:              10,
+			wantSubIDs:              11,
 		},
 		{
 			name: "CreatesMissing: all empty, all entities created",
@@ -75,17 +75,17 @@ func TestSeedEnsure(t *testing.T) {
 			},
 			wantErr:                 false,
 			wantFeaturesCreated:     9,
-			wantCustomersCreated:    10,
+			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
 			wantPricesCreated:       10, // base + 9 usage
-			wantSubsCreated:         10,
-			wantWalletsCreated:      3,
-			wantPersistentCustomers: 10,
+			wantSubsCreated:         11, // 10 persistent + 1 alert canary
+			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
+			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
 			wantMeterIDs:            9,
 			wantFeatureIDs:          9,
 			wantPlanIDs:             1,
-			wantSubIDs:              10,
+			wantSubIDs:              11,
 		},
 		{
 			name: "PartialExisting: features exist but plan/subs/wallets don't",
@@ -109,17 +109,17 @@ func TestSeedEnsure(t *testing.T) {
 			},
 			wantErr:                 false,
 			wantFeaturesCreated:     0,
-			wantCustomersCreated:    0,
+			wantCustomersCreated:    1, // alert canary still needs creating
 			wantPlansCreated:        1,
 			wantPricesCreated:       10,
-			wantSubsCreated:         10,
-			wantWalletsCreated:      3,
-			wantPersistentCustomers: 10,
+			wantSubsCreated:         11, // 10 persistent + 1 alert canary
+			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
+			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
 			wantMeterIDs:            9,
 			wantFeatureIDs:          9,
 			wantPlanIDs:             1,
-			wantSubIDs:              10,
+			wantSubIDs:              11,
 		},
 	}
 

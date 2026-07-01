@@ -361,12 +361,16 @@ feature_flag:
   enable_meter_usage_for_preview_invoice: true
   # Switch /events/analytics to use meter-usage
   enable_meter_usage_for_analytics: true
+    # Switch invoice billing to use meter-usage
+  enable_meter_usage_for_billing: false
   # Per-tenant rollout overrides for meter-usage. Resolution order per tenant:
   #   disabled_tenants > enabled_tenants > global enable_* flag above.
   meter_usage_for_preview_invoice_enabled_tenants: []
   meter_usage_for_preview_invoice_disabled_tenants: []
   meter_usage_for_analytics_enabled_tenants: []
   meter_usage_for_analytics_disabled_tenants: []
+  meter_usage_for_billing_enabled_tenants: []
+  meter_usage_for_billing_disabled_tenants: []
   enable_usage_benchmark: false
   usage_benchmark_enabled_tenants: []
   usage_benchmark_disabled_tenants: []

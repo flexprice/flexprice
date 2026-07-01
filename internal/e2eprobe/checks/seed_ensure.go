@@ -16,10 +16,37 @@ import (
 const (
 	PersistentCustomerCount = 10
 	PreFundedWalletCount    = 3
+
+	// AlertCanaryExternalCustomerID owns the dedicated $30 wallet used by
+	// LowBalanceAlertProbe to exercise the low-balance webhook pipeline
+	// end-to-end. Held outside PreFundedCustomerIDs so wallet_debit_verification
+	// / wallet_balance_probe never touch it.
+	AlertCanaryExternalCustomerID = "e2eprobe-cust-alert-canary"
+
+	// AlertCanaryInitialBalance sits $5 above the info threshold (25).
+	// Any drop of >$5 in current-period usage crosses info; >$20 crosses
+	// warning; >$30 crosses critical.
+	AlertCanaryInitialBalance = "30.00"
 )
 
-func strPtr(s string) *string { return &s }
-func int64Ptr(i int64) *int64 { return &i }
+func strPtr(s string) *string       { return &s }
+func int64Ptr(i int64) *int64       { return &i }
+func float64Ptr(f float64) *float64 { return &f }
+func boolPtr(b bool) *bool          { return &b }
+
+// lowBalanceAlertSettings returns the alert thresholds seed wallets are
+// created with: info at 25, warning at 10, critical at 0 (all "below").
+// Fires wallet.credit_balance.dropped webhooks; consumed by the
+// low-wallet-alert-listener check.
+func lowBalanceAlertSettings() *types.AlertSettings {
+	below := types.AlertConditionBelow
+	return &types.AlertSettings{
+		AlertEnabled: boolPtr(true),
+		Info:         &types.AlertThreshold{Threshold: float64Ptr(25), Condition: &below},
+		Warning:      &types.AlertThreshold{Threshold: float64Ptr(10), Condition: &below},
+		Critical:     &types.AlertThreshold{Threshold: float64Ptr(0), Condition: &below},
+	}
+}
 
 func persistentExternalCustomerID(i int) string {
 	return fmt.Sprintf("e2eprobe-cust-persistent-%d", i)
@@ -36,7 +63,7 @@ func NewSeedEnsure(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *log
 	return &SeedEnsure{client: c, reg: r, runID: runID, logger: lg}
 }
 
-func (s *SeedEnsure) Name() string         { return "seed-ensure" }
+func (s *SeedEnsure) Name() string        { return "seed-ensure" }
 func (s *SeedEnsure) Kind() e2eprobe.Kind { return e2eprobe.KindBootstrap }
 func (s *SeedEnsure) Run(ctx context.Context) error {
 	seeds := e2eprobe.Seeds{
@@ -254,6 +281,44 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 	for i := 0; i < PreFundedWalletCount && i < PersistentCustomerCount; i++ {
 		out.PreFundedCustomerIDs = append(out.PreFundedCustomerIDs, persistentExternalCustomerID(i))
 	}
+
+	// Alert-canary customer: separate persistent customer used only for
+	// low-balance webhook pipeline verification. Added to PersistentCustomerIDs
+	// so ensureSubscriptions gives it a plan sub (required for ongoing-balance
+	// projection), but deliberately kept out of PreFundedCustomerIDs.
+	if err := s.ensureAlertCanaryCustomer(ctx); err != nil {
+		return err
+	}
+	out.PersistentCustomerIDs = append(out.PersistentCustomerIDs, AlertCanaryExternalCustomerID)
+	out.AlertCanaryExternalCustomerID = AlertCanaryExternalCustomerID
+	return nil
+}
+
+func (s *SeedEnsure) ensureAlertCanaryCustomer(ctx context.Context) error {
+	ext := AlertCanaryExternalCustomerID
+	_, err := s.client.Customers().GetByExternalID(ctx, ext)
+	if err == nil {
+		return nil
+	}
+	var apiErr *sdkerrors.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode != http.StatusNotFound {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "lookup alert canary: %w", err)
+	}
+	req := types.DtoCreateCustomerRequest{
+		ExternalID: ext,
+		Name:       strPtr("E2EProbe Alert Canary"),
+		Email:      strPtr(fmt.Sprintf("%s@e2eprobe.flexprice.invalid", ext)),
+		Metadata: map[string]string{
+			"e2eprobe":        "true",
+			"e2eprobe_cohort": "persistent",
+			"e2eprobe_role":   "alert-canary",
+			"e2eprobe_run_id": s.runID,
+			"created_unix_ns": fmt.Sprintf("%d", time.Now().UnixNano()),
+		},
+	}
+	if _, err := s.client.Customers().Create(ctx, req); err != nil {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "create alert canary: %w", err)
+	}
 	return nil
 }
 
@@ -458,8 +523,14 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 	return nil
 }
 
-// ensureWallets creates and tops up a wallet for the first 3 persistent customers.
+// ensureWallets creates and tops up a wallet for the first 3 persistent customers
+// plus the dedicated alert-canary customer (lower balance, alert-driven).
 func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) error {
+	if seeds.AlertCanaryExternalCustomerID != "" {
+		if err := s.ensureAlertCanaryWallet(ctx, seeds.AlertCanaryExternalCustomerID); err != nil {
+			return err
+		}
+	}
 	if len(seeds.PreFundedCustomerIDs) == 0 {
 		return nil
 	}
@@ -484,7 +555,10 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 			continue // wallet already exists
 		}
 
-		// Create wallet.
+		// Create wallet with low-balance alert thresholds (info=25, warning=10,
+		// critical=0). Enables the low-wallet-alert-listener check end-to-end:
+		// Flexprice fires wallet.credit_balance.dropped webhooks as the balance
+		// crosses each threshold, and the listener validates + tracks receipts.
 		createReq := types.DtoCreateWalletRequest{
 			ExternalCustomerID: &extCustID,
 			Currency:           "USD",
@@ -492,6 +566,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 				"e2eprobe":      "true",
 				"e2eprobe_role": "seed",
 			},
+			AlertSettings: lowBalanceAlertSettings(),
 		}
 		walletResp, err := s.client.Wallets().Create(ctx, createReq)
 		if err != nil {
@@ -511,6 +586,56 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		if _, err := s.client.Wallets().TopUp(ctx, walletID, topUpReq); err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "wallet_id": walletID}, "top up wallet %s for customer %s: %w", walletID, extCustID, err)
 		}
+	}
+	return nil
+}
+
+// ensureAlertCanaryWallet provisions the canary customer's single low-balance
+// wallet ($30 initial) with the {info=25, warning=10, critical=0} thresholds
+// enabled. Idempotent — skips when a wallet already exists.
+func (s *SeedEnsure) ensureAlertCanaryWallet(ctx context.Context, extCustID string) error {
+	custResp, err := s.client.Customers().GetByExternalID(ctx, extCustID)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "get alert canary %s: %w", extCustID, err)
+	}
+	if custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
+		return nil
+	}
+	internalCustID := *custResp.DtoCustomerResponse.ID
+
+	walletsResp, err := s.client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "get alert canary wallets: %w", err)
+	}
+	if walletsResp != nil && len(walletsResp.DtoWalletResponses) > 0 {
+		return nil
+	}
+
+	createReq := types.DtoCreateWalletRequest{
+		ExternalCustomerID: strPtr(extCustID),
+		Currency:           "USD",
+		Metadata: map[string]string{
+			"e2eprobe":      "true",
+			"e2eprobe_role": "alert-canary",
+		},
+		AlertSettings: lowBalanceAlertSettings(),
+	}
+	walletResp, err := s.client.Wallets().Create(ctx, createReq)
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "create alert canary wallet: %w", err)
+	}
+	if walletResp.DtoWalletResponse == nil || walletResp.DtoWalletResponse.ID == nil {
+		return nil
+	}
+	walletID := *walletResp.DtoWalletResponse.ID
+
+	topUpReq := types.DtoTopUpWalletRequest{
+		Amount:            strPtr(AlertCanaryInitialBalance),
+		Description:       strPtr("e2eprobe alert canary initial top-up"),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+	}
+	if _, err := s.client.Wallets().TopUp(ctx, walletID, topUpReq); err != nil {
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "wallet_id": walletID}, "top up alert canary wallet: %w", err)
 	}
 	return nil
 }
