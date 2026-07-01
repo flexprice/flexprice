@@ -92,7 +92,9 @@ func (c *Client) GetOrCreateApplication(ctx context.Context, tenantID, environme
 	return app.Id, nil
 }
 
-// GetDashboardURL gets the dashboard URL for the given application
+// GetDashboardURL returns the Svix app-portal access token for the given
+// application. (In Svix OSS the returned `url` is a docs stub; the usable
+// value is the app-scoped JWT token, consumed by svix-react in the browser.)
 func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (string, error) {
 	if !c.enabled || c.client == nil {
 		return "", nil
@@ -110,7 +112,7 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (str
 		return "", fmt.Errorf("failed to get dashboard access: %w", err)
 	}
 
-	return dashboard.Url, nil
+	return dashboard.Token, nil
 }
 
 // SendMessage sends a webhook message to the given application.
