@@ -957,13 +957,14 @@ func (s *EntitlementServiceSuite) TestUpdateEntitlementConfigValue() {
 		s.Equal("https://prod.example.com/hook", resp.Entitlement.ConfigValue["webhook_url"])
 	})
 
-	s.Run("Setting is_enabled on config feature returns validation error", func() {
+	s.Run("Setting is_enabled on config feature is silently corrected to true", func() {
 		isEnabled := false
 		req := dto.UpdateEntitlementRequest{IsEnabled: &isEnabled}
 
 		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
-		s.Error(err)
-		s.Nil(resp)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.True(resp.Entitlement.IsEnabled)
 	})
 }
 
