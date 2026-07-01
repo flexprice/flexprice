@@ -106,8 +106,8 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 		return
 	}
 
-	// Get app-portal access token
-	token, err := h.svixClient.GetDashboardURL(c.Request.Context(), appID)
+	// Get app-portal access url and token
+	url, token, err := h.svixClient.GetDashboardURL(c.Request.Context(), appID)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to get Svix app-portal token",
 			"error", err,
@@ -121,6 +121,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"svix_enabled": true,
+		"url":          url,
 		"token":        token,
 		"app_id":       appID,
 	})
