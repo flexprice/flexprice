@@ -6886,12 +6886,17 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 		case types.FeatureTypeConfig:
 			if override.UsageLimit != nil {
 				return ierr.NewError("usage_limit cannot be set for config features").
-					WithHint("Only config_value and is_enabled can be overridden for config features").
+					WithHint("Only config_value can be overridden for config features").
 					Mark(ierr.ErrValidation)
 			}
 			if override.StaticValue != nil {
 				return ierr.NewError("static_value cannot be set for config features").
-					WithHint("Only config_value and is_enabled can be overridden for config features").
+					WithHint("Only config_value can be overridden for config features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.IsEnabled != nil {
+				return ierr.NewError("is_enabled cannot be set for config features").
+					WithHint("Only config_value can be overridden for config features").
 					Mark(ierr.ErrValidation)
 			}
 		}
