@@ -221,6 +221,10 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 
 func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	// L1 (ForceCache*) bypasses cache.enabled and is not instrumented by the
+	// cache layer, so record its eviction explicitly (mirroring SetCache). The
+	// L2 r.cache.Delete below is recorded by the cache implementation itself.
 	r.cache.ForceCacheDelete(ctx, cacheKey)
+	cache.RecordDelete(ctx, "tenant", cache.SourceInMemory)
 	r.cache.Delete(ctx, cacheKey)
 }

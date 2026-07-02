@@ -37,6 +37,17 @@ func RecordMiss(ctx context.Context, entity, source string) {
 	recordEvent(ctx, "cache.miss", entity, source)
 }
 
+// RecordLookup records a cache lookup outcome, emitting a hit event when hit is
+// true and a miss event otherwise. It lets callers record a lookup in one call
+// instead of branching on the result themselves.
+func RecordLookup(ctx context.Context, entity, source string, hit bool) {
+	name := "cache.miss"
+	if hit {
+		name = "cache.hit"
+	}
+	recordEvent(ctx, name, entity, source)
+}
+
 // RecordSet records a cache write as an OTel span event.
 func RecordSet(ctx context.Context, entity, source string) {
 	recordEvent(ctx, "cache.set", entity, source)
@@ -45,6 +56,14 @@ func RecordSet(ctx context.Context, entity, source string) {
 // RecordDelete records a cache invalidation as an OTel span event.
 func RecordDelete(ctx context.Context, entity, source string) {
 	recordEvent(ctx, "cache.delete", entity, source)
+}
+
+// RecordError records a cache backend failure (e.g. a Redis transport/timeout
+// error) as an OTel span event. It is deliberately distinct from RecordMiss so
+// genuine "cold cache" misses stay separable from "cache is degraded" in
+// miss-rate metrics.
+func RecordError(ctx context.Context, entity, source string) {
+	recordEvent(ctx, "cache.error", entity, source)
 }
 
 // entityFromKey derives the domain-entity label from a cache key. Keys are

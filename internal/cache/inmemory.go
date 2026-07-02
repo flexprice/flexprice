@@ -66,23 +66,13 @@ func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool)
 	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}
-	if ctx.Err() != nil {
-		return nil, false
-	}
 	value, found := c.cache.Get(key)
-	if found {
-		RecordHit(ctx, entityFromKey(key), SourceInMemory)
-	} else {
-		RecordMiss(ctx, entityFromKey(key), SourceInMemory)
-	}
+	RecordLookup(ctx, entityFromKey(key), SourceInMemory, found)
 	return value, found
 }
 
 func (c *inMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
 	if c == nil {
-		return nil, false
-	}
-	if ctx.Err() != nil {
 		return nil, false
 	}
 	return c.cache.Get(key)
@@ -92,9 +82,6 @@ func (c *inMemoryCache) ForceCacheSet(ctx context.Context, key string, value int
 	if c == nil {
 		return
 	}
-	if ctx.Err() != nil {
-		return
-	}
 	c.cache.Set(key, value, expiration)
 }
 
@@ -102,42 +89,35 @@ func (c *inMemoryCache) ForceCacheDelete(ctx context.Context, key string) {
 	if c == nil {
 		return
 	}
-	if ctx.Err() != nil {
-		return
-	}
 	c.cache.Delete(key)
 }
 
-// Set adds a value to the cache with the specified expiration
+// Set adds a value to the cache with the specified expiration.
+// Mutations intentionally ignore ctx cancellation: repositories invalidate the
+// cache after a committed DB write, so honoring a canceled request context here
+// would leave stale entries alive until TTL expiry.
 func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	if c == nil || !c.IsEnabled() {
-		return
-	}
-	if ctx.Err() != nil {
 		return
 	}
 	c.cache.Set(key, value, expiration)
 	RecordSet(ctx, entityFromKey(key), SourceInMemory)
 }
 
-// Delete removes a key from the cache
+// Delete removes a key from the cache. See Set for why ctx cancellation is not
+// honored on mutation paths.
 func (c *inMemoryCache) Delete(ctx context.Context, key string) {
 	if c == nil || !c.IsEnabled() {
-		return
-	}
-	if ctx.Err() != nil {
 		return
 	}
 	c.cache.Delete(key)
 	RecordDelete(ctx, entityFromKey(key), SourceInMemory)
 }
 
-// DeleteByPrefix removes all keys with the given prefix
+// DeleteByPrefix removes all keys with the given prefix. See Set for why ctx
+// cancellation is not honored on mutation paths.
 func (c *inMemoryCache) DeleteByPrefix(ctx context.Context, prefix string) {
 	if c == nil || !c.IsEnabled() {
-		return
-	}
-	if ctx.Err() != nil {
 		return
 	}
 	// Get all items from the cache

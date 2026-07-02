@@ -104,11 +104,13 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			// Key does not exist
+			// Key genuinely does not exist: a real cache miss.
 			RecordMiss(ctx, entityFromKey(key), SourceRedis)
 			return nil, false
 		}
-		RecordMiss(ctx, entityFromKey(key), SourceRedis)
+		// Transport/timeout/other Redis failure: record as an error, not a miss,
+		// so cache health issues stay distinguishable from cold-cache misses.
+		RecordError(ctx, entityFromKey(key), SourceRedis)
 		c.log.Error(ctx, "Redis GET error", "key", redisKey, "error", err)
 		return nil, false
 	}
@@ -146,7 +148,9 @@ func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{},
 	}
 
 	if err := c.client.Set(ctx, redisKey, strValue, expiration).Err(); err != nil {
+		RecordError(ctx, entityFromKey(key), SourceRedis)
 		c.log.Error(ctx, "Redis SET error", "key", redisKey, "error", err)
+		return
 	}
 	RecordSet(ctx, entityFromKey(key), SourceRedis)
 }
@@ -170,7 +174,10 @@ func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
 
 		// Retry once
 		if retryErr := c.delete(retryCtx, redisKey); retryErr != nil {
+			// Both attempts failed: record an error, not a successful delete.
+			RecordError(ctx, entityFromKey(key), SourceRedis)
 			c.log.Error(ctx, "Redis DELETE retry failed", "key", redisKey, "error", retryErr)
+			return
 		}
 	}
 	RecordDelete(ctx, entityFromKey(key), SourceRedis)

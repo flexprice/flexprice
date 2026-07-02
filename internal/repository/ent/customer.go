@@ -200,7 +200,12 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 
 	SetSpanSuccess(span)
 
-	return domainCustomer.FromEnt(c), nil
+	// The lookup-key path is not cache-readable (cache is keyed by ID), but the
+	// DB result carries the canonical ID, so warm the ID-keyed entry to save a
+	// later Get(ctx, customer.ID) round-trip.
+	result := domainCustomer.FromEnt(c)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
