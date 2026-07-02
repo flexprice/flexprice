@@ -99,26 +99,20 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 		return nil, false
 	}
 
-	spanCtx, span := startCacheSpan(ctx, storageSpansEnabled(c.config), "get", SourceRedis, key)
-	defer endCacheSpan(span)
-
 	redisKey := c.GetRedisKey(key)
 
-	value, err := c.client.Get(spanCtx, redisKey).Result()
+	value, err := c.client.Get(ctx, redisKey).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			// Key does not exist
-			setCacheHit(span, false)
 			RecordMiss(ctx, entityFromKey(key), SourceRedis)
 			return nil, false
 		}
-		failCacheSpan(span, err)
 		RecordMiss(ctx, entityFromKey(key), SourceRedis)
 		c.log.Error(ctx, "Redis GET error", "key", redisKey, "error", err)
 		return nil, false
 	}
 
-	setCacheHit(span, true)
 	RecordHit(ctx, entityFromKey(key), SourceRedis)
 	return value, true
 }
@@ -133,9 +127,6 @@ func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{},
 		expiration = ExpiryDefaultRedis
 	}
 
-	spanCtx, span := startCacheSpan(ctx, storageSpansEnabled(c.config), "set", SourceRedis, key)
-	defer endCacheSpan(span)
-
 	// Generate Key
 	redisKey := c.GetRedisKey(key)
 
@@ -148,15 +139,13 @@ func (c *redisCacheImpl) Set(ctx context.Context, key string, value interface{},
 		// Marshal non-string values to JSON
 		jsonBytes, err := json.Marshal(value)
 		if err != nil {
-			failCacheSpan(span, err)
 			c.log.Error(ctx, "Failed to marshal cache value", "key", redisKey, "error", err)
 			return
 		}
 		strValue = string(jsonBytes)
 	}
 
-	if err := c.client.Set(spanCtx, redisKey, strValue, expiration).Err(); err != nil {
-		failCacheSpan(span, err)
+	if err := c.client.Set(ctx, redisKey, strValue, expiration).Err(); err != nil {
 		c.log.Error(ctx, "Redis SET error", "key", redisKey, "error", err)
 	}
 	RecordSet(ctx, entityFromKey(key), SourceRedis)
@@ -167,11 +156,8 @@ func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
 	if c == nil || !c.IsEnabled() {
 		return
 	}
-	spanCtx, span := startCacheSpan(ctx, storageSpansEnabled(c.config), "delete", SourceRedis, key)
-	defer endCacheSpan(span)
-
 	redisKey := c.GetRedisKey(key)
-	err := c.delete(spanCtx, redisKey)
+	err := c.delete(ctx, redisKey)
 	if err != nil {
 		c.log.Info(ctx, "Redis DELETE failed, retrying...", "key", redisKey, "error", err)
 
@@ -184,7 +170,6 @@ func (c *redisCacheImpl) Delete(ctx context.Context, key string) {
 
 		// Retry once
 		if retryErr := c.delete(retryCtx, redisKey); retryErr != nil {
-			failCacheSpan(span, retryErr)
 			c.log.Error(ctx, "Redis DELETE retry failed", "key", redisKey, "error", retryErr)
 		}
 	}

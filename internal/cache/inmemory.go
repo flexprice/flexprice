@@ -69,10 +69,7 @@ func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool)
 	if ctx.Err() != nil {
 		return nil, false
 	}
-	_, span := startCacheSpan(ctx, storageSpansEnabled(c.cfg), "get", SourceInMemory, key)
-	defer endCacheSpan(span)
 	value, found := c.cache.Get(key)
-	setCacheHit(span, found)
 	if found {
 		RecordHit(ctx, entityFromKey(key), SourceInMemory)
 	} else {
@@ -119,8 +116,6 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}, 
 	if ctx.Err() != nil {
 		return
 	}
-	_, span := startCacheSpan(ctx, storageSpansEnabled(c.cfg), "set", SourceInMemory, key)
-	defer endCacheSpan(span)
 	c.cache.Set(key, value, expiration)
 	RecordSet(ctx, entityFromKey(key), SourceInMemory)
 }
@@ -133,8 +128,6 @@ func (c *inMemoryCache) Delete(ctx context.Context, key string) {
 	if ctx.Err() != nil {
 		return
 	}
-	_, span := startCacheSpan(ctx, storageSpansEnabled(c.cfg), "delete", SourceInMemory, key)
-	defer endCacheSpan(span)
 	c.cache.Delete(key)
 	RecordDelete(ctx, entityFromKey(key), SourceInMemory)
 }
@@ -147,8 +140,6 @@ func (c *inMemoryCache) DeleteByPrefix(ctx context.Context, prefix string) {
 	if ctx.Err() != nil {
 		return
 	}
-	_, span := startCacheSpan(ctx, storageSpansEnabled(c.cfg), "delete_by_prefix", SourceInMemory, prefix)
-	defer endCacheSpan(span)
 	// Get all items from the cache
 	items := c.cache.Items()
 
