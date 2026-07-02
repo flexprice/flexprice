@@ -162,6 +162,10 @@ type WalletBalanceAlertEvent struct {
 	Timestamp             time.Time `json:"timestamp"`
 	Source                string    `json:"source"`              // e.g., "wallet_credit", "wallet_debit", "manual", "cron"
 	WalletID              string    `json:"wallet_id,omitempty"` // Optional: specific wallet that triggered the event
+	// SkipAsyncRecheck is true when CheckWalletBalanceAlert has already run synchronously
+	// in-process for this event. The Kafka consumer skips reprocessing such events
+	// to avoid re-triggering auto top-up for the same balance drop.
+	SkipAsyncRecheck bool `json:"skip_async_recheck,omitempty"`
 }
 
 func (e *WalletBalanceAlertEvent) Validate() error {

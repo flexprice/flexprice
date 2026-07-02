@@ -1899,6 +1899,9 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		TenantID:              types.GetTenantID(ctx),
 		EnvironmentID:         types.GetEnvironmentID(ctx),
 		WalletID:              req.WalletID,
+		// CheckWalletBalanceAlert is about to be called synchronously below for this
+		// same event; the Kafka consumer must not repeat it or auto top-up double-fires.
+		SkipAsyncRecheck: true,
 	}
 	if err := walletBalanceAlertSvc.PublishEvent(ctx, event); err != nil {
 		s.Logger.Error(ctx, "failed to publish wallet balance alert event",
