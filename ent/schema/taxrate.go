@@ -93,6 +93,6 @@ func (TaxRate) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
 			StorageKey(Idx_code_tenant_id_environment_id).
-			Annotations(entsql.IndexWhere("(code IS NOT NULL AND code != '' and status = 'published')")),
+			Annotations(entsql.IndexWhere("((code IS NOT NULL) AND ((code)::text <> ''::text) AND ((status)::text = 'published'::text))")),
 	}
 }

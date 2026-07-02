@@ -51,7 +51,7 @@ func (Auth) Indexes() []ent.Index {
 		index.Fields("user_id").
 			Unique().
 			StorageKey("idx_auth_user_id_unique").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 		index.Fields("provider").
 			StorageKey("idx_auth_provider"),
 		index.Fields("status").

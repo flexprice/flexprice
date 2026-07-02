@@ -124,7 +124,7 @@ func (Coupon) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id"),
 		index.Fields("tenant_id", "environment_id", "coupon_code").
 			Unique().
-			Annotations(entsql.IndexWhere("coupon_code IS NOT NULL AND coupon_code != '' AND status = 'published'")).
+			Annotations(entsql.IndexWhere("((coupon_code IS NOT NULL) AND ((coupon_code)::text <> ''::text) AND ((status)::text = 'published'::text))")).
 			StorageKey("idx_coupon_tenant_environment_coupon_code_unique"),
 	}
 }
