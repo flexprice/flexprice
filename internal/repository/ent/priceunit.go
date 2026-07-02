@@ -498,7 +498,6 @@ func (r *priceUnitRepository) GetCache(ctx context.Context, id string) *domainPr
 	}
 	p, ok := cache.UnmarshalCacheValue[domainPriceUnit.PriceUnit](value)
 	if !ok {
-		cache.RecordMiss(ctx, "price_unit", cache.SourceInMemory)
 		return nil
 	}
 	return p

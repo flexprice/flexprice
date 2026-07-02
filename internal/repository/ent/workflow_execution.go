@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainWorkflowExecution "github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -23,15 +22,13 @@ type workflowExecutionRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts WorkflowExecutionQueryOptions
-	cache     cache.InMemoryCache
 }
 
-func NewWorkflowExecutionRepository(client postgres.IClient, log *logger.Logger, c cache.InMemoryCache) domainWorkflowExecution.Repository {
+func NewWorkflowExecutionRepository(client postgres.IClient, log *logger.Logger) domainWorkflowExecution.Repository {
 	return &workflowExecutionRepository{
 		client:    client,
 		log:       log,
 		queryOpts: WorkflowExecutionQueryOptions{},
-		cache:     c,
 	}
 }
 
@@ -96,12 +93,6 @@ func (r *workflowExecutionRepository) Get(ctx context.Context, workflowID, runID
 	})
 	defer FinishSpan(span)
 
-	if r.cache != nil {
-		if cached := r.GetCache(ctx, workflowID, runID); cached != nil {
-			return cached, nil
-		}
-	}
-
 	entExec, err := r.getEnt(ctx, workflowID, runID)
 	if err != nil {
 		SetSpanError(span, err)
@@ -109,9 +100,6 @@ func (r *workflowExecutionRepository) Get(ctx context.Context, workflowID, runID
 	}
 	SetSpanSuccess(span)
 	dom := domainWorkflowExecution.FromEnt(entExec)
-	if r.cache != nil {
-		r.SetCache(ctx, workflowID, runID, dom)
-	}
 	return dom, nil
 }
 
@@ -293,9 +281,6 @@ func (r *workflowExecutionRepository) UpdateStatus(
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	if r.cache != nil {
-		r.DeleteCache(ctx, workflowID, runID)
-	}
 	return nil
 }
 
@@ -457,30 +442,4 @@ func workflowExecutionFieldName(field string) string {
 		return f
 	}
 	return ""
-}
-
-func (r *workflowExecutionRepository) GetCache(ctx context.Context, workflowID, runID string) *domainWorkflowExecution.WorkflowExecution {
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	key := cache.GenerateKey(cache.PrefixWorkflowExecution, tenantID, environmentID, workflowID+":"+runID)
-	if value, found := r.cache.Get(ctx, key); found {
-		if exec, ok := value.(*domainWorkflowExecution.WorkflowExecution); ok {
-			return exec
-		}
-	}
-	return nil
-}
-
-func (r *workflowExecutionRepository) SetCache(ctx context.Context, workflowID, runID string, exec *domainWorkflowExecution.WorkflowExecution) {
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	key := cache.GenerateKey(cache.PrefixWorkflowExecution, tenantID, environmentID, workflowID+":"+runID)
-	r.cache.Set(ctx, key, exec, cache.ExpiryDefaultInMemory)
-}
-
-func (r *workflowExecutionRepository) DeleteCache(ctx context.Context, workflowID, runID string) {
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	key := cache.GenerateKey(cache.PrefixWorkflowExecution, tenantID, environmentID, workflowID+":"+runID)
-	r.cache.Delete(ctx, key)
 }

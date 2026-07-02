@@ -524,7 +524,6 @@ func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxR
 	}
 	t, ok := cache.UnmarshalCacheValue[domainTaxRate.TaxRate](value)
 	if !ok {
-		cache.RecordMiss(ctx, "tax_rate", cache.SourceInMemory)
 		return nil
 	}
 	return t

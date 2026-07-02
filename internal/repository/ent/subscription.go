@@ -1068,7 +1068,6 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 	}
 	s, ok := cache.UnmarshalCacheValue[domainSub.Subscription](value)
 	if !ok {
-		cache.RecordMiss(ctx, "subscription", cache.SourceRedis)
 		return nil
 	}
 	return s

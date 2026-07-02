@@ -1168,7 +1168,6 @@ func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvo
 	}
 	inv, ok := cache.UnmarshalCacheValue[domainInvoice.Invoice](value)
 	if !ok {
-		cache.RecordMiss(ctx, "invoice", cache.SourceRedis)
 		return nil
 	}
 	return inv

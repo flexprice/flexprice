@@ -774,7 +774,6 @@ func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPaym
 	}
 	p, ok := cache.UnmarshalCacheValue[domainPayment.Payment](value)
 	if !ok {
-		cache.RecordMiss(ctx, "payment", cache.SourceRedis)
 		return nil
 	}
 	return p

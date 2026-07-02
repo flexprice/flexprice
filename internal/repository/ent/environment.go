@@ -265,7 +265,6 @@ func (r *environmentRepository) GetCache(ctx context.Context, id string) *domain
 	}
 	e, ok := cache.UnmarshalCacheValue[domainEnvironment.Environment](value)
 	if !ok {
-		cache.RecordMiss(ctx, "environment", cache.SourceInMemory)
 		return nil
 	}
 	return e

@@ -723,7 +723,6 @@ func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.
 	}
 	p, ok := cache.UnmarshalCacheValue[domainPrice.Price](value)
 	if !ok {
-		cache.RecordMiss(ctx, "price", cache.SourceRedis)
 		return nil
 	}
 	return p

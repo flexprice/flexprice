@@ -560,7 +560,6 @@ func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCus
 	}
 	c, ok := cache.UnmarshalCacheValue[domainCustomer.Customer](value)
 	if !ok {
-		cache.RecordMiss(ctx, "customer", cache.SourceRedis)
 		return nil
 	}
 	return c

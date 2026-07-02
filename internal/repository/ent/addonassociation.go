@@ -512,7 +512,6 @@ func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *d
 	}
 	aa, ok := cache.UnmarshalCacheValue[domainAddonAssociation.AddonAssociation](value)
 	if !ok {
-		cache.RecordMiss(ctx, "addon_association", cache.SourceRedis)
 		return nil
 	}
 	return aa

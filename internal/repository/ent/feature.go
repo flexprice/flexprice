@@ -605,7 +605,6 @@ func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeat
 	}
 	f, ok := cache.UnmarshalCacheValue[domainFeature.Feature](value)
 	if !ok {
-		cache.RecordMiss(ctx, "feature", cache.SourceInMemory)
 		return nil
 	}
 	return f

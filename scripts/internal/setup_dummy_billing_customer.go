@@ -147,7 +147,7 @@ func SetupDummyBillingCustomer() error {
 	groupRepo := entRepo.NewGroupRepository(client, appLogger, cacheClient)
 	scheduledTaskRepo := entRepo.NewScheduledTaskRepository(client, appLogger)
 	planPriceSyncRepo := entRepo.NewPlanPriceSyncRepository(client, appLogger)
-	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger, cacheClient)
+	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger)
 	authRepo := entRepo.NewAuthRepository(client, appLogger)
 	userRepo := entRepo.NewUserRepository(client, appLogger, cacheClient)
 

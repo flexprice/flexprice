@@ -941,7 +941,6 @@ func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomai
 	}
 	w, ok := cache.UnmarshalCacheValue[walletdomain.Wallet](value)
 	if !ok {
-		cache.RecordMiss(ctx, "wallet", cache.SourceRedis)
 		return nil
 	}
 	return w

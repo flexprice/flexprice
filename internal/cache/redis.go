@@ -105,7 +105,7 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			// Key genuinely does not exist: a real cache miss.
-			RecordMiss(ctx, entityFromKey(key), SourceRedis)
+			RecordLookup(ctx, entityFromKey(key), SourceRedis, false)
 			return nil, false
 		}
 		// Transport/timeout/other Redis failure: record as an error, not a miss,
@@ -115,7 +115,7 @@ func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool
 		return nil, false
 	}
 
-	RecordHit(ctx, entityFromKey(key), SourceRedis)
+	RecordLookup(ctx, entityFromKey(key), SourceRedis, true)
 	return value, true
 }
 

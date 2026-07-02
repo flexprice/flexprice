@@ -606,7 +606,6 @@ func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domain
 	}
 	cg, ok := cache.UnmarshalCacheValue[domainCreditGrant.CreditGrant](value)
 	if !ok {
-		cache.RecordMiss(ctx, "credit_grant", cache.SourceRedis)
 		return nil
 	}
 	return cg

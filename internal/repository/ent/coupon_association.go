@@ -491,7 +491,6 @@ func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *
 	}
 	ca, ok := cache.UnmarshalCacheValue[domainCouponAssociation.CouponAssociation](value)
 	if !ok {
-		cache.RecordMiss(ctx, "coupon_association", cache.SourceRedis)
 		return nil
 	}
 	return ca

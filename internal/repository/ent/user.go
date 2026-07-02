@@ -419,7 +419,6 @@ func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.Us
 	}
 	u, ok := cache.UnmarshalCacheValue[domainUser.User](value)
 	if !ok {
-		cache.RecordMiss(ctx, "user", cache.SourceRedis)
 		return nil
 	}
 	return u

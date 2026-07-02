@@ -403,7 +403,6 @@ func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.
 	}
 	m, ok := cache.UnmarshalCacheValue[domainMeter.Meter](value)
 	if !ok {
-		cache.RecordMiss(ctx, "meter", cache.SourceInMemory)
 		return nil
 	}
 	return m

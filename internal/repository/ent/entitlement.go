@@ -692,7 +692,6 @@ func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domain
 	}
 	e, ok := cache.UnmarshalCacheValue[domainEntitlement.Entitlement](value)
 	if !ok {
-		cache.RecordMiss(ctx, "entitlement", cache.SourceRedis)
 		return nil
 	}
 	return e

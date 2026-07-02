@@ -535,7 +535,6 @@ func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.
 	}
 	a, ok := cache.UnmarshalCacheValue[domainAddon.Addon](value)
 	if !ok {
-		cache.RecordMiss(ctx, "addon", cache.SourceInMemory)
 		return nil
 	}
 	return a

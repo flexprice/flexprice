@@ -256,7 +256,6 @@ func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.
 	}
 	g, ok := cache.UnmarshalCacheValue[domainGroup.Group](value)
 	if !ok {
-		cache.RecordMiss(ctx, "group", cache.SourceRedis)
 		return nil
 	}
 	return g

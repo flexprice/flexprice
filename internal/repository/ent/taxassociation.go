@@ -294,7 +294,6 @@ func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *dom
 	}
 	tc, ok := cache.UnmarshalCacheValue[domainTaxConfig.TaxAssociation](value)
 	if !ok {
-		cache.RecordMiss(ctx, "tax_association", cache.SourceRedis)
 		return nil
 	}
 	return tc

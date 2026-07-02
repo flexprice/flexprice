@@ -656,7 +656,6 @@ func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainC
 	}
 	c, ok := cache.UnmarshalCacheValue[domainConnection.Connection](value)
 	if !ok {
-		cache.RecordMiss(ctx, "connection", cache.SourceRedis)
 		return nil
 	}
 	return c

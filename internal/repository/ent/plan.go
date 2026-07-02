@@ -512,7 +512,6 @@ func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Pl
 	}
 	p, ok := cache.UnmarshalCacheValue[domainPlan.Plan](value)
 	if !ok {
-		cache.RecordMiss(ctx, "plan", cache.SourceRedis)
 		return nil
 	}
 	return p

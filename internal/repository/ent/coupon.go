@@ -539,7 +539,6 @@ func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupo
 	}
 	c, ok := cache.UnmarshalCacheValue[domainCoupon.Coupon](value)
 	if !ok {
-		cache.RecordMiss(ctx, "coupon", cache.SourceInMemory)
 		return nil
 	}
 	return c

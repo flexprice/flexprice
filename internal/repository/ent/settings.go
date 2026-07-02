@@ -360,7 +360,6 @@ func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSet
 	}
 	s, ok := cache.UnmarshalCacheValue[domainSettings.Setting](value)
 	if !ok {
-		cache.RecordMiss(ctx, "settings", cache.SourceInMemory)
 		return nil
 	}
 	return s

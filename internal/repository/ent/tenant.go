@@ -206,7 +206,6 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 	// L1 first
 	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
 		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
-			cache.RecordHit(ctx, "tenant", cache.SourceInMemory)
 			return t
 		}
 	}

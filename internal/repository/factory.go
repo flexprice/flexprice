@@ -100,7 +100,7 @@ func NewCustomerRepository(p RepositoryParams) customer.Repository {
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
-	return entRepo.NewPlanRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewPlanRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
@@ -148,7 +148,7 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 }
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
-	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {
@@ -156,7 +156,7 @@ func NewPaymentRepository(p RepositoryParams) payment.Repository {
 }
 
 func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
-	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {
@@ -164,7 +164,7 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 }
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
-	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
@@ -176,7 +176,7 @@ func NewCostsheetRepository(p RepositoryParams) costsheet.Repository {
 }
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
-	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCouponRepository(p RepositoryParams) coupon.Repository {
@@ -248,7 +248,7 @@ func NewSystemEventDomainRepository(repo *entRepo.SystemEventRepository) domains
 }
 
 func NewGroupRepository(p RepositoryParams) group.Repository {
-	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
@@ -272,7 +272,7 @@ func NewMeterUsageBenchmarkRepository(p RepositoryParams) events.MeterUsageBench
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
-	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger)
 }
 
 func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {

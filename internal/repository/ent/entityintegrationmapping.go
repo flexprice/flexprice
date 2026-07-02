@@ -496,7 +496,6 @@ func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id st
 	}
 	m, ok := cache.UnmarshalCacheValue[domainEntityIntegrationMapping.EntityIntegrationMapping](value)
 	if !ok {
-		cache.RecordMiss(ctx, "entity_integration_mapping", cache.SourceRedis)
 		return nil
 	}
 	return m
