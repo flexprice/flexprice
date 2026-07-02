@@ -287,6 +287,17 @@ func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wal
 
 // processEvent delegates to the wallet service to check balance alerts
 func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wallet.WalletBalanceAlertEvent) error {
+	// Skip events that were already checked synchronously in-process (e.g. right after a
+	// wallet transaction). Reprocessing them here would re-run triggerAutoTopup for the
+	// same balance drop and credit the wallet twice.
+	if event.SkipAsyncRecheck {
+		s.Logger.Debug(ctx, "skipping wallet balance alert event already handled synchronously",
+			"event_id", event.ID,
+			"customer_id", event.CustomerID,
+		)
+		return nil
+	}
+
 	// Check if wallet balance alerts are enabled for this tenant
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	config, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
