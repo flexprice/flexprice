@@ -55,10 +55,15 @@ func (r *groupRepository) Create(ctx context.Context, grp *domainGroup.Group) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, grp.ID)
 	return nil
 }
 
 func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Group, error) {
+	if cached := r.GetCache(ctx, id); cached != nil {
+		return cached, nil
+	}
+
 	client := r.client.Reader(ctx)
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -83,7 +88,9 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 			Mark(ierr.ErrDatabase)
 	}
 
-	return r.toDomainGroup(entGroup), nil
+	result := r.toDomainGroup(entGroup)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 func (r *groupRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainGroup.Group, error) {
@@ -206,6 +213,7 @@ func (r *groupRepository) Update(ctx context.Context, grp *domainGroup.Group) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, grp.ID)
 	return nil
 }
 
@@ -231,7 +239,31 @@ func (r *groupRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
+}
+
+func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) {
+	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), grp.ID)
+	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultRedis)
+}
+
+func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.Group {
+	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+	g, ok := cache.UnmarshalCacheValue[domainGroup.Group](value)
+	if !ok {
+		return nil
+	}
+	return g
+}
+
+func (r *groupRepository) DeleteCache(ctx context.Context, id string) {
+	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	r.cache.Delete(ctx, cacheKey)
 }
 
 func (r *groupRepository) toDomainGroup(entGroup *ent.Group) *domainGroup.Group {

@@ -190,31 +190,28 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 }
 
 func (r *tenantRepository) SetCache(ctx context.Context, tenant *domainTenant.Tenant) {
-	span := cache.StartCacheSpan(ctx, "tenant", "set", map[string]interface{}{
-		"tenant_id": tenant.ID,
-	})
-	defer cache.FinishSpan(span)
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, tenant.ID)
+	// Tenant intentionally bypasses the cache.enabled flag (ForceCache*) so it is
+	// always available; do not switch these to r.cache.Set/Get/Delete.
+	// L1 (ForceCache*) bypasses cache.enabled and is not instrumented by the
+	// cache layer, so record its write explicitly. The L2 r.cache.Set below is
+	// recorded by the cache implementation itself.
 	r.cache.ForceCacheSet(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
+	cache.RecordSet(ctx, "tenant", cache.SourceInMemory)
 	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultRedis)
 }
 
 func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTenant.Tenant {
-	span := cache.StartCacheSpan(ctx, "tenant", "get", map[string]interface{}{
-		"tenant_id": key,
-	})
-	defer cache.FinishSpan(span)
-
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
 	// L1 first
 	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
-	// L2 fallback
+	// L2 fallback (recorded by the cache implementation itself)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
@@ -222,12 +219,11 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 }
 
 func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "tenant", "delete", map[string]interface{}{
-		"tenant_id": key,
-	})
-	defer cache.FinishSpan(span)
-
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	// L1 (ForceCache*) bypasses cache.enabled and is not instrumented by the
+	// cache layer, so record its eviction explicitly (mirroring SetCache). The
+	// L2 r.cache.Delete below is recorded by the cache implementation itself.
 	r.cache.ForceCacheDelete(ctx, cacheKey)
+	cache.RecordDelete(ctx, "tenant", cache.SourceInMemory)
 	r.cache.Delete(ctx, cacheKey)
 }

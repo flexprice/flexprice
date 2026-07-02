@@ -593,40 +593,24 @@ func (o FeatureQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
-	span := cache.StartCacheSpan(ctx, "feature", "set", map[string]interface{}{
-		"feature_id": feature.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, feature.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), feature.ID)
 	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
 }
 
-func (r *featureRepository) GetCache(ctx context.Context, key string) *domainFeature.Feature {
-	span := cache.StartCacheSpan(ctx, "feature", "get", map[string]interface{}{
-		"feature_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainFeature.Feature)
+func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	f, ok := cache.UnmarshalCacheValue[domainFeature.Feature](value)
+	if !ok {
+		return nil
+	}
+	return f
 }
 
 func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
-	span := cache.StartCacheSpan(ctx, "feature", "delete", map[string]interface{}{
-		"feature_id": featureID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, featureID)
+	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), featureID)
 	r.cache.Delete(ctx, cacheKey)
 }

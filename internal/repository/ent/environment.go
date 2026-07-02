@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	entEnvironment "github.com/flexprice/flexprice/ent/environment"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -16,13 +17,15 @@ import (
 type environmentRepository struct {
 	client postgres.IClient
 	logger *logger.Logger
+	cache  cache.InMemoryCache
 }
 
 // NewEnvironmentRepository creates a new environment repository
-func NewEnvironmentRepository(client postgres.IClient, logger *logger.Logger) domainEnvironment.Repository {
+func NewEnvironmentRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainEnvironment.Repository {
 	return &environmentRepository{
 		client: client,
 		logger: logger,
+		cache:  cache,
 	}
 }
 
@@ -62,6 +65,7 @@ func (r *environmentRepository) Create(ctx context.Context, env *domainEnvironme
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, env.ID)
 	return nil
 }
 
@@ -72,6 +76,10 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvi
 		"environment_id": id,
 	})
 	defer FinishSpan(span)
+
+	if cached := r.GetCache(ctx, id); cached != nil {
+		return cached, nil
+	}
 
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
 	if !ok {
@@ -111,7 +119,9 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvi
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainEnvironment.FromEnt(e), nil
+	result := domainEnvironment.FromEnt(e)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 // List retrieves environments based on filter
@@ -195,6 +205,7 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, env.ID)
 	return nil
 }
 
@@ -237,4 +248,29 @@ func (r *environmentRepository) CountByType(ctx context.Context, envType types.E
 	}
 
 	return count, nil
+}
+
+// Environments are scoped to a tenant (not to an environment), so the cache key
+// is keyed by tenant + environment ID only, mirroring the Get query filter.
+func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnvironment.Environment) {
+	cacheKey := cache.GenerateKey(cache.PrefixEnvironment, types.GetTenantID(ctx), env.ID)
+	r.cache.Set(ctx, cacheKey, env, cache.ExpiryDefaultInMemory)
+}
+
+func (r *environmentRepository) GetCache(ctx context.Context, id string) *domainEnvironment.Environment {
+	cacheKey := cache.GenerateKey(cache.PrefixEnvironment, types.GetTenantID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+	e, ok := cache.UnmarshalCacheValue[domainEnvironment.Environment](value)
+	if !ok {
+		return nil
+	}
+	return e
+}
+
+func (r *environmentRepository) DeleteCache(ctx context.Context, id string) {
+	cacheKey := cache.GenerateKey(cache.PrefixEnvironment, types.GetTenantID(ctx), id)
+	r.cache.Delete(ctx, cacheKey)
 }

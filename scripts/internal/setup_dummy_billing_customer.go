@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -27,7 +28,6 @@ import (
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/security"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
@@ -123,7 +123,7 @@ func SetupDummyBillingCustomer() error {
 	entitlementRepo := entRepo.NewEntitlementRepository(client, appLogger, cacheClient)
 	walletRepo := entRepo.NewWalletRepository(client, appLogger, cacheClient)
 	tenantRepo := entRepo.NewTenantRepository(client, appLogger, cacheClient)
-	environmentRepo := entRepo.NewEnvironmentRepository(client, appLogger)
+	environmentRepo := entRepo.NewEnvironmentRepository(client, appLogger, cacheClient)
 	creditGrantRepo := entRepo.NewCreditGrantRepository(client, appLogger, cacheClient)
 	creditGrantApplicationRepo := entRepo.NewCreditGrantApplicationRepository(client, appLogger, cacheClient)
 	taxRateRepo := entRepo.NewTaxRateRepository(client, appLogger, cacheClient)
@@ -147,9 +147,9 @@ func SetupDummyBillingCustomer() error {
 	groupRepo := entRepo.NewGroupRepository(client, appLogger, cacheClient)
 	scheduledTaskRepo := entRepo.NewScheduledTaskRepository(client, appLogger)
 	planPriceSyncRepo := entRepo.NewPlanPriceSyncRepository(client, appLogger)
-	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger, cacheClient)
+	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger)
 	authRepo := entRepo.NewAuthRepository(client, appLogger)
-	userRepo := entRepo.NewUserRepository(client, appLogger)
+	userRepo := entRepo.NewUserRepository(client, appLogger, cacheClient)
 
 	eventRepo := chRepo.NewEventRepository(chStore, appLogger)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, appLogger)

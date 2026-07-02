@@ -164,11 +164,6 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedItem := r.GetCache(ctx, id); cachedItem != nil {
-		return cachedItem, nil
-	}
-
 	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
@@ -210,7 +205,6 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	}
 
 	lineItemData := subscription.SubscriptionLineItemFromEnt(item)
-	r.SetCache(ctx, lineItemData)
 	SetSpanSuccess(span)
 	return lineItemData, nil
 }
@@ -279,8 +273,6 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Invalidate cache after update
-	r.DeleteCache(ctx, item.ID)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -355,8 +347,6 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Invalidate cache after delete
-	r.DeleteCache(ctx, id)
 	SetSpanSuccess(span)
 	return nil
 }

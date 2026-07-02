@@ -257,11 +257,6 @@ func (r *invoiceLineItemRepository) Get(ctx context.Context, id string) (*domain
 	})
 	defer FinishSpan(span)
 
-	if cached := r.GetCache(ctx, id); cached != nil {
-		SetSpanSuccess(span)
-		return cached, nil
-	}
-
 	r.log.Debug(ctx, "getting invoice line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
@@ -294,7 +289,6 @@ func (r *invoiceLineItemRepository) Get(ctx context.Context, id string) (*domain
 	}
 
 	result := domaininvoice.LineItemFromEnt(item)
-	r.SetCache(ctx, result)
 	SetSpanSuccess(span)
 	return result, nil
 }
@@ -350,7 +344,6 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, item.ID)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -396,7 +389,6 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, id)
 	SetSpanSuccess(span)
 	return nil
 }
