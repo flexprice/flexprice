@@ -49,9 +49,28 @@ type CreateCreditGrantRequest struct {
 type UpdateCreditGrantRequest struct {
 	Name     *string         `json:"name,omitempty"`
 	Metadata *types.Metadata `json:"metadata,omitempty"`
+	EndDate  *time.Time      `json:"end_date,omitempty"`
 }
 
-// CreditGrantResponse represents the response for a credit grant
+// Validate validates the update credit grant request
+func (r *UpdateCreditGrantRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.EndDate != nil {
+		if r.EndDate.Before(time.Now()) {
+			return errors.NewError("end_date cannot be in the past").
+				WithHint("Please provide a valid end date").
+				WithReportableDetails(map[string]interface{}{
+					"end_date": r.EndDate,
+				}).
+				Mark(errors.ErrValidation)
+		}
+	}
+	return nil
+}
+
 type CreditGrantResponse struct {
 	*creditgrant.CreditGrant
 }
@@ -310,25 +329,6 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 	}
 
 	return cg
-}
-
-// UpdateCreditGrant applies UpdateCreditGrantRequest to domain CreditGrant
-func (r *UpdateCreditGrantRequest) UpdateCreditGrant(grant *creditgrant.CreditGrant, ctx context.Context) {
-	user := types.GetUserID(ctx)
-	grant.UpdatedBy = user
-
-	if r.Name != nil {
-		grant.Name = *r.Name
-	}
-
-	if r.Metadata != nil {
-		if grant.Metadata == nil {
-			grant.Metadata = make(map[string]string)
-		}
-		for k, v := range *r.Metadata {
-			grant.Metadata[k] = v
-		}
-	}
 }
 
 // FromCreditGrant converts domain CreditGrant to CreditGrantResponse
