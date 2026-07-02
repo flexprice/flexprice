@@ -70,7 +70,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 	// if txn is linked to internal subscription, meaning a 0$ txn
 	// no invoice linked to this payment
 	// skip this webhook( subscription gets activated using subscription.activated webhook event)
-	if customData == nil {
+	if customData != nil {
 		subID := h.syncSvc.ExtractFlexSubIDFromCustomData(event.Data.CustomData)
 		if subID != "" {
 			return nil
