@@ -1866,6 +1866,12 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 
 	subscription.CancelAtPeriodEnd = req.CancelAtPeriodEnd
 
+	// Metadata: replace-in-full when provided, leave untouched when omitted (nil).
+	// Sending an empty map {} clears all keys.
+	if req.Metadata != nil {
+		subscription.Metadata = req.Metadata
+	}
+
 	// Update the subscription in the database
 	err = s.SubRepo.Update(ctx, subscription)
 	if err != nil {
