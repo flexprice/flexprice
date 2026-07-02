@@ -120,6 +120,9 @@ type GetSubscriptionMeterUsageRequest struct {
 	GroupBy         []string            // appended after "meter_id"; "meter_id" is always present
 	PropertyFilters map[string][]string // e.g. {"model": ["gpt-4"]}
 	Sources         []string            // event source filter
+	// CollectSources when true fetches distinct source values for bucketed meters
+	// via a secondary query (used when expand:"source" is requested by analytics callers).
+	CollectSources bool
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -579,7 +582,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			bucketedResult, err := s.queryBucketedMeterUsage(
 				ctx, m, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
-				req.PropertyFilters, req.Sources,
+				req.PropertyFilters, req.Sources, req.CollectSources,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
@@ -795,6 +798,7 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	useFinal bool,
 	propertyFilters map[string][]string,
 	sources []string,
+	collectSources bool,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
 	meterGroupBy := m.Aggregation.GroupBy
@@ -808,7 +812,8 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	if meterGroupBy != "" {
 		paramsGroupBy = []string{"properties." + meterGroupBy}
 	}
-	return s.repo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
+
+	queryParams := &events.MeterUsageQueryParams{
 		TenantID:            types.GetTenantID(ctx),
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		ExternalCustomerIDs: externalCustomerIDs,
@@ -822,7 +827,23 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		UseFinal:            useFinal,
 		PropertyFilters:     propertyFilters,
 		Sources:             sources,
-	})
+	}
+
+	result, err := s.repo.GetUsageForBucketedMeters(ctx, queryParams)
+	if err != nil {
+		return nil, err
+	}
+
+	if collectSources {
+		sourcesResult, sourcesErr := s.repo.GetSourcesForBucketedMeter(ctx, queryParams)
+		if sourcesErr != nil {
+			s.logger.Warn(ctx, "failed to collect sources for bucketed meter", "error", sourcesErr, "meter_id", m.ID)
+		} else {
+			result.Sources = sourcesResult
+		}
+	}
+
+	return result, nil
 }
 
 // hasUserBucketedGroupBy reports whether the request asks for fan-out on a
@@ -1076,6 +1097,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			GroupBy:         params.GroupBy,
 			PropertyFilters: params.PropertyFilters,
 			Sources:         params.Sources,
+			CollectSources:  lo.Contains(params.Expand, "source"),
 		})
 		if err != nil {
 			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
@@ -1186,6 +1208,8 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 				analytic.Source = lu.AnalyticsResult.Source
 				analytic.Sources = lu.AnalyticsResult.Sources
 				analytic.Properties = lu.AnalyticsResult.Properties
+			} else if lu.BucketedResult != nil && len(lu.BucketedResult.Sources) > 0 {
+				analytic.Sources = lu.BucketedResult.Sources
 			}
 
 			// Set usage values from the line item usage
