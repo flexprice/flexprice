@@ -484,7 +484,11 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	}
 
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
-	_ = s.sendZapierWebhook(ctx, req.Email)
+	userFullName := ""
+	if req.Metadata != nil {
+		userFullName = req.Metadata["user_full_name"]
+	}
+	_ = s.sendZapierWebhook(ctx, req.Email, userFullName)
 
 	return nil
 }
@@ -863,11 +867,12 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 // ZapierWebhookPayload represents the data sent to Zapier webhook
 type ZapierWebhookPayload struct {
 	Email string `json:"email"`
+	Name  string `json:"name,omitempty"`
 }
 
 // sendZapierWebhook sends a webhook event to Zapier for user signup
 // This function is fail-safe and will never break the onboarding flow
-func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string) error {
+func (s *onboardingService) sendZapierWebhook(ctx context.Context, email, name string) error {
 	// Get Zapier webhook URL from config
 	zapierWebhookURL := s.Config.Email.ZapierWebhookURL
 
@@ -877,9 +882,10 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 		return nil
 	}
 
-	// Build the payload - only send email
+	// Build the payload
 	payload := ZapierWebhookPayload{
 		Email: email,
+		Name:  name,
 	}
 
 	// Marshal payload to JSON
