@@ -16939,6 +16939,12 @@ const docTemplate = `{
                 },
                 "total_cost": {
                     "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_net_cost": {
+                    "type": "string"
                 }
             }
         },
@@ -21606,6 +21612,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "net_cost": {
+                    "type": "string"
+                },
                 "plan": {
                     "description": "Full plan object (only if expand includes \"plan\")",
                     "allOf": [
@@ -21679,6 +21688,9 @@ const docTemplate = `{
                 "total_cost": {
                     "type": "string"
                 },
+                "total_discount": {
+                    "type": "string"
+                },
                 "total_usage": {
                     "type": "string"
                 },
@@ -21725,9 +21737,15 @@ const docTemplate = `{
                 "cost": {
                     "type": "string"
                 },
+                "discount": {
+                    "type": "string"
+                },
                 "event_count": {
                     "description": "Number of events in this time window",
                     "type": "integer"
+                },
+                "net_cost": {
+                    "type": "string"
                 },
                 "timestamp": {
                     "type": "string"

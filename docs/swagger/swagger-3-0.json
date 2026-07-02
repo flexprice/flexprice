@@ -18832,6 +18832,12 @@
           },
           "total_cost": {
             "type": "string"
+          },
+          "total_discount": {
+            "type": "string"
+          },
+          "total_net_cost": {
+            "type": "string"
           }
         }
       },
@@ -23285,6 +23291,9 @@
           "name": {
             "type": "string"
           },
+          "net_cost": {
+            "type": "string"
+          },
           "plan": {
             "$ref": "#/components/schemas/Plan"
           },
@@ -23338,6 +23347,9 @@
           "total_cost": {
             "type": "string"
           },
+          "total_discount": {
+            "type": "string"
+          },
           "total_usage": {
             "type": "string"
           },
@@ -23379,9 +23391,15 @@
           "cost": {
             "type": "string"
           },
+          "discount": {
+            "type": "string"
+          },
           "event_count": {
             "type": "integer",
             "description": "Number of events in this time window"
+          },
+          "net_cost": {
+            "type": "string"
           },
           "timestamp": {
             "type": "string"

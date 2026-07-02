@@ -11,6 +11,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	ca "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -1106,6 +1108,9 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
+	// Apply percentage-coupon discounts (gross TotalCost preserved; net/discount stamped).
+	applyAnalyticsDiscounts(ctx, s.ServiceParams, data, params.StartTime, params.EndTime)
+
 	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
@@ -1577,9 +1582,11 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	params *events.MeterUsageDetailedAnalyticsParams,
 ) *dto.GetUsageAnalyticsResponse {
 	response := &dto.GetUsageAnalyticsResponse{
-		TotalCost: decimal.Zero,
-		Currency:  data.Currency,
-		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
+		TotalCost:     decimal.Zero,
+		TotalDiscount: decimal.Zero,
+		TotalNetCost:  decimal.Zero,
+		Currency:      data.Currency,
+		Items:         make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
 
 	expandMap := make(map[string]bool, len(params.Expand))
@@ -1602,6 +1609,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      analytic.TotalUsage,
 			TotalCost:       analytic.TotalCost,
+			TotalDiscount:   analytic.TotalDiscount,
+			NetCost:         analytic.TotalCost.Sub(analytic.TotalDiscount),
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -1717,6 +1726,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					Timestamp:                        point.Timestamp,
 					Usage:                            point.Usage,
 					Cost:                             point.Cost,
+					Discount:                         point.Discount,
+					NetCost:                          point.Cost.Sub(point.Discount),
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -1748,7 +1759,12 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.TotalDiscount = response.TotalDiscount.Add(analytic.TotalDiscount)
 	}
+
+	// Derive TotalNetCost from fully-summed TotalCost and TotalDiscount so the
+	// result is consistent even when the discount pass short-circuits (zero discount).
+	response.TotalNetCost = response.TotalCost.Sub(response.TotalDiscount)
 
 	sort.Slice(response.Items, func(i, j int) bool {
 		return response.Items[i].FeatureName < response.Items[j].FeatureName
@@ -2081,6 +2097,77 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // ---------------------------------------------------------------------------
 // Cost calculation (copied from feature_usage_tracking.go to remove dependency)
 // ---------------------------------------------------------------------------
+
+// applyAnalyticsDiscounts stamps percentage-coupon discounts (TotalDiscount + per-point Discount)
+// onto each analytics item for ANY analytics endpoint. Net cost is derived in the response
+// builders from TotalCost - TotalDiscount, so callers need only run this pass. Short-circuits
+// when there are no costed subscriptions, no coupon repo, or no applicable coupons.
+func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) {
+	if len(data.Analytics) == 0 || len(data.Subscriptions) == 0 {
+		return
+	}
+
+	// Discounts require the coupon-association repo. If the service was constructed
+	// without it (e.g. a focused test), degrade gracefully to no discounts rather
+	// than panic — discounts are an enhancement on a read path.
+	if sp.CouponAssociationRepo == nil {
+		return
+	}
+
+	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+		return c.Type == types.CouponTypePercentage &&
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+			c.IsValid()
+	}
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, keep)
+	if err != nil {
+		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
+		return
+	}
+	data.LineItemCoupons, data.SubscriptionCoupons = projectAnalyticsCoupons(sel)
+	if len(data.LineItemCoupons) == 0 && len(data.SubscriptionCoupons) == 0 {
+		return
+	}
+
+	for _, item := range data.Analytics {
+		subID := item.SubscriptionID
+		if subID == "" {
+			if li := data.SubscriptionLineItems[item.SubLineItemID]; li != nil {
+				subID = li.SubscriptionID
+			}
+		}
+		lineCoupons := data.LineItemCoupons[item.SubLineItemID]
+		subCoupons := data.SubscriptionCoupons[subID]
+		if len(lineCoupons) == 0 && len(subCoupons) == 0 {
+			continue
+		}
+
+		in := discountInput{
+			Currency:       item.Currency,
+			GrossTotalCost: item.TotalCost,
+			LineCoupons:    lineCoupons,
+			SubCoupons:     subCoupons,
+			RangeStart:     start,
+			RangeEnd:       end,
+		}
+		if len(item.Points) > 0 {
+			in.Points = make([]pointCost, len(item.Points))
+			for i, p := range item.Points {
+				in.Points[i] = pointCost{Timestamp: p.Timestamp, Cost: p.Cost}
+			}
+		}
+
+		out := ApplyAnalyticsDiscounts(in)
+		item.TotalDiscount = out.TotalDiscount
+		item.NetCost = out.NetCost
+		for i := range item.Points {
+			if i < len(out.PointDiscounts) {
+				item.Points[i].Discount = out.PointDiscounts[i]
+				item.Points[i].NetCost = item.Points[i].Cost.Sub(out.PointDiscounts[i])
+			}
+		}
+	}
+}
 
 // calculateCosts calculates costs for all analytics items in the data.
 func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsData) error {

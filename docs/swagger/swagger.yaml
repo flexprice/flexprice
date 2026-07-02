@@ -3676,6 +3676,10 @@ definitions:
         type: array
       total_cost:
         type: string
+      total_discount:
+        type: string
+      total_net_cost:
+        type: string
     type: object
   GetUsageByMeterRequest:
     properties:
@@ -7087,6 +7091,8 @@ definitions:
         type: string
       name:
         type: string
+      net_cost:
+        type: string
       plan:
         allOf:
         - $ref: '#/definitions/Plan'
@@ -7134,6 +7140,8 @@ definitions:
         description: Full line item (only if expand includes "subscription_line_item")
       total_cost:
         type: string
+      total_discount:
+        type: string
       total_usage:
         type: string
       total_usage_display:
@@ -7173,9 +7181,13 @@ definitions:
         type: string
       cost:
         type: string
+      discount:
+        type: string
       event_count:
         description: Number of events in this time window
         type: integer
+      net_cost:
+        type: string
       timestamp:
         type: string
       usage:
