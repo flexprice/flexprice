@@ -645,7 +645,31 @@ test-suite:
 	fi
 	@cd integration-testing-suite/go && go run .
 
-.PHONY: sdk-all test-sdk test-sdks test-suite
+# -----------------------------------------------------------------------
+# Integration journeys — YAML-defined customer workflows run through the
+# published Go SDK against live targets. See integration-testing-suite/.
+# -----------------------------------------------------------------------
+
+## journeys-validate: statically validate all journey YAML (no network/secrets)
+journeys-validate:
+	@cd integration-testing-suite/runner && go test ./... && go run . -dir ../journeys -validate
+
+## journeys-run: run journeys against the configured target(s)
+## Usage: export FLEXPRICE_API_KEY=sk_... (or FLEXPRICE_TARGETS / FLEXPRICE_TARGETS_FILE)
+##        make journeys-run [TAGS=sanity] [JOURNEY=customer-crud]
+journeys-run:
+	@cd integration-testing-suite/runner && go run . -dir ../journeys \
+		$(if $(TAGS),-tags $(TAGS),) $(if $(JOURNEY),-journey $(JOURNEY),)
+
+## journeys-coverage: report which SDK operations have no journey coverage
+journeys-coverage:
+	@cd integration-testing-suite/runner && go run . -dir ../journeys -coverage
+
+## journeys-ops: list every SDK operation callable from journey YAML
+journeys-ops:
+	@cd integration-testing-suite/runner && go run . -list-ops -verbose
+
+.PHONY: sdk-all test-sdk test-sdks test-suite journeys-validate journeys-run journeys-coverage journeys-ops
 
 # -----------------------------------------------------------------------
 # Loglint — ctx-first logger enforcement
