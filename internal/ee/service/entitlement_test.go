@@ -947,17 +947,26 @@ func (s *EntitlementServiceSuite) TestUpdateEntitlementConfigValue() {
 	})
 
 	s.Run("Update without config_value leaves existing config_value intact", func() {
-		isEnabled := false
+		// Empty update — no fields set; config_value must remain from the previous subtest
+		req := dto.UpdateEntitlementRequest{}
+
+		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+		s.Equal("https://prod.example.com/hook", resp.Entitlement.ConfigValue["webhook_url"])
+	})
+
+	s.Run("Update config_value does not disturb existing is_enabled", func() {
 		req := dto.UpdateEntitlementRequest{
-			IsEnabled: &isEnabled,
+			ConfigValue: map[string]interface{}{"env": "production"},
 		}
 
 		resp, err := s.service.UpdateEntitlement(s.GetContext(), "ent-config-1", req)
 		s.NoError(err)
 		s.NotNil(resp)
-		s.False(resp.Entitlement.IsEnabled)
-		// config_value must still be what the previous sub-test set
-		s.Equal("production", resp.Entitlement.ConfigValue["env"])
+		// is_enabled is untouched — remains what it was created with (true)
+		s.True(resp.Entitlement.IsEnabled)
 	})
 }
 

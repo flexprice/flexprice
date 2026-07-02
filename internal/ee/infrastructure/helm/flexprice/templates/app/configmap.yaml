@@ -125,12 +125,14 @@ data:
       topic: {{ .Values.eventProcessing.topic | quote }}
       rate_limit: {{ .Values.eventProcessing.rateLimit }}
       consumer_group: {{ .Values.eventProcessing.consumerGroup | quote }}
+      topic_dlq: {{ .Values.eventProcessing.topicDLQ | quote }}
 
     event_processing_lazy:
       enabled: {{ .Values.eventProcessingLazy.enabled }}
       topic: {{ .Values.eventProcessingLazy.topic | quote }}
       rate_limit: {{ .Values.eventProcessingLazy.rateLimit }}
       consumer_group: {{ .Values.eventProcessingLazy.consumerGroup | quote }}
+      topic_dlq: {{ .Values.eventProcessingLazy.topicDLQ | quote }}
 
     event_post_processing:
       enabled: {{ .Values.eventPostProcessing.enabled }}
@@ -149,12 +151,14 @@ data:
       topic_backfill: {{ .Values.featureUsageTracking.topicBackfill | quote }}
       rate_limit_backfill: {{ .Values.featureUsageTracking.rateLimitBackfill }}
       consumer_group_backfill: {{ .Values.featureUsageTracking.consumerGroupBackfill | quote }}
+      topic_dlq: {{ .Values.featureUsageTracking.topicDLQ | quote }}
 
     feature_usage_tracking_lazy:
       enabled: {{ .Values.featureUsageTrackingLazy.enabled }}
       topic: {{ .Values.featureUsageTrackingLazy.topic | quote }}
       rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
+      topic_dlq: {{ .Values.featureUsageTrackingLazy.topicDLQ | quote }}
 
     # The blocks below were previously absent from this ConfigMap, so on GKE (where the
     # mounted ConfigMap replaces the baked config.yaml) their FLEXPRICE_* env overrides were
@@ -177,24 +181,28 @@ data:
       topic: {{ .Values.meterUsageTracking.topic | quote }}
       rate_limit: {{ .Values.meterUsageTracking.rateLimit }}
       consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
+      topic_dlq: {{ .Values.meterUsageTracking.topicDLQ | quote }}
 
     meter_usage_tracking_lazy:
       enabled: {{ .Values.meterUsageTrackingLazy.enabled }}
       topic: {{ .Values.meterUsageTrackingLazy.topic | quote }}
       rate_limit: {{ .Values.meterUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.meterUsageTrackingLazy.consumerGroup | quote }}
+      topic_dlq: {{ .Values.meterUsageTrackingLazy.topicDLQ | quote }}
 
     costsheet_usage_tracking:
       enabled: {{ .Values.costsheetUsageTracking.enabled }}
       topic: {{ .Values.costsheetUsageTracking.topic | quote }}
       rate_limit: {{ .Values.costsheetUsageTracking.rateLimit }}
       consumer_group: {{ .Values.costsheetUsageTracking.consumerGroup | quote }}
+      topic_dlq: {{ .Values.costsheetUsageTracking.topicDLQ | quote }}
 
     costsheet_usage_tracking_lazy:
       enabled: {{ .Values.costsheetUsageTrackingLazy.enabled }}
       topic: {{ .Values.costsheetUsageTrackingLazy.topic | quote }}
       rate_limit: {{ .Values.costsheetUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.costsheetUsageTrackingLazy.consumerGroup | quote }}
+      topic_dlq: {{ .Values.costsheetUsageTrackingLazy.topicDLQ | quote }}
 
     raw_event_consumption:
       enabled: {{ .Values.rawEventConsumption.enabled }}

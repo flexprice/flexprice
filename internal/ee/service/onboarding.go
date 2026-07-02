@@ -219,6 +219,7 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 	router.AddNoPublishHandler(
 		"onboarding_events_handler",
 		cfg.OnboardingEvents.Topic,
+		cfg.Kafka.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,

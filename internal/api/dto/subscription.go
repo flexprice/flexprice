@@ -1451,6 +1451,9 @@ type OverrideEntitlementRequest struct {
 
 	// StaticValue is the static value for static features
 	StaticValue *string `json:"static_value,omitempty"`
+
+	// ConfigValue is the config value for config features
+	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
 }
 
 // Validate validates the entitlement override request

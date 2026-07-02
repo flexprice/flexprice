@@ -288,6 +288,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
+		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 	})
@@ -2135,6 +2136,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
+		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
@@ -5695,6 +5697,7 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 		AuthRepo:                 s.GetStores().AuthRepo,
 		WalletRepo:               s.GetStores().WalletRepo,
 		PaymentRepo:              s.GetStores().PaymentRepo,
+		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	})
@@ -7324,4 +7327,290 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_TrialStart_Invoice() {
 				"payment status must match collection method expectation")
 		})
 	}
+}
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
+	ctx := s.GetContext()
+
+	// Create a published addon with a monthly fixed price
+	subSvc := s.service.(*subscriptionService)
+	addonID := "addon_draft_test"
+	priceID := "price_addon_draft_test"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Draft Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	// Create a draft subscription
+	draftStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	draftResp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(draftStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(types.SubscriptionStatusDraft, draftResp.SubscriptionStatus)
+
+	// Adding an addon to a draft subscription must succeed
+	_, err = s.service.AddAddonToSubscription(ctx, draftResp.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID: addonID,
+	})
+	s.NoError(err)
+
+	// Addon line item must be stored
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{draftResp.ID}
+	filter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(addonID, items[0].EntityID)
+
+	// Addon association must also be persisted
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaEntityType := types.AddonAssociationEntityTypeSubscription
+	aaFilter.EntityType = &aaEntityType
+	aaFilter.EntityIDs = []string{draftResp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1)
+	s.Equal(addonID, associations[0].AddonID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_DraftWithAddons() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+
+	addonID := "addon_draft_create"
+	priceID := "price_addon_draft_create"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Draft Create Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(20),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	draftStart := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(draftStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+		Addons: []dto.AddAddonToSubscriptionRequest{
+			{AddonID: addonID},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.SubscriptionStatusDraft, resp.SubscriptionStatus)
+
+	// Addon association must be persisted
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{resp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1)
+	s.Equal(addonID, associations[0].AddonID)
+
+	// Addon line item must be persisted
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{resp.ID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(addonID, items[0].EntityID)
+}
+
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_WithAddons_DatesShifted() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+
+	addonID := "addon_activate_shift"
+	priceID := "price_addon_activate_shift"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Activate Shift Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(15),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	// Create draft with addon (original start = T0)
+	t0 := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(t0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		PaymentBehavior:    lo.ToPtr(types.PaymentBehaviorDefaultActive),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+		Addons: []dto.AddAddonToSubscriptionRequest{
+			{AddonID: addonID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Activate with new start = T1
+	t1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	_, err = s.service.ActivateDraftSubscription(ctx, resp.ID, dto.ActivateDraftSubscriptionRequest{
+		StartDate: lo.ToPtr(t1),
+	})
+	s.Require().NoError(err)
+
+	// Addon line item StartDate must equal T1
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{resp.ID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.True(items[0].StartDate.Equal(t1), "addon line item StartDate should equal activation start date")
+	s.True(items[0].EndDate.IsZero(), "recurring addon EndDate should not be set after activation")
+}
+
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_OnetimeAddon_EndDateRecomputed() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+
+	addonID := "addon_onetime_shift"
+	priceID := "price_onetime_shift"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Onetime Shift Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(50),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	// Create draft at T0 with a one-time addon
+	t0 := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(t0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		PaymentBehavior:    lo.ToPtr(types.PaymentBehaviorDefaultActive),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+		Addons: []dto.AddAddonToSubscriptionRequest{
+			{AddonID: addonID, Cadence: types.AddonCadenceOnetime},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Activate at T1 (one month later)
+	t1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	expectedEnd := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC) // period end after T1 for monthly
+	_, err = s.service.ActivateDraftSubscription(ctx, resp.ID, dto.ActivateDraftSubscriptionRequest{
+		StartDate: lo.ToPtr(t1),
+	})
+	s.Require().NoError(err)
+
+	// Line item StartDate == T1, EndDate == expectedEnd
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{resp.ID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.True(items[0].StartDate.Equal(t1), "addon line item StartDate should equal activation start date")
+	s.True(items[0].EndDate.Equal(expectedEnd), "one-time addon line item EndDate should be recomputed from activation start date")
+
+	// Association EndDate must also equal expectedEnd
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{resp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1)
+	s.Require().NotNil(associations[0].EndDate)
+	s.True(associations[0].EndDate.Equal(expectedEnd), "one-time addon association EndDate should be recomputed from activation start date")
 }

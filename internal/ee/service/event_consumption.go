@@ -111,6 +111,7 @@ func (s *eventConsumptionService) RegisterHandler(
 	router.AddNoPublishHandler(
 		"event_consumption_handler",
 		cfg.EventProcessing.Topic,
+		cfg.EventProcessing.TopicDLQ,
 		s.pubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -139,6 +140,7 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	router.AddNoPublishHandler(
 		"event_consumption_lazy_handler",
 		cfg.EventProcessingLazy.Topic,
+		cfg.EventProcessingLazy.TopicDLQ,
 		s.lazyPubSub,
 		s.processMessage,
 		throttle.Middleware,
@@ -173,6 +175,7 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 	router.AddNoPublishHandler(
 		"event_consumption_replay_handler",
 		cfg.EventProcessingReplay.Topic,
+		cfg.Kafka.TopicDLQ,
 		s.replayPubSub,
 		s.processMessage,
 		replayThrottle.Middleware,

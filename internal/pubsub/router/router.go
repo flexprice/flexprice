@@ -8,7 +8,6 @@ import (
 	watermillKafka "github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
-	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,10 +16,11 @@ import (
 
 // Router manages all message routing
 type Router struct {
-	router  *message.Router
-	logger  *logger.Logger
-	tracing *tracing.Service
-	config  *config.Webhook
+	router       *message.Router
+	logger       *logger.Logger
+	tracing      *tracing.Service
+	config       *config.Webhook
+	dlqPublisher message.Publisher
 }
 
 // NewRouter creates a new message router
@@ -33,65 +33,29 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 		return nil, err
 	}
 
-	// Create publisher for PoisonQueue middleware
-	var poisonQueuePublisher message.Publisher
-	var dlqTopicName string
+	var dlqPublisher message.Publisher
 
-	if cfg.Kafka.TopicDLQ != "" {
-		// Use real Kafka DLQ when configured (on the deployment's local/consume cluster)
-		var err error
-		poisonQueuePublisher, err = createDLQPublisher(cfg, logger)
+	dlqPublisher, err = createDLQPublisher(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
-		dlqTopicName = cfg.Kafka.TopicDLQ
-		logger.Info(context.Background(), "DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
-	} else {
-		// Use in-memory DLQ (original behavior) when not configured
-		poisonQueuePublisher = getTempDLQ()
-		dlqTopicName = "poison_queue"
-		logger.Info(context.Background(), "DLQ using in-memory queue (no topic_dlq configured)")
-	}
+	logger.Info(context.Background(), "DLQ publisher initialized")
 
-	// PoisonQueue middleware (always present, just with different publisher)
-	poisonQueue, err := middleware.PoisonQueue(poisonQueuePublisher, dlqTopicName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add middleware in correct order
 	router.AddMiddleware(
-		poisonQueue,          // FIRST: catch permanently failed messages
-		middleware.Recoverer, // SECOND: recover from panics
+		middleware.Recoverer,
 		middleware.CorrelationID,
-		middleware.Retry{
-			MaxRetries:          3, // Hardcoded as requested
-			InitialInterval:     1 * time.Second,
-			MaxInterval:         10 * time.Second,
-			Multiplier:          2.0,
-			MaxElapsedTime:      2 * time.Minute,
-			RandomizationFactor: 0.5,
-			Logger:              watermill.NewStdLogger(true, false),
-			OnRetryHook: func(retryNum int, delay time.Duration) {
-				logger.Info(context.Background(), "retrying message",
-					"retry_number", retryNum,
-					"max_retries", 3,
-					"delay", delay,
-				)
-			},
-		}.Middleware,
 	)
 
 	return &Router{
-		router:  router,
-		logger:  logger,
-		tracing: tracingSvc,
-		config:  &cfg.Webhook,
+		router:       router,
+		logger:       logger,
+		tracing:      tracingSvc,
+		config:       &cfg.Webhook,
+		dlqPublisher: dlqPublisher,
 	}, nil
 }
 
 func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (message.Publisher, error) {
-	// DLQ lives on the deployment's local/consume cluster (same one its consumers read).
 	kc := &cfg.Kafka
 	saramaConfig := kafka.GetSaramaConfig(kc)
 	if saramaConfig != nil {
@@ -115,10 +79,13 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 	return publisher, nil
 }
 
-// AddNoPublishHandler adds a handler that doesn't publish messages
+// AddNoPublishHandler adds a handler that doesn't publish messages.
+// topicDLQ overrides the global DLQ topic for this handler; pass "" to use
+// the global kafka.topic_dlq fallback.
 func (r *Router) AddNoPublishHandler(
 	handlerName string,
 	topicName string,
+	topicDLQ string,
 	subscriber message.Subscriber,
 	handlerFunc func(msg *message.Message) error,
 	middlewares ...message.HandlerMiddleware,
@@ -130,8 +97,6 @@ func (r *Router) AddNoPublishHandler(
 		func(msg *message.Message) error {
 			err := handlerFunc(msg)
 			if err != nil {
-				// No request span on this watermill callback — CaptureException
-				// synthesizes a span so the failure still reaches SigNoz.
 				r.tracing.CaptureException(context.Background(), err)
 				r.logger.Error(context.Background(), "handler failed",
 					"error", err,
@@ -143,8 +108,39 @@ func (r *Router) AddNoPublishHandler(
 		},
 	)
 
-	for _, middleware := range middlewares {
-		handler.AddMiddleware(middleware)
+	// PoisonQueue must be outermost so it catches failures after retries are exhausted
+	if r.dlqPublisher != nil && topicDLQ != "" {
+		pq, err := middleware.PoisonQueue(r.dlqPublisher, topicDLQ)
+		if err != nil {
+			r.logger.Error(context.Background(), "failed to create poison queue middleware, DLQ disabled for handler",
+				"handler", handlerName,
+				"error", err,
+			)
+		} else {
+			handler.AddMiddleware(pq)
+		}
+	}
+
+	handler.AddMiddleware(middleware.Retry{
+		MaxRetries:          3,
+		InitialInterval:     1 * time.Second,
+		MaxInterval:         10 * time.Second,
+		Multiplier:          2.0,
+		MaxElapsedTime:      2 * time.Minute,
+		RandomizationFactor: 0.5,
+		Logger:              watermill.NewStdLogger(true, false),
+		OnRetryHook: func(retryNum int, delay time.Duration) {
+			r.logger.Info(context.Background(), "retrying message",
+				"handler", handlerName,
+				"retry_number", retryNum,
+				"max_retries", 3,
+				"delay", delay,
+			)
+		},
+	}.Middleware)
+
+	for _, mw := range middlewares {
+		handler.AddMiddleware(mw)
 	}
 }
 
@@ -160,14 +156,4 @@ func (r *Router) Run() error {
 func (r *Router) Close() error {
 	r.logger.Info(context.Background(), "closing router")
 	return r.router.Close()
-}
-
-// getTempDLQ returns a temporary in-memory DLQ (original behavior when topic_dlq not configured)
-func getTempDLQ() *gochannel.GoChannel {
-	return gochannel.NewGoChannel(
-		gochannel.Config{
-			Persistent: false,
-		},
-		watermill.NewStdLogger(true, false),
-	)
 }
