@@ -64,6 +64,18 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 			"error", err, "event_type", EventTransactionCompleted)
 		return nil
 	}
+	customData := event.Data.CustomData
+	// temp fix
+	// todo: handle using payment
+	// if txn is linked to internal subscription, meaning a 0$ txn
+	// no invoice linked to this payment
+	// skip this webhook( subscription gets activated using subscription.activated webhook event)
+	if customData == nil {
+		subID := h.syncSvc.ExtractFlexSubIDFromCustomData(event.Data.CustomData)
+		if subID != "" {
+			return nil
+		}
+	}
 	err := h.syncSvc.ProcessTransactionCompletedWebhook(ctx, event.Data.ID, services.PaymentService, services.InvoiceService)
 	if err != nil {
 		h.logger.Error(ctx, "failed to process transaction.completed webhook",
