@@ -153,6 +153,12 @@ type MeterUsageRepository interface {
 	// mirrors feature_usage's getMaxBucketTotals + getAnalyticsPoints shape.
 	GetUsageForBucketedMetersDetailed(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterUsageDetailedResult, error)
 
+	// GetSourcesForBucketedMeter returns the distinct source values for a bucketed meter
+	// using the same WHERE conditions as GetUsageForBucketedMeters. Used by the analytics
+	// path to populate expand:"source" without polluting MeterUsageQueryParams with an
+	// analytics-only concern.
+	GetSourcesForBucketedMeter(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.
 	GetDistinctMeterIDs(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)

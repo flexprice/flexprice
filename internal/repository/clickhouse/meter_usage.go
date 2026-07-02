@@ -344,6 +344,27 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 	return &result, nil
 }
 
+// GetSourcesForBucketedMeter returns distinct source values for a bucketed meter using
+// the same WHERE conditions as GetUsageForBucketedMeters. Called by the analytics service
+// layer when expand:"source" is requested, keeping MeterUsageQueryParams free of analytics concerns.
+func (r *MeterUsageRepository) GetSourcesForBucketedMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	where, args := r.qb.BuildWhereClause(params)
+	query := fmt.Sprintf("SELECT groupUniqArray(source) FROM meter_usage WHERE %s", where)
+
+	var sources []string
+	if err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&sources); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to collect distinct sources for bucketed meter").
+			WithReportableDetails(map[string]interface{}{"meter_id": params.MeterID}).
+			Mark(ierr.ErrDatabase)
+	}
+	return sources, nil
+}
+
 // GetUsageForBucketedMetersDetailed runs the analytics-side bucketed query:
 // 1) the aggregate query returns one row per (source, properties) combo with
 // per-combo TotalUsage / EventCount; 2) for each combo, a follow-up query

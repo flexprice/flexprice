@@ -762,6 +762,27 @@ func (s *InMemoryMeterUsageStore) GetDistinctMeterIDs(_ context.Context, params 
 	return ids, nil
 }
 
+func (s *InMemoryMeterUsageStore) GetSourcesForBucketedMeter(_ context.Context, params *events.MeterUsageQueryParams) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		if r.Source != "" {
+			seen[r.Source] = struct{}{}
+		}
+	}
+	sources := make([]string, 0, len(seen))
+	for src := range seen {
+		sources = append(sources, src)
+	}
+	sort.Strings(sources)
+	return sources, nil
+}
+
 // ---------------------------------------------------------------------------
 // GetDetailedAnalytics
 // ---------------------------------------------------------------------------
