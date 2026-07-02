@@ -204,6 +204,8 @@ type AggregationResult struct {
 	Metadata   map[string]string     `json:"metadata,omitempty"`
 	MeterID    string                `json:"meter_id"`
 	PriceID    string                `json:"price_id"`
+	// Sources holds distinct source values when CollectSources is requested (analytics expand:"source").
+	Sources []string `json:"sources,omitempty"`
 }
 
 type EventIterator struct {
