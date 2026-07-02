@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "flexprice": {
+    "flexprice-admin": {
       "command": "npx",
       "args": [
         "-y",
@@ -14,8 +14,8 @@
         "read",
         "--scope",
         "write",
-        "--mode",
-        "dynamic"
+        "--scope",
+        "delete"
       ]
     }
   }
