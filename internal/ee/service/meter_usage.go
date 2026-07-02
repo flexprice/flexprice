@@ -837,7 +837,7 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	if collectSources {
 		sourcesResult, sourcesErr := s.repo.GetSourcesForBucketedMeter(ctx, queryParams)
 		if sourcesErr != nil {
-			s.logger.Warn(ctx, "failed to collect sources for bucketed meter", "error", sourcesErr, "meter_id", m.ID)
+			s.logger.Error(ctx, "failed to collect sources for bucketed meter, sources omitted from response", "error", sourcesErr, "meter_id", m.ID)
 		} else {
 			result.Sources = sourcesResult
 		}
