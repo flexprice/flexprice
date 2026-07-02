@@ -55,6 +55,13 @@ spec:
               value: "consumer"
             - name: TMPDIR
               value: "/tmp"
+            {{- /* consumer-only env overrides — rendered AFTER flexprice.env so these
+                   win over the global .Values.extraEnv for duplicate keys (k8s last-wins).
+                   Used for settings that differ on the consumer vs api/worker, e.g.
+                   FLEXPRICE_CACHE_ENABLED (cache is on for the consumer only). */}}
+            {{- with .Values.consumer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- if and .Values.consumer.preStop .Values.consumer.preStop.enabled }}
           lifecycle:
             preStop:
