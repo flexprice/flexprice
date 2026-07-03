@@ -482,14 +482,34 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 	return &Span{span: sp, ctx: newCtx}, newCtx
 }
 
+// startStorageSpan starts a SpanKindClient span carrying the OTel `db.system`
+// semconv attribute. Both are required for trace backends to classify the span
+// as a database call (SigNoz's "Database Calls" tab filters on
+// spanKind=Client AND db.system != ''); a plain internal span renders as an
+// anonymous child in the waterfall and never reaches that tab.
+func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
+	if s == nil || !s.tracingEnabled {
+		return nil, ctx
+	}
+	newCtx, sp := s.tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindClient))
+	sp.SetAttributes(
+		attribute.String("span.op", op),
+		attribute.String("db.system", dbSystem),
+	)
+	for k, v := range params {
+		sp.SetAttributes(toAttr(k, v))
+	}
+	return &Span{span: sp, ctx: newCtx}, newCtx
+}
+
 // StartDBSpan starts a span representing a Postgres operation.
 func (s *Service) StartDBSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	return s.startSpan(ctx, operation, "db.postgres", params)
+	return s.startStorageSpan(ctx, operation, "db.postgres", "postgresql", params)
 }
 
 // StartClickHouseSpan starts a span representing a ClickHouse operation.
 func (s *Service) StartClickHouseSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	return s.startSpan(ctx, operation, "db.clickhouse", params)
+	return s.startStorageSpan(ctx, operation, "db.clickhouse", "clickhouse", params)
 }
 
 // StartKafkaConsumerSpan starts a span around a Kafka consume.
