@@ -359,16 +359,16 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 		return nil, err
 	}
 
+	updated, err := s.CreditGrantRepo.Update(ctx, existing)
+	if err != nil {
+		return nil, err
+	}
+
 	if req.EndDate != nil {
 		err = s.DeleteCreditGrant(ctx, dto.DeleteCreditGrantRequest{CreditGrantID: id, EffectiveDate: req.EndDate})
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	updated, err := s.CreditGrantRepo.Update(ctx, existing)
-	if err != nil {
-		return nil, err
 	}
 
 	response := &dto.CreditGrantResponse{CreditGrant: updated}
