@@ -103,8 +103,8 @@ func main() {
 			cache.InitializeInMemoryCache,
 			cache.NewRedisCache,
 
-			// Postgres
-			postgres.NewEntClients,
+			// Postgres (traced: per-statement DB spans when storage_spans_enabled)
+			postgres.NewTracedEntClients,
 			postgres.NewClient,
 
 			// Clickhouse

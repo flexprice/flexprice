@@ -85,8 +85,8 @@ func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args .
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.select", map[string]interface{}{
-		"query":      truncateQuery(query),
-		"args_count": len(args),
+		"db.statement": truncateQuery(query),
+		"args_count":   len(args),
 	})
 	if span != nil {
 		defer span.Finish()
@@ -101,13 +101,15 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 		return tc.conn.Query(ctx, query, args...)
 	}
 
-	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
-	// 	"query":      truncateQuery(query),
-	// 	"args_count": len(args),
-	// })
-	// if span != nil {
-	// 	defer span.Finish()
-	// }
+	// Note: the span covers the query call, not consumption of the returned
+	// rows, so it measures time-to-first-response rather than full read time.
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
+		"db.statement": truncateQuery(query),
+		"args_count":   len(args),
+	})
+	if span != nil {
+		defer span.Finish()
+	}
 
 	return tc.conn.Query(ctx, query, args...)
 }
@@ -119,8 +121,8 @@ func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) d
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query_row", map[string]interface{}{
-		"query":      truncateQuery(query),
-		"args_count": len(args),
+		"db.statement": truncateQuery(query),
+		"args_count":   len(args),
 	})
 	if span != nil {
 		defer span.Finish()
@@ -135,12 +137,12 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 		return tc.conn.PrepareBatch(ctx, query, options...)
 	}
 
-	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
-	// 	"query": truncateQuery(query),
-	// })
-	// if span != nil {
-	// 	defer span.Finish()
-	// }
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
+		"db.statement": truncateQuery(query),
+	})
+	if span != nil {
+		defer span.Finish()
+	}
 
 	batch, err := tc.conn.PrepareBatch(ctx, query, options...)
 	if err != nil {
@@ -160,13 +162,13 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 		return tc.conn.Exec(ctx, query, args...)
 	}
 
-	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
-	// 	"query":      truncateQuery(query),
-	// 	"args_count": len(args),
-	// })
-	// if span != nil {
-	// 	defer span.Finish()
-	// }
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
+		"db.statement": truncateQuery(query),
+		"args_count":   len(args),
+	})
+	if span != nil {
+		defer span.Finish()
+	}
 
 	return tc.conn.Exec(ctx, query, args...)
 }
@@ -177,13 +179,13 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 		return tc.conn.AsyncInsert(ctx, query, wait, args...)
 	}
 
-	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
-	// 	"query": truncateQuery(query),
-	// 	"wait":  wait,
-	// })
-	// if span != nil {
-	// 	defer span.Finish()
-	// }
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
+		"db.statement": truncateQuery(query),
+		"wait":         wait,
+	})
+	if span != nil {
+		defer span.Finish()
+	}
 
 	return tc.conn.AsyncInsert(ctx, query, wait, args...)
 }
@@ -261,13 +263,14 @@ func (tb *tracedBatch) Send() error {
 		return tb.batch.Send()
 	}
 
-	// ctx := context.Background()
-	// span, _ := tb.tracing.StartClickHouseSpan(ctx, "clickhouse.batch_send", map[string]interface{}{
-	// 	"count": tb.batch.IsSent(),
-	// })
-	// if span != nil {
-	// 	defer span.Finish()
-	// }
+	// Use the context captured at PrepareBatch time so the send span is a
+	// child of the originating request trace rather than a detached root span.
+	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_send", map[string]interface{}{
+		"rows": tb.batch.Rows(),
+	})
+	if span != nil {
+		defer span.Finish()
+	}
 
 	return tb.batch.Send()
 }

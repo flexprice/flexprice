@@ -69,7 +69,7 @@ type Client struct {
 func Module() fx.Option {
 	return fx.Options(
 		fx.Provide(
-			NewEntClients,
+			NewTracedEntClients,
 			NewClient,
 		),
 	)
@@ -82,8 +82,21 @@ type EntClients struct {
 	HasReader bool
 }
 
-// NewEntClients creates both writer and reader Ent clients
+// NewEntClients creates both writer and reader Ent clients without SQL-level
+// tracing. Kept for scripts and tooling; the server fx graph uses
+// NewTracedEntClients so per-statement DB spans can be emitted.
 func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntClients, error) {
+	return newEntClients(config, logger, nil)
+}
+
+// NewTracedEntClients creates writer and reader Ent clients whose drivers emit
+// a SpanKindClient span per SQL statement (reads, writes, and in-transaction
+// statements) when otel.traces.storage_spans_enabled is true.
+func NewTracedEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
+	return newEntClients(config, logger, tracingSvc)
+}
+
+func newEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
 	// Get writer DSN from config
 	writerDSN := config.Postgres.GetDSN()
 
@@ -98,8 +111,12 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	writerDB.SetMaxIdleConns(config.Postgres.MaxIdleConns)
 	writerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
-	// Create writer driver
-	writerDrv := entsql.OpenDB(dialect.Postgres, writerDB)
+	// Create writer driver, with per-statement span instrumentation when a
+	// tracing service is supplied (spans stay gated on storage_spans_enabled)
+	var writerDrv dialect.Driver = entsql.OpenDB(dialect.Postgres, writerDB)
+	if tracingSvc != nil {
+		writerDrv = newTracedDriver(writerDrv, tracingSvc, "writer")
+	}
 
 	// Create client with options
 	writerOpts := []ent.Option{
@@ -139,8 +156,11 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		readerDB.SetMaxIdleConns(config.Postgres.MaxIdleConns)
 		readerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
-		// Create reader driver
-		readerDrv := entsql.OpenDB(dialect.Postgres, readerDB)
+		// Create reader driver (traced like the writer)
+		var readerDrv dialect.Driver = entsql.OpenDB(dialect.Postgres, readerDB)
+		if tracingSvc != nil {
+			readerDrv = newTracedDriver(readerDrv, tracingSvc, "reader")
+		}
 
 		// Create reader client with options (removing debug logs for reads)
 		readerOpts := []ent.Option{
