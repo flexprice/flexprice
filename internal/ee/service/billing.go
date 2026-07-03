@@ -2110,6 +2110,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		NextPeriodEnd:      nextPeriodEnd,
 	})
 
+	isMeterUsageEnabledForBilling := s.Config.FeatureFlag.IsMeterUsageEnabledForBilling(sub.TenantID)
+
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
 	var description string
@@ -2148,7 +2150,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
-		// Use calculateFeatureUsageCharges for arrear so cumulative commitment is applied (feature_usage path)
+		// Use calculateFeatureUsageCharges (or calculateMeterUsageCharges) for arrear so cumulative commitment is applied (feature_usage or meter_usage path)
 		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, &dto.FilterLineItemsToBeInvoicedParams{
 			Subscription:     sub,
 			PeriodStart:      periodStart,
@@ -2178,26 +2180,50 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		// For current period arrear charges (feature_usage path for cumulative commitment support)
-		arrearResult, err := s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    arrearLineItems,
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-			IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
-		})
+		// For current period arrear charges (feature_usage or meter_usage path for cumulative commitment support)
+		var arrearResult *dto.BillingCalculationResult
+		if isMeterUsageEnabledForBilling {
+			arrearResult, err = s.calculateMeterUsageCharges(
+				ctx,
+				sub,
+				arrearLineItems,
+				periodStart,
+				periodEnd,
+				classification.HasUsageCharges, // Include usage for arrear
+			)
+		} else {
+			arrearResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
+				Subscription: sub,
+				LineItems:    arrearLineItems,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+				IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
+			})
+		}
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    advanceLineItems,
-			PeriodStart:  nextPeriodStart,
-			PeriodEnd:    nextPeriodEnd,
-			IncludeUsage: false, // No usage for advance
-		})
+		var advanceResult *dto.BillingCalculationResult
+		if isMeterUsageEnabledForBilling {
+			advanceResult, err = s.calculateMeterUsageCharges(
+				ctx,
+				sub,
+				advanceLineItems,
+				nextPeriodStart,
+				nextPeriodEnd,
+				false, // No usage for advance
+			)
+		} else {
+			advanceResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
+				Subscription: sub,
+				LineItems:    advanceLineItems,
+				PeriodStart:  nextPeriodStart,
+				PeriodEnd:    nextPeriodEnd,
+				IncludeUsage: false, // No usage for advance
+			})
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -2334,7 +2360,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		metadata["is_preview"] = "true"
 
 	case types.ReferencePointCancel:
-		// for cancel, include arrear line items only (feature_usage path for cumulative commitment)
+		// for cancel, include arrear line items only (feature_usage or meter_usage path for cumulative commitment)
 		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, &dto.FilterLineItemsToBeInvoicedParams{
 			Subscription:     sub,
 			PeriodStart:      periodStart,
@@ -2347,14 +2373,26 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
-			ctx,
-			sub,
-			arrearLineItems,
-			periodStart,
-			periodEnd,
-			true, // Include usage for arrear
-		)
+		var arrearResult *dto.BillingCalculationResult
+		if isMeterUsageEnabledForBilling {
+			arrearResult, err = s.calculateMeterUsageCharges(
+				ctx,
+				sub,
+				arrearLineItems,
+				periodStart,
+				periodEnd,
+				true, // Include usage for arrear
+			)
+		} else {
+			arrearResult, err = s.calculateFeatureUsageCharges(
+				ctx,
+				sub,
+				arrearLineItems,
+				periodStart,
+				periodEnd,
+				true, // Include usage for arrear
+			)
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -640,6 +640,11 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			}
 		}
 
+		// Shift addon line item dates to the new activation start date
+		if err := s.shiftAddonLineItemDates(ctx, sub, newStartDate); err != nil {
+			return err
+		}
+
 		// Create invoice for the subscription
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 		// Apply backward compatibility normalization
@@ -4460,10 +4465,17 @@ func (s *subscriptionService) addAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if sub exists and is active
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		return nil, ierr.NewError("subscription is not active").
-			WithHint("Cannot add addon to inactive subscription").
+	// Check if subscription is in a state that allows addon attachment
+	// Draft is allowed to support shopping-cart preview flows where addons are
+	// attached before the subscription goes live. Trialing is intentionally
+	// excluded — add it here if trialing subscriptions should also accept addons.
+	allowedStatuses := []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+	}
+	if !lo.Contains(allowedStatuses, sub.SubscriptionStatus) {
+		return nil, ierr.NewError("subscription status does not allow addon attachment").
+			WithHint("Addon can only be added to active or draft subscriptions").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -4971,6 +4983,67 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 	lineItem.PriceUnit = price.PriceUnit
 
 	return lineItem
+}
+
+// shiftAddonLineItemDates updates StartDate (and EndDate for one-time addons) of all
+// addon associations and their line items to newStartDate. Called during draft activation
+// so that addon dates stay consistent with the new subscription start date.
+func (s *subscriptionService) shiftAddonLineItemDates(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	newStartDate time.Time,
+) error {
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{sub.ID}
+	assocFilter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
+
+	associations, err := s.AddonAssociationRepo.List(ctx, assocFilter)
+	if err != nil {
+		return err
+	}
+
+	for _, assoc := range associations {
+		// EndDate is set only for one-time cadence addons at creation time.
+		// Draft subscriptions cannot have cancelled associations (cancellation
+		// requires an active/trialing subscription), so EndDate != nil reliably
+		// identifies one-time addons here.
+		isOnetime := assoc.EndDate != nil
+
+		var newEnd time.Time
+		if isOnetime {
+			newEnd, err = addonPeriodEndForStartDate(sub, newStartDate)
+			if err != nil {
+				return err
+			}
+			assoc.EndDate = &newEnd
+			if err := s.AddonAssociationRepo.Update(ctx, assoc); err != nil {
+				return err
+			}
+		}
+
+		liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilter.SubscriptionIDs = []string{sub.ID}
+		liFilter.AddonAssociationIDs = []string{assoc.ID}
+		liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+
+		lineItems, err := s.SubscriptionLineItemRepo.List(ctx, liFilter)
+		if err != nil {
+			return err
+		}
+
+		for _, item := range lineItems {
+			item.StartDate = newStartDate
+			if isOnetime {
+				item.EndDate = newEnd
+			}
+			if err := s.SubscriptionLineItemRepo.Update(ctx, item); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // addonPeriodEndForStartDate returns the end of the billing period that contains startDate.
@@ -6764,6 +6837,12 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			newEnt.StaticValue = parentEnt.StaticValue
 		}
 
+		if override.ConfigValue != nil {
+			newEnt.ConfigValue = override.ConfigValue
+		} else {
+			newEnt.ConfigValue = parentEnt.ConfigValue
+		}
+
 		// Validate based on feature type
 		switch parentEnt.FeatureType {
 		case types.FeatureTypeMetered:
@@ -6782,6 +6861,11 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 					"parent_entitlement_id", parentEnt.ID,
 					"feature_id", parentEnt.FeatureID)
 			}
+			if override.ConfigValue != nil {
+				return ierr.NewError("config_value cannot be set for metered features").
+					WithHint("Only usage_limit and is_enabled can be overridden for metered features").
+					Mark(ierr.ErrValidation)
+			}
 		case types.FeatureTypeStatic:
 			// For static features, static_value is required
 			if newEnt.StaticValue == "" {
@@ -6792,6 +6876,27 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			if override.UsageLimit != nil {
 				return ierr.NewError("usage_limit cannot be set for static features").
 					WithHint("Only static_value and is_enabled can be overridden for static features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.ConfigValue != nil {
+				return ierr.NewError("config_value cannot be set for static features").
+					WithHint("Only static_value and is_enabled can be overridden for static features").
+					Mark(ierr.ErrValidation)
+			}
+		case types.FeatureTypeConfig:
+			if override.UsageLimit != nil {
+				return ierr.NewError("usage_limit cannot be set for config features").
+					WithHint("Only config_value can be overridden for config features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.StaticValue != nil {
+				return ierr.NewError("static_value cannot be set for config features").
+					WithHint("Only config_value can be overridden for config features").
+					Mark(ierr.ErrValidation)
+			}
+			if override.IsEnabled != nil {
+				return ierr.NewError("is_enabled cannot be set for config features").
+					WithHint("Only config_value can be overridden for config features").
 					Mark(ierr.ErrValidation)
 			}
 		}

@@ -337,6 +337,10 @@ func (s *creditGrantService) ListCreditGrants(ctx context.Context, filter *types
 }
 
 func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, req dto.UpdateCreditGrantRequest) (*dto.CreditGrantResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	existing, err := s.CreditGrantRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -353,6 +357,13 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 	// Validate updated credit grant
 	if err := existing.Validate(); err != nil {
 		return nil, err
+	}
+
+	if req.EndDate != nil {
+		err = s.DeleteCreditGrant(ctx, dto.DeleteCreditGrantRequest{CreditGrantID: id, EffectiveDate: req.EndDate})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	updated, err := s.CreditGrantRepo.Update(ctx, existing)

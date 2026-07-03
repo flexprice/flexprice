@@ -87,8 +87,8 @@ func (r *CreateEntitlementRequest) Validate() error {
 }
 
 func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitlement.Entitlement {
-	// If the feature is static or metered, it is by default enabled
-	if r.FeatureType == types.FeatureTypeStatic || r.FeatureType == types.FeatureTypeMetered {
+	// Static, metered, and config features are enabled by default
+	if r.FeatureType == types.FeatureTypeStatic || r.FeatureType == types.FeatureTypeMetered || r.FeatureType == types.FeatureTypeConfig {
 		r.IsEnabled = true
 	}
 

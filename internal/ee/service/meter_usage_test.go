@@ -4357,3 +4357,169 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_FanOutOmitsEmptyPropertyValue
 	s.False(present,
 		"missing property must be omitted from Properties (feature-side parity); got %v", item.Properties)
 }
+
+// ---------------------------------------------------------------------------
+// Sources expand — regression tests for bucketed-meter path (fix/analytics)
+//
+// Root cause: for bucketed meters whose group_by does NOT contain "source" or
+// "properties.*", the non-detailed bucketed path (queryBucketedMeterUsage) was
+// used. That path never queried distinct sources, so lu.BucketedResult.Sources
+// remained nil and expand:"source" silently produced no output.
+// ---------------------------------------------------------------------------
+
+// TestBucketedMeter_ExpandSource_PopulatesSources is the primary regression
+// guard: a bucketed SUM meter (BucketSize set, no "source" in group_by) with
+// expand:"source" must return Sources populated with all distinct source values.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_ExpandSource_PopulatesSources() {
+	ctx := s.GetContext()
+
+	// BucketSize set → IsBucketedSumMeter() = true → non-detailed bucketed path
+	// when "source" is absent from GroupBy (the exact broken scenario).
+	m := &meter.Meter{
+		ID:        "mtr_bkt_src",
+		Name:      "Bucketed SUM sources",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_src", m.ID, decimal.NewFromFloat(0.01))
+	s.createLineItemForMeter(ctx, "li_bkt_src", m.ID, p.ID)
+
+	// Two distinct sources contributing to the same bucketed meter.
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "stripe",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, nil)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "stripe",
+		time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 20, nil)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "internal",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 5, nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		Expand:             []string{"source"},
+	})
+	s.NoError(err)
+	s.Require().NotEmpty(resp.Items, "expected at least one analytic item")
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_bkt_src" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "analytic item for bucketed line item not found")
+	s.Require().NotEmpty(item.Sources,
+		"expand:source on bucketed meter must populate Sources; got nil/empty")
+	s.True(slices.Contains(item.Sources, "stripe"),
+		"Sources must include 'stripe'; got %v", item.Sources)
+	s.True(slices.Contains(item.Sources, "internal"),
+		"Sources must include 'internal'; got %v", item.Sources)
+}
+
+// TestBucketedMeter_NoExpandSource_EmptySources confirms the secondary sources
+// query is NOT issued when expand:"source" is absent — Sources must be nil.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_NoExpandSource_EmptySources() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        "mtr_bkt_nosrc",
+		Name:      "Bucketed SUM no-sources",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_nosrc", m.ID, decimal.NewFromFloat(0.01))
+	s.createLineItemForMeter(ctx, "li_bkt_nosrc", m.ID, p.ID)
+
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "stripe",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, nil)
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "internal",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 5, nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		// No Expand → collectSources=false → Sources must remain nil.
+	})
+	s.NoError(err)
+	s.Require().NotEmpty(resp.Items)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_bkt_nosrc" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "analytic item for bucketed line item not found")
+	s.Empty(item.Sources,
+		"Sources must be nil when expand:source is absent; got %v", item.Sources)
+}
+
+// TestStandardMeter_ExpandSource_StillWorks is a regression guard for the
+// non-bucketed path: a standard SUM meter (no BucketSize) with expand:"source"
+// and a GroupBy must return populated Sources. GroupBy is required to trigger
+// the analytics code path (isAnalyticsQuery=true) for non-bucketed meters;
+// without it the request falls through to the scalar billing path that doesn't
+// collect sources — not a bug, just the intended routing.
+func (s *MeterUsageServiceSuite) TestStandardMeter_ExpandSource_StillWorks() {
+	ctx := s.GetContext()
+
+	// No BucketSize → IsBucketedSumMeter() = false → standard analytics path.
+	m := s.createMeterWithAggregation(ctx, "mtr_std_src", "ev_std_src", types.AggregationSum)
+	p := s.createPriceForMeter(ctx, "pr_std_src", m.ID, decimal.NewFromFloat(0.01))
+	s.createLineItemForMeter(ctx, "li_std_src", m.ID, p.ID)
+
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "api", "ev_std_src",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "sdk", "ev_std_src",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 20, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		// GroupBy triggers isAnalyticsQuery=true so the GetDetailedAnalytics
+		// repo path is used (which collects sources). Real callers of
+		// expand:source always pair it with a group_by.
+		GroupBy: []string{"meter_id"},
+		Expand:  []string{"source"},
+	})
+	s.NoError(err)
+	s.Require().NotEmpty(resp.Items)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_std_src" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "analytic item for standard meter not found")
+	s.Require().NotEmpty(item.Sources,
+		"expand:source on standard (non-bucketed) meter must still populate Sources; got nil/empty")
+	s.True(slices.Contains(item.Sources, "api"),
+		"Sources must include 'api'; got %v", item.Sources)
+	s.True(slices.Contains(item.Sources, "sdk"),
+		"Sources must include 'sdk'; got %v", item.Sources)
+}
