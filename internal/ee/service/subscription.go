@@ -2513,7 +2513,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		meterUsageRequests = append(meterUsageRequests, usageRequest)
 	}
 
-	s.Logger.Info(ctx, "performance optimization results",
+	s.Logger.Debug(ctx, "performance optimization results",
 		"subscription_id", req.SubscriptionID,
 		"external_customer_ids", externalCustomerIDs,
 		"total_line_items", len(lineItems),
@@ -6237,7 +6237,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
 
-	s.Logger.Info(ctx, "subscription usage calculation completed V2",
+	s.Logger.Debug(ctx, "subscription usage calculation completed V2",
 		"subscription_id", req.SubscriptionID,
 		"total_cost", totalCost.InexactFloat64(),
 		"charge_count", len(finalCharges),
@@ -6410,7 +6410,7 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
 
-	s.Logger.Info(ctx, "meter usage by subscription calculation completed",
+	s.Logger.Debug(ctx, "meter usage by subscription calculation completed",
 		"subscription_id", req.SubscriptionID,
 		"total_cost", totalCost.InexactFloat64(),
 		"charge_count", len(finalCharges),
@@ -6549,10 +6549,6 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 ) []*dto.EntitlementResponse {
 	// Build a map of parent_entitlement_id -> true for quick lookup
 	// Only include subscription entitlements that are currently active (time-based check)
-	s.Logger.Info(context.Background(), "total plan entitlements", "count", len(planEntitlements))
-	s.Logger.Info(context.Background(), "total addon entitlements", "count", len(addonEntitlements))
-	s.Logger.Info(context.Background(), "total subscription entitlements", "count", len(subscriptionEntitlements))
-
 	now := time.Now().UTC()
 	overriddenIDs := make(map[string]bool)
 	activeSubEntitlements := make([]*dto.EntitlementResponse, 0, len(subscriptionEntitlements))

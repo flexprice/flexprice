@@ -64,11 +64,13 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 
 		switch {
 		case statusCode >= 500:
-			log.Info(spanCtx, "HTTP_REQUEST_ERROR", fields...)
+			log.Error(spanCtx, "HTTP_REQUEST_ERROR", fields...)
 		case statusCode >= 400:
-			log.Info(spanCtx, "HTTP_REQUEST_WARNING", fields...)
+			log.Warn(spanCtx, "HTTP_REQUEST_WARNING", fields...)
 		default:
-			log.Info(spanCtx, "HTTP_REQUEST_INFO", fields...)
+			// Successful requests are fully covered by tracing; keep at debug
+			// to avoid flooding production log volume.
+			log.Debug(spanCtx, "HTTP_REQUEST_INFO", fields...)
 		}
 	}
 }

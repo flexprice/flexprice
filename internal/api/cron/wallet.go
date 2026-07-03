@@ -107,7 +107,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 				return
 			}
 
-			h.logger.Info(c.Request.Context(), "found expired credits", "count", len(transactions.Items))
+			h.logger.Debug(c.Request.Context(), "found expired credits", "count", len(transactions.Items))
 
 			for _, tx := range transactions.Items {
 				tenantResponse.Count++
