@@ -482,14 +482,37 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 	return &Span{span: sp, ctx: newCtx}, newCtx
 }
 
+// startStorageSpan starts a SpanKindClient span carrying the OTel `db.system`
+// semconv attribute. Both are required for trace backends to classify the span
+// as a database call (SigNoz's "Database Calls" tab filters on
+// spanKind=Client AND a non-empty db.system); a plain internal span renders
+// as an anonymous child in the waterfall and never reaches that tab.
+//
+// Gated on otel.traces.storage_spans_enabled so every storage span — DB,
+// ClickHouse, repository — obeys the one flag regardless of call path.
+func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
+	if !s.IsStorageSpansEnabled() {
+		return nil, ctx
+	}
+	newCtx, sp := s.tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindClient))
+	sp.SetAttributes(
+		attribute.String("span.op", op),
+		attribute.String("db.system", dbSystem),
+	)
+	for k, v := range params {
+		sp.SetAttributes(toAttr(k, v))
+	}
+	return &Span{span: sp, ctx: newCtx}, newCtx
+}
+
 // StartDBSpan starts a span representing a Postgres operation.
 func (s *Service) StartDBSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	return s.startSpan(ctx, operation, "db.postgres", params)
+	return s.startStorageSpan(ctx, operation, "db.postgres", "postgresql", params)
 }
 
 // StartClickHouseSpan starts a span representing a ClickHouse operation.
 func (s *Service) StartClickHouseSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	return s.startSpan(ctx, operation, "db.clickhouse", params)
+	return s.startStorageSpan(ctx, operation, "db.clickhouse", "clickhouse", params)
 }
 
 // StartKafkaConsumerSpan starts a span around a Kafka consume.
@@ -542,10 +565,17 @@ func (s *Service) StartTransaction(ctx context.Context, name string) (*Span, con
 	return &Span{span: sp, ctx: newCtx}, newCtx
 }
 
-// StartRepositorySpan starts a span for a repository.<repository>.<operation>.
-func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) (*Span, context.Context) {
+// StartRepositorySpan starts a span for a repository.<repository>.<operation>
+// call. dbSystem identifies the underlying store ("postgresql", "clickhouse")
+// so the span carries the OTel db.system attribute and is recognized as a
+// database call by trace backends (e.g. SigNoz's Database Calls tab).
+//
+// Gated by otel.traces.storage_spans_enabled (via startStorageSpan) — this
+// fires once per repository method call, so it is subject to the same
+// noise/volume tradeoff as StartDBSpan/StartClickHouseSpan.
+func (s *Service) StartRepositorySpan(ctx context.Context, dbSystem, repository, operation string, params map[string]interface{}) (*Span, context.Context) {
 	name := fmt.Sprintf("repository.%s.%s", repository, operation)
-	span, newCtx := s.startSpan(ctx, name, "db.repository", params)
+	span, newCtx := s.startStorageSpan(ctx, name, "db.repository", dbSystem, params)
 	if span != nil {
 		span.SetData("repository", repository)
 		span.SetData("operation", operation)
