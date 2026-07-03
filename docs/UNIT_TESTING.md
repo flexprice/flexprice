@@ -170,42 +170,35 @@ Gold-standard examples to imitate: `meter_test.go` (crisp, ~250 lines), `price_t
 
 ## 7. Coverage state — `internal/ee/service`
 
-**Snapshot: 2026-07-03** · `go test -coverprofile ./internal/ee/service/...`
+**Snapshot: 2026-07-03 (post coverage push)** · `go test -race -coverprofile ./internal/ee/service/...`
 
 | Metric | Value |
 |---|---|
-| Total statement coverage | **39.5%** (9,611 / 24,310 statements) |
-| Test cases passing (incl. subtests) | ~1,757 |
-| Test files | 69 (2 are empty placeholders) |
-| Source files at 0% | 27 of 89 |
-| Statements to cover to reach **80%** | ~9,840 |
+| Total statement coverage (as-is) | **54.8%** (13,331 / 24,310 statements) |
+| **Core coverage** (excl. `feature_usage_tracking.go`, `event_post_processing.go`, `costsheet_usage_tracking.go` — slated for removal) | **61.1%** (13,148 / 21,534) |
+| Test cases passing (incl. subtests, `-race`) | 2,801 |
+| Baseline before the push (same day) | 39.5% overall / 42.6% core, 1,757 cases |
 
-### Biggest levers to 80% (uncovered statements, descending)
+The 2026-07-03 push added ~1,050 table-driven cases across 25 new test files covering the billing core: subscription lifecycle/trial/schedule, invoice lifecycle/preview/PDF, billing usage & commitments, billing meter usage, wallet lifecycle/transactions/expiry, payments & payment processing, credit grants, plan/price/priceunit, tax, and coupon validation. Per-file movement: tax 11→85%, coupon_validation 1→96%, payment 32→89%, billing 59→83%, billing_meter_usage 0→84%, creditgrant 63→81%, wallet 50→78%, subscription_payment_processor 49→75%, subscription 51→72%, plan 15→72%, invoice 39→71%, price 67→86%, priceunit 0→90%, subscription_trial 21→88%, subscription_schedule 0→80%, wallet_payment 71→95%, payment_processor 25→63%.
 
-The top 10 files below account for ~7,300 uncovered statements — roughly three-quarters of the gap to 80%.
+### Biggest remaining levers toward 80% (uncovered statements, excl. files being removed)
 
 | File | Coverage | Uncovered stmts |
 |---|---|---|
-| feature_usage_tracking.go | 10.7% | 1,521 |
-| subscription.go | 51.1% | 1,516 |
-| invoice.go | 39.2% | 1,084 |
-| costsheet_usage_tracking.go | 0.0% | 600 |
-| billing.go | 59.1% | 583 |
-| wallet.go | 50.1% | 577 |
-| event_post_processing.go | 0.0% | 472 |
-| plan.go | 15.1% | 421 |
-| tax.go | 10.8% | 355 |
+| subscription.go | 71.9% | 872 |
+| invoice.go | 70.6% | 524 |
 | oauth.go | 0.0% | 353 |
 | connection.go | 0.0% | 331 |
 | task.go | 41.0% | 317 |
-| meter_usage.go | 68.7% | 294 |
 | scheduled_task.go | 0.0% | 280 |
-| billing_meter_usage.go | 0.0% | 269 |
-| payment_processor.go | 25.1% | 254 |
+| meter_usage.go | 70.6% | 276 |
+| wallet.go | 78.2% | 252 |
 | onboarding.go | 8.9% | 246 |
-| price.go | 66.9% | 200 |
+| billing.go | 83.0% | 242 |
 | event.go | 36.5% | 195 |
 | dashboard.go | 0.0% | 191 |
+
+Much of the residual gap in the well-covered files is (a) external-integration sync paths (Stripe/Razorpay/Chargebee/QuickBooks/Zoho/Paddle/HubSpot) and Temporal dispatch blocks, and (b) repo-error logging branches that the in-memory stores cannot be made to fail. Getting those needs fault-injecting store doubles and an injectable Temporal test service in `internal/testutil/` — build those before chasing the long tail.
 
 ### Full per-file coverage
 
@@ -215,102 +208,102 @@ The top 10 files below account for ~7,300 uncovered statements — roughly three
 | File | Coverage | Stmts |
 |---|---|---|
 | env_access.go | 100.0% | 24 / 24 |
+| coupon_validation.go | 96.2% | 76 / 79 |
+| wallet_payment.go | 95.0% | 152 / 160 |
+| coupon.go | 91.1% | 51 / 56 |
+| priceunit.go | 89.5% | 51 / 57 |
+| payment.go | 89.3% | 175 / 196 |
+| subscription_trial.go | 88.3% | 106 / 120 |
 | line_item_proration.go | 87.8% | 79 / 90 |
 | credit_adjustment.go | 87.5% | 77 / 88 |
+| price.go | 85.8% | 518 / 604 |
+| tax.go | 85.4% | 340 / 398 |
 | sync/export/credit_usage_report.go | 85.0% | 51 / 60 |
 | subscription_grouped_invoicing.go | 84.7% | 50 / 59 |
+| billing_meter_usage.go | 83.6% | 225 / 269 |
 | subscription_modification.go | 83.5% | 410 / 491 |
 | sync/export/usage_analytics_export.go | 83.1% | 74 / 89 |
+| billing.go | 83.0% | 1182 / 1424 |
+| creditgrant.go | 81.0% | 366 / 452 |
 | subscription_phase.go | 80.6% | 58 / 72 |
-| billing_commitment.go | 77.0% | 144 / 187 |
-| entitlement.go | 73.8% | 222 / 301 |
+| subscription_schedule.go | 79.5% | 120 / 151 |
+| billing_commitment.go | 79.1% | 148 / 187 |
+| entitlement.go | 78.4% | 236 / 301 |
+| wallet.go | 78.2% | 904 / 1156 |
+| subscription_payment_processor.go | 75.4% | 196 / 260 |
+| subscription.go | 71.9% | 2228 / 3100 |
+| plan.go | 71.8% | 356 / 496 |
 | secret.go | 71.4% | 90 / 126 |
-| wallet_payment.go | 71.2% | 114 / 160 |
 | meter.go | 71.1% | 54 / 76 |
+| meter_usage.go | 70.6% | 664 / 940 |
+| invoice.go | 70.6% | 1259 / 1783 |
+| coupon_association.go | 70.1% | 82 / 117 |
 | coupon_application.go | 70.1% | 82 / 117 |
 | subscription_line_item.go | 69.6% | 265 / 381 |
 | creditnote.go | 69.0% | 209 / 303 |
-| meter_usage.go | 68.7% | 646 / 940 |
-| price.go | 66.9% | 404 / 604 |
 | subscription_modification_tax.go | 65.6% | 59 / 90 |
 | subscription_modification_coupon.go | 65.0% | 67 / 103 |
 | environment.go | 64.2% | 43 / 67 |
 | gemini_pricing.go | 63.4% | 64 / 101 |
+| payment_processor.go | 62.5% | 212 / 339 |
 | raw_event_consumption.go | 61.5% | 72 / 117 |
 | feature.go | 61.5% | 158 / 257 |
-| subscription_change.go | 60.9% | 212 / 348 |
-| creditgrant.go | 60.6% | 274 / 452 |
-| billing.go | 59.1% | 841 / 1424 |
+| subscription_change.go | 61.2% | 213 / 348 |
+| user.go | 59.2% | 100 / 169 |
 | subscription_modification_trial_end.go | 57.1% | 44 / 77 |
 | sync/export/event_export.go | 55.8% | 53 / 95 |
 | customer.go | 55.8% | 110 / 197 |
-| user.go | 52.1% | 88 / 169 |
-| subscription.go | 51.1% | 1584 / 3100 |
-| proration.go | 50.2% | 124 / 247 |
-| wallet.go | 50.1% | 579 / 1156 |
+| proration.go | 55.1% | 136 / 247 |
+| subscription_state_handler.go | 50.0% | 6 / 12 |
 | auth.go | 50.0% | 21 / 42 |
-| coupon_association.go | 49.6% | 58 / 117 |
-| subscription_payment_processor.go | 49.2% | 128 / 260 |
+| addon.go | 48.6% | 105 / 216 |
 | entityintegrationmapping.go | 48.5% | 64 / 132 |
-| addon.go | 47.7% | 103 / 216 |
 | alertlogs.go | 42.2% | 43 / 102 |
 | task.go | 41.0% | 220 / 537 |
 | streaming_processor.go | 40.6% | 78 / 192 |
-| invoice.go | 39.2% | 699 / 1783 |
 | event.go | 36.5% | 112 / 307 |
 | file_provider.go | 35.3% | 24 / 68 |
-| subscription_state_handler.go | 33.3% | 4 / 12 |
-| payment.go | 32.1% | 63 / 196 |
 | meter_usage_tracking.go | 28.8% | 51 / 177 |
+| group.go | 26.4% | 29 / 110 |
 | usage_benchmark_analytics.go | 25.5% | 25 / 98 |
-| payment_processor.go | 25.1% | 85 / 339 |
-| subscription_trial.go | 20.8% | 25 / 120 |
-| coupon.go | 16.1% | 9 / 56 |
-| plan.go | 15.1% | 75 / 496 |
+| wallet_balance_alert.go | 24.7% | 19 / 77 |
 | settings.go | 13.6% | 15 / 110 |
 | tenant.go | 12.7% | 14 / 110 |
-| tax.go | 10.8% | 43 / 398 |
-| feature_usage_tracking.go | 10.7% | 183 / 1704 |
+| feature_usage_tracking.go | 10.7% | 183 / 1704 — being removed |
 | csv_processor.go | 10.0% | 1 / 10 |
-| group.go | 9.1% | 10 / 110 |
 | onboarding.go | 8.9% | 24 / 270 |
 | file_processor.go | 6.4% | 7 / 110 |
 | json_processor.go | 2.0% | 1 / 49 |
-| coupon_validation.go | 1.3% | 1 / 79 |
 | workflow_execution.go | 0.0% | 0 / 35 |
 | workflow.go | 0.0% | 0 / 123 |
-| wallet_balance_alert.go | 0.0% | 0 / 77 |
 | usage_benchmark.go | 0.0% | 0 / 81 |
 | sync/export/invoice_export.go | 0.0% | 0 / 49 |
 | sync/export/credit_topup_export.go | 0.0% | 0 / 34 |
 | sync/export/base.go | 0.0% | 0 / 59 |
-| subscription_schedule.go | 0.0% | 0 / 151 |
 | subscription_modification_grouped.go | 0.0% | 0 / 38 |
 | scheduled_task.go | 0.0% | 0 / 280 |
 | revenue_analytics.go | 0.0% | 0 / 41 |
 | raw_events_reprocessing.go | 0.0% | 0 / 98 |
-| priceunit.go | 0.0% | 0 / 57 |
 | oauth.go | 0.0% | 0 / 353 |
 | integration_sync.go | 0.0% | 0 / 38 |
 | factory.go | 0.0% | 0 / 1 |
-| event_post_processing.go | 0.0% | 0 / 472 |
+| event_post_processing.go | 0.0% | 0 / 472 — being removed |
 | event_consumption.go | 0.0% | 0 / 101 |
 | dashboard.go | 0.0% | 0 / 191 |
 | customer_portal.go | 0.0% | 0 / 134 |
-| costsheet_usage_tracking.go | 0.0% | 0 / 600 |
+| costsheet_usage_tracking.go | 0.0% | 0 / 600 — ingestion being removed |
 | costsheet.go | 0.0% | 0 / 104 |
 | connection.go | 0.0% | 0 / 331 |
 | checkout_session_actions.go | 0.0% | 0 / 72 |
 | checkout_session.go | 0.0% | 0 / 153 |
-| billing_meter_usage.go | 0.0% | 0 / 269 |
 
 </details>
 
 ### Suggested attack order for the 80% goal
 
-1. **Billing-correctness core, partially covered** — `subscription.go`, `invoice.go`, `billing.go`, `wallet.go`: highest business risk, harness already exists (suites + fixtures), ~3,760 uncovered statements.
-2. **Large 0% files with in-memory-testable logic** — `feature_usage_tracking.go`, `costsheet_usage_tracking.go`, `event_post_processing.go`, `billing_meter_usage.go`: fill the two placeholder test files while at it.
-3. **Mid-size validation-heavy files** — `plan.go`, `tax.go`, `task.go`, `coupon_validation.go`, `payment_processor.go`: cheap table-driven wins.
-4. **Long tail** — `oauth.go`, `connection.go`, `dashboard.go`, `scheduled_task.go`, sync/export: some need new in-memory doubles (HTTP, workflow) — build them in `internal/testutil/` first.
+1. **Deepen the core** — `subscription.go` (872 uncovered) and `invoice.go` (524): the remainder is mostly integration-sync and analytics-mapper paths; needs fault-injecting doubles + an injectable Temporal test service in `internal/testutil/` first.
+2. **Mid-size untested services** — `task.go` (import pipeline), `event.go`, `meter_usage.go`, `dashboard.go`, `customer_portal.go`, `checkout_session*.go`: mostly in-memory-testable today.
+3. **Infra-dependent 0% files** — `oauth.go`, `connection.go`, `scheduled_task.go`, `onboarding.go`, sync/export: need new doubles (HTTP client fixtures, scheduled-task store, workflow-execution store).
+4. **Long tail** — `settings.go`, `tenant.go`, `group.go`, `alertlogs.go`, processors.
 
 To refresh this section: rerun the coverage command above and regenerate the tables.
