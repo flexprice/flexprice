@@ -286,6 +286,7 @@ data:
       # false (not the config.yaml baked default), diverging from AWS prod where they are on.
       enable_meter_usage_for_analytics: {{ .Values.featureFlag.enableMeterUsageForAnalytics | default false }}
       enable_meter_usage_for_preview_invoice: {{ .Values.featureFlag.enableMeterUsageForPreviewInvoice | default false }}
+      enable_meter_usage_for_billing: {{ .Values.featureFlag.enableMeterUsageForBilling | default false }}
       enable_usage_benchmark: {{ .Values.featureFlag.enableUsageBenchmark | default false }}
 
     secrets:
