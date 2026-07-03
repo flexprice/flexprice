@@ -122,7 +122,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		}
 	}
 
-	p.logger.Info(ctx, "successfully published webhook event",
+	p.logger.Debug(ctx, "successfully published webhook event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,

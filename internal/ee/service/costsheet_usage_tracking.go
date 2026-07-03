@@ -332,7 +332,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	var cust *customer.Customer
 	cust, err = s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Info(ctx, "customer not found for event, skipping",
+		s.Logger.Debug(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -634,7 +634,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Info(context.Background(), "property not found for aggregation",
+			s.Logger.Debug(context.Background(), "property not found for aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,

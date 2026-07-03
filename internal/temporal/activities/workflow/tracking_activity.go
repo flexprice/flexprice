@@ -53,7 +53,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 		ctx = types.SetUserID(ctx, input.CreatedBy)
 	}
 
-	a.logger.Info(ctx, "Tracking workflow start",
+	a.logger.Debug(ctx, "Tracking workflow start",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"workflow_type", input.WorkflowType)
@@ -81,7 +81,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 		return nil
 	}
 
-	a.logger.Info(ctx, "Successfully tracked workflow start",
+	a.logger.Debug(ctx, "Successfully tracked workflow start",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID)
 
@@ -104,7 +104,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 		}
 	}()
 
-	a.logger.Info(ctx, "Tracking workflow end",
+	a.logger.Debug(ctx, "Tracking workflow end",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"status", input.WorkflowStatus,
@@ -132,7 +132,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 		return nil
 	}
 
-	a.logger.Info(ctx, "Successfully tracked workflow end",
+	a.logger.Debug(ctx, "Successfully tracked workflow end",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"status", input.WorkflowStatus,

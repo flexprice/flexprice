@@ -369,7 +369,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Info(ctx, "customer not found for event, skipping",
+		s.Logger.Debug(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,

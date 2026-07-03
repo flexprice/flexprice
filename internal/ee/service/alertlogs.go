@@ -103,7 +103,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 
 	// Debug log to verify what we fetched from DB (NO CACHE!)
 	if existingAlert != nil {
-		s.Logger.Info(ctx, "fetched existing alert from database",
+		s.Logger.Debug(ctx, "fetched existing alert from database",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
@@ -113,7 +113,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			"requested_status", req.AlertStatus,
 		)
 	} else {
-		s.Logger.Info(ctx, "no existing alert found in database",
+		s.Logger.Debug(ctx, "no existing alert found in database",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,

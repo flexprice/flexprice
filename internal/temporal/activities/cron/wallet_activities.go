@@ -76,7 +76,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 				return nil, err
 			}
 
-			a.logger.Info(ctx, "found expired credits", "count", len(transactions.Items))
+			a.logger.Debug(ctx, "found expired credits", "count", len(transactions.Items))
 
 			for i, tx := range transactions.Items {
 				if i%100 == 0 {
