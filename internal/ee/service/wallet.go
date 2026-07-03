@@ -1889,7 +1889,9 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-	walletBalanceAlertSvc := NewWalletBalanceAlertService(s.ServiceParams)
+	// CheckWalletBalanceAlert runs synchronously below for this event, so it is not
+	// published to Kafka — publishing it too would let the async consumer re-run the
+	// same check and double-fire auto top-up.
 	event := &wallet.WalletBalanceAlertEvent{
 		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
 		Timestamp:             time.Now().UTC(),
@@ -1899,13 +1901,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		TenantID:              types.GetTenantID(ctx),
 		EnvironmentID:         types.GetEnvironmentID(ctx),
 		WalletID:              req.WalletID,
-	}
-	if err := walletBalanceAlertSvc.PublishEvent(ctx, event); err != nil {
-		s.Logger.Error(ctx, "failed to publish wallet balance alert event",
-			"error", err,
-			"customer_id", w.CustomerID,
-			"wallet_id", req.WalletID,
-		)
 	}
 
 	// Log credit balance alert after wallet operation
