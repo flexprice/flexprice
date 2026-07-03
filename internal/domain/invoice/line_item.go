@@ -1,6 +1,7 @@
 package invoice
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -155,6 +156,27 @@ func (i *InvoiceLineItem) Validate() error {
 	}
 
 	return nil
+}
+
+// GetDescription builds a human-readable description for this line item,
+// falling back through DisplayName, PlanDisplayName and MeterDisplayName.
+// When the quantity is not 1, it is appended to the description so that
+// integrations which can only sync an amount (e.g. Stripe, which sends
+// Amount instead of Quantity) don't lose the original quantity.
+func (i *InvoiceLineItem) GetDescription() string {
+	name := lo.FromPtr(i.DisplayName)
+	if name == "" {
+		name = lo.FromPtr(i.PlanDisplayName)
+	}
+	if name == "" {
+		name = lo.FromPtr(i.MeterDisplayName)
+	}
+
+	if i.Quantity.Equal(decimal.NewFromInt(1)) {
+		return name
+	}
+
+	return fmt.Sprintf("%s (Qty: %s)", name, i.Quantity.String())
 }
 
 // LineItemFromEnt converts an Ent InvoiceLineItem to the domain model.
