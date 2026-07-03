@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -42,10 +43,6 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 			"latency_ms", latency.Milliseconds(),
 		}
 
-		if len(c.Errors) > 0 {
-			fields = append(fields, "errors", c.Errors.String())
-		}
-
 		// otelgin's deferred context-restore fires when it returns, which happens
 		// BEFORE we reach this post-phase. So c.Request.Context() no longer holds
 		// the OTel span. SpanEnrichmentMiddleware (post-phase executes before otelgin's
@@ -64,9 +61,23 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 
 		switch {
 		case statusCode >= 500:
-			log.Error(spanCtx, "HTTP_REQUEST_ERROR", fields...)
+			errMsg := c.Errors.String()
+			if errMsg == "" {
+				errMsg = http.StatusText(statusCode)
+			}
+			log.Error(spanCtx, "HTTP_REQUEST_ERROR",
+				"error", errMsg,
+				"method", c.Request.Method,
+				"path", path,
+				"query", raw,
+				"status", statusCode,
+				"latency_ms", latency.Milliseconds(),
+			)
 		case statusCode >= 400:
-			log.Warn(spanCtx, "HTTP_REQUEST_WARNING", fields...)
+			if len(c.Errors) > 0 {
+				fields = append(fields, "errors", c.Errors.String())
+			}
+			log.Info(spanCtx, "HTTP_REQUEST_WARNING", fields...)
 		default:
 			// Successful requests are fully covered by tracing; keep at debug
 			// to avoid flooding production log volume.
