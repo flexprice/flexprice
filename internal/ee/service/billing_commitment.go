@@ -25,8 +25,9 @@ func generateBucketStarts(start, end time.Time, bucketSize types.WindowSize, bil
 	}
 	var out []time.Time
 	if bucketSize == types.WindowSizeMonth && billingAnchor == nil {
+		anchorDay := start.Day() // keep the original day fixed; see addMonthClamped
 		first := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
-		for t := first; t.Before(end); t = t.AddDate(0, 1, 0) {
+		for t := first; t.Before(end); t = addMonthClamped(t, anchorDay) {
 			out = append(out, t)
 		}
 		return out
@@ -37,6 +38,27 @@ func generateBucketStarts(start, end time.Time, bucketSize types.WindowSize, bil
 		t = nextBucketStart(t, bucketSize, billingAnchor)
 	}
 	return out
+}
+
+// addMonthClamped adds one month to t, using `day` as the day-of-month
+// instead of overflowing into the next month like time.AddDate does.
+//
+// Example bug this avoids: Jan 31 + AddDate(0, 1, 0) = Mar 3, because
+// February has no 31st and Go rolls the extra days into March. We want
+// Feb 28 (or 29) instead.
+//
+// Always pass the ORIGINAL target day (e.g. the subscription's billing day),
+// not t.Day(). Otherwise, once a short month clamps the day down to 28, every
+// later month would stay stuck at 28 instead of going back to 31 once a
+// longer month comes around.
+func addMonthClamped(t time.Time, day int) time.Time {
+	loc := t.Location()
+	year, month := t.Year(), t.Month()+1
+	if month > 12 {
+		month, year = 1, year+1
+	}
+	lastDayOfMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, loc).Day()
+	return time.Date(year, month, min(day, lastDayOfMonth), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
 }
 
 func truncateToBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *time.Time) time.Time {
@@ -86,7 +108,9 @@ func truncateToBucketStart(t time.Time, bucketSize types.WindowSize, billingAnch
 
 func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *time.Time) time.Time {
 	if bucketSize == types.WindowSizeMonth {
-		return t.AddDate(0, 1, 0)
+		// billingAnchor is always set here — the nil case is handled by the
+		// separate loop in generateBucketStarts above.
+		return addMonthClamped(t, billingAnchor.Day())
 	}
 	switch bucketSize {
 	case types.WindowSizeMinute:

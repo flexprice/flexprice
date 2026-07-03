@@ -89,6 +89,82 @@ func TestGenerateBucketStarts_Month_WithAnchor_StartBeforeAnchorDay(t *testing.T
 	assert.True(t, out[2].Equal(time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC)))
 }
 
+// TestGenerateBucketStarts_Month_Day31 covers a subscription that starts on
+// the 31st of a month. Without addMonthClamped, Jan 31 + one month would
+// overflow past February into March 3 instead of landing on Feb 28.
+func TestGenerateBucketStarts_Month_Day31(t *testing.T) {
+	start := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC) // 2026: not a leap year
+	end := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	out := generateBucketStarts(start, end, types.WindowSizeMonth, nil)
+	require.Len(t, out, 4)
+	assert.True(t, out[0].Equal(time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)), "Jan 31")
+	assert.True(t, out[1].Equal(time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)), "Feb 28: clamped, February has no 31st")
+	assert.True(t, out[2].Equal(time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)), "Mar 31: back to day 31, March has one")
+	assert.True(t, out[3].Equal(time.Date(2026, 4, 30, 0, 0, 0, 0, time.UTC)), "Apr 30: clamped again, April has 30 days")
+}
+
+// TestGenerateBucketStarts_Month_Day31_LeapYear is the same scenario in a
+// leap year, where February's clamp should land on the 29th, not the 28th.
+func TestGenerateBucketStarts_Month_Day31_LeapYear(t *testing.T) {
+	start := time.Date(2028, 1, 31, 0, 0, 0, 0, time.UTC) // 2028: leap year
+	end := time.Date(2028, 3, 1, 0, 0, 0, 0, time.UTC)
+	out := generateBucketStarts(start, end, types.WindowSizeMonth, nil)
+	require.Len(t, out, 2)
+	assert.True(t, out[0].Equal(time.Date(2028, 1, 31, 0, 0, 0, 0, time.UTC)), "Jan 31")
+	assert.True(t, out[1].Equal(time.Date(2028, 2, 29, 0, 0, 0, 0, time.UTC)), "Feb 29: leap year, so it clamps to 29 not 28")
+}
+
+// TestGenerateBucketStarts_Month_WithAnchor_Day31 is the same day-31 overflow
+// bug, but for a billing anchor instead of a no-anchor period start.
+func TestGenerateBucketStarts_Month_WithAnchor_Day31(t *testing.T) {
+	anchor := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	out := generateBucketStarts(start, end, types.WindowSizeMonth, &anchor)
+	require.Len(t, out, 4)
+	assert.True(t, out[0].Equal(time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)), "Jan 31")
+	assert.True(t, out[1].Equal(time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)), "Feb 28: clamped")
+	assert.True(t, out[2].Equal(time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)), "Mar 31: back to the anchor day")
+	assert.True(t, out[3].Equal(time.Date(2026, 4, 30, 0, 0, 0, 0, time.UTC)), "Apr 30: clamped again")
+}
+
+// TestAddMonthClamped tests addMonthClamped directly, without going through
+// generateBucketStarts.
+func TestAddMonthClamped(t *testing.T) {
+	tests := []struct {
+		name string
+		from time.Time
+		want time.Time
+	}{
+		{
+			name: "Jan 31 clamps to Feb 28 in a non-leap year",
+			from: time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC),
+			want: time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Jan 31 clamps to Feb 29 in a leap year",
+			from: time.Date(2028, 1, 31, 0, 0, 0, 0, time.UTC),
+			want: time.Date(2028, 2, 29, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Feb 28 goes back to Mar 31 (day 31 exists again in March)",
+			from: time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC),
+			want: time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Dec 31 rolls into Jan 31 of the next year",
+			from: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC),
+			want: time.Date(2027, 1, 31, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := addMonthClamped(tc.from, 31)
+			assert.True(t, got.Equal(tc.want), "expected %s, got %s", tc.want, got)
+		})
+	}
+}
+
 // newCommitmentCalculatorForTest builds a calculator with a real PriceService
 // backed by in-memory stores so flat-fee CalculateCost works deterministically.
 func newCommitmentCalculatorForTest(t *testing.T) *commitmentCalculator {
