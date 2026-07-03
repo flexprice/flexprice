@@ -2912,7 +2912,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	keep := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
 		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
 	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, sub.CurrentPeriodStart, sub.CurrentPeriodEnd, keep)
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, keep)
 	if err != nil {
 		return nil, err
 	}

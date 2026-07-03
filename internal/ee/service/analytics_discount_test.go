@@ -113,6 +113,31 @@ func TestApplyAnalyticsDiscounts_Windowed(t *testing.T) {
 	}
 }
 
+// TestApplyAnalyticsDiscounts_WindowedEndDateExpiry covers the activeAt branch where a
+// coupon has a non-nil EndDate and a point falls after it — the only branch of activeAt
+// not otherwise exercised by open-ended (EndDate == nil) coupons used elsewhere.
+func TestApplyAnalyticsDiscounts_WindowedEndDateExpiry(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	rangeEnd := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	couponEnd := t0.Add(12 * time.Hour) // expires between t0 and t1
+	points := []pointCost{{Timestamp: t0, Cost: dec("50")}, {Timestamp: t1, Cost: dec("50")}}
+
+	out := ApplyAnalyticsDiscounts(discountInput{
+		Currency: "USD", GrossTotalCost: dec("100"), Points: points,
+		SubCoupons: []analyticsCoupon{pctCoupon("10", t0, &couponEnd)}, RangeStart: t0, RangeEnd: rangeEnd,
+	})
+	if !out.PointDiscounts[0].Equal(dec("5")) {
+		t.Fatalf("point at/before EndDate should be discounted, got %s", out.PointDiscounts[0])
+	}
+	if !out.PointDiscounts[1].Equal(decimal.Zero) {
+		t.Fatalf("point after EndDate should NOT be discounted, got %s", out.PointDiscounts[1])
+	}
+	if !out.TotalDiscount.Equal(dec("5")) || !out.NetCost.Equal(dec("95")) {
+		t.Fatalf("expired coupon: discount=%s net=%s", out.TotalDiscount, out.NetCost)
+	}
+}
+
 func TestApplyAnalyticsDiscounts_WindowedNoCoupons(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)

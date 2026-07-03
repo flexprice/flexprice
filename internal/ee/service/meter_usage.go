@@ -2154,14 +2154,18 @@ func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *Analyt
 	}
 
 	for _, item := range data.Analytics {
-		subID := item.SubscriptionID
-		if subID == "" {
-			if li := data.SubscriptionLineItems[item.SubLineItemID]; li != nil {
-				subID = li.SubscriptionID
-			}
+		// Default to no discount so the domain object is internally consistent
+		// (NetCost == TotalCost) even when no coupon applies to this item, rather
+		// than relying on downstream DTO mapping to re-derive it from zero values.
+		item.TotalDiscount = decimal.Zero
+		item.NetCost = item.TotalCost
+		for i := range item.Points {
+			item.Points[i].Discount = decimal.Zero
+			item.Points[i].NetCost = item.Points[i].Cost
 		}
+
 		lineCoupons := data.LineItemCoupons[item.SubLineItemID]
-		subCoupons := data.SubscriptionCoupons[subID]
+		subCoupons := data.SubscriptionCoupons[item.SubscriptionID]
 		if len(lineCoupons) == 0 && len(subCoupons) == 0 {
 			continue
 		}

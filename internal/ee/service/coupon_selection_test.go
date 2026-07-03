@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -45,6 +46,40 @@ func TestSplitAndOrderAssociations(t *testing.T) {
 	}
 	if sel.SubLineItemIDToPriceID["sli_1"] != "price_1" {
 		t.Fatalf("price map wrong: %+v", sel.SubLineItemIDToPriceID)
+	}
+}
+
+// TestSplitAndOrderAssociations_NilGuards covers the defensive skip for a nil
+// association or one with a nil embedded Coupon — reachable if a caller ever
+// passes a malformed slice, not just well-formed repo output.
+func TestSplitAndOrderAssociations_NilGuards(t *testing.T) {
+	pct := dec("10")
+	perc := &coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: &pct}
+	subs := []*subscription.Subscription{{ID: "sub_1"}}
+	assocs := []*ca.CouponAssociation{
+		nil,
+		{ID: "ca_nil_coupon", SubscriptionID: "sub_1", StartDate: time.Now(), Coupon: nil},
+		{ID: "ca_ok", SubscriptionID: "sub_1", StartDate: time.Now(), Coupon: perc},
+	}
+
+	sel := splitAndOrderAssociations(subs, assocs, nil)
+
+	if got := sel.SubLevel["sub_1"]; len(got) != 1 || got[0].ID != "ca_ok" {
+		t.Fatalf("nil/nil-coupon entries should be skipped, got %+v", got)
+	}
+}
+
+// TestSelectSubscriptionCoupons_EmptySubs covers the empty-subs early return —
+// no current caller hits this (both meter-usage and billing guard against it
+// upstream), but it's a public shared helper's own defensive contract worth
+// verifying directly.
+func TestSelectSubscriptionCoupons_EmptySubs(t *testing.T) {
+	sel, err := selectSubscriptionCoupons(context.Background(), ServiceParams{}, nil, time.Now(), time.Now(), nil)
+	if err != nil {
+		t.Fatalf("expected no error for empty subs, got %v", err)
+	}
+	if len(sel.SubLevel) != 0 || len(sel.LineLevel) != 0 {
+		t.Fatalf("expected an empty selection, got %+v", sel)
 	}
 }
 

@@ -2505,6 +2505,12 @@ func (s *featureUsageTrackingService) aggregateAnalyticsByGrouping(analytics []*
 			existing.CountUniqueUsage += item.CountUniqueUsage
 			existing.EventCount += item.EventCount
 			existing.TotalCost = existing.TotalCost.Add(item.TotalCost)
+			// Discounts are computed per-item before grouping (applyAnalyticsDiscounts runs
+			// first), so merging rows into one group must carry TotalDiscount forward too —
+			// otherwise a grouped query silently reports zero discount despite it having been
+			// correctly computed pre-merge.
+			existing.TotalDiscount = existing.TotalDiscount.Add(item.TotalDiscount)
+			existing.NetCost = existing.TotalCost.Sub(existing.TotalDiscount)
 
 			// Merge sources using a set to avoid duplicates
 			if len(item.Sources) > 0 {
@@ -2544,6 +2550,8 @@ func (s *featureUsageTrackingService) aggregateAnalyticsByGrouping(analytics []*
 				CountUniqueUsage: item.CountUniqueUsage,
 				EventCount:       item.EventCount,
 				TotalCost:        item.TotalCost,
+				TotalDiscount:    item.TotalDiscount,
+				NetCost:          item.NetCost,
 				Currency:         item.Currency,
 				Properties:       make(map[string]string),
 				CommitmentInfo:   item.CommitmentInfo,
@@ -2653,6 +2661,8 @@ func (s *featureUsageTrackingService) mergeTimeSeriesPoints(existing []events.Us
 			existingPoint.CountUniqueUsage += new[i].CountUniqueUsage
 			existingPoint.EventCount += new[i].EventCount
 			existingPoint.Cost = existingPoint.Cost.Add(new[i].Cost)
+			existingPoint.Discount = existingPoint.Discount.Add(new[i].Discount)
+			existingPoint.NetCost = existingPoint.Cost.Sub(existingPoint.Discount)
 		} else {
 			// Add new point
 			pointMap[new[i].Timestamp] = &new[i]
