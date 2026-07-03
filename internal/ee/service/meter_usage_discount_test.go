@@ -11,6 +11,8 @@ package service
 //  5. No coupons                                     → discount = 0 (regression guard)
 //  6. Group-by source with line-item 10% coupon      → per-item NetCost = 90% of cost
 //  7. Windowed (DAY) with forever 10% coupon         → per-point discount = 10% of point cost
+//  8. Compounding (10% line + 15% sub) + cross-meter isolation on a second line item
+//  9. Straddling range: non-windowed over-applies vs. windowed per-point accuracy
 
 import (
 	"context"
@@ -237,17 +239,108 @@ func (s *MeterUsageDiscountSuite) attachLineItemCoupon(ctx context.Context, asso
 
 // attachSubCoupon creates a subscription-level coupon association (no line item).
 func (s *MeterUsageDiscountSuite) attachSubCoupon(ctx context.Context, assocID string, c *coupon.Coupon) {
+	s.attachSubCouponWithStart(ctx, assocID, c, s.periodStart)
+}
+
+// attachLineItemCouponWithStart is attachLineItemCoupon with an explicit StartDate,
+// used to build coupons that only cover part of the query range.
+func (s *MeterUsageDiscountSuite) attachLineItemCouponWithStart(ctx context.Context, assocID string, c *coupon.Coupon, lineItemID string, startDate time.Time) {
+	a := &coupon_association.CouponAssociation{
+		ID:                     assocID,
+		CouponID:               c.ID,
+		SubscriptionID:         s.sub.ID,
+		SubscriptionLineItemID: lo.ToPtr(lineItemID),
+		StartDate:              startDate,
+		EndDate:                nil,
+		EnvironmentID:          types.GetEnvironmentID(ctx),
+		Coupon:                 c,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CouponAssociationRepo.Create(ctx, a))
+}
+
+// attachSubCouponWithStart is attachSubCoupon with an explicit StartDate.
+func (s *MeterUsageDiscountSuite) attachSubCouponWithStart(ctx context.Context, assocID string, c *coupon.Coupon, startDate time.Time) {
 	a := &coupon_association.CouponAssociation{
 		ID:             assocID,
 		CouponID:       c.ID,
 		SubscriptionID: s.sub.ID,
-		StartDate:      s.periodStart,
+		StartDate:      startDate,
 		EndDate:        nil,
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 		Coupon:         c,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().CouponAssociationRepo.Create(ctx, a))
+}
+
+// createSecondMeterLineItem creates a second meter/price/line-item on the SAME
+// subscription, so tests can verify cross-meter (cross-line-item) isolation.
+// $0.01/unit flat fee, mirroring setupEntitiesDiscount's Meter A pricing.
+func (s *MeterUsageDiscountSuite) createSecondMeterLineItem(ctx context.Context, id string) (*meter.Meter, *price.Price, *subscription.SubscriptionLineItem) {
+	m := &meter.Meter{
+		ID:        "meter_discount_storage",
+		Name:      "Storage Ops",
+		EventName: "storage_op",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationSum,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	p := &price.Price{
+		ID:             "price_discount_storage",
+		Amount:         decimal.NewFromFloat(0.01),
+		Currency:       "usd",
+		EntityType:     types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:       "plan_discount_1",
+		BillingModel:   types.BILLING_MODEL_FLAT_FEE,
+		Type:           types.PRICE_TYPE_USAGE,
+		MeterID:        m.ID,
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	li := &subscription.SubscriptionLineItem{
+		ID:             id,
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        p.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        m.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		EndDate:        s.periodEnd,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+	return m, p, li
+}
+
+// insertUsageForMeter inserts a meter_usage record for an arbitrary meter/event,
+// used once a second meter exists on the subscription.
+func (s *MeterUsageDiscountSuite) insertUsageForMeter(ctx context.Context, meterID, eventName string, ts time.Time, qty float64, source string) {
+	s.NoError(s.meterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{
+		{
+			Event: events.Event{
+				ID:                 types.GenerateUUID(),
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: s.customer.ExternalID,
+				Timestamp:          ts,
+				EventName:          eventName,
+				Source:             source,
+			},
+			MeterID:  meterID,
+			QtyTotal: decimal.NewFromFloat(qty),
+		},
+	}))
 }
 
 // queryAnalytics is a convenience wrapper around GetDetailedAnalytics.
@@ -572,4 +665,137 @@ func (s *MeterUsageDiscountSuite) TestWindowedPerPointDiscount() {
 	netCostDiff := sumPointNetCost.Sub(item.NetCost).Abs()
 	s.True(netCostDiff.LessThanOrEqual(decimal.NewFromFloat(0.01)),
 		"sum(point.NetCost)=%s should ≈ item.NetCost=%s", sumPointNetCost, item.NetCost)
+}
+
+// Case 8: Compounding (10% line-item + 15% subscription-level) on one line item,
+// while a SECOND line item (different meter) only carries the subscription-level
+// coupon. Verifies: (a) compounding order/math, (b) the line-item coupon does not
+// bleed into the other meter, (c) the subscription-level coupon reaches both.
+//
+// Line item A (Meter A): $100 gross. 10% line coupon then 15% sub coupon:
+//
+//	100 * 0.90 * 0.85 = 76.50 → discount = 23.50
+//
+// Line item B (Meter Storage): $50 gross. Only the 15% sub coupon applies:
+//
+//	50 * 0.85 = 42.50 → discount = 7.50
+func (s *MeterUsageDiscountSuite) TestCompoundingAndLineItemIsolation() {
+	ctx := s.GetContext()
+
+	liA := s.createLineItemDiscount(ctx, "li_disc_8a")
+	_, _, liB := s.createSecondMeterLineItem(ctx, "li_disc_8b")
+
+	// Meter A: 10,000 units × $0.01 = $100 gross.
+	s.insertUsage(ctx, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 10_000)
+	// Meter Storage: 5,000 units × $0.01 = $50 gross.
+	s.insertUsageForMeter(ctx, "meter_discount_storage", "storage_op", time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 5_000, "")
+
+	lineCoupon := s.createPercentageCoupon(ctx, "coupon_compound_line", 10)
+	s.attachLineItemCoupon(ctx, "assoc_compound_line", lineCoupon, liA.ID)
+
+	subCoupon := s.createPercentageCoupon(ctx, "coupon_compound_sub", 15)
+	s.attachSubCoupon(ctx, "assoc_compound_sub", subCoupon)
+
+	resp := s.queryAnalytics(ctx)
+	s.Require().Len(resp.Items, 2, "expected one item per line item/meter")
+
+	var itemA, itemB *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		switch resp.Items[i].MeterID {
+		case s.meterAPI.ID:
+			itemA = &resp.Items[i]
+		case "meter_discount_storage":
+			itemB = &resp.Items[i]
+		}
+	}
+	s.Require().NotNil(itemA, "expected an item for Meter A")
+	s.Require().NotNil(itemB, "expected an item for Meter Storage")
+
+	// Line item A: compounded 10% then 15%.
+	s.True(itemA.TotalCost.Equal(decimal.NewFromInt(100)), "itemA.TotalCost got %s", itemA.TotalCost)
+	s.True(itemA.TotalDiscount.Equal(decimal.RequireFromString("23.5")), "itemA.TotalDiscount got %s", itemA.TotalDiscount)
+	s.True(itemA.NetCost.Equal(decimal.RequireFromString("76.5")), "itemA.NetCost got %s", itemA.NetCost)
+
+	// Line item B: only the 15% sub-level coupon (the 10% line coupon is scoped to A).
+	s.True(itemB.TotalCost.Equal(decimal.NewFromInt(50)), "itemB.TotalCost got %s", itemB.TotalCost)
+	s.True(itemB.TotalDiscount.Equal(decimal.RequireFromString("7.5")), "itemB.TotalDiscount got %s", itemB.TotalDiscount)
+	s.True(itemB.NetCost.Equal(decimal.RequireFromString("42.5")), "itemB.NetCost got %s", itemB.NetCost)
+
+	// Response-level totals reconcile across both items.
+	s.True(resp.TotalCost.Equal(decimal.NewFromInt(150)), "resp.TotalCost got %s", resp.TotalCost)
+	s.True(resp.TotalDiscount.Equal(decimal.NewFromInt(31)), "resp.TotalDiscount got %s", resp.TotalDiscount)
+	s.True(resp.TotalNetCost.Equal(decimal.NewFromInt(119)), "resp.TotalNetCost got %s", resp.TotalNetCost)
+
+	_ = liB
+}
+
+// Case 9: Straddling range — a coupon whose StartDate falls partway through the
+// query range. Non-windowed queries are all-or-nothing (over-apply to the whole
+// range); windowed (DAY) queries only discount the windows at/after StartDate.
+//
+// Usage: $50 gross before the coupon starts (Jan 5 + Jan 10), $50 gross at/after
+// (Jan 20 + Jan 25). Coupon: 20% line-item, StartDate = Jan 15 (mid-range).
+//
+//	Non-windowed: discounts the FULL $100 → discount = $20, net = $80
+//	Windowed:     discounts only the post-start $50 → discount = $10, net = $90
+func (s *MeterUsageDiscountSuite) TestStraddlingRangeNonWindowedOverAppliesVsWindowedAccurate() {
+	ctx := s.GetContext()
+
+	li := s.createLineItemDiscount(ctx, "li_disc_9")
+
+	// Pre-coupon-start usage: $30 + $20 = $50 gross.
+	s.insertUsage(ctx, time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC), 3_000)
+	s.insertUsage(ctx, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 2_000)
+	// Post-coupon-start usage: $20 + $30 = $50 gross.
+	s.insertUsage(ctx, time.Date(2026, 1, 20, 12, 0, 0, 0, time.UTC), 2_000)
+	s.insertUsage(ctx, time.Date(2026, 1, 25, 12, 0, 0, 0, time.UTC), 3_000)
+
+	couponStart := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	c := s.createPercentageCoupon(ctx, "coupon_straddle", 20)
+	s.attachLineItemCouponWithStart(ctx, "assoc_straddle", c, li.ID, couponStart)
+
+	// Non-windowed: all-or-nothing over the full range.
+	nonWindowed, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(nonWindowed.Items, 1)
+	nwItem := nonWindowed.Items[0]
+
+	s.True(nwItem.TotalCost.Equal(decimal.NewFromInt(100)), "non-windowed TotalCost got %s", nwItem.TotalCost)
+	s.True(nwItem.TotalDiscount.Equal(decimal.NewFromInt(20)),
+		"non-windowed should over-apply the discount to the whole range, got %s", nwItem.TotalDiscount)
+	s.True(nwItem.NetCost.Equal(decimal.NewFromInt(80)), "non-windowed NetCost got %s", nwItem.NetCost)
+
+	// Windowed (DAY): only post-coupon-start windows are discounted.
+	windowed, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+	s.Require().Len(windowed.Items, 1)
+	wItem := windowed.Items[0]
+
+	s.True(wItem.TotalCost.Equal(decimal.NewFromInt(100)), "windowed TotalCost got %s", wItem.TotalCost)
+	s.True(wItem.TotalDiscount.Equal(decimal.NewFromInt(10)),
+		"windowed should only discount post-coupon-start usage, got %s", wItem.TotalDiscount)
+	s.True(wItem.NetCost.Equal(decimal.NewFromInt(90)), "windowed NetCost got %s", wItem.NetCost)
+
+	// The core claim of the feature: windowed accuracy strictly reduces the
+	// discount compared to non-windowed over-application, on identical data.
+	s.True(wItem.TotalDiscount.LessThan(nwItem.TotalDiscount),
+		"windowed discount (%s) should be less than non-windowed discount (%s) when the coupon starts mid-range",
+		wItem.TotalDiscount, nwItem.TotalDiscount)
+
+	if len(wItem.Points) > 0 {
+		for _, pt := range wItem.Points {
+			if pt.Timestamp.Before(couponStart) {
+				s.True(pt.Discount.IsZero(), "pre-coupon-start point should have zero discount, got %s at %s", pt.Discount, pt.Timestamp)
+			}
+		}
+	}
 }
