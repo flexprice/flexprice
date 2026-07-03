@@ -115,20 +115,26 @@ func selectSubscriptionCoupons(
 //
 // SubLineItemIDToPriceID is NOT included in the returned pair; callers needing price-keyed
 // lookups should read sel.SubLineItemIDToPriceID directly.
-func projectAnalyticsCoupons(sel *subscriptionCouponSelection) (line, sub map[string][]analyticsCoupon) {
-	line = map[string][]analyticsCoupon{}
-	sub = map[string][]analyticsCoupon{}
-	conv := func(a *ca.CouponAssociation) analyticsCoupon {
-		return analyticsCoupon{Coupon: a.Coupon, StartDate: a.StartDate, EndDate: a.EndDate}
-	}
+func projectAnalyticsCoupons(sel *subscriptionCouponSelection) (line, sub map[string][]*analyticsCoupon) {
+	line = map[string][]*analyticsCoupon{}
+	sub = map[string][]*analyticsCoupon{}
+
 	for k, as := range sel.LineLevel {
 		for _, a := range as {
-			line[k] = append(line[k], conv(a))
+			line[k] = append(line[k], &analyticsCoupon{
+				Coupon:    a.Coupon,
+				StartDate: a.StartDate,
+				EndDate:   a.EndDate,
+			})
 		}
 	}
 	for k, as := range sel.SubLevel {
 		for _, a := range as {
-			sub[k] = append(sub[k], conv(a))
+			sub[k] = append(sub[k], &analyticsCoupon{
+				Coupon:    a.Coupon,
+				StartDate: a.StartDate,
+				EndDate:   a.EndDate,
+			})
 		}
 	}
 	return line, sub

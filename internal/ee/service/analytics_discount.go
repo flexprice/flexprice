@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/shopspring/decimal"
 )
 
@@ -46,27 +47,27 @@ type pointCost struct {
 }
 
 type discountInput struct {
-	Currency       string
-	GrossTotalCost decimal.Decimal
-	Points         []pointCost       // empty => non-windowed
-	LineCoupons    []analyticsCoupon // applied first
-	SubCoupons     []analyticsCoupon // applied after, compounding
-	RangeStart     time.Time         // used when Points is empty
-	RangeEnd       time.Time         // used when Points is empty
+	Currency    string
+	SubTotal    decimal.Decimal
+	Points      []events.UsageAnalyticPoint // empty => non-windowed
+	LineCoupons []*analyticsCoupon          // applied first
+	SubCoupons  []*analyticsCoupon          // applied after, compounding
+	RangeStart  time.Time                   // used when Points is empty
+	RangeEnd    time.Time                   // used when Points is empty
 }
 
 type discountOutput struct {
 	TotalDiscount  decimal.Decimal
-	NetCost        decimal.Decimal
-	PointDiscounts []decimal.Decimal // aligned to input Points; nil when non-windowed
+	SubTotal       decimal.Decimal
+	PointDiscounts []events.UsageAnalyticPoint // aligned to input Points; nil when non-windowed
 }
 
 // compound applies the active line coupons then sub coupons onto base, using the canonical
 // coupon.ApplyDiscount math (which rounds to currency precision and caps at >= 0), and returns
 // the total discount (base - remaining).
-func compound(base decimal.Decimal, currency string, line, sub []analyticsCoupon, active func(analyticsCoupon) bool) decimal.Decimal {
+func compound(base decimal.Decimal, currency string, line, sub []*analyticsCoupon, active func(*analyticsCoupon) bool) decimal.Decimal {
 	remaining := base
-	apply := func(cs []analyticsCoupon) {
+	apply := func(cs []*analyticsCoupon) {
 		for _, c := range cs {
 			if remaining.LessThanOrEqual(decimal.Zero) || !active(c) {
 				continue
@@ -81,39 +82,34 @@ func compound(base decimal.Decimal, currency string, line, sub []analyticsCoupon
 
 // ApplyAnalyticsDiscounts computes per-window (or all-or-nothing when non-windowed) percentage
 // discounts for one analytic item. Pure: no DB, no service deps.
-func ApplyAnalyticsDiscounts(in discountInput) discountOutput {
+func ApplyAnalyticsDiscounts(in *discountInput) *discountOutput {
 	if len(in.LineCoupons) == 0 && len(in.SubCoupons) == 0 {
-		if len(in.Points) == 0 {
-			return discountOutput{TotalDiscount: decimal.Zero, NetCost: in.GrossTotalCost}
-		}
-		// Windowed input with no applicable coupons: preserve per-point alignment by
-		// returning a zero-valued PointDiscounts slice (length == len(in.Points)), so the
-		// contract "PointDiscounts is nil only for non-windowed input" holds.
-		return discountOutput{
+		return &discountOutput{
 			TotalDiscount:  decimal.Zero,
-			NetCost:        in.GrossTotalCost,
-			PointDiscounts: make([]decimal.Decimal, len(in.Points)),
+			SubTotal:       in.SubTotal,
+			PointDiscounts: in.Points,
 		}
 	}
 
+	// Non-windowed input.
+	// so in case points are empty, we apply the discounts to subscription level only internally we still apply coupons for line items and roll up to subscription level.
 	if len(in.Points) == 0 {
-		discount := compound(in.GrossTotalCost, in.Currency, in.LineCoupons, in.SubCoupons,
-			func(c analyticsCoupon) bool { return c.activeOverlaps(in.RangeStart, in.RangeEnd) })
-		return discountOutput{TotalDiscount: discount, NetCost: in.GrossTotalCost.Sub(discount)}
+
+		discount := compound(in.SubTotal, in.Currency, in.LineCoupons, in.SubCoupons,
+			func(c *analyticsCoupon) bool { return c.activeOverlaps(in.RangeStart, in.RangeEnd) })
+		return &discountOutput{TotalDiscount: discount, SubTotal: in.SubTotal.Sub(discount)}
 	}
 
-	pointDiscounts := make([]decimal.Decimal, len(in.Points))
-	total := decimal.Zero
+	totalDiscount := decimal.Zero
 	for i := range in.Points {
-		p := in.Points[i]
-		d := compound(p.Cost, in.Currency, in.LineCoupons, in.SubCoupons,
-			func(c analyticsCoupon) bool { return c.activeAt(p.Timestamp) })
-		pointDiscounts[i] = d
-		total = total.Add(d)
+		discount := compound(in.Points[i].Cost, in.Currency, in.LineCoupons, in.SubCoupons,
+			func(c *analyticsCoupon) bool { return c.activeAt(in.Points[i].Timestamp) })
+		totalDiscount = totalDiscount.Add(discount)
+		in.Points[i].Discount = discount
 	}
-	return discountOutput{
-		TotalDiscount:  total,
-		NetCost:        in.GrossTotalCost.Sub(total),
-		PointDiscounts: pointDiscounts,
+	return &discountOutput{
+		TotalDiscount:  totalDiscount,
+		SubTotal:       in.SubTotal.Sub(totalDiscount),
+		PointDiscounts: in.Points,
 	}
 }

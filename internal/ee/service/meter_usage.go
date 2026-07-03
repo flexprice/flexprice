@@ -1604,8 +1604,8 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
 	params *events.MeterUsageDetailedAnalyticsParams,
-	lineItemCoupons map[string][]analyticsCoupon,
-	subscriptionCoupons map[string][]analyticsCoupon,
+	lineItemCoupons map[string][]*analyticsCoupon,
+	subscriptionCoupons map[string][]*analyticsCoupon,
 ) *dto.GetUsageAnalyticsResponse {
 	response := &dto.GetUsageAnalyticsResponse{
 		Subtotal:      decimal.Zero,
@@ -1652,24 +1652,22 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		subCoupons := subscriptionCoupons[analytic.SubscriptionID]
 		var discountOut *discountOutput
 		if len(lineCoupons) > 0 || len(subCoupons) > 0 {
-			in := discountInput{
-				Currency:       analytic.Currency,
-				GrossTotalCost: analytic.TotalCost,
-				LineCoupons:    lineCoupons,
-				SubCoupons:     subCoupons,
-				RangeStart:     params.StartTime,
-				RangeEnd:       params.EndTime,
+			discountOut = ApplyAnalyticsDiscounts(&discountInput{
+				Currency:    analytic.Currency,
+				SubTotal:    analytic.TotalCost,
+				LineCoupons: lineCoupons,
+				SubCoupons:  subCoupons,
+				RangeStart:  params.StartTime,
+				RangeEnd:    params.EndTime,
+				Points:      analytic.Points,
+			})
+
+			if discountOut != nil {
+				item.TotalDiscount = discountOut.TotalDiscount
+				item.TotalCost = discountOut.SubTotal
+				analytic.Points = discountOut.PointDiscounts
 			}
-			if len(analytic.Points) > 0 {
-				in.Points = make([]pointCost, len(analytic.Points))
-				for i, p := range analytic.Points {
-					in.Points[i] = pointCost{Timestamp: p.Timestamp, Cost: p.Cost}
-				}
-			}
-			out := ApplyAnalyticsDiscounts(in)
-			discountOut = &out
-			item.TotalDiscount = out.TotalDiscount
-			item.TotalCost = out.NetCost
+
 		}
 
 		if item.FeatureName == "" {
@@ -1775,19 +1773,13 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 				}
 			}
 
-			for pointIdx, point := range analytic.Points {
-				pointDiscount := decimal.Zero
-				pointCostVal := point.Cost
-				if discountOut != nil && pointIdx < len(discountOut.PointDiscounts) {
-					pointDiscount = discountOut.PointDiscounts[pointIdx]
-					pointCostVal = point.Cost.Sub(pointDiscount)
-				}
+			for _, point := range analytic.Points {
 				dtoPoint := dto.UsageAnalyticPoint{
 					Timestamp:                        point.Timestamp,
 					Usage:                            point.Usage,
 					Subtotal:                         point.Cost,
-					Discount:                         pointDiscount,
-					Cost:                             pointCostVal,
+					Discount:                         point.Discount,
+					Cost:                             point.Cost.Sub(point.Discount),
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -2163,7 +2155,7 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // thread the returned maps into toUsageAnalyticsResponseDTO, which applies discounts inline
 // while building the DTO. Short-circuits (returning nil, nil) when there are no costed
 // analytics/subscriptions, no coupon repo, or no applicable coupons.
-func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) (lineItemCoupons, subscriptionCoupons map[string][]analyticsCoupon) {
+func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) (lineItemCoupons, subscriptionCoupons map[string][]*analyticsCoupon) {
 	if len(data.Analytics) == 0 || len(data.Subscriptions) == 0 {
 		return nil, nil
 	}

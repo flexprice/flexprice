@@ -86,6 +86,7 @@ type UsageAnalyticPoint struct {
 	WindowStart time.Time       // For bucketed features: which request window this bucket belongs to
 	Usage       decimal.Decimal `swaggertype:"string"`
 	Cost        decimal.Decimal `swaggertype:"string"`
+	Discount    decimal.Decimal `swaggertype:"string"`
 	EventCount  uint64          // Number of events in this time window
 
 	// BucketID is the commitment time bucket this window's start falls in (empty
