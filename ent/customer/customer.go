@@ -49,6 +49,8 @@ const (
 	FieldAddressCountry = "address_country"
 	// FieldTimezone holds the string denoting the timezone field in the database.
 	FieldTimezone = "timezone"
+	// FieldAllowedIntegrationProviders holds the string denoting the allowed_integration_providers field in the database.
+	FieldAllowedIntegrationProviders = "allowed_integration_providers"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldAddressPostalCode,
 	FieldAddressCountry,
 	FieldTimezone,
+	FieldAllowedIntegrationProviders,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

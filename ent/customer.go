@@ -53,8 +53,10 @@ type Customer struct {
 	// AddressCountry holds the value of the "address_country" field.
 	AddressCountry string `json:"address_country,omitempty"`
 	// Timezone holds the value of the "timezone" field.
-	Timezone     string `json:"timezone,omitempty"`
-	selectValues sql.SelectValues
+	Timezone string `json:"timezone,omitempty"`
+	// AllowedIntegrationProviders holds the value of the "allowed_integration_providers" field.
+	AllowedIntegrationProviders []string `json:"allowed_integration_providers,omitempty"`
+	selectValues                sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -62,7 +64,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customer.FieldMetadata:
+		case customer.FieldMetadata, customer.FieldAllowedIntegrationProviders:
 			values[i] = new([]byte)
 		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone:
 			values[i] = new(sql.NullString)
@@ -199,6 +201,14 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.Timezone = value.String
 			}
+		case customer.FieldAllowedIntegrationProviders:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field allowed_integration_providers", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &c.AllowedIntegrationProviders); err != nil {
+					return fmt.Errorf("unmarshal field allowed_integration_providers: %w", err)
+				}
+			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
 		}
@@ -288,6 +298,9 @@ func (c *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timezone=")
 	builder.WriteString(c.Timezone)
+	builder.WriteString(", ")
+	builder.WriteString("allowed_integration_providers=")
+	builder.WriteString(fmt.Sprintf("%v", c.AllowedIntegrationProviders))
 	builder.WriteByte(')')
 	return builder.String()
 }

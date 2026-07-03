@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -92,16 +95,102 @@ type customerVendorSyncInput struct {
 	CustomerID    string
 }
 
-// DispatchInvoiceVendorSync parses the invoice ID from the event payload and starts
-// Temporal sync workflows for each enabled provider. No DB reads are performed here —
-// the invoice is fetched inside the Temporal activity after a short sleep, avoiding
-// the race condition where the event arrives before the DB transaction commits.
+// invoiceSyncProviderOrder is the fixed code order used both to build the enabled-provider
+// list and as the tie-break when a customer has no allow-list. This is the canonical
+// dispatch order for invoice outbound sync.
+var invoiceSyncProviderOrder = []types.SecretProvider{
+	types.SecretProviderStripe,
+	types.SecretProviderRazorpay,
+	types.SecretProviderChargebee,
+	types.SecretProviderQuickBooks,
+	types.SecretProviderHubSpot,
+	types.SecretProviderMoyasar,
+	types.SecretProviderNomod,
+	types.SecretProviderPaddle,
+	types.SecretProviderZohoBooks,
+	types.SecretProviderWhop,
+}
+
+// invoiceOutboundEnabledInOrder returns the providers that have an enabled outbound
+// invoice connection, in fixed code order. A real DB error aborts; a missing connection
+// simply excludes that provider.
+func invoiceOutboundEnabledInOrder(
+	ctx context.Context,
+	connRepo connection.Repository,
+) ([]types.SecretProvider, error) {
+	var enabled []types.SecretProvider
+	for _, p := range invoiceSyncProviderOrder {
+		conn, err := getConnectionIfExists(ctx, connRepo, p)
+		if err != nil {
+			return nil, err
+		}
+		if conn != nil && conn.IsInvoiceOutboundEnabled() {
+			enabled = append(enabled, p)
+		}
+	}
+	return enabled, nil
+}
+
+// resolveAllowedProviders returns the customer's ordered allow-list for the invoice.
+// The normal path (customer_id present) loads only the customer, which pre-exists the
+// invoice, so there is no commit race. For in-flight messages lacking customer_id it
+// falls back to a guarded invoice read to recover the customer id; such messages predate
+// this feature's deploy, so their invoice is already committed. Missing entities are not
+// fatal — they yield a nil allow-list (⇒ first enabled provider by fixed order).
+func resolveAllowedProviders(
+	ctx context.Context,
+	customerRepo customer.Repository,
+	invoiceRepo invoice.Repository,
+	customerID string,
+	invoiceID string,
+	log *logger.Logger,
+) ([]string, error) {
+	if customerID == "" {
+		if invoiceRepo == nil {
+			return nil, nil
+		}
+		inv, err := invoiceRepo.Get(ctx, invoiceID)
+		if err != nil {
+			if ierr.IsNotFound(err) || ent.IsNotFound(err) {
+				log.Warn(ctx, "integration_events: invoice not found while resolving sync target, defaulting to fixed order",
+					"invoice_id", invoiceID)
+				return nil, nil
+			}
+			return nil, err
+		}
+		customerID = inv.CustomerID
+	}
+
+	if customerRepo == nil || customerID == "" {
+		return nil, nil
+	}
+
+	cust, err := customerRepo.Get(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) || ent.IsNotFound(err) {
+			log.Warn(ctx, "integration_events: customer not found while resolving sync target, defaulting to fixed order",
+				"customer_id", customerID, "invoice_id", invoiceID)
+			return nil, nil
+		}
+		return nil, err
+	}
+	return cust.AllowedIntegrationProviders, nil
+}
+
+// DispatchInvoiceVendorSync resolves an invoice to exactly one integration provider and
+// starts that provider's Temporal sync workflow. The target is the first entry of the
+// customer's allowed_integration_providers with an enabled outbound connection, or — when
+// the allow-list is empty — the first enabled provider by fixed code order. Invoice details
+// are still fetched inside the Temporal activity after a short sleep (the dispatcher only
+// reads the customer, which pre-exists the invoice), preserving the commit-race avoidance.
 // eimRepo is used for idempotency: if a mapping already exists the provider trigger is skipped.
 func DispatchInvoiceVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
 	connRepo connection.Repository,
 	eimRepo entityintegrationmapping.Repository,
+	customerRepo customer.Repository,
+	invoiceRepo invoice.Repository,
 	log *logger.Logger,
 	event *types.WebhookEvent,
 	msgUUID string,
@@ -110,9 +199,10 @@ func DispatchInvoiceVendorSync(
 		return nil
 	}
 
-	// Parse invoice ID from the event payload — no DB calls at this stage.
+	// Parse invoice + customer IDs from the event payload.
 	var pl struct {
-		InvoiceID string `json:"invoice_id"`
+		InvoiceID  string `json:"invoice_id"`
+		CustomerID string `json:"customer_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payload, dropping",
@@ -134,35 +224,75 @@ func DispatchInvoiceVendorSync(
 		return errTemporalUnavailable
 	}
 
+	// Determine enabled providers (fixed order) and the customer's allow-list, then resolve
+	// to a single target.
+	enabledInOrder, err := invoiceOutboundEnabledInOrder(ctx, connRepo)
+	if err != nil {
+		return fmt.Errorf("integration_events: failed to determine enabled providers for invoice %s: %w", in.InvoiceID, err)
+	}
+	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.CustomerID, pl.InvoiceID, log)
+	if err != nil {
+		return fmt.Errorf("integration_events: failed to resolve allow-list for invoice %s: %w", in.InvoiceID, err)
+	}
+
+	target, ok := ResolveInvoiceSyncTarget(allowed, enabledInOrder)
+	if !ok {
+		log.Info(ctx, "integration_events: no invoice sync target resolved, skipping",
+			"invoice_id", in.InvoiceID,
+			"tenant_id", in.TenantID,
+			"environment_id", in.EnvironmentID,
+			"allowed_integration_providers", allowed,
+			"enabled_providers", enabledInOrder,
+		)
+		return nil
+	}
+
 	log.Info(ctx, "integration_events: dispatching invoice vendor sync",
 		"invoice_id", in.InvoiceID,
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
+		"resolved_provider", target,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
-		if err := trigger(); err != nil {
-			dispatchErrs = append(dispatchErrs, err)
-		}
+	trigger, ok := invoiceSyncTrigger(ctx, connRepo, eimRepo, temporalSvc, log, in, target)
+	if !ok {
+		// Should not happen: target came from invoiceSyncProviderOrder.
+		log.Error(ctx, "integration_events: resolved provider has no invoice trigger",
+			"invoice_id", in.InvoiceID, "resolved_provider", target)
+		return nil
 	}
-
-	if len(dispatchErrs) > 0 {
-		return fmt.Errorf("integration_events: one or more provider dispatches failed for invoice %s: %w", in.InvoiceID, errors.Join(dispatchErrs...))
+	if err := trigger(); err != nil {
+		return fmt.Errorf("integration_events: provider dispatch failed for invoice %s: %w", in.InvoiceID, err)
 	}
-
 	return nil
+}
+
+// invoiceSyncTrigger maps a resolved provider to its invoice-sync trigger closure. The
+// returned closure retains the per-provider guards (connection existence, outbound
+// enablement, idempotency) so routing is an additional filter, never a replacement.
+func invoiceSyncTrigger(
+	ctx context.Context,
+	connRepo connection.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	temporalSvc temporalservice.TemporalService,
+	log *logger.Logger,
+	in invoiceVendorSyncInput,
+	provider types.SecretProvider,
+) (func() error, bool) {
+	triggers := map[types.SecretProvider]func() error{
+		types.SecretProviderStripe:     func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderRazorpay:   func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderChargebee:  func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderQuickBooks: func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderHubSpot:    func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderMoyasar:    func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderNomod:      func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderPaddle:     func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderZohoBooks:  func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		types.SecretProviderWhop:       func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+	}
+	trigger, ok := triggers[provider]
+	return trigger, ok
 }
 
 // DispatchCustomerVendorSync starts Temporal customer-sync workflows for each enabled provider.
@@ -805,13 +935,18 @@ func triggerPaddleCustomerSyncIfEnabled(
 	return executeCustomerWorkflow(ctx, temporalSvc, log, types.TemporalPaddleCustomerSyncWorkflow, input, types.SecretProviderPaddle, in.CustomerID)
 }
 
-// DispatchInvoicePaidVendorSync starts provider-specific workflows to push the
-// "invoice paid" status back to the external vendor. Currently only Whop needs this.
+// DispatchInvoicePaidVendorSync pushes the "invoice paid" status back to the single
+// integration the invoice is routed to. It resolves the target with the same rules as
+// DispatchInvoiceVendorSync; only when the resolved target is Whop (the only provider that
+// implements a mark-paid workflow) is a workflow started. Any other resolved target has no
+// paid-status push and is a no-op.
 func DispatchInvoicePaidVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
 	connRepo connection.Repository,
 	eimRepo entityintegrationmapping.Repository,
+	customerRepo customer.Repository,
+	invoiceRepo invoice.Repository,
 	log *logger.Logger,
 	event *types.WebhookEvent,
 	msgUUID string,
@@ -821,7 +956,8 @@ func DispatchInvoicePaidVendorSync(
 	}
 
 	var pl struct {
-		InvoiceID string `json:"invoice_id"`
+		InvoiceID  string `json:"invoice_id"`
+		CustomerID string `json:"customer_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payment payload, dropping",
@@ -843,11 +979,38 @@ func DispatchInvoicePaidVendorSync(
 		return errTemporalUnavailable
 	}
 
+	enabledInOrder, err := invoiceOutboundEnabledInOrder(ctx, connRepo)
+	if err != nil {
+		return fmt.Errorf("integration_events: failed to determine enabled providers for invoice %s: %w", in.InvoiceID, err)
+	}
+	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.CustomerID, pl.InvoiceID, log)
+	if err != nil {
+		return fmt.Errorf("integration_events: failed to resolve allow-list for invoice %s: %w", in.InvoiceID, err)
+	}
+
+	target, ok := ResolveInvoiceSyncTarget(allowed, enabledInOrder)
+	if !ok {
+		log.Info(ctx, "integration_events: no invoice paid sync target resolved, skipping",
+			"invoice_id", in.InvoiceID,
+			"allowed_integration_providers", allowed,
+			"enabled_providers", enabledInOrder,
+		)
+		return nil
+	}
+
 	log.Info(ctx, "integration_events: dispatching invoice paid vendor sync",
 		"invoice_id", in.InvoiceID,
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
+		"resolved_provider", target,
 	)
+
+	// Only Whop has a mark-paid workflow; other resolved targets have nothing to push.
+	if target != types.SecretProviderWhop {
+		log.Info(ctx, "integration_events: resolved provider has no mark-paid step, skipping",
+			"invoice_id", in.InvoiceID, "resolved_provider", target)
+		return nil
+	}
 
 	if err := triggerWhopMarkPaidIfEnabled(ctx, connRepo, temporalSvc, log, in); err != nil {
 		return fmt.Errorf("integration_events: whop mark-paid dispatch failed for invoice %s: %w", in.InvoiceID, err)

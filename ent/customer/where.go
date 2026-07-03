@@ -1324,6 +1324,16 @@ func TimezoneContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldTimezone, v))
 }
 
+// AllowedIntegrationProvidersIsNil applies the IsNil predicate on the "allowed_integration_providers" field.
+func AllowedIntegrationProvidersIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldAllowedIntegrationProviders))
+}
+
+// AllowedIntegrationProvidersNotNil applies the NotNil predicate on the "allowed_integration_providers" field.
+func AllowedIntegrationProvidersNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldAllowedIntegrationProviders))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Customer) predicate.Customer {
 	return predicate.Customer(sql.AndPredicates(predicates...))

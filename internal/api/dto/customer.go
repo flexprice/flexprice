@@ -68,6 +68,13 @@ type CreateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// allowed_integration_providers is an ordered priority list of integration provider
+	// identifiers (e.g. "stripe", "razorpay") that this customer's invoices sync to.
+	// Invoice sync resolves to the first entry with an enabled outbound connection.
+	// The submitted order is the priority order and is preserved. Empty/omitted ⇒ first
+	// enabled provider by fixed code order.
+	AllowedIntegrationProviders []string `json:"allowed_integration_providers,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -108,6 +115,12 @@ type UpdateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// allowed_integration_providers is the ordered priority list of integration provider
+	// identifiers this customer's invoices sync to. Pointer-aware: omit (null) to leave
+	// unchanged; pass an empty array to clear it (revert to fixed code order). The
+	// submitted order is the priority order and is preserved.
+	AllowedIntegrationProviders *[]string `json:"allowed_integration_providers,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
@@ -157,6 +170,24 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
+	// Validate allowed integration providers if provided
+	if err := validateAllowedIntegrationProviders(r.AllowedIntegrationProviders); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateAllowedIntegrationProviders ensures every entry is a known types.SecretProvider.
+// Order is preserved by the caller — this only checks membership, never sorts.
+func validateAllowedIntegrationProviders(providers []string) error {
+	for i, p := range providers {
+		if err := types.SecretProvider(p).Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Invalid integration provider %q at index %d", p, i).
+				Mark(ierr.ErrValidation)
+		}
+	}
 	return nil
 }
 
@@ -166,20 +197,21 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		tz = types.DefaultTimezone
 	}
 	return &customer.Customer{
-		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
-		ExternalID:        r.ExternalID,
-		Name:              r.Name,
-		Email:             r.Email,
-		AddressLine1:      r.AddressLine1,
-		AddressLine2:      r.AddressLine2,
-		AddressCity:       r.AddressCity,
-		AddressState:      r.AddressState,
-		AddressPostalCode: r.AddressPostalCode,
-		AddressCountry:    r.AddressCountry,
-		Timezone:          tz,
-		Metadata:          r.Metadata,
-		EnvironmentID:     types.GetEnvironmentID(ctx),
-		BaseModel:         types.GetDefaultBaseModel(ctx),
+		ID:                          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID:                  r.ExternalID,
+		Name:                        r.Name,
+		Email:                       r.Email,
+		AddressLine1:                r.AddressLine1,
+		AddressLine2:                r.AddressLine2,
+		AddressCity:                 r.AddressCity,
+		AddressState:                r.AddressState,
+		AddressPostalCode:           r.AddressPostalCode,
+		AddressCountry:              r.AddressCountry,
+		Timezone:                    tz,
+		Metadata:                    r.Metadata,
+		AllowedIntegrationProviders: r.AllowedIntegrationProviders,
+		EnvironmentID:               types.GetEnvironmentID(ctx),
+		BaseModel:                   types.GetDefaultBaseModel(ctx),
 	}
 }
 
@@ -194,6 +226,13 @@ func (r *UpdateCustomerRequest) Validate() error {
 			return ierr.NewError("invalid timezone").
 				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Validate allowed integration providers if provided (nil ⇒ leave unchanged)
+	if r.AllowedIntegrationProviders != nil {
+		if err := validateAllowedIntegrationProviders(*r.AllowedIntegrationProviders); err != nil {
+			return err
 		}
 	}
 

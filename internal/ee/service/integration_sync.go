@@ -76,7 +76,10 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 			Mark(ierr.ErrValidation)
 	}
 
-	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})
+	payload, err := json.Marshal(map[string]string{
+		"invoice_id":  invoiceID,
+		"customer_id": inv.CustomerID,
+	})
 	if err != nil {
 		return err
 	}
@@ -88,7 +91,7 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 		Payload:       payload,
 	}
 	return integrationevents.DispatchInvoiceVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "",
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.CustomerRepo, s.InvoiceRepo, s.Logger, event, "",
 	)
 }
 

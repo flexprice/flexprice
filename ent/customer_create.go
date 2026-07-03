@@ -240,6 +240,12 @@ func (cc *CustomerCreate) SetNillableTimezone(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetAllowedIntegrationProviders sets the "allowed_integration_providers" field.
+func (cc *CustomerCreate) SetAllowedIntegrationProviders(s []string) *CustomerCreate {
+	cc.mutation.SetAllowedIntegrationProviders(s)
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -444,6 +450,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Timezone(); ok {
 		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
 		_node.Timezone = value
+	}
+	if value, ok := cc.mutation.AllowedIntegrationProviders(); ok {
+		_spec.SetField(customer.FieldAllowedIntegrationProviders, field.TypeJSON, value)
+		_node.AllowedIntegrationProviders = value
 	}
 	return _node, _spec
 }
