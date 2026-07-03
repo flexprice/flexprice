@@ -163,7 +163,7 @@ func newReprocessEventsScript() (*ReprocessEventsScript, error) {
 	}
 
 	// Initialize Postgres client for customer, meter, feature repositories
-	entClient, err := postgres.NewEntClients(cfg, log, nil)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}

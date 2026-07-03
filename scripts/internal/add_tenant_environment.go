@@ -35,7 +35,7 @@ func newAddEnvironmentScript() (*addEnvironmentScript, error) {
 		return nil, fmt.Errorf("failed to create logger: %w", err)
 	}
 
-	entClient, err := postgres.NewEntClients(cfg, log, nil)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}

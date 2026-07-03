@@ -487,8 +487,11 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 // as a database call (SigNoz's "Database Calls" tab filters on
 // spanKind=Client AND a non-empty db.system); a plain internal span renders
 // as an anonymous child in the waterfall and never reaches that tab.
+//
+// Gated on otel.traces.storage_spans_enabled so every storage span — DB,
+// ClickHouse, repository — obeys the one flag regardless of call path.
 func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
-	if s == nil || !s.tracingEnabled {
+	if !s.IsStorageSpansEnabled() {
 		return nil, ctx
 	}
 	newCtx, sp := s.tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindClient))
@@ -567,13 +570,10 @@ func (s *Service) StartTransaction(ctx context.Context, name string) (*Span, con
 // so the span carries the OTel db.system attribute and is recognized as a
 // database call by trace backends (e.g. SigNoz's Database Calls tab).
 //
-// Gated by otel.traces.storage_spans_enabled — this fires once per repository
-// method call (in addition to any lower-level per-statement spans), so it is
-// subject to the same noise/volume tradeoff as StartDBSpan/StartClickHouseSpan.
+// Gated by otel.traces.storage_spans_enabled (via startStorageSpan) — this
+// fires once per repository method call, so it is subject to the same
+// noise/volume tradeoff as StartDBSpan/StartClickHouseSpan.
 func (s *Service) StartRepositorySpan(ctx context.Context, dbSystem, repository, operation string, params map[string]interface{}) (*Span, context.Context) {
-	if !s.IsStorageSpansEnabled() {
-		return nil, ctx
-	}
 	name := fmt.Sprintf("repository.%s.%s", repository, operation)
 	span, newCtx := s.startStorageSpan(ctx, name, "db.repository", dbSystem, params)
 	if span != nil {

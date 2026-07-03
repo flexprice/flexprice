@@ -88,11 +88,11 @@ func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args .
 		"db.statement": truncateQuery(query),
 		"args_count":   len(args),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tc.conn.Select(ctx, dest, query, args...)
+	err := tc.conn.Select(ctx, dest, query, args...)
+	span.SetStatusError(err)
+	return err
 }
 
 // Query adds tracing and delegates to the underlying connection
@@ -107,11 +107,11 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 		"db.statement": truncateQuery(query),
 		"args_count":   len(args),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tc.conn.Query(ctx, query, args...)
+	rows, err := tc.conn.Query(ctx, query, args...)
+	span.SetStatusError(err)
+	return rows, err
 }
 
 // QueryRow adds tracing and delegates to the underlying connection
@@ -124,9 +124,7 @@ func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) d
 		"db.statement": truncateQuery(query),
 		"args_count":   len(args),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
 	return tc.conn.QueryRow(ctx, query, args...)
 }
@@ -140,12 +138,11 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
 		"db.statement": truncateQuery(query),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
 	batch, err := tc.conn.PrepareBatch(ctx, query, options...)
 	if err != nil {
+		span.SetStatusError(err)
 		return nil, err
 	}
 
@@ -166,11 +163,11 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 		"db.statement": truncateQuery(query),
 		"args_count":   len(args),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tc.conn.Exec(ctx, query, args...)
+	err := tc.conn.Exec(ctx, query, args...)
+	span.SetStatusError(err)
+	return err
 }
 
 // AsyncInsert adds tracing and delegates to the underlying connection
@@ -183,11 +180,11 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 		"db.statement": truncateQuery(query),
 		"wait":         wait,
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tc.conn.AsyncInsert(ctx, query, wait, args...)
+	err := tc.conn.AsyncInsert(ctx, query, wait, args...)
+	span.SetStatusError(err)
+	return err
 }
 
 // Ping adds tracing and delegates to the underlying connection
@@ -197,11 +194,11 @@ func (tc *tracedConn) Ping(ctx context.Context) error {
 	}
 
 	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.ping", nil)
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tc.conn.Ping(ctx)
+	err := tc.conn.Ping(ctx)
+	span.SetStatusError(err)
+	return err
 }
 
 // Stats delegates to the underlying connection
@@ -250,11 +247,11 @@ func (tb *tracedBatch) Flush() error {
 	// Use the context captured at PrepareBatch time so the flush span is a
 	// child of the originating request trace rather than a detached root span.
 	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_flush", nil)
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tb.batch.Flush()
+	err := tb.batch.Flush()
+	span.SetStatusError(err)
+	return err
 }
 
 // Send adds tracing and delegates to the underlying batch
@@ -268,11 +265,11 @@ func (tb *tracedBatch) Send() error {
 	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_send", map[string]interface{}{
 		"rows": tb.batch.Rows(),
 	})
-	if span != nil {
-		defer span.Finish()
-	}
+	defer span.Finish()
 
-	return tb.batch.Send()
+	err := tb.batch.Send()
+	span.SetStatusError(err)
+	return err
 }
 
 // IsSent delegates to the underlying batch

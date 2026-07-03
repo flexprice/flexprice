@@ -83,11 +83,7 @@ type EntClients struct {
 }
 
 // NewEntClients creates both writer and reader Ent clients.
-//
-// tracingSvc may be nil (scripts/tooling). When non-nil and
-// otel.traces.storage_spans_enabled is true, the drivers emit a SpanKindClient
-// span per SQL statement — reads, writes, and in-transaction statements.
-func NewEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
+func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntClients, error) {
 	// Get writer DSN from config
 	writerDSN := config.Postgres.GetDSN()
 
@@ -102,9 +98,8 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger, tracingS
 	writerDB.SetMaxIdleConns(config.Postgres.MaxIdleConns)
 	writerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
-	// Create writer driver; per-statement span instrumentation no-ops when
-	// tracingSvc is nil or storage_spans_enabled is false
-	writerDrv := newTracedDriver(entsql.OpenDB(dialect.Postgres, writerDB), tracingSvc, "writer")
+	// Create writer driver
+	writerDrv := entsql.OpenDB(dialect.Postgres, writerDB)
 
 	// Create client with options
 	writerOpts := []ent.Option{
@@ -144,8 +139,8 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger, tracingS
 		readerDB.SetMaxIdleConns(config.Postgres.MaxIdleConns)
 		readerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
-		// Create reader driver (traced like the writer)
-		readerDrv := newTracedDriver(entsql.OpenDB(dialect.Postgres, readerDB), tracingSvc, "reader")
+		// Create reader driver
+		readerDrv := entsql.OpenDB(dialect.Postgres, readerDB)
 
 		// Create reader client with options (removing debug logs for reads)
 		readerOpts := []ent.Option{

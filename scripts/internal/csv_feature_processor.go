@@ -118,7 +118,7 @@ func newCSVFeatureProcessor(tenantID, environmentID, userID string) (*CSVFeature
 	}
 
 	// Initialize postgres client
-	entClient, err := postgres.NewEntClients(cfg, log, nil)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 		return nil, err
