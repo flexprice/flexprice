@@ -198,15 +198,30 @@ func TestApplyAnalyticsDiscounts_StackingAndCurrency(t *testing.T) {
 
 func ptrTime(t time.Time) *time.Time { return &t }
 
-// TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp covers applyAnalyticsDiscounts's own
+// TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp covers loadAnalyticsCoupons's own
 // early-return guards directly — GetDetailedAnalytics never calls it with empty
 // Analytics/Subscriptions in practice, but the function's defensive guard should hold
 // on its own regardless of caller behavior.
 func TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp(t *testing.T) {
 	ctx := context.Background()
-	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{}, time.Now(), time.Now())
-	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{
+
+	lineItemCoupons, subscriptionCoupons := loadAnalyticsCoupons(ctx, ServiceParams{}, &AnalyticsData{}, time.Now(), time.Now())
+	if lineItemCoupons != nil {
+		t.Fatalf("lineItemCoupons: want nil got %v", lineItemCoupons)
+	}
+	if subscriptionCoupons != nil {
+		t.Fatalf("subscriptionCoupons: want nil got %v", subscriptionCoupons)
+	}
+
+	lineItemCoupons, subscriptionCoupons = loadAnalyticsCoupons(ctx, ServiceParams{}, &AnalyticsData{
 		Analytics: []*events.DetailedUsageAnalytic{{TotalCost: decimal.NewFromInt(100)}},
 	}, time.Now(), time.Now())
-	// No assertions beyond "did not panic" — this guards the function's own early returns.
+	if lineItemCoupons != nil {
+		t.Fatalf("lineItemCoupons: want nil got %v", lineItemCoupons)
+	}
+	if subscriptionCoupons != nil {
+		t.Fatalf("subscriptionCoupons: want nil got %v", subscriptionCoupons)
+	}
+	// No assertions beyond "did not panic" and "empty maps come back nil" — this guards
+	// the function's own early returns (no analytics/subscriptions, no CouponAssociationRepo).
 }

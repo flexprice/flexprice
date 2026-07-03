@@ -1322,6 +1322,7 @@ func (s *eventPostProcessingService) isSubscriptionValidForEvent(
 func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic, featureMap map[string]*feature.Feature) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
+		Subtotal:  decimal.Zero,
 		Currency:  "",
 		Items:     make([]dto.UsageAnalyticItem, 0, len(analytics)),
 	}
@@ -1342,6 +1343,7 @@ func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      analytic.TotalUsage,
 			TotalCost:       analytic.TotalCost,
+			Subtotal:        analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -1367,12 +1369,14 @@ func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.
 				Timestamp:  point.Timestamp,
 				Usage:      point.Usage,
 				Cost:       point.Cost,
+				Subtotal:   point.Cost,
 				EventCount: point.EventCount,
 			})
 		}
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.Subtotal = response.Subtotal.Add(analytic.TotalCost)
 		response.Currency = analytic.Currency
 	}
 

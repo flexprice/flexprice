@@ -2651,6 +2651,74 @@
         ]
       }
     },
+    "/customers/external/{external_id}/entitlements": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Get customer entitlements by external ID",
+        "description": "Use when checking entitlements by your app's customer id (e.g. feature gating at the edge). Supports optional filters (feature_ids, subscription_ids).",
+        "operationId": "getCustomerEntitlementsByExternalID",
+        "parameters": [
+          {
+            "name": "external_id",
+            "in": "path",
+            "description": "Customer External ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerEntitlementsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/customers/search": {
       "post": {
         "tags": [
@@ -18830,13 +18898,14 @@
               "$ref": "#/components/schemas/UsageAnalyticItem"
             }
           },
-          "total_cost": {
+          "subtotal": {
             "type": "string"
+          },
+          "total_cost": {
+            "type": "string",
+            "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)"
           },
           "total_discount": {
-            "type": "string"
-          },
-          "total_net_cost": {
             "type": "string"
           }
         }
@@ -19975,6 +20044,11 @@
         ],
         "type": "object",
         "properties": {
+          "config_value": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "ConfigValue is the config value for config features"
+          },
           "entitlement_id": {
             "type": "string",
             "description": "EntitlementID references the plan/addon entitlement to override"
@@ -22686,6 +22760,10 @@
       "UpdateCreditGrantRequest": {
         "type": "object",
         "properties": {
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
           },
@@ -23291,9 +23369,6 @@
           "name": {
             "type": "string"
           },
-          "net_cost": {
-            "type": "string"
-          },
           "plan": {
             "$ref": "#/components/schemas/Plan"
           },
@@ -23344,8 +23419,12 @@
           "subscription_line_item": {
             "$ref": "#/components/schemas/subscription.SubscriptionLineItem"
           },
-          "total_cost": {
+          "subtotal": {
             "type": "string"
+          },
+          "total_cost": {
+            "type": "string",
+            "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)"
           },
           "total_discount": {
             "type": "string"
@@ -23389,7 +23468,8 @@
             "type": "string"
           },
           "cost": {
-            "type": "string"
+            "type": "string",
+            "description": "Cost is the final cost after discount (Subtotal - Discount)"
           },
           "discount": {
             "type": "string"
@@ -23398,7 +23478,7 @@
             "type": "integer",
             "description": "Number of events in this time window"
           },
-          "net_cost": {
+          "subtotal": {
             "type": "string"
           },
           "timestamp": {

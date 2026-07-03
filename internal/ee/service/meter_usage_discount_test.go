@@ -382,20 +382,20 @@ func (s *MeterUsageDiscountSuite) TestLineItemPercentageCoupon() {
 	expectedDiscount := decimal.NewFromInt(10)
 	expectedNet := decimal.NewFromInt(90)
 
-	s.True(item.TotalCost.Equal(expectedGross),
-		"item.TotalCost want %s got %s", expectedGross, item.TotalCost)
+	s.True(item.Subtotal.Equal(expectedGross),
+		"item.Subtotal want %s got %s", expectedGross, item.Subtotal)
 	s.True(item.TotalDiscount.Equal(expectedDiscount),
 		"item.TotalDiscount want %s got %s", expectedDiscount, item.TotalDiscount)
-	s.True(item.NetCost.Equal(expectedNet),
-		"item.NetCost want %s got %s", expectedNet, item.NetCost)
+	s.True(item.TotalCost.Equal(expectedNet),
+		"item.TotalCost want %s got %s", expectedNet, item.TotalCost)
 
 	// Response-level totals
-	s.True(resp.TotalCost.Equal(expectedGross),
-		"resp.TotalCost want %s got %s", expectedGross, resp.TotalCost)
+	s.True(resp.Subtotal.Equal(expectedGross),
+		"resp.Subtotal want %s got %s", expectedGross, resp.Subtotal)
 	s.True(resp.TotalDiscount.Equal(expectedDiscount),
 		"resp.TotalDiscount want %s got %s", expectedDiscount, resp.TotalDiscount)
-	s.True(resp.TotalNetCost.Equal(expectedNet),
-		"resp.TotalNetCost want %s got %s", expectedNet, resp.TotalNetCost)
+	s.True(resp.TotalCost.Equal(expectedNet),
+		"resp.TotalCost want %s got %s", expectedNet, resp.TotalCost)
 }
 
 // Case 2: Subscription-level 10% forever coupon (SubscriptionLineItemID == nil).
@@ -419,16 +419,16 @@ func (s *MeterUsageDiscountSuite) TestSubLevelPercentageCoupon() {
 	expectedDiscount := decimal.NewFromInt(10)
 	expectedNet := decimal.NewFromInt(90)
 
-	s.True(item.TotalCost.Equal(expectedGross),
-		"item.TotalCost want %s got %s", expectedGross, item.TotalCost)
+	s.True(item.Subtotal.Equal(expectedGross),
+		"item.Subtotal want %s got %s", expectedGross, item.Subtotal)
 	s.True(item.TotalDiscount.Equal(expectedDiscount),
 		"item.TotalDiscount want %s got %s", expectedDiscount, item.TotalDiscount)
-	s.True(item.NetCost.Equal(expectedNet),
-		"item.NetCost want %s got %s", expectedNet, item.NetCost)
+	s.True(item.TotalCost.Equal(expectedNet),
+		"item.TotalCost want %s got %s", expectedNet, item.TotalCost)
 
-	s.True(resp.TotalCost.Equal(expectedGross), "resp.TotalCost")
+	s.True(resp.Subtotal.Equal(expectedGross), "resp.Subtotal")
 	s.True(resp.TotalDiscount.Equal(expectedDiscount), "resp.TotalDiscount")
-	s.True(resp.TotalNetCost.Equal(expectedNet), "resp.TotalNetCost")
+	s.True(resp.TotalCost.Equal(expectedNet), "resp.TotalCost")
 }
 
 // Case 3: Fixed coupon only — discount stays 0 (fixed amounts are silently skipped
@@ -461,13 +461,13 @@ func (s *MeterUsageDiscountSuite) TestFixedCouponSkipped() {
 
 	// Assert gross cost explicitly so this test still catches a pricing regression
 	// to zero — "discount==0 && net==total" alone would pass even if both were 0.
-	s.True(item.TotalCost.Equal(decimal.NewFromInt(100)),
-		"item.TotalCost want 100 got %s", item.TotalCost)
+	s.True(item.Subtotal.Equal(decimal.NewFromInt(100)),
+		"item.Subtotal want 100 got %s", item.Subtotal)
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"fixed coupon should produce zero discount in analytics, got %s", item.TotalDiscount)
-	// When no percentage discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
-	s.True(item.NetCost.Equal(item.TotalCost),
-		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
+	// When no percentage discount applies, TotalCost is derived as Subtotal - TotalDiscount = Subtotal.
+	s.True(item.TotalCost.Equal(item.Subtotal),
+		"TotalCost should equal Subtotal when no applicable discount, got %s", item.TotalCost)
 }
 
 // Case 4: Once-cadence percentage coupon — skipped silently (analytics only applies
@@ -497,13 +497,13 @@ func (s *MeterUsageDiscountSuite) TestOnceCadenceCouponSkipped() {
 	s.Require().Len(resp.Items, 1)
 	item := resp.Items[0]
 
-	s.True(item.TotalCost.Equal(decimal.NewFromInt(100)),
-		"item.TotalCost want 100 got %s", item.TotalCost)
+	s.True(item.Subtotal.Equal(decimal.NewFromInt(100)),
+		"item.Subtotal want 100 got %s", item.Subtotal)
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"once-cadence coupon should be skipped in analytics, got %s", item.TotalDiscount)
-	// When no percentage discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
-	s.True(item.NetCost.Equal(item.TotalCost),
-		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
+	// When no percentage discount applies, TotalCost is derived as Subtotal - TotalDiscount = Subtotal.
+	s.True(item.TotalCost.Equal(item.Subtotal),
+		"TotalCost should equal Subtotal when no applicable discount, got %s", item.TotalCost)
 }
 
 // Case 5: No coupons — regression guard; discount = 0.
@@ -519,17 +519,17 @@ func (s *MeterUsageDiscountSuite) TestNoCoupons() {
 	s.Require().Len(resp.Items, 1)
 	item := resp.Items[0]
 
-	s.True(item.TotalCost.Equal(decimal.NewFromInt(100)),
-		"item.TotalCost want 100 got %s", item.TotalCost)
+	s.True(item.Subtotal.Equal(decimal.NewFromInt(100)),
+		"item.Subtotal want 100 got %s", item.Subtotal)
 	s.True(item.TotalDiscount.Equal(decimal.Zero),
 		"no coupon should produce zero discount, got %s", item.TotalDiscount)
-	// When no discount applies, NetCost is derived as TotalCost - TotalDiscount = TotalCost.
-	s.True(item.NetCost.Equal(item.TotalCost),
-		"NetCost should equal TotalCost when no applicable discount, got %s", item.NetCost)
-	s.True(resp.TotalCost.Equal(decimal.NewFromInt(100)), "resp.TotalCost want 100 got %s", resp.TotalCost)
+	// When no discount applies, TotalCost is derived as Subtotal - TotalDiscount = Subtotal.
+	s.True(item.TotalCost.Equal(item.Subtotal),
+		"TotalCost should equal Subtotal when no applicable discount, got %s", item.TotalCost)
+	s.True(resp.Subtotal.Equal(decimal.NewFromInt(100)), "resp.Subtotal want 100 got %s", resp.Subtotal)
 	s.True(resp.TotalDiscount.Equal(decimal.Zero), "resp.TotalDiscount should be 0")
-	// TotalNetCost is derived as TotalCost - TotalDiscount — equals TotalCost when no discount.
-	s.True(resp.TotalNetCost.Equal(resp.TotalCost), "resp.TotalNetCost should equal TotalCost when no discounts")
+	// TotalCost is derived as Subtotal - TotalDiscount — equals Subtotal when no discount.
+	s.True(resp.TotalCost.Equal(resp.Subtotal), "resp.TotalCost should equal Subtotal when no discounts")
 }
 
 // Case 6: Group-by source — two sources, one line-item 10% coupon.
@@ -572,24 +572,24 @@ func (s *MeterUsageDiscountSuite) TestGroupBySourceWithCoupon() {
 		expectedGross := decimal.NewFromInt(100)
 		expectedDiscount := decimal.NewFromInt(10)
 		expectedNet := decimal.NewFromInt(90)
-		s.True(item.TotalCost.Equal(expectedGross), "item.TotalCost want %s got %s", expectedGross, item.TotalCost)
+		s.True(item.Subtotal.Equal(expectedGross), "item.Subtotal want %s got %s", expectedGross, item.Subtotal)
 		s.True(item.TotalDiscount.Equal(expectedDiscount), "item.TotalDiscount want %s got %s", expectedDiscount, item.TotalDiscount)
-		s.True(item.NetCost.Equal(expectedNet), "item.NetCost want %s got %s", expectedNet, item.NetCost)
+		s.True(item.TotalCost.Equal(expectedNet), "item.TotalCost want %s got %s", expectedNet, item.TotalCost)
 		s.T().Skip("in-memory store does not fan out group_by=source into multiple items; single-item linearity verified above")
 	}
 
-	// Multiple items: each item's NetCost = TotalCost * 0.9
+	// Multiple items: each item's TotalCost = Subtotal * 0.9
 	// and the totals should sum correctly.
 	var sumGross, sumDiscount decimal.Decimal
 	ninetyPct := decimal.NewFromFloat(0.9)
 	tenPct := decimal.NewFromFloat(0.10)
 	for _, item := range resp.Items {
-		sumGross = sumGross.Add(item.TotalCost)
+		sumGross = sumGross.Add(item.Subtotal)
 		sumDiscount = sumDiscount.Add(item.TotalDiscount)
 
-		expectedItemNet := types.RoundToCurrencyPrecision(item.TotalCost.Mul(ninetyPct), "usd")
-		s.True(item.NetCost.Equal(expectedItemNet),
-			"item.NetCost want %s got %s (source=%s)", expectedItemNet, item.NetCost, item.Source)
+		expectedItemNet := types.RoundToCurrencyPrecision(item.Subtotal.Mul(ninetyPct), "usd")
+		s.True(item.TotalCost.Equal(expectedItemNet),
+			"item.TotalCost want %s got %s (source=%s)", expectedItemNet, item.TotalCost, item.Source)
 	}
 
 	expectedTotalGross := decimal.NewFromInt(100)
@@ -638,12 +638,12 @@ func (s *MeterUsageDiscountSuite) TestWindowedPerPointDiscount() {
 	expectedDiscount := decimal.NewFromInt(10)
 	expectedNet := decimal.NewFromInt(90)
 
-	s.True(item.TotalCost.Equal(expectedGross),
-		"item.TotalCost want %s got %s", expectedGross, item.TotalCost)
+	s.True(item.Subtotal.Equal(expectedGross),
+		"item.Subtotal want %s got %s", expectedGross, item.Subtotal)
 	s.True(item.TotalDiscount.Equal(expectedDiscount),
 		"item.TotalDiscount want %s got %s", expectedDiscount, item.TotalDiscount)
-	s.True(item.NetCost.Equal(expectedNet),
-		"item.NetCost want %s got %s", expectedNet, item.NetCost)
+	s.True(item.TotalCost.Equal(expectedNet),
+		"item.TotalCost want %s got %s", expectedNet, item.TotalCost)
 
 	_ = li // silence unused warning if points check is skipped
 
@@ -651,21 +651,21 @@ func (s *MeterUsageDiscountSuite) TestWindowedPerPointDiscount() {
 		s.T().Skip("no points returned for windowed query; per-point discount checks require points")
 	}
 
-	// Per-point: each point.Discount ≈ point.Cost * 0.10
+	// Per-point: each point.Discount ≈ point.Subtotal * 0.10
 	tenPct := decimal.NewFromFloat(0.10)
 	var sumPointDiscount, sumPointNetCost decimal.Decimal
 	for _, pt := range item.Points {
-		expectedPtDiscount := types.RoundToCurrencyPrecision(pt.Cost.Mul(tenPct), "usd")
+		expectedPtDiscount := types.RoundToCurrencyPrecision(pt.Subtotal.Mul(tenPct), "usd")
 		discountDiff := pt.Discount.Sub(expectedPtDiscount).Abs()
 		s.True(discountDiff.LessThanOrEqual(decimal.NewFromFloat(0.01)),
 			"point.Discount want ~%s got %s at %s", expectedPtDiscount, pt.Discount, pt.Timestamp)
 
-		expectedPtNet := pt.Cost.Sub(pt.Discount)
-		s.True(pt.NetCost.Equal(expectedPtNet),
-			"point.NetCost want %s got %s at %s", expectedPtNet, pt.NetCost, pt.Timestamp)
+		expectedPtNet := pt.Subtotal.Sub(pt.Discount)
+		s.True(pt.Cost.Equal(expectedPtNet),
+			"point.Cost want %s got %s at %s", expectedPtNet, pt.Cost, pt.Timestamp)
 
 		sumPointDiscount = sumPointDiscount.Add(pt.Discount)
-		sumPointNetCost = sumPointNetCost.Add(pt.NetCost)
+		sumPointNetCost = sumPointNetCost.Add(pt.Cost)
 	}
 
 	// Sum of point discounts == item.TotalDiscount (allow ±1 cent for multi-point rounding)
@@ -673,10 +673,10 @@ func (s *MeterUsageDiscountSuite) TestWindowedPerPointDiscount() {
 	s.True(totalDiscountDiff.LessThanOrEqual(decimal.NewFromFloat(0.01)),
 		"sum(point.Discount)=%s should ≈ item.TotalDiscount=%s", sumPointDiscount, item.TotalDiscount)
 
-	// Sum of point NetCosts == item.NetCost (allow ±1 cent)
-	netCostDiff := sumPointNetCost.Sub(item.NetCost).Abs()
+	// Sum of point costs == item.TotalCost (allow ±1 cent)
+	netCostDiff := sumPointNetCost.Sub(item.TotalCost).Abs()
 	s.True(netCostDiff.LessThanOrEqual(decimal.NewFromFloat(0.01)),
-		"sum(point.NetCost)=%s should ≈ item.NetCost=%s", sumPointNetCost, item.NetCost)
+		"sum(point.Cost)=%s should ≈ item.TotalCost=%s", sumPointNetCost, item.TotalCost)
 }
 
 // Case 8: Compounding (10% line-item + 15% subscription-level) on one line item,
@@ -724,19 +724,19 @@ func (s *MeterUsageDiscountSuite) TestCompoundingAndLineItemIsolation() {
 	s.Require().NotNil(itemB, "expected an item for Meter Storage")
 
 	// Line item A: compounded 10% then 15%.
-	s.True(itemA.TotalCost.Equal(decimal.NewFromInt(100)), "itemA.TotalCost got %s", itemA.TotalCost)
+	s.True(itemA.Subtotal.Equal(decimal.NewFromInt(100)), "itemA.Subtotal got %s", itemA.Subtotal)
 	s.True(itemA.TotalDiscount.Equal(decimal.RequireFromString("23.5")), "itemA.TotalDiscount got %s", itemA.TotalDiscount)
-	s.True(itemA.NetCost.Equal(decimal.RequireFromString("76.5")), "itemA.NetCost got %s", itemA.NetCost)
+	s.True(itemA.TotalCost.Equal(decimal.RequireFromString("76.5")), "itemA.TotalCost got %s", itemA.TotalCost)
 
 	// Line item B: only the 15% sub-level coupon (the 10% line coupon is scoped to A).
-	s.True(itemB.TotalCost.Equal(decimal.NewFromInt(50)), "itemB.TotalCost got %s", itemB.TotalCost)
+	s.True(itemB.Subtotal.Equal(decimal.NewFromInt(50)), "itemB.Subtotal got %s", itemB.Subtotal)
 	s.True(itemB.TotalDiscount.Equal(decimal.RequireFromString("7.5")), "itemB.TotalDiscount got %s", itemB.TotalDiscount)
-	s.True(itemB.NetCost.Equal(decimal.RequireFromString("42.5")), "itemB.NetCost got %s", itemB.NetCost)
+	s.True(itemB.TotalCost.Equal(decimal.RequireFromString("42.5")), "itemB.TotalCost got %s", itemB.TotalCost)
 
 	// Response-level totals reconcile across both items.
-	s.True(resp.TotalCost.Equal(decimal.NewFromInt(150)), "resp.TotalCost got %s", resp.TotalCost)
+	s.True(resp.Subtotal.Equal(decimal.NewFromInt(150)), "resp.Subtotal got %s", resp.Subtotal)
 	s.True(resp.TotalDiscount.Equal(decimal.NewFromInt(31)), "resp.TotalDiscount got %s", resp.TotalDiscount)
-	s.True(resp.TotalNetCost.Equal(decimal.NewFromInt(119)), "resp.TotalNetCost got %s", resp.TotalNetCost)
+	s.True(resp.TotalCost.Equal(decimal.NewFromInt(119)), "resp.TotalCost got %s", resp.TotalCost)
 
 	_ = liB
 }
@@ -776,10 +776,10 @@ func (s *MeterUsageDiscountSuite) TestStraddlingRangeNonWindowedOverAppliesVsWin
 	s.Require().Len(nonWindowed.Items, 1)
 	nwItem := nonWindowed.Items[0]
 
-	s.True(nwItem.TotalCost.Equal(decimal.NewFromInt(100)), "non-windowed TotalCost got %s", nwItem.TotalCost)
+	s.True(nwItem.Subtotal.Equal(decimal.NewFromInt(100)), "non-windowed Subtotal got %s", nwItem.Subtotal)
 	s.True(nwItem.TotalDiscount.Equal(decimal.NewFromInt(20)),
 		"non-windowed should over-apply the discount to the whole range, got %s", nwItem.TotalDiscount)
-	s.True(nwItem.NetCost.Equal(decimal.NewFromInt(80)), "non-windowed NetCost got %s", nwItem.NetCost)
+	s.True(nwItem.TotalCost.Equal(decimal.NewFromInt(80)), "non-windowed TotalCost got %s", nwItem.TotalCost)
 
 	// Windowed (DAY): only post-coupon-start windows are discounted.
 	windowed, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
@@ -792,10 +792,10 @@ func (s *MeterUsageDiscountSuite) TestStraddlingRangeNonWindowedOverAppliesVsWin
 	s.Require().Len(windowed.Items, 1)
 	wItem := windowed.Items[0]
 
-	s.True(wItem.TotalCost.Equal(decimal.NewFromInt(100)), "windowed TotalCost got %s", wItem.TotalCost)
+	s.True(wItem.Subtotal.Equal(decimal.NewFromInt(100)), "windowed Subtotal got %s", wItem.Subtotal)
 	s.True(wItem.TotalDiscount.Equal(decimal.NewFromInt(10)),
 		"windowed should only discount post-coupon-start usage, got %s", wItem.TotalDiscount)
-	s.True(wItem.NetCost.Equal(decimal.NewFromInt(90)), "windowed NetCost got %s", wItem.NetCost)
+	s.True(wItem.TotalCost.Equal(decimal.NewFromInt(90)), "windowed TotalCost got %s", wItem.TotalCost)
 
 	// The core claim of the feature: windowed accuracy strictly reduces the
 	// discount compared to non-windowed over-application, on identical data.
@@ -867,7 +867,7 @@ func (s *MeterUsageDiscountSuite) TestMixedCoverageAcrossSubscriptions() {
 	s.Require().NotNil(itemUndiscounted, "expected an item for sub_discount_11b")
 
 	s.True(itemDiscounted.TotalDiscount.Equal(decimal.NewFromInt(10)), "itemDiscounted.TotalDiscount want 10 got %s", itemDiscounted.TotalDiscount)
-	s.True(itemUndiscounted.TotalCost.Equal(decimal.NewFromInt(20)), "itemUndiscounted.TotalCost got %s", itemUndiscounted.TotalCost)
+	s.True(itemUndiscounted.Subtotal.Equal(decimal.NewFromInt(20)), "itemUndiscounted.Subtotal got %s", itemUndiscounted.Subtotal)
 	s.True(itemUndiscounted.TotalDiscount.IsZero(), "itemUndiscounted.TotalDiscount should be 0, got %s", itemUndiscounted.TotalDiscount)
-	s.True(itemUndiscounted.NetCost.Equal(itemUndiscounted.TotalCost), "itemUndiscounted.NetCost should equal TotalCost")
+	s.True(itemUndiscounted.TotalCost.Equal(itemUndiscounted.Subtotal), "itemUndiscounted.TotalCost should equal Subtotal")
 }

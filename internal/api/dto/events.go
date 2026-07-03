@@ -366,9 +366,9 @@ type GetUsageAnalyticsRequest struct {
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API
 type GetUsageAnalyticsResponse struct {
-	TotalCost       decimal.Decimal      `json:"total_cost" swaggertype:"string"`
+	Subtotal        decimal.Decimal      `json:"subtotal" swaggertype:"string"`
 	TotalDiscount   decimal.Decimal      `json:"total_discount" swaggertype:"string"`
-	TotalNetCost    decimal.Decimal      `json:"total_net_cost" swaggertype:"string"`
+	TotalCost       decimal.Decimal      `json:"total_cost" swaggertype:"string"` // TotalCost is the final cost after discount (Subtotal - TotalDiscount)
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
@@ -397,9 +397,9 @@ type UsageAnalyticItem struct {
 	TotalUsage           decimal.Decimal                    `json:"total_usage" swaggertype:"string"`
 	TotalUsageDisplay    string                             `json:"total_usage_display"`      // Empty string when feature has no reporting unit; otherwise the value in reporting units
 	ReportingUnit        *types.ReportingUnit               `json:"reporting_unit,omitempty"` // Present when total_usage_display is set (unit_singular, unit_plural, conversion_rate)
-	TotalCost            decimal.Decimal                    `json:"total_cost" swaggertype:"string"`
+	Subtotal             decimal.Decimal                    `json:"subtotal" swaggertype:"string"`
 	TotalDiscount        decimal.Decimal                    `json:"total_discount" swaggertype:"string"`
-	NetCost              decimal.Decimal                    `json:"net_cost" swaggertype:"string"`
+	TotalCost            decimal.Decimal                    `json:"total_cost" swaggertype:"string"` // TotalCost is the final cost after discount (Subtotal - TotalDiscount)
 	Currency             string                             `json:"currency,omitempty"`
 	EventCount           uint64                             `json:"event_count"`          // Number of events that contributed to this aggregation
 	Properties           map[string]string                  `json:"properties,omitempty"` // Stores property values for flexible grouping (e.g., org_id -> "org123")
@@ -427,10 +427,10 @@ type CustomAnalyticItem struct {
 type UsageAnalyticPoint struct {
 	Timestamp  time.Time       `json:"timestamp"`
 	Usage      decimal.Decimal `json:"usage" swaggertype:"string"`
-	Cost       decimal.Decimal `json:"cost" swaggertype:"string"`
+	Subtotal   decimal.Decimal `json:"subtotal" swaggertype:"string"`
 	Discount   decimal.Decimal `json:"discount" swaggertype:"string"`
-	NetCost    decimal.Decimal `json:"net_cost" swaggertype:"string"`
-	EventCount uint64          `json:"event_count"` // Number of events in this time window
+	Cost       decimal.Decimal `json:"cost" swaggertype:"string"` // Cost is the final cost after discount (Subtotal - Discount)
+	EventCount uint64          `json:"event_count"`               // Number of events in this time window
 
 	// Commitment breakdown (only populated for windowed commitments)
 	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitempty" swaggertype:"string"`

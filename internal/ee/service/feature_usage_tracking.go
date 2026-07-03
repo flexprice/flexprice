@@ -3048,6 +3048,7 @@ func rollupBucketPoints(
 
 func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
+		Subtotal:  decimal.Zero,
 		TotalCost: decimal.Zero,
 		Currency:  "",
 		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
@@ -3085,6 +3086,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      totalUsage, // Now correctly uses sum of bucket maxes for bucketed MAX
 			TotalCost:       analytic.TotalCost,
+			Subtotal:        analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -3208,6 +3210,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					Timestamp:                        point.Timestamp,
 					Usage:                            correctUsage,
 					Cost:                             point.Cost,
+					Subtotal:                         point.Cost,
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -3239,6 +3242,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.Subtotal = response.Subtotal.Add(analytic.TotalCost)
 		response.Currency = analytic.Currency
 	}
 

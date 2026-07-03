@@ -3674,11 +3674,12 @@ definitions:
         items:
           $ref: '#/definitions/UsageAnalyticItem'
         type: array
+      subtotal:
+        type: string
       total_cost:
+        description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
         type: string
       total_discount:
-        type: string
-      total_net_cost:
         type: string
     type: object
   GetUsageByMeterRequest:
@@ -4563,6 +4564,10 @@ definitions:
     type: object
   OverrideEntitlementRequest:
     properties:
+      config_value:
+        additionalProperties: true
+        description: ConfigValue is the config value for config features
+        type: object
       entitlement_id:
         description: EntitlementID references the plan/addon entitlement to override
         type: string
@@ -6630,6 +6635,8 @@ definitions:
     type: object
   UpdateCreditGrantRequest:
     properties:
+      end_date:
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
@@ -7091,8 +7098,6 @@ definitions:
         type: string
       name:
         type: string
-      net_cost:
-        type: string
       plan:
         allOf:
         - $ref: '#/definitions/Plan'
@@ -7138,7 +7143,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/subscription.SubscriptionLineItem'
         description: Full line item (only if expand includes "subscription_line_item")
+      subtotal:
+        type: string
       total_cost:
+        description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
         type: string
       total_discount:
         type: string
@@ -7180,13 +7188,14 @@ definitions:
       computed_true_up_amount:
         type: string
       cost:
+        description: Cost is the final cost after discount (Subtotal - Discount)
         type: string
       discount:
         type: string
       event_count:
         description: Number of events in this time window
         type: integer
-      net_cost:
+      subtotal:
         type: string
       timestamp:
         type: string
@@ -12530,6 +12539,41 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get customer by external ID
+      tags:
+      - Customers
+  /customers/external/{external_id}/entitlements:
+    get:
+      description: Use when checking entitlements by your app's customer id (e.g.
+        feature gating at the edge). Supports optional filters (feature_ids, subscription_ids).
+      operationId: getCustomerEntitlementsByExternalID
+      parameters:
+      - description: Customer External ID
+        in: path
+        name: external_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CustomerEntitlementsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get customer entitlements by external ID
       tags:
       - Customers
   /customers/search:

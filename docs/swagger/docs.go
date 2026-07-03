@@ -2168,6 +2168,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/external/{external_id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when checking entitlements by your app's customer id (e.g. feature gating at the edge). Supports optional filters (feature_ids, subscription_ids).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get customer entitlements by external ID",
+                "operationId": "getCustomerEntitlementsByExternalID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer External ID",
+                        "name": "external_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CustomerEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/search": {
             "post": {
                 "security": [
@@ -16937,13 +16990,14 @@ const docTemplate = `{
                         "$ref": "#/definitions/UsageAnalyticItem"
                     }
                 },
+                "subtotal": {
+                    "type": "string"
+                },
                 "total_cost": {
+                    "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)",
                     "type": "string"
                 },
                 "total_discount": {
-                    "type": "string"
-                },
-                "total_net_cost": {
                     "type": "string"
                 }
             }
@@ -18100,6 +18154,11 @@ const docTemplate = `{
                 "entitlement_id"
             ],
             "properties": {
+                "config_value": {
+                    "description": "ConfigValue is the config value for config features",
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "entitlement_id": {
                     "description": "EntitlementID references the plan/addon entitlement to override",
                     "type": "string"
@@ -20958,6 +21017,9 @@ const docTemplate = `{
         "UpdateCreditGrantRequest": {
             "type": "object",
             "properties": {
+                "end_date": {
+                    "type": "string"
+                },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
@@ -21612,9 +21674,6 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "net_cost": {
-                    "type": "string"
-                },
                 "plan": {
                     "description": "Full plan object (only if expand includes \"plan\")",
                     "allOf": [
@@ -21685,7 +21744,11 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "subtotal": {
+                    "type": "string"
+                },
                 "total_cost": {
+                    "description": "TotalCost is the final cost after discount (Subtotal - TotalDiscount)",
                     "type": "string"
                 },
                 "total_discount": {
@@ -21735,6 +21798,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "cost": {
+                    "description": "Cost is the final cost after discount (Subtotal - Discount)",
                     "type": "string"
                 },
                 "discount": {
@@ -21744,7 +21808,7 @@ const docTemplate = `{
                     "description": "Number of events in this time window",
                     "type": "integer"
                 },
-                "net_cost": {
+                "subtotal": {
                     "type": "string"
                 },
                 "timestamp": {

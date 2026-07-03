@@ -1130,14 +1130,14 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
-	// Apply percentage-coupon discounts (gross TotalCost preserved; net/discount stamped).
-	applyAnalyticsDiscounts(ctx, s.ServiceParams, data, params.StartTime, params.EndTime)
+	// Load percentage-coupon associations (applied inline while building the response DTO).
+	lineItemCoupons, subscriptionCoupons := loadAnalyticsCoupons(ctx, s.ServiceParams, data, params.StartTime, params.EndTime)
 
 	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO
-	return s.toUsageAnalyticsResponseDTO(ctx, data, data.Meters, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, data.Meters, params, lineItemCoupons, subscriptionCoupons), nil
 }
 
 // mergeSubscriptionUsagesToAnalyticsData converts N SubscriptionMeterUsage results
@@ -1582,7 +1582,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO (no cost calculation without subscription context)
-	return s.toUsageAnalyticsResponseDTO(ctx, data, meterMap, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, meterMap, params, nil, nil), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1604,11 +1604,13 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
 	params *events.MeterUsageDetailedAnalyticsParams,
+	lineItemCoupons map[string][]analyticsCoupon,
+	subscriptionCoupons map[string][]analyticsCoupon,
 ) *dto.GetUsageAnalyticsResponse {
 	response := &dto.GetUsageAnalyticsResponse{
-		TotalCost:     decimal.Zero,
+		Subtotal:      decimal.Zero,
 		TotalDiscount: decimal.Zero,
-		TotalNetCost:  decimal.Zero,
+		TotalCost:     decimal.Zero,
 		Currency:      data.Currency,
 		Items:         make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
@@ -1632,14 +1634,42 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			UnitPlural:      analytic.UnitPlural,
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      analytic.TotalUsage,
+			Subtotal:        analytic.TotalCost,
 			TotalCost:       analytic.TotalCost,
-			TotalDiscount:   analytic.TotalDiscount,
-			NetCost:         analytic.TotalCost.Sub(analytic.TotalDiscount),
+			TotalDiscount:   decimal.Zero,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
 			CommitmentInfo:  analytic.CommitmentInfo,
 			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
+		}
+
+		// Apply percentage-coupon discounts inline (folded from the former separate
+		// discount pass). Default is no discount (Subtotal == TotalCost); when coupons
+		// apply to this item, ApplyAnalyticsDiscounts recomputes TotalDiscount/TotalCost
+		// (and per-point Discount/Cost below).
+		lineCoupons := lineItemCoupons[analytic.SubLineItemID]
+		subCoupons := subscriptionCoupons[analytic.SubscriptionID]
+		var discountOut *discountOutput
+		if len(lineCoupons) > 0 || len(subCoupons) > 0 {
+			in := discountInput{
+				Currency:       analytic.Currency,
+				GrossTotalCost: analytic.TotalCost,
+				LineCoupons:    lineCoupons,
+				SubCoupons:     subCoupons,
+				RangeStart:     params.StartTime,
+				RangeEnd:       params.EndTime,
+			}
+			if len(analytic.Points) > 0 {
+				in.Points = make([]pointCost, len(analytic.Points))
+				for i, p := range analytic.Points {
+					in.Points[i] = pointCost{Timestamp: p.Timestamp, Cost: p.Cost}
+				}
+			}
+			out := ApplyAnalyticsDiscounts(in)
+			discountOut = &out
+			item.TotalDiscount = out.TotalDiscount
+			item.TotalCost = out.NetCost
 		}
 
 		if item.FeatureName == "" {
@@ -1745,13 +1775,19 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 				}
 			}
 
-			for _, point := range analytic.Points {
+			for pointIdx, point := range analytic.Points {
+				pointDiscount := decimal.Zero
+				pointCostVal := point.Cost
+				if discountOut != nil && pointIdx < len(discountOut.PointDiscounts) {
+					pointDiscount = discountOut.PointDiscounts[pointIdx]
+					pointCostVal = point.Cost.Sub(pointDiscount)
+				}
 				dtoPoint := dto.UsageAnalyticPoint{
 					Timestamp:                        point.Timestamp,
 					Usage:                            point.Usage,
-					Cost:                             point.Cost,
-					Discount:                         point.Discount,
-					NetCost:                          point.Cost.Sub(point.Discount),
+					Subtotal:                         point.Cost,
+					Discount:                         pointDiscount,
+					Cost:                             pointCostVal,
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -1782,13 +1818,13 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		}
 
 		response.Items = append(response.Items, item)
-		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
-		response.TotalDiscount = response.TotalDiscount.Add(analytic.TotalDiscount)
+		response.Subtotal = response.Subtotal.Add(analytic.TotalCost)
+		response.TotalDiscount = response.TotalDiscount.Add(item.TotalDiscount)
 	}
 
-	// Derive TotalNetCost from fully-summed TotalCost and TotalDiscount so the
+	// Derive TotalCost (final) from fully-summed Subtotal and TotalDiscount so the
 	// result is consistent even when the discount pass short-circuits (zero discount).
-	response.TotalNetCost = response.TotalCost.Sub(response.TotalDiscount)
+	response.TotalCost = response.Subtotal.Sub(response.TotalDiscount)
 
 	sort.Slice(response.Items, func(i, j int) bool {
 		return response.Items[i].FeatureName < response.Items[j].FeatureName
@@ -2122,20 +2158,21 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // Cost calculation (copied from feature_usage_tracking.go to remove dependency)
 // ---------------------------------------------------------------------------
 
-// applyAnalyticsDiscounts stamps percentage-coupon discounts (TotalDiscount + per-point Discount)
-// onto each analytics item for ANY analytics endpoint. Net cost is derived in the response
-// builders from TotalCost - TotalDiscount, so callers need only run this pass. Short-circuits
-// when there are no costed subscriptions, no coupon repo, or no applicable coupons.
-func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) {
+// loadAnalyticsCoupons loads the applicable percentage-coupon associations for ANY analytics
+// endpoint and projects them into the applicator's line-item/subscription-keyed maps. Callers
+// thread the returned maps into toUsageAnalyticsResponseDTO, which applies discounts inline
+// while building the DTO. Short-circuits (returning nil, nil) when there are no costed
+// analytics/subscriptions, no coupon repo, or no applicable coupons.
+func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *AnalyticsData, start, end time.Time) (lineItemCoupons, subscriptionCoupons map[string][]analyticsCoupon) {
 	if len(data.Analytics) == 0 || len(data.Subscriptions) == 0 {
-		return
+		return nil, nil
 	}
 
 	// Discounts require the coupon-association repo. If the service was constructed
 	// without it (e.g. a focused test), degrade gracefully to no discounts rather
 	// than panic — discounts are an enhancement on a read path.
 	if sp.CouponAssociationRepo == nil {
-		return
+		return nil, nil
 	}
 
 	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
@@ -2146,57 +2183,13 @@ func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *Analyt
 	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, keep)
 	if err != nil {
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
-		return
+		return nil, nil
 	}
-	// Local, not stored on AnalyticsData: nothing outside this function reads them, and this
-	// keeps per-call scratch state out of a struct shared across the whole analytics pipeline.
-	lineItemCoupons, subscriptionCoupons := projectAnalyticsCoupons(sel)
+	lineItemCoupons, subscriptionCoupons = projectAnalyticsCoupons(sel)
 	if len(lineItemCoupons) == 0 && len(subscriptionCoupons) == 0 {
-		return
+		return nil, nil
 	}
-
-	for _, item := range data.Analytics {
-		// Default to no discount so the domain object is internally consistent
-		// (NetCost == TotalCost) even when no coupon applies to this item, rather
-		// than relying on downstream DTO mapping to re-derive it from zero values.
-		item.TotalDiscount = decimal.Zero
-		item.NetCost = item.TotalCost
-		for i := range item.Points {
-			item.Points[i].Discount = decimal.Zero
-			item.Points[i].NetCost = item.Points[i].Cost
-		}
-
-		lineCoupons := lineItemCoupons[item.SubLineItemID]
-		subCoupons := subscriptionCoupons[item.SubscriptionID]
-		if len(lineCoupons) == 0 && len(subCoupons) == 0 {
-			continue
-		}
-
-		in := discountInput{
-			Currency:       item.Currency,
-			GrossTotalCost: item.TotalCost,
-			LineCoupons:    lineCoupons,
-			SubCoupons:     subCoupons,
-			RangeStart:     start,
-			RangeEnd:       end,
-		}
-		if len(item.Points) > 0 {
-			in.Points = make([]pointCost, len(item.Points))
-			for i, p := range item.Points {
-				in.Points[i] = pointCost{Timestamp: p.Timestamp, Cost: p.Cost}
-			}
-		}
-
-		out := ApplyAnalyticsDiscounts(in)
-		item.TotalDiscount = out.TotalDiscount
-		item.NetCost = out.NetCost
-		for i := range item.Points {
-			if i < len(out.PointDiscounts) {
-				item.Points[i].Discount = out.PointDiscounts[i]
-				item.Points[i].NetCost = item.Points[i].Cost.Sub(out.PointDiscounts[i])
-			}
-		}
-	}
+	return lineItemCoupons, subscriptionCoupons
 }
 
 // calculateCosts calculates costs for all analytics items in the data.
