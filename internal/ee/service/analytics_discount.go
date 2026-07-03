@@ -41,11 +41,6 @@ func (ac analyticsCoupon) activeOverlaps(start, end time.Time) bool {
 	return !ac.StartDate.After(end)
 }
 
-type pointCost struct {
-	Timestamp time.Time
-	Cost      decimal.Decimal
-}
-
 type discountInput struct {
 	Currency    string
 	SubTotal    decimal.Decimal
