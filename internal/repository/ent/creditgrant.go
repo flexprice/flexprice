@@ -594,11 +594,21 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domainCreditGrant.CreditGrant) {
+	span := cache.StartCacheSpan(ctx, "creditgrant", "set", map[string]interface{}{
+		"creditgrant_id": creditGrant.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrant.ID)
 	r.cache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultRedis)
 }
 
 func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
+	span := cache.StartCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
+		"creditgrant_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -612,6 +622,11 @@ func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domain
 }
 
 func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID string) {
+	span := cache.StartCacheSpan(ctx, "creditgrant", "delete", map[string]interface{}{
+		"creditgrant_id": creditGrantID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrantID)
 	r.cache.Delete(ctx, cacheKey)
 }

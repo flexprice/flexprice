@@ -63,7 +63,6 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 	if cached := r.GetCache(ctx, id); cached != nil {
 		return cached, nil
 	}
-
 	client := r.client.Reader(ctx)
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -244,11 +243,21 @@ func (r *groupRepository) Delete(ctx context.Context, id string) error {
 }
 
 func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) {
+	span := cache.StartCacheSpan(ctx, "group", "set", map[string]interface{}{
+		"group_id": grp.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), grp.ID)
 	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultRedis)
 }
 
 func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.Group {
+	span := cache.StartCacheSpan(ctx, "group", "get", map[string]interface{}{
+		"group_id": id,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -262,6 +271,11 @@ func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.
 }
 
 func (r *groupRepository) DeleteCache(ctx context.Context, id string) {
+	span := cache.StartCacheSpan(ctx, "group", "delete", map[string]interface{}{
+		"group_id": id,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	r.cache.Delete(ctx, cacheKey)
 }

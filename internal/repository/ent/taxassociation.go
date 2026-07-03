@@ -282,11 +282,21 @@ func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxA
 
 // Cache operations
 func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
+		"tax_association_id": t.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
 	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultRedis)
 }
 
 func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
+		"tax_association_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -300,6 +310,11 @@ func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *dom
 }
 
 func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
+	span := cache.StartCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
+		"tax_association_id": t.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

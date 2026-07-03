@@ -762,11 +762,21 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {
+	span := cache.StartCacheSpan(ctx, "payment", "set", map[string]interface{}{
+		"payment_id": payment.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), payment.ID)
 	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
 }
 
 func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
+	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
+		"payment_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -780,6 +790,11 @@ func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPaym
 }
 
 func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
+	span := cache.StartCacheSpan(ctx, "payment", "delete", map[string]interface{}{
+		"payment_id": paymentID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), paymentID)
 	r.cache.Delete(ctx, cacheKey)
 }

@@ -484,11 +484,21 @@ func (o EntityIntegrationMappingQueryOptions) applyEntityQueryOptions(_ context.
 // Cache operations
 
 func (r *entityIntegrationMappingRepository) SetCache(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) {
+	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "set", map[string]interface{}{
+		"mapping_id": mapping.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), mapping.ID)
 	r.cache.Set(ctx, cacheKey, mapping, cache.ExpiryDefaultRedis)
 }
 
 func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
+	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "get", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -502,6 +512,11 @@ func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id st
 }
 
 func (r *entityIntegrationMappingRepository) DeleteCache(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) {
+	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "delete", map[string]interface{}{
+		"mapping_id": mapping.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), mapping.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

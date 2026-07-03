@@ -929,11 +929,21 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 }
 
 func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
+	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+		"wallet_id": wallet.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), wallet.ID)
 	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultRedis)
 }
 
 func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
+	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+		"wallet_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -947,6 +957,11 @@ func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomai
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
+	span := cache.StartCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), walletID)
 	r.cache.Delete(ctx, cacheKey)
 }

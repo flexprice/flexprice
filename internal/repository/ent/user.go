@@ -407,11 +407,21 @@ func (r *userRepository) ListByFilter(ctx context.Context, filter *types.UserFil
 // Users are scoped to a tenant (not to an environment), so the cache key is
 // keyed by tenant + user ID only, mirroring the GetByID query filter.
 func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
+	span := cache.StartCacheSpan(ctx, "user", "set", map[string]interface{}{
+		"user_id": user.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixUser, user.TenantID, user.ID)
 	r.cache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
 }
 
 func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.User {
+	span := cache.StartCacheSpan(ctx, "user", "get", map[string]interface{}{
+		"user_id": id,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixUser, types.GetTenantID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -425,6 +435,11 @@ func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.Us
 }
 
 func (r *userRepository) DeleteCache(ctx context.Context, id string) {
+	span := cache.StartCacheSpan(ctx, "user", "delete", map[string]interface{}{
+		"user_id": id,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixUser, types.GetTenantID(ctx), id)
 	r.cache.Delete(ctx, cacheKey)
 }

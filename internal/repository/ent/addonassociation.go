@@ -500,11 +500,21 @@ func (o AddonAssociationQueryOptions) GetFieldResolver(st string) (string, error
 }
 
 func (r *addonAssociationRepository) SetCache(ctx context.Context, addonAssociation *domainAddonAssociation.AddonAssociation) {
+	span := cache.StartCacheSpan(ctx, "addon_association", "set", map[string]interface{}{
+		"addon_association_id": addonAssociation.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonAssociation.ID)
 	r.cache.Set(ctx, cacheKey, addonAssociation, cache.ExpiryDefaultRedis)
 }
 
 func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *domainAddonAssociation.AddonAssociation {
+	span := cache.StartCacheSpan(ctx, "addon_association", "get", map[string]interface{}{
+		"addon_association_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -518,6 +528,11 @@ func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *d
 }
 
 func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssociationID string) {
+	span := cache.StartCacheSpan(ctx, "addon_association", "delete", map[string]interface{}{
+		"addon_association_id": addonAssociationID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonAssociationID)
 	r.cache.Delete(ctx, cacheKey)
 }

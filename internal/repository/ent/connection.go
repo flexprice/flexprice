@@ -644,11 +644,21 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *connectionRepository) SetCache(ctx context.Context, connection *domainConnection.Connection) {
+	span := cache.StartCacheSpan(ctx, "connection", "set", map[string]interface{}{
+		"connection_id": connection.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), connection.ID)
 	r.cache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultRedis)
 }
 
 func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainConnection.Connection {
+	span := cache.StartCacheSpan(ctx, "connection", "get", map[string]interface{}{
+		"connection_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -662,6 +672,11 @@ func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainC
 }
 
 func (r *connectionRepository) DeleteCache(ctx context.Context, connection *domainConnection.Connection) {
+	span := cache.StartCacheSpan(ctx, "connection", "delete", map[string]interface{}{
+		"connection_id": connection.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), connection.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

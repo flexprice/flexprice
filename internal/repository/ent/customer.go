@@ -548,11 +548,21 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 }
 
 func (r *customerRepository) SetCache(ctx context.Context, customer *domainCustomer.Customer) {
+	span := cache.StartCacheSpan(ctx, "customer", "set", map[string]interface{}{
+		"customer_id": customer.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
 	r.cache.Set(ctx, cacheKey, customer, cache.ExpiryDefaultRedis)
 }
 
 func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCustomer.Customer {
+	span := cache.StartCacheSpan(ctx, "customer", "get", map[string]interface{}{
+		"customer_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -566,6 +576,11 @@ func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCus
 }
 
 func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCustomer.Customer) {
+	span := cache.StartCacheSpan(ctx, "customer", "delete", map[string]interface{}{
+		"customer_id": customer.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

@@ -348,11 +348,22 @@ func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, 
 }
 
 func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettings.Setting) {
+	span := cache.StartCacheSpan(ctx, "settings", "set", map[string]interface{}{
+		"setting_id": setting.ID,
+		"key":        setting.Key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
 	r.cache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
+	span := cache.StartCacheSpan(ctx, "settings", "get", map[string]interface{}{
+		"key": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -366,6 +377,12 @@ func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSet
 }
 
 func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSettings.Setting) {
+	span := cache.StartCacheSpan(ctx, "settings", "delete", map[string]interface{}{
+		"setting_id": setting.ID,
+		"key":        setting.Key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

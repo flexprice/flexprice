@@ -500,11 +500,21 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 }
 
 func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
+	span := cache.StartCacheSpan(ctx, "plan", "set", map[string]interface{}{
+		"plan_id": plan.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), plan.ID)
 	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultRedis)
 }
 
 func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Plan {
+	span := cache.StartCacheSpan(ctx, "plan", "get", map[string]interface{}{
+		"plan_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -518,6 +528,11 @@ func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Pl
 }
 
 func (r *planRepository) DeleteCache(ctx context.Context, plan *domainPlan.Plan) {
+	span := cache.StartCacheSpan(ctx, "plan", "delete", map[string]interface{}{
+		"plan_id": plan.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), plan.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

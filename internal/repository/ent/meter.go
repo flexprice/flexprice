@@ -391,11 +391,21 @@ func (o MeterQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.M
 }
 
 func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter) {
+	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+		"meter_id": meter.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), meter.ID)
 	r.cache.Set(ctx, cacheKey, meter, cache.ExpiryDefaultInMemory)
 }
 
 func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.Meter {
+	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+		"meter_id": meter.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -409,6 +419,11 @@ func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.
 }
 
 func (r *meterRepository) DeleteCache(ctx context.Context, meterID string) {
+	span := cache.StartCacheSpan(ctx, "meter", "delete", map[string]interface{}{
+		"meter_id": meterID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), meterID)
 	r.cache.Delete(ctx, cacheKey)
 }

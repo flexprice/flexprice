@@ -523,11 +523,23 @@ func (o AddonQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon) {
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addon.ID)
+	span := cache.StartCacheSpan(ctx, "addon", "set", map[string]interface{}{
+		"addon_id": addon.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, addon.ID)
 	r.cache.Set(ctx, cacheKey, addon, cache.ExpiryDefaultInMemory)
 }
 
 func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.Addon {
+	span := cache.StartCacheSpan(ctx, "addon", "get", map[string]interface{}{
+		"addon_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -541,6 +553,11 @@ func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.
 }
 
 func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
+	span := cache.StartCacheSpan(ctx, "addon", "delete", map[string]interface{}{
+		"addon_id": addonID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonID)
 	r.cache.Delete(ctx, cacheKey)
 }

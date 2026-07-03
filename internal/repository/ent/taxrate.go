@@ -512,11 +512,21 @@ func (o TaxRateQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 
 // caching
 func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate.TaxRate) {
+	span := cache.StartCacheSpan(ctx, "taxrate", "set", map[string]interface{}{
+		"taxrate_id": taxrate.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), taxrate.ID)
 	r.cache.Set(ctx, cacheKey, taxrate, cache.ExpiryDefaultInMemory)
 }
 
 func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxRate.TaxRate {
+	span := cache.StartCacheSpan(ctx, "taxrate", "get", map[string]interface{}{
+		"taxrate_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -530,6 +540,11 @@ func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxR
 }
 
 func (r *taxrateRepository) DeleteCache(ctx context.Context, taxrate *domainTaxRate.TaxRate) {
+	span := cache.StartCacheSpan(ctx, "taxrate", "delete", map[string]interface{}{
+		"taxrate_id": taxrate.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), taxrate.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

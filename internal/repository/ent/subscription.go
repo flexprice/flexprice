@@ -1056,11 +1056,21 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
+	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
+		"subscription_id": sub.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), sub.ID)
 	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
 }
 
 func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
+	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
+		"subscription_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -1074,6 +1084,11 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 }
 
 func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
+	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
+		"subscription_id": subID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), subID)
 	r.cache.Delete(ctx, cacheKey)
 }

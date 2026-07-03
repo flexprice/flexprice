@@ -593,11 +593,21 @@ func (o FeatureQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
+	span := cache.StartCacheSpan(ctx, "feature", "set", map[string]interface{}{
+		"feature_id": feature.ID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), feature.ID)
 	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
 }
 
 func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
+	span := cache.StartCacheSpan(ctx, "feature", "get", map[string]interface{}{
+		"feature_id": key,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
@@ -611,6 +621,11 @@ func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeat
 }
 
 func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
+	span := cache.StartCacheSpan(ctx, "feature", "delete", map[string]interface{}{
+		"feature_id": featureID,
+	})
+	defer cache.FinishSpan(span)
+
 	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), featureID)
 	r.cache.Delete(ctx, cacheKey)
 }
