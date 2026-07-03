@@ -536,7 +536,7 @@ func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon
 
 func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.Addon {
 	span := cache.StartCacheSpan(ctx, "addon", "get", map[string]interface{}{
-		"addon_id": key,
+		"addon_id": id,
 	})
 	defer cache.FinishSpan(span)
 

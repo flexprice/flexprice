@@ -1067,7 +1067,7 @@ func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Su
 
 func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
 	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
-		"subscription_id": key,
+		"subscription_id": id,
 	})
 	defer cache.FinishSpan(span)
 

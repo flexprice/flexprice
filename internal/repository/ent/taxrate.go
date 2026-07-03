@@ -523,7 +523,7 @@ func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate
 
 func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxRate.TaxRate {
 	span := cache.StartCacheSpan(ctx, "taxrate", "get", map[string]interface{}{
-		"taxrate_id": key,
+		"taxrate_id": id,
 	})
 	defer cache.FinishSpan(span)
 

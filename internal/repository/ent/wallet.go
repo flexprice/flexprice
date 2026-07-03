@@ -940,7 +940,7 @@ func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wa
 
 func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
-		"wallet_id": key,
+		"wallet_id": id,
 	})
 	defer cache.FinishSpan(span)
 

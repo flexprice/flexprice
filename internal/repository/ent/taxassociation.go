@@ -293,7 +293,7 @@ func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxCon
 
 func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
 	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
-		"tax_association_id": key,
+		"tax_association_id": id,
 	})
 	defer cache.FinishSpan(span)
 

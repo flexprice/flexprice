@@ -773,7 +773,7 @@ func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment
 
 func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
 	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
-		"payment_id": key,
+		"payment_id": id,
 	})
 	defer cache.FinishSpan(span)
 

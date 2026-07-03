@@ -604,7 +604,7 @@ func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature
 
 func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
 	span := cache.StartCacheSpan(ctx, "feature", "get", map[string]interface{}{
-		"feature_id": key,
+		"feature_id": id,
 	})
 	defer cache.FinishSpan(span)
 

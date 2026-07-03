@@ -511,7 +511,7 @@ func (r *addonAssociationRepository) SetCache(ctx context.Context, addonAssociat
 
 func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *domainAddonAssociation.AddonAssociation {
 	span := cache.StartCacheSpan(ctx, "addon_association", "get", map[string]interface{}{
-		"addon_association_id": key,
+		"addon_association_id": id,
 	})
 	defer cache.FinishSpan(span)
 

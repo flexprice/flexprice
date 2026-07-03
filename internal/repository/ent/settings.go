@@ -360,7 +360,7 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
 	span := cache.StartCacheSpan(ctx, "settings", "get", map[string]interface{}{
-		"key": key,
+		"key": id,
 	})
 	defer cache.FinishSpan(span)
 

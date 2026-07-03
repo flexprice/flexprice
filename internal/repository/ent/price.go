@@ -722,7 +722,7 @@ func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price
 
 func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.Price {
 	span := cache.StartCacheSpan(ctx, "price", "get", map[string]interface{}{
-		"price_id": key,
+		"price_id": id,
 	})
 	defer cache.FinishSpan(span)
 

@@ -538,7 +538,7 @@ func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Co
 
 func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
 	span := cache.StartCacheSpan(ctx, "coupon", "get", map[string]interface{}{
-		"coupon_id": key,
+		"coupon_id": id,
 	})
 	defer cache.FinishSpan(span)
 

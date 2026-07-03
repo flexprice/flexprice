@@ -605,7 +605,7 @@ func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domai
 
 func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
 	span := cache.StartCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
-		"creditgrant_id": key,
+		"creditgrant_id": id,
 	})
 	defer cache.FinishSpan(span)
 

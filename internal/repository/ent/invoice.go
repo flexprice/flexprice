@@ -1167,7 +1167,7 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 
 func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
 	span := cache.StartCacheSpan(ctx, "invoice", "get", map[string]interface{}{
-		"invoice_id": key,
+		"invoice_id": id,
 	})
 	defer cache.FinishSpan(span)
 

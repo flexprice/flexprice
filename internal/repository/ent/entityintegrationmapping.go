@@ -495,7 +495,7 @@ func (r *entityIntegrationMappingRepository) SetCache(ctx context.Context, mappi
 
 func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
 	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "get", map[string]interface{}{
-		"key": key,
+		"key": id,
 	})
 	defer cache.FinishSpan(span)
 

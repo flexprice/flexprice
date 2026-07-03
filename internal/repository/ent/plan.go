@@ -511,7 +511,7 @@ func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
 
 func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Plan {
 	span := cache.StartCacheSpan(ctx, "plan", "get", map[string]interface{}{
-		"plan_id": key,
+		"plan_id": id,
 	})
 	defer cache.FinishSpan(span)
 

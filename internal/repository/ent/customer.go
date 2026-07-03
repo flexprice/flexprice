@@ -559,7 +559,7 @@ func (r *customerRepository) SetCache(ctx context.Context, customer *domainCusto
 
 func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCustomer.Customer {
 	span := cache.StartCacheSpan(ctx, "customer", "get", map[string]interface{}{
-		"customer_id": key,
+		"customer_id": id,
 	})
 	defer cache.FinishSpan(span)
 

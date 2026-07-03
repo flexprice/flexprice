@@ -691,7 +691,7 @@ func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domai
 
 func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domainEntitlement.Entitlement {
 	span := cache.StartCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
-		"entitlement_id": key,
+		"entitlement_id": id,
 	})
 	defer cache.FinishSpan(span)
 
