@@ -13,6 +13,7 @@ package service
 //  7. Windowed (DAY) with forever 10% coupon         → per-point discount = 10% of point cost
 //  8. Compounding (10% line + 15% sub) + cross-meter isolation on a second line item
 //  9. Straddling range: non-windowed over-applies vs. windowed per-point accuracy
+//  10. Mixed coverage across subscriptions: one discounted, one not
 
 import (
 	"context"
@@ -811,20 +812,7 @@ func (s *MeterUsageDiscountSuite) TestStraddlingRangeNonWindowedOverAppliesVsWin
 	}
 }
 
-// Case 10: applyAnalyticsDiscounts is a no-op (no panic, nothing touched) when
-// there is no analytics data or no subscriptions to derive coupons from —
-// exercised directly since GetDetailedAnalytics never calls it with empty
-// inputs in practice, but the function's own defensive guard should hold.
-func TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp(t *testing.T) {
-	ctx := context.Background()
-	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{}, time.Now(), time.Now())
-	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{
-		Analytics: []*events.DetailedUsageAnalytic{{TotalCost: decimal.NewFromInt(100)}},
-	}, time.Now(), time.Now())
-	// No assertions beyond "did not panic" — this guards the function's own early returns.
-}
-
-// Case 11: two subscriptions for the SAME customer — subscription 1 has a
+// Case 10: two subscriptions for the SAME customer — subscription 1 has a
 // line-item coupon, subscription 2 has no coupons at all. Subscription 2's item
 // must show zero discount while subscription 1's is correctly discounted —
 // proves the per-item "no coupon applies to THIS item" skip only affects the

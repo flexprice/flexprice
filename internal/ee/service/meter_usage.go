@@ -2148,8 +2148,10 @@ func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *Analyt
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return
 	}
-	data.LineItemCoupons, data.SubscriptionCoupons = projectAnalyticsCoupons(sel)
-	if len(data.LineItemCoupons) == 0 && len(data.SubscriptionCoupons) == 0 {
+	// Local, not stored on AnalyticsData: nothing outside this function reads them, and this
+	// keeps per-call scratch state out of a struct shared across the whole analytics pipeline.
+	lineItemCoupons, subscriptionCoupons := projectAnalyticsCoupons(sel)
+	if len(lineItemCoupons) == 0 && len(subscriptionCoupons) == 0 {
 		return
 	}
 
@@ -2164,8 +2166,8 @@ func applyAnalyticsDiscounts(ctx context.Context, sp ServiceParams, data *Analyt
 			item.Points[i].NetCost = item.Points[i].Cost
 		}
 
-		lineCoupons := data.LineItemCoupons[item.SubLineItemID]
-		subCoupons := data.SubscriptionCoupons[item.SubscriptionID]
+		lineCoupons := lineItemCoupons[item.SubLineItemID]
+		subCoupons := subscriptionCoupons[item.SubscriptionID]
 		if len(lineCoupons) == 0 && len(subCoupons) == 0 {
 			continue
 		}

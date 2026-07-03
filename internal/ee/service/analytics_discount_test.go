@@ -1,10 +1,12 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -195,3 +197,16 @@ func TestApplyAnalyticsDiscounts_StackingAndCurrency(t *testing.T) {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+// TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp covers applyAnalyticsDiscounts's own
+// early-return guards directly — GetDetailedAnalytics never calls it with empty
+// Analytics/Subscriptions in practice, but the function's defensive guard should hold
+// on its own regardless of caller behavior.
+func TestApplyAnalyticsDiscounts_EmptyInputsAreNoOp(t *testing.T) {
+	ctx := context.Background()
+	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{}, time.Now(), time.Now())
+	applyAnalyticsDiscounts(ctx, ServiceParams{}, &AnalyticsData{
+		Analytics: []*events.DetailedUsageAnalytic{{TotalCost: decimal.NewFromInt(100)}},
+	}, time.Now(), time.Now())
+	// No assertions beyond "did not panic" — this guards the function's own early returns.
+}
