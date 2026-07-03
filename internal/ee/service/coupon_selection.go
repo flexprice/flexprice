@@ -27,14 +27,14 @@ type subscriptionCouponSelection struct {
 // those matching the predicate, split into sub-level vs line-level, and order each slice
 // deterministically (StartDate, then ID) so compounding is stable.
 //
-// If keep is nil, all associations are accepted.
+// If filter is nil, all associations are accepted.
 //
 // subs[*].LineItems must be populated for SubLineItemIDToPriceID to be useful; callers needing
 // price-keyed lookups must fetch subscriptions with their line items eager-loaded.
 func splitAndOrderAssociations(
 	subs []*subscription.Subscription,
 	associations []*ca.CouponAssociation,
-	keep func(*coupon.Coupon, *ca.CouponAssociation) bool,
+	filter func(*coupon.Coupon, *ca.CouponAssociation) bool,
 ) *subscriptionCouponSelection {
 	sel := &subscriptionCouponSelection{
 		SubLevel:               map[string][]*ca.CouponAssociation{},
@@ -52,7 +52,7 @@ func splitAndOrderAssociations(
 		if a == nil || a.Coupon == nil {
 			continue
 		}
-		if keep != nil && !keep(a.Coupon, a) {
+		if filter != nil && !filter(a.Coupon, a) {
 			continue
 		}
 		if a.SubscriptionLineItemID != nil {
@@ -78,33 +78,33 @@ func splitAndOrderAssociations(
 }
 
 // selectSubscriptionCoupons fetches active associations for the given subscriptions over
-// [start, end] (coupon eager-loaded) and returns the split selection filtered by keep.
+// [start, end] (coupon eager-loaded) and returns the split selection filtered by filter.
 //
 // subs[*].LineItems must be populated for the returned SubLineItemIDToPriceID to be useful;
 // callers needing price-keyed lookups must fetch subscriptions with line items eager-loaded.
 func selectSubscriptionCoupons(
 	ctx context.Context, sp ServiceParams,
 	subs []*subscription.Subscription, start, end time.Time,
-	keep func(*coupon.Coupon, *ca.CouponAssociation) bool,
+	filter func(*coupon.Coupon, *ca.CouponAssociation) bool,
 ) (*subscriptionCouponSelection, error) {
 	if len(subs) == 0 {
-		return splitAndOrderAssociations(subs, nil, keep), nil
+		return splitAndOrderAssociations(subs, nil, filter), nil
 	}
 	subIDs := make([]string, 0, len(subs))
 	for _, s := range subs {
 		subIDs = append(subIDs, s.ID)
 	}
-	filter := types.NewNoLimitCouponAssociationFilter()
-	filter.SubscriptionIDs = subIDs
-	filter.ActiveOnly = true
-	filter.PeriodStart = &start
-	filter.PeriodEnd = &end
+	caFilter := types.NewNoLimitCouponAssociationFilter()
+	caFilter.SubscriptionIDs = subIDs
+	caFilter.ActiveOnly = true
+	caFilter.PeriodStart = &start
+	caFilter.PeriodEnd = &end
 
-	associations, err := sp.CouponAssociationRepo.List(ctx, filter)
+	associations, err := sp.CouponAssociationRepo.List(ctx, caFilter)
 	if err != nil {
 		return nil, err
 	}
-	return splitAndOrderAssociations(subs, associations, keep), nil
+	return splitAndOrderAssociations(subs, associations, filter), nil
 }
 
 // projectAnalyticsCoupons converts the selection into the applicator's pure analyticsCoupon maps:

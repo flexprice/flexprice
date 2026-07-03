@@ -2909,10 +2909,10 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	// with the analytics path via selectSubscriptionCoupons; billing supplies its own validation
 	// predicate (ValidateCoupon over the eager-loaded coupon).
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
-	keep := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
 		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
 	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, keep)
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
 	if err != nil {
 		return nil, err
 	}

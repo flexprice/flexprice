@@ -2168,19 +2168,12 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 
-	// Discounts require the coupon-association repo. If the service was constructed
-	// without it (e.g. a focused test), degrade gracefully to no discounts rather
-	// than panic — discounts are an enhancement on a read path.
-	if sp.CouponAssociationRepo == nil {
-		return nil, nil
-	}
-
-	keep := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+	filter := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
 		return c.Type == types.CouponTypePercentage &&
 			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
 			c.IsValid()
 	}
-	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, keep)
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, filter)
 	if err != nil {
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return nil, nil
