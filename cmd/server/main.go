@@ -298,6 +298,7 @@ func main() {
 		),
 		fx.Invoke(
 			tracing.RegisterHooks,
+			repository.InitTracing,
 			pyroscope.RegisterHooks,
 			initIntegrationFactory,
 			startServer,
