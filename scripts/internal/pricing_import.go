@@ -81,7 +81,7 @@ func newPricingImportScript(tenantID, environmentID string) (*pricingImportScrip
 	}
 
 	// Initialize the database client
-	entClients, err := postgres.NewEntClients(cfg, log)
+	entClients, err := postgres.NewEntClients(cfg, log, nil)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 		return nil, err

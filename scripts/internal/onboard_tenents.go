@@ -39,7 +39,7 @@ func SyncBillingCustomers() error {
 	}
 
 	// Initialize database client
-	entClient, err := postgres.NewEntClients(cfg, logger)
+	entClient, err := postgres.NewEntClients(cfg, logger, nil)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}

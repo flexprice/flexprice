@@ -104,7 +104,7 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 
 	sentryService := tracing.NewService(cfg, appLogger)
 
-	entClient, err := postgres.NewEntClients(cfg, appLogger)
+	entClient, err := postgres.NewEntClients(cfg, appLogger, nil)
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}

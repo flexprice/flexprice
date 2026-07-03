@@ -106,7 +106,7 @@ func SeedEventsFromMeters() error {
 	ctx = context.WithValue(ctx, types.CtxTenantID, "<tenant_id>")
 
 	// Initialize the other DB
-	entClient, err := postgres.NewEntClients(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log, nil)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}

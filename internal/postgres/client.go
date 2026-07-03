@@ -69,7 +69,7 @@ type Client struct {
 func Module() fx.Option {
 	return fx.Options(
 		fx.Provide(
-			NewTracedEntClients,
+			NewEntClients,
 			NewClient,
 		),
 	)
@@ -82,21 +82,12 @@ type EntClients struct {
 	HasReader bool
 }
 
-// NewEntClients creates both writer and reader Ent clients without SQL-level
-// tracing. Kept for scripts and tooling; the server fx graph uses
-// NewTracedEntClients so per-statement DB spans can be emitted.
-func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntClients, error) {
-	return newEntClients(config, logger, nil)
-}
-
-// NewTracedEntClients creates writer and reader Ent clients whose drivers emit
-// a SpanKindClient span per SQL statement (reads, writes, and in-transaction
-// statements) when otel.traces.storage_spans_enabled is true.
-func NewTracedEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
-	return newEntClients(config, logger, tracingSvc)
-}
-
-func newEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
+// NewEntClients creates both writer and reader Ent clients.
+//
+// tracingSvc may be nil (scripts/tooling). When non-nil and
+// otel.traces.storage_spans_enabled is true, the drivers emit a SpanKindClient
+// span per SQL statement — reads, writes, and in-transaction statements.
+func NewEntClients(config *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*EntClients, error) {
 	// Get writer DSN from config
 	writerDSN := config.Postgres.GetDSN()
 
@@ -111,12 +102,9 @@ func newEntClients(config *config.Configuration, logger *logger.Logger, tracingS
 	writerDB.SetMaxIdleConns(config.Postgres.MaxIdleConns)
 	writerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
-	// Create writer driver, with per-statement span instrumentation when a
-	// tracing service is supplied (spans stay gated on storage_spans_enabled)
-	var writerDrv dialect.Driver = entsql.OpenDB(dialect.Postgres, writerDB)
-	if tracingSvc != nil {
-		writerDrv = newTracedDriver(writerDrv, tracingSvc, "writer")
-	}
+	// Create writer driver; per-statement span instrumentation no-ops when
+	// tracingSvc is nil or storage_spans_enabled is false
+	writerDrv := newTracedDriver(entsql.OpenDB(dialect.Postgres, writerDB), tracingSvc, "writer")
 
 	// Create client with options
 	writerOpts := []ent.Option{
@@ -157,10 +145,7 @@ func newEntClients(config *config.Configuration, logger *logger.Logger, tracingS
 		readerDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 
 		// Create reader driver (traced like the writer)
-		var readerDrv dialect.Driver = entsql.OpenDB(dialect.Postgres, readerDB)
-		if tracingSvc != nil {
-			readerDrv = newTracedDriver(readerDrv, tracingSvc, "reader")
-		}
+		readerDrv := newTracedDriver(entsql.OpenDB(dialect.Postgres, readerDB), tracingSvc, "reader")
 
 		// Create reader client with options (removing debug logs for reads)
 		readerOpts := []ent.Option{
@@ -201,21 +186,16 @@ func newEntClients(config *config.Configuration, logger *logger.Logger, tracingS
 	}, nil
 }
 
-// NewClient creates a new ent client wrapper with transaction management
+// NewClient creates a new ent client wrapper with transaction management.
+// tracingSvc may be nil; all tracing hooks no-op in that case.
 func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.Service) IClient {
-	postgresClient := &Client{
+	return &Client{
 		writerClient: clients.Writer,
 		readerClient: clients.Reader,
 		logger:       logger,
 		tracing:      tracingSvc,
 		hasReader:    clients.HasReader,
 	}
-
-	if tracingSvc != nil {
-		return NewTracingClient(postgresClient, tracingSvc, logger)
-	}
-
-	return postgresClient
 }
 
 // WithTx wraps the given function in a transaction
@@ -226,7 +206,27 @@ func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.S
 // transaction goes through Writer(txCtx), and because the pin holder is shared
 // with the parent context, reads issued AFTER the transaction commits still
 // route to the writer despite replica lag.
+//
+// A "postgres.transaction" span is created only when
+// otel.traces.storage_spans_enabled is true. At default (false) the span is
+// skipped to avoid one extra row per HTTP request in SigNoz; the parent HTTP
+// span from otelgin already captures total request latency.
 func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if !c.tracing.IsStorageSpansEnabled() {
+		return c.withTx(ctx, fn)
+	}
+	span, spanCtx := c.tracing.StartDBSpan(ctx, "postgres.transaction", nil)
+	defer span.Finish()
+	err := c.withTx(spanCtx, fn)
+	if err != nil {
+		span.SetStatusError(err)
+	} else {
+		span.SetStatusOK()
+	}
+	return err
+}
+
+func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	// If we're already in a transaction, reuse it and do not start a new one or commit it
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return fn(ctx)
@@ -291,6 +291,11 @@ func (c *Client) TxFromContext(ctx context.Context) *ent.Tx {
 //
 // Use this for: Create, Update, Delete, Save, Exec operations
 func (c *Client) Writer(ctx context.Context) *ent.Client {
+	if span := c.tracing.GetSpanFromContext(ctx); span != nil {
+		span.SetTag("db.endpoint", "writer")
+		span.SetTag("db.resolved_target", "writer")
+	}
+
 	// A write is about to happen: pin this unit of work to the writer so all
 	// subsequent reads on this context see the write (read-your-writes).
 	types.PinWriter(ctx)
@@ -309,24 +314,27 @@ func (c *Client) Writer(ctx context.Context) *ent.Client {
 //
 // Use this for: Get, List, Count, Query operations
 func (c *Client) Reader(ctx context.Context) *ent.Client {
+	target, client := "reader", c.readerClient
+	switch tx := c.TxFromContext(ctx); {
 	// Priority 1: If in a transaction, use transaction client for read-your-writes consistency
-	if tx := c.TxFromContext(ctx); tx != nil {
-		return tx.Client()
-	}
-
+	case tx != nil:
+		target, client = "writer_via_tx", tx.Client()
 	// Priority 2: If force writer flag is set, use writer for read-after-write consistency
-	if types.ShouldForceWriter(ctx) {
-		return c.writerClient
-	}
-
+	case types.ShouldForceWriter(ctx):
+		target, client = "writer_forced", c.writerClient
 	// Priority 3: If a write already happened in this unit of work, use writer
 	// so the just-written rows are visible despite replica lag
-	if types.IsWriterPinned(ctx) {
-		return c.writerClient
+	case types.IsWriterPinned(ctx):
+		target, client = "writer_pinned", c.writerClient
+	}
+	// Priority 4 (default): reader for scalability
+
+	if span := c.tracing.GetSpanFromContext(ctx); span != nil {
+		span.SetTag("db.endpoint", "reader")
+		span.SetTag("db.resolved_target", target)
 	}
 
-	// Priority 4: Default to reader for scalability
-	return c.readerClient
+	return client
 }
 
 // Close closes the database connection

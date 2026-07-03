@@ -101,7 +101,7 @@ func SetupDummyBillingCustomer() error {
 		return fmt.Errorf("clickhouse: %w", err)
 	}
 
-	entClient, err := postgres.NewEntClients(cfg, appLogger)
+	entClient, err := postgres.NewEntClients(cfg, appLogger, nil)
 	if err != nil {
 		return fmt.Errorf("postgres: %w", err)
 	}

@@ -485,8 +485,8 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 // startStorageSpan starts a SpanKindClient span carrying the OTel `db.system`
 // semconv attribute. Both are required for trace backends to classify the span
 // as a database call (SigNoz's "Database Calls" tab filters on
-// spanKind=Client AND db.system != ''); a plain internal span renders as an
-// anonymous child in the waterfall and never reaches that tab.
+// spanKind=Client AND a non-empty db.system); a plain internal span renders
+// as an anonymous child in the waterfall and never reaches that tab.
 func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
 	if s == nil || !s.tracingEnabled {
 		return nil, ctx
