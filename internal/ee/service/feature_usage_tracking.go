@@ -401,7 +401,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		return err // Return error for retry
 	}
 
-	s.Logger.Info(context.Background(), "event for feature usage tracking processed successfully",
+	s.Logger.Debug(context.Background(), "event for feature usage tracking processed successfully",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", tenantID,
@@ -456,7 +456,7 @@ func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *e
 					continue
 				}
 
-				s.Logger.Info(ctx, "wallet balance alert event published successfully",
+				s.Logger.Debug(ctx, "wallet balance alert event published successfully",
 					"event_id", event.ID,
 					"customer_id", event.CustomerID,
 				)
@@ -503,7 +503,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	// STEP 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Info(ctx, "customer not found for event",
+		s.Logger.Debug(ctx, "customer not found for event",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -521,7 +521,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		}
 
 		if customer == nil {
-			s.Logger.Info(ctx, "skipping event - no customer and no auto-creation workflow configured",
+			s.Logger.Debug(ctx, "skipping event - no customer and no auto-creation workflow configured",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
@@ -1090,7 +1090,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Info(context.Background(), "property not found for aggregation",
+			s.Logger.Debug(context.Background(), "property not found for aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -3048,6 +3048,7 @@ func rollupBucketPoints(
 
 func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
+		Subtotal:  decimal.Zero,
 		TotalCost: decimal.Zero,
 		Currency:  "",
 		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
@@ -3085,6 +3086,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			AggregationType: analytic.AggregationType,
 			TotalUsage:      totalUsage, // Now correctly uses sum of bucket maxes for bucketed MAX
 			TotalCost:       analytic.TotalCost,
+			Subtotal:        analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
 			Properties:      analytic.Properties,
@@ -3208,6 +3210,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					Timestamp:                        point.Timestamp,
 					Usage:                            correctUsage,
 					Cost:                             point.Cost,
+					Subtotal:                         point.Cost,
 					EventCount:                       point.EventCount,
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
@@ -3239,6 +3242,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 
 		response.Items = append(response.Items, item)
 		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+		response.Subtotal = response.Subtotal.Add(analytic.TotalCost)
 		response.Currency = analytic.Currency
 	}
 

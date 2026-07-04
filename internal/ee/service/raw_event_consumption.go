@@ -168,7 +168,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 
-	s.Logger.Info(context.Background(), "processing raw event batch",
+	s.Logger.Debug(context.Background(), "processing raw event batch",
 		"batch_size", len(batch.Data),
 		"message_uuid", msg.UUID,
 	)
