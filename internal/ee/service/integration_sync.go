@@ -77,8 +77,7 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 	}
 
 	payload, err := json.Marshal(map[string]string{
-		"invoice_id":  invoiceID,
-		"customer_id": inv.CustomerID,
+		"invoice_id": invoiceID,
 	})
 	if err != nil {
 		return err

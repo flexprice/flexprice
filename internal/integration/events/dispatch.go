@@ -18,6 +18,7 @@ import (
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 )
 
 // getConnectionIfExists returns the connection for a provider, or nil if none is configured.
@@ -112,69 +113,111 @@ var invoiceSyncProviderOrder = []types.SecretProvider{
 }
 
 // invoiceOutboundEnabledInOrder returns the providers that have an enabled outbound
-// invoice connection, in fixed code order. A real DB error aborts; a missing connection
-// simply excludes that provider.
+// invoice connection, in fixed code order. It fetches all of the tenant/environment's
+// connections in a single query and indexes them by provider, rather than issuing one
+// lookup per provider. A real DB error aborts; a missing connection simply excludes that
+// provider.
 func invoiceOutboundEnabledInOrder(
 	ctx context.Context,
 	connRepo connection.Repository,
 ) ([]types.SecretProvider, error) {
+	filter := types.NewNoLimitConnectionFilter()
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	conns, err := connRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	byProvider := make(map[types.SecretProvider]*connection.Connection, len(conns))
+	for _, conn := range conns {
+		if _, seen := byProvider[conn.ProviderType]; !seen {
+			byProvider[conn.ProviderType] = conn
+		}
+	}
+
 	var enabled []types.SecretProvider
 	for _, p := range invoiceSyncProviderOrder {
-		conn, err := getConnectionIfExists(ctx, connRepo, p)
-		if err != nil {
-			return nil, err
-		}
-		if conn != nil && conn.IsInvoiceOutboundEnabled() {
+		if conn, ok := byProvider[p]; ok && conn.IsInvoiceOutboundEnabled() {
 			enabled = append(enabled, p)
 		}
 	}
 	return enabled, nil
 }
 
-// resolveAllowedProviders returns the customer's ordered allow-list for the invoice.
-// The normal path (customer_id present) loads only the customer, which pre-exists the
-// invoice, so there is no commit race. For in-flight messages lacking customer_id it
-// falls back to a guarded invoice read to recover the customer id; such messages predate
-// this feature's deploy, so their invoice is already committed. Missing entities are not
-// fatal — they yield a nil allow-list (⇒ first enabled provider by fixed order).
+// resolveAllowedProviders returns the customer's ordered allow-list for the invoice. It
+// reads the invoice to recover the customer id, then loads the customer. The invoice is
+// already committed by the time its system event is dispatched, so there is no commit race.
+// Missing entities are not fatal — they yield a nil allow-list (⇒ first enabled provider by
+// fixed order).
 func resolveAllowedProviders(
 	ctx context.Context,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
-	customerID string,
 	invoiceID string,
 	log *logger.Logger,
-) ([]string, error) {
-	if customerID == "" {
-		if invoiceRepo == nil {
-			return nil, nil
-		}
-		inv, err := invoiceRepo.Get(ctx, invoiceID)
-		if err != nil {
-			if ierr.IsNotFound(err) || ent.IsNotFound(err) {
-				log.Warn(ctx, "integration_events: invoice not found while resolving sync target, defaulting to fixed order",
-					"invoice_id", invoiceID)
-				return nil, nil
-			}
-			return nil, err
-		}
-		customerID = inv.CustomerID
-	}
-
-	if customerRepo == nil || customerID == "" {
+) ([]types.SecretProvider, error) {
+	if invoiceRepo == nil || customerRepo == nil {
 		return nil, nil
 	}
 
-	cust, err := customerRepo.Get(ctx, customerID)
+	inv, err := invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		if ierr.IsNotFound(err) || ent.IsNotFound(err) {
+			log.Warn(ctx, "integration_events: invoice not found while resolving sync target, defaulting to fixed order",
+				"invoice_id", invoiceID)
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if inv.CustomerID == "" {
+		return nil, nil
+	}
+
+	cust, err := customerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
 		if ierr.IsNotFound(err) || ent.IsNotFound(err) {
 			log.Warn(ctx, "integration_events: customer not found while resolving sync target, defaulting to fixed order",
-				"customer_id", customerID, "invoice_id", invoiceID)
+				"customer_id", inv.CustomerID, "invoice_id", invoiceID)
 			return nil, nil
 		}
 		return nil, err
 	}
 	return cust.AllowedIntegrationProviders, nil
+}
+
+// ResolveInvoiceSyncTarget returns the single provider an invoice should sync to.
+//
+//	allowed        — customer.AllowedIntegrationProviders, in priority order (may be empty)
+//	enabledInOrder — providers with an enabled outbound connection, in fixed code order
+//
+// Returns (target, true) or ("", false) when nothing is resolvable. It is pure and
+// side-effect-free: it performs no I/O and is the single source of truth for invoice-sync
+// routing.
+func ResolveInvoiceSyncTarget(allowed []types.SecretProvider, enabledInOrder []types.SecretProvider) (types.SecretProvider, bool) {
+	// Build a set of enabled providers for O(1) membership checks.
+	enabledSet := make(map[types.SecretProvider]struct{}, len(enabledInOrder))
+	for _, p := range enabledInOrder {
+		enabledSet[p] = struct{}{}
+	}
+
+	// Non-empty allow-list: return the first allowed entry that is enabled.
+	// Unknown/misspelled entries are simply never in the set, so they are ignored.
+	if len(allowed) > 0 {
+		for _, p := range allowed {
+			if _, ok := enabledSet[p]; ok {
+				return p, true
+			}
+		}
+		return "", false
+	}
+
+	// Empty allow-list: fall back to the first enabled provider by fixed code order.
+	if len(enabledInOrder) > 0 {
+		return enabledInOrder[0], true
+	}
+
+	return "", false
 }
 
 // DispatchInvoiceVendorSync resolves an invoice to exactly one integration provider and
@@ -199,10 +242,10 @@ func DispatchInvoiceVendorSync(
 		return nil
 	}
 
-	// Parse invoice + customer IDs from the event payload.
+	// Parse the invoice id from the event payload. The customer is resolved by re-reading
+	// the invoice, so no customer_id is expected here.
 	var pl struct {
-		InvoiceID  string `json:"invoice_id"`
-		CustomerID string `json:"customer_id"`
+		InvoiceID string `json:"invoice_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payload, dropping",
@@ -230,7 +273,7 @@ func DispatchInvoiceVendorSync(
 	if err != nil {
 		return fmt.Errorf("integration_events: failed to determine enabled providers for invoice %s: %w", in.InvoiceID, err)
 	}
-	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.CustomerID, pl.InvoiceID, log)
+	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.InvoiceID, log)
 	if err != nil {
 		return fmt.Errorf("integration_events: failed to resolve allow-list for invoice %s: %w", in.InvoiceID, err)
 	}
@@ -956,8 +999,7 @@ func DispatchInvoicePaidVendorSync(
 	}
 
 	var pl struct {
-		InvoiceID  string `json:"invoice_id"`
-		CustomerID string `json:"customer_id"`
+		InvoiceID string `json:"invoice_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payment payload, dropping",
@@ -983,7 +1025,7 @@ func DispatchInvoicePaidVendorSync(
 	if err != nil {
 		return fmt.Errorf("integration_events: failed to determine enabled providers for invoice %s: %w", in.InvoiceID, err)
 	}
-	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.CustomerID, pl.InvoiceID, log)
+	allowed, err := resolveAllowedProviders(ctx, customerRepo, invoiceRepo, pl.InvoiceID, log)
 	if err != nil {
 		return fmt.Errorf("integration_events: failed to resolve allow-list for invoice %s: %w", in.InvoiceID, err)
 	}

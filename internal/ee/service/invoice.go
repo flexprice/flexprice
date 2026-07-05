@@ -272,7 +272,7 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 	}
 
 	if resp.InvoiceStatus == types.InvoiceStatusFinalized {
-		s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, resp.ID, resp.CustomerID)
+		s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, resp.ID)
 	}
 
 	return resp, nil
@@ -987,7 +987,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		return err
 	}
 
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
 
 	return nil
 }
@@ -1171,7 +1171,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		return err
 	}
 
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateVoided, inv.ID)
 	return nil
 }
 
@@ -1658,7 +1658,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	}
 
 	// Publish webhook events
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID)
 
 	return nil
 }
@@ -1786,7 +1786,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	}
 
 	// Publish webhook events
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdatePayment, inv.ID)
 
 	return nil
 }
@@ -2104,7 +2104,7 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 			summary.OverdueInvoiceCount++
 
 			// Publish webhook event
-			s.publishSystemEvent(ctx, types.WebhookEventInvoicePaymentOverdue, inv.ID, inv.CustomerID)
+			s.publishSystemEvent(ctx, types.WebhookEventInvoicePaymentOverdue, inv.ID)
 		}
 
 		// Split charges by type
@@ -2955,19 +2955,16 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	return nil
 }
 
-// publishSystemEvent publishes a webhook-shaped system event for an invoice. customerID is
-// included in the payload so downstream integration dispatchers can resolve the invoice's
-// single sync target without re-reading the invoice (avoiding the commit race). Pass "" when
-// the customer id is not readily in scope; dispatchers fall back to a guarded invoice read.
-func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, invoiceID string, customerID string) {
+// publishSystemEvent publishes a webhook-shaped system event for an invoice. Downstream
+// integration dispatchers resolve the invoice's single sync target by re-reading the invoice
+// (and its customer), so only the invoice id is carried in the payload.
+func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, invoiceID string) {
 	webhookPayload, err := json.Marshal(struct {
-		InvoiceID  string `json:"invoice_id"`
-		CustomerID string `json:"customer_id,omitempty"`
-		TenantID   string `json:"tenant_id"`
+		InvoiceID string `json:"invoice_id"`
+		TenantID  string `json:"tenant_id"`
 	}{
-		InvoiceID:  invoiceID,
-		CustomerID: customerID,
-		TenantID:   types.GetTenantID(ctx),
+		InvoiceID: invoiceID,
+		TenantID:  types.GetTenantID(ctx),
 	})
 
 	if err != nil {
@@ -3256,7 +3253,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 	}
 
 	// Publish webhook event for invoice recalculation
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
 
 	// Finalize the invoice if requested
 	if finalize {
@@ -3502,7 +3499,7 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 	}
 
 	// Publish webhook event for invoice update
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, id, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, id)
 
 	// Return the updated invoice
 	return s.GetInvoice(ctx, id)
@@ -3516,7 +3513,7 @@ func (s *invoiceService) TriggerCommunication(ctx context.Context, id string) er
 	}
 
 	// Publish webhook event
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceCommunicationTriggered, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, types.WebhookEventInvoiceCommunicationTriggered, inv.ID)
 	return nil
 }
 
@@ -3561,7 +3558,7 @@ func (s *invoiceService) TriggerWebhook(ctx context.Context, invoiceID string, e
 	)
 
 	// Publish webhook event
-	s.publishSystemEvent(ctx, eventName, inv.ID, inv.CustomerID)
+	s.publishSystemEvent(ctx, eventName, inv.ID)
 	return nil
 }
 

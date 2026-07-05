@@ -45,11 +45,10 @@ type Customer struct {
 	// Metadata
 	Metadata map[string]string `db:"metadata" json:"metadata"`
 
-	// AllowedIntegrationProviders is an ordered priority list of provider identifiers
-	// (types.SecretProvider values) that this customer's invoices may sync to. Invoice
-	// sync resolves to the first entry with an enabled outbound connection. Empty/nil ⇒
-	// first enabled provider by fixed code order.
-	AllowedIntegrationProviders []string `db:"allowed_integration_providers" json:"allowed_integration_providers,omitempty"`
+	// AllowedIntegrationProviders is an ordered priority list of providers that this
+	// customer's invoices may sync to. Invoice sync resolves to the first entry with an
+	// enabled outbound connection. Empty/nil ⇒ first enabled provider by fixed code order.
+	AllowedIntegrationProviders []types.SecretProvider `db:"allowed_integration_providers" json:"allowed_integration_providers,omitempty"`
 
 	// EnvironmentID is the environment identifier for the customer
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
@@ -75,7 +74,7 @@ func FromEnt(c *ent.Customer) *Customer {
 		AddressCountry:              c.AddressCountry,
 		Timezone:                    c.Timezone,
 		Metadata:                    c.Metadata,
-		AllowedIntegrationProviders: c.AllowedIntegrationProviders,
+		AllowedIntegrationProviders: types.SecretProvidersFromStrings(c.AllowedIntegrationProviders),
 		EnvironmentID:               c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,

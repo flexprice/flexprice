@@ -69,12 +69,12 @@ type CreateCustomerRequest struct {
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
 
-	// allowed_integration_providers is an ordered priority list of integration provider
-	// identifiers (e.g. "stripe", "razorpay") that this customer's invoices sync to.
-	// Invoice sync resolves to the first entry with an enabled outbound connection.
-	// The submitted order is the priority order and is preserved. Empty/omitted ⇒ first
-	// enabled provider by fixed code order.
-	AllowedIntegrationProviders []string `json:"allowed_integration_providers,omitempty"`
+	// allowed_integration_providers is an ordered priority list of integration providers
+	// (e.g. "stripe", "razorpay") that this customer's invoices sync to. Invoice sync
+	// resolves to the first entry with an enabled outbound connection. The submitted order
+	// is the priority order and is preserved. Empty/omitted ⇒ first enabled provider by
+	// fixed code order.
+	AllowedIntegrationProviders []*types.SecretProvider `json:"allowed_integration_providers,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -116,11 +116,11 @@ type UpdateCustomerRequest struct {
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
 
-	// allowed_integration_providers is the ordered priority list of integration provider
-	// identifiers this customer's invoices sync to. Pointer-aware: omit (null) to leave
-	// unchanged; pass an empty array to clear it (revert to fixed code order). The
-	// submitted order is the priority order and is preserved.
-	AllowedIntegrationProviders *[]string `json:"allowed_integration_providers,omitempty"`
+	// allowed_integration_providers is the ordered priority list of integration providers
+	// this customer's invoices sync to. Pointer-aware: omit (null) to leave unchanged;
+	// pass an empty array to clear it (revert to fixed code order). The submitted order is
+	// the priority order and is preserved.
+	AllowedIntegrationProviders *[]*types.SecretProvider `json:"allowed_integration_providers,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
@@ -178,13 +178,19 @@ func (r *CreateCustomerRequest) Validate() error {
 	return nil
 }
 
-// validateAllowedIntegrationProviders ensures every entry is a known types.SecretProvider.
-// Order is preserved by the caller — this only checks membership, never sorts.
-func validateAllowedIntegrationProviders(providers []string) error {
+// validateAllowedIntegrationProviders ensures every entry is a non-nil, known
+// types.SecretProvider. Order is preserved by the caller — this only checks membership,
+// never sorts.
+func validateAllowedIntegrationProviders(providers []*types.SecretProvider) error {
 	for i, p := range providers {
-		if err := types.SecretProvider(p).Validate(); err != nil {
+		if p == nil {
+			return ierr.NewError("integration provider cannot be null").
+				WithHintf("Integration provider at index %d cannot be null", i).
+				Mark(ierr.ErrValidation)
+		}
+		if err := p.Validate(); err != nil {
 			return ierr.WithError(err).
-				WithHintf("Invalid integration provider %q at index %d", p, i).
+				WithHintf("Invalid integration provider %q at index %d", *p, i).
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -209,7 +215,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		AddressCountry:              r.AddressCountry,
 		Timezone:                    tz,
 		Metadata:                    r.Metadata,
-		AllowedIntegrationProviders: r.AllowedIntegrationProviders,
+		AllowedIntegrationProviders: types.DerefSecretProviders(r.AllowedIntegrationProviders),
 		EnvironmentID:               types.GetEnvironmentID(ctx),
 		BaseModel:                   types.GetDefaultBaseModel(ctx),
 	}

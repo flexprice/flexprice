@@ -268,7 +268,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	// Update allowed integration providers if provided.
 	// nil ⇒ leave unchanged; empty slice ⇒ clear (revert to fixed code order).
 	if req.AllowedIntegrationProviders != nil {
-		cust.AllowedIntegrationProviders = *req.AllowedIntegrationProviders
+		cust.AllowedIntegrationProviders = types.DerefSecretProviders(*req.AllowedIntegrationProviders)
 	}
 
 	// Validate address fields after update
