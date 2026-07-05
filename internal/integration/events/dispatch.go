@@ -163,7 +163,7 @@ func resolveAllowedProviders(
 	inv, err := invoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		if ierr.IsNotFound(err) || ent.IsNotFound(err) {
-			log.Warn(ctx, "integration_events: invoice not found while resolving sync target, defaulting to fixed order",
+			log.Info(ctx, "integration_events: invoice not found while resolving sync target, defaulting to fixed order",
 				"invoice_id", invoiceID)
 			return nil, nil
 		}
@@ -177,7 +177,7 @@ func resolveAllowedProviders(
 	cust, err := customerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
 		if ierr.IsNotFound(err) || ent.IsNotFound(err) {
-			log.Warn(ctx, "integration_events: customer not found while resolving sync target, defaulting to fixed order",
+			log.Info(ctx, "integration_events: customer not found while resolving sync target, defaulting to fixed order",
 				"customer_id", inv.CustomerID, "invoice_id", invoiceID)
 			return nil, nil
 		}
@@ -301,7 +301,8 @@ func DispatchInvoiceVendorSync(
 	if !ok {
 		// Should not happen: target came from invoiceSyncProviderOrder.
 		log.Error(ctx, "integration_events: resolved provider has no invoice trigger",
-			"invoice_id", in.InvoiceID, "resolved_provider", target)
+			"invoice_id", in.InvoiceID, "resolved_provider", target,
+			"error", fmt.Errorf("provider %s resolved but has no invoice trigger", target))
 		return nil
 	}
 	if err := trigger(); err != nil {
