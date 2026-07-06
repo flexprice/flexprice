@@ -123,11 +123,11 @@ func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
 }
 
 func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItemRepository {
-	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.SubscriptionPhaseRepository {
-	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
@@ -139,7 +139,7 @@ func NewWalletRepository(p RepositoryParams) wallet.Repository {
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
-	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
@@ -151,7 +151,7 @@ func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
 }
 
 func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
-	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
@@ -183,7 +183,7 @@ func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
 }
 
 func NewCostsheetRepository(p RepositoryParams) costsheet.Repository {
-	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger)
 }
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
@@ -207,7 +207,7 @@ func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
 }
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
-	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewConnectionRepository(p RepositoryParams) connection.Repository {
@@ -247,7 +247,7 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
-	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger)
 }
 
 func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {

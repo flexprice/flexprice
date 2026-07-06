@@ -439,7 +439,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 
 	// TODO: This is done to ensure backwards compatibility with the old repository.
 	// We should remove this once we migrate all callers to use the new repository.
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		r.logger.Error(ctx, "failed to get invoice line items", "error", err)
@@ -504,7 +504,7 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 	result := domainInvoice.FromEnt(inv)
 
 	// Fetch line items separately (consistent with Get pattern)
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)

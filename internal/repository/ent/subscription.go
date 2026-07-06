@@ -831,7 +831,7 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 	s := domainSub.GetSubscriptionFromEnt(sub)
 
 	// Use ListBySubscription as the source of truth for line items
-	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger, r.cache)
+	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger)
 	lineItems, err := lineItemRepo.ListBySubscription(ctx, s)
 	if err != nil {
 		SetSpanError(span, err)

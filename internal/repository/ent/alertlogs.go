@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainAlertLogs "github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,15 +21,13 @@ type alertLogsRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts AlertLogQueryOptions
-	cache     cache.InMemoryCache
 }
 
-func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainAlertLogs.Repository {
+func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger) domainAlertLogs.Repository {
 	return &alertLogsRepository{
 		client:    client,
 		log:       log,
 		queryOpts: AlertLogQueryOptions{},
-		cache:     cache,
 	}
 }
 
