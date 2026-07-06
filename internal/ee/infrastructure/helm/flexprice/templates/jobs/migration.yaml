@@ -311,11 +311,13 @@ spec:
               echo "✅ Ent migrations complete"
           env:
             {{- include "flexprice.env" . | nindent 12 }}
+          {{- if not .Values.env }}
           volumeMounts:
             - name: config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
               readOnly: true
+          {{- end }}
           resources:
             {{- toYaml .Values.migration.resources | nindent 12 }}
         {{- end }}
@@ -455,10 +457,12 @@ spec:
           env:
             {{- include "flexprice.env" . | nindent 12 }}
           volumeMounts:
+            {{- if not .Values.env }}
             - name: config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
               readOnly: true
+            {{- end }}
             - name: tools
               mountPath: /tools
             {{- with .Values.extraVolumeMounts }}
@@ -468,9 +472,11 @@ spec:
             {{- toYaml .Values.migration.resources | nindent 12 }}
 
       volumes:
+        {{- if not .Values.env }}
         - name: config
           configMap:
             name: {{ include "flexprice.fullname" . }}-config
+        {{- end }}
         - name: tools
           emptyDir: {}
         {{- if .Values.migration.steps.clickhouse }}
