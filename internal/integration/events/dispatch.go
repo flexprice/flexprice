@@ -305,7 +305,7 @@ func DispatchInvoiceVendorSync(
 			"error", fmt.Errorf("provider %s resolved but has no invoice trigger", target))
 		return nil
 	}
-	if err := trigger(); err != nil {
+	if err = trigger(); err != nil {
 		return fmt.Errorf("integration_events: provider dispatch failed for invoice %s: %w", in.InvoiceID, err)
 	}
 	return nil
