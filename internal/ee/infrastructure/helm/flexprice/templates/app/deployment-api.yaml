@@ -19,7 +19,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if not .Values.env }}
         checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        {{- end }}
         checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -70,19 +72,23 @@ spec:
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           volumeMounts:
+            {{- if not .Values.env }}
             - name: config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
               readOnly: true
+            {{- end }}
             - name: tmp
               mountPath: /tmp
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
+        {{- if not .Values.env }}
         - name: config
           configMap:
             name: {{ include "flexprice.fullname" . }}-config
+        {{- end }}
         - name: tmp
           emptyDir: {}
         {{- with .Values.extraVolumes }}
