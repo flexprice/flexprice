@@ -226,6 +226,13 @@ temporal:
     retry_max_interval_seconds: 10
     retry_backoff_coefficient: 1.5
 
+# ⚠️ DO NOT EMPTY OR CHANGE THIS VALUE WITHOUT A KEY-RECONCILIATION PLAN.
+# The app reads only `secrets.encryption_key` (env: FLEXPRICE_SECRETS_ENCRYPTION_KEY).
+# ECS prod sets FLEXPRICE_ENCRYPTION_KEY (a DIFFERENT name) which the loader does NOT read,
+# so ECS prod is currently decrypting live data with THIS baked value. Emptying it, or
+# binding FLEXPRICE_ENCRYPTION_KEY, would switch the key and make existing ciphertext
+# undecryptable. Reconcile the env name + re-encrypt data as a separate migration before
+# this field is treated as a rejectable secret. Tracked separately — see summary.
 secrets:
   encryption_key: "031f6bbed1156eca651d48652c17a5bce727514cc804f185aca207153b2915abb79c0f1b53945915866dc3b63f37ea73aa86fc062f13e6008249e30819f87483"
 
