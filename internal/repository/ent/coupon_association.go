@@ -484,25 +484,26 @@ func (r *couponAssociationRepository) SetCache(ctx context.Context, association 
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, association.ID)
-	r.cache.Set(ctx, cacheKey, association, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), association.ID)
+	r.cache.Set(ctx, cacheKey, association, cache.ExpiryDefaultRedis)
 }
 
-func (r *couponAssociationRepository) GetCache(ctx context.Context, key string) *domainCouponAssociation.CouponAssociation {
+func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *domainCouponAssociation.CouponAssociation {
 	span := cache.StartCacheSpan(ctx, "coupon_association", "get", map[string]interface{}{
-		"association_id": key,
+		"association_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCouponAssociation.CouponAssociation)
+	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	ca, ok := cache.UnmarshalCacheValue[domainCouponAssociation.CouponAssociation](value)
+	if !ok {
+		return nil
+	}
+	return ca
 }
 
 func (r *couponAssociationRepository) DeleteCache(ctx context.Context, associationID string) {
@@ -511,8 +512,6 @@ func (r *couponAssociationRepository) DeleteCache(ctx context.Context, associati
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, associationID)
+	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), associationID)
 	r.cache.Delete(ctx, cacheKey)
 }

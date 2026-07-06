@@ -934,25 +934,26 @@ func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wa
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, wallet.ID)
-	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), wallet.ID)
+	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultRedis)
 }
 
-func (r *walletRepository) GetCache(ctx context.Context, key string) *walletdomain.Wallet {
+func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
-		"wallet_id": key,
+		"wallet_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*walletdomain.Wallet)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	w, ok := cache.UnmarshalCacheValue[walletdomain.Wallet](value)
+	if !ok {
+		return nil
+	}
+	return w
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
@@ -961,9 +962,7 @@ func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), walletID)
 	r.cache.Delete(ctx, cacheKey)
 }
 

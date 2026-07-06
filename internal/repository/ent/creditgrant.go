@@ -599,27 +599,26 @@ func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domai
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, creditGrant.ID)
-	r.cache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrant.ID)
+	r.cache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultRedis)
 }
 
-func (r *creditGrantRepository) GetCache(ctx context.Context, key string) *domainCreditGrant.CreditGrant {
+func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
 	span := cache.StartCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
-		"creditgrant_id": key,
+		"creditgrant_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCreditGrant.CreditGrant)
+	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cg, ok := cache.UnmarshalCacheValue[domainCreditGrant.CreditGrant](value)
+	if !ok {
+		return nil
+	}
+	return cg
 }
 
 func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID string) {
@@ -628,9 +627,6 @@ func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID s
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, creditGrantID)
+	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrantID)
 	r.cache.Delete(ctx, cacheKey)
 }

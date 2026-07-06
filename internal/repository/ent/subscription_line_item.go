@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -25,16 +24,14 @@ type subscriptionLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SubscriptionLineItemQueryOptions
-	cache     cache.InMemoryCache
 }
 
 // NewSubscriptionLineItemRepository creates a new subscription line item repository
-func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) subscription.LineItemRepository {
+func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logger) subscription.LineItemRepository {
 	return &subscriptionLineItemRepository{
 		client:    client,
 		log:       log,
 		queryOpts: SubscriptionLineItemQueryOptions{},
-		cache:     cache,
 	}
 }
 
@@ -164,11 +161,6 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedItem := r.GetCache(ctx, id); cachedItem != nil {
-		return cachedItem, nil
-	}
-
 	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
@@ -210,7 +202,6 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 	}
 
 	lineItemData := subscription.SubscriptionLineItemFromEnt(item)
-	r.SetCache(ctx, lineItemData)
 	SetSpanSuccess(span)
 	return lineItemData, nil
 }
@@ -279,8 +270,6 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Invalidate cache after update
-	r.DeleteCache(ctx, item.ID)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -355,8 +344,6 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Invalidate cache after delete
-	r.DeleteCache(ctx, id)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -787,44 +774,4 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 	}
 
 	return query, nil
-}
-
-// Cache operations
-func (r *subscriptionLineItemRepository) SetCache(ctx context.Context, lineItem *subscription.SubscriptionLineItem) {
-	span := cache.StartCacheSpan(ctx, "subscription_line_item", "set", map[string]interface{}{
-		"line_item_id": lineItem.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, lineItem.ID)
-	r.cache.Set(ctx, cacheKey, lineItem, cache.ExpiryDefaultInMemory)
-}
-
-func (r *subscriptionLineItemRepository) GetCache(ctx context.Context, key string) *subscription.SubscriptionLineItem {
-	span := cache.StartCacheSpan(ctx, "subscription_line_item", "get", map[string]interface{}{
-		"line_item_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*subscription.SubscriptionLineItem)
-	}
-	return nil
-}
-
-func (r *subscriptionLineItemRepository) DeleteCache(ctx context.Context, lineItemID string) {
-	span := cache.StartCacheSpan(ctx, "subscription_line_item", "delete", map[string]interface{}{
-		"line_item_id": lineItemID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscriptionLineItem, tenantID, environmentID, lineItemID)
-	r.cache.Delete(ctx, cacheKey)
 }

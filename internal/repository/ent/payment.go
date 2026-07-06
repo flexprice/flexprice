@@ -767,25 +767,26 @@ func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, payment.ID)
-	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), payment.ID)
+	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
 }
 
-func (r *paymentRepository) GetCache(ctx context.Context, key string) *domainPayment.Payment {
+func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
 	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
-		"payment_id": key,
+		"payment_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPayment.Payment)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPayment.Payment](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
@@ -794,8 +795,6 @@ func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, paymentID)
+	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), paymentID)
 	r.cache.Delete(ctx, cacheKey)
 }

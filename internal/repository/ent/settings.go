@@ -354,33 +354,26 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Set both ID and key based cache entries
-	idKey := cache.GenerateKey(cache.PrefixSettings, tenantID, environmentID, setting.ID)
-	keyKey := cache.GenerateKey(cache.PrefixSettings, tenantID, environmentID, setting.Key)
-
-	r.cache.Set(ctx, idKey, setting, cache.ExpiryDefaultInMemory)
-	r.cache.Set(ctx, keyKey, setting, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "id_key", idKey, "key_key", keyKey)
+	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
+	r.cache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
 }
 
-func (r *settingsRepository) GetCache(ctx context.Context, key string) *domainSettings.Setting {
+func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
 	span := cache.StartCacheSpan(ctx, "settings", "get", map[string]interface{}{
-		"key": key,
+		"key": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if setting, ok := value.(*domainSettings.Setting); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return setting
-		}
+	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	s, ok := cache.UnmarshalCacheValue[domainSettings.Setting](value)
+	if !ok {
+		return nil
+	}
+	return s
 }
 
 func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSettings.Setting) {
@@ -390,15 +383,8 @@ func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSet
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Delete both ID and key based cache entries
-	idKey := cache.GenerateKey(cache.PrefixSettings, tenantID, environmentID, setting.ID)
-	keyKey := cache.GenerateKey(cache.PrefixSettings, tenantID, environmentID, setting.Key)
-	r.cache.Delete(ctx, idKey)
-	r.cache.Delete(ctx, keyKey)
-	r.log.Debug(ctx, "cache deleted", "id_key", idKey, "key_key", keyKey)
+	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
+	r.cache.Delete(ctx, cacheKey)
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments

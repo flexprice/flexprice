@@ -439,7 +439,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 
 	// TODO: This is done to ensure backwards compatibility with the old repository.
 	// We should remove this once we migrate all callers to use the new repository.
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		r.logger.Error(ctx, "failed to get invoice line items", "error", err)
@@ -504,7 +504,7 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 	result := domainInvoice.FromEnt(inv)
 
 	// Fetch line items separately (consistent with Get pattern)
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
@@ -781,11 +781,8 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 		"idempotency_key": key,
 	})
 	defer FinishSpan(span)
-	// Try to get from cache first
-	if cachedInvoice := r.GetCache(ctx, key); cachedInvoice != nil {
-		return cachedInvoice, nil
-	}
 
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	inv, err := r.client.Writer(ctx).Invoice.Query().
 		Where(
 			invoice.IdempotencyKeyEQ(key),
@@ -802,9 +799,7 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 		return nil, ierr.WithError(err).WithHint("failed to get invoice by idempotency key").Mark(ierr.ErrDatabase)
 	}
 
-	invoiceData := domainInvoice.FromEnt(inv)
-	r.SetCache(ctx, invoiceData)
-	return invoiceData, nil
+	return domainInvoice.FromEnt(inv), nil
 }
 
 func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
@@ -1166,30 +1161,26 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.ID)
-	r.cache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultInMemory)
-
-	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.IdempotencyKey)
-	r.cache.Set(ctx, idempotencyKey, inv, cache.ExpiryDefaultInMemory)
-
-	r.logger.Debug(ctx, "set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
+	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), inv.ID)
+	r.cache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
 }
 
-func (r *invoiceRepository) GetCache(ctx context.Context, key string) *domainInvoice.Invoice {
+func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
 	span := cache.StartCacheSpan(ctx, "invoice", "get", map[string]interface{}{
-		"invoice_id": key,
+		"invoice_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainInvoice.Invoice)
+	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	inv, ok := cache.UnmarshalCacheValue[domainInvoice.Invoice](value)
+	if !ok {
+		return nil
+	}
+	return inv
 }
 
 func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
@@ -1198,19 +1189,8 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, key)
+	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	r.cache.Delete(ctx, cacheKey)
-
-	// get idempotency key
-	invoice, err := r.Get(ctx, key)
-	if err != nil {
-		r.logger.Error(ctx, "failed to get invoice by idempotency key", "error", err)
-		return
-	}
-	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
-	r.cache.Delete(ctx, idempotencyKey)
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination

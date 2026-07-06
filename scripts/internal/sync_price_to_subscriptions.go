@@ -248,7 +248,7 @@ func newSyncPriceToSubscriptionsScript() (*syncPriceToSubscriptionsScript, error
 	planRepo := entRepo.NewPlanRepository(client, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)
 	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, cacheClient)
-	lineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log, cacheClient)
+	lineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log)
 
 	return &syncPriceToSubscriptionsScript{
 		log:              log,

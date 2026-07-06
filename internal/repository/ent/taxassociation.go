@@ -287,27 +287,26 @@ func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxCon
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
-	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
+	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultRedis)
 }
 
-func (r *taxAssociationRepository) GetCache(ctx context.Context, key string) *domainTaxConfig.TaxAssociation {
+func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
 	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
-		"tax_association_id": key,
+		"tax_association_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if tc, ok := value.(*domainTaxConfig.TaxAssociation); ok {
-			return tc
-		}
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	tc, ok := cache.UnmarshalCacheValue[domainTaxConfig.TaxAssociation](value)
+	if !ok {
+		return nil
+	}
+	return tc
 }
 
 func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
@@ -316,9 +315,7 @@ func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTax
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
 	r.cache.Delete(ctx, cacheKey)
 }
 

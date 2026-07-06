@@ -396,25 +396,26 @@ func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, meter.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), meter.ID)
 	r.cache.Set(ctx, cacheKey, meter, cache.ExpiryDefaultInMemory)
 }
 
-func (r *meterRepository) GetCache(ctx context.Context, key string) *domainMeter.Meter {
-	span := cache.StartCacheSpan(ctx, "meter", "get", map[string]interface{}{
-		"meter_id": key,
+func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.Meter {
+	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+		"meter_id": meter.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainMeter.Meter)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	m, ok := cache.UnmarshalCacheValue[domainMeter.Meter](value)
+	if !ok {
+		return nil
+	}
+	return m
 }
 
 func (r *meterRepository) DeleteCache(ctx context.Context, meterID string) {
@@ -423,8 +424,6 @@ func (r *meterRepository) DeleteCache(ctx context.Context, meterID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixMeter, tenantID, environmentID, meterID)
+	cacheKey := cache.GenerateKey(cache.PrefixMeter, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), meterID)
 	r.cache.Delete(ctx, cacheKey)
 }

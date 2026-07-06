@@ -11,7 +11,7 @@ import (
 )
 
 // DefaultExpiration is the default expiration time for cache entries
-const DefaultExpiration = 30 * time.Minute
+const DefaultExpiration = 2 * time.Minute
 
 // DefaultCleanupInterval is how often expired items are removed from the cache
 const DefaultCleanupInterval = 1 * time.Hour

@@ -168,11 +168,7 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedCustomer := r.GetCache(ctx, lookupKey); cachedCustomer != nil {
-		return cachedCustomer, nil
-	}
-
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	client := r.client.Reader(ctx)
 
 	r.log.Debug(ctx, "getting customer by lookup key", "lookup_key", lookupKey)
@@ -204,11 +200,12 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 
 	SetSpanSuccess(span)
 
-	customer := domainCustomer.FromEnt(c)
-	// Set cache
-	r.SetCache(ctx, customer)
-
-	return customer, nil
+	// The lookup-key path is not cache-readable (cache is keyed by ID), but the
+	// DB result carries the canonical ID, so warm the ID-keyed entry to save a
+	// later Get(ctx, customer.ID) round-trip.
+	result := domainCustomer.FromEnt(c)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
@@ -551,40 +548,31 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 }
 
 func (r *customerRepository) SetCache(ctx context.Context, customer *domainCustomer.Customer) {
-
 	span := cache.StartCacheSpan(ctx, "customer", "set", map[string]interface{}{
 		"customer_id": customer.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Set both ID and external ID based cache entries
-	custIdKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ID)
-	extIDKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ExternalID)
-
-	r.cache.Set(ctx, custIdKey, customer, cache.ExpiryDefaultInMemory)
-	r.cache.Set(ctx, extIDKey, customer, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "id_key", custIdKey, "ext_key", extIDKey)
+	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
+	r.cache.Set(ctx, cacheKey, customer, cache.ExpiryDefaultRedis)
 }
 
-func (r *customerRepository) GetCache(ctx context.Context, key string) *domainCustomer.Customer {
-
+func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCustomer.Customer {
 	span := cache.StartCacheSpan(ctx, "customer", "get", map[string]interface{}{
-		"customer_id": key,
+		"customer_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if customer, ok := value.(*domainCustomer.Customer); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return customer
-		}
+	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainCustomer.Customer](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCustomer.Customer) {
@@ -593,13 +581,6 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Delete ID-based cache first
-	custIdKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ID)
-	extIDKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ExternalID)
-	r.cache.Delete(ctx, custIdKey)
-	r.cache.Delete(ctx, extIDKey)
-	r.log.Debug(ctx, "cache deleted", "ext_key", extIDKey)
+	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
+	r.cache.Delete(ctx, cacheKey)
 }

@@ -532,29 +532,26 @@ func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Co
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
 	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
-func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
+func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
 	span := cache.StartCacheSpan(ctx, "coupon", "get", map[string]interface{}{
-		"coupon_id": key,
+		"coupon_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return coupon
-		}
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainCoupon.Coupon](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon.Coupon) {
@@ -563,10 +560,6 @@ func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

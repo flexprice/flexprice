@@ -95,7 +95,7 @@ func NewMeterRepository(p RepositoryParams) meter.Repository {
 }
 
 func NewUserRepository(p RepositoryParams) user.Repository {
-	return entRepo.NewUserRepository(p.EntClient, p.Logger)
+	return entRepo.NewUserRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewAuthRepository(p RepositoryParams) auth.Repository {
@@ -103,11 +103,11 @@ func NewAuthRepository(p RepositoryParams) auth.Repository {
 }
 
 func NewPriceRepository(p RepositoryParams) price.Repository {
-	return entRepo.NewPriceRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPriceRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCustomerRepository(p RepositoryParams) customer.Repository {
-	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCustomerRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewPlanRepository(p RepositoryParams) plan.Repository {
@@ -119,15 +119,15 @@ func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
-	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItemRepository {
-	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.SubscriptionPhaseRepository {
-	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
@@ -135,23 +135,23 @@ func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.Subscrip
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
-	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
-	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
-	return entRepo.NewEnvironmentRepository(p.EntClient, p.Logger)
+	return entRepo.NewEnvironmentRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
-	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
-	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
@@ -163,11 +163,11 @@ func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 }
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {
-	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
-	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {
@@ -175,19 +175,19 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 }
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
-	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
-	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCostsheetRepository(p RepositoryParams) costsheet.Repository {
-	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger)
 }
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
-	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditGrantApplicationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCouponRepository(p RepositoryParams) coupon.Repository {
@@ -195,7 +195,7 @@ func NewCouponRepository(p RepositoryParams) coupon.Repository {
 }
 
 func NewCouponAssociationRepository(p RepositoryParams) coupon_association.Repository {
-	return entRepo.NewCouponAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCouponApplicationRepository(p RepositoryParams) coupon_application.Repository {
@@ -207,15 +207,15 @@ func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
 }
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
-	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditNoteLineItemRepository(p.EntClient, p.Logger)
 }
 
 func NewConnectionRepository(p RepositoryParams) connection.Repository {
-	return entRepo.NewConnectionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewConnectionRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegrationmapping.Repository {
-	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
@@ -223,7 +223,7 @@ func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
-	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
@@ -239,7 +239,7 @@ func NewAddonRepository(p RepositoryParams) addon.Repository {
 }
 
 func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Repository {
-	return entRepo.NewAddonAssociationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAddonAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
@@ -247,7 +247,7 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
-	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger)
 }
 
 func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {
@@ -283,7 +283,7 @@ func NewMeterUsageBenchmarkRepository(p RepositoryParams) events.MeterUsageBench
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
-	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger)
 }
 
 func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.Repository {

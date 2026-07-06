@@ -649,31 +649,26 @@ func (r *connectionRepository) SetCache(ctx context.Context, connection *domainC
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Set ID based cache entry
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, tenantID, environmentID, connection.ID)
-
-	r.cache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
+	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), connection.ID)
+	r.cache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultRedis)
 }
 
-func (r *connectionRepository) GetCache(ctx context.Context, key string) *domainConnection.Connection {
+func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainConnection.Connection {
 	span := cache.StartCacheSpan(ctx, "connection", "get", map[string]interface{}{
-		"connection_id": key,
+		"connection_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if connection, ok := value.(*domainConnection.Connection); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return connection
-		}
+	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainConnection.Connection](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *connectionRepository) DeleteCache(ctx context.Context, connection *domainConnection.Connection) {
@@ -682,11 +677,6 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Delete ID-based cache
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, tenantID, environmentID, connection.ID)
+	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), connection.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

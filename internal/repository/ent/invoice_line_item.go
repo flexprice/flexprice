@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/internal/cache"
 	domaininvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -25,7 +24,6 @@ const invoiceLineItemBatchSize = 1000
 type invoiceLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
-	cache     cache.InMemoryCache
 	queryOpts InvoiceLineItemQueryOptions
 }
 
@@ -33,52 +31,8 @@ type invoiceLineItemRepository struct {
 func NewInvoiceLineItemRepository(
 	client postgres.IClient,
 	log *logger.Logger,
-	c cache.InMemoryCache,
 ) domaininvoice.LineItemRepository {
-	return &invoiceLineItemRepository{client: client, log: log, cache: c, queryOpts: InvoiceLineItemQueryOptions{}}
-}
-
-// Cache helpers
-
-func (r *invoiceLineItemRepository) SetCache(ctx context.Context, item *domaininvoice.InvoiceLineItem) {
-	span := cache.StartCacheSpan(ctx, "invoice_line_item", "set", map[string]interface{}{
-		"line_item_id": item.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoiceLineItem, tenantID, environmentID, item.ID)
-	r.cache.Set(ctx, cacheKey, item, cache.ExpiryDefaultInMemory)
-}
-
-func (r *invoiceLineItemRepository) GetCache(ctx context.Context, id string) *domaininvoice.InvoiceLineItem {
-	span := cache.StartCacheSpan(ctx, "invoice_line_item", "get", map[string]interface{}{
-		"line_item_id": id,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoiceLineItem, tenantID, environmentID, id)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if item, ok := value.(*domaininvoice.InvoiceLineItem); ok {
-			return item
-		}
-	}
-	return nil
-}
-
-func (r *invoiceLineItemRepository) DeleteCache(ctx context.Context, id string) {
-	span := cache.StartCacheSpan(ctx, "invoice_line_item", "delete", map[string]interface{}{
-		"line_item_id": id,
-	})
-	defer cache.FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoiceLineItem, tenantID, environmentID, id)
-	r.cache.Delete(ctx, cacheKey)
+	return &invoiceLineItemRepository{client: client, log: log, queryOpts: InvoiceLineItemQueryOptions{}}
 }
 
 // Create creates a single invoice line item.
@@ -257,11 +211,6 @@ func (r *invoiceLineItemRepository) Get(ctx context.Context, id string) (*domain
 	})
 	defer FinishSpan(span)
 
-	if cached := r.GetCache(ctx, id); cached != nil {
-		SetSpanSuccess(span)
-		return cached, nil
-	}
-
 	r.log.Debug(ctx, "getting invoice line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
@@ -294,7 +243,6 @@ func (r *invoiceLineItemRepository) Get(ctx context.Context, id string) (*domain
 	}
 
 	result := domaininvoice.LineItemFromEnt(item)
-	r.SetCache(ctx, result)
 	SetSpanSuccess(span)
 	return result, nil
 }
@@ -350,7 +298,6 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, item.ID)
 	SetSpanSuccess(span)
 	return nil
 }
@@ -396,7 +343,6 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, id)
 	SetSpanSuccess(span)
 	return nil
 }

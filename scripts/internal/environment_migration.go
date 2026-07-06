@@ -50,7 +50,7 @@ func newMigrationScript() (*migrationScript, error) {
 
 	// Initialize repositories
 	tenantRepo := entRepo.NewTenantRepository(pgClient, log, cacheClient)
-	environmentRepo := entRepo.NewEnvironmentRepository(pgClient, log)
+	environmentRepo := entRepo.NewEnvironmentRepository(pgClient, log, cacheClient)
 
 	return &migrationScript{
 		cfg:             cfg,

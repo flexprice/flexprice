@@ -160,11 +160,7 @@ func (r *addonRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedAddon := r.GetCache(ctx, lookupKey); cachedAddon != nil {
-		return cachedAddon, nil
-	}
-
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	client := r.client.Reader(ctx)
 
 	r.log.Debug(ctx, "getting addon by lookup key",
@@ -538,19 +534,22 @@ func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon
 	r.cache.Set(ctx, cacheKey, addon, cache.ExpiryDefaultInMemory)
 }
 
-func (r *addonRepository) GetCache(ctx context.Context, key string) *domainAddon.Addon {
+func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.Addon {
 	span := cache.StartCacheSpan(ctx, "addon", "get", map[string]interface{}{
-		"addon_id": key,
+		"addon_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainAddon.Addon)
+	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	a, ok := cache.UnmarshalCacheValue[domainAddon.Addon](value)
+	if !ok {
+		return nil
+	}
+	return a
 }
 
 func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
@@ -559,8 +558,6 @@ func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, addonID)
+	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonID)
 	r.cache.Delete(ctx, cacheKey)
 }

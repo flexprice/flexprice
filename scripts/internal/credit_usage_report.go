@@ -13,11 +13,11 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -228,8 +228,8 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 	customerRepo := entRepo.NewCustomerRepository(client, log, cacheClient)
 	walletRepo := entRepo.NewWalletRepository(client, log, cacheClient)
 	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, cacheClient)
-	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log, cacheClient)
-	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, log, cacheClient)
+	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log)
+	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, log)
 	planRepo := entRepo.NewPlanRepository(client, log, cacheClient)
 	priceRepo := entRepo.NewPriceRepository(client, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)

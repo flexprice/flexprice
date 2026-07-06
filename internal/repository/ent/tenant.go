@@ -208,13 +208,13 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
 	// L1 first
 	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
-	// L2 fallback
+	// L2 fallback (recorded by the cache implementation itself)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
