@@ -91,11 +91,12 @@ func newPricingImportScript(tenantID, environmentID string) (*pricingImportScrip
 	// Create postgres client
 	pgClient := postgres.NewClient(entClients, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
 	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(pgClient, log, cacheClient)
 
 	return &pricingImportScript{

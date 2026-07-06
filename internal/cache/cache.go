@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/types"
 )
 
-// InMemoryCache defines the interface for caching operations
-type InMemoryCache interface {
+// BaseCache provides common caching operations
+type BaseCache interface {
 	IsEnabled() bool
 
 	// Get retrieves a value from the cache
@@ -38,10 +40,17 @@ type InMemoryCache interface {
 	ForceCacheDelete(ctx context.Context, key string)
 }
 
+// InMemoryCache defines the interface for caching operations
+type InMemoryCache interface {
+	BaseCache
+	IsInMemory() bool
+}
+
 type RedisCache interface {
-	InMemoryCache
+	BaseCache
+	IsRedisCache() bool
+
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
-	AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error)
 }
 
 // Predefined cache key prefixes for different entity types
@@ -91,12 +100,19 @@ const (
 
 // GenerateKey creates a cache key from a prefix and a set of parameters
 // It joins all parameters with a colon and appends them to the prefix
-func GenerateKey(prefix string, params ...interface{}) string {
-	parts := make([]string, len(params)+1)
-	parts[0] = prefix
+func GenerateKey(ctx context.Context, prefix string, params ...any) string {
+	parts := make([]string, 0, len(params)+3)
 
-	for i, param := range params {
-		parts[i+1] = fmt.Sprintf("%v", param)
+	tenantId := types.GetTenantID(ctx)
+	environmentId := types.GetEnvironmentID(ctx)
+	if tenantId != "" && environmentId != "" {
+		parts = append(parts, tenantId, environmentId)
+	}
+
+	parts = append(parts, prefix)
+
+	for _, param := range params {
+		parts = append(parts, fmt.Sprintf("%v", param))
 	}
 
 	return strings.Join(parts, ":")

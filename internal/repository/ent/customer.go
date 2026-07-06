@@ -20,18 +20,18 @@ import (
 )
 
 type customerRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CustomerQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CustomerQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCustomerRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCustomer.Repository {
+func NewCustomerRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCustomer.Repository {
 	return &customerRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CustomerQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CustomerQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -553,8 +553,8 @@ func (r *customerRepository) SetCache(ctx context.Context, customer *domainCusto
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
-	r.cache.Set(ctx, cacheKey, customer, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCustomer, customer.ID)
+	r.redisCache.Set(ctx, cacheKey, customer, cache.ExpiryDefaultRedis)
 }
 
 func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCustomer.Customer {
@@ -563,8 +563,8 @@ func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCus
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCustomer, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -581,6 +581,6 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customer.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCustomer, customer.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

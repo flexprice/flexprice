@@ -242,10 +242,8 @@ func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wa
 	}
 
 	// Generate cache key for this customer in this tenant/environment
-	cacheKey := cache.GenerateKey(
+	cacheKey := cache.GenerateKey(ctx,
 		cache.PrefixWalletAlertThrottle,
-		event.TenantID,
-		event.EnvironmentID,
 		event.CustomerID,
 	)
 
@@ -266,10 +264,8 @@ func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wa
 
 // markProcessed marks this customer as processed in cache to enable throttling
 func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wallet.WalletBalanceAlertEvent) {
-	cacheKey := cache.GenerateKey(
+	cacheKey := cache.GenerateKey(ctx,
 		cache.PrefixWalletAlertThrottle,
-		event.TenantID,
-		event.EnvironmentID,
 		event.CustomerID,
 	)
 

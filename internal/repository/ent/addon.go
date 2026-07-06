@@ -528,9 +528,7 @@ func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, tenantID, environmentID, addon.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddon, addon.ID)
 	r.cache.Set(ctx, cacheKey, addon, cache.ExpiryDefaultInMemory)
 }
 
@@ -540,7 +538,7 @@ func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddon, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -558,6 +556,6 @@ func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixAddon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddon, addonID)
 	r.cache.Delete(ctx, cacheKey)
 }

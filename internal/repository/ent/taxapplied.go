@@ -445,11 +445,8 @@ func (r *taxappliedRepository) SetCache(ctx context.Context, taxapplied *domainT
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
 	// Set both ID and external ID based cache entries
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
 	r.cache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultInMemory)
 
 	r.log.Debug(ctx, "cache set", "id_key", cacheKey)
@@ -461,15 +458,16 @@ func (r *taxappliedRepository) GetCache(ctx context.Context, key string) *domain
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if taxapplied, ok := value.(*domainTaxApplied.TaxApplied); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return taxapplied
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, key)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	r.log.Debug(ctx, "cache miss", "key", cacheKey)
-	return nil
+	ta, ok := cache.UnmarshalCacheValue[domainTaxApplied.TaxApplied](value)
+	if !ok {
+		return nil
+	}
+	return ta
 }
 
 func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *domainTaxApplied.TaxApplied) {
@@ -478,11 +476,8 @@ func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *doma
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
 	// Delete ID-based cache first
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
 	r.cache.Delete(ctx, cacheKey)
 	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

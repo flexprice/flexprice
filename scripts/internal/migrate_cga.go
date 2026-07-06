@@ -12,10 +12,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	_ "github.com/lib/pq"
@@ -45,11 +45,11 @@ func MigrateCGA() error {
 	}
 
 	pgClient := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
-	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
-	subscriptionRepo := entRepo.NewSubscriptionRepository(pgClient, log, cacheClient)
-	cgaRepo := entRepo.NewCreditGrantApplicationRepository(pgClient, log, cacheClient)
-	creditGrantRepo := entRepo.NewCreditGrantRepository(pgClient, log, cacheClient)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(pgClient, log, redisCache)
+	cgaRepo := entRepo.NewCreditGrantApplicationRepository(pgClient, log, redisCache)
+	creditGrantRepo := entRepo.NewCreditGrantRepository(pgClient, log, redisCache)
 
 	baseCtx := context.Background()
 

@@ -598,7 +598,7 @@ func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), feature.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, feature.ID)
 	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
 }
 
@@ -608,7 +608,7 @@ func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeat
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -626,6 +626,6 @@ func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), featureID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, featureID)
 	r.cache.Delete(ctx, cacheKey)
 }

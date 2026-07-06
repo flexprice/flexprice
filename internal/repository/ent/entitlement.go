@@ -685,7 +685,7 @@ func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domai
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), entitlement.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlement.ID)
 	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultRedis)
 }
 
@@ -695,7 +695,7 @@ func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domain
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -713,6 +713,6 @@ func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID s
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), entitlementID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlementID)
 	r.cache.Delete(ctx, cacheKey)
 }

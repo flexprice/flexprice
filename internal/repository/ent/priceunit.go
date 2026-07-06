@@ -491,7 +491,7 @@ func (r *priceUnitRepository) SetCache(ctx context.Context, priceUnit *domainPri
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), priceUnit.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, priceUnit.ID)
 	r.cache.Set(ctx, cacheKey, priceUnit, cache.ExpiryDefaultInMemory)
 }
 
@@ -501,7 +501,7 @@ func (r *priceUnitRepository) GetCache(ctx context.Context, id string) *domainPr
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -519,6 +519,6 @@ func (r *priceUnitRepository) DeleteCache(ctx context.Context, priceUnit *domain
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), priceUnit.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, priceUnit.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

@@ -18,16 +18,16 @@ import (
 )
 
 type settingsRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
-	cache  cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	redisCache cache.RedisCache
 }
 
-func NewSettingsRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainSettings.Repository {
+func NewSettingsRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainSettings.Repository {
 	return &settingsRepository{
-		client: client,
-		log:    log,
-		cache:  cache,
+		client:     client,
+		log:        log,
+		redisCache: redisCache,
 	}
 }
 
@@ -354,8 +354,8 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
-	r.cache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, setting.ID)
+	r.redisCache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
@@ -364,8 +364,8 @@ func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSet
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -383,8 +383,8 @@ func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSet
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), setting.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, setting.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments

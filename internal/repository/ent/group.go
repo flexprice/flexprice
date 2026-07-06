@@ -248,7 +248,7 @@ func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) 
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), grp.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, grp.ID)
 	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultRedis)
 }
 
@@ -258,7 +258,7 @@ func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -276,7 +276,7 @@ func (r *groupRepository) DeleteCache(ctx context.Context, id string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixGroup, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, id)
 	r.cache.Delete(ctx, cacheKey)
 }
 

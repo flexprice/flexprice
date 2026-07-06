@@ -517,7 +517,7 @@ func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), taxrate.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, taxrate.ID)
 	r.cache.Set(ctx, cacheKey, taxrate, cache.ExpiryDefaultInMemory)
 }
 
@@ -527,7 +527,7 @@ func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxR
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -545,6 +545,6 @@ func (r *taxrateRepository) DeleteCache(ctx context.Context, taxrate *domainTaxR
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), taxrate.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, taxrate.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

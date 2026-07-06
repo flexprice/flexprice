@@ -182,18 +182,18 @@ func (o CouponAssociationQueryOptions) applyEntityQueryOptions(_ context.Context
 }
 
 type couponAssociationRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponAssociationQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponAssociationQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCouponAssociation.Repository {
+func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCouponAssociation.Repository {
 	return &couponAssociationRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponAssociationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponAssociationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -484,8 +484,8 @@ func (r *couponAssociationRepository) SetCache(ctx context.Context, association 
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), association.ID)
-	r.cache.Set(ctx, cacheKey, association, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, association.ID)
+	r.redisCache.Set(ctx, cacheKey, association, cache.ExpiryDefaultRedis)
 }
 
 func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *domainCouponAssociation.CouponAssociation {
@@ -494,8 +494,8 @@ func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -512,6 +512,6 @@ func (r *couponAssociationRepository) DeleteCache(ctx context.Context, associati
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), associationID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, associationID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

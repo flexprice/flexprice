@@ -1406,7 +1406,7 @@ func (s *costsheetUsageTrackingService) getCorrectUsageValueForPoint(point event
 func (s *costsheetUsageTrackingService) getActiveCostsheetWithCache(ctx context.Context) (*dto.CostsheetResponse, error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCostsheet, tenantID, environmentID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCostsheet)
 
 	// Try to get from cache first
 	cacheClient := cache.GetInMemoryCache()

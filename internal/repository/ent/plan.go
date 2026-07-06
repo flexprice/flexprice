@@ -505,7 +505,7 @@ func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), plan.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, plan.ID)
 	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultRedis)
 }
 
@@ -515,7 +515,7 @@ func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Pl
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -533,6 +533,6 @@ func (r *planRepository) DeleteCache(ctx context.Context, plan *domainPlan.Plan)
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), plan.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, plan.ID)
 	r.cache.Delete(ctx, cacheKey)
 }

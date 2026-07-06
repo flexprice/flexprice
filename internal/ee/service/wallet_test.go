@@ -2872,7 +2872,7 @@ func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wall
 // stringified, wrapped via the wallet prefix).
 func (s *WalletServiceSuite) primeCachedBalance(ctx context.Context, walletID string, balance decimal.Decimal, ttl time.Duration) {
 	ws := s.service.(*walletService)
-	key := cache.GenerateKey(cache.PrefixWallet, walletID)
+	key := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
 	ws.RedisCache.ForceCacheSet(ctx, key, balance.String(), ttl)
 }
 

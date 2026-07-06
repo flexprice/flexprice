@@ -47,9 +47,10 @@ func newMigrationScript() (*migrationScript, error) {
 	// Create postgres client
 	pgClient := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
-	tenantRepo := entRepo.NewTenantRepository(pgClient, log, cacheClient)
+	tenantRepo := entRepo.NewTenantRepository(pgClient, log, cacheClient, redisCache)
 	environmentRepo := entRepo.NewEnvironmentRepository(pgClient, log, cacheClient)
 
 	return &migrationScript{

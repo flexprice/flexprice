@@ -19,18 +19,18 @@ import (
 )
 
 type couponRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCoupon.Repository {
+func NewCouponRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCoupon.Repository {
 	return &couponRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -532,8 +532,8 @@ func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Co
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
-	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
 }
 
 func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
@@ -542,8 +542,8 @@ func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupo
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -560,6 +560,6 @@ func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), coupon.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

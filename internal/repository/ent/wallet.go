@@ -23,10 +23,10 @@ type walletRepository struct {
 	client    postgres.IClient
 	logger    *logger.Logger
 	queryOpts WalletTransactionQueryOptions
-	cache     cache.InMemoryCache
+	cache     cache.RedisCache
 }
 
-func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.RedisCache) walletdomain.Repository {
 	return &walletRepository{
 		client: client,
 		logger: logger,
@@ -934,7 +934,7 @@ func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wa
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), wallet.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, wallet.ID)
 	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultRedis)
 }
 
@@ -944,7 +944,7 @@ func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomai
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -962,7 +962,7 @@ func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
 	r.cache.Delete(ctx, cacheKey)
 }
 
