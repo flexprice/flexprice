@@ -1,3 +1,7 @@
+{{- /* Rendered ONLY for legacy (un-migrated) environments. When a values file sets
+       `.Values.env` (config-autobind final-goal shape), config comes from the baked
+       config.yaml + explicit env vars, and this ConfigMap is not rendered. */}}
+{{- if not .Values.env }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -294,4 +298,5 @@ data:
     
     # Note: secrets.encryption_key should be set via environment variable FLEXPRICE_SECRETS_ENCRYPTION_KEY
     # for security reasons. It's not included in this configmap.
+{{- end }}
 
