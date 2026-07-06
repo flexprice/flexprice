@@ -396,7 +396,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 
 	// No pending schedule, nothing to do
 	if schedule == nil {
-		s.logger.Info(ctx, "no pending plan change found",
+		s.logger.Debug(ctx, "no pending plan change found",
 			"subscription_id", sub.ID)
 		return &subscriptionModels.ProcessPendingPlanChangesActivityOutput{
 			Success:    true,

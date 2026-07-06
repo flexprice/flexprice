@@ -990,7 +990,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		return 0, ierr.WithError(err).WithHint("billing sequence generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Info(ctx, "generated billing sequence",
+	r.logger.Debug(ctx, "generated billing sequence",
 		"tenant_id", tenantID,
 		"subscription_id", subscriptionID,
 		"sequence", lastSequence)

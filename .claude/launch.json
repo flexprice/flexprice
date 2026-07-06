@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "flexprice-api",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["run"],
+      "port": 8080
+    }
+  ]
+}

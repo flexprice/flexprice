@@ -1237,7 +1237,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 				return nil, err
 			}
 
-			s.Logger.Info(ctx, "subscription charges details",
+			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", usageResult.TotalAmount,
 				"num_usage_charges", len(usageResult.LineItems))
@@ -2029,7 +2029,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(subscriptions) > 0 {
-		s.Logger.Info(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Debug(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"subscription_id", subscriptions[0].ID,
 			"credits_available", tx.CreditsAvailable,
@@ -2055,7 +2055,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(invoices) > 0 {
-		s.Logger.Info(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Debug(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"invoice_id", invoices[0].ID,
 		)
@@ -2777,7 +2777,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				return nil, err
 			}
 
-			s.Logger.Info(ctx, "subscription charges details",
+			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", featureUsageResult.TotalAmount,
 				"num_usage_charges", len(featureUsageResult.LineItems))
@@ -3083,7 +3083,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		return err
 	}
 
-	s.Logger.Info(ctx, "ongoing balance alert check - determined status",
+	s.Logger.Debug(ctx, "ongoing balance alert check - determined status",
 		"wallet_id", w.ID,
 		"ongoing_balance", ongoingBalance,
 		"alert_settings", alertSettings,
@@ -3121,7 +3121,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		return err
 	}
 
-	s.Logger.Info(ctx, "successfully logged ongoing balance alert",
+	s.Logger.Debug(ctx, "successfully logged ongoing balance alert",
 		"wallet_id", w.ID,
 		"alert_status", alertStatus,
 		"ongoing_balance", ongoingBalance,
@@ -3170,7 +3170,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		)
 	}
 
-	s.Logger.Info(ctx, "wallet ongoing balance alert check completed",
+	s.Logger.Debug(ctx, "wallet ongoing balance alert check completed",
 		"wallet_id", w.ID,
 		"alert_status", alertStatus,
 		"event_id", eventID,
@@ -3184,7 +3184,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, req.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxTenantID, req.TenantID)
 
-	s.Logger.Info(ctx, "checking wallet balance alerts",
+	s.Logger.Debug(ctx, "checking wallet balance alerts",
 		"event_id", req.ID,
 		"customer_id", req.CustomerID,
 		"tenant_id", req.TenantID,
@@ -3287,7 +3287,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// CheckWalletBalanceAlert call that fires inside processWalletOperation
 		// during the top-up credit will then log the post-topup state (ok).
 		if walletAlertsEnabled {
-			s.Logger.Info(ctx, "wallet balance details for alert check",
+			s.Logger.Debug(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
 				"real_time_balance", balance.RealTimeBalance,
 				"wallet_current_balance", balance.Wallet.Balance,
@@ -3330,7 +3330,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		}
 	}
 
-	s.Logger.Info(ctx, "completed wallet balance alert check for customer",
+	s.Logger.Debug(ctx, "completed wallet balance alert check for customer",
 		"customer_id", req.CustomerID,
 		"wallets_processed", len(wallets),
 		"event_id", req.ID,

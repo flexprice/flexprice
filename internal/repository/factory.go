@@ -49,8 +49,19 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"go.uber.org/fx"
 )
+
+// InitTracing wires the tracing service into the ent and clickhouse
+// repository packages so their (call-site-only) StartRepositorySpan helpers
+// emit real spans. Repository constructors don't take *tracing.Service
+// directly — this avoids threading it through every one of them — so this
+// must run once during startup, before any repository method is invoked.
+func InitTracing(tracingSvc *tracing.Service) {
+	entRepo.SetTracingService(tracingSvc)
+	clickhouseRepo.SetTracingService(tracingSvc)
+}
 
 // RepositoryParams holds common dependencies for repositories
 type RepositoryParams struct {

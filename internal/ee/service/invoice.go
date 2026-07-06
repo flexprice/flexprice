@@ -223,7 +223,7 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 					resp = dto.NewInvoiceResponse(existingForPeriod)
 					return nil
 				}
-				s.Logger.Info(ctx, "invoice already exists for subscription period",
+				s.Logger.Debug(ctx, "invoice already exists for subscription period",
 					"invoice_id", existingForPeriod.ID,
 					"subscription_id", *req.SubscriptionID,
 					"period_start", *req.PeriodStart,

@@ -49,7 +49,7 @@ func NewWalletBalanceAlertService(
 
 	svc.pubSub = params.WalletBalanceAlertPubSub.PubSub
 
-	params.Logger.Info(context.Background(), "wallet alert pubsub initialized successfully",
+	params.Logger.Debug(context.Background(), "wallet alert pubsub initialized successfully",
 		"consumer_group", params.Config.WalletBalanceAlert.ConsumerGroup,
 		"topic", params.Config.WalletBalanceAlert.Topic,
 	)
@@ -121,7 +121,7 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Info(ctx, "publishing wallet balance alert event",
+	s.Logger.Debug(ctx, "publishing wallet balance alert event",
 		"event_id", event.ID,
 		"customer_id", event.CustomerID,
 		"tenant_id", event.TenantID,
@@ -194,7 +194,7 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 		)
 		return nil
 	}
-	s.Logger.Info(context.Background(), "processing wallet balance alert message",
+	s.Logger.Debug(context.Background(), "processing wallet balance alert message",
 		"message_uuid", msg.UUID,
 		"tenant_id", event.TenantID,
 		"environment_id", event.EnvironmentID,
@@ -252,7 +252,7 @@ func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wa
 	// Check if we processed this customer recently
 	_, exists := s.cache.ForceCacheGet(ctx, cacheKey)
 	if exists {
-		s.Logger.Info(ctx, "throttling wallet balance recalculation - processed recently",
+		s.Logger.Debug(ctx, "throttling wallet balance recalculation - processed recently",
 			"customer_id", event.CustomerID,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,
@@ -309,7 +309,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 
 	// Check if we should throttle this request
 	if s.shouldThrottle(ctx, event) {
-		s.Logger.Info(ctx, "skipping wallet balance recalculation due to throttle",
+		s.Logger.Debug(ctx, "skipping wallet balance recalculation due to throttle",
 			"customer_id", event.CustomerID,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,

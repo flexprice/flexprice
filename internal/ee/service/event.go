@@ -268,7 +268,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				}
 
 				// Start a repository span for this meter operation
-				span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", operationName, params)
+				span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "clickhouse", "GetUsageByMeter", operationName, params)
 				if span != nil {
 					ctx = spanCtx
 					meterSpanFinisher = &tracing.SpanFinisher{Span: span}
@@ -410,7 +410,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 			"meter_index": i,
 		}
 
-		span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", "BulkGetUsageByMeterSync", params)
+		span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "clickhouse", "GetUsageByMeter", "BulkGetUsageByMeterSync", params)
 		callCtx := ctx
 		var spanFinisher *tracing.SpanFinisher
 		if span != nil {
