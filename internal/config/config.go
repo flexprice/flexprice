@@ -892,9 +892,14 @@ func NewValidatedConfig() (*Configuration, error) {
 	if cfg.Deployment.Mode == types.ModeLocal {
 		return cfg, nil
 	}
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("config validation failed: %w", err)
-	}
+	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
+	// Many fields carry dormant `validate:"required"` tags that were never enforced
+	// (Validate was never called at boot historically) and are broken for boot-time
+	// use: `required` on a bool fails whenever it's false (Cache.Enabled, S3.Enabled,
+	// DynamoDB.InUse), and AWS-only creds (FlexpriceS3Exports.*) are legitimately unset
+	// on GCP. Enforcing them wholesale crashlooped every non-local pod. Fixing those
+	// tags is a separate cleanup; until then fail-fast is scoped to the targeted secret
+	// check below.
 	if err := cfg.validateSecrets(); err != nil {
 		return nil, err
 	}
