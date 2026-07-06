@@ -67,6 +67,7 @@ type ServiceParams struct {
 	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
+	Locker        cache.Locker
 
 	// Repositories
 	AuthRepo                     auth.Repository

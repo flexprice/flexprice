@@ -186,6 +186,7 @@ data:
       rate_limit: {{ .Values.meterUsageTracking.rateLimit }}
       consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
       topic_dlq: {{ .Values.meterUsageTracking.topicDLQ | quote }}
+      redis_deduplication_enabled: {{ .Values.meterUsageTracking.redisDeduplicationEnabled }}
 
     meter_usage_tracking_lazy:
       enabled: {{ .Values.meterUsageTrackingLazy.enabled }}

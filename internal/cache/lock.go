@@ -9,7 +9,7 @@ import (
 )
 
 type Locker interface {
-	Acquire(ctx context.Context, key string, ttl time.Duration) (Lock, error)
+	AcquireLock(ctx context.Context, key string, ttl time.Duration) (Lock, error)
 }
 
 type Lock interface {
@@ -47,7 +47,7 @@ else
 end
 `)
 
-func (l *redisLocker) Acquire(ctx context.Context, key string, ttl time.Duration) (Lock, error) {
+func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Duration) (Lock, error) {
 	token := uuid.NewString()
 
 	ok, err := l.client.SetNX(ctx, key, token, ttl).Result()

@@ -22,7 +22,7 @@ type inMemoryRedisLocker struct {
 	values map[string]inMemoryRedisEntry
 }
 
-func (r *inMemoryRedisLocker) Acquire(ctx context.Context, key string, expiration time.Duration) (cache.Lock, error) {
+func (r *inMemoryRedisLocker) AcquireLock(ctx context.Context, key string, expiration time.Duration) (cache.Lock, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
