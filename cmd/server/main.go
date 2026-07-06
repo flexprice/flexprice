@@ -80,8 +80,8 @@ func main() {
 			// Validator
 			validator.NewValidator,
 
-			// Config — validated at boot (fail-fast for non-local deployments)
-			config.NewValidatedConfig,
+			// Config
+			config.NewConfig,
 
 			// Logger
 			logger.NewLogger,
