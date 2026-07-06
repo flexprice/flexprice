@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"slices"
@@ -870,7 +871,7 @@ const devDBPassword = "flexprice123"
 
 // placeholderSecrets are the exact dev/sample values baked into config.yaml (plus empty).
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
-// public credential, so validateSecrets refuses to start.
+// public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
 	"": true, // unset
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
@@ -900,16 +901,23 @@ func NewValidatedConfig() (*Configuration, error) {
 	// on GCP. Enforcing them wholesale crashlooped every non-local pod. Fixing those
 	// tags is a separate cleanup; until then fail-fast is scoped to the targeted secret
 	// check below.
+	//
+	// validateSecrets is WARN-ONLY: it logs placeholder/dev secrets for enabled features
+	// but does NOT abort boot. A hard fail at boot risks a prod crashloop (cf. the
+	// 2026-07-06 full-struct-validation incident), so we surface misconfig in logs
+	// without taking prod down. Tighten to hard-fail later, once every env is confirmed
+	// clean via a staging deploy.
 	if err := cfg.validateSecrets(); err != nil {
-		return nil, err
+		log.Printf("[config] WARNING: %v", err)
 	}
 	return cfg, nil
 }
 
-// validateSecrets rejects placeholder/dev secret values for features that are actually
+// validateSecrets flags placeholder/dev secret values for features that are actually
 // enabled. It is intentionally conservative — it checks only KNOWN baked sentinels (not mere
-// emptiness of optional secrets) so it never false-positives and blocks a legitimate deploy.
-// Caller gates this on deployment.mode != local.
+// emptiness of optional secrets) so it never false-positives on a legitimate deploy.
+// The caller (NewValidatedConfig) gates this on deployment.mode != local and treats a
+// returned error as a WARNING, not a boot failure.
 func (c Configuration) validateSecrets() error {
 	isPlaceholder := func(v string) bool { return placeholderSecrets[strings.TrimSpace(v)] }
 
@@ -940,7 +948,7 @@ func (c Configuration) validateSecrets() error {
 	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
 
 	if len(bad) > 0 {
-		return fmt.Errorf("refusing to start in mode %q: placeholder/dev secrets for enabled features: %s — inject real values via FLEXPRICE_* env",
+		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
 			c.Deployment.Mode, strings.Join(bad, ", "))
 	}
 	return nil
