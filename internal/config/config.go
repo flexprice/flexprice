@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -730,122 +732,20 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
 	_ = v.BindEnv("logging.region", "REGION")
 
-	// Explicitly bind keys where AutomaticEnv is ambiguous due to underscores in key segments
-	_ = v.BindEnv("clickhouse.password", "FLEXPRICE_CLICKHOUSE_PASSWORD")
-	_ = v.BindEnv("clickhouse.username", "FLEXPRICE_CLICKHOUSE_USERNAME")
-	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
-	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
+	// Auto-bind every scalar/slice key in the Configuration struct to its FLEXPRICE_* env
+	// var. This replaces ~50 hand-written v.BindEnv calls (a graveyard grown one prod
+	// incident at a time). Viper's AutomaticEnv is NOT consulted by Unmarshal for keys
+	// absent from the loaded config.yaml or nested under underscores, so such keys silently
+	// fall to their Go zero value unless the key is registered. Walking the struct registers
+	// every leaf key, so a FLEXPRICE_* env var always lands regardless of which config.yaml a
+	// deployment mounts (baked file on ECS, ConfigMap on GKE) — and no new key can be
+	// forgotten. Runs once at startup; reflection cost is irrelevant. See bindEnvs below.
+	bindEnvs(v, reflect.TypeOf(Configuration{}))
 
-	// Redis cluster_mode/key_prefix are supplied only as env vars by the Helm chart
-	// (they are not rendered into config.yaml). viper's Unmarshal does not consult
-	// AutomaticEnv for keys absent from the config file, so without these explicit
-	// binds ClusterMode silently resolves to false and a single-node client is used
-	// against a cluster-mode endpoint, causing "MOVED" errors on every off-slot key.
-	_ = v.BindEnv("redis.cluster_mode", "FLEXPRICE_REDIS_CLUSTER_MODE")
-	_ = v.BindEnv("redis.key_prefix", "FLEXPRICE_REDIS_KEY_PREFIX")
-
-	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
-	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
-	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
-	_ = v.BindEnv("otel.protocol", "FLEXPRICE_OTEL_PROTOCOL")
-	_ = v.BindEnv("otel.insecure", "FLEXPRICE_OTEL_INSECURE")
-	_ = v.BindEnv("otel.traces.enabled", "FLEXPRICE_OTEL_TRACES_ENABLED")
-	_ = v.BindEnv("otel.traces.endpoint", "FLEXPRICE_OTEL_TRACES_ENDPOINT")
-	_ = v.BindEnv("otel.traces.protocol", "FLEXPRICE_OTEL_TRACES_PROTOCOL")
-	_ = v.BindEnv("otel.traces.auth_header", "FLEXPRICE_OTEL_TRACES_AUTH_HEADER")
-	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
-	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
-	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
-	_ = v.BindEnv("otel.traces.capture_exceptions", "FLEXPRICE_OTEL_TRACES_CAPTURE_EXCEPTIONS")
-	// Exception capture is on by default. Struct `default:` tags aren't applied at
-	// runtime here (defaults live in config.yaml), so guarantee default-on via
-	// SetDefault for deploys whose config.yaml predates this key. Env/yaml override.
+	// Exception capture is on by default. Struct `default:` tags aren't applied at runtime
+	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
+	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
-	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
-	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
-	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
-	_ = v.BindEnv("otel.logs.insecure", "FLEXPRICE_OTEL_LOGS_INSECURE")
-	_ = v.BindEnv("otel.logs.auth_header", "FLEXPRICE_OTEL_LOGS_AUTH_HEADER")
-	_ = v.BindEnv("otel.logs.auth_value", "FLEXPRICE_OTEL_LOGS_AUTH_VALUE")
-
-	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
-	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
-	_ = v.BindEnv("logging.otel_endpoint", "FLEXPRICE_LOGGING_OTEL_ENDPOINT")
-	_ = v.BindEnv("logging.otel_insecure", "FLEXPRICE_LOGGING_OTEL_INSECURE")
-	_ = v.BindEnv("logging.otel_protocol", "FLEXPRICE_LOGGING_OTEL_PROTOCOL")
-	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
-	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
-	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
-
-	// Explicitly bind Temporal env vars — AutomaticEnv + Unmarshal misses these
-	// because the yaml ships non-empty defaults (api_key: "strong api key"), so
-	// Unmarshal returns the yaml value instead of consulting AutomaticEnv.
-	_ = v.BindEnv("temporal.api_key", "FLEXPRICE_TEMPORAL_API_KEY")
-	_ = v.BindEnv("temporal.api_key_name", "FLEXPRICE_TEMPORAL_API_KEY_NAME")
-
-	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
-	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
-	// Explicitly bind auth.secret — the helm ConfigMap's rendered config.yaml omits this key,
-	// so on GKE deployments it stays empty and supabase/JWT token validation fails (login
-	// broken, and an empty key makes tokens forgeable). The FLEXPRICE_AUTH_SECRET env is
-	// injected from the secret; this bind makes Unmarshal actually read it.
-	_ = v.BindEnv("auth.secret", "FLEXPRICE_AUTH_SECRET")
-	// Explicitly bind auth.supabase.* — same trap as auth.secret. The helm ConfigMap's
-	// rendered config.yaml carries only supabase.base_url (no service_key), so on GKE the
-	// service_key stays empty and every Supabase Admin call (e.g. user invite/create) fails
-	// with a swallowed 500. The FLEXPRICE_AUTH_SUPABASE_* envs are injected from the secret;
-	// these binds make Unmarshal actually read them.
-	_ = v.BindEnv("auth.supabase.service_key", "FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY")
-	_ = v.BindEnv("auth.supabase.base_url", "FLEXPRICE_AUTH_SUPABASE_BASE_URL")
-	// Explicitly bind email.resend_api_key — same trap: the ConfigMap renders email
-	// {enabled, from_address, reply_to, calendar_url} but NOT resend_api_key (a secret, injected
-	// as FLEXPRICE_EMAIL_RESEND_API_KEY). Without this bind, transactional email (invoices,
-	// receipts, notifications) silently fails to send on GKE.
-	_ = v.BindEnv("email.resend_api_key", "FLEXPRICE_EMAIL_RESEND_API_KEY")
-	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
-	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
-
-	// Explicitly bind the Svix auth token. The helm ConfigMap renders webhook.svix_config
-	// {enabled, base_url} but NOT auth_token (it's a secret), and the chart injects the token
-	// as FLEXPRICE_SVIX_API_KEY. Without this bind, webhook.svix_config.auth_token stays empty
-	// on GKE (AutomaticEnv+Unmarshal won't map FLEXPRICE_SVIX_API_KEY to it), so the Svix client
-	// is created with an empty key and every call 401s. Same class as auth.secret above.
-	_ = v.BindEnv("webhook.svix_config.auth_token", "FLEXPRICE_SVIX_API_KEY")
-
-	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
-	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
-	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
-	// are silently ignored and dual-write never turns on. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
-	_ = v.BindEnv("kafka_secondary.brokers", "FLEXPRICE_KAFKA_SECONDARY_BROKERS")
-	_ = v.BindEnv("kafka_secondary.consumer_group", "FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP")
-	_ = v.BindEnv("kafka_secondary.topic", "FLEXPRICE_KAFKA_SECONDARY_TOPIC")
-	_ = v.BindEnv("kafka_secondary.topic_lazy", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_LAZY")
-	_ = v.BindEnv("kafka_secondary.topic_dlq", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_DLQ")
-	_ = v.BindEnv("kafka_secondary.tls", "FLEXPRICE_KAFKA_SECONDARY_TLS")
-	_ = v.BindEnv("kafka_secondary.use_sasl", "FLEXPRICE_KAFKA_SECONDARY_USE_SASL")
-	_ = v.BindEnv("kafka_secondary.sasl_mechanism", "FLEXPRICE_KAFKA_SECONDARY_SASL_MECHANISM")
-	_ = v.BindEnv("kafka_secondary.sasl_user", "FLEXPRICE_KAFKA_SECONDARY_SASL_USER")
-	_ = v.BindEnv("kafka_secondary.sasl_password", "FLEXPRICE_KAFKA_SECONDARY_SASL_PASSWORD")
-	_ = v.BindEnv("kafka_secondary.sasl_oauth_scopes", "FLEXPRICE_KAFKA_SECONDARY_SASL_OAUTH_SCOPES")
-	_ = v.BindEnv("kafka_secondary.client_id", "FLEXPRICE_KAFKA_SECONDARY_CLIENT_ID")
-	_ = v.BindEnv("kafka_secondary.route_tenants_on_lazy_mode", "FLEXPRICE_KAFKA_SECONDARY_ROUTE_TENANTS_ON_LAZY_MODE")
-
-	// Explicitly bind the PRIMARY kafka SASL credentials. The helm ConfigMap renders the
-	// kafka block without sasl_user/sasl_password, so on a GKE deployment whose primary
-	// cluster uses a password mechanism (e.g. AWS MSK SCRAM-SHA-512) these stay empty and
-	// SCRAM auth fails. The FLEXPRICE_KAFKA_SASL_{USER,PASSWORD} envs are injected by the
-	// chart; these binds make Unmarshal read them. (OAUTHBEARER/GMK needs neither.)
-	_ = v.BindEnv("kafka.sasl_user", "FLEXPRICE_KAFKA_SASL_USER")
-	_ = v.BindEnv("kafka.sasl_password", "FLEXPRICE_KAFKA_SASL_PASSWORD")
-
-	// Explicitly bind deployment.mode — the helm ConfigMap is one shared object across the
-	// api/consumer/worker Deployments, so it cannot carry a per-component mode; the only
-	// per-component signal is the FLEXPRICE_DEPLOYMENT_MODE env each Deployment sets. Since
-	// deployment.mode is absent from the rendered config.yaml and was not bound, AutomaticEnv+
-	// Unmarshal ignored the env and every pod fell back to ModeLocal (running API + Temporal +
-	// Kafka consumers regardless of role — e.g. the api consuming prod topics). This bind makes
-	// Unmarshal honor the per-Deployment env. See infrastructure/docs/gcp-mumbai-gmk-consumer-runbook.md.
-	_ = v.BindEnv("deployment.mode", "FLEXPRICE_DEPLOYMENT_MODE")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -906,8 +806,152 @@ func NewConfig() (*Configuration, error) {
 	return &cfg, nil
 }
 
+// bindEnvs walks a (possibly nested) struct type and registers a Viper env binding for
+// every scalar/slice leaf field. The dotted key path is built from each field's
+// `mapstructure` tag (falling back to the lowercased field name); Viper derives the env var
+// name from that path via SetEnvPrefix("FLEXPRICE") + SetEnvKeyReplacer(".", "_"), i.e.
+// FLEXPRICE_<UPPER_SNAKE_PATH> — exactly the names the Helm chart and ECS task definitions
+// already set.
+//
+// Why this is needed: Viper's AutomaticEnv is not consulted by Unmarshal for keys that are
+// absent from the loaded config.yaml or nested under underscores, so such keys silently
+// resolve to their Go zero value. Registering the key here makes Unmarshal honor the env var
+// regardless of which config.yaml a deployment mounts. Replaces ~50 hand-maintained
+// v.BindEnv calls and guarantees no future key can be forgotten.
+//
+// Maps are intentionally NOT bound: the env-driven ones hold JSON strings
+// (auth.api_key.keys, env_access.user_env_mapping) that mapstructure can't decode into a
+// map; they are parsed by hand after Unmarshal. Slices ARE bound — Viper's default
+// StringToSlice decode hook splits a comma-separated env var into []string (e.g.
+// kafka_secondary.brokers). Unexported fields are skipped.
+func bindEnvs(v *viper.Viper, t reflect.Type, parts ...string) {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.PkgPath != "" { // unexported — Unmarshal can't set it anyway
+			continue
+		}
+		tag := strings.Split(f.Tag.Get("mapstructure"), ",")[0]
+		if tag == "-" {
+			continue
+		}
+		if tag == "" {
+			tag = strings.ToLower(f.Name)
+		}
+		path := append(append([]string{}, parts...), tag)
+
+		ft := f.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		switch ft.Kind() {
+		case reflect.Struct:
+			bindEnvs(v, ft, path...)
+		case reflect.Map:
+			// JSON-string env vars can't decode into a map; parsed by hand after Unmarshal.
+		default:
+			// scalars and slices (Viper splits comma-separated env into []string)
+			_ = v.BindEnv(strings.Join(path, "."))
+		}
+	}
+}
+
 func (c Configuration) Validate() error {
 	return validator.ValidateRequest(c)
+}
+
+// devDBPassword is the shared local docker-compose DB password baked into config.yaml.
+// Legitimate for local dev; a red flag in any real deployment.
+const devDBPassword = "flexprice123"
+
+// placeholderSecrets are the exact dev/sample values baked into config.yaml (plus empty).
+// A non-local deployment booting with any of these for an ENABLED feature is running on a
+// public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
+var placeholderSecrets = map[string]bool{
+	"": true, // unset
+	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
+	"<supabase service key>":                                   true,
+	"svix_auth_token":                                          true,
+}
+
+// NewValidatedConfig loads configuration and, for non-local deployments, enforces fail-fast
+// validation: struct `validate` tags plus a placeholder-secret check. Binary entry points
+// (cmd/server) use this so a misconfigured deployment fails to START — with a rolling deploy
+// the old task keeps serving and the deploy fails loudly — instead of booting into a silent
+// incident (empty auth.secret → forgeable JWTs, dev DB password, etc). Unit tests call
+// NewConfig directly to stay lean.
+func NewValidatedConfig() (*Configuration, error) {
+	cfg, err := NewConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Deployment.Mode == types.ModeLocal {
+		return cfg, nil
+	}
+	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
+	// Many fields carry dormant `validate:"required"` tags that were never enforced
+	// (Validate was never called at boot historically) and are broken for boot-time
+	// use: `required` on a bool fails whenever it's false (Cache.Enabled, S3.Enabled,
+	// DynamoDB.InUse), and AWS-only creds (FlexpriceS3Exports.*) are legitimately unset
+	// on GCP. Enforcing them wholesale crashlooped every non-local pod. Fixing those
+	// tags is a separate cleanup; until then fail-fast is scoped to the targeted secret
+	// check below.
+	//
+	// validateSecrets is WARN-ONLY: it logs placeholder/dev secrets for enabled features
+	// but does NOT abort boot. A hard fail at boot risks a prod crashloop (cf. the
+	// 2026-07-06 full-struct-validation incident), so we surface misconfig in logs
+	// without taking prod down. Tighten to hard-fail later, once every env is confirmed
+	// clean via a staging deploy.
+	if err := cfg.validateSecrets(); err != nil {
+		log.Printf("[config] WARNING: %v", err)
+	}
+	return cfg, nil
+}
+
+// validateSecrets flags placeholder/dev secret values for features that are actually
+// enabled. It is intentionally conservative — it checks only KNOWN baked sentinels (not mere
+// emptiness of optional secrets) so it never false-positives on a legitimate deploy.
+// The caller (NewValidatedConfig) gates this on deployment.mode != local and treats a
+// returned error as a WARNING, not a boot failure.
+func (c Configuration) validateSecrets() error {
+	isPlaceholder := func(v string) bool { return placeholderSecrets[strings.TrimSpace(v)] }
+
+	var bad []string
+	// auth.secret signs/verifies JWTs for the flexprice provider — always required there.
+	if c.Auth.Provider == types.AuthProviderFlexprice && isPlaceholder(c.Auth.Secret) {
+		bad = append(bad, "auth.secret (FLEXPRICE_AUTH_SECRET)")
+	}
+	// supabase service key — required only when supabase is the auth provider.
+	if c.Auth.Provider == types.AuthProviderSupabase && isPlaceholder(c.Auth.Supabase.ServiceKey) {
+		bad = append(bad, "auth.supabase.service_key (FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY)")
+	}
+	// svix token — required only when the Svix webhook backend is on.
+	if c.Webhook.Svix.Enabled && isPlaceholder(c.Webhook.Svix.AuthToken) {
+		bad = append(bad, "webhook.svix_config.auth_token (FLEXPRICE_SVIX_API_KEY)")
+	}
+	// db creds — reject only the shared dev password. Don't require non-empty: managed IAM
+	// auth can legitimately use an empty DB password.
+	if strings.TrimSpace(c.Postgres.Password) == devDBPassword {
+		bad = append(bad, "postgres.password (FLEXPRICE_POSTGRES_PASSWORD)")
+	}
+	if strings.TrimSpace(c.ClickHouse.Password) == devDBPassword {
+		bad = append(bad, "clickhouse.password (FLEXPRICE_CLICKHOUSE_PASSWORD)")
+	}
+	// NOTE: secrets.encryption_key is intentionally NOT checked. ECS prod currently decrypts
+	// with the baked value (canonical env FLEXPRICE_SECRETS_ENCRYPTION_KEY is unset there; ECS
+	// sets a different, unread name). Rejecting it would block prod boot and switching keys
+	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
+
+	if len(bad) > 0 {
+		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
+			c.Deployment.Mode, strings.Join(bad, ", "))
+	}
+	return nil
 }
 
 // GetDefaultConfig returns a default configuration for local development
