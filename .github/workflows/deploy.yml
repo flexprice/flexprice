@@ -116,6 +116,10 @@ jobs:
           push: true
           tags: ${{ steps.image-tag.outputs.ecr_tag }}
           provenance: false
+          # Shared layer cache in GHCR (both AWS + GCP self-hosted runners reach it).
+          # First build of a commit populates it; rebuilds and the GHCR step below hit it.
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
 
       - name: Push image to GHCR
         uses: docker/build-push-action@v7
@@ -127,6 +131,8 @@ jobs:
           push: true
           tags: ${{ steps.image-tag.outputs.ghcr_tags }}
           provenance: false
+          # Reuses the cache the ECR build just populated -> all layers hit, no rebuild.
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
 
       - name: Set image output
         id: set-image
