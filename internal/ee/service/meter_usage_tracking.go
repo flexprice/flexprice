@@ -289,25 +289,30 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 // No subscription/feature/price resolution needed.
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
 	// Step 0: Check if the event is already processed
-	if s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
+	if event.ID != "" &&
+		s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID
 		cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, eventId)
 		lock, err := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
 		if err != nil {
-			return fmt.Errorf("failed to check if event is already processed: %w", err)
-		}
-		if !lock.AcquiredSuccessfully() {
-			s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
-			return nil
-		}
-
-		// release lock on error so retries don't block
-		defer func() {
-			if err != nil {
-				lock.Release(ctx)
+			s.Logger.Error(ctx, "failed to acquire lock on meter usage tracking event", "error", err, "event_id", eventId)
+		} else {
+			if !lock.AcquiredSuccessfully() {
+				s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
+				return nil
 			}
-		}()
+
+			// release lock on error so retries don't block
+			defer func() {
+				if err != nil {
+					lockErr := lock.Release(ctx)
+					if lockErr != nil {
+						s.Logger.Error(ctx, "failed to release lock on meter usage tracking event", "error", lockErr, "event_id", eventId)
+					}
+				}
+			}()
+		}
 	}
 
 	// Step 1: Lookup meters by event name (cache-first)
