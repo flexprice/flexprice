@@ -2726,7 +2726,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 				Aggregation: meter.Aggregation{
 					Type:       types.AggregationMax,
 					Field:      "value",
-					BucketSize: "minute", // Minute-level buckets
+					BucketSize: types.WindowSizeMinute, // Minute-level buckets
 				},
 				BaseModel: types.GetDefaultBaseModel(ctx),
 			}
