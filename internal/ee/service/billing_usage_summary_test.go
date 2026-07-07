@@ -298,15 +298,29 @@ func (s *BillingUsageSummarySuite) TestGetCustomerUsageSummary_DailyResetUsesTod
 	s.True(f.UsagePercent.Equal(decimal.RequireFromString("0.2")))
 }
 
+// anchoredMonthStart mirrors the anchored monthly bucketing used by the real
+// ClickHouse repo (formatWindowSizeWithBillingAnchor,
+// internal/repository/clickhouse/aggregators.go:187-201) and the in-memory
+// stores: shift by (anchorDay-1) days, truncate to month start, shift back.
+func anchoredMonthStart(t time.Time, anchor time.Time) time.Time {
+	anchorDay := anchor.Day()
+	shifted := t.UTC().AddDate(0, 0, -(anchorDay - 1))
+	monthStart := time.Date(shifted.Year(), shifted.Month(), 1, 0, 0, 0, 0, time.UTC)
+	return monthStart.AddDate(0, 0, anchorDay-1)
+}
+
 func (s *BillingUsageSummarySuite) TestGetCustomerUsageSummary_MonthlyResetOnAnnualSub() {
 	fx := s.newSummaryFixture("monthly", types.BILLING_PERIOD_ANNUAL,
 		types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY, lo.ToPtr(int64(200)), 150)
 
-	// Mid-month timestamps keep both events safely inside their calendar months.
-	currentMonth15 := time.Date(s.now.Year(), s.now.Month(), 15, 12, 0, 0, 0, time.UTC)
-	prevMonth15 := currentMonth15.AddDate(0, -1, 0)
-	s.insertEvent(fx, prevMonth15, 100)   // previous month
-	s.insertEvent(fx, currentMonth15, 50) // current month
+	// The usage query passes the subscription's BillingAnchor, so monthly
+	// windows are anchored on the anchor's day-of-month — not calendar months.
+	// Seed one event in the anchored window containing "now" and one in the
+	// window before it; the summary must only count the current window.
+	currentWindow := anchoredMonthStart(s.now, fx.sub.BillingAnchor)
+	previousWindow := anchoredMonthStart(currentWindow.Add(-time.Hour), fx.sub.BillingAnchor)
+	s.insertEvent(fx, previousWindow.Add(12*time.Hour), 100) // previous anchored month
+	s.insertEvent(fx, currentWindow.Add(12*time.Hour), 50)   // current anchored month
 
 	resp, err := s.service.GetCustomerUsageSummary(s.GetContext(), s.customer.ID, nil)
 	s.NoError(err)
@@ -314,7 +328,7 @@ func (s *BillingUsageSummarySuite) TestGetCustomerUsageSummary_MonthlyResetOnAnn
 	f := s.featureSummary(resp, fx.feat.ID)
 	s.NotNil(f)
 	s.True(f.CurrentUsage.Equal(decimal.NewFromInt(50)),
-		"monthly reset must only count the current month's usage (50), got %s", f.CurrentUsage)
+		"monthly reset must only count the current anchored month's usage (50), got %s", f.CurrentUsage)
 }
 
 func (s *BillingUsageSummarySuite) TestGetCustomerUsageSummary_NeverResetUsesCumulativeUsage() {

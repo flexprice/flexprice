@@ -91,10 +91,10 @@ func (s *BillingUsageChargesSuite) SetupTest() {
 		Aggregation: meter.Aggregation{
 			Type:  types.AggregationMax,
 			Field: "qty",
-			// Hourly buckets: the in-memory event store routes day/month windows
-			// through SUM/COUNT-only aggregation, so MAX bucketing needs a
-			// non-day window size to exercise the real bucketed-max math.
-			BucketSize: types.WindowSizeHour,
+			// Day buckets: the in-memory event store now implements windowed
+			// MAX faithfully (per-day max, total = sum of day maxes), matching
+			// the real ClickHouse bucketed-max SQL.
+			BucketSize: types.WindowSizeDay,
 		},
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
@@ -249,6 +249,32 @@ func (s *BillingUsageChargesSuite) insertEvent(eventName string, ts time.Time, q
 	}))
 }
 
+// insertFeatureUsage seeds one feature_usage row for a fixture's bucketed line
+// item — the rows CalculateFeatureUsageCharges aggregates via
+// FeatureUsageRepo.GetUsageForBucketedMeters. Sign 1 mirrors production rows.
+func (s *BillingUsageChargesSuite) insertFeatureUsage(fx *chargesFixture, ts time.Time, qty string) {
+	ctx := s.GetContext()
+	store := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
+	s.NoError(store.InsertProcessedEvent(ctx, &events.FeatureUsage{
+		Event: events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           types.GetTenantID(ctx),
+			EnvironmentID:      types.GetEnvironmentID(ctx),
+			EventName:          "buc_bucket_event",
+			CustomerID:         s.customer.ID,
+			ExternalCustomerID: s.customer.ExternalID,
+			Timestamp:          ts,
+		},
+		SubscriptionID: fx.sub.ID,
+		SubLineItemID:  fx.item.ID,
+		PriceID:        fx.item.PriceID,
+		FeatureID:      s.featBucket.ID,
+		MeterID:        fx.item.MeterID,
+		QtyTotal:       decimal.RequireFromString(qty),
+		Sign:           1,
+	}))
+}
+
 // charge builds a usage charge for the fixture's line item (price matched by ID
 // for CalculateUsageCharges, line item ID for CalculateFeatureUsageCharges).
 func (s *BillingUsageChargesSuite) charge(fx *chargesFixture, qty, amount float64, p *price.Price) *dto.SubscriptionUsageByMetersResponse {
@@ -356,11 +382,11 @@ func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_WeeklyResetFallsBac
 }
 
 func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_BucketedMeterEntitlements() {
-	// Bucketed MAX meter, hourly buckets: 08:00 bucket max(10, 7) = 10,
-	// 09:00 bucket max = 20 → total quantity 30.
+	// Bucketed MAX meter, day buckets: Jun 3 bucket max(10, 7) = 10,
+	// Jun 4 bucket max = 20 → total quantity 30.
 	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 8, 0, 0, 0, time.UTC), 10)
-	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 8, 30, 0, 0, time.UTC), 7)
-	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 9, 15, 0, 0, time.UTC), 20)
+	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 12, 30, 0, 0, time.UTC), 7)
+	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 4, 9, 15, 0, 0, time.UTC), 20)
 
 	s.Run("usage_limit_reduces_aggregate_quantity", func() {
 		fx := s.newChargesFixture("bkt_lim", types.BILLING_PERIOD_MONTHLY, true)
@@ -389,9 +415,9 @@ func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_BucketedMeterEntitl
 }
 
 func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_LineItemCommitment() {
-	// Bucketed usage for the windowed case: two hourly buckets with max 10 and 20.
+	// Bucketed usage for the windowed case: two day buckets with max 10 and 20.
 	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 8, 0, 0, 0, time.UTC), 10)
-	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 3, 9, 0, 0, 0, time.UTC), 20)
+	s.insertEvent("buc_bucket_event", time.Date(2025, 6, 4, 9, 0, 0, 0, time.UTC), 20)
 
 	s.Run("flat_commitment_bills_overage_at_overage_rate", func() {
 		fx := s.newChargesFixture("cmt_flat", types.BILLING_PERIOD_MONTHLY, false)
@@ -609,28 +635,42 @@ func (s *BillingUsageChargesSuite) TestCalculateFeatureUsageCharges_WeeklyAndUnl
 }
 
 func (s *BillingUsageChargesSuite) TestCalculateFeatureUsageCharges_BucketedMeterEntitlements() {
-	// The in-memory FeatureUsageRepo returns empty bucketed usage, so bucketed
-	// feature-usage charges compute to zero — these cases pin the control flow
-	// (bucketed query + entitlement gates), not ClickHouse aggregation math.
+	// Bucketed MAX meter over feature_usage rows, day buckets:
+	// Jun 3 max(10, 7) = 10, Jun 4 max = 20 → total quantity 30.
+	seedBucketedUsage := func(fx *chargesFixture) {
+		s.insertFeatureUsage(fx, time.Date(2025, 6, 3, 8, 0, 0, 0, time.UTC), "10")
+		s.insertFeatureUsage(fx, time.Date(2025, 6, 3, 12, 30, 0, 0, time.UTC), "7")
+		s.insertFeatureUsage(fx, time.Date(2025, 6, 4, 9, 15, 0, 0, time.UTC), "20")
+	}
+
 	s.Run("bucketed_meter_with_usage_limit", func() {
 		fx := s.newChargesFixture("fbkt_lim", types.BILLING_PERIOD_MONTHLY, true)
 		s.addEntitlement(fx, s.featBucket, lo.ToPtr(int64(5)), types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
+		seedBucketedUsage(fx)
 
 		result, err := s.calcFeatureUsage(fx, mkUsage(s.charge(fx, 0, 0, s.priceBucket)))
 		s.NoError(err)
 		s.Len(result.LineItems, 1)
-		s.True(result.TotalAmount.IsZero())
+		// 30 - 5 = 25 → 25 * $0.02 = $0.5
+		s.True(result.LineItems[0].Quantity.Equal(decimal.NewFromInt(25)),
+			"quantity should be 25, got %s", result.LineItems[0].Quantity)
+		s.True(result.TotalAmount.Equal(decimal.RequireFromString("0.5")),
+			"total should be 0.5, got %s", result.TotalAmount)
 	})
 
 	s.Run("bucketed_meter_with_unlimited_entitlement", func() {
 		fx := s.newChargesFixture("fbkt_unl", types.BILLING_PERIOD_MONTHLY, true)
 		s.addEntitlement(fx, s.featBucket, nil, types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
+		seedBucketedUsage(fx)
 
 		result, err := s.calcFeatureUsage(fx, mkUsage(s.charge(fx, 0, 0, s.priceBucket)))
 		s.NoError(err)
 		s.Len(result.LineItems, 1)
 		s.True(result.LineItems[0].Amount.IsZero())
 		s.True(result.LineItems[0].Quantity.IsZero())
+		s.NotNil(result.LineItems[0].AdjustedEntitlementQuantity)
+		s.True(result.LineItems[0].AdjustedEntitlementQuantity.Equal(decimal.NewFromInt(30)),
+			"adjusted entitlement quantity should be the full 30, got %s", result.LineItems[0].AdjustedEntitlementQuantity)
 	})
 }
 
@@ -666,11 +706,41 @@ func (s *BillingUsageChargesSuite) TestCalculateFeatureUsageCharges_LineItemComm
 		subCopy.LineItems = []*subscription.SubscriptionLineItem{&item}
 		fxCopy := &chargesFixture{plan: fx.plan, sub: &subCopy, item: &item}
 
-		// In-memory feature_usage bucketed query returns no windows → $0.
+		// No feature_usage rows seeded → no windows → $0.
 		result, err := s.calcFeatureUsage(fxCopy, mkUsage(s.charge(fxCopy, 0, 0, s.priceBucket)))
 		s.NoError(err)
 		s.Len(result.LineItems, 1)
 		s.True(result.TotalAmount.IsZero())
+	})
+
+	s.Run("windowed_commitment_applies_per_bucket", func() {
+		fx := s.newChargesFixture("fcmt_win2", types.BILLING_PERIOD_MONTHLY, true)
+		item := *fx.item
+		item.CommitmentAmount = lo.ToPtr(decimal.RequireFromString("0.3"))
+		item.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
+		item.CommitmentOverageFactor = lo.ToPtr(decimal.NewFromInt(2))
+		item.CommitmentWindowed = true
+		subCopy := *fx.sub
+		subCopy.LineItems = []*subscription.SubscriptionLineItem{&item}
+		fxCopy := &chargesFixture{plan: fx.plan, sub: &subCopy, item: &item}
+
+		// Two day buckets with max 10 and 20 → window costs $0.20 / $0.40 vs a
+		// $0.30 per-window commitment at 2x → 0.2 + (0.3 + 0.1*2) = $0.7 —
+		// same math as the raw-events windowed commitment path.
+		s.insertFeatureUsage(fxCopy, time.Date(2025, 6, 3, 8, 0, 0, 0, time.UTC), "10")
+		s.insertFeatureUsage(fxCopy, time.Date(2025, 6, 4, 9, 0, 0, 0, time.UTC), "20")
+
+		result, err := s.calcFeatureUsage(fxCopy, mkUsage(s.charge(fxCopy, 0, 0, s.priceBucket)))
+		s.NoError(err)
+		s.Len(result.LineItems, 1)
+		s.True(result.TotalAmount.Equal(decimal.RequireFromString("0.7")),
+			"total should be 0.7, got %s", result.TotalAmount)
+		info := result.LineItems[0].CommitmentInfo
+		s.NotNil(info)
+		s.True(info.ComputedCommitmentUtilizedAmount.Equal(decimal.RequireFromString("0.5")),
+			"utilized should be 0.5, got %s", info.ComputedCommitmentUtilizedAmount)
+		s.True(info.ComputedOverageAmount.Equal(decimal.RequireFromString("0.2")),
+			"overage should be 0.2, got %s", info.ComputedOverageAmount)
 	})
 }
 
