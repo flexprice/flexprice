@@ -476,7 +476,7 @@ type MeterUsageTrackingConfig struct {
 	RateLimit                 int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
-	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"true"`
+	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
