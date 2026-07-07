@@ -629,6 +629,15 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
+	// subscription id filter: subscription-scoped prices store the
+	// subscription ID in entity_id
+	if f.SubscriptionID != nil && *f.SubscriptionID != "" {
+		query = query.Where(
+			price.EntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION),
+			price.EntityID(*f.SubscriptionID),
+		)
+	}
+
 	// meter id filter
 	if len(f.MeterIDs) > 0 {
 		query = query.Where(price.MeterIDIn(f.MeterIDs...))
