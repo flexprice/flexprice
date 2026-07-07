@@ -732,6 +732,12 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
 	_ = v.BindEnv("logging.region", "REGION")
 
+	// Legacy custom env aliases: these keys are fed by an env var whose name does NOT
+	// match the struct-derived FLEXPRICE_<PATH> name, so the reflection walker below cannot
+	// register them. They MUST stay explicit. (svix: deployments set FLEXPRICE_SVIX_API_KEY,
+	// not FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN — dropping this bind broke Svix with 401s.)
+	_ = v.BindEnv("webhook.svix_config.auth_token", "FLEXPRICE_SVIX_API_KEY")
+
 	// Auto-bind every scalar/slice key in the Configuration struct to its FLEXPRICE_* env
 	// var. This replaces ~50 hand-written v.BindEnv calls (a graveyard grown one prod
 	// incident at a time). Viper's AutomaticEnv is NOT consulted by Unmarshal for keys

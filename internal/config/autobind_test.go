@@ -93,3 +93,31 @@ func TestAutoBindLeavesOptionalPointerNil(t *testing.T) {
 		t.Errorf("kafka_secondary = %#v, want nil (reflective bind must not allocate the optional pointer struct)", cfg.KafkaSecondary)
 	}
 }
+
+// TestCustomEnvAliasesBind guards the env-var names that do NOT follow the struct-derived
+// FLEXPRICE_<PATH> convention and therefore CANNOT be covered by the reflection walker —
+// they must stay as explicit v.BindEnv calls. Dropping the svix alias broke Svix with 401s
+// on staging (2026-07-06); this test fails loudly if any such alias is removed again.
+func TestCustomEnvAliasesBind(t *testing.T) {
+	cases := []struct {
+		env, val string
+		get      func(*Configuration) string
+	}{
+		{"SERVICE_NAME", "probe-svc", func(c *Configuration) string { return c.Logging.ServiceName }},
+		{"ENVIRONMENT", "probe-env", func(c *Configuration) string { return c.Logging.Environment }},
+		{"REGION", "probe-region", func(c *Configuration) string { return c.Logging.Region }},
+		{"FLEXPRICE_SVIX_API_KEY", "probe-svix-token", func(c *Configuration) string { return c.Webhook.Svix.AuthToken }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.env, func(t *testing.T) {
+			t.Setenv(tc.env, tc.val)
+			cfg, err := NewConfig()
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if got := tc.get(cfg); got != tc.val {
+				t.Errorf("env %s did not bind: got %q, want %q — custom alias likely dropped", tc.env, got, tc.val)
+			}
+		})
+	}
+}
