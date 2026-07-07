@@ -262,7 +262,15 @@ func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Cont
 	if parentSub.SubscriptionType != types.SubscriptionTypeParent {
 		return nil
 	}
-	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
+	// cascadeTrialEndToInherited parks children in incomplete while the parent's
+	// trial-end invoice is unpaid — the default status set (active/trialing/draft)
+	// would never find them, leaving them incomplete forever.
+	children, err := s.getInheritedSubscriptionsInStatuses(ctx, parentSub.ID, []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusIncomplete,
+	})
 	if err != nil {
 		return err
 	}
