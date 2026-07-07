@@ -325,6 +325,7 @@ meter_usage_tracking:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
   topic_dlq: "meter_usage_tracking_service_dlq"
+  redis_deduplication_enabled: true
 
 meter_usage_tracking_lazy:
   enabled: true

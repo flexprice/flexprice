@@ -3495,7 +3495,7 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
 	s.RedisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
@@ -3503,7 +3503,7 @@ func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context
 	if walletID == "" || s.RedisCache == nil {
 		return
 	}
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
 	s.RedisCache.ForceCacheDelete(ctx, cacheKey)
 }
 
@@ -3517,11 +3517,16 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
+	// TODO: Cleanup old cache key after 30 min of going live (30 min TTL in old cache key)
+	oldCacheKey := cache.GenerateKey(nil, cache.PrefixWallet, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {
 		cachedValue, remainingTTL, found := s.RedisCache.ForceCacheGetWithTTL(ctx, cacheKey)
+		if !found {
+			cachedValue, remainingTTL, found = s.RedisCache.ForceCacheGetWithTTL(ctx, oldCacheKey)
+		}
 		if !found {
 			return nil
 		}
@@ -3549,6 +3554,9 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 	// Default path: no max-live check
 	cachedValue, found := s.RedisCache.ForceCacheGet(ctx, cacheKey)
+	if !found {
+		cachedValue, found = s.RedisCache.ForceCacheGet(ctx, oldCacheKey)
+	}
 	if !found {
 		return nil
 	}

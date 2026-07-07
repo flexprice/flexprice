@@ -24,18 +24,18 @@ import (
 )
 
 type subscriptionRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts SubscriptionQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  SubscriptionQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainSub.Repository {
 	return &subscriptionRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: SubscriptionQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  SubscriptionQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -1061,8 +1061,8 @@ func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Su
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), sub.ID)
-	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, sub.ID)
+	r.redisCache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
 }
 
 func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
@@ -1071,8 +1071,8 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -1089,8 +1089,8 @@ func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) 
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), subID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, subID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // ListByCustomerID retrieves all active subscriptions for a customer and includes line items

@@ -15,18 +15,18 @@ import (
 )
 
 type paymentMethodRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PaymentMethodQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PaymentMethodQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPaymentMethodRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPaymentMethod.Repository {
+func NewPaymentMethodRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPaymentMethod.Repository {
 	return &paymentMethodRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PaymentMethodQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PaymentMethodQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -429,10 +429,8 @@ func (r *paymentMethodRepository) setCache(ctx context.Context, pm *domainPaymen
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPaymentMethod, tenantID, environmentID, pm.ID)
-	r.cache.Set(ctx, cacheKey, pm, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPaymentMethod, pm.ID)
+	r.redisCache.Set(ctx, cacheKey, pm, cache.ExpiryDefaultRedis)
 }
 
 func (r *paymentMethodRepository) getCache(ctx context.Context, id string) *domainPaymentMethod.PaymentMethod {
@@ -441,13 +439,16 @@ func (r *paymentMethodRepository) getCache(ctx context.Context, id string) *doma
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPaymentMethod, tenantID, environmentID, id)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPaymentMethod.PaymentMethod)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPaymentMethod, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	pm, ok := cache.UnmarshalCacheValue[domainPaymentMethod.PaymentMethod](value)
+	if !ok {
+		return nil
+	}
+	return pm
 }
 
 func (r *paymentMethodRepository) deleteCache(ctx context.Context, id string) {
@@ -456,8 +457,6 @@ func (r *paymentMethodRepository) deleteCache(ctx context.Context, id string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPaymentMethod, tenantID, environmentID, id)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPaymentMethod, id)
+	r.redisCache.Delete(ctx, cacheKey)
 }

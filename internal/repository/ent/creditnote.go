@@ -20,18 +20,18 @@ import (
 )
 
 type creditnoteRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CreditNoteQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CreditNoteQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCreditNote.Repository {
+func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCreditNote.Repository {
 	return &creditnoteRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CreditNoteQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CreditNoteQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -636,10 +636,8 @@ func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNot
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, cn.ID)
-	r.cache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, cn.ID)
+	r.redisCache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "set credit note in cache", "id", cn.ID, "cache_key", cacheKey)
 }
@@ -650,13 +648,16 @@ func (r *creditnoteRepository) GetCache(ctx context.Context, key string) *domain
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCreditNote.CreditNote)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, key)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cn, ok := cache.UnmarshalCacheValue[domainCreditNote.CreditNote](value)
+	if !ok {
+		return nil
+	}
+	return cn
 }
 
 func (r *creditnoteRepository) DeleteCache(ctx context.Context, key string) {
@@ -665,8 +666,6 @@ func (r *creditnoteRepository) DeleteCache(ctx context.Context, key string) {
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, key)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, key)
+	r.redisCache.Delete(ctx, cacheKey)
 }

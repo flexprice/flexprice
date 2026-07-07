@@ -15,17 +15,17 @@ import (
 )
 
 type userRepository struct {
-	client postgres.IClient
-	logger *logger.Logger
-	cache  cache.InMemoryCache
+	client     postgres.IClient
+	logger     *logger.Logger
+	redisCache cache.RedisCache
 }
 
 // NewUserRepository creates a new user repository
-func NewUserRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainUser.Repository {
+func NewUserRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainUser.Repository {
 	return &userRepository{
-		client: client,
-		logger: logger,
-		cache:  cache,
+		client:     client,
+		logger:     logger,
+		redisCache: redisCache,
 	}
 }
 
@@ -412,8 +412,8 @@ func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixUser, user.TenantID, user.ID)
-	r.cache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, user.TenantID, user.ID)
+	r.redisCache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
 }
 
 func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.User {
@@ -422,8 +422,8 @@ func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.Us
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixUser, types.GetTenantID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -440,6 +440,6 @@ func (r *userRepository) DeleteCache(ctx context.Context, id string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixUser, types.GetTenantID(ctx), id)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), id)
+	r.redisCache.Delete(ctx, cacheKey)
 }

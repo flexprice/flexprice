@@ -242,12 +242,13 @@ func newSyncPriceToSubscriptionsScript() (*syncPriceToSubscriptionsScript, error
 	}
 	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Create repositories
-	priceRepo := entRepo.NewPriceRepository(client, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(client, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(client, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, cacheClient)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, redisCache)
 	lineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log)
 
 	return &syncPriceToSubscriptionsScript{

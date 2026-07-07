@@ -18,11 +18,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -125,11 +125,12 @@ func newCSVFeatureProcessor(tenantID, environmentID, userID string) (*CSVFeature
 	}
 	pgClient := postgres.NewClient(entClient, log, sentryService)
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
 	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(pgClient, log, cacheClient)
 	addonRepo := entRepo.NewAddonRepository(pgClient, log, cacheClient)
 	eventRepo := chRepo.NewEventRepository(chStore, log)

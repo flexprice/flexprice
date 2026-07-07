@@ -16,19 +16,19 @@ import (
 )
 
 type taxAssociationRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts TaxAssociationQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  TaxAssociationQueryOptions
+	redisCache cache.RedisCache
 }
 
 // NewTaxAssociationRepository creates a new tax association repository
-func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainTaxConfig.Repository {
+func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainTaxConfig.Repository {
 	return &taxAssociationRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: TaxAssociationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  TaxAssociationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -287,8 +287,8 @@ func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxCon
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
-	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, t.ID)
+	r.redisCache.Set(ctx, cacheKey, t, cache.ExpiryDefaultRedis)
 }
 
 func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
@@ -297,8 +297,8 @@ func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *dom
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -315,8 +315,8 @@ func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTax
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), t.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, t.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 type TaxAssociationQuery = *ent.TaxAssociationQuery

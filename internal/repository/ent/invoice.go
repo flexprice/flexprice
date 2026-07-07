@@ -24,18 +24,18 @@ import (
 )
 
 type invoiceRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts InvoiceQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  InvoiceQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainInvoice.Repository {
 	return &invoiceRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: InvoiceQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  InvoiceQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -1161,8 +1161,8 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), inv.ID)
-	r.cache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, inv.ID)
+	r.redisCache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
 }
 
 func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
@@ -1171,8 +1171,8 @@ func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvo
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -1189,8 +1189,8 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, key)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination

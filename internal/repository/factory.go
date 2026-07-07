@@ -139,7 +139,7 @@ func NewWalletRepository(p RepositoryParams) wallet.Repository {
 }
 
 func NewTenantRepository(p RepositoryParams) tenant.Repository {
-	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewTenantRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
 }
 
 func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
@@ -175,7 +175,7 @@ func NewTaskRepository(p RepositoryParams) task.Repository {
 }
 
 func NewSecretRepository(p RepositoryParams) secret.Repository {
-	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewSecretRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
@@ -191,7 +191,7 @@ func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplicat
 }
 
 func NewCouponRepository(p RepositoryParams) coupon.Repository {
-	return entRepo.NewCouponRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCouponAssociationRepository(p RepositoryParams) coupon_association.Repository {
@@ -199,11 +199,11 @@ func NewCouponAssociationRepository(p RepositoryParams) coupon_association.Repos
 }
 
 func NewCouponApplicationRepository(p RepositoryParams) coupon_application.Repository {
-	return entRepo.NewCouponApplicationRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCouponApplicationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCreditNoteRepository(p RepositoryParams) creditnote.Repository {
-	return entRepo.NewCreditNoteRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewCreditNoteRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLineItemRepository {
@@ -219,7 +219,7 @@ func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegration
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
-	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
@@ -227,7 +227,7 @@ func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 }
 
 func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
-	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
@@ -243,7 +243,7 @@ func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Reposito
 }
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
-	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {

@@ -53,6 +53,10 @@ func (c *inMemoryCache) IsEnabled() bool {
 	return c.cfg.Cache.Enabled && c.cfg.Cache.InMemory.Enabled
 }
 
+func (c *inMemoryCache) IsInMemory() bool {
+	return true
+}
+
 // GetCache returns the global cache instance
 func GetInMemoryCache() InMemoryCache {
 	if globalCache == nil {

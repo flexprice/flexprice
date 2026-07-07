@@ -19,18 +19,18 @@ import (
 )
 
 type addonAssociationRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts AddonAssociationQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  AddonAssociationQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainAddonAssociation.Repository {
+func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainAddonAssociation.Repository {
 	return &addonAssociationRepository{
-		client:    client,
-		log:       log,
-		queryOpts: AddonAssociationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  AddonAssociationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -505,8 +505,8 @@ func (r *addonAssociationRepository) SetCache(ctx context.Context, addonAssociat
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonAssociation.ID)
-	r.cache.Set(ctx, cacheKey, addonAssociation, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddonAssociation, addonAssociation.ID)
+	r.redisCache.Set(ctx, cacheKey, addonAssociation, cache.ExpiryDefaultRedis)
 }
 
 func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *domainAddonAssociation.AddonAssociation {
@@ -515,8 +515,8 @@ func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *d
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddonAssociation, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -533,6 +533,6 @@ func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssoc
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), addonAssociationID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixAddonAssociation, addonAssociationID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

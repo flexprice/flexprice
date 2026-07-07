@@ -20,18 +20,18 @@ import (
 )
 
 type entityIntegrationMappingRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts EntityIntegrationMappingQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  EntityIntegrationMappingQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainEntityIntegrationMapping.Repository {
+func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainEntityIntegrationMapping.Repository {
 	return &entityIntegrationMappingRepository{
-		client:    client,
-		log:       log,
-		queryOpts: EntityIntegrationMappingQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  EntityIntegrationMappingQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -489,8 +489,8 @@ func (r *entityIntegrationMappingRepository) SetCache(ctx context.Context, mappi
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), mapping.ID)
-	r.cache.Set(ctx, cacheKey, mapping, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, mapping.ID)
+	r.redisCache.Set(ctx, cacheKey, mapping, cache.ExpiryDefaultRedis)
 }
 
 func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
@@ -499,8 +499,8 @@ func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id st
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -517,6 +517,6 @@ func (r *entityIntegrationMappingRepository) DeleteCache(ctx context.Context, ma
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), mapping.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, mapping.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

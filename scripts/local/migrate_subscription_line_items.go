@@ -45,14 +45,15 @@ func MigrateSubscriptionLineItems() error {
 	}
 	client := postgres.NewClient(entClient, logger, tracing.NewService(cfg, logger))
 
-	cache := cache.NewInMemoryCache()
+	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, logger, cache)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, logger, redisCache)
 	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, logger)
-	planRepo := entRepo.NewPlanRepository(client, logger, cache)
-	priceRepo := entRepo.NewPriceRepository(client, logger, cache)
-	meterRepo := entRepo.NewMeterRepository(client, logger, cache)
+	planRepo := entRepo.NewPlanRepository(client, logger, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(client, logger, redisCache)
+	meterRepo := entRepo.NewMeterRepository(client, logger, cacheClient)
 
 	// Get all published subscriptions without line items
 	filter := types.NewNoLimitSubscriptionFilter()

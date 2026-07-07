@@ -17,18 +17,18 @@ import (
 )
 
 type couponApplicationRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponApplicationQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponApplicationQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCouponApplication.Repository {
+func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCouponApplication.Repository {
 	return &couponApplicationRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponApplicationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponApplicationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -513,10 +513,8 @@ func (r *couponApplicationRepository) SetCache(ctx context.Context, ca *domainCo
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponApplication, tenantID, environmentID, ca.ID)
-	r.cache.Set(ctx, cacheKey, ca, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponApplication, ca.ID)
+	r.redisCache.Set(ctx, cacheKey, ca, cache.ExpiryDefaultRedis)
 }
 
 func (r *couponApplicationRepository) GetCache(ctx context.Context, key string) *domainCouponApplication.CouponApplication {
@@ -525,13 +523,16 @@ func (r *couponApplicationRepository) GetCache(ctx context.Context, key string) 
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponApplication, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCouponApplication.CouponApplication)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponApplication, key)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cg, ok := cache.UnmarshalCacheValue[domainCouponApplication.CouponApplication](value)
+	if !ok {
+		return nil
+	}
+	return cg
 }
 
 func (r *couponApplicationRepository) DeleteCache(ctx context.Context, ca *domainCouponApplication.CouponApplication) {
@@ -540,8 +541,6 @@ func (r *couponApplicationRepository) DeleteCache(ctx context.Context, ca *domai
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponApplication, tenantID, environmentID, ca.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponApplication, ca.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

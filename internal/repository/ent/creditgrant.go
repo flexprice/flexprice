@@ -16,18 +16,18 @@ import (
 )
 
 type creditGrantRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CreditGrantQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CreditGrantQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCreditGrantRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCreditGrant.Repository {
+func NewCreditGrantRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCreditGrant.Repository {
 	return &creditGrantRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CreditGrantQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CreditGrantQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -599,8 +599,8 @@ func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domai
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrant.ID)
-	r.cache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, creditGrant.ID)
+	r.redisCache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultRedis)
 }
 
 func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
@@ -609,8 +609,8 @@ func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domain
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -627,6 +627,6 @@ func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID s
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrant, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), creditGrantID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, creditGrantID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

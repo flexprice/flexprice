@@ -12,6 +12,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -48,6 +49,7 @@ import (
 //     instantiated exactly once per process. The goCache.Cache inside it, and
 //     its single background cleanup goroutine, are also allocated exactly once.
 const meterCacheTTL = 10 * time.Minute
+const eventDeduplicationLockTTL = 24 * time.Hour
 
 // MeterUsageTrackingService handles meter-level usage tracking.
 // Unlike FeatureUsageTrackingService, this skips subscription/feature/price resolution.
@@ -286,6 +288,28 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 // processEvent matches an event to meters and writes meter_usage records.
 // No subscription/feature/price resolution needed.
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
+	// Step 0: Check if the event is already processed
+	if s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
+		s.ServiceParams.Locker != nil {
+		eventId := event.ID
+		cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, eventId)
+		lock, err := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+		if err != nil {
+			return fmt.Errorf("failed to check if event is already processed: %w", err)
+		}
+		if !lock.AcquiredSuccessfully() {
+			s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
+			return nil
+		}
+
+		// release lock on error so retries don't block
+		defer func() {
+			if err != nil {
+				lock.Release(ctx)
+			}
+		}()
+	}
+
 	// Step 1: Lookup meters by event name (cache-first)
 	meters, err := s.getMetersForEvent(ctx, event.EventName)
 	if err != nil {

@@ -20,18 +20,18 @@ import (
 )
 
 type priceRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PriceQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PriceQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPriceRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPrice.Repository {
+func NewPriceRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPrice.Repository {
 	return &priceRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PriceQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PriceQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -716,8 +716,8 @@ func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), price.ID)
-	r.cache.Set(ctx, cacheKey, price, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, price.ID)
+	r.redisCache.Set(ctx, cacheKey, price, cache.ExpiryDefaultRedis)
 }
 
 func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.Price {
@@ -726,8 +726,8 @@ func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -744,8 +744,8 @@ func (r *priceRepository) DeleteCache(ctx context.Context, priceID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), priceID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, priceID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // Grouping cruds

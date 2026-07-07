@@ -16,18 +16,18 @@ import (
 )
 
 type paymentRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PaymentQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PaymentQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPayment.Repository {
+func NewPaymentRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPayment.Repository {
 	return &paymentRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PaymentQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PaymentQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -767,8 +767,8 @@ func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), payment.ID)
-	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, payment.ID)
+	r.redisCache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
 }
 
 func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
@@ -777,8 +777,8 @@ func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPaym
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -795,6 +795,6 @@ func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), paymentID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, paymentID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
