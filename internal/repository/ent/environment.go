@@ -253,7 +253,7 @@ func (r *environmentRepository) CountByType(ctx context.Context, envType types.E
 // Environments are scoped to a tenant (not to an environment), so the cache key
 // is keyed by tenant + environment ID only, mirroring the Get query filter.
 func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnvironment.Environment) {
-	span := cache.StartCacheSpan(ctx, "environment", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "environment", "set", map[string]interface{}{
 		"environment_id": env.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -263,7 +263,7 @@ func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnviron
 }
 
 func (r *environmentRepository) GetCache(ctx context.Context, id string) *domainEnvironment.Environment {
-	span := cache.StartCacheSpan(ctx, "environment", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "environment", "get", map[string]interface{}{
 		"environment_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -281,7 +281,7 @@ func (r *environmentRepository) GetCache(ctx context.Context, id string) *domain
 }
 
 func (r *environmentRepository) DeleteCache(ctx context.Context, id string) {
-	span := cache.StartCacheSpan(ctx, "environment", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "environment", "delete", map[string]interface{}{
 		"environment_id": id,
 	})
 	defer cache.FinishSpan(span)

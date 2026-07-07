@@ -523,7 +523,7 @@ func (o AddonQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon) {
-	span := cache.StartCacheSpan(ctx, "addon", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "addon", "set", map[string]interface{}{
 		"addon_id": addon.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -533,7 +533,7 @@ func (r *addonRepository) SetCache(ctx context.Context, addon *domainAddon.Addon
 }
 
 func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.Addon {
-	span := cache.StartCacheSpan(ctx, "addon", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "addon", "get", map[string]interface{}{
 		"addon_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -551,7 +551,7 @@ func (r *addonRepository) GetCache(ctx context.Context, id string) *domainAddon.
 }
 
 func (r *addonRepository) DeleteCache(ctx context.Context, addonID string) {
-	span := cache.StartCacheSpan(ctx, "addon", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "addon", "delete", map[string]interface{}{
 		"addon_id": addonID,
 	})
 	defer cache.FinishSpan(span)

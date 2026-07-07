@@ -762,7 +762,7 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {
-	span := cache.StartCacheSpan(ctx, "payment", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "set", map[string]interface{}{
 		"payment_id": payment.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -772,7 +772,7 @@ func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment
 }
 
 func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
-	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "get", map[string]interface{}{
 		"payment_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -790,7 +790,7 @@ func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPaym
 }
 
 func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
-	span := cache.StartCacheSpan(ctx, "payment", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "delete", map[string]interface{}{
 		"payment_id": paymentID,
 	})
 	defer cache.FinishSpan(span)

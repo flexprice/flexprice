@@ -512,7 +512,7 @@ func (o TaxRateQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 
 // caching
 func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate.TaxRate) {
-	span := cache.StartCacheSpan(ctx, "taxrate", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxrate", "set", map[string]interface{}{
 		"taxrate_id": taxrate.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -522,7 +522,7 @@ func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate
 }
 
 func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxRate.TaxRate {
-	span := cache.StartCacheSpan(ctx, "taxrate", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxrate", "get", map[string]interface{}{
 		"taxrate_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -540,7 +540,7 @@ func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxR
 }
 
 func (r *taxrateRepository) DeleteCache(ctx context.Context, taxrate *domainTaxRate.TaxRate) {
-	span := cache.StartCacheSpan(ctx, "taxrate", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxrate", "delete", map[string]interface{}{
 		"taxrate_id": taxrate.ID,
 	})
 	defer cache.FinishSpan(span)

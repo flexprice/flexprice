@@ -391,7 +391,7 @@ func (o MeterQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.M
 }
 
 func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter) {
-	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "meter", "set", map[string]interface{}{
 		"meter_id": meter.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -401,7 +401,7 @@ func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter
 }
 
 func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.Meter {
-	span := cache.StartCacheSpan(ctx, "meter", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "meter", "set", map[string]interface{}{
 		"meter_id": meter.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -419,7 +419,7 @@ func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.
 }
 
 func (r *meterRepository) DeleteCache(ctx context.Context, meterID string) {
-	span := cache.StartCacheSpan(ctx, "meter", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "meter", "delete", map[string]interface{}{
 		"meter_id": meterID,
 	})
 	defer cache.FinishSpan(span)

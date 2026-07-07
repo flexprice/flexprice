@@ -500,7 +500,7 @@ func (o AddonAssociationQueryOptions) GetFieldResolver(st string) (string, error
 }
 
 func (r *addonAssociationRepository) SetCache(ctx context.Context, addonAssociation *domainAddonAssociation.AddonAssociation) {
-	span := cache.StartCacheSpan(ctx, "addon_association", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "addon_association", "set", map[string]interface{}{
 		"addon_association_id": addonAssociation.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -510,7 +510,7 @@ func (r *addonAssociationRepository) SetCache(ctx context.Context, addonAssociat
 }
 
 func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *domainAddonAssociation.AddonAssociation {
-	span := cache.StartCacheSpan(ctx, "addon_association", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "addon_association", "get", map[string]interface{}{
 		"addon_association_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -528,7 +528,7 @@ func (r *addonAssociationRepository) GetCache(ctx context.Context, id string) *d
 }
 
 func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssociationID string) {
-	span := cache.StartCacheSpan(ctx, "addon_association", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "addon_association", "delete", map[string]interface{}{
 		"addon_association_id": addonAssociationID,
 	})
 	defer cache.FinishSpan(span)

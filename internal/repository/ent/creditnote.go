@@ -631,7 +631,7 @@ func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNote.CreditNote) {
-	span := cache.StartCacheSpan(ctx, "creditnote", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "set", map[string]interface{}{
 		"creditnote_id": cn.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -643,7 +643,7 @@ func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNot
 }
 
 func (r *creditnoteRepository) GetCache(ctx context.Context, key string) *domainCreditNote.CreditNote {
-	span := cache.StartCacheSpan(ctx, "creditnote", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "get", map[string]interface{}{
 		"creditnote_id": key,
 	})
 	defer cache.FinishSpan(span)
@@ -661,7 +661,7 @@ func (r *creditnoteRepository) GetCache(ctx context.Context, key string) *domain
 }
 
 func (r *creditnoteRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "creditnote", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "delete", map[string]interface{}{
 		"creditnote_id": key,
 	})
 	defer cache.FinishSpan(span)

@@ -593,7 +593,7 @@ func (o FeatureQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
-	span := cache.StartCacheSpan(ctx, "feature", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "set", map[string]interface{}{
 		"feature_id": feature.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -603,7 +603,7 @@ func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature
 }
 
 func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
-	span := cache.StartCacheSpan(ctx, "feature", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "get", map[string]interface{}{
 		"feature_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -621,7 +621,7 @@ func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeat
 }
 
 func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
-	span := cache.StartCacheSpan(ctx, "feature", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "delete", map[string]interface{}{
 		"feature_id": featureID,
 	})
 	defer cache.FinishSpan(span)

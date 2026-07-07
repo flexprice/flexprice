@@ -594,7 +594,7 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domainCreditGrant.CreditGrant) {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "set", map[string]interface{}{
 		"creditgrant_id": creditGrant.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -604,7 +604,7 @@ func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domai
 }
 
 func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
 		"creditgrant_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -622,7 +622,7 @@ func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domain
 }
 
 func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID string) {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "delete", map[string]interface{}{
 		"creditgrant_id": creditGrantID,
 	})
 	defer cache.FinishSpan(span)

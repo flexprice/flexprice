@@ -8,6 +8,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	goCache "github.com/patrickmn/go-cache"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // DefaultExpiration is the default expiration time for cache entries
@@ -65,12 +67,20 @@ func GetInMemoryCache() InMemoryCache {
 	return globalCache
 }
 
-// Get retrieves a value from the cache
-func (c *inMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
+// Get retrieves a value from the cache. Auto-tags cache.hit on the active
+// span (see StartInMemoryCacheSpan) so callers get the attribute without
+// extra bookkeeping. Safe when no span is active — SpanFromContext returns
+// a no-op.
+func (c *inMemoryCache) Get(ctx context.Context, key string) (_ interface{}, found bool) {
+	defer func() {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("cache.hit", found))
+	}()
+
 	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}
-	return c.cache.Get(key)
+	value, found := c.cache.Get(key)
+	return value, found
 }
 
 func (c *inMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
