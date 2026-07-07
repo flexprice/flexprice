@@ -549,6 +549,14 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	response := dto.NewInvoiceResponse(inv)
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription {
+		if inv.SubscriptionID == nil || *inv.SubscriptionID == "" {
+			return nil, ierr.NewError("subscription invoice is missing subscription id").
+				WithHint("Invoice is marked as subscription type but has no subscription reference").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": inv.ID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
 		subscription, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
 		if err != nil {
 			return nil, err
