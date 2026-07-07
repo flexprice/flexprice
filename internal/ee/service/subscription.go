@@ -7685,16 +7685,24 @@ func (s *subscriptionService) ExternalCustomerIDsForSubscription(ctx context.Con
 	return lo.Uniq(out), nil
 }
 
-// getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription.
+// getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription
+// in the default lifecycle statuses (active/trialing/draft).
 func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string) ([]*subscription.Subscription, error) {
-	filter := types.NewNoLimitSubscriptionFilter()
-	filter.ParentSubscriptionIDs = []string{parentSubID}
-	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
+	return s.getInheritedSubscriptionsInStatuses(ctx, parentSubID, []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 		types.SubscriptionStatusDraft,
-	}
+	})
+}
+
+// getInheritedSubscriptionsInStatuses retrieves INHERITED child subscriptions in the given statuses.
+// Cascades that must reach children parked in other states (e.g. incomplete after a trial-end
+// cascade) pass their own status list instead of the defaults.
+func (s *subscriptionService) getInheritedSubscriptionsInStatuses(ctx context.Context, parentSubID string, statuses []types.SubscriptionStatus) ([]*subscription.Subscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{parentSubID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	filter.SubscriptionStatus = statuses
 
 	return s.SubRepo.List(ctx, filter)
 }
