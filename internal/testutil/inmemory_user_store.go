@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryUserStore is an in-memory implementation of the User repository
@@ -99,6 +100,12 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 
 		// Filter by type if specified
 		if filter.Type != nil && u.Type != *filter.Type {
+			continue
+		}
+
+		// Filter by user IDs if specified
+		// (mirrors internal/repository/ent/user.go ListByFilter: entUser.IDIn(filter.UserIDs...))
+		if len(filter.UserIDs) > 0 && !lo.Contains(filter.UserIDs, u.ID) {
 			continue
 		}
 

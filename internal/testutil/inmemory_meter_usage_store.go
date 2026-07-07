@@ -222,7 +222,9 @@ func truncateToWindow(t time.Time, ws types.WindowSize, billingAnchor *time.Time
 		}
 		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 	default:
-		return time.Time{}
+		// formatWindowSize falls back to toStartOfDay for any unknown non-empty
+		// window size (internal/repository/clickhouse/aggregators.go:161-162).
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 	}
 }
 

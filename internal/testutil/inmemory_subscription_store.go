@@ -52,9 +52,26 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
+	// Filter by subscription IDs
+	if len(f.SubscriptionIDs) > 0 && !lo.Contains(f.SubscriptionIDs, sub.ID) {
+		return false
+	}
+
 	// Filter by customer ID
 	if f.CustomerID != "" && sub.CustomerID != f.CustomerID {
 		return false
+	}
+
+	// Filter by customer IDs
+	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, sub.CustomerID) {
+		return false
+	}
+
+	// Filter by invoicing customer IDs
+	if len(f.InvoicingCustomerIDs) > 0 {
+		if sub.InvoicingCustomerID == nil || !lo.Contains(f.InvoicingCustomerIDs, *sub.InvoicingCustomerID) {
+			return false
+		}
 	}
 
 	// Filter by plan ID
@@ -79,6 +96,15 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
+	// Default to active when the client did not constrain subscription_status
+	// (neither top-level nor DSL filters) — mirrors the real Ent repo
+	// (internal/repository/ent/subscription.go applyEntityQueryOptions).
+	if f.SubscriptionStatus == nil && !subscriptionFiltersConstrainStatus(f.Filters) {
+		if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return false
+		}
+	}
+
 	// Filter by billing cadence
 	if len(f.BillingCadence) > 0 && !lo.Contains(f.BillingCadence, sub.BillingCadence) {
 		return false
@@ -86,6 +112,11 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 
 	// Filter by billing period
 	if len(f.BillingPeriod) > 0 && !lo.Contains(f.BillingPeriod, sub.BillingPeriod) {
+		return false
+	}
+
+	// Filter by subscription status not in
+	if len(f.SubscriptionStatusNotIn) > 0 && lo.Contains(f.SubscriptionStatusNotIn, sub.SubscriptionStatus) {
 		return false
 	}
 
@@ -105,29 +136,44 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		}
 	}
 
-	if f.EffectiveDateForUpdate == nil && f.TimeRangeFilter != nil {
-		if f.StartTime != nil && sub.CreatedAt.Before(*f.StartTime) {
+	// Time range filter — mirrors the real Ent repo: current_period_start >= StartTime,
+	// current_period_end <= EndTime (NOT created_at).
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil && sub.CurrentPeriodStart.Before(*f.StartTime) {
 			return false
 		}
-		if f.EndTime != nil && sub.CreatedAt.After(*f.EndTime) {
+		if f.EndTime != nil && sub.CurrentPeriodEnd.After(*f.EndTime) {
 			return false
 		}
 	}
 
-	// Filter by active at
+	// Filter by active at — mirrors the real Ent repo:
+	// start_date <= ActiveAt AND (end_date > ActiveAt OR end_date IS NULL).
 	if f.ActiveAt != nil {
-		if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-			return false
-		}
 		if sub.StartDate.After(*f.ActiveAt) {
 			return false
 		}
-		if sub.EndDate != nil && sub.EndDate.Before(*f.ActiveAt) {
+		if sub.EndDate != nil && !sub.EndDate.After(*f.ActiveAt) {
 			return false
 		}
 	}
 
 	return true
+}
+
+// subscriptionFiltersConstrainStatus reports whether any DSL filter condition targets
+// subscription_status, mirroring SubscriptionQueryOptions.filtersConstrainSubscriptionStatus
+// in internal/repository/ent/subscription.go.
+func subscriptionFiltersConstrainStatus(filters []*types.FilterCondition) bool {
+	for _, fc := range filters {
+		if fc == nil || fc.Field == nil {
+			continue
+		}
+		if *fc.Field == "subscription_status" {
+			return true
+		}
+	}
+	return false
 }
 
 // subscriptionSortFn implements sorting logic for subscriptions
@@ -243,19 +289,10 @@ func (s *InMemorySubscriptionStore) ListByCustomerID(ctx context.Context, custom
 }
 
 func (s *InMemorySubscriptionStore) ListByIDs(ctx context.Context, ids []string) ([]*subscription.Subscription, error) {
-	allSubs, err := s.ListAll(ctx, &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
+	return s.ListAll(ctx, &types.SubscriptionFilter{
+		QueryFilter:     types.NewNoLimitQueryFilter(),
+		SubscriptionIDs: ids,
 	})
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list subscriptions").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Filter the subscriptions by IDs
-	return lo.Filter(allSubs, func(sub *subscription.Subscription, _ int) bool {
-		return lo.Contains(ids, sub.ID)
-	}), nil
 }
 func (s *InMemorySubscriptionStore) Count(ctx context.Context, filter *types.SubscriptionFilter) (int, error) {
 	count, err := s.InMemoryStore.Count(ctx, filter, subscriptionFilterFn)
@@ -316,26 +353,16 @@ func (s *InMemorySubscriptionStore) Delete(ctx context.Context, id string) error
 	return nil
 }
 
-// ListAll returns all subscriptions without pagination
+// ListAll returns all subscriptions without pagination.
+// Mirrors the real Ent repo: reuse the caller's filter as-is, overriding only pagination.
 func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
-	// Create an unlimited filter
-	unlimitedFilter := &types.SubscriptionFilter{
-		QueryFilter:             types.NewNoLimitQueryFilter(),
-		TimeRangeFilter:         filter.TimeRangeFilter,
-		CustomerID:              filter.CustomerID,
-		PlanID:                  filter.PlanID,
-		ParentSubscriptionIDs:   filter.ParentSubscriptionIDs,
-		SubscriptionTypes:       filter.SubscriptionTypes,
-		SubscriptionStatus:      filter.SubscriptionStatus,
-		BillingCadence:          filter.BillingCadence,
-		BillingPeriod:           filter.BillingPeriod,
-		SubscriptionStatusNotIn: filter.SubscriptionStatusNotIn,
-		ActiveAt:                filter.ActiveAt,
-		EffectiveDateForUpdate:  filter.EffectiveDateForUpdate,
-		TrialEndDueLTE:          filter.TrialEndDueLTE,
+	if filter == nil {
+		filter = &types.SubscriptionFilter{}
 	}
+	unlimitedFilter := *filter
+	unlimitedFilter.QueryFilter = types.NewNoLimitQueryFilter()
 
-	return s.List(ctx, unlimitedFilter)
+	return s.List(ctx, &unlimitedFilter)
 }
 
 // GetSubscriptionsForBillingPeriodUpdate returns subscriptions across all tenants for billing-period jobs.
@@ -517,19 +544,19 @@ func (s *InMemorySubscriptionStore) GetRecentSubscriptionsByPlan(ctx context.Con
 	now := time.Now().UTC()
 	sevenDaysAgo := now.AddDate(0, 0, -7)
 
-	// Get all subscriptions created in last 7 days
-	filter := &types.SubscriptionFilter{
+	// Mirror the real repo's raw SQL: active + published subscriptions created in the last 7 days.
+	allActive, err := s.ListAll(ctx, &types.SubscriptionFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
-		TimeRangeFilter: &types.TimeRangeFilter{
-			StartTime: lo.ToPtr(sevenDaysAgo),
-			EndTime:   lo.ToPtr(now),
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
 		},
-	}
-
-	subscriptions, err := s.ListAll(ctx, filter)
+	})
 	if err != nil {
 		return nil, err
 	}
+	subscriptions := lo.Filter(allActive, func(sub *subscription.Subscription, _ int) bool {
+		return sub.Status == types.StatusPublished && !sub.CreatedAt.Before(sevenDaysAgo)
+	})
 
 	// Group by plan
 	planCounts := make(map[string]*types.SubscriptionPlanCount)
