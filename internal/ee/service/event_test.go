@@ -445,7 +445,15 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 
 	s.NoError(err)
 	s.NotNil(result)
-	s.Equal(decimal.NewFromFloat(300).InexactFloat64(), result.Value.InexactFloat64()) // Only sum of us-east-1 events (100 + 200)
+	// Windowed queries return per-window rows; like the real ClickHouse repo,
+	// Value is not populated for pure WindowSize queries (only the BucketSize
+	// path assigns it — internal/repository/clickhouse/event.go:286-371).
+	s.True(result.Value.IsZero(), "windowed queries must not populate Value, got %s", result.Value)
+	windowTotal := decimal.Zero
+	for _, r := range result.Results {
+		windowTotal = windowTotal.Add(r.Value)
+	}
+	s.Equal(decimal.NewFromFloat(300).InexactFloat64(), windowTotal.InexactFloat64()) // Only sum of us-east-1 events (100 + 200)
 	s.Equal("api_request", result.EventName)
 	s.Equal(types.AggregationSum, result.Type)
 }

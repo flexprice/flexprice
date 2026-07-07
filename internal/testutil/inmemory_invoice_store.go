@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -75,6 +76,14 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		})
 	}
 
+	// Copy coupon applications (slice copy; elements are shared like the real
+	// repo's edge-loaded pointers).
+	var couponApplications []*coupon_application.CouponApplication
+	if inv.CouponApplications != nil {
+		couponApplications = make([]*coupon_application.CouponApplication, len(inv.CouponApplications))
+		copy(couponApplications, inv.CouponApplications)
+	}
+
 	return &invoice.Invoice{
 		ID:                         inv.ID,
 		CustomerID:                 inv.CustomerID,
@@ -89,6 +98,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalDiscount:              inv.TotalDiscount,
+		TotalTax:                   inv.TotalTax,
 		AmountRemaining:            inv.AmountRemaining,
 		AdjustmentAmount:           inv.AdjustmentAmount,
 		RefundedAmount:             inv.RefundedAmount,
@@ -101,12 +111,14 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		PaidAt:                     inv.PaidAt,
 		VoidedAt:                   inv.VoidedAt,
 		FinalizedAt:                inv.FinalizedAt,
+		IssueDate:                  inv.IssueDate,
 		BillingPeriod:              inv.BillingPeriod,
 		PeriodStart:                inv.PeriodStart,
 		PeriodEnd:                  inv.PeriodEnd,
 		InvoicePDFURL:              inv.InvoicePDFURL,
 		BillingReason:              inv.BillingReason,
 		LineItems:                  lineItems,
+		CouponApplications:         couponApplications,
 		Metadata:                   inv.Metadata,
 		Version:                    inv.Version,
 		EnvironmentID:              inv.EnvironmentID,
@@ -128,15 +140,21 @@ func (s *InMemoryInvoiceStore) Create(ctx context.Context, inv *invoice.Invoice)
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	return s.InMemoryStore.Create(ctx, inv.ID, copyInvoice(inv))
-}
-
-func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *invoice.Invoice) error {
-	if err := s.Create(ctx, inv); err != nil {
+	if err := s.InMemoryStore.Create(ctx, inv.ID, copyInvoice(inv)); err != nil {
 		return err
 	}
+
+	// The real repo persists line items into the invoice_line_items table
+	// (CreateWithLineItems, internal/repository/ent/invoice.go) and Get/List
+	// re-read them from that table — the single source of truth. Many tests
+	// create invoices with embedded LineItems via Create, so sync them into
+	// the line item store (when wired) to keep Get/List consistent with items
+	// added later through InvoiceLineItemRepo.
 	if s.lineItemStore != nil {
 		for _, item := range inv.LineItems {
+			if item == nil {
+				continue
+			}
 			// Ensure InvoiceID is set on each line item (mirrors real DB behaviour)
 			if item.InvoiceID == "" {
 				item.InvoiceID = inv.ID
@@ -146,6 +164,32 @@ func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *inv
 			}
 		}
 	}
+	return nil
+}
+
+func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *invoice.Invoice) error {
+	// The real repo creates the invoice and its line items in one transaction
+	// (internal/repository/ent/invoice.go CreateWithLineItems). The in-memory
+	// Create already syncs embedded line items into the line item store, so
+	// this is a straight delegation.
+	return s.Create(ctx, inv)
+}
+
+// attachLineItems mirrors the real repo's Get/List behaviour: line items are
+// loaded from the line item table (published only) rather than served from an
+// embedded copy on the invoice (internal/repository/ent/invoice.go — Get loads
+// via LineItemRepository.ListByInvoiceID; List edge-loads WithLineItems
+// filtered on status=published). Falls back to the embedded copy when no line
+// item store is wired.
+func (s *InMemoryInvoiceStore) attachLineItems(ctx context.Context, inv *invoice.Invoice) error {
+	if s.lineItemStore == nil || inv == nil {
+		return nil
+	}
+	items, err := s.lineItemStore.ListByInvoiceID(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+	inv.LineItems = items
 	return nil
 }
 
@@ -160,7 +204,9 @@ func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID strin
 		itemCopy.InvoiceID = invoiceID
 		inv.LineItems = append(inv.LineItems, itemCopy)
 		if s.lineItemStore != nil {
-			_ = s.lineItemStore.Create(ctx, itemCopy)
+			if err := s.lineItemStore.Create(ctx, itemCopy); err != nil {
+				return err
+			}
 		}
 	}
 	return s.Update(ctx, inv)
@@ -195,7 +241,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("invoice get failed").Mark(ierr.ErrDatabase)
 	}
-	return copyInvoice(inv), nil
+	result := copyInvoice(inv)
+	if err := s.attachLineItems(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // GetForUpdate returns the invoice; in-memory store has no row locking.
@@ -215,7 +265,23 @@ func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
+	invoices, err := s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*invoice.Invoice, len(invoices))
+	for i, inv := range invoices {
+		cp := copyInvoice(inv)
+		if filter != nil && filter.SkipLineItems {
+			// Mirror the real repo: List skips the line-items edge-load when
+			// SkipLineItems is set (internal/repository/ent/invoice.go List).
+			cp.LineItems = nil
+		} else if err := s.attachLineItems(ctx, cp); err != nil {
+			return nil, err
+		}
+		result[i] = cp
+	}
+	return result, nil
 }
 
 func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
@@ -416,6 +482,17 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by currency (exact match, mirrors invoice.Currency(f.Currency)
+	// in the real repo's applyEntityQueryOptions)
+	if f.Currency != "" && inv.Currency != f.Currency {
+		return false
+	}
+
+	// Filter by invoice IDs (mirrors invoice.IDIn(f.InvoiceIDs...))
+	if len(f.InvoiceIDs) > 0 && !lo.Contains(f.InvoiceIDs, inv.ID) {
+		return false
+	}
+
 	// Filter by invoice status — mirrors repository default: when no explicit status
 	// filter is set, exclude SKIPPED invoices (zero-dollar drafts with no financial data).
 	if len(f.InvoiceStatus) > 0 {
@@ -451,15 +528,18 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
-	// Filter by time range
+	// Filter by time range. Mirrors the real repo:
+	// StartTime → invoice.PeriodStartGTE(StartTime), EndTime → invoice.PeriodEndLTE(EndTime)
+	// (internal/repository/ent/invoice.go applyEntityQueryOptions). SQL comparisons
+	// against NULL are false, so nil PeriodStart/PeriodEnd never match.
 	if f.TimeRangeFilter != nil && (f.TimeRangeFilter.StartTime != nil || f.TimeRangeFilter.EndTime != nil) {
 		if f.TimeRangeFilter.StartTime != nil {
-			if inv.PeriodStart == nil || inv.PeriodStart.After(*f.TimeRangeFilter.StartTime) {
+			if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.TimeRangeFilter.StartTime) {
 				return false
 			}
 		}
 		if f.TimeRangeFilter.EndTime != nil {
-			if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.TimeRangeFilter.EndTime) {
+			if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.TimeRangeFilter.EndTime) {
 				return false
 			}
 		}
@@ -468,6 +548,20 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	// Filter by period_start_gte (periodStart >= value)
 	if f.PeriodStartGTE != nil {
 		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+
+	// Filter by period_start_lte (periodStart <= value, mirrors invoice.PeriodStartLTE)
+	if f.PeriodStartLTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.After(*f.PeriodStartLTE) {
+			return false
+		}
+	}
+
+	// Filter by period_end_gte (periodEnd >= value, mirrors invoice.PeriodEndGTE)
+	if f.PeriodEndGTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {
 			return false
 		}
 	}
@@ -601,6 +695,14 @@ func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice
 			inv.LineItems[i].Status = item.Status
 			inv.LineItems[i].UpdatedAt = time.Now().UTC()
 			inv.LineItems[i].UpdatedBy = types.GetUserID(ctx)
+			// Persist to the line item store (single source of truth for
+			// Get/List when wired), mirroring the real DB where line items
+			// live in their own table.
+			if s.lineItemStore != nil {
+				if err := s.lineItemStore.Update(ctx, inv.LineItems[i]); err != nil {
+					return err
+				}
+			}
 			found = true
 			break
 		}
