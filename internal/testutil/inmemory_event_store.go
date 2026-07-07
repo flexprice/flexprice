@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"strconv"
 	"sync"
@@ -135,275 +136,240 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 		Type:      params.AggregationType,
 	}
 
-	// Handle window size for daily aggregation
-	if params.WindowSize == types.WindowSizeDay {
-		// Group events by day
-		dailyBuckets := make(map[time.Time][]*events.Event)
-		for _, event := range filteredEvents {
-			dayStart := truncateToBucket(event.Timestamp, types.WindowSizeDay)
-			dailyBuckets[dayStart] = append(dailyBuckets[dayStart], event)
-		}
-
-		// Sort days
-		days := make([]time.Time, 0, len(dailyBuckets))
-		for day := range dailyBuckets {
-			days = append(days, day)
-		}
-		sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
-
-		// Calculate aggregation for each day
-		result.Results = make([]events.UsageResult, 0, len(days))
-		var totalValue decimal.Decimal
-
-		for _, day := range days {
-			dayEvents := dailyBuckets[day]
-			var dayValue decimal.Decimal
-
-			switch params.AggregationType {
-			case types.AggregationCount:
-				dayValue = decimal.NewFromInt(int64(len(dayEvents)))
-			case types.AggregationSum:
-				for _, event := range dayEvents {
-					if val, ok := event.Properties[params.PropertyName]; ok {
-						switch v := val.(type) {
-						case float64:
-							dayValue = dayValue.Add(decimal.NewFromFloat(v))
-						case int:
-							dayValue = dayValue.Add(decimal.NewFromInt(int64(v)))
-						case int64:
-							dayValue = dayValue.Add(decimal.NewFromInt(v))
-						case string:
-							if f, err := strconv.ParseFloat(v, 64); err == nil {
-								dayValue = dayValue.Add(decimal.NewFromFloat(f))
-							}
-						}
-					}
-				}
-			}
-
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: day,
-				Value:      dayValue,
-			})
-			totalValue = totalValue.Add(dayValue)
-		}
-
-		result.Value = totalValue
+	// Branch order mirrors the real aggregator dispatch: MaxAggregator.GetQuery /
+	// SumAggregator.GetQuery check BucketSize before anything else
+	// (internal/repository/clickhouse/aggregators.go:264-271, 653-660), so a
+	// bucketed-meter query with both BucketSize and WindowSize set is bucketed
+	// by BucketSize and WindowSize is ignored.
+	if (params.AggregationType == types.AggregationMax || params.AggregationType == types.AggregationSum) && params.BucketSize != "" {
+		s.aggregateBucketed(filteredEvents, params, result)
 		return result, nil
 	}
 
-	// Handle window size for monthly aggregation
-	if params.WindowSize == types.WindowSizeMonth {
-		// Group events by month
-		monthlyBuckets := make(map[time.Time][]*events.Event)
+	// Windowed aggregation (any WindowSize): mirrors the windowed scan loop in
+	// internal/repository/clickhouse/event.go:286-371 — one UsageResult per
+	// window with events, ordered by window start. Note the real repo does NOT
+	// populate result.Value for pure WindowSize queries (it is only assigned in
+	// the BucketSize path at event.go:317), so neither do we.
+	if params.WindowSize != "" {
+		windows := make(map[time.Time][]*events.Event)
 		for _, event := range filteredEvents {
-			monthStart := truncateToBucket(event.Timestamp, types.WindowSizeMonth)
-			monthlyBuckets[monthStart] = append(monthlyBuckets[monthStart], event)
+			// Window bucketing mirrors formatWindowSizeWithBillingAnchor
+			// (aggregators.go:132-201): toStartOfDay/toStartOfMonth etc., with
+			// billing-anchor-shifted months when a BillingAnchor is provided.
+			start := truncateToWindow(event.Timestamp, params.WindowSize, params.BillingAnchor)
+			windows[start] = append(windows[start], event)
 		}
 
-		// Sort months
-		months := make([]time.Time, 0, len(monthlyBuckets))
-		for month := range monthlyBuckets {
-			months = append(months, month)
+		starts := make([]time.Time, 0, len(windows))
+		for start := range windows {
+			starts = append(starts, start)
 		}
-		sort.Slice(months, func(i, j int) bool { return months[i].Before(months[j]) })
+		sort.Slice(starts, func(i, j int) bool { return starts[i].Before(starts[j]) })
 
-		// Calculate aggregation for each month
-		result.Results = make([]events.UsageResult, 0, len(months))
-		var totalValue decimal.Decimal
-
-		for _, month := range months {
-			monthEvents := monthlyBuckets[month]
-			var monthValue decimal.Decimal
-
-			switch params.AggregationType {
-			case types.AggregationCount:
-				monthValue = decimal.NewFromInt(int64(len(monthEvents)))
-			case types.AggregationSum:
-				for _, event := range monthEvents {
-					if val, ok := event.Properties[params.PropertyName]; ok {
-						switch v := val.(type) {
-						case float64:
-							monthValue = monthValue.Add(decimal.NewFromFloat(v))
-						case int:
-							monthValue = monthValue.Add(decimal.NewFromInt(int64(v)))
-						case int64:
-							monthValue = monthValue.Add(decimal.NewFromInt(v))
-						case string:
-							if f, err := strconv.ParseFloat(v, 64); err == nil {
-								monthValue = monthValue.Add(decimal.NewFromFloat(f))
-							}
-						}
-					}
-				}
-			}
-
+		result.Results = make([]events.UsageResult, 0, len(starts))
+		for _, start := range starts {
 			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: month,
-				Value:      monthValue,
+				WindowSize: start,
+				// The real scan clamps every windowed value to zero:
+				// MAX/SUM via clampToZero (event.go:336), AVG/LATEST/
+				// SUM_WITH_MULTIPLIER/WEIGHTED_SUM via the explicit negative
+				// check (event.go:352-355). COUNT/COUNT_UNIQUE are uint64.
+				Value: clampUsageValueToZero(aggregateUsageValue(windows[start], params)),
 			})
-			totalValue = totalValue.Add(monthValue)
 		}
-
-		result.Value = totalValue
 		return result, nil
 	}
 
-	// Handle bucket size for MAX aggregation (existing logic)
-	if params.AggregationType == types.AggregationMax && params.BucketSize != "" {
-		// Group events into buckets by bucket start time
-		buckets := make(map[time.Time]decimal.Decimal)
-		var overallMax decimal.Decimal
-
-		for _, event := range filteredEvents {
-			if val, ok := event.Properties[params.PropertyName]; ok {
-				var f float64
-				switch v := val.(type) {
-				case float64:
-					f = v
-				case int:
-					f = float64(v)
-				case int64:
-					f = float64(v)
-				case string:
-					if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-						f = parsed
-					} else {
-						continue
-					}
-				default:
-					continue
-				}
-
-				bucketStart := truncateToBucket(event.Timestamp, params.BucketSize)
-				current := buckets[bucketStart]
-				if current.IsZero() || decimal.NewFromFloat(f).GreaterThan(current) {
-					buckets[bucketStart] = decimal.NewFromFloat(f)
-				}
-
-				if overallMax.IsZero() || decimal.NewFromFloat(f).GreaterThan(overallMax) {
-					overallMax = decimal.NewFromFloat(f)
-				}
-			}
-		}
-
-		// Convert buckets to sorted results
-		keys := make([]time.Time, 0, len(buckets))
-		for k := range buckets {
-			keys = append(keys, k)
-		}
-		sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
-
-		result.Results = make([]events.UsageResult, 0, len(keys))
-		var sumOfBucketMaxes decimal.Decimal
-		for _, k := range keys {
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: k,
-				Value:      buckets[k],
-			})
-			sumOfBucketMaxes = sumOfBucketMaxes.Add(buckets[k])
-		}
-		// Value is the sum of per-bucket maxes, matching ClickHouse SQL behavior.
-		// The billing code uses this as the total quantity for the bucketed meter.
-		result.Value = sumOfBucketMaxes
-		return result, nil
-	}
-
-	// Standard aggregation without windowing
-	switch params.AggregationType {
-	case types.AggregationCount:
-		result.Value = decimal.NewFromInt(int64(len(filteredEvents)))
-	case types.AggregationSum:
-		var sum decimal.Decimal
-		for _, event := range filteredEvents {
-			if val, ok := event.Properties[params.PropertyName]; ok {
-				switch v := val.(type) {
-				case float64:
-					sum = sum.Add(decimal.NewFromFloat(v))
-				case int:
-					sum = sum.Add(decimal.NewFromInt(int64(v)))
-				case int64:
-					sum = sum.Add(decimal.NewFromInt(v))
-				case string:
-					if f, err := strconv.ParseFloat(v, 64); err == nil {
-						sum = sum.Add(decimal.NewFromFloat(f))
-					}
-				}
-			}
-		}
-		result.Value = sum
-	case types.AggregationMax:
-		// Simple max across all filtered events
-		var maxVal decimal.Decimal
-		for _, event := range filteredEvents {
-			if val, ok := event.Properties[params.PropertyName]; ok {
-				var f float64
-				switch v := val.(type) {
-				case float64:
-					f = v
-				case int:
-					f = float64(v)
-				case int64:
-					f = float64(v)
-				case string:
-					if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-						f = parsed
-					} else {
-						continue
-					}
-				default:
-					continue
-				}
-				if maxVal.IsZero() || decimal.NewFromFloat(f).GreaterThan(maxVal) {
-					maxVal = decimal.NewFromFloat(f)
-				}
-			}
-		}
-		result.Value = maxVal
-	}
-
+	// Standard aggregation without windowing (event.go:372-414). Negative
+	// totals are clamped to zero for all aggregation types (event.go:400-403).
+	result.Value = clampUsageValueToZero(aggregateUsageValue(filteredEvents, params))
 	return result, nil
 }
 
-// truncateToBucket truncates t to the start of the given bucket size in UTC.
-func truncateToBucket(t time.Time, size types.WindowSize) time.Time {
-	t = t.UTC()
-	switch size {
-	case types.WindowSizeMinute:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
-	case types.WindowSize15Min:
-		m := (t.Minute() / 15) * 15
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
-	case types.WindowSize30Min:
-		m := (t.Minute() / 30) * 30
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
-	case types.WindowSizeHour:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
-	case types.WindowSize3Hour:
-		h := (t.Hour() / 3) * 3
-		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
-	case types.WindowSize6Hour:
-		h := (t.Hour() / 6) * 6
-		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
-	case types.WindowSize12Hour:
-		h := (t.Hour() / 12) * 12
-		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
-	case types.WindowSizeDay:
-		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
-	case types.WindowSizeWeek:
-		// Start of week (Monday) at 00:00 UTC
-		weekday := int(t.Weekday())
-		if weekday == 0 { // Sunday
-			weekday = 7
-		}
-		start := t.AddDate(0, 0, -(weekday - 1))
-		return time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
-	case types.WindowSizeMonth:
-		// Start of month at 00:00 UTC
-		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
-	default:
-		return t
+// aggregateBucketed implements the bucketed (BucketSize) MAX/SUM queries:
+//   - MaxAggregator.getWindowedQuery (aggregators.go:714-799): max per bucket,
+//     total = sum of bucket maxes; with a valid "properties.X" GroupBy entry,
+//     max per (bucket, group) and total = sum of all group values.
+//   - SumAggregator.getWindowedQuery (aggregators.go:325-366): sum per bucket,
+//     total = sum of bucket sums (no group-by support, like the SQL).
+//
+// The repo scan (event.go:305-327 via scanBucketedRow) sets result.Value to the
+// query's total and appends one UsageResult per row.
+func (s *InMemoryEventStore) aggregateBucketed(filteredEvents []*events.Event, params *events.UsageParams, result *events.AggregationResult) {
+	// Group-by is only supported for MAX (event.go:308-310, aggregators.go:727).
+	groupByProperty := events.FirstGroupByProperty(params.GroupBy)
+	hasGroupBy := params.AggregationType == types.AggregationMax &&
+		groupByProperty != "" &&
+		inMemoryValidGroupByPropertyPattern.MatchString(groupByProperty)
+
+	type bucketKey struct {
+		start    time.Time
+		groupKey string
 	}
+	buckets := make(map[bucketKey][]*events.Event)
+	for _, event := range filteredEvents {
+		key := bucketKey{start: truncateToWindow(event.Timestamp, params.BucketSize, params.BillingAnchor)}
+		if hasGroupBy {
+			key.groupKey = propertyValue(event.Properties, groupByProperty)
+		}
+		buckets[key] = append(buckets[key], event)
+	}
+
+	keys := make([]bucketKey, 0, len(buckets))
+	for k := range buckets {
+		keys = append(keys, k)
+	}
+	// ORDER BY bucket_start[, group_key] (aggregators.go:752, 788).
+	sort.Slice(keys, func(i, j int) bool {
+		if !keys[i].start.Equal(keys[j].start) {
+			return keys[i].start.Before(keys[j].start)
+		}
+		return keys[i].groupKey < keys[j].groupKey
+	})
+
+	result.Results = make([]events.UsageResult, 0, len(keys))
+	total := decimal.Zero
+	for _, k := range keys {
+		value := aggregateUsageValue(buckets[k], params)
+		total = total.Add(value)
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: k.start,
+			Value:      value,
+			GroupKey:   k.groupKey,
+		})
+	}
+	// total = sum of per-bucket (per-group) values (aggregators.go:747, 784).
+	result.Value = total
+}
+
+// inMemoryValidGroupByPropertyPattern mirrors validGroupByPropertyPattern in
+// internal/repository/clickhouse/feature_usage.go:21.
+var inMemoryValidGroupByPropertyPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+
+// eventNumericValue extracts the numeric value of an event property, mirroring
+// JSONExtractFloat(assumeNotNull(properties), '<prop>') in the aggregator SQL:
+// a missing or non-numeric property contributes 0 (numeric strings are parsed,
+// which the in-memory store has always accepted).
+func eventNumericValue(event *events.Event, propertyName string) decimal.Decimal {
+	val, ok := event.Properties[propertyName]
+	if !ok {
+		return decimal.Zero
+	}
+	switch v := val.(type) {
+	case float64:
+		return decimal.NewFromFloat(v)
+	case int:
+		return decimal.NewFromInt(int64(v))
+	case int64:
+		return decimal.NewFromInt(v)
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return decimal.NewFromFloat(f)
+		}
+	}
+	return decimal.Zero
+}
+
+// aggregateUsageValue reduces a set of events to a single value for the given
+// aggregation type, mirroring the per-window/per-bucket SQL aggregates in
+// internal/repository/clickhouse/aggregators.go:
+//
+//	COUNT                count(DISTINCT id)                    (aggregators.go:390-402)
+//	COUNT_UNIQUE         count(DISTINCT property string value) (aggregators.go:441-458)
+//	SUM                  sum(value)                            (aggregators.go:292-309)
+//	SUM_WITH_MULTIPLIER  sum(value) * multiplier               (aggregators.go:612-629)
+//	AVG                  avg(value)                            (aggregators.go:500-517)
+//	MAX                  max(value)                            (aggregators.go:681-698, 767-789)
+//	LATEST               argMax(value, timestamp)              (aggregators.go:555-568)
+//	WEIGHTED_SUM         sum((value/total_seconds) * dateDiff('second', ts, period_end))
+//	                                                           (aggregators.go:825-848)
+//
+// Events are already unique by ID in the store, so the SQL's per-id
+// deduplication (GROUP BY id / count(DISTINCT id)) is implicit.
+func aggregateUsageValue(evts []*events.Event, params *events.UsageParams) decimal.Decimal {
+	switch params.AggregationType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(len(evts)))
+	case types.AggregationCountUnique:
+		seen := make(map[string]struct{}, len(evts))
+		for _, event := range evts {
+			// JSONExtractString semantics: missing property → "" (still counted
+			// as a distinct value, like the SQL's count(DISTINCT property_value)).
+			seen[propertyValue(event.Properties, params.PropertyName)] = struct{}{}
+		}
+		return decimal.NewFromInt(int64(len(seen)))
+	case types.AggregationSum:
+		sum := decimal.Zero
+		for _, event := range evts {
+			sum = sum.Add(eventNumericValue(event, params.PropertyName))
+		}
+		return sum
+	case types.AggregationSumWithMultiplier:
+		sum := decimal.Zero
+		for _, event := range evts {
+			sum = sum.Add(eventNumericValue(event, params.PropertyName))
+		}
+		multiplier := decimal.NewFromInt(1)
+		if params.Multiplier != nil {
+			multiplier = *params.Multiplier
+		}
+		return sum.Mul(multiplier)
+	case types.AggregationAvg:
+		if len(evts) == 0 {
+			return decimal.Zero
+		}
+		sum := decimal.Zero
+		for _, event := range evts {
+			sum = sum.Add(eventNumericValue(event, params.PropertyName))
+		}
+		return sum.Div(decimal.NewFromInt(int64(len(evts))))
+	case types.AggregationMax:
+		if len(evts) == 0 {
+			return decimal.Zero
+		}
+		max := eventNumericValue(evts[0], params.PropertyName)
+		for _, event := range evts[1:] {
+			if v := eventNumericValue(event, params.PropertyName); v.GreaterThan(max) {
+				max = v
+			}
+		}
+		return max
+	case types.AggregationLatest:
+		if len(evts) == 0 {
+			return decimal.Zero
+		}
+		latest := evts[0]
+		for _, event := range evts[1:] {
+			if event.Timestamp.After(latest.Timestamp) {
+				latest = event
+			}
+		}
+		return eventNumericValue(latest, params.PropertyName)
+	case types.AggregationWeightedSum:
+		// sum((value / nullIf(total_seconds, 0)) * dateDiff('second', timestamp, period_end)).
+		totalSeconds := int64(params.EndTime.Sub(params.StartTime).Seconds())
+		if totalSeconds == 0 {
+			return decimal.Zero
+		}
+		sum := decimal.Zero
+		divisor := decimal.NewFromInt(totalSeconds)
+		for _, event := range evts {
+			remaining := decimal.NewFromInt(int64(params.EndTime.Sub(event.Timestamp).Seconds()))
+			sum = sum.Add(eventNumericValue(event, params.PropertyName).Div(divisor).Mul(remaining))
+		}
+		return sum
+	}
+	return decimal.Zero
+}
+
+// clampUsageValueToZero mirrors the repo's clamping of negative aggregation
+// values to zero on scan (event.go:336, 352-355, 400-403).
+func clampUsageValueToZero(d decimal.Decimal) decimal.Decimal {
+	if d.LessThan(decimal.Zero) {
+		return decimal.Zero
+	}
+	return d
 }
 
 func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, uint64, error) {
