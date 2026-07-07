@@ -74,16 +74,6 @@ func TestInMemoryPriceStore_List_AllowExpiredPrices(t *testing.T) {
 				WithAllowExpiredPrices(true),
 			expectedIDs: []string{"price-active-no-end", "price-active-future-end", "price-expired"},
 		},
-		{
-			name: "subscription_id_is_not_applied_matching_real_repo",
-			// The real Ent repository (internal/repository/ent/price.go,
-			// applyEntityQueryOptions) never consumes PriceFilter.SubscriptionID,
-			// so setting it must not narrow results here either. If the real
-			// repo ever starts applying it, mirror that change in
-			// priceFilterFn and update this case.
-			filter:      types.NewNoLimitPriceFilter().WithSubscriptionID("sub-does-not-exist"),
-			expectedIDs: []string{"price-active-no-end", "price-active-future-end"},
-		},
 	}
 
 	for _, tc := range testCases {
@@ -121,4 +111,71 @@ func TestInMemoryPriceStore_GetByPlanID_IncludesExpiredPrices(t *testing.T) {
 
 	gotIDs := lo.Map(prices, func(p *price.Price, _ int) string { return p.ID })
 	assert.ElementsMatch(t, []string{"price-active", "price-expired"}, gotIDs)
+}
+
+// newTestSubscriptionPrice builds a published subscription-scoped price —
+// subscription-scoped prices store the subscription ID in entity_id.
+func newTestSubscriptionPrice(id, subscriptionID string) *price.Price {
+	p := newTestPrice(id, subscriptionID, nil)
+	p.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
+	return p
+}
+
+// TestInMemoryPriceStore_List_SubscriptionIDFilter mirrors the real Ent repo
+// (internal/repository/ent/price.go applyEntityQueryOptions): SubscriptionID
+// filters to subscription-scoped prices whose entity_id matches — prices of
+// other subscriptions or plans must never leak into the result.
+func TestInMemoryPriceStore_List_SubscriptionIDFilter(t *testing.T) {
+	ctx := SetupContext()
+
+	setupStore := func(t *testing.T) *InMemoryPriceStore {
+		t.Helper()
+		store := NewInMemoryPriceStore()
+		require.NoError(t, store.Create(ctx, newTestSubscriptionPrice("price-sub-1a", "sub-1")))
+		require.NoError(t, store.Create(ctx, newTestSubscriptionPrice("price-sub-1b", "sub-1")))
+		require.NoError(t, store.Create(ctx, newTestSubscriptionPrice("price-sub-2", "sub-2")))
+		require.NoError(t, store.Create(ctx, newTestPrice("price-plan", "plan-1", nil)))
+		return store
+	}
+
+	testCases := []struct {
+		name        string
+		filter      *types.PriceFilter
+		expectedIDs []string
+	}{
+		{
+			name:        "returns_only_the_requested_subscriptions_prices",
+			filter:      types.NewNoLimitPriceFilter().WithSubscriptionID("sub-1"),
+			expectedIDs: []string{"price-sub-1a", "price-sub-1b"},
+		},
+		{
+			name: "combined_with_entity_type_subscription",
+			filter: types.NewNoLimitPriceFilter().
+				WithSubscriptionID("sub-2").
+				WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION),
+			expectedIDs: []string{"price-sub-2"},
+		},
+		{
+			name:        "unknown_subscription_returns_nothing",
+			filter:      types.NewNoLimitPriceFilter().WithSubscriptionID("sub-does-not-exist"),
+			expectedIDs: []string{},
+		},
+		{
+			name:        "no_subscription_id_returns_everything",
+			filter:      types.NewNoLimitPriceFilter(),
+			expectedIDs: []string{"price-sub-1a", "price-sub-1b", "price-sub-2", "price-plan"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := setupStore(t)
+
+			prices, err := store.List(ctx, tc.filter)
+			require.NoError(t, err)
+
+			gotIDs := lo.Map(prices, func(p *price.Price, _ int) string { return p.ID })
+			assert.ElementsMatch(t, tc.expectedIDs, gotIDs)
+		})
+	}
 }

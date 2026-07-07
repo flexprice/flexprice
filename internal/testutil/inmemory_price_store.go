@@ -96,11 +96,14 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
-	// NOTE: PriceFilter.SubscriptionID is intentionally NOT applied here.
-	// The real Ent repository (internal/repository/ent/price.go,
-	// applyEntityQueryOptions) does not consume it either — the field is
-	// validated in types.PriceFilter but never translated into a query
-	// predicate, so the in-memory store mirrors that behavior.
+	// subscription id filter: mirrors the real Ent repo
+	// (internal/repository/ent/price.go applyEntityQueryOptions) —
+	// subscription-scoped prices store the subscription ID in entity_id
+	if f.SubscriptionID != nil && *f.SubscriptionID != "" {
+		if p.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION || p.EntityID != *f.SubscriptionID {
+			return false
+		}
+	}
 
 	return true
 }
