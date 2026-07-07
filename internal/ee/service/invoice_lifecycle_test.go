@@ -324,9 +324,12 @@ func (s *InvoiceLifecycleSuite) TestCreateOneOffInvoice() {
 		s.True(resp.Total.Equal(decimal.NewFromInt(110)), "total incl tax, got %s", resp.Total)
 		s.True(resp.AmountDue.Equal(decimal.NewFromInt(110)))
 
+		// The stored invoice carries the tax total (10% of the 100 subtotal).
+		stored, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), resp.ID)
+		s.NoError(err)
+		s.True(stored.TotalTax.Equal(decimal.NewFromInt(10)), "stored TotalTax, got %s", stored.TotalTax)
+
 		// Read back the tax application record (10% of the 100 subtotal).
-		// NOTE: stored TotalTax is not asserted here because the in-memory
-		// invoice store's copyInvoice drops the TotalTax field (test-infra gap).
 		taxFilter := types.NewNoLimitTaxAppliedFilter()
 		taxFilter.EntityType = types.TaxRateEntityTypeInvoice
 		taxFilter.EntityID = resp.ID

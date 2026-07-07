@@ -314,9 +314,24 @@ func (s *InvoicePreviewSuite) TestGetCustomerMultiCurrencyInvoiceSummary() {
 		}
 		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, eurSub, nil))
 
-		// NOTE: exclusion of cancelled-subscription currencies is not covered here
-		// because the in-memory subscription store does not implement the
-		// SubscriptionStatusNotIn filter (test-infra gap).
+		// A cancelled GBP subscription: its currency must NOT get a summary
+		// (the service filters cancelled subscriptions out via
+		// SubscriptionStatusNotIn / the active-only default).
+		cancelledSub := &subscription.Subscription{
+			ID:                 "sub_pv_gbp_cancelled",
+			PlanID:             s.testData.plan.ID,
+			CustomerID:         s.testData.customer.ID,
+			StartDate:          s.testData.now.Add(-40 * 24 * time.Hour),
+			BillingAnchor:      s.testData.now.Add(-10 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-40 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(-10 * 24 * time.Hour),
+			Currency:           "gbp",
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			SubscriptionStatus: types.SubscriptionStatusCancelled,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, cancelledSub, nil))
 
 		// One overdue finalized USD invoice.
 		overdueDate := s.testData.now.Add(-24 * time.Hour)
@@ -348,6 +363,7 @@ func (s *InvoicePreviewSuite) TestGetCustomerMultiCurrencyInvoiceSummary() {
 		for _, sum := range resp.Summaries {
 			byCurrency[sum.Currency] = sum
 		}
+		s.Nil(byCurrency["gbp"], "cancelled subscription currency must be excluded")
 
 		usd := byCurrency["usd"]
 		s.Require().NotNil(usd)

@@ -343,12 +343,12 @@ func (s *InvoicePDFSuite) TestGetInvoiceDataForPDFGen() {
 	})
 
 	s.Run("issuing_date_falls_back_to_finalized_at", func() {
+		// The fixture has no IssueDate, so the FinalizedAt fallback branch is
+		// what this case exercises.
 		inv := s.buildPDFInvoice("inv_pdf_issuedate", nil)
 		resp, err := s.service.GetInvoice(ctx, inv.ID)
 		s.Require().NoError(err)
-		// NOTE: the in-memory invoice store does not persist IssueDate, so the
-		// FinalizedAt fallback branch is what this fixture exercises.
-		resp.IssueDate = nil
+		s.Require().Nil(resp.IssueDate)
 
 		data, err := svc.getInvoiceDataForPDFGen(ctx, resp, s.testData.customer, s.testData.tenant)
 		s.NoError(err)
@@ -356,6 +356,23 @@ func (s *InvoicePDFSuite) TestGetInvoiceDataForPDFGen() {
 		s.WithinDuration(s.testData.now, data.IssuingDate.Time, time.Second,
 			"issuing date must fall back to finalized_at")
 		s.WithinDuration(s.testData.now.Add(7*24*time.Hour), data.DueDate.Time, time.Second)
+	})
+
+	s.Run("persisted_issue_date_takes_precedence_over_finalized_at", func() {
+		issueDate := s.testData.now.Add(-3 * 24 * time.Hour)
+		inv := s.buildPDFInvoice("inv_pdf_issuedate_set", nil)
+		inv.IssueDate = &issueDate
+		s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+
+		resp, err := s.service.GetInvoice(ctx, inv.ID)
+		s.Require().NoError(err)
+		s.Require().NotNil(resp.IssueDate, "IssueDate must survive the store round-trip")
+
+		data, err := svc.getInvoiceDataForPDFGen(ctx, resp, s.testData.customer, s.testData.tenant)
+		s.NoError(err)
+		s.Require().NotNil(data)
+		s.WithinDuration(issueDate, data.IssuingDate.Time, time.Second,
+			"issuing date must use the persisted issue_date, not finalized_at")
 	})
 }
 
