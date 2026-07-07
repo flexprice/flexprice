@@ -412,7 +412,7 @@ func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, user.TenantID, user.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), user.ID)
 	r.redisCache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
 }
 

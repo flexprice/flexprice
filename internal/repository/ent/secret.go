@@ -195,7 +195,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
-	_, err := client.Secret.UpdateOneID(id).
+	updated, err := client.Secret.UpdateOneID(id).
 		SetLastUsedAt(time.Now().UTC()).
 		Save(ctx)
 
@@ -215,7 +215,10 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	r.DeleteCache(ctx, id)
+	// SetCache keys the entry under secret.Value (the hashed API key); the
+	// primary id was never used as a cache key, so deleting by id was a no-op
+	// that left a stale entry until TTL.
+	r.DeleteCache(ctx, updated.Value)
 	return nil
 }
 

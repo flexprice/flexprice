@@ -506,7 +506,7 @@ func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, plan.ID)
-	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultRedis)
+	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultInMemory)
 }
 
 func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Plan {

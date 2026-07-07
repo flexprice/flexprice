@@ -401,8 +401,8 @@ func (r *meterRepository) SetCache(ctx context.Context, meter *domainMeter.Meter
 }
 
 func (r *meterRepository) GetCache(ctx context.Context, id string) *domainMeter.Meter {
-	span, ctx := cache.StartInMemoryCacheSpan(ctx, "meter", "set", map[string]interface{}{
-		"meter_id": meter.ID,
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "meter", "get", map[string]interface{}{
+		"meter_id": id,
 	})
 	defer cache.FinishSpan(span)
 
