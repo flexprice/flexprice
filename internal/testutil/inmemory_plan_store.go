@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryPlanStore implements plan.Repository
@@ -45,6 +46,12 @@ func planFilterFn(ctx context.Context, p *plan.Plan, filter interface{}) bool {
 
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
+		return false
+	}
+
+	// Filter by plan IDs
+	// (mirrors internal/repository/ent/plan.go applyEntityQueryOptions: plan.IDIn(f.PlanIDs...))
+	if len(f.PlanIDs) > 0 && !lo.Contains(f.PlanIDs, p.ID) {
 		return false
 	}
 

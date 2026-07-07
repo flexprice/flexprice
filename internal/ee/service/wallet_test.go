@@ -2742,10 +2742,10 @@ func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_RecoveryFromAlarm_OKLogC
 	s.Require().Len(logsAfterAlarm, 1)
 	s.Equal(types.AlertStateInAlarm, logsAfterAlarm[0].AlertStatus)
 
-	// Raise the balance above threshold in the store to simulate recovery
-	w.Balance = decimal.NewFromInt(100)
-	w.CreditBalance = decimal.NewFromInt(100)
-	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, w.ID, w))
+	// Raise the balance above threshold to simulate recovery. UpdateWallet does
+	// not touch balances (matching the real repo) — use UpdateWalletBalance.
+	s.NoError(s.GetStores().WalletRepo.UpdateWalletBalance(ctx, w.ID,
+		decimal.NewFromInt(100), decimal.NewFromInt(100)))
 
 	// Second call: balance=100 → OK (transition from in_alarm → log created)
 	s.NoError(s.service.CheckWalletBalanceAlert(ctx, s.makeEvent()))
