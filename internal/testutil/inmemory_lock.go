@@ -34,6 +34,7 @@ func (r *inMemoryRedisLocker) AcquireLock(ctx context.Context, key string, expir
 		} else {
 			// Lock is held by someone else
 			return &inMemoryRedisLock{
+				locker:     r,
 				key:        key,
 				value:      entry.value.(string),
 				expiration: entry.expiration,
@@ -56,6 +57,7 @@ func (r *inMemoryRedisLocker) AcquireLock(ctx context.Context, key string, expir
 	}
 
 	return &inMemoryRedisLock{
+		locker:     r,
 		key:        key,
 		value:      token,
 		expiration: exp,
@@ -64,10 +66,10 @@ func (r *inMemoryRedisLocker) AcquireLock(ctx context.Context, key string, expir
 }
 
 type inMemoryRedisLock struct {
+	locker     *inMemoryRedisLocker
 	key        string
 	value      string
 	expiration time.Time
-	expiryOnce sync.Once
 	success    bool
 	released   bool
 	mu         sync.Mutex
@@ -86,10 +88,6 @@ func (l *inMemoryRedisLock) AcquiredSuccessfully() bool {
 }
 
 func (l *inMemoryRedisLock) Release(ctx context.Context) error {
-	if l.released {
-		return nil
-	}
-
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -98,5 +96,12 @@ func (l *inMemoryRedisLock) Release(ctx context.Context) error {
 	}
 
 	l.released = true
+	if l.success && l.locker != nil {
+		l.locker.mu.Lock()
+		if e, ok := l.locker.values[l.key]; ok && e.value == l.value {
+			delete(l.locker.values, l.key)
+		}
+		l.locker.mu.Unlock()
+	}
 	return nil
 }

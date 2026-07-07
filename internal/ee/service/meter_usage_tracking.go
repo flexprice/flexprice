@@ -287,28 +287,31 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 
 // processEvent matches an event to meters and writes meter_usage records.
 // No subscription/feature/price resolution needed.
-func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
+func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) (err error) {
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
 		s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID
 		cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, eventId)
-		lock, err := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to acquire lock on meter usage tracking event", "error", err, "event_id", eventId)
+		lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+		if lockErr != nil {
+			s.Logger.Error(ctx, "failed to acquire lock on meter usage tracking event", "error", lockErr, "event_id", eventId)
 		} else {
 			if !lock.AcquiredSuccessfully() {
 				s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
 				return nil
 			}
 
-			// release lock on error so retries don't block
+			// Release the dedup lock on any processing failure below so retries
+			// aren't dedup-skipped until TTL. `err` here is the named return —
+			// it captures failures from getMetersForEvent, BulkInsertMeterUsage,
+			// etc., not just the AcquireLock result.
 			defer func() {
 				if err != nil {
-					lockErr := lock.Release(ctx)
-					if lockErr != nil {
-						s.Logger.Error(ctx, "failed to release lock on meter usage tracking event", "error", lockErr, "event_id", eventId)
+					releaseErr := lock.Release(ctx)
+					if releaseErr != nil {
+						s.Logger.Error(ctx, "failed to release lock on meter usage tracking event", "error", releaseErr, "event_id", eventId)
 					}
 				}
 			}()

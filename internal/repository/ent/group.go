@@ -249,7 +249,7 @@ func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) 
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, grp.ID)
-	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultRedis)
+	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultInMemory)
 }
 
 func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.Group {

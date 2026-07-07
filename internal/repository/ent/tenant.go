@@ -87,16 +87,16 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 
 	// L1: in-memory (always checked regardless of cache.enabled)
 	if value, found := r.inMemoryCache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t, nil
 		}
 	}
 
 	// L2: Redis (respects cache.enabled)
 	if value, found := r.redisCache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			// Back-fill L1 so the next request doesn't hit Redis
-			r.redisCache.ForceCacheSet(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
+			r.inMemoryCache.ForceCacheSet(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
 			return t, nil
 		}
 	}

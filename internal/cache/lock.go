@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,15 +22,23 @@ type redisLocker struct {
 	client redis.UniversalClient
 }
 
-func NewRedisLocker(cache RedisCache) Locker {
+func NewRedisLocker(cache RedisCache) (Locker, error) {
+	// When Redis is unreachable at startup, NewRedisCache returns a typed-nil
+	// *redisCacheImpl wrapped in RedisCache (the connection error is already logged by InitializeRedisCache)
+	if cache == nil {
+		return nil, nil
+	}
 	redisClient, ok := cache.(*redisCacheImpl)
-	if !ok || redisClient == nil {
-		return nil
+	if !ok {
+		return nil, fmt.Errorf("NewRedisLocker: unsupported RedisCache implementation %T", cache)
+	}
+	if redisClient == nil || redisClient.client == nil {
+		return nil, nil
 	}
 
 	return &redisLocker{
 		client: redisClient.client,
-	}
+	}, nil
 }
 
 type redisLock struct {
