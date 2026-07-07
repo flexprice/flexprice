@@ -112,7 +112,7 @@ sentry:
 # Set FLEXPRICE_OTEL_INSECURE=false (default) for TLS to SigNoz Cloud.
 otel:
   enabled: true
-  service_name: "flexprice-local" # Override via FLEXPRICE_OTL_SERVICE_NAME or SERVICE_NAME
+  service_name: "" # empty => ResolveServiceName falls back to logging.service_name, then deployment.mode (per-component: api/consumer/temporal_worker). Override via FLEXPRICE_OTEL_SERVICE_NAME or SERVICE_NAME. (was "flexprice-local" — a local-only default that leaked into every non-local deployment booting from this baked file.)
   protocol: "grpc" # SigNoz Cloud uses gRPC/TLS — do not change
   insecure: false # false = TLS (required for SigNoz Cloud)
 
@@ -411,7 +411,7 @@ oauth:
   # Development: http://localhost:3000/tools/integrations/oauth/callback
   # Staging: https://admin-dev.flexprice.io/tools/integrations/oauth/callback
   # Production: https://admin.flexprice.io/tools/integrations/oauth/callback
-  redirect_uri: "http://localhost:3000/tools/integrations/oauth/callback"
+  redirect_uri: "" # neutral default; each env sets its own via FLEXPRICE_OAUTH_REDIRECT_URI (see per-env values above). For local oauth testing set it to http://localhost:3000/tools/integrations/oauth/callback.
 
 # Customer portal configuration
 customer_portal:
