@@ -53,14 +53,15 @@ import (
 	"go.uber.org/fx"
 )
 
-// InitTracing wires the tracing service into the ent and clickhouse
-// repository packages so their (call-site-only) StartRepositorySpan helpers
-// emit real spans. Repository constructors don't take *tracing.Service
+// InitTracing wires the tracing service into the ent, clickhouse and cache
+// packages so their (call-site-only) StartRepositorySpan / StartCacheSpan
+// helpers emit real spans. Repository constructors don't take *tracing.Service
 // directly — this avoids threading it through every one of them — so this
-// must run once during startup, before any repository method is invoked.
+// must run once during startup, before any repository or cache call runs.
 func InitTracing(tracingSvc *tracing.Service) {
 	entRepo.SetTracingService(tracingSvc)
 	clickhouseRepo.SetTracingService(tracingSvc)
+	cache.SetTracingService(tracingSvc)
 }
 
 // RepositoryParams holds common dependencies for repositories

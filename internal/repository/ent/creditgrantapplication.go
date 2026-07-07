@@ -546,7 +546,7 @@ func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, applica
 }
 
 func (r *creditGrantApplicationRepository) GetCache(ctx context.Context, id string) *domain.CreditGrantApplication {
-	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrantapplication", "get", map[string]interface{}{
 		"application_id": id,
 		"tenant_id":      types.GetTenantID(ctx),
 		"environment_id": types.GetEnvironmentID(ctx),
@@ -566,7 +566,7 @@ func (r *creditGrantApplicationRepository) GetCache(ctx context.Context, id stri
 }
 
 func (r *creditGrantApplicationRepository) DeleteCache(ctx context.Context, application *domain.CreditGrantApplication) {
-	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrantapplication", "delete", map[string]interface{}{
 		"application_id": application.ID,
 	})
 	defer cache.FinishSpan(span)

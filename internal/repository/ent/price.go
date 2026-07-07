@@ -711,7 +711,7 @@ func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*do
 }
 
 func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price) {
-	span := cache.StartCacheSpan(ctx, "price", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "set", map[string]interface{}{
 		"price_id": price.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -721,7 +721,7 @@ func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price
 }
 
 func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.Price {
-	span := cache.StartCacheSpan(ctx, "price", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "get", map[string]interface{}{
 		"price_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -739,7 +739,7 @@ func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.
 }
 
 func (r *priceRepository) DeleteCache(ctx context.Context, priceID string) {
-	span := cache.StartCacheSpan(ctx, "price", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "delete", map[string]interface{}{
 		"price_id": priceID,
 	})
 	defer cache.FinishSpan(span)

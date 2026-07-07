@@ -680,7 +680,7 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domainEntitlement.Entitlement) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "set", map[string]interface{}{
 		"entitlement_id": entitlement.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -690,7 +690,7 @@ func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domai
 }
 
 func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domainEntitlement.Entitlement {
-	span := cache.StartCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
 		"entitlement_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -708,7 +708,7 @@ func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domain
 }
 
 func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID string) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "delete", map[string]interface{}{
 		"entitlement_id": entitlementID,
 	})
 	defer cache.FinishSpan(span)

@@ -243,7 +243,7 @@ func (r *groupRepository) Delete(ctx context.Context, id string) error {
 }
 
 func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) {
-	span := cache.StartCacheSpan(ctx, "group", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "set", map[string]interface{}{
 		"group_id": grp.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -253,7 +253,7 @@ func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) 
 }
 
 func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.Group {
-	span := cache.StartCacheSpan(ctx, "group", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "get", map[string]interface{}{
 		"group_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -271,7 +271,7 @@ func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.
 }
 
 func (r *groupRepository) DeleteCache(ctx context.Context, id string) {
-	span := cache.StartCacheSpan(ctx, "group", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "delete", map[string]interface{}{
 		"group_id": id,
 	})
 	defer cache.FinishSpan(span)

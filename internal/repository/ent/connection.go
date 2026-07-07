@@ -644,7 +644,7 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *connectionRepository) SetCache(ctx context.Context, connection *domainConnection.Connection) {
-	span := cache.StartCacheSpan(ctx, "connection", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "set", map[string]interface{}{
 		"connection_id": connection.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -654,7 +654,7 @@ func (r *connectionRepository) SetCache(ctx context.Context, connection *domainC
 }
 
 func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainConnection.Connection {
-	span := cache.StartCacheSpan(ctx, "connection", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "get", map[string]interface{}{
 		"connection_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -672,7 +672,7 @@ func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainC
 }
 
 func (r *connectionRepository) DeleteCache(ctx context.Context, connection *domainConnection.Connection) {
-	span := cache.StartCacheSpan(ctx, "connection", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "delete", map[string]interface{}{
 		"connection_id": connection.ID,
 	})
 	defer cache.FinishSpan(span)

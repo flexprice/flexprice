@@ -348,7 +348,7 @@ func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, 
 }
 
 func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettings.Setting) {
-	span := cache.StartCacheSpan(ctx, "settings", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "set", map[string]interface{}{
 		"setting_id": setting.ID,
 		"key":        setting.Key,
 	})
@@ -359,7 +359,7 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {
-	span := cache.StartCacheSpan(ctx, "settings", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "get", map[string]interface{}{
 		"key": id,
 	})
 	defer cache.FinishSpan(span)
@@ -377,7 +377,7 @@ func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSet
 }
 
 func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSettings.Setting) {
-	span := cache.StartCacheSpan(ctx, "settings", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "settings", "delete", map[string]interface{}{
 		"setting_id": setting.ID,
 		"key":        setting.Key,
 	})

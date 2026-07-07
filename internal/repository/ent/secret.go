@@ -408,7 +408,7 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 }
 
 func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Secret) {
-	span := cache.StartCacheSpan(ctx, "secret", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "set", map[string]interface{}{
 		"secret_id": secret.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -417,7 +417,7 @@ func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Se
 }
 
 func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecret.Secret {
-	span := cache.StartCacheSpan(ctx, "secret", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", map[string]interface{}{
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)
@@ -434,7 +434,7 @@ func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecr
 }
 
 func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "secret", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", map[string]interface{}{
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)

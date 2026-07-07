@@ -282,7 +282,7 @@ func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxA
 
 // Cache operations
 func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
 		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -292,7 +292,7 @@ func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxCon
 }
 
 func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
 		"tax_association_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -310,7 +310,7 @@ func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *dom
 }
 
 func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
 		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)

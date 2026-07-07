@@ -1156,7 +1156,7 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Invoice) {
-	span := cache.StartCacheSpan(ctx, "invoice", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "set", map[string]interface{}{
 		"invoice_id": inv.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -1166,7 +1166,7 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 }
 
 func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
-	span := cache.StartCacheSpan(ctx, "invoice", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "get", map[string]interface{}{
 		"invoice_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -1184,7 +1184,7 @@ func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvo
 }
 
 func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
 		"invoice_id": key,
 	})
 	defer cache.FinishSpan(span)

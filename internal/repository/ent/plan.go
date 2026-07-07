@@ -500,7 +500,7 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 }
 
 func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
-	span := cache.StartCacheSpan(ctx, "plan", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "set", map[string]interface{}{
 		"plan_id": plan.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -510,7 +510,7 @@ func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
 }
 
 func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Plan {
-	span := cache.StartCacheSpan(ctx, "plan", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "get", map[string]interface{}{
 		"plan_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -528,7 +528,7 @@ func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Pl
 }
 
 func (r *planRepository) DeleteCache(ctx context.Context, plan *domainPlan.Plan) {
-	span := cache.StartCacheSpan(ctx, "plan", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "delete", map[string]interface{}{
 		"plan_id": plan.ID,
 	})
 	defer cache.FinishSpan(span)

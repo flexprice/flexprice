@@ -548,7 +548,7 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 }
 
 func (r *customerRepository) SetCache(ctx context.Context, customer *domainCustomer.Customer) {
-	span := cache.StartCacheSpan(ctx, "customer", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "customer", "set", map[string]interface{}{
 		"customer_id": customer.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -558,7 +558,7 @@ func (r *customerRepository) SetCache(ctx context.Context, customer *domainCusto
 }
 
 func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCustomer.Customer {
-	span := cache.StartCacheSpan(ctx, "customer", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "customer", "get", map[string]interface{}{
 		"customer_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -576,7 +576,7 @@ func (r *customerRepository) GetCache(ctx context.Context, id string) *domainCus
 }
 
 func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCustomer.Customer) {
-	span := cache.StartCacheSpan(ctx, "customer", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "customer", "delete", map[string]interface{}{
 		"customer_id": customer.ID,
 	})
 	defer cache.FinishSpan(span)

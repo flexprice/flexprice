@@ -19,8 +19,8 @@ import (
 //
 // Each tick picks one meter from the seed list (round-robin via cursor)
 // and a rotating customer; asserts aggregated usage > 0 in the lookback
-// window. A single probe tick covers one meter, so all 9 meters get
-// exercised over 9 ticks.
+// window. A single probe tick covers one meter, so all 8 meters get
+// exercised over 8 ticks.
 type MeterAggregationProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
@@ -36,7 +36,7 @@ func (p *MeterAggregationProbe) Name() string        { return "meter-aggregation
 func (p *MeterAggregationProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
 // meterAggLookback is the lookback window for aggregation. Events ingest at
-// 5/sec across 9 meters, so each meter sees ~33 events per minute. A 30-min
+// 5/sec across 8 meters, so each meter sees ~37 events per minute. A 30-min
 // window should show hundreds of events per meter if aggregation is healthy.
 const meterAggLookback = 30 * time.Minute
 

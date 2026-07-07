@@ -508,7 +508,7 @@ func (o CouponApplicationQueryOptions) applyEntityQueryOptions(_ context.Context
 
 // Cache methods
 func (r *couponApplicationRepository) SetCache(ctx context.Context, ca *domainCouponApplication.CouponApplication) {
-	span := cache.StartCacheSpan(ctx, "coupon_application", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_application", "set", map[string]interface{}{
 		"coupon_application_id": ca.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -518,7 +518,7 @@ func (r *couponApplicationRepository) SetCache(ctx context.Context, ca *domainCo
 }
 
 func (r *couponApplicationRepository) GetCache(ctx context.Context, key string) *domainCouponApplication.CouponApplication {
-	span := cache.StartCacheSpan(ctx, "coupon_application", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_application", "get", map[string]interface{}{
 		"coupon_application_id": key,
 	})
 	defer cache.FinishSpan(span)
@@ -536,7 +536,7 @@ func (r *couponApplicationRepository) GetCache(ctx context.Context, key string) 
 }
 
 func (r *couponApplicationRepository) DeleteCache(ctx context.Context, ca *domainCouponApplication.CouponApplication) {
-	span := cache.StartCacheSpan(ctx, "coupon_application", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_application", "delete", map[string]interface{}{
 		"coupon_application_id": ca.ID,
 	})
 	defer cache.FinishSpan(span)

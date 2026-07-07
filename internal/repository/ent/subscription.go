@@ -1056,7 +1056,7 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
-	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "set", map[string]interface{}{
 		"subscription_id": sub.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -1066,7 +1066,7 @@ func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Su
 }
 
 func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
-	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "get", map[string]interface{}{
 		"subscription_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -1084,7 +1084,7 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 }
 
 func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
-	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
 		"subscription_id": subID,
 	})
 	defer cache.FinishSpan(span)

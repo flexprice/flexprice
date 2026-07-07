@@ -929,7 +929,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 }
 
 func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
-	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": wallet.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -939,7 +939,7 @@ func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wa
 }
 
 func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
-	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -957,7 +957,7 @@ func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomai
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
-	span := cache.StartCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)

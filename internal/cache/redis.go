@@ -11,6 +11,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	redisClient "github.com/flexprice/flexprice/internal/redis"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -97,8 +99,14 @@ func (c *redisCacheImpl) IsRedisCache() bool {
 	return true
 }
 
-// Get retrieves a value from the cache
-func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool) {
+// Get retrieves a value from the cache. Auto-tags cache.hit on the active
+// span (see StartRedisCacheSpan) so callers get the attribute without extra
+// bookkeeping. Safe when no span is active — SpanFromContext returns a no-op.
+func (c *redisCacheImpl) Get(ctx context.Context, key string) (_ interface{}, found bool) {
+	defer func() {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("cache.hit", found))
+	}()
+
 	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}

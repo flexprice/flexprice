@@ -479,7 +479,7 @@ func (r *couponAssociationRepository) Count(ctx context.Context, filter *types.C
 }
 
 func (r *couponAssociationRepository) SetCache(ctx context.Context, association *domainCouponAssociation.CouponAssociation) {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "set", map[string]interface{}{
 		"association_id": association.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -489,7 +489,7 @@ func (r *couponAssociationRepository) SetCache(ctx context.Context, association 
 }
 
 func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *domainCouponAssociation.CouponAssociation {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "get", map[string]interface{}{
 		"association_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -507,7 +507,7 @@ func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *
 }
 
 func (r *couponAssociationRepository) DeleteCache(ctx context.Context, associationID string) {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "delete", map[string]interface{}{
 		"association_id": associationID,
 	})
 	defer cache.FinishSpan(span)

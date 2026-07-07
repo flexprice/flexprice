@@ -424,7 +424,7 @@ func (o PaymentMethodQueryOptions) applyEntityFilters(_ context.Context, f *type
 }
 
 func (r *paymentMethodRepository) setCache(ctx context.Context, pm *domainPaymentMethod.PaymentMethod) {
-	span := cache.StartCacheSpan(ctx, "payment_method", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment_method", "set", map[string]interface{}{
 		"payment_method_id": pm.ID,
 	})
 	defer cache.FinishSpan(span)
@@ -434,7 +434,7 @@ func (r *paymentMethodRepository) setCache(ctx context.Context, pm *domainPaymen
 }
 
 func (r *paymentMethodRepository) getCache(ctx context.Context, id string) *domainPaymentMethod.PaymentMethod {
-	span := cache.StartCacheSpan(ctx, "payment_method", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment_method", "get", map[string]interface{}{
 		"payment_method_id": id,
 	})
 	defer cache.FinishSpan(span)
@@ -452,7 +452,7 @@ func (r *paymentMethodRepository) getCache(ctx context.Context, id string) *doma
 }
 
 func (r *paymentMethodRepository) deleteCache(ctx context.Context, id string) {
-	span := cache.StartCacheSpan(ctx, "payment_method", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment_method", "delete", map[string]interface{}{
 		"payment_method_id": id,
 	})
 	defer cache.FinishSpan(span)
