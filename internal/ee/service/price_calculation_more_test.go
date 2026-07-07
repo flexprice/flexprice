@@ -251,6 +251,69 @@ func (s *PriceMoreServiceSuite) TestGetPricesBySubscriptionID() {
 	})
 }
 
+// TestGetPricesExpiredPriceFiltering verifies AllowExpiredPrices end to end:
+// by default GetPrices must exclude prices whose EndDate has passed (mirrors
+// the real repo's EndDate IS NULL OR EndDate > now predicate), and include
+// them when AllowExpiredPrices is set.
+func (s *PriceMoreServiceSuite) TestGetPricesExpiredPriceFiltering() {
+	newPlanPrice := func(id string, endDate *time.Time) *price.Price {
+		return &price.Price{
+			ID:                 id,
+			Amount:             decimal.NewFromInt(5),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           s.testData.plan.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			EndDate:            endDate,
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+		}
+	}
+
+	pastEnd := s.testData.now.Add(-24 * time.Hour)
+	futureEnd := s.testData.now.Add(24 * time.Hour)
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), newPlanPrice("price_pm_active", nil)))
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), newPlanPrice("price_pm_future_end", &futureEnd)))
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), newPlanPrice("price_pm_expired", &pastEnd)))
+
+	testCases := []struct {
+		name         string
+		allowExpired bool
+		expectedIDs  []string
+	}{
+		{
+			name:         "default_filter_excludes_expired_prices",
+			allowExpired: false,
+			expectedIDs:  []string{"price_pm_active", "price_pm_future_end"},
+		},
+		{
+			name:         "allow_expired_prices_includes_expired_prices",
+			allowExpired: true,
+			expectedIDs:  []string{"price_pm_active", "price_pm_future_end", "price_pm_expired"},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			filter := types.NewNoLimitPriceFilter().
+				WithEntityIDs([]string{s.testData.plan.ID}).
+				WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+				WithAllowExpiredPrices(tc.allowExpired)
+
+			resp, err := s.service.GetPrices(s.GetContext(), filter)
+			s.NoError(err)
+
+			gotIDs := lo.Map(resp.Items, func(p *dto.PriceResponse, _ int) string { return p.Price.ID })
+			s.ElementsMatch(tc.expectedIDs, gotIDs)
+			s.Equal(len(tc.expectedIDs), resp.Pagination.Total)
+		})
+	}
+}
+
 func (s *PriceMoreServiceSuite) TestGetPricesByCostsheetID() {
 	s.Run("empty_costsheet_id_returns_validation_error", func() {
 		_, err := s.service.GetPricesByCostsheetID(s.GetContext(), "")

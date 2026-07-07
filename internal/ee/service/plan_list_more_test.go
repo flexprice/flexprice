@@ -158,6 +158,57 @@ func (s *PlanListServiceSuite) TestGetPlansWithNilFilterUsesDefaults() {
 	s.Nil(resp.Items[0].CreditGrants)
 }
 
+func (s *PlanListServiceSuite) TestGetPlansFilterByPlanIDs() {
+	secondPlan := &plan.Plan{
+		ID:        "plan_list_2",
+		Name:      "Second List Plan",
+		LookupKey: "second-list-plan",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(s.GetContext(), secondPlan))
+
+	testCases := []struct {
+		name        string
+		planIDs     []string
+		expectedIDs []string
+	}{
+		{
+			name:        "no_plan_ids_returns_all_plans",
+			planIDs:     nil,
+			expectedIDs: []string{s.testData.plan.ID, secondPlan.ID},
+		},
+		{
+			name:        "single_plan_id_returns_only_that_plan",
+			planIDs:     []string{secondPlan.ID},
+			expectedIDs: []string{secondPlan.ID},
+		},
+		{
+			name:        "multiple_plan_ids_return_matching_plans",
+			planIDs:     []string{s.testData.plan.ID, secondPlan.ID},
+			expectedIDs: []string{s.testData.plan.ID, secondPlan.ID},
+		},
+		{
+			name:        "unknown_plan_id_returns_empty",
+			planIDs:     []string{"plan_missing"},
+			expectedIDs: []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			filter := types.NewNoLimitPlanFilter()
+			filter.PlanIDs = tc.planIDs
+
+			resp, err := s.service.GetPlans(s.GetContext(), filter)
+			s.NoError(err)
+
+			gotIDs := lo.Map(resp.Items, func(p *dto.PlanResponse, _ int) string { return p.Plan.ID })
+			s.ElementsMatch(tc.expectedIDs, gotIDs)
+			s.Equal(len(tc.expectedIDs), resp.Pagination.Total)
+		})
+	}
+}
+
 func (s *PlanListServiceSuite) TestGetPlansInvalidFilterReturnsValidationError() {
 	filter := types.NewPlanFilter()
 	filter.QueryFilter.Limit = lo.ToPtr(-1)
