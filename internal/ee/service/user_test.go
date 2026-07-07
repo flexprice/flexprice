@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -432,6 +433,81 @@ func (s *UserServiceSuite) TestDeleteUser() {
 		err := s.userService.DeleteUser(ctx, "sa-1")
 		s.NoError(err)
 	})
+}
+
+func (s *UserServiceSuite) TestListUsersByFilter_UserIDs() {
+	ctx := testutil.SetupContext()
+
+	seedStore := func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo}
+		for _, u := range []struct {
+			id    string
+			email string
+			typ   types.UserType
+		}{
+			{"user-a", "a@example.com", types.UserTypeUser},
+			{"user-b", "b@example.com", types.UserTypeUser},
+			{"sa-c", "", types.UserTypeServiceAccount},
+		} {
+			s.NoError(s.userRepo.Create(ctx, &user.User{
+				ID:        u.id,
+				Email:     u.email,
+				Type:      u.typ,
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}))
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		filter      *types.UserFilter
+		expectedIDs []string
+	}{
+		{
+			name:        "no_user_ids_returns_all_users",
+			filter:      &types.UserFilter{QueryFilter: types.NewNoLimitQueryFilter()},
+			expectedIDs: []string{"user-a", "user-b", "sa-c"},
+		},
+		{
+			name: "user_ids_returns_only_matching_users",
+			filter: &types.UserFilter{
+				QueryFilter: types.NewNoLimitQueryFilter(),
+				UserIDs:     []string{"user-b"},
+			},
+			expectedIDs: []string{"user-b"},
+		},
+		{
+			name: "user_ids_combined_with_type_filter",
+			filter: &types.UserFilter{
+				QueryFilter: types.NewNoLimitQueryFilter(),
+				UserIDs:     []string{"user-a", "sa-c"},
+				Type:        lo.ToPtr(types.UserTypeServiceAccount),
+			},
+			expectedIDs: []string{"sa-c"},
+		},
+		{
+			name: "unknown_user_id_returns_empty",
+			filter: &types.UserFilter{
+				QueryFilter: types.NewNoLimitQueryFilter(),
+				UserIDs:     []string{"user-missing"},
+			},
+			expectedIDs: []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			seedStore()
+
+			resp, err := s.userService.ListUsersByFilter(ctx, tc.filter)
+			s.NoError(err)
+
+			gotIDs := lo.Map(resp.Items, func(u *dto.UserResponse, _ int) string { return u.ID })
+			s.ElementsMatch(tc.expectedIDs, gotIDs)
+			s.Equal(len(tc.expectedIDs), resp.Pagination.Total)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
