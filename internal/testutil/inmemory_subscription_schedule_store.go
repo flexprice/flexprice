@@ -111,23 +111,21 @@ func (s *InMemorySubscriptionScheduleStore) GetBySubscriptionID(ctx context.Cont
 	return result, nil
 }
 
-// GetPendingBySubscriptionAndType retrieves a pending schedule of a specific type for a subscription
+// GetPendingBySubscriptionAndType retrieves a pending schedule of a specific type for a subscription.
+// Mirrors the real Ent repo (internal/repository/ent/subscription_schedule.go): when no pending
+// schedule exists it returns (nil, nil) — "no pending schedule found is not an error".
 func (s *InMemorySubscriptionScheduleStore) GetPendingBySubscriptionAndType(ctx context.Context, subscriptionID string, scheduleType types.SubscriptionScheduleChangeType) (*subscription.SubscriptionSchedule, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	schedules, exists := s.schedulesBySubscription[subscriptionID]
-	if !exists {
-		return nil, ierr.NewError("subscription schedule not found").Mark(ierr.ErrNotFound)
-	}
 
-	for _, schedule := range schedules {
+	for _, schedule := range s.schedulesBySubscription[subscriptionID] {
 		if schedule.ScheduleType == scheduleType &&
 			schedule.Status == types.ScheduleStatusPending {
 			return schedule, nil
 		}
 	}
 
-	return nil, ierr.NewError("subscription schedule not found").Mark(ierr.ErrNotFound)
+	return nil, nil // No pending schedule found is not an error
 }
 
 // List retrieves schedules with filters
