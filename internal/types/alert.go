@@ -27,6 +27,11 @@ const (
 	AlertTypeLowOngoingBalance    AlertType = "low_ongoing_balance"
 	AlertTypeLowCreditBalance     AlertType = "low_credit_balance"
 	AlertTypeFeatureWalletBalance AlertType = "feature_wallet_balance"
+
+	// Subscription spend notification alert types (alert_settings table)
+	AlertTypeSubscriptionSpend         AlertType = "subscription_spend"
+	AlertTypeSubscriptionLineItemSpend AlertType = "subscription_line_item_spend"
+	AlertTypeSubscriptionGroupSpend    AlertType = "subscription_group_spend"
 )
 
 // AlertEntityType represents the type of entity for alerts
@@ -35,14 +40,25 @@ type AlertEntityType string
 const (
 	AlertEntityTypeWallet  AlertEntityType = "wallet"
 	AlertEntityTypeFeature AlertEntityType = "feature"
+
+	// Currently creatable via dto.CreateAlertSettingsRequest.Validate() (alert_settings table); wallet
+	// TODO: To add support for feature/wallet alerts in alert_settings table
+	AlertEntityTypeSubscription         AlertEntityType = "subscription"
+	AlertEntityTypeSubscriptionLineItem AlertEntityType = "subscription_line_item"
+	AlertEntityTypeGroup                AlertEntityType = "group"
 )
 
+// allAlertEntityTypes lists every value this type can hold, across both alert pipelines
+var allAlertEntityTypes = []AlertEntityType{
+	AlertEntityTypeWallet,
+	AlertEntityTypeFeature,
+	AlertEntityTypeSubscription,
+	AlertEntityTypeSubscriptionLineItem,
+	AlertEntityTypeGroup,
+}
+
 func (aet AlertEntityType) Validate() error {
-	allowedTypes := []AlertEntityType{
-		AlertEntityTypeWallet,
-		AlertEntityTypeFeature,
-	}
-	if !lo.Contains(allowedTypes, aet) {
+	if !lo.Contains(allAlertEntityTypes, aet) {
 		return ierr.NewError("invalid alert entity type").
 			WithHint("Please provide a valid alert entity type").
 			Mark(ierr.ErrValidation)
@@ -50,11 +66,32 @@ func (aet AlertEntityType) Validate() error {
 	return nil
 }
 
+// IsSubscriptionRootedAlert reports whether the row hangs off a subscription — either directly or
+// via its parent. The "above only" threshold rule applies to these rows; wallet/feature rows added
+// later won't match, so they keep their own conditions without any change here.
+func IsSubscriptionRootedAlert(entityType, parentEntityType AlertEntityType) bool {
+	return entityType == AlertEntityTypeSubscription || parentEntityType == AlertEntityTypeSubscription
+}
+
+// Values lets the ent schema bind entity_type/parent_entity_type to this type via GoType. It
+// returns the full value set on purpose: the DB enum stays wide so adding wallet/entitlement alerts
+// later needs no migration, while the CRUD narrows what's actually creatable.
+func (AlertEntityType) Values() []string {
+	values := make([]string, len(allAlertEntityTypes))
+	for i, v := range allAlertEntityTypes {
+		values[i] = string(v)
+	}
+	return values
+}
+
 func (at AlertType) Validate() error {
 	allowedTypes := []AlertType{
 		AlertTypeLowOngoingBalance,
 		AlertTypeLowCreditBalance,
 		AlertTypeFeatureWalletBalance,
+		AlertTypeSubscriptionSpend,
+		AlertTypeSubscriptionLineItemSpend,
+		AlertTypeSubscriptionGroupSpend,
 	}
 	if !lo.Contains(allowedTypes, at) {
 		return ierr.NewError("invalid alert type").
@@ -147,6 +184,125 @@ func (f *AlertLogFilter) GetOffset() int {
 
 // GetExpand returns the Expand for the filter
 func (f *AlertLogFilter) GetExpand() Expand {
+	if f.Expand == nil || *f.Expand == "" {
+		return NewExpand("")
+	}
+	return NewExpand(*f.Expand)
+}
+
+// AlertSettingsFilter represents filters for querying the alert_settings table
+// (subscription / subscription_line_item / group spend alert configurations).
+type AlertSettingsFilter struct {
+	*QueryFilter
+	*TimeRangeFilter
+
+	// filters allows complex filtering based on multiple fields
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
+	EntityType       AlertEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
+	EntityID         string          `json:"entity_id,omitempty" form:"entity_id" validate:"omitempty"`
+	EntityIDs        []string        `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
+	ParentEntityType AlertEntityType `json:"parent_entity_type,omitempty" form:"parent_entity_type" validate:"omitempty"`
+	ParentEntityID   string          `json:"parent_entity_id,omitempty" form:"parent_entity_id" validate:"omitempty"`
+	ParentEntityIDs  []string        `json:"parent_entity_ids,omitempty" form:"parent_entity_ids" validate:"omitempty"`
+	Enabled          *bool           `json:"enabled,omitempty" form:"enabled" validate:"omitempty"`
+	Expand           *string         `json:"expand,omitempty" form:"expand" validate:"omitempty"`
+}
+
+// NewDefaultAlertSettingsFilter creates a new AlertSettingsFilter with default pagination
+func NewDefaultAlertSettingsFilter() *AlertSettingsFilter {
+	return &AlertSettingsFilter{
+		QueryFilter: NewDefaultQueryFilter(),
+	}
+}
+
+// NewNoLimitAlertSettingsFilter creates a new AlertSettingsFilter with no pagination limits
+func NewNoLimitAlertSettingsFilter() *AlertSettingsFilter {
+	return &AlertSettingsFilter{
+		QueryFilter: NewNoLimitQueryFilter(),
+	}
+}
+
+// Validate validates the alert settings filter
+func (f *AlertSettingsFilter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.EntityType != "" {
+		if err := f.EntityType.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.ParentEntityType != "" {
+		if err := f.ParentEntityType.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetLimit implements BaseFilter interface
+func (f *AlertSettingsFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface
+func (f *AlertSettingsFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetStatus implements BaseFilter interface
+func (f *AlertSettingsFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetSort implements BaseFilter interface
+func (f *AlertSettingsFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface
+func (f *AlertSettingsFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// IsUnlimited implements BaseFilter interface
+func (f *AlertSettingsFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
+}
+
+// GetExpand returns the Expand for the filter
+func (f *AlertSettingsFilter) GetExpand() Expand {
 	if f.Expand == nil || *f.Expand == "" {
 		return NewExpand("")
 	}
@@ -373,4 +529,23 @@ func (At *AlertSettings) AlertState(ongoingBalance decimal.Decimal) (AlertState,
 
 func (at *AlertSettings) IsAlertEnabled() bool {
 	return at.AlertEnabled != nil && *at.AlertEnabled
+}
+
+// Merge overlays the patch's non-nil fields onto a copy of at. This is how updates stay partial:
+// {"alert_enabled": false} flips just that flag and leaves the existing thresholds alone.
+func (at *AlertSettings) Merge(patch *AlertSettings) *AlertSettings {
+	merged := *at
+	if patch.Critical != nil {
+		merged.Critical = patch.Critical
+	}
+	if patch.Warning != nil {
+		merged.Warning = patch.Warning
+	}
+	if patch.Info != nil {
+		merged.Info = patch.Info
+	}
+	if patch.AlertEnabled != nil {
+		merged.AlertEnabled = patch.AlertEnabled
+	}
+	return &merged
 }
