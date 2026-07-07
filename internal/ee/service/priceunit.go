@@ -81,17 +81,16 @@ func (s *priceUnitService) GetPriceUnitByCode(ctx context.Context, code string) 
 }
 
 func (s *priceUnitService) ListPriceUnits(ctx context.Context, filter *types.PriceUnitFilter) (*dto.ListPriceUnitsResponse, error) {
+	if filter == nil {
+		filter = types.NewPriceUnitFilter()
+	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
 	// Validate filter
 	if err := filter.Validate(); err != nil {
 		return nil, err
-	}
-
-	if filter.GetLimit() == 0 {
-		filter.QueryFilter = types.NewDefaultQueryFilter()
-	}
-
-	if filter.QueryFilter == nil {
-		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
 
 	// Get price units from repository
