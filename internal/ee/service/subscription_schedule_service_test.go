@@ -168,6 +168,40 @@ func (s *SubscriptionScheduleServiceSuite) TestSchedulePlanChange() {
 		BillingCycle:       types.BillingCycleAnniversary,
 	}
 
+	s.Run("schedules_plan_change_when_no_pending_schedule_exists", func() {
+		// Fresh active subscription with no schedules: the happy path must
+		// create a pending plan-change schedule at the current period end.
+		// (Previously untestable: the in-memory schedule store returned
+		// ErrNotFound instead of the real repo's (nil, nil) for "no pending".)
+		subResp, err := s.subService.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.basicPlan.ID,
+			Currency:           "usd",
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCycle:       types.BillingCycleAnniversary,
+		})
+		s.Require().NoError(err)
+
+		schedule, err := s.scheduleService.SchedulePlanChange(ctx, subResp.Subscription.ID, config)
+		s.NoError(err)
+		s.Require().NotNil(schedule)
+		s.Equal(types.ScheduleStatusPending, schedule.Status)
+		s.Equal(types.SubscriptionScheduleChangeTypePlanChange, schedule.ScheduleType)
+		s.True(schedule.ScheduledAt.Equal(subResp.Subscription.CurrentPeriodEnd))
+
+		// Read back through the repo: it is the pending schedule for this subscription.
+		stored, err := s.GetStores().SubscriptionScheduleRepo.GetPendingBySubscriptionAndType(ctx, subResp.Subscription.ID, types.SubscriptionScheduleChangeTypePlanChange)
+		s.NoError(err)
+		s.Require().NotNil(stored)
+		s.Equal(schedule.ID, stored.ID)
+
+		storedConfig, err := stored.GetPlanChangeConfig()
+		s.NoError(err)
+		s.Equal(s.testData.premiumPlan.ID, storedConfig.TargetPlanID)
+	})
+
 	s.Run("subscription_not_found_returns_error", func() {
 		_, err := s.scheduleService.SchedulePlanChange(ctx, "sub_does_not_exist", config)
 		s.Error(err)
@@ -304,6 +338,47 @@ func (s *SubscriptionScheduleServiceSuite) TestCancelBySubscriptionAndType() {
 	s.Run("errors_when_no_pending_schedule_of_type", func() {
 		err := s.scheduleService.CancelBySubscriptionAndType(ctx, s.testData.sub.ID, types.SubscriptionScheduleChangeTypeCancellation)
 		s.Error(err)
+	})
+}
+
+func (s *SubscriptionScheduleServiceSuite) TestMarkCancellationScheduleAsExecuted() {
+	ctx := s.GetContext()
+
+	s.Run("no_pending_cancellation_schedule_is_a_noop", func() {
+		// Previously untestable: the in-memory schedule store returned
+		// ErrNotFound where the real repo returns (nil, nil), so this branch
+		// always errored under test.
+		s.NoError(s.subService.MarkCancellationScheduleAsExecuted(ctx, s.testData.sub.ID))
+	})
+
+	s.Run("non_cancellation_pending_schedule_is_ignored", func() {
+		planChange := s.newPlanChangeSchedule(s.testData.sub.ID, s.testData.premiumPlan.ID, s.testData.now.Add(24*time.Hour), types.ScheduleStatusPending)
+
+		s.NoError(s.subService.MarkCancellationScheduleAsExecuted(ctx, s.testData.sub.ID))
+
+		stored, err := s.GetStores().SubscriptionScheduleRepo.Get(ctx, planChange.ID)
+		s.NoError(err)
+		s.Equal(types.ScheduleStatusPending, stored.Status, "plan-change schedule must remain pending")
+	})
+
+	s.Run("marks_pending_cancellation_schedule_as_executed", func() {
+		schedule := s.newCancellationSchedule(s.testData.sub.ID, s.testData.now.Add(24*time.Hour), &subscription.CancellationConfiguration{
+			CancellationType:  types.CancellationTypeEndOfPeriod,
+			ProrationBehavior: types.ProrationBehaviorNone,
+		})
+
+		s.NoError(s.subService.MarkCancellationScheduleAsExecuted(ctx, s.testData.sub.ID))
+
+		stored, err := s.GetStores().SubscriptionScheduleRepo.Get(ctx, schedule.ID)
+		s.NoError(err)
+		s.Equal(types.ScheduleStatusExecuted, stored.Status)
+		s.NotNil(stored.ExecutedAt)
+	})
+
+	s.Run("already_executed_schedule_is_not_marked_twice", func() {
+		// After the previous subtest the schedule is executed; a second call
+		// finds no pending cancellation schedule and is a clean no-op.
+		s.NoError(s.subService.MarkCancellationScheduleAsExecuted(ctx, s.testData.sub.ID))
 	})
 }
 
