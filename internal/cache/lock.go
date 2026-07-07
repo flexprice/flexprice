@@ -23,9 +23,17 @@ type redisLocker struct {
 }
 
 func NewRedisLocker(cache RedisCache) (Locker, error) {
+	// When Redis is unreachable at startup, NewRedisCache returns a typed-nil
+	// *redisCacheImpl wrapped in RedisCache (the connection error is already logged by InitializeRedisCache)
+	if cache == nil {
+		return nil, nil
+	}
 	redisClient, ok := cache.(*redisCacheImpl)
-	if !ok || redisClient == nil {
+	if !ok {
 		return nil, fmt.Errorf("NewRedisLocker: unsupported RedisCache implementation %T", cache)
+	}
+	if redisClient == nil || redisClient.client == nil {
+		return nil, nil
 	}
 
 	return &redisLocker{
