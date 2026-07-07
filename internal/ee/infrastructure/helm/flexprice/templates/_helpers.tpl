@@ -531,7 +531,17 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.dynamodb.inUse | quote }}
 {{- /* ---- Webhook / Svix ---- */}}
 {{- if .Values.webhook.svixConfig.enabled }}
+{{- /* Legacy alias: pre-config-autobind images bind webhook.svix_config.auth_token from this
+       name via an explicit v.BindEnv. Kept so a rollback to an older image still gets the token. */}}
 - name: FLEXPRICE_SVIX_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: svix-auth-token
+{{- /* Canonical name the reflection env-binder derives from webhook.svix_config.auth_token.
+       Config-autobind images read THIS (no BindEnv needed). Same secret as the legacy alias
+       above, so both images resolve the same token — forward- and backward-compatible. */}}
+- name: FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.secretName" . }}
