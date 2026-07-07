@@ -19,9 +19,92 @@ type InMemoryWalletStore struct {
 
 func NewInMemoryWalletStore() *InMemoryWalletStore {
 	return &InMemoryWalletStore{
-		wallets:      NewInMemoryStore[*wallet.Wallet](),
-		transactions: NewInMemoryStore[*wallet.Transaction](),
+		wallets:      NewInMemoryStore[*wallet.Wallet]().WithCloneFn(copyWallet),
+		transactions: NewInMemoryStore[*wallet.Transaction]().WithCloneFn(copyWalletTransaction),
 	}
+}
+
+// copyWallet returns a deep copy so callers can never alias the stored
+// record — the real Ent repo materializes a fresh row per read, and services
+// (e.g. convertToPostpaid's response bookkeeping) mutate returned wallets
+// after persisting.
+func copyWallet(w *wallet.Wallet) *wallet.Wallet {
+	if w == nil {
+		return nil
+	}
+	c := *w
+	if w.Metadata != nil {
+		c.Metadata = make(types.Metadata, len(w.Metadata))
+		for k, v := range w.Metadata {
+			c.Metadata[k] = v
+		}
+	}
+	if w.AutoTopup != nil {
+		at := *w.AutoTopup
+		if w.AutoTopup.Enabled != nil {
+			at.Enabled = lo.ToPtr(*w.AutoTopup.Enabled)
+		}
+		if w.AutoTopup.Threshold != nil {
+			at.Threshold = lo.ToPtr(*w.AutoTopup.Threshold)
+		}
+		if w.AutoTopup.Amount != nil {
+			at.Amount = lo.ToPtr(*w.AutoTopup.Amount)
+		}
+		if w.AutoTopup.Invoicing != nil {
+			at.Invoicing = lo.ToPtr(*w.AutoTopup.Invoicing)
+		}
+		c.AutoTopup = &at
+	}
+	if w.Config.AllowedPriceTypes != nil {
+		c.Config.AllowedPriceTypes = append([]types.WalletConfigPriceType(nil), w.Config.AllowedPriceTypes...)
+	}
+	if w.AlertSettings != nil {
+		as := *w.AlertSettings
+		if w.AlertSettings.Critical != nil {
+			crit := *w.AlertSettings.Critical
+			as.Critical = &crit
+		}
+		if w.AlertSettings.Warning != nil {
+			warn := *w.AlertSettings.Warning
+			as.Warning = &warn
+		}
+		if w.AlertSettings.Info != nil {
+			info := *w.AlertSettings.Info
+			as.Info = &info
+		}
+		if w.AlertSettings.AlertEnabled != nil {
+			as.AlertEnabled = lo.ToPtr(*w.AlertSettings.AlertEnabled)
+		}
+		c.AlertSettings = &as
+	}
+	return &c
+}
+
+// copyWalletTransaction returns a deep copy of a wallet transaction.
+func copyWalletTransaction(t *wallet.Transaction) *wallet.Transaction {
+	if t == nil {
+		return nil
+	}
+	c := *t
+	if t.Metadata != nil {
+		c.Metadata = make(types.Metadata, len(t.Metadata))
+		for k, v := range t.Metadata {
+			c.Metadata[k] = v
+		}
+	}
+	if t.ExpiryDate != nil {
+		c.ExpiryDate = lo.ToPtr(*t.ExpiryDate)
+	}
+	if t.Priority != nil {
+		c.Priority = lo.ToPtr(*t.Priority)
+	}
+	if t.ConversionRate != nil {
+		c.ConversionRate = lo.ToPtr(*t.ConversionRate)
+	}
+	if t.TopupConversionRate != nil {
+		c.TopupConversionRate = lo.ToPtr(*t.TopupConversionRate)
+	}
+	return &c
 }
 
 // walletFilterFn implements filtering logic for wallets
@@ -595,8 +678,18 @@ func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wa
 	if w.AutoTopup != nil {
 		existing.AutoTopup = w.AutoTopup
 	}
-	// Update config if provided (WalletConfig is a struct type, so we always update it)
-	existing.Config = w.Config
+	// Mirror the real Ent repo's merge semantics (internal/repository/ent/wallet.go
+	// UpdateWallet): Config only when AllowedPriceTypes is set, AlertSettings when
+	// non-nil, AlertState when non-empty.
+	if w.Config.AllowedPriceTypes != nil {
+		existing.Config = w.Config
+	}
+	if w.AlertSettings != nil {
+		existing.AlertSettings = w.AlertSettings
+	}
+	if w.AlertState != "" {
+		existing.AlertState = w.AlertState
+	}
 
 	// Update metadata
 	existing.UpdatedBy = types.GetUserID(ctx)

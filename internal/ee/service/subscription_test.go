@@ -4619,9 +4619,12 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 		wantErr   bool
 	}{
 		{
-			name:      "list_all_subscriptions",
-			input:     &types.SubscriptionFilter{QueryFilter: types.NewDefaultQueryFilter()},
-			wantCount: 3, // 2 new + 1 from setupTestData
+			name:  "list_all_subscriptions_defaults_to_active_only",
+			input: &types.SubscriptionFilter{QueryFilter: types.NewDefaultQueryFilter()},
+			// When subscription_status is unconstrained, the repository defaults
+			// to active-only (real Ent repo behavior): sub_1 + 1 from
+			// setupTestData; the cancelled sub_2 is excluded.
+			wantCount: 2,
 			wantErr:   false,
 		},
 		{
@@ -4630,7 +4633,7 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 				QueryFilter: types.NewDefaultQueryFilter(),
 				CustomerID:  s.testData.customer.ID,
 			},
-			wantCount: 3,
+			wantCount: 2, // active-only default also applies; cancelled sub_2 excluded
 			wantErr:   false,
 		},
 		{
@@ -5435,7 +5438,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithBucketedMaxAggr
 		Aggregation: meter.Aggregation{
 			Type:       types.AggregationMax,
 			Field:      "usage_value",
-			BucketSize: "minute", // Bucketed by minute
+			BucketSize: types.WindowSizeMinute, // Bucketed by minute
 		},
 		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 	}
