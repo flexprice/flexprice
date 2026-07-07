@@ -876,7 +876,12 @@ func (s *billingService) CalculateUsageCharges(
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
 
-			// Calculate price unit amount if price unit is available
+			// Calculate price unit amount if price unit is available.
+			// A resolution failure here must fail the whole calculation (matching
+			// CalculateFeatureUsageCharges) rather than skip the line item: the
+			// item's amount was already added to totalUsageCost above, so silently
+			// dropping it would leave TotalAmount including a charge with no
+			// corresponding invoice line item.
 			var priceUnitAmount decimal.Decimal
 			if item.PriceUnit != nil {
 				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
@@ -885,7 +890,7 @@ func (s *billingService) CalculateUsageCharges(
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
-					continue
+					return nil, err
 				}
 				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 				if err != nil {
@@ -893,7 +898,7 @@ func (s *billingService) CalculateUsageCharges(
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
-					continue
+					return nil, err
 				}
 				priceUnitAmount = convertedAmount
 			}

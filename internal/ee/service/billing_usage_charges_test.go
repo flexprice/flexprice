@@ -524,7 +524,7 @@ func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_OverageAndTrueUp() 
 	})
 }
 
-func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_MissingPriceUnitSkipsLineItem() {
+func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_MissingPriceUnitReturnsError() {
 	fx := s.newChargesFixture("pu", types.BILLING_PERIOD_MONTHLY, false)
 	item := *fx.item
 	item.PriceUnit = lo.ToPtr("credits_missing") // not registered in PriceUnitRepo
@@ -532,14 +532,14 @@ func (s *BillingUsageChargesSuite) TestCalculateUsageCharges_MissingPriceUnitSki
 	subCopy.LineItems = []*subscription.SubscriptionLineItem{&item}
 	fxCopy := &chargesFixture{plan: fx.plan, sub: &subCopy, item: &item}
 
+	// A price unit that cannot be resolved must fail the whole calculation
+	// (matching CalculateFeatureUsageCharges), not silently drop the line item
+	// while leaving its amount in TotalAmount — that would make the invoice
+	// total disagree with the sum of its line items.
 	result, err := s.calcUsage(fxCopy, mkUsage(s.charge(fxCopy, 500, 10, s.priceSum)))
-	s.NoError(err)
-	// The line item is skipped when its price unit cannot be resolved.
-	// NOTE: the amount has already been added to the running total before the
-	// price-unit lookup, so TotalAmount still includes the skipped line item.
-	s.Empty(result.LineItems)
-	s.True(result.TotalAmount.Equal(decimal.NewFromInt(10)),
-		"documented behavior: total includes skipped line item amount, got %s", result.TotalAmount)
+	s.Error(err)
+	s.ErrorContains(err, "price unit")
+	s.Nil(result)
 }
 
 // ---------------------------------------------------------------------------
