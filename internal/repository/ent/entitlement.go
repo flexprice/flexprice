@@ -686,7 +686,7 @@ func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domai
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlement.ID)
-	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultRedis)
+	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultInMemory)
 }
 
 func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domainEntitlement.Entitlement {
