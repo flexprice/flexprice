@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -83,6 +84,23 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 			return false
 		}
 	}
+
+	// Filter out expired prices unless explicitly allowed
+	// (mirrors internal/repository/ent/price.go applyEntityQueryOptions:
+	// when AllowExpiredPrices is false, only prices with
+	// EndDate IS NULL OR EndDate > now are returned)
+	if !f.AllowExpiredPrices {
+		now := time.Now().UTC()
+		if p.EndDate != nil && !p.EndDate.After(now) {
+			return false
+		}
+	}
+
+	// NOTE: PriceFilter.SubscriptionID is intentionally NOT applied here.
+	// The real Ent repository (internal/repository/ent/price.go,
+	// applyEntityQueryOptions) does not consume it either — the field is
+	// validated in types.PriceFilter but never translated into a query
+	// predicate, so the in-memory store mirrors that behavior.
 
 	return true
 }
@@ -212,11 +230,14 @@ func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
 
 // ListAll returns all prices without pagination
 func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
-	// Create an unlimited filter
+	// Create an unlimited filter. AllowExpiredPrices is carried over because
+	// the real repository's ListAll (internal/repository/ent/price.go)
+	// forwards the caller's filter to List unchanged.
 	unlimitedFilter := &types.PriceFilter{
-		QueryFilter:     types.NewNoLimitQueryFilter(),
-		TimeRangeFilter: filter.TimeRangeFilter,
-		EntityIDs:       filter.EntityIDs,
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		TimeRangeFilter:    filter.TimeRangeFilter,
+		EntityIDs:          filter.EntityIDs,
+		AllowExpiredPrices: filter.AllowExpiredPrices,
 	}
 
 	return s.List(ctx, unlimitedFilter)
@@ -247,7 +268,11 @@ func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error
 }
 
 func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
-	return s.InMemoryStore.List(ctx, types.NewPriceFilter().WithEntityIDs([]string{planID}), priceFilterFn, priceSortFn)
+	// AllowExpiredPrices is true because the real repository's GetByPlanID
+	// (internal/repository/ent/price.go) only filters on entity ID + published
+	// status and applies no end-date predicate — expired prices are included.
+	filter := types.NewPriceFilter().WithEntityIDs([]string{planID}).WithAllowExpiredPrices(true)
+	return s.InMemoryStore.List(ctx, filter, priceFilterFn, priceSortFn)
 }
 
 // Clear clears the price store

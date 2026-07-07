@@ -19,6 +19,13 @@ type SortFunc[T any] func(i, j T) bool
 type InMemoryStore[T any] struct {
 	mu    sync.RWMutex
 	items map[string]T
+	// cloneFn, when set, is applied on every write (Create/Update store a
+	// copy) and every read (Get/List return copies). Real repositories
+	// materialize a fresh row per read, so callers can never alias the
+	// persisted record; without a cloneFn this store hands out raw pointers
+	// and a post-persist mutation in a service silently edits "the database".
+	// Wire it per store via WithCloneFn for pointer-typed T.
+	cloneFn func(T) T
 }
 
 // NewInMemoryStore creates a new InMemoryStore
@@ -26,6 +33,20 @@ func NewInMemoryStore[T any]() *InMemoryStore[T] {
 	return &InMemoryStore[T]{
 		items: make(map[string]T),
 	}
+}
+
+// WithCloneFn sets the clone function used to isolate stored records from
+// caller-held references. Returns the store for chained construction.
+func (s *InMemoryStore[T]) WithCloneFn(fn func(T) T) *InMemoryStore[T] {
+	s.cloneFn = fn
+	return s
+}
+
+func (s *InMemoryStore[T]) clone(item T) T {
+	if s.cloneFn == nil {
+		return item
+	}
+	return s.cloneFn(item)
 }
 
 // Create adds a new item to the store
@@ -42,7 +63,7 @@ func (s *InMemoryStore[T]) Create(ctx context.Context, id string, item T) error 
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	s.items[id] = item
+	s.items[id] = s.clone(item)
 	return nil
 }
 
@@ -52,7 +73,7 @@ func (s *InMemoryStore[T]) Get(ctx context.Context, id string) (T, error) {
 	defer s.mu.RUnlock()
 
 	if item, exists := s.items[id]; exists {
-		return item, nil
+		return s.clone(item), nil
 	}
 
 	var zero T
@@ -72,7 +93,7 @@ func (s *InMemoryStore[T]) List(ctx context.Context, filter interface{}, filterF
 	var result []T
 	for _, item := range s.items {
 		if filterFn == nil || filterFn(ctx, item, filter) {
-			result = append(result, item)
+			result = append(result, s.clone(item))
 		}
 	}
 
@@ -128,7 +149,7 @@ func (s *InMemoryStore[T]) Update(ctx context.Context, id string, item T) error 
 			Mark(ierr.ErrNotFound)
 	}
 
-	s.items[id] = item
+	s.items[id] = s.clone(item)
 	return nil
 }
 
