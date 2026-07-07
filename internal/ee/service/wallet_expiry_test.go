@@ -171,7 +171,10 @@ func (s *WalletExpirySuite) TestExpireCreditsSkippedForActiveSubscription() {
 	txn := s.seedCreditTxn("wtxn_skip_sub", credits, &pastExpiry)
 	s.setWalletBalance(credits)
 
-	// Active standalone subscription for the customer blocks expiry.
+	// Active standalone subscription for the customer blocks expiry. The expiry
+	// check filters subscriptions with current_period_end <= now (an unbilled
+	// finished period), so the subscription's current period must already have
+	// ended for the skip to apply.
 	sub := &subscription.Subscription{
 		ID:                 "sub_blocks_expiry",
 		PlanID:             "plan_expiry",
@@ -179,13 +182,11 @@ func (s *WalletExpirySuite) TestExpireCreditsSkippedForActiveSubscription() {
 		Currency:           "usd",
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		SubscriptionType:   types.SubscriptionTypeStandalone,
-		StartDate:          s.testData.now.Add(-24 * time.Hour),
-		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
-		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		StartDate:          s.testData.now.Add(-31 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-31 * 24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(-1 * time.Hour),
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
-	// Backdate so the created_at <= now time-range filter matches deterministically.
-	sub.CreatedAt = s.testData.now.Add(-24 * time.Hour)
 	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
 
 	result, err := s.service.ExpireCredits(s.GetContext(), txn.ID)
@@ -207,11 +208,17 @@ func (s *WalletExpirySuite) TestExpireCreditsSkippedForActiveSubscription() {
 func (s *WalletExpirySuite) TestExpireCreditsSkippedForUnpaidInvoiceInGrantPeriod() {
 	pastExpiry := s.testData.now.Add(-1 * time.Hour)
 	credits := decimal.NewFromInt(30)
-	txn := s.seedCreditTxn("wtxn_skip_inv", credits, &pastExpiry)
+	// Backdate the grant so an invoice billing period can contain its
+	// created_at: the skip filter requires period_start <= grant created_at
+	// <= period_end <= grant expiry.
+	grantCreatedAt := s.testData.now.Add(-72 * time.Hour)
+	txn := s.seedCreditTxn("wtxn_skip_inv", credits, &pastExpiry, func(t *wallet.Transaction) {
+		t.CreatedAt = grantCreatedAt
+	})
 	s.setWalletBalance(credits)
 
-	// Unpaid subscription invoice whose billing period ends before the grant
-	// expiry blocks expiry.
+	// Unpaid subscription invoice whose billing period contains the grant's
+	// created_at and ends before the grant expiry blocks expiry.
 	inv := &invoice.Invoice{
 		ID:              "inv_blocks_expiry",
 		CustomerID:      s.testData.customer.ID,
@@ -221,7 +228,7 @@ func (s *WalletExpirySuite) TestExpireCreditsSkippedForUnpaidInvoiceInGrantPerio
 		PaymentStatus:   types.PaymentStatusPending,
 		AmountDue:       decimal.NewFromInt(50),
 		AmountRemaining: decimal.NewFromInt(50),
-		PeriodStart:     lo.ToPtr(s.testData.now.Add(-48 * time.Hour)),
+		PeriodStart:     lo.ToPtr(s.testData.now.Add(-96 * time.Hour)),
 		PeriodEnd:       lo.ToPtr(s.testData.now.Add(-2 * time.Hour)),
 		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
 	}
@@ -236,6 +243,37 @@ func (s *WalletExpirySuite) TestExpireCreditsSkippedForUnpaidInvoiceInGrantPerio
 	storedTxn, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), txn.ID)
 	s.NoError(err)
 	s.True(storedTxn.CreditsAvailable.Equal(credits), "skipped expiry must not consume credits")
+}
+
+func (s *WalletExpirySuite) TestExpireCreditsProceedsWhenInvoicePeriodPredatesGrant() {
+	pastExpiry := s.testData.now.Add(-1 * time.Hour)
+	credits := decimal.NewFromInt(30)
+	txn := s.seedCreditTxn("wtxn_inv_predates", credits, &pastExpiry)
+	s.setWalletBalance(credits)
+
+	// Unpaid subscription invoice whose billing period ended before the grant
+	// was even created: it fails the period_end >= grant created_at filter, so
+	// it must NOT block expiry.
+	inv := &invoice.Invoice{
+		ID:              "inv_period_predates_grant",
+		CustomerID:      s.testData.customer.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountDue:       decimal.NewFromInt(50),
+		AmountRemaining: decimal.NewFromInt(50),
+		PeriodStart:     lo.ToPtr(s.testData.now.Add(-30 * 24 * time.Hour)),
+		PeriodEnd:       lo.ToPtr(s.testData.now.Add(-20 * 24 * time.Hour)),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
+
+	result, err := s.service.ExpireCredits(s.GetContext(), txn.ID)
+	s.NoError(err)
+	s.NotNil(result)
+	s.True(result.Expired, "invoice outside the grant period must not block expiry")
+	s.Equal(types.CreditExpirySkipReasonNone, result.SkipReason)
 }
 
 func (s *WalletExpirySuite) TestExpireCreditsDebitsWallet() {
