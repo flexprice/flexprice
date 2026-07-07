@@ -637,7 +637,7 @@ func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNot
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, cn.ID)
-	r.redisCache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "set credit note in cache", "id", cn.ID, "cache_key", cacheKey)
 }

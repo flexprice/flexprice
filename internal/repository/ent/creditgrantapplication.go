@@ -540,7 +540,7 @@ func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, applica
 	defer FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrantApplication, application.ID)
-	r.redisCache.Set(ctx, cacheKey, application, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, application, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }

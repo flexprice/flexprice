@@ -430,7 +430,7 @@ func (r *paymentMethodRepository) setCache(ctx context.Context, pm *domainPaymen
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixPaymentMethod, pm.ID)
-	r.redisCache.Set(ctx, cacheKey, pm, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, pm, cache.ExpiryDefaultRedis)
 }
 
 func (r *paymentMethodRepository) getCache(ctx context.Context, id string) *domainPaymentMethod.PaymentMethod {

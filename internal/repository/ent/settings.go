@@ -355,7 +355,7 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixSettings, setting.ID)
-	r.redisCache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, setting, cache.ExpiryDefaultRedis)
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, id string) *domainSettings.Setting {

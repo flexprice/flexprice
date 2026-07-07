@@ -514,7 +514,7 @@ func (r *couponApplicationRepository) SetCache(ctx context.Context, ca *domainCo
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponApplication, ca.ID)
-	r.redisCache.Set(ctx, cacheKey, ca, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, ca, cache.ExpiryDefaultRedis)
 }
 
 func (r *couponApplicationRepository) GetCache(ctx context.Context, key string) *domainCouponApplication.CouponApplication {

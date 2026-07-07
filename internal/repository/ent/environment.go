@@ -258,7 +258,7 @@ func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnviron
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, env.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, types.GetTenantID(ctx), env.ID)
 	r.cache.Set(ctx, cacheKey, env, cache.ExpiryDefaultInMemory)
 }
 
@@ -268,7 +268,7 @@ func (r *environmentRepository) GetCache(ctx context.Context, id string) *domain
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, types.GetTenantID(ctx), id)
 	value, found := r.cache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -286,6 +286,6 @@ func (r *environmentRepository) DeleteCache(ctx context.Context, id string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEnvironment, types.GetTenantID(ctx), id)
 	r.cache.Delete(ctx, cacheKey)
 }

@@ -20,18 +20,18 @@ import (
 )
 
 type taxrateRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts TaxRateQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  TaxRateQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewTaxRateRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainTaxRate.Repository {
+func NewTaxRateRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainTaxRate.Repository {
 	return &taxrateRepository{
-		client:    client,
-		log:       log,
-		queryOpts: TaxRateQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  TaxRateQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -518,7 +518,7 @@ func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, taxrate.ID)
-	r.cache.Set(ctx, cacheKey, taxrate, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, taxrate, cache.ExpiryDefaultRedis)
 }
 
 func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxRate.TaxRate {
@@ -528,7 +528,7 @@ func (r *taxrateRepository) GetCache(ctx context.Context, id string) *domainTaxR
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, id)
-	value, found := r.cache.Get(ctx, cacheKey)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -546,5 +546,5 @@ func (r *taxrateRepository) DeleteCache(ctx context.Context, taxrate *domainTaxR
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxRate, taxrate.ID)
-	r.cache.Delete(ctx, cacheKey)
+	r.redisCache.Delete(ctx, cacheKey)
 }

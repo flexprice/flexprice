@@ -103,10 +103,12 @@ const (
 func GenerateKey(ctx context.Context, prefix string, params ...any) string {
 	parts := make([]string, 0, len(params)+3)
 
-	tenantId := types.GetTenantID(ctx)
-	environmentId := types.GetEnvironmentID(ctx)
-	if tenantId != "" && environmentId != "" {
-		parts = append(parts, tenantId, environmentId)
+	if ctx != nil {
+		tenantId := types.GetTenantID(ctx)
+		environmentId := types.GetEnvironmentID(ctx)
+		if tenantId != "" && environmentId != "" {
+			parts = append(parts, tenantId, environmentId)
+		}
 	}
 
 	parts = append(parts, prefix)

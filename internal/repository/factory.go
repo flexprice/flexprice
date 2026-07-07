@@ -219,7 +219,7 @@ func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegration
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
-	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
@@ -227,7 +227,7 @@ func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 }
 
 func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
-	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {

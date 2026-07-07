@@ -19,18 +19,18 @@ import (
 )
 
 type taxappliedRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts TaxAppliedQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  TaxAppliedQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainTaxApplied.Repository {
+func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainTaxApplied.Repository {
 	return &taxappliedRepository{
-		client:    client,
-		log:       log,
-		queryOpts: TaxAppliedQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  TaxAppliedQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -447,7 +447,7 @@ func (r *taxappliedRepository) SetCache(ctx context.Context, taxapplied *domainT
 
 	// Set both ID and external ID based cache entries
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
-	r.cache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "cache set", "id_key", cacheKey)
 }
@@ -459,7 +459,7 @@ func (r *taxappliedRepository) GetCache(ctx context.Context, key string) *domain
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, key)
-	value, found := r.cache.Get(ctx, cacheKey)
+	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
 	}
@@ -478,7 +478,7 @@ func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *doma
 
 	// Delete ID-based cache first
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
-	r.cache.Delete(ctx, cacheKey)
+	r.redisCache.Delete(ctx, cacheKey)
 	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }
 

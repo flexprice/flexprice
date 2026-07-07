@@ -83,7 +83,7 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 	})
 	defer FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(nil, cache.PrefixTenant, id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTenant, id)
 
 	// L1: in-memory (always checked regardless of cache.enabled)
 	if value, found := r.inMemoryCache.ForceCacheGet(ctx, cacheKey); found {
