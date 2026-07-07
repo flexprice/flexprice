@@ -540,13 +540,12 @@ func (s *PaymentProcessingSuite) TestCreatePaymentWithProcessPaymentPropagatesFa
 	// Explicit postpaid wallet with insufficient consumable credits: creation
 	// succeeds (balance check happens in the processor), processing fails.
 	w := s.createWallet("wallet_process_fail", decimal.NewFromInt(500), nil)
-	walletStored, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
-	s.NoError(err)
-	walletStored.Balance = decimal.NewFromInt(20)
-	walletStored.CreditBalance = decimal.NewFromInt(20)
-	s.NoError(s.GetStores().WalletRepo.UpdateWallet(s.GetContext(), walletStored.ID, walletStored))
+	// UpdateWallet does not touch balances (matching the real repo) — lower the
+	// balance through the dedicated balance-update path.
+	s.NoError(s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), w.ID,
+		decimal.NewFromInt(20), decimal.NewFromInt(20)))
 
-	_, err = s.paymentService.CreatePayment(s.GetContext(), &dto.CreatePaymentRequest{
+	_, err := s.paymentService.CreatePayment(s.GetContext(), &dto.CreatePaymentRequest{
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     s.testData.invoice.ID,
 		PaymentMethodType: types.PaymentMethodTypeCredits,
