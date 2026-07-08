@@ -169,7 +169,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Reader(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debug(ctx, "updating taxapplied",
 		"taxapplied_id", ta.ID,
