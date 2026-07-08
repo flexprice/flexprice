@@ -718,6 +718,7 @@ func NewConfig() (*Configuration, error) {
 	// every leaf key, so a FLEXPRICE_* env var always lands regardless of which config.yaml a
 	// deployment mounts (baked file on ECS, ConfigMap on GKE) — and no new key can be
 	// forgotten. Runs once at startup; reflection cost is irrelevant. See bindEnvs below.
+	// clickhouse.protocol (FLEXPRICE_CLICKHOUSE_PROTOCOL) is bound automatically here.
 	bindEnvs(v, reflect.TypeOf(Configuration{}))
 
 	// Exception capture is on by default. Struct `default:` tags aren't applied at runtime
@@ -940,6 +941,13 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 			Password: c.Password,
 		},
 		ConnOpenStrategy: clickhouse.ConnOpenInOrder,
+		// Bounded dial/read deadlines. Without DialTimeout the native driver can
+		// block forever on connect: ClickHouse Cloud behind AWS PrivateLink is
+		// fronted by multiple AZ ENIs, and an in-order dial to an ENI that never
+		// completes the TCP/native handshake hangs indefinitely with no default
+		// deadline. A finite DialTimeout makes it fail over to the next address.
+		DialTimeout: 10 * time.Second,
+		ReadTimeout: 30 * time.Second,
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}

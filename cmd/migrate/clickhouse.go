@@ -8,8 +8,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 )
@@ -34,6 +36,9 @@ func runClickHouseMigrations(ctx context.Context, cfg *config.Configuration, dir
 	}
 
 	// Connect without pinning a database so we can CREATE DATABASE if missing.
+	// The native protocol works over ClickHouse Cloud PrivateLink now that
+	// GetClientOptions sets a DialTimeout (without it, the in-order dial to a
+	// PrivateLink AZ ENI could block forever).
 	bootstrap := *opts
 	bootstrap.Auth.Database = "default"
 	conn, err := clickhouse_go.Open(&bootstrap)
@@ -73,13 +78,41 @@ func runClickHouseMigrations(ctx context.Context, cfg *config.Configuration, dir
 			return fmt.Errorf("split %s: %w", filepath.Base(f), err)
 		}
 		for i, stmt := range stmts {
-			if err := dbConn.Exec(ctx, stmt); err != nil {
+			if err := execWithRetry(ctx, dbConn, stmt); err != nil {
 				return fmt.Errorf("%s statement %d: %w\n---\n%s", filepath.Base(f), i+1, err, stmt)
 			}
 		}
 		log.Info(ctx, "applied clickhouse migration", "file", filepath.Base(f))
 	}
 	return nil
+}
+
+// execWithRetry runs a statement, retrying on ClickHouse Cloud's transient
+// SharedMergeTree replication races. Rapid consecutive ALTERs (e.g. several
+// ADD INDEX on one table) can outrun cross-replica metadata sync, yielding
+// "code: 517 ... doesn't catchup with latest ALTER ... Please retry". These are
+// self-healing once replicas converge, so a short backoff-retry clears them.
+func execWithRetry(ctx context.Context, conn driver.Conn, stmt string) error {
+	const maxAttempts = 8
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err = conn.Exec(ctx, stmt); err == nil {
+			return nil
+		}
+		msg := err.Error()
+		transient := strings.Contains(msg, "code: 517") ||
+			strings.Contains(msg, "CANNOT_ASSIGN_ALTER") ||
+			strings.Contains(msg, "doesn't catchup")
+		if !transient || attempt == maxAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * time.Second):
+		}
+	}
+	return err
 }
 
 // splitSQL strips `--` line comments and `/* */` block comments, then splits on
