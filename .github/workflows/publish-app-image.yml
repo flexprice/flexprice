@@ -84,7 +84,7 @@ jobs:
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
           format: table
