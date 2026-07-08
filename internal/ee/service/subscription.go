@@ -1493,6 +1493,24 @@ func (s *subscriptionService) handleCreditGrants(
 	subscription *subscription.Subscription,
 	creditGrantRequests []dto.CreateCreditGrantRequest,
 ) error {
+	// Plan/subscription grants anchor at the subscription start (or trial end).
+	startDate := subscription.StartDate
+	if subscription.TrialEnd != nil {
+		startDate = lo.FromPtr(subscription.TrialEnd)
+	}
+	return s.handleCreditGrantsWithStart(ctx, subscription, creditGrantRequests, startDate)
+}
+
+// handleCreditGrantsWithStart materializes the given credit grant requests onto the
+// subscription, anchoring the grant chain at startDate. Callers that attach grants
+// mid-cycle (e.g. addon application) pass the attach date so the first grant applies
+// immediately and recurs from there, instead of the subscription start.
+func (s *subscriptionService) handleCreditGrantsWithStart(
+	ctx context.Context,
+	subscription *subscription.Subscription,
+	creditGrantRequests []dto.CreateCreditGrantRequest,
+	startDate time.Time,
+) error {
 	if len(creditGrantRequests) == 0 {
 		return nil
 	}
@@ -1538,12 +1556,7 @@ func (s *subscriptionService) handleCreditGrants(
 		}
 	}
 
-	// Create and apply credit grants
-	startDate := subscription.StartDate
-	if subscription.TrialEnd != nil {
-		startDate = lo.FromPtr(subscription.TrialEnd)
-	}
-
+	// Create and apply credit grants anchored at startDate
 	for _, grantReq := range creditGrantRequests {
 		// Ensure subscription ID is set and scope is SUBSCRIPTION
 		grantReq.SubscriptionID = lo.ToPtr(subscription.ID)
@@ -4571,6 +4584,13 @@ func (s *subscriptionService) addAddonToSubscription(
 			}
 		}
 
+		// Materialize the addon's credit grants (if any) onto the subscription,
+		// anchored at the addon attach date so mid-cycle grants apply immediately.
+		// Kept in-transaction so grant application is atomic with the addon attach.
+		if err := s.materializeAddonCreditGrants(ctx, sub, req.AddonID, addonRequestedStart); err != nil {
+			return err
+		}
+
 		return nil
 	})
 
@@ -4596,6 +4616,54 @@ func (s *subscriptionService) addAddonToSubscription(
 	}
 
 	return addonAssociation, nil
+}
+
+// materializeAddonCreditGrants clones the addon's ADDON-scoped credit grant templates
+// into SUBSCRIPTION-scoped grants on the subscription and applies them, anchored at
+// startDate (the addon attach date). AddonID is carried through as provenance so
+// removal can target these grants specifically. No-op when the addon has no grants.
+func (s *subscriptionService) materializeAddonCreditGrants(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	addonID string,
+	startDate time.Time,
+) error {
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	addonGrants, err := creditGrantService.GetCreditGrantsByAddon(ctx, addonID)
+	if err != nil {
+		return err
+	}
+	if len(addonGrants.Items) == 0 {
+		return nil
+	}
+
+	s.Logger.Info(ctx, "addon has credit grants",
+		"addon_id", addonID,
+		"subscription_id", sub.ID,
+		"credit_grants_count", len(addonGrants.Items))
+
+	requests := make([]dto.CreateCreditGrantRequest, 0, len(addonGrants.Items))
+	for _, cg := range addonGrants.Items {
+		requests = append(requests, dto.CreateCreditGrantRequest{
+			Name:                   cg.Name,
+			Scope:                  types.CreditGrantScopeSubscription,
+			Credits:                cg.Credits,
+			Cadence:                cg.Cadence,
+			ExpirationType:         cg.ExpirationType,
+			Priority:               cg.Priority,
+			SubscriptionID:         lo.ToPtr(sub.ID),
+			AddonID:                lo.ToPtr(addonID), // provenance for targeted removal
+			Period:                 cg.Period,
+			ExpirationDuration:     cg.ExpirationDuration,
+			ExpirationDurationUnit: cg.ExpirationDurationUnit,
+			Metadata:               cg.Metadata,
+			PeriodCount:            cg.PeriodCount,
+			ConversionRate:         cg.ConversionRate,
+			TopupConversionRate:    cg.TopupConversionRate,
+		})
+	}
+
+	return s.handleCreditGrantsWithStart(ctx, sub, requests, startDate)
 }
 
 // validateEntitlementCompatibility checks if addon entitlements are compatible with existing subscription entitlements
@@ -4899,6 +4967,18 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 				return err
 			}
+		}
+
+		// Cancel future applications of credit grants materialized from THIS addon only
+		// (scoped by addon_id provenance). Already-granted credits are not clawed back;
+		// plan-sourced and other-addon grants are left untouched.
+		creditGrantService := NewCreditGrantService(s.ServiceParams)
+		if err := creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
+			SubscriptionID: association.EntityID,
+			AddonID:        lo.ToPtr(association.AddonID),
+			EffectiveDate:  effectiveEndDate,
+		}); err != nil {
+			return err
 		}
 
 		return nil

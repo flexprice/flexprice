@@ -18,6 +18,7 @@ type CreditGrant struct {
 	Scope                  types.CreditGrantScope               `json:"scope"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
+	AddonID                *string                              `json:"addon_id,omitempty"`
 	Credits                decimal.Decimal                      `json:"credits" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
@@ -52,6 +53,7 @@ type CreditGrantCloneOverrides struct {
 	ID            *string
 	Scope         *types.CreditGrantScope
 	PlanID        *string
+	AddonID       *string
 	EnvironmentID *string // nil = derive from ctx; non-nil = use explicit value
 	BaseModel     *types.BaseModel
 }
@@ -75,6 +77,9 @@ func (c *CreditGrant) CopyWith(ctx context.Context, overrides *CreditGrantCloneO
 	}
 	if overrides.PlanID != nil {
 		out.PlanID = overrides.PlanID
+	}
+	if overrides.AddonID != nil {
+		out.AddonID = overrides.AddonID
 	}
 	if overrides.BaseModel != nil {
 		out.BaseModel = lo.FromPtr(overrides.BaseModel)
@@ -125,9 +130,19 @@ func (c *CreditGrant) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 
+	case types.CreditGrantScopeAddon:
+		if c.AddonID == nil || *c.AddonID == "" {
+			return ierr.NewError("addon_id is required for ADDON-scoped grants").
+				WithHint("Please provide a valid addon ID").
+				WithReportableDetails(map[string]interface{}{
+					"scope": c.Scope,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 	default:
 		return ierr.NewError("invalid scope").
-			WithHint("Scope must be either PLAN or SUBSCRIPTION").
+			WithHint("Scope must be one of PLAN, SUBSCRIPTION or ADDON").
 			WithReportableDetails(map[string]interface{}{
 				"scope": c.Scope,
 			}).
@@ -200,6 +215,7 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		Scope:                  types.CreditGrantScope(c.Scope),
 		PlanID:                 c.PlanID,
 		SubscriptionID:         c.SubscriptionID,
+		AddonID:                c.AddonID,
 		Credits:                c.Credits,
 		Cadence:                types.CreditGrantCadence(c.Cadence),
 		Period:                 period,

@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -271,6 +271,37 @@ func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
 	resp, err := h.entitlementService.GetAddonEntitlements(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to get addon entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get addon credit grants
+// @ID getAddonCreditGrants
+// @Description Use when listing credits attached to an addon (e.g. included prepaid or promo credits).
+// @Tags Credit Grants
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Addon ID"
+// @Success 200 {object} dto.ListCreditGrantsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /addons/{id}/creditgrants [get]
+func (h *AddonHandler) GetAddonCreditGrants(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetAddonCreditGrants(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error(c.Request.Context(), "Failed to get addon credit grants", "error", err)
 		c.Error(err)
 		return
 	}

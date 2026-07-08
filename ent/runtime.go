@@ -541,19 +541,19 @@ func init() {
 	// creditgrant.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	creditgrant.ScopeValidator = creditgrantDescScope.Validators[0].(func(string) error)
 	// creditgrantDescCredits is the schema descriptor for credits field.
-	creditgrantDescCredits := creditgrantFields[5].Descriptor()
+	creditgrantDescCredits := creditgrantFields[6].Descriptor()
 	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
 	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
 	// creditgrantDescCadence is the schema descriptor for cadence field.
-	creditgrantDescCadence := creditgrantFields[8].Descriptor()
+	creditgrantDescCadence := creditgrantFields[9].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
 	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
-	creditgrantDescExpirationType := creditgrantFields[11].Descriptor()
+	creditgrantDescExpirationType := creditgrantFields[12].Descriptor()
 	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
 	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[15].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[16].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	creditgrantapplicationMixin := schema.CreditGrantApplication{}.Mixin()
