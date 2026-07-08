@@ -3,13 +3,13 @@ package webhook
 import (
 	"context"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	kafkaProducerPkg "github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
@@ -47,6 +47,7 @@ func providePayloadBuilderFactory(
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
 	checkoutSessionService interfaces.CheckoutSessionService,
+	groupService service.GroupService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -61,6 +62,7 @@ func providePayloadBuilderFactory(
 		tracingSvc,
 		creditNoteService,
 		checkoutSessionService,
+		groupService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

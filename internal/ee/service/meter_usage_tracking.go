@@ -13,9 +13,13 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	domainAlert "github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
@@ -385,6 +389,12 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	)
 
 	s.runMeterUsagePostInsertSideEffects(ctx, event)
+
+	// Step 4: Evaluate subscription/line-item/group spend alerts for the meters this event
+	// touched. Swallows its own errors — it must never fail processEvent, since the meter_usage
+	// write above already succeeded and a retry would just redo that insert.
+	meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
+	s.checkSpendBreachForEvent(ctx, event, meterIDs)
 
 	return nil
 }

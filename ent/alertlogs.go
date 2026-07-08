@@ -48,8 +48,10 @@ type AlertLogs struct {
 	// AlertStatus holds the value of the "alert_status" field.
 	AlertStatus string `json:"alert_status,omitempty"`
 	// AlertInfo holds the value of the "alert_info" field.
-	AlertInfo    types.AlertInfo `json:"alert_info,omitempty"`
-	selectValues sql.SelectValues
+	AlertInfo types.AlertInfo `json:"alert_info,omitempty"`
+	// AlertSettingID holds the value of the "alert_setting_id" field.
+	AlertSettingID *string `json:"alert_setting_id,omitempty"`
+	selectValues   sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -59,7 +61,7 @@ func (*AlertLogs) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case alertlogs.FieldAlertInfo:
 			values[i] = new([]byte)
-		case alertlogs.FieldID, alertlogs.FieldTenantID, alertlogs.FieldStatus, alertlogs.FieldCreatedBy, alertlogs.FieldUpdatedBy, alertlogs.FieldEnvironmentID, alertlogs.FieldEntityType, alertlogs.FieldEntityID, alertlogs.FieldParentEntityType, alertlogs.FieldParentEntityID, alertlogs.FieldCustomerID, alertlogs.FieldAlertType, alertlogs.FieldAlertStatus:
+		case alertlogs.FieldID, alertlogs.FieldTenantID, alertlogs.FieldStatus, alertlogs.FieldCreatedBy, alertlogs.FieldUpdatedBy, alertlogs.FieldEnvironmentID, alertlogs.FieldEntityType, alertlogs.FieldEntityID, alertlogs.FieldParentEntityType, alertlogs.FieldParentEntityID, alertlogs.FieldCustomerID, alertlogs.FieldAlertType, alertlogs.FieldAlertStatus, alertlogs.FieldAlertSettingID:
 			values[i] = new(sql.NullString)
 		case alertlogs.FieldCreatedAt, alertlogs.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -179,6 +181,13 @@ func (al *AlertLogs) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field alert_info: %w", err)
 				}
 			}
+		case alertlogs.FieldAlertSettingID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field alert_setting_id", values[i])
+			} else if value.Valid {
+				al.AlertSettingID = new(string)
+				*al.AlertSettingID = value.String
+			}
 		default:
 			al.selectValues.Set(columns[i], values[i])
 		}
@@ -265,6 +274,11 @@ func (al *AlertLogs) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("alert_info=")
 	builder.WriteString(fmt.Sprintf("%v", al.AlertInfo))
+	builder.WriteString(", ")
+	if v := al.AlertSettingID; v != nil {
+		builder.WriteString("alert_setting_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

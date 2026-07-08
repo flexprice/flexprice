@@ -2594,6 +2594,7 @@ type AlertLogsMutation struct {
 	alert_type         *string
 	alert_status       *string
 	alert_info         *types.AlertInfo
+	alert_setting_id   *string
 	clearedFields      map[string]struct{}
 	done               bool
 	oldValue           func(context.Context) (*AlertLogs, error)
@@ -3322,6 +3323,55 @@ func (m *AlertLogsMutation) ResetAlertInfo() {
 	m.alert_info = nil
 }
 
+// SetAlertSettingID sets the "alert_setting_id" field.
+func (m *AlertLogsMutation) SetAlertSettingID(s string) {
+	m.alert_setting_id = &s
+}
+
+// AlertSettingID returns the value of the "alert_setting_id" field in the mutation.
+func (m *AlertLogsMutation) AlertSettingID() (r string, exists bool) {
+	v := m.alert_setting_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAlertSettingID returns the old "alert_setting_id" field's value of the AlertLogs entity.
+// If the AlertLogs object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertLogsMutation) OldAlertSettingID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAlertSettingID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAlertSettingID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAlertSettingID: %w", err)
+	}
+	return oldValue.AlertSettingID, nil
+}
+
+// ClearAlertSettingID clears the value of the "alert_setting_id" field.
+func (m *AlertLogsMutation) ClearAlertSettingID() {
+	m.alert_setting_id = nil
+	m.clearedFields[alertlogs.FieldAlertSettingID] = struct{}{}
+}
+
+// AlertSettingIDCleared returns if the "alert_setting_id" field was cleared in this mutation.
+func (m *AlertLogsMutation) AlertSettingIDCleared() bool {
+	_, ok := m.clearedFields[alertlogs.FieldAlertSettingID]
+	return ok
+}
+
+// ResetAlertSettingID resets all changes to the "alert_setting_id" field.
+func (m *AlertLogsMutation) ResetAlertSettingID() {
+	m.alert_setting_id = nil
+	delete(m.clearedFields, alertlogs.FieldAlertSettingID)
+}
+
 // Where appends a list predicates to the AlertLogsMutation builder.
 func (m *AlertLogsMutation) Where(ps ...predicate.AlertLogs) {
 	m.predicates = append(m.predicates, ps...)
@@ -3356,7 +3406,7 @@ func (m *AlertLogsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertLogsMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, alertlogs.FieldTenantID)
 	}
@@ -3402,6 +3452,9 @@ func (m *AlertLogsMutation) Fields() []string {
 	if m.alert_info != nil {
 		fields = append(fields, alertlogs.FieldAlertInfo)
 	}
+	if m.alert_setting_id != nil {
+		fields = append(fields, alertlogs.FieldAlertSettingID)
+	}
 	return fields
 }
 
@@ -3440,6 +3493,8 @@ func (m *AlertLogsMutation) Field(name string) (ent.Value, bool) {
 		return m.AlertStatus()
 	case alertlogs.FieldAlertInfo:
 		return m.AlertInfo()
+	case alertlogs.FieldAlertSettingID:
+		return m.AlertSettingID()
 	}
 	return nil, false
 }
@@ -3479,6 +3534,8 @@ func (m *AlertLogsMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldAlertStatus(ctx)
 	case alertlogs.FieldAlertInfo:
 		return m.OldAlertInfo(ctx)
+	case alertlogs.FieldAlertSettingID:
+		return m.OldAlertSettingID(ctx)
 	}
 	return nil, fmt.Errorf("unknown AlertLogs field %s", name)
 }
@@ -3593,6 +3650,13 @@ func (m *AlertLogsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAlertInfo(v)
 		return nil
+	case alertlogs.FieldAlertSettingID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAlertSettingID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AlertLogs field %s", name)
 }
@@ -3641,6 +3705,9 @@ func (m *AlertLogsMutation) ClearedFields() []string {
 	if m.FieldCleared(alertlogs.FieldCustomerID) {
 		fields = append(fields, alertlogs.FieldCustomerID)
 	}
+	if m.FieldCleared(alertlogs.FieldAlertSettingID) {
+		fields = append(fields, alertlogs.FieldAlertSettingID)
+	}
 	return fields
 }
 
@@ -3672,6 +3739,9 @@ func (m *AlertLogsMutation) ClearField(name string) error {
 		return nil
 	case alertlogs.FieldCustomerID:
 		m.ClearCustomerID()
+		return nil
+	case alertlogs.FieldAlertSettingID:
+		m.ClearAlertSettingID()
 		return nil
 	}
 	return fmt.Errorf("unknown AlertLogs nullable field %s", name)
@@ -3725,6 +3795,9 @@ func (m *AlertLogsMutation) ResetField(name string) error {
 		return nil
 	case alertlogs.FieldAlertInfo:
 		m.ResetAlertInfo()
+		return nil
+	case alertlogs.FieldAlertSettingID:
+		m.ResetAlertSettingID()
 		return nil
 	}
 	return fmt.Errorf("unknown AlertLogs field %s", name)

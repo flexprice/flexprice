@@ -183,6 +183,20 @@ func (alc *AlertLogsCreate) SetAlertInfo(ti types.AlertInfo) *AlertLogsCreate {
 	return alc
 }
 
+// SetAlertSettingID sets the "alert_setting_id" field.
+func (alc *AlertLogsCreate) SetAlertSettingID(s string) *AlertLogsCreate {
+	alc.mutation.SetAlertSettingID(s)
+	return alc
+}
+
+// SetNillableAlertSettingID sets the "alert_setting_id" field if the given value is not nil.
+func (alc *AlertLogsCreate) SetNillableAlertSettingID(s *string) *AlertLogsCreate {
+	if s != nil {
+		alc.SetAlertSettingID(*s)
+	}
+	return alc
+}
+
 // SetID sets the "id" field.
 func (alc *AlertLogsCreate) SetID(s string) *AlertLogsCreate {
 	alc.mutation.SetID(s)
@@ -390,6 +404,10 @@ func (alc *AlertLogsCreate) createSpec() (*AlertLogs, *sqlgraph.CreateSpec) {
 	if value, ok := alc.mutation.AlertInfo(); ok {
 		_spec.SetField(alertlogs.FieldAlertInfo, field.TypeJSON, value)
 		_node.AlertInfo = value
+	}
+	if value, ok := alc.mutation.AlertSettingID(); ok {
+		_spec.SetField(alertlogs.FieldAlertSettingID, field.TypeString, value)
+		_node.AlertSettingID = &value
 	}
 	return _node, _spec
 }

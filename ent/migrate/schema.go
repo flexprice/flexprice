@@ -91,6 +91,7 @@ var (
 		{Name: "alert_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_info", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "alert_setting_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// AlertLogsTable holds the schema information for the "alert_logs" table.
 	AlertLogsTable = &schema.Table{
@@ -122,6 +123,11 @@ var (
 				Name:    "idx_alertlogs_customer_type_status_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[12], AlertLogsColumns[13], AlertLogsColumns[14], AlertLogsColumns[3]},
+			},
+			{
+				Name:    "idx_alertlogs_alert_setting_id",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[16], AlertLogsColumns[3]},
 			},
 		},
 	}
