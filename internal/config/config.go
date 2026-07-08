@@ -72,13 +72,6 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
-	WebhookLogging             WebhookLoggingConfig             `mapstructure:"webhook_logging" validate:"omitempty"`
-}
-
-// WebhookLoggingConfig controls which inbound webhook requests are persisted to the DB.
-type WebhookLoggingConfig struct {
-	TenantIDs      []string `mapstructure:"tenant_ids"`
-	EnvironmentIDs []string `mapstructure:"environment_ids"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -891,16 +884,6 @@ func NewConfig() (*Configuration, error) {
 			return nil, fmt.Errorf("failed to parse FLEXPRICE_USER_ENV_MAPPING JSON: %v", err)
 		}
 		cfg.EnvAccess.UserEnvMapping = userEnvMapping
-	}
-
-	// Parse webhook logging tenant/environment ID lists from env vars.
-	// Viper cannot split comma-separated env vars into []string reliably,
-	// so we read os.Getenv directly and split manually.
-	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_TENANT_IDS"); raw != "" {
-		cfg.WebhookLogging.TenantIDs = strings.Split(raw, ",")
-	}
-	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_ENVIRONMENT_IDS"); raw != "" {
-		cfg.WebhookLogging.EnvironmentIDs = strings.Split(raw, ",")
 	}
 
 	return &cfg, nil
