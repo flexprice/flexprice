@@ -115,6 +115,40 @@ run-local:
 	@set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a; \
 	FLEXPRICE_DEPLOYMENT_MODE=local go run cmd/server/main.go
 
+# ---------------------------------------------------------------------------
+# Worktree-aware server — deterministic port from branch name, shared .env
+# ---------------------------------------------------------------------------
+
+# Run server on a port derived from the current branch name (8080 for main,
+# 8100-8899 for other branches). Loads .env from the main worktree so there
+# is only ever one .env file regardless of how many worktrees are active.
+.PHONY: run-wt
+run-wt:
+	@export PATH="/usr/local/go/bin:$$HOME/.local/bin:$$PATH"; \
+	BRANCH=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached); \
+	if [ "$$BRANCH" = "main" ] || [ "$$BRANCH" = "master" ]; then PORT=8080; \
+	else PORT=$$((8100 + $$(printf '%s' "$$BRANCH" | cksum | awk '{print $$1}') % 800)); fi; \
+	MAIN_WT=$$(git worktree list --porcelain | awk '/^worktree /{print $$2; exit}'); \
+	ENV_FILE="$$MAIN_WT/.env"; \
+	REPO_ROOT=$$(git rev-parse --show-toplevel); \
+	printf '\n+---------------------------------------------+\n'; \
+	printf '|  branch : %-34s|\n' "$$BRANCH"; \
+	printf '|  port   : %-34s|\n' "$$PORT"; \
+	printf '|  url    : %-34s|\n' "http://localhost:$$PORT"; \
+	printf '|  .env   : %-34s|\n' "$$ENV_FILE"; \
+	printf '+---------------------------------------------+\n\n'; \
+	[ -f "$$ENV_FILE" ] || { printf 'ERROR: .env not found at %s\n' "$$ENV_FILE" >&2; exit 1; }; \
+	set -a && . "$$ENV_FILE" && set +a; \
+	export FLEXPRICE_SERVER_ADDRESS=":$$PORT"; \
+	exec go run "$$REPO_ROOT/cmd/server/main.go"
+
+# Show all worktrees, their computed ports, and whether a server is running.
+# Calls scripts/wt-ports.sh from the main worktree (works before and after commit).
+.PHONY: wt-ports
+wt-ports:
+	@MAIN_WT=$$(git worktree list --porcelain | awk '/^worktree /{print $$2; exit}'); \
+	bash "$$MAIN_WT/scripts/wt-ports.sh"
+
 # Run Ent schema migrations against local Docker postgres
 .PHONY: migrate-local
 migrate-local:
