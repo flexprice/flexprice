@@ -461,6 +461,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.ZohoBooksInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalTabsInvoiceSyncWorkflow:
+		if input, ok := params.(models.TabsInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
 	case types.TemporalHubSpotInvoiceSyncWorkflow:
 		if input, ok := params.(models.HubSpotInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
@@ -650,6 +654,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildWhopInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
 	case types.TemporalZohoBooksInvoiceSyncWorkflow:
 		return s.buildZohoBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalTabsInvoiceSyncWorkflow:
+		return s.buildTabsInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
 		return s.buildStripeCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalRazorpayCustomerSyncWorkflow:
@@ -1070,6 +1076,24 @@ func (s *temporalService) buildZohoBooksInvoiceSyncInput(_ context.Context, tena
 
 	return nil, errors.NewError("invalid input for Zoho Books invoice sync workflow").
 		WithHint("Provide ZohoBooksInvoiceSyncWorkflowInput with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildTabsInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.TabsInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.TabsInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Tabs invoice sync workflow").
+		WithHint("Provide TabsInvoiceSyncWorkflowInput with invoice_id").
 		Mark(errors.ErrValidation)
 }
 
