@@ -36,10 +36,13 @@ func main() {
 
 	// ClickHouse migrations: separate path, idempotent .sql files.
 	if *clickhouse {
+		if *dryRun {
+			log.Fatalf("-dry-run is not supported with -clickhouse")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 		defer cancel()
 		logger.Info(ctx, "Running ClickHouse migrations...", "address", cfg.ClickHouse.Address, "database", cfg.ClickHouse.Database)
-		if err := runClickHouseMigrations(ctx, cfg, *chDir); err != nil {
+		if err := runClickHouseMigrations(ctx, cfg, *chDir, logger); err != nil {
 			logger.Fatal(ctx, "ClickHouse migration failed", "error", err)
 		}
 		logger.Info(ctx, "ClickHouse migrations completed successfully")

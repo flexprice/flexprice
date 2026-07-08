@@ -7,9 +7,10 @@ import (
 
 func TestSplitSQL(t *testing.T) {
 	cases := []struct {
-		name string
-		in   string
-		want []string
+		name    string
+		in      string
+		want    []string
+		wantErr bool
 	}{
 		{
 			name: "line comments stripped, split on semicolon",
@@ -31,10 +32,49 @@ func TestSplitSQL(t *testing.T) {
 			in:   "CREATE TABLE z (a Int8)",
 			want: []string{"CREATE TABLE z (a Int8)"},
 		},
+		{
+			name: "plain string literal without markers is fine",
+			in:   "SELECT 'hello world';",
+			want: []string{"SELECT 'hello world'"},
+		},
+		{
+			name: "escaped and doubled quotes stay in literal",
+			in:   "SELECT 'a''b', 'c\\'d';",
+			want: []string{"SELECT 'a''b', 'c\\'d'"},
+		},
+		{
+			name:    "semicolon inside literal fails loudly",
+			in:      "SELECT 'a;b';",
+			wantErr: true,
+		},
+		{
+			name:    "line comment marker inside literal fails loudly",
+			in:      "SELECT 'a -- b';",
+			wantErr: true,
+		},
+		{
+			name:    "block comment marker inside literal fails loudly",
+			in:      "SELECT 'a /* b';",
+			wantErr: true,
+		},
+		{
+			name:    "marker inside backtick identifier fails loudly",
+			in:      "SELECT `a;b`;",
+			wantErr: true,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := splitSQL(c.in)
+			got, err := splitSQL(c.in)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("splitSQL() expected error, got nil (out=%#v)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("splitSQL() unexpected error: %v", err)
+			}
 			if !reflect.DeepEqual(got, c.want) {
 				t.Fatalf("splitSQL()\n got=%#v\nwant=%#v", got, c.want)
 			}
