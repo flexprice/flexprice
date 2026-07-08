@@ -243,6 +243,11 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
+	// Start a root span so the reader/writer DB router can record
+	// db.resolved_target on it while this message is processed.
+	span, ctx := kafka.StartConsumerSpan(ctx, "event_post_processing")
+	defer span.Finish()
+
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {

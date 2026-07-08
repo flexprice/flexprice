@@ -237,6 +237,11 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
+	// Start a root span so the reader/writer DB router can record
+	// db.resolved_target on it while this message is processed.
+	span, ctx := kafka.StartConsumerSpan(ctx, "event_consumption")
+	defer span.Finish()
+
 	s.Logger.Debug(context.Background(), "processing event in event consumption service",
 		"event_id", event.ID,
 		"event_name", event.EventName,

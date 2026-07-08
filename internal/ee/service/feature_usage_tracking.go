@@ -375,6 +375,11 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
+	// Start a root span so the reader/writer DB router can record
+	// db.resolved_target on it while this message is processed.
+	span, ctx := kafka.StartConsumerSpan(ctx, "feature_usage_tracking")
+	defer span.Finish()
+
 	if tenantID == "" {
 		s.Logger.Info(context.Background(), "tenant id is required for feature usage tracking: event_id", event.ID,
 			"event_name", event.EventName,

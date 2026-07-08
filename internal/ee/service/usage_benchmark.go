@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -182,6 +183,11 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 	ctx := types.WithWriterPinning(context.Background())
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+
+	// Start a root span so the reader/writer DB router can record
+	// db.resolved_target on it while this message is processed.
+	span, ctx := kafka.StartConsumerSpan(ctx, "usage_benchmark")
+	defer span.Finish()
 
 	switch evt.Kind {
 	case events.UsageBenchmarkKindAnalytics:

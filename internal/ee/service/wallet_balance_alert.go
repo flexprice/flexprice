@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -211,6 +212,11 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 	if event.EnvironmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	}
+
+	// Start a root span so the reader/writer DB router can record
+	// db.resolved_target on it while this message is processed.
+	span, ctx := kafka.StartConsumerSpan(ctx, "wallet_balance_alert")
+	defer span.Finish()
 
 	// Process the event
 	if err := s.processEvent(ctx, event); err != nil {
