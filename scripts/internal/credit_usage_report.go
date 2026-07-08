@@ -13,11 +13,11 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -223,21 +223,22 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 	}
 	client := postgres.NewClient(entClient, log, sentryService)
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Create repositories
-	customerRepo := entRepo.NewCustomerRepository(client, log, cacheClient)
-	walletRepo := entRepo.NewWalletRepository(client, log, cacheClient)
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, cacheClient)
-	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log, cacheClient)
-	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, log, cacheClient)
+	customerRepo := entRepo.NewCustomerRepository(client, log, redisCache)
+	walletRepo := entRepo.NewWalletRepository(client, log, redisCache)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, redisCache)
+	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, log)
+	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, log)
 	planRepo := entRepo.NewPlanRepository(client, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(client, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(client, log, redisCache)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)
 	featureRepo := entRepo.NewFeatureRepository(client, log, cacheClient)
 	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient)
 	addonRepo := entRepo.NewAddonRepository(client, log, cacheClient)
-	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, log, cacheClient)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, log, cacheClient)
+	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, log, redisCache)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, log, redisCache)
 	eventRepo := chRepo.NewEventRepository(chStore, log)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
 	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, log)

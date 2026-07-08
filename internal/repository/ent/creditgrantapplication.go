@@ -16,18 +16,18 @@ import (
 )
 
 type creditGrantApplicationRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CreditGrantApplicationQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CreditGrantApplicationQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCreditGrantApplicationRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domain.Repository {
+func NewCreditGrantApplicationRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domain.Repository {
 	return &creditGrantApplicationRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CreditGrantApplicationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CreditGrantApplicationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -539,43 +539,39 @@ func (r *creditGrantApplicationRepository) SetCache(ctx context.Context, applica
 	})
 	defer FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, tenantID, environmentID, application.ID)
-	r.cache.Set(ctx, cacheKey, application, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrantApplication, application.ID)
+	r.redisCache.Set(ctx, cacheKey, application, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
 func (r *creditGrantApplicationRepository) GetCache(ctx context.Context, id string) *domain.CreditGrantApplication {
-	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrantapplication", "get", map[string]interface{}{
 		"application_id": id,
 		"tenant_id":      types.GetTenantID(ctx),
 		"environment_id": types.GetEnvironmentID(ctx),
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if application, ok := value.(*domain.CreditGrantApplication); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return application
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrantApplication, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cg, ok := cache.UnmarshalCacheValue[domain.CreditGrantApplication](value)
+	if !ok {
+		return nil
+	}
+	return cg
 }
 
 func (r *creditGrantApplicationRepository) DeleteCache(ctx context.Context, application *domain.CreditGrantApplication) {
-	span := cache.StartCacheSpan(ctx, "creditgrantapplication", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrantapplication", "delete", map[string]interface{}{
 		"application_id": application.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCreditGrantApplication, tenantID, environmentID, application.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrantApplication, application.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

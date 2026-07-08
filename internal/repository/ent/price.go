@@ -20,18 +20,18 @@ import (
 )
 
 type priceRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PriceQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PriceQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPriceRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPrice.Repository {
+func NewPriceRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPrice.Repository {
 	return &priceRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PriceQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PriceQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -711,42 +711,41 @@ func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*do
 }
 
 func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price) {
-	span := cache.StartCacheSpan(ctx, "price", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "set", map[string]interface{}{
 		"price_id": price.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, tenantID, environmentID, price.ID)
-	r.cache.Set(ctx, cacheKey, price, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, price.ID)
+	r.redisCache.Set(ctx, cacheKey, price, cache.ExpiryDefaultRedis)
 }
 
-func (r *priceRepository) GetCache(ctx context.Context, key string) *domainPrice.Price {
-	span := cache.StartCacheSpan(ctx, "price", "get", map[string]interface{}{
-		"price_id": key,
+func (r *priceRepository) GetCache(ctx context.Context, id string) *domainPrice.Price {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "get", map[string]interface{}{
+		"price_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPrice.Price)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPrice.Price](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *priceRepository) DeleteCache(ctx context.Context, priceID string) {
-	span := cache.StartCacheSpan(ctx, "price", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "delete", map[string]interface{}{
 		"price_id": priceID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPrice, tenantID, environmentID, priceID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPrice, priceID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // Grouping cruds

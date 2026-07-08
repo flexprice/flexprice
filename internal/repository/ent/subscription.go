@@ -24,18 +24,18 @@ import (
 )
 
 type subscriptionRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts SubscriptionQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  SubscriptionQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainSub.Repository {
 	return &subscriptionRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: SubscriptionQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  SubscriptionQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -831,7 +831,7 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 	s := domainSub.GetSubscriptionFromEnt(sub)
 
 	// Use ListBySubscription as the source of truth for line items
-	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger, r.cache)
+	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger)
 	lineItems, err := lineItemRepo.ListBySubscription(ctx, s)
 	if err != nil {
 		SetSpanError(span, err)
@@ -1056,42 +1056,41 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
-	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "set", map[string]interface{}{
 		"subscription_id": sub.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, sub.ID)
-	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, sub.ID)
+	r.redisCache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
 }
 
-func (r *subscriptionRepository) GetCache(ctx context.Context, key string) *domainSub.Subscription {
-	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
-		"subscription_id": key,
+func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "get", map[string]interface{}{
+		"subscription_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainSub.Subscription)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	s, ok := cache.UnmarshalCacheValue[domainSub.Subscription](value)
+	if !ok {
+		return nil
+	}
+	return s
 }
 
 func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
-	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
 		"subscription_id": subID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, subID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // ListByCustomerID retrieves all active subscriptions for a customer and includes line items

@@ -20,18 +20,18 @@ import (
 )
 
 type entityIntegrationMappingRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts EntityIntegrationMappingQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  EntityIntegrationMappingQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainEntityIntegrationMapping.Repository {
+func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainEntityIntegrationMapping.Repository {
 	return &entityIntegrationMappingRepository{
-		client:    client,
-		log:       log,
-		queryOpts: EntityIntegrationMappingQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  EntityIntegrationMappingQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -484,52 +484,39 @@ func (o EntityIntegrationMappingQueryOptions) applyEntityQueryOptions(_ context.
 // Cache operations
 
 func (r *entityIntegrationMappingRepository) SetCache(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) {
-	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "entity_integration_mapping", "set", map[string]interface{}{
 		"mapping_id": mapping.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	key := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, mapping.ID)
-	r.cache.Set(ctx, key, mapping, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", key)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, mapping.ID)
+	r.redisCache.Set(ctx, cacheKey, mapping, cache.ExpiryDefaultRedis)
 }
 
-func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, key string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
-	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "get", map[string]interface{}{
-		"key": key,
+func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, id string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "entity_integration_mapping", "get", map[string]interface{}{
+		"key": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, key)
-	if cached, found := r.cache.Get(ctx, cacheKey); found {
-		if mapping, ok := cached.(*domainEntityIntegrationMapping.EntityIntegrationMapping); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return mapping
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-
-	r.log.Debug(ctx, "cache miss", "key", cacheKey)
-	return nil
+	m, ok := cache.UnmarshalCacheValue[domainEntityIntegrationMapping.EntityIntegrationMapping](value)
+	if !ok {
+		return nil
+	}
+	return m
 }
 
 func (r *entityIntegrationMappingRepository) DeleteCache(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) {
-	span := cache.StartCacheSpan(ctx, "entity_integration_mapping", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "entity_integration_mapping", "delete", map[string]interface{}{
 		"mapping_id": mapping.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	key := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, mapping.ID)
-	r.cache.Delete(ctx, key)
-
-	r.log.Debug(ctx, "cache deleted", "key", key)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntityIntegrationMapping, mapping.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

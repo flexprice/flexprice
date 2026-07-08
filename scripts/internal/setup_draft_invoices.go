@@ -12,10 +12,10 @@ import (
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
@@ -109,10 +109,10 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 	client := postgres.NewClient(entClient, appLogger, tracing.NewService(cfg, appLogger))
-	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, cacheClient)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, cacheClient)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, redisCache)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, redisCache)
 	invoiceSvc := service.NewInvoiceService(service.ServiceParams{
 		Logger:      appLogger,
 		Config:      cfg,

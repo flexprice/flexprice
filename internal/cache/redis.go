@@ -11,6 +11,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	redisClient "github.com/flexprice/flexprice/internal/redis"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -93,8 +95,18 @@ func (c *redisCacheImpl) IsEnabled() bool {
 	return c.config.Cache.Enabled && c.config.Cache.Redis.Enabled
 }
 
-// Get retrieves a value from the cache
-func (c *redisCacheImpl) Get(ctx context.Context, key string) (interface{}, bool) {
+func (c *redisCacheImpl) IsRedisCache() bool {
+	return true
+}
+
+// Get retrieves a value from the cache. Auto-tags cache.hit on the active
+// span (see StartRedisCacheSpan) so callers get the attribute without extra
+// bookkeeping. Safe when no span is active — SpanFromContext returns a no-op.
+func (c *redisCacheImpl) Get(ctx context.Context, key string) (_ interface{}, found bool) {
+	defer func() {
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("cache.hit", found))
+	}()
+
 	if c == nil || !c.IsEnabled() {
 		return nil, false
 	}
@@ -196,23 +208,6 @@ func (c *redisCacheImpl) TrySetNX(ctx context.Context, key string, value interfa
 		strValue = string(jsonBytes)
 	}
 	ok, err := c.client.SetNX(ctx, redisKey, strValue, expiration).Result()
-	if err != nil {
-		return false, err
-	}
-	return ok, nil
-}
-
-// AcquireLock acquires a lock on a key with the given expiration time.
-// Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
-func (c *redisCacheImpl) AcquireLock(ctx context.Context, key string, expiration time.Duration) (bool, error) {
-	if c == nil {
-		return false, nil
-	}
-
-	redisKey := c.GetRedisKey(key)
-	// For acquire lock, we use a fixed value of "1"
-	// This is because we don't need to store any value in the lock key
-	ok, err := c.client.SetNX(ctx, redisKey, "1", expiration).Result()
 	if err != nil {
 		return false, err
 	}

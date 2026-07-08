@@ -16,10 +16,10 @@ make run-e2eprobe
 
 `seed-ensure` is fully self-contained — no manual tenant prep is required. On first run (or any run where entities are missing) the harness idempotently provisions:
 
-1. **9 features** (each with an embedded meter, one per aggregation type: COUNT, SUM, AVG, COUNT_UNIQUE, LATEST, MAX, SUM_WITH_MULTIPLIER, WEIGHTED_SUM, SUM/api-filter).
+1. **8 features** (each with an embedded meter, one per aggregation type: COUNT, SUM, AVG, COUNT_UNIQUE, LATEST, MAX, SUM_WITH_MULTIPLIER, SUM/api-filter).
 2. **10 persistent customers** tagged `metadata.e2eprobe_cohort = "persistent"`.
 3. **1 plan** (`e2eprobe_plan`) with metadata `e2eprobe = "true"`.
-4. **10 prices** attached to the plan: 1 base recurring fixed fee ($19.99/mo) + 1 usage price per feature ($0.01/unit).
+4. **9 prices** attached to the plan: 1 base recurring fixed fee ($19.99/mo) + 1 usage price per feature ($0.01/unit).
 5. **10 subscriptions** — one per persistent customer — on the e2eprobe plan (monthly, anniversary cycle). Draft subscriptions are activated automatically.
 6. **3 wallets** on the first 3 persistent customers (`e2eprobe-cust-persistent-0/1/2`), each topped up to $100.00 USD.
 
@@ -62,10 +62,10 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 
 | Kind | Name | Schedule | What it does |
 | ---- | ---- | -------- | ------------ |
-| bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 9 features/meters, 10 customers, 1 plan, 10 prices, 10 subs, 3 wallets |
+| bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 8 features/meters, 10 customers, 1 plan, 9 prices, 10 subs, 3 wallets |
 | driver | event-ingest-driver | Rate(5/s) | Varied event ingest using the deck |
 | probe | analytics-probe | 2m | `GetUsageAnalytics` rotating params |
-| probe | meter-aggregation-probe | 3m | Asserts each seed meter produces >0 usage over a 30-min window (round-robin; all 9 meters covered every ~27 min) |
+| probe | meter-aggregation-probe | 3m | Asserts each seed meter produces >0 usage over a 30-min window (round-robin; all 8 meters covered every 24 min) |
 | probe | wallet-balance-probe | 2m | Wallet balance reads |
 | probe | wallet-debit-verification | 20m | Phase 1: TopUp read-after-write correctness; Phase 2: event→analytics aggregation pipeline |
 | probe | cycle-invoice-probe | 15m | Auto-invoice freshness invariant |

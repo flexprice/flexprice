@@ -19,18 +19,18 @@ import (
 )
 
 type taxappliedRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts TaxAppliedQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  TaxAppliedQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainTaxApplied.Repository {
+func NewTaxAppliedRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainTaxApplied.Repository {
 	return &taxappliedRepository{
-		client:    client,
-		log:       log,
-		queryOpts: TaxAppliedQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  TaxAppliedQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -440,50 +440,45 @@ func (o TaxAppliedQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *taxappliedRepository) SetCache(ctx context.Context, taxapplied *domainTaxApplied.TaxApplied) {
-	span := cache.StartCacheSpan(ctx, "taxapplied", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxapplied", "set", map[string]interface{}{
 		"taxapplied_id": taxapplied.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
 	// Set both ID and external ID based cache entries
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
-	r.cache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
+	r.redisCache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "cache set", "id_key", cacheKey)
 }
 
 func (r *taxappliedRepository) GetCache(ctx context.Context, key string) *domainTaxApplied.TaxApplied {
-	span := cache.StartCacheSpan(ctx, "taxapplied", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxapplied", "get", map[string]interface{}{
 		"taxapplied_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if taxapplied, ok := value.(*domainTaxApplied.TaxApplied); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return taxapplied
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, key)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	r.log.Debug(ctx, "cache miss", "key", cacheKey)
-	return nil
+	ta, ok := cache.UnmarshalCacheValue[domainTaxApplied.TaxApplied](value)
+	if !ok {
+		return nil
+	}
+	return ta
 }
 
 func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *domainTaxApplied.TaxApplied) {
-	span := cache.StartCacheSpan(ctx, "taxapplied", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxapplied", "delete", map[string]interface{}{
 		"taxapplied_id": taxapplied.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
 	// Delete ID-based cache first
-	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxApplied, taxapplied.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }
 

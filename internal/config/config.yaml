@@ -23,9 +23,9 @@ kafka:
   brokers: "localhost:29092" # For local mode
   # Will be overridden by FLEXPRICE_KAFKA_BROKERS env var in Docker
   consumer_group: "flexprice-consumer-local"
-  topic: "events"
-  topic_lazy: "events_lazy"
-  topic_dlq: "events_dlq"
+  topic: "staging_events"
+  topic_lazy: "staging_events_lazy"
+  topic_dlq: "staging_events_dlq"
   tls: false
   use_sasl: false
   sasl_mechanism: ""
@@ -112,7 +112,7 @@ sentry:
 # Set FLEXPRICE_OTEL_INSECURE=false (default) for TLS to SigNoz Cloud.
 otel:
   enabled: true
-  service_name: "flexprice-local" # Override via FLEXPRICE_OTL_SERVICE_NAME or SERVICE_NAME
+  service_name: ""
   protocol: "grpc" # SigNoz Cloud uses gRPC/TLS — do not change
   insecure: false # false = TLS (required for SigNoz Cloud)
 
@@ -226,6 +226,13 @@ temporal:
     retry_max_interval_seconds: 10
     retry_backoff_coefficient: 1.5
 
+# ⚠️ DO NOT EMPTY OR CHANGE THIS VALUE WITHOUT A KEY-RECONCILIATION PLAN.
+# The app reads only `secrets.encryption_key` (env: FLEXPRICE_SECRETS_ENCRYPTION_KEY).
+# ECS prod sets FLEXPRICE_ENCRYPTION_KEY (a DIFFERENT name) which the loader does NOT read,
+# so ECS prod is currently decrypting live data with THIS baked value. Emptying it, or
+# binding FLEXPRICE_ENCRYPTION_KEY, would switch the key and make existing ciphertext
+# undecryptable. Reconcile the env name + re-encrypt data as a separate migration before
+# this field is treated as a rejectable secret. Tracked separately — see summary.
 secrets:
   encryption_key: "031f6bbed1156eca651d48652c17a5bce727514cc804f185aca207153b2915abb79c0f1b53945915866dc3b63f37ea73aa86fc062f13e6008249e30819f87483"
 
@@ -318,6 +325,7 @@ meter_usage_tracking:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
   topic_dlq: "meter_usage_tracking_service_dlq"
+  redis_deduplication_enabled: false
 
 meter_usage_tracking_lazy:
   enabled: true
@@ -404,7 +412,7 @@ oauth:
   # Development: http://localhost:3000/tools/integrations/oauth/callback
   # Staging: https://admin-dev.flexprice.io/tools/integrations/oauth/callback
   # Production: https://admin.flexprice.io/tools/integrations/oauth/callback
-  redirect_uri: "http://localhost:3000/tools/integrations/oauth/callback"
+  redirect_uri: "" 
 
 # Customer portal configuration
 customer_portal:

@@ -36,17 +36,44 @@ func UnmarshalCacheValue[T any](value interface{}) (*T, bool) {
 	return nil, false
 }
 
-// StartCacheSpan creates a span for a cache operation.
+// tracingSvc is wired once at startup via SetTracingService (see
+// internal/repository.InitTracing), letting every cache call emit a span
+// without threading *tracing.Service through each repository constructor.
+var tracingSvc *tracing.Service
+
+// SetTracingService wires the tracing service used by StartRedisCacheSpan.
+// Must be called once during app startup before any cache call runs.
+func SetTracingService(svc *tracing.Service) {
+	tracingSvc = svc
+}
+
+// StartRedisCacheSpan creates a span for a Redis cache operation and returns
+// a child context carrying the span. Callers should pass the returned ctx to
+// the underlying cache call (e.g. redisCache.Get(ctx, key)) so the impl can
+// auto-tag cache.hit on the same span via trace.SpanFromContext.
 //
-// Currently a no-op; cache-level spans are not yet config-gated.
-// Set FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true to enable DB and
-// ClickHouse storage spans; per-cache spans will follow in a future pass.
-func StartCacheSpan(ctx context.Context, cache, operation string, params map[string]interface{}) *tracing.Span {
-	_ = ctx
-	_ = cache
-	_ = operation
-	_ = params
-	return nil
+// Gated by FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (same flag as the
+// DB / ClickHouse storage spans). Emitted as a SpanKindClient span with
+// db.system=redis so it is recognized as a database call by trace backends
+// (e.g. SigNoz's Database Calls tab).
+func StartRedisCacheSpan(ctx context.Context, cacheEntity, operation string, params map[string]interface{}) (*tracing.Span, context.Context) {
+	if tracingSvc == nil {
+		return nil, ctx
+	}
+	return tracingSvc.StartCacheSpan(ctx, "redis", cacheEntity, operation, params)
+}
+
+// StartInMemoryCacheSpan creates a span for an in-memory cache operation and
+// returns a child context carrying the span.
+//
+// Same gating and span shape as StartRedisCacheSpan, but tagged with
+// db.system=in_memory so trace backends can distinguish local hits from
+// Redis round-trips (latency profile is completely different).
+func StartInMemoryCacheSpan(ctx context.Context, cacheEntity, operation string, params map[string]interface{}) (*tracing.Span, context.Context) {
+	if tracingSvc == nil {
+		return nil, ctx
+	}
+	return tracingSvc.StartCacheSpan(ctx, "in_memory", cacheEntity, operation, params)
 }
 
 // FinishSpan safely finishes a span, handling nil spans.
@@ -62,4 +89,15 @@ func SetSpanError(span *tracing.Span, err error) {
 // SetSpanSuccess marks a span as successful.
 func SetSpanSuccess(span *tracing.Span) {
 	span.SetStatusOK()
+}
+
+// SetCacheHit tags a cache span with cache.hit=true/false. Call from Get
+// paths after the lookup so trace backends can compute per-entity hit rate.
+// No-op on nil spans; Set/Delete paths should not call this (the concept
+// doesn't apply).
+func SetCacheHit(span *tracing.Span, hit bool) {
+	if span == nil {
+		return
+	}
+	span.SetData("cache.hit", hit)
 }

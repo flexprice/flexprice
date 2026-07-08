@@ -831,6 +831,7 @@ meterUsageTracking:
   rateLimit: 1
   consumerGroup: "v1_meter_usage_tracking_service"
   topicDLQ: "meter_usage_tracking_service_dlq"
+  redisDeduplicationEnabled: true
 
 meterUsageTrackingLazy:
   enabled: false

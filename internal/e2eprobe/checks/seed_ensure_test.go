@@ -29,7 +29,7 @@ func TestSeedEnsure(t *testing.T) {
 		{
 			name: "AllPresent: features pre-exist, customers present, plan pre-exists",
 			setup: func(fc *fakeClient) {
-				// Pre-populate 9 features with lookup keys and meter IDs.
+				// Pre-populate 8 features with lookup keys and meter IDs.
 				for _, spec := range seedFeatureSpecs {
 					lk := spec.lookupKey
 					mID := "meter_" + spec.eventName
@@ -54,16 +54,16 @@ func TestSeedEnsure(t *testing.T) {
 				// subs and wallets are empty — they'll be created
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     0, // all 9 found via Query
+			wantFeaturesCreated:     0, // all 8 found via Query
 			wantCustomersCreated:    1, // 10 pre-populated; alert canary still needs creating
 			wantPlansCreated:        0, // plan found via Query
-			wantPricesCreated:       10, // base + 9 usage prices
+			wantPricesCreated:       9, // base + 8 usage prices
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            9,
-			wantFeatureIDs:          9,
+			wantMeterIDs:            8,
+			wantFeatureIDs:          8,
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},
@@ -74,23 +74,23 @@ func TestSeedEnsure(t *testing.T) {
 				fc.customers.getErr = errNotFound
 			},
 			wantErr:                 false,
-			wantFeaturesCreated:     9,
+			wantFeaturesCreated:     8,
 			wantCustomersCreated:    11, // 10 persistent + 1 alert canary
 			wantPlansCreated:        1,
-			wantPricesCreated:       10, // base + 9 usage
+			wantPricesCreated:       9, // base + 8 usage
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            9,
-			wantFeatureIDs:          9,
+			wantMeterIDs:            8,
+			wantFeatureIDs:          8,
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},
 		{
 			name: "PartialExisting: features exist but plan/subs/wallets don't",
 			setup: func(fc *fakeClient) {
-				// Pre-populate 9 features.
+				// Pre-populate 8 features.
 				for _, spec := range seedFeatureSpecs {
 					lk := spec.lookupKey
 					mID := "meter_" + spec.eventName
@@ -111,13 +111,13 @@ func TestSeedEnsure(t *testing.T) {
 			wantFeaturesCreated:     0,
 			wantCustomersCreated:    1, // alert canary still needs creating
 			wantPlansCreated:        1,
-			wantPricesCreated:       10,
+			wantPricesCreated:       9,
 			wantSubsCreated:         11, // 10 persistent + 1 alert canary
 			wantWalletsCreated:      4,  // 3 pre-funded + 1 alert canary
 			wantPersistentCustomers: 11, // 10 persistent + 1 alert canary
 			wantPreFundedCustomers:  3,
-			wantMeterIDs:            9,
-			wantFeatureIDs:          9,
+			wantMeterIDs:            8,
+			wantFeatureIDs:          8,
 			wantPlanIDs:             1,
 			wantSubIDs:              11,
 		},

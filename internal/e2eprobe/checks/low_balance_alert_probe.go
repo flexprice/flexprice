@@ -127,7 +127,11 @@ func (p *LowBalanceAlertProbe) Run(ctx context.Context) error {
 }
 
 func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext string, attrs map[string]string) error {
-	before := len(p.listener.SeenThresholds(walletID))
+	// Baseline the newest receipt timestamp per alert_type before ingest.
+	// SeenThresholds is keyed by alert_type so len() doesn't grow on repeat
+	// cycles — a re-fired "low_ongoing_balance" overwrites the same key.
+	// We must compare timestamps to detect a fresh delivery.
+	baseline := maxReceipt(p.listener.SeenThresholds(walletID))
 
 	amountStr := strconv.Itoa(p.opts.UsageAmount)
 	ingestReq := types.DtoIngestEventRequest{
@@ -146,7 +150,7 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 
 	deadline := time.Now().Add(p.opts.WebhookWait)
 	for {
-		if got := len(p.listener.SeenThresholds(walletID)); got > before {
+		if newest := maxReceipt(p.listener.SeenThresholds(walletID)); newest.After(baseline) {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -160,6 +164,19 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 		case <-time.After(p.opts.PollInterval):
 		}
 	}
+}
+
+// maxReceipt returns the newest timestamp in a SeenThresholds map, or the
+// zero time when the map is empty. Zero baseline is fine: any real receipt
+// After(zero) resolves to true on the first cycle.
+func maxReceipt(seen map[string]time.Time) time.Time {
+	var newest time.Time
+	for _, t := range seen {
+		if t.After(newest) {
+			newest = t
+		}
+	}
+	return newest
 }
 
 func (p *LowBalanceAlertProbe) recover(ctx context.Context, walletID, ext string, attrs map[string]string) error {

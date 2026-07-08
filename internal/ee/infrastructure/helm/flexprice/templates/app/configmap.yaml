@@ -1,3 +1,7 @@
+{{- /* Rendered ONLY for legacy (un-migrated) environments. When a values file sets
+       `.Values.env` (config-autobind final-goal shape), config comes from the baked
+       config.yaml + explicit env vars, and this ConfigMap is not rendered. */}}
+{{- if not .Values.env }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -182,6 +186,7 @@ data:
       rate_limit: {{ .Values.meterUsageTracking.rateLimit }}
       consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
       topic_dlq: {{ .Values.meterUsageTracking.topicDLQ | quote }}
+      redis_deduplication_enabled: {{ .Values.meterUsageTracking.redisDeduplicationEnabled }}
 
     meter_usage_tracking_lazy:
       enabled: {{ .Values.meterUsageTrackingLazy.enabled }}
@@ -294,4 +299,5 @@ data:
     
     # Note: secrets.encryption_key should be set via environment variable FLEXPRICE_SECRETS_ENCRYPTION_KEY
     # for security reasons. It's not included in this configmap.
+{{- end }}
 

@@ -583,6 +583,25 @@ func (s *Service) StartRepositorySpan(ctx context.Context, dbSystem, repository,
 	return span, newCtx
 }
 
+// StartCacheSpan starts a span for a cache.<entity>.<operation> call. Uses
+// db.system=<dbSystem> so the span lands in the Database Calls tab of trace
+// backends alongside the DB / ClickHouse spans; in-memory cache calls share
+// the same code path and are tagged the same way (cache.entity distinguishes
+// what was accessed).
+//
+// Gated by otel.traces.storage_spans_enabled (via startStorageSpan) — cache
+// spans fire on every get/set/delete, so they share the same noise/volume
+// tradeoff as the other storage spans.
+func (s *Service) StartCacheSpan(ctx context.Context, dbSystem, cacheEntity, operation string, params map[string]interface{}) (*Span, context.Context) {
+	name := fmt.Sprintf("cache.%s.%s", cacheEntity, operation)
+	span, newCtx := s.startStorageSpan(ctx, name, "cache."+operation, dbSystem, params)
+	if span != nil {
+		span.SetData("cache.entity", cacheEntity)
+		span.SetData("cache.operation", operation)
+	}
+	return span, newCtx
+}
+
 // GetSpanFromContext returns the currently active span (wrapped), if any.
 func (s *Service) GetSpanFromContext(ctx context.Context) *Span {
 	if s == nil {

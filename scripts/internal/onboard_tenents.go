@@ -12,11 +12,11 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/pubsub/memory"
 	"github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -48,19 +48,20 @@ func SyncBillingCustomers() error {
 	client := postgres.NewClient(entClient, logger, tracing.NewService(cfg, logger))
 
 	// Initialize cache
-	cache := cache.GetInMemoryCache()
+	cacheClient := cache.GetInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
-	tenantRepo := ent.NewTenantRepository(client, logger, cache)
-	customerRepo := ent.NewCustomerRepository(client, logger, cache)
-	subscriptionRepo := ent.NewSubscriptionRepository(client, logger, cache)
-	invoiceRepo := ent.NewInvoiceRepository(client, logger, cache)
-	walletRepo := ent.NewWalletRepository(client, logger, cache)
-	planRepo := ent.NewPlanRepository(client, logger, cache)
-	priceRepo := ent.NewPriceRepository(client, logger, cache)
-	meterRepo := ent.NewMeterRepository(client, logger, cache)
-	entitlementRepo := ent.NewEntitlementRepository(client, logger, cache)
-	featureRepo := ent.NewFeatureRepository(client, logger, cache)
+	tenantRepo := ent.NewTenantRepository(client, logger, cacheClient, redisCache)
+	customerRepo := ent.NewCustomerRepository(client, logger, redisCache)
+	subscriptionRepo := ent.NewSubscriptionRepository(client, logger, redisCache)
+	invoiceRepo := ent.NewInvoiceRepository(client, logger, redisCache)
+	walletRepo := ent.NewWalletRepository(client, logger, redisCache)
+	planRepo := ent.NewPlanRepository(client, logger, cacheClient)
+	priceRepo := ent.NewPriceRepository(client, logger, redisCache)
+	meterRepo := ent.NewMeterRepository(client, logger, cacheClient)
+	entitlementRepo := ent.NewEntitlementRepository(client, logger, cacheClient)
+	featureRepo := ent.NewFeatureRepository(client, logger, cacheClient)
 	authRepo := ent.NewAuthRepository(client, logger)
 	systemEventRepo := ent.NewSystemEventRepository(client)
 

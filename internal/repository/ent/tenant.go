@@ -14,17 +14,19 @@ import (
 )
 
 type tenantRepository struct {
-	client postgres.IClient
-	logger *logger.Logger
-	cache  cache.InMemoryCache
+	client        postgres.IClient
+	logger        *logger.Logger
+	inMemoryCache cache.InMemoryCache
+	redisCache    cache.RedisCache
 }
 
 // NewTenantRepository creates a new tenant repository
-func NewTenantRepository(client postgres.IClient, logger *logger.Logger, cache cache.InMemoryCache) domainTenant.Repository {
+func NewTenantRepository(client postgres.IClient, logger *logger.Logger, inMemoryCache cache.InMemoryCache, redisCache cache.RedisCache) domainTenant.Repository {
 	return &tenantRepository{
-		client: client,
-		logger: logger,
-		cache:  cache,
+		client:        client,
+		logger:        logger,
+		inMemoryCache: inMemoryCache,
+		redisCache:    redisCache,
 	}
 }
 
@@ -81,20 +83,20 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 	})
 	defer FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTenant, id)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTenant, id)
 
 	// L1: in-memory (always checked regardless of cache.enabled)
-	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+	if value, found := r.inMemoryCache.ForceCacheGet(ctx, cacheKey); found {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t, nil
 		}
 	}
 
 	// L2: Redis (respects cache.enabled)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+	if value, found := r.redisCache.Get(ctx, cacheKey); found {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			// Back-fill L1 so the next request doesn't hit Redis
-			r.cache.ForceCacheSet(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
+			r.inMemoryCache.ForceCacheSet(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
 			return t, nil
 		}
 	}
@@ -128,8 +130,8 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 	SetSpanSuccess(span)
 	tenantData := domainTenant.FromEnt(tenant)
 	// Populate both layers
-	r.cache.ForceCacheSet(ctx, cacheKey, tenantData, cache.ExpiryDefaultInMemory)
-	r.cache.Set(ctx, cacheKey, tenantData, cache.ExpiryDefaultRedis)
+	r.inMemoryCache.ForceCacheSet(ctx, cacheKey, tenantData, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, tenantData, cache.ExpiryDefaultRedis)
 	return tenantData, nil
 }
 
@@ -190,31 +192,31 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 }
 
 func (r *tenantRepository) SetCache(ctx context.Context, tenant *domainTenant.Tenant) {
-	span := cache.StartCacheSpan(ctx, "tenant", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "tenant", "set", map[string]interface{}{
 		"tenant_id": tenant.ID,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(cache.PrefixTenant, tenant.ID)
-	r.cache.ForceCacheSet(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
-	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultRedis)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTenant, tenant.ID)
+	r.inMemoryCache.ForceCacheSet(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
+	r.redisCache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultRedis)
 }
 
 func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTenant.Tenant {
-	span := cache.StartCacheSpan(ctx, "tenant", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "tenant", "get", map[string]interface{}{
 		"tenant_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTenant, key)
 	// L1 first
-	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+	if value, found := r.inMemoryCache.ForceCacheGet(ctx, cacheKey); found {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
-	// L2 fallback
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if t, ok := value.(*domainTenant.Tenant); ok {
+	// L2 fallback (recorded by the cache implementation itself)
+	if value, found := r.redisCache.Get(ctx, cacheKey); found {
+		if t, ok := cache.UnmarshalCacheValue[domainTenant.Tenant](value); ok {
 			return t
 		}
 	}
@@ -222,12 +224,12 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 }
 
 func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "tenant", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "tenant", "delete", map[string]interface{}{
 		"tenant_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
-	r.cache.ForceCacheDelete(ctx, cacheKey)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTenant, key)
+	r.inMemoryCache.ForceCacheDelete(ctx, cacheKey)
+	r.redisCache.Delete(ctx, cacheKey)
 }

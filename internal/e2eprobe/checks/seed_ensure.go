@@ -149,11 +149,6 @@ var seedFeatureSpecs = func() []featureSpec {
 			field: strPtr("amount"), multiplier: strPtr("1000"), aggLabel: "sum_with_multiplier",
 		},
 		{
-			lookupKey: "e2eprobe_weighted_sum_feature", eventName: "e2eprobe_weighted_sum",
-			displayName: "E2EProbe WeightedSum", aggType: types.AggregationTypeWeightedSum,
-			field: strPtr("amount"), expression: strPtr("double(amount) * double(duration_ms)"), aggLabel: "weighted_sum",
-		},
-		{
 			lookupKey: "e2eprobe_sum_filtered_feature", eventName: "e2eprobe_sum_filtered",
 			displayName: "E2EProbe Sum (api-only)", aggType: types.AggregationTypeSum,
 			field: strPtr("amount"),
@@ -165,7 +160,7 @@ var seedFeatureSpecs = func() []featureSpec {
 	}
 }()
 
-// ensureFeatures creates 9 features with embedded meters idempotently.
+// ensureFeatures creates 8 features with embedded meters idempotently.
 // MeterIDs and FeatureIDs are populated into out.
 func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) error {
 	// Build lookup-key index of existing features.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	entUser "github.com/flexprice/flexprice/ent/user"
+	"github.com/flexprice/flexprice/internal/cache"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -14,15 +15,17 @@ import (
 )
 
 type userRepository struct {
-	client postgres.IClient
-	logger *logger.Logger
+	client     postgres.IClient
+	logger     *logger.Logger
+	redisCache cache.RedisCache
 }
 
 // NewUserRepository creates a new user repository
-func NewUserRepository(client postgres.IClient, logger *logger.Logger) domainUser.Repository {
+func NewUserRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainUser.Repository {
 	return &userRepository{
-		client: client,
-		logger: logger,
+		client:     client,
+		logger:     logger,
+		redisCache: redisCache,
 	}
 }
 
@@ -77,6 +80,7 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, user.ID)
 	return nil
 }
 
@@ -136,6 +140,7 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, user.ID)
 	return nil
 }
 
@@ -188,6 +193,7 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
 	return nil
 }
 
@@ -206,6 +212,10 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.Us
 		"tenant_id": tenantID,
 	})
 	defer FinishSpan(span)
+
+	if cached := r.GetCache(ctx, id); cached != nil {
+		return cached, nil
+	}
 
 	client := r.client.Reader(ctx)
 	user, err := client.User.
@@ -237,7 +247,9 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.Us
 	}
 
 	SetSpanSuccess(span)
-	return domainUser.FromEnt(user), nil
+	result := domainUser.FromEnt(user)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 // GetByEmail retrieves a user by email
@@ -390,4 +402,44 @@ func (r *userRepository) ListByFilter(ctx context.Context, filter *types.UserFil
 	}
 
 	return domainUsers, int64(total), nil
+}
+
+// Users are scoped to a tenant (not to an environment), so the cache key is
+// keyed by tenant + user ID only, mirroring the GetByID query filter.
+func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "set", map[string]interface{}{
+		"user_id": user.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), user.ID)
+	r.redisCache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
+}
+
+func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.User {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "get", map[string]interface{}{
+		"user_id": id,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+	u, ok := cache.UnmarshalCacheValue[domainUser.User](value)
+	if !ok {
+		return nil
+	}
+	return u
+}
+
+func (r *userRepository) DeleteCache(ctx context.Context, id string) {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "user", "delete", map[string]interface{}{
+		"user_id": id,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, types.GetTenantID(ctx), id)
+	r.redisCache.Delete(ctx, cacheKey)
 }

@@ -19,18 +19,18 @@ import (
 )
 
 type couponRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainCoupon.Repository {
+func NewCouponRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCoupon.Repository {
 	return &couponRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -527,46 +527,39 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 }
 
 func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "set", map[string]interface{}{
 		"coupon_id": coupon.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
-	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultRedis)
 }
 
-func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
-	span := cache.StartCacheSpan(ctx, "coupon", "get", map[string]interface{}{
-		"coupon_id": key,
+func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "get", map[string]interface{}{
+		"coupon_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return coupon
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainCoupon.Coupon](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "delete", map[string]interface{}{
 		"coupon_id": coupon.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
-	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

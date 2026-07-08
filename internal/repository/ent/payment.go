@@ -16,18 +16,18 @@ import (
 )
 
 type paymentRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PaymentQueryOptions
-	cache     cache.InMemoryCache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PaymentQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPayment.Repository {
+func NewPaymentRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPayment.Repository {
 	return &paymentRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PaymentQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PaymentQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -762,40 +762,39 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {
-	span := cache.StartCacheSpan(ctx, "payment", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "set", map[string]interface{}{
 		"payment_id": payment.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, payment.ID)
-	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, payment.ID)
+	r.redisCache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
 }
 
-func (r *paymentRepository) GetCache(ctx context.Context, key string) *domainPayment.Payment {
-	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
-		"payment_id": key,
+func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "get", map[string]interface{}{
+		"payment_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPayment.Payment)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPayment.Payment](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
-	span := cache.StartCacheSpan(ctx, "payment", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "delete", map[string]interface{}{
 		"payment_id": paymentID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, paymentID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, paymentID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

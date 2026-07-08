@@ -195,7 +195,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
-	_, err := client.Secret.UpdateOneID(id).
+	updated, err := client.Secret.UpdateOneID(id).
 		SetLastUsedAt(time.Now().UTC()).
 		Save(ctx)
 
@@ -215,7 +215,10 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	r.DeleteCache(ctx, id)
+	// SetCache keys the entry under secret.Value (the hashed API key); the
+	// primary id was never used as a cache key, so deleting by id was a no-op
+	// that left a stale entry until TTL.
+	r.DeleteCache(ctx, updated.Value)
 	return nil
 }
 
@@ -408,32 +411,37 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 }
 
 func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Secret) {
-	span := cache.StartCacheSpan(ctx, "secret", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "set", map[string]interface{}{
 		"secret_id": secret.ID,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(cache.PrefixSecret, secret.Value)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, secret.Value)
 	r.cache.Set(ctx, cacheKey, secret, cache.ExpiryDefaultInMemory)
 }
 
 func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecret.Secret {
-	span := cache.StartCacheSpan(ctx, "secret", "get", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", map[string]interface{}{
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(cache.PrefixSecret, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainSecret.Secret)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	sec, ok := cache.UnmarshalCacheValue[domainSecret.Secret](value)
+	if !ok {
+		return nil
+	}
+	return sec
 }
 
 func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "secret", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", map[string]interface{}{
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixSecret, key)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
 	r.cache.Delete(ctx, cacheKey)
 }

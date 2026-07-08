@@ -16,10 +16,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -90,11 +90,12 @@ func newFeatureImportScript(tenantID, environmentID, planID string) (*featureImp
 	// Create postgres client
 	pgClient := postgres.NewClient(entClients, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize repositories
 	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(pgClient, log, cacheClient)
 
 	// Create service params

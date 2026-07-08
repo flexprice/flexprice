@@ -11,11 +11,11 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -169,6 +169,7 @@ func newReprocessEventsScript() (*ReprocessEventsScript, error) {
 	}
 	pgClient := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Initialize ClickHouse client for event repositories
 	sentryService := tracing.NewService(cfg, log)
@@ -180,9 +181,9 @@ func newReprocessEventsScript() (*ReprocessEventsScript, error) {
 	// Initialize repositories
 	eventRepo := chRepo.NewEventRepository(chStore, log)
 	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, log)
-	customerRepo := entRepo.NewCustomerRepository(pgClient, log, cacheClient)
+	customerRepo := entRepo.NewCustomerRepository(pgClient, log, redisCache)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 	featureRepo := entRepo.NewFeatureRepository(pgClient, log, cacheClient)
 
 	// Create service parameters

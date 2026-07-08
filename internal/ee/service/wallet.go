@@ -3490,20 +3490,20 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 		return
 	}
 
-	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
-	s.RedisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
+	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWallet, walletID)
+	s.RedisCache.ForceCacheSet(spanCtx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
 func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
 	if walletID == "" || s.RedisCache == nil {
 		return
 	}
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
 	s.RedisCache.ForceCacheDelete(ctx, cacheKey)
 }
 
@@ -3512,16 +3512,21 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 		return nil
 	}
 
-	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWallet, walletID)
+	// TODO: Cleanup old cache key after 30 min of going live (30 min TTL in old cache key)
+	oldCacheKey := cache.GenerateKey(nil, cache.PrefixWallet, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {
-		cachedValue, remainingTTL, found := s.RedisCache.ForceCacheGetWithTTL(ctx, cacheKey)
+		cachedValue, remainingTTL, found := s.RedisCache.ForceCacheGetWithTTL(spanCtx, cacheKey)
+		if !found {
+			cachedValue, remainingTTL, found = s.RedisCache.ForceCacheGetWithTTL(spanCtx, oldCacheKey)
+		}
 		if !found {
 			return nil
 		}
@@ -3548,7 +3553,10 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	}
 
 	// Default path: no max-live check
-	cachedValue, found := s.RedisCache.ForceCacheGet(ctx, cacheKey)
+	cachedValue, found := s.RedisCache.ForceCacheGet(spanCtx, cacheKey)
+	if !found {
+		cachedValue, found = s.RedisCache.ForceCacheGet(spanCtx, oldCacheKey)
+	}
 	if !found {
 		return nil
 	}

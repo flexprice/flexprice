@@ -254,6 +254,24 @@ Create environment variables from configuration.
 All service addresses are resolved via named templates above so this block stays clean.
 */}}
 {{- define "flexprice.env" -}}
+{{- if .Values.env }}
+{{- /* Generic env map — MIGRATED environments (config-autobind final-goal shape). The app
+       reads the baked config.yaml for defaults; every per-env override is an explicit env var
+       in .Values.env, and every secret is a name->secret-key entry in .Values.secretEnv. No
+       per-key template maintenance. When .Values.env is set the ConfigMap is not rendered. */}}
+{{- range $k, $v := .Values.env }}
+- name: {{ $k }}
+  value: {{ $v | quote }}
+{{- end }}
+{{- range $name, $key := .Values.secretEnv }}
+- name: {{ $name }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" $ }}
+      key: {{ $key }}
+{{- end }}
+{{- else }}
+{{- /* Legacy structured env — UN-MIGRATED environments (unchanged; ConfigMap still rendered). */ -}}
 - name: FLEXPRICE_SERVER_ADDRESS
   value: ":8080"
 {{- /* ---- PostgreSQL ---- */}}
@@ -513,7 +531,17 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.dynamodb.inUse | quote }}
 {{- /* ---- Webhook / Svix ---- */}}
 {{- if .Values.webhook.svixConfig.enabled }}
+{{- /* Legacy alias: pre-config-autobind images bind webhook.svix_config.auth_token from this
+       name via an explicit v.BindEnv. Kept so a rollback to an older image still gets the token. */}}
 - name: FLEXPRICE_SVIX_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: svix-auth-token
+{{- /* Canonical name the reflection env-binder derives from webhook.svix_config.auth_token.
+       Config-autobind images read THIS (no BindEnv needed). Same secret as the legacy alias
+       above, so both images resolve the same token — forward- and backward-compatible. */}}
+- name: FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.secretName" . }}
@@ -587,7 +615,8 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_OAUTH_REDIRECT_URI
   value: {{ .Values.app.oauthRedirectUri | quote }}
 {{- end }}
-{{- /* ---- Extra env vars (passthrough) ---- */}}
+{{- end }}
+{{- /* ---- Extra env vars (passthrough; applies in both legacy and migrated modes) ---- */}}
 {{- with .Values.extraEnv }}
 {{ toYaml . | trim }}
 {{- end }}
