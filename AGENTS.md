@@ -562,3 +562,57 @@ Docker Compose demonstrates this pattern with separate services: `flexprice-api`
 - Core is AGPLv3 licensed
 - Enterprise features (`internal/ee/`) require commercial license
 - See LICENSE file for details
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for running this backend inside a Cursor Cloud VM. Standard
+commands live in `SETUP.md`, `LOCAL_TESTING.md`, and the `Makefile`; this section only
+records the gotchas that are not obvious from those docs.
+
+### Docker daemon is not auto-started
+Docker is pre-installed in the VM image but there is **no systemd/service manager**, so
+`dockerd` is not running on a fresh session. Start it once per session before any
+`docker`/`make` target that touches infra:
+
+```bash
+sudo dockerd > /tmp/dockerd.log 2>&1 &      # wait ~5s for the socket
+sudo chmod 666 /var/run/docker.sock          # let the non-root user reach the socket
+```
+
+The daemon uses `fuse-overlayfs` with the containerd snapshotter disabled (see
+`/etc/docker/daemon.json`) — this is required because the VM kernel lacks full overlay2
+support. Do not switch the storage driver back to overlay2.
+
+### Bring up the stack (all infra is Docker, app runs via `go run`)
+```bash
+docker compose up -d postgres kafka clickhouse temporal temporal-ui
+make migrate-postgres        # docker exec: creates extensions
+make migrate-clickhouse      # docker exec: applies migrations/clickhouse/*
+make migrate-local           # Ent schema migration — uses .env.local (NOT make migrate-ent)
+make seed-db                 # seeds the default tenant/environment
+make init-kafka              # creates topics
+make run-local               # single process: API + consumer + workers
+```
+
+Then `curl http://localhost:8080/health` → `{"status":"ok"}`. Auth for `/v1/*` needs both
+`-H "x-api-key: sk_local_flexprice_test_key"` and
+`-H "x-environment-id: 00000000-0000-0000-0000-000000000000"`.
+
+### Non-obvious caveats
+- **Use `make migrate-local`, never `make migrate-ent`** for local Ent migrations —
+  `migrate-ent` reads `.env` (which can point at production); `migrate-local` reads the
+  committed `.env.local`. Same warning in `LOCAL_TESTING.md`.
+- **Temporal is disabled by default locally** (`FLEXPRICE_TEMPORAL_ENABLED="false"` in
+  `.env.local`), so `make run-local` boots even if the `temporal` container is not up. Set
+  it to `true` (and start the container) only when testing workflows.
+- **`make init-kafka` does not create the webhook topic.** The webhook consumer subscribes
+  to `flexprice_system_events` (from `webhook.topic` in `config.yaml`), which is not in the
+  `init-kafka` list. Without it the server logs a harmless-but-noisy `topic ... does not
+  exist` reconnect loop. Create it once to silence the loop:
+  `docker compose exec -T kafka kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic flexprice_system_events --partitions 1 --replication-factor 1`.
+- **Tests need no external infra.** `internal/testutil` provides in-memory stores, so
+  `make test` (Go `-race` over `./internal/...`) runs without the Docker stack. `make test`
+  first runs `scripts/install-typst.sh`, which downloads the `typst` binary to
+  `~/.local/bin` (needs network) and appends that dir to `~/.bashrc`.
+- **`make lint` is non-blocking** (prints `LL008` dev-checkpoint warnings and exits 0). Use
+  `make lint-ci` for the errors-only gate.
