@@ -15,6 +15,22 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AutoChargeRequest is the input for PaymentService.AutoCharge.
+type AutoChargeRequest struct {
+	InvoiceID          string
+	RazorpayCustomerID string
+	TokenID            string          // Razorpay token ID (from GetCustomerTokens)
+	Amount             decimal.Decimal // in major units (e.g. rupees)
+	Currency           string          // ISO code, e.g. "INR"
+	FlexPricePaymentID string          // FlexPrice payment.ID — embedded in Razorpay notes for webhook reconciliation
+}
+
+// AutoChargeResult is the output of PaymentService.AutoCharge.
+type AutoChargeResult struct {
+	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
+	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
+}
+
 // PaymentService handles Razorpay payment operations
 type PaymentService struct {
 	client         RazorpayClient
@@ -730,4 +746,119 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 		}
 	}
 	return ""
+}
+
+// AutoCharge submits a server-initiated (off-session) recurring charge against an
+// existing Razorpay UPI mandate token. It uses receipt=invoiceID as a Razorpay-native
+// idempotency key so retries are safe.
+//
+// Returns AlreadySubmitted=true when a prior attempt already reached Razorpay — in
+// that case the webhook (payment.captured / payment.failed) will reconcile state.
+func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
+	amountPaise := toPaise(req.Amount)
+
+	orderData := map[string]interface{}{
+		"amount":          amountPaise,
+		"currency":        strings.ToUpper(req.Currency),
+		"payment_capture": true,
+		"receipt":         req.InvoiceID, // Razorpay-native idempotency key
+		"notes": map[string]interface{}{
+			"flexprice_invoice_id": req.InvoiceID,
+			"flexprice_payment_id": req.FlexPricePaymentID,
+		},
+	}
+
+	order, err := s.client.CreateOrder(ctx, orderData)
+	if err != nil {
+		// Razorpay returns BAD_REQUEST_ERROR when an order with the same receipt already exists.
+		if isReceiptDuplicateError(err) {
+			return s.handleExistingOrder(ctx, req)
+		}
+		return nil, err
+	}
+
+	orderID, _ := order["id"].(string)
+	return s.submitRecurringPayment(ctx, req, orderID)
+}
+
+// isReceiptDuplicateError reports whether err is Razorpay's "duplicate receipt" error.
+func isReceiptDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "receipt") && (strings.Contains(msg, "already") || strings.Contains(msg, "duplicate"))
+}
+
+// handleExistingOrder fetches the existing Razorpay order (matched by receipt) and
+// decides how to proceed based on its status.
+func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
+	order, err := s.client.FetchOrdersByReceipt(ctx, req.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	status, _ := order["status"].(string)
+	orderID, _ := order["id"].(string)
+
+	switch status {
+	case "created":
+		// Order exists but payment was never submitted — submit now using the same order.
+		return s.submitRecurringPayment(ctx, req, orderID)
+	case "attempted", "paid":
+		// Payment was already submitted or fully captured. Return AlreadySubmitted so the
+		// caller marks the FlexPrice payment as PROCESSING and lets the webhook reconcile.
+		s.logger.Info(ctx, "razorpay order already attempted/paid, returning AlreadySubmitted",
+			"invoice_id", req.InvoiceID,
+			"order_id", orderID,
+			"status", status)
+		return &AutoChargeResult{AlreadySubmitted: true}, nil
+	default:
+		return nil, ierr.NewErrorf("unexpected Razorpay order status %q for receipt %s", status, req.InvoiceID).
+			Mark(ierr.ErrInternal)
+	}
+}
+
+// submitRecurringPayment calls Razorpay's recurring payment API against orderID.
+func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoChargeRequest, orderID string) (*AutoChargeResult, error) {
+	amountPaise := toPaise(req.Amount)
+
+	paymentData := map[string]interface{}{
+		"amount":      amountPaise,
+		"currency":    strings.ToUpper(req.Currency),
+		"order_id":    orderID,
+		"customer_id": req.RazorpayCustomerID,
+		"token":       req.TokenID,
+		"recurring":   true,
+		"description": "Auto-charge for invoice " + req.InvoiceID,
+		"notes": map[string]interface{}{
+			"flexprice_invoice_id": req.InvoiceID,
+			"flexprice_payment_id": req.FlexPricePaymentID,
+		},
+	}
+
+	payment, err := s.client.CreateRecurringPayment(ctx, paymentData)
+	if err != nil {
+		// If Razorpay rejects because the order is already being processed, treat as AlreadySubmitted.
+		if isOrderAlreadyProcessingError(err) {
+			s.logger.Info(ctx, "razorpay order already being processed, returning AlreadySubmitted",
+				"invoice_id", req.InvoiceID,
+				"order_id", orderID)
+			return &AutoChargeResult{AlreadySubmitted: true}, nil
+		}
+		return nil, err
+	}
+
+	razorpayPaymentID, _ := payment["id"].(string)
+	return &AutoChargeResult{RazorpayPaymentID: razorpayPaymentID}, nil
+}
+
+// isOrderAlreadyProcessingError reports whether the Razorpay error indicates the order
+// already has a payment in progress.
+func isOrderAlreadyProcessingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "order") && strings.Contains(msg, "payment")
 }
