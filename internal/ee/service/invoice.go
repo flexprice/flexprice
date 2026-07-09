@@ -1125,20 +1125,28 @@ func (s *invoiceService) attemptRazorpayAutoCharge(ctx context.Context, inv *inv
 	}
 }
 
+// autoChargeLockTTL is the Redis distributed lock TTL for AutoChargeInvoice.
+// 15 minutes covers the full charge-submission-to-webhook window for UPI Autopay;
+// it is intentionally longer than a typical HTTP timeout because all gateway errors
+// are treated as ambiguous (we cannot reliably classify network timeouts vs. definitive
+// failures from the Razorpay client). Phase 2 will release the lock immediately on
+// classified failures via PaymentLifecycle.RecordPaymentFailure.
+const autoChargeLockTTL = 15 * time.Minute
+
 // AutoChargeInvoice attempts to charge inv via gatewayMethodID on provider.
-// A Redis distributed lock (15-minute TTL) prevents concurrent attempts on the
+// A Redis distributed lock (autoChargeLockTTL) prevents concurrent attempts on the
 // same invoice. Razorpay enforces the NPCI one-debit-per-cycle rule at the
 // gateway level, so no application-side cycle claim is needed.
 func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Invoice, gatewayMethodID string, provider interfaces.CheckoutProvider) error {
 	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
-	lock, err := s.Locker.AcquireLock(ctx, lockKey, 15*time.Minute)
+	lock, err := s.Locker.AcquireLock(ctx, lockKey, autoChargeLockTTL)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
 		return err
 	}
 	if !lock.AcquiredSuccessfully() {
 		s.Logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
-			"invoice_id", inv.ID, "ttl_minutes", 15)
+			"invoice_id", inv.ID, "ttl_minutes", int(autoChargeLockTTL.Minutes()))
 		return nil
 	}
 
@@ -1164,7 +1172,7 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 		"gateway_method_id", gatewayMethodID,
 		"provider_payment_intent_id", chargeResult.ProviderPaymentIntentID,
 		"status", chargeResult.Status,
-		"ttl_minutes", 15,
+		"ttl_minutes", int(autoChargeLockTTL.Minutes()),
 	)
 	// Lock stays held until TTL expiry; invoice status is updated to "paid" by
 	// the existing payment.authorized webhook handler when Razorpay confirms.
