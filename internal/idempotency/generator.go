@@ -32,6 +32,11 @@ const (
 
 	// Wallet Credit Adjustment
 	ScopeWalletCreditAdjustment Scope = "wallet_credit_adjustment"
+
+	// Token Cycle Charge — one successful debit per gateway token per billing
+	// cycle per subscription (the NPCI one-debit-per-cycle rule). See
+	// docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §7.
+	ScopeTokenCycleCharge Scope = "token_cycle_charge"
 )
 
 // Generator generates idempotency keys
