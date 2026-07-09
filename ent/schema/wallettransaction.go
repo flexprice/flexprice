@@ -146,6 +146,9 @@ func (WalletTransaction) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Lower number indicates higher priority. Nil values are treated as lowest priority."),
+		field.String("parent_transaction_id").
+			Optional().
+			Immutable(),
 	}
 }
 
@@ -170,5 +173,7 @@ func (WalletTransaction) Indexes() []ent.Index {
 				entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'"),
 			).
 			StorageKey("idx_tenant_environment_idempotency_key"),
+		index.Fields("tenant_id", "environment_id", "parent_transaction_id", "transaction_status").
+			StorageKey("idx_tenant_environment_parent_transaction_status"),
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -3036,4 +3037,453 @@ func (s *CheckWalletBalanceAlertSuite) TestAutoTopupNotBlockedByDisabledAlerts()
 	s.NoError(err)
 	s.Equal(0, s.countWalletAlertLogs(w.ID), "no alert logs when alerts not configured")
 	s.Equal(1, s.countAutoTopupInvoices(), "auto top-up must not be blocked by disabled alerts")
+}
+
+// ---------------------------------------------------------------------------
+// Bonus credit top-up (ERD: bonus_credits.md) — §8.2-8.5
+// ---------------------------------------------------------------------------
+
+// --- 8.2 Unit tests: findBonusSlab / resolveBonusValue (pure functions) ---
+
+func bonusSlabsForTest() []types.BonusCreditsSlab {
+	return []types.BonusCreditsSlab{
+		{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}},
+		{Threshold: decimal.NewFromInt(1000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypePercentage, Value: decimal.NewFromInt(10)}},
+		{Threshold: decimal.Zero, Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.Zero}},
+	}
+}
+
+func TestFindBonusSlab(t *testing.T) {
+	slabsNoZeroCatchAll := bonusSlabsForTest()[:2] // only 5000, 1000 — no 0 catch-all
+
+	tests := []struct {
+		name    string
+		slabs   []types.BonusCreditsSlab
+		credits decimal.Decimal
+		wantNil bool
+		wantThr decimal.Decimal
+	}{
+		{"below every threshold, no catch-all", slabsNoZeroCatchAll, decimal.NewFromInt(500), true, decimal.Decimal{}},
+		{"exact threshold match", bonusSlabsForTest(), decimal.NewFromInt(1000), false, decimal.NewFromInt(1000)},
+		{"falls in middle bracket", bonusSlabsForTest(), decimal.NewFromInt(3000), false, decimal.NewFromInt(1000)},
+		{"highest bracket", bonusSlabsForTest(), decimal.NewFromInt(10000), false, decimal.NewFromInt(5000)},
+		{"empty slabs", []types.BonusCreditsSlab{}, decimal.NewFromInt(100), true, decimal.Decimal{}},
+		{"zero credits with catch-all", bonusSlabsForTest(), decimal.Zero, false, decimal.Zero},
+		{"zero credits without catch-all", slabsNoZeroCatchAll, decimal.Zero, true, decimal.Decimal{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := findBonusSlab(tt.slabs, tt.credits)
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			if assert.NotNil(t, got) {
+				assert.True(t, tt.wantThr.Equal(got.Threshold), "expected threshold %s, got %s", tt.wantThr, got.Threshold)
+			}
+		})
+	}
+}
+
+func TestResolveBonusValue(t *testing.T) {
+	flatSlab := &types.BonusCreditsSlab{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}}
+	pctSlab := &types.BonusCreditsSlab{Threshold: decimal.NewFromInt(1000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypePercentage, Value: decimal.NewFromInt(10)}}
+
+	got := resolveBonusCredits(flatSlab, decimal.NewFromInt(6000))
+	assert.True(t, decimal.NewFromInt(750).Equal(got), "flat bonus should be 750, got %s", got)
+
+	got = resolveBonusCredits(pctSlab, decimal.NewFromInt(3000))
+	assert.True(t, decimal.NewFromInt(300).Equal(got), "percentage bonus should be 300, got %s", got)
+}
+
+// --- helpers shared by 8.3-8.5 ---
+
+func (s *WalletServiceSuite) seedBonusConfig(cfg types.BonusCreditsTopupConfig) {
+	svc := &settingsService{ServiceParams: s.service.(*walletService).ServiceParams}
+	s.NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyBonusCreditsTopupConfig, cfg))
+}
+
+func (s *WalletServiceSuite) seedAutoComplete(enabled bool) {
+	svc := &settingsService{ServiceParams: s.service.(*walletService).ServiceParams}
+	invCfg, err := GetSetting[types.InvoiceConfig](svc, s.GetContext(), types.SettingKeyInvoiceConfig)
+	s.NoError(err)
+	invCfg.AutoCompletePurchasedCreditTransaction = enabled
+	s.NoError(UpdateSetting(svc, s.GetContext(), types.SettingKeyInvoiceConfig, invCfg))
+}
+
+// TestBonusCreditsTopupConfig_APIDispatch exercises the actual GetSettingByKey/UpdateSettingByKey
+// switch dispatch used by the GET/PUT /v1/settings/:key API handlers — the seed helpers above
+// only exercise the generic GetSetting/UpdateSetting typed functions, which bypass this switch
+// entirely, so this is the only coverage for "is bonus_credits_topup_config wired into the API".
+func (s *WalletServiceSuite) TestBonusCreditsTopupConfig_APIDispatch() {
+	svc := &settingsService{ServiceParams: s.service.(*walletService).ServiceParams}
+
+	updateResp, err := svc.UpdateSettingByKey(s.GetContext(), types.SettingKeyBonusCreditsTopupConfig, &dto.UpdateSettingRequest{
+		Value: map[string]interface{}{
+			"enabled": true,
+			"slabs": []map[string]interface{}{
+				{"threshold": "200", "operator": "gte", "bonus": map[string]interface{}{"type": "percentage", "value": "10"}},
+				{"threshold": "100", "operator": "gte", "bonus": map[string]interface{}{"type": "flat", "value": "50"}},
+			},
+		},
+	})
+	s.NoError(err, "UpdateSettingByKey must recognize bonus_credits_topup_config")
+	s.Equal(types.SettingKeyBonusCreditsTopupConfig, updateResp.Key)
+
+	getResp, err := svc.GetSettingByKey(s.GetContext(), types.SettingKeyBonusCreditsTopupConfig)
+	s.NoError(err, "GetSettingByKey must recognize bonus_credits_topup_config")
+	s.Equal(true, getResp.Value["enabled"])
+}
+
+func (s *WalletServiceSuite) bonusTxByParent(parentID string) *wallet.Transaction {
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.testData.wallet.ID
+	txs, err := s.GetStores().WalletRepo.ListAllWalletTransactions(s.GetContext(), filter)
+	s.NoError(err)
+	for _, tx := range txs {
+		if tx.ParentTransactionID == parentID {
+			return tx
+		}
+	}
+	return nil
+}
+
+// --- 8.3 TopUpWallet resolution ---
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_ExplicitOverrideWins() {
+	s.seedBonusConfig(types.BonusCreditsTopupConfig{
+		Enabled: true,
+		Slabs:   []types.BonusCreditsSlab{{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}}},
+	})
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(6000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(500)),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_explicit_override"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx, "expected a bonus transaction") {
+		s.True(decimal.NewFromInt(500).Equal(bonusTx.CreditAmount), "explicit override should win over slab-resolved 750")
+		s.Equal(types.TransactionReasonPurchasedCreditBonus, bonusTx.TransactionReason)
+	}
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_ExplicitZeroIsRejected() {
+	// bonus_credits_to_add must be omitted to grant no bonus; 0 (or negative) is now a
+	// validation error rather than an "opt out" signal.
+	s.seedBonusConfig(types.BonusCreditsTopupConfig{
+		Enabled: true,
+		Slabs:   []types.BonusCreditsSlab{{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}}},
+	})
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(6000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.Zero),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_explicit_zero"),
+	}
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.Error(err)
+	s.True(ierr.IsValidation(err), "expected a validation error, got %v", err)
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_NilConfigDisabled() {
+	s.seedBonusConfig(types.BonusCreditsTopupConfig{Enabled: false, Slabs: []types.BonusCreditsSlab{}})
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(6000),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_nil_disabled"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.Nil(bonusTx, "disabled config should not create a bonus transaction")
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_NilConfigEnabledSlabMatches() {
+	s.seedBonusConfig(types.BonusCreditsTopupConfig{
+		Enabled: true,
+		Slabs:   []types.BonusCreditsSlab{{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}}},
+	})
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(6000),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_slab_matches"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx) {
+		s.True(decimal.NewFromInt(750).Equal(bonusTx.CreditAmount))
+	}
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_NilConfigEnabledNoSlabMatches() {
+	s.seedBonusConfig(types.BonusCreditsTopupConfig{
+		Enabled: true,
+		Slabs:   []types.BonusCreditsSlab{{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}}},
+	})
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_no_slab_matches"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.Nil(bonusTx, "no slab clears the purchase amount, so no bonus should be created")
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsResolution_NoSettingRowSeeded() {
+	// No seeding at all: GetSetting must fall back to the coded default (enabled:false).
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(6000),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_no_setting_row"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.Nil(bonusTx)
+}
+
+// --- 8.4 Creation-time status and atomicity ---
+
+func (s *WalletServiceSuite) TestBonusCreditsCreationAtomicity_Direct() {
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_direct_atomic"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusCompleted, resp.WalletTransaction.TxStatus)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx) {
+		s.Equal(types.TransactionStatusCompleted, bonusTx.TxStatus)
+		s.True(decimal.NewFromInt(100).Equal(bonusTx.Amount), "bonus tx currency amount must reflect its credit_amount at the topup conversion rate, got %s", bonusTx.Amount)
+	}
+
+	// wallet started at credit_balance=1000; both purchase (1000) and bonus (100) applied
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(2100).Equal(w.CreditBalance), "expected 1000 + 1000 + 100 = 2100, got %s", w.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsCreationAtomicity_InvoicedAutoComplete() {
+	s.seedAutoComplete(true)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("bonus_invoiced_auto_complete"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusCompleted, resp.WalletTransaction.TxStatus)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx) {
+		s.Equal(types.TransactionStatusCompleted, bonusTx.TxStatus)
+	}
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(2100).Equal(w.CreditBalance), "expected 1000 + 1000 + 100 = 2100, got %s", w.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsCreationAtomicity_InvoicedNoAutoComplete() {
+	s.seedAutoComplete(false)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("bonus_invoiced_no_auto_complete"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusPending, resp.WalletTransaction.TxStatus)
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx) {
+		s.Equal(types.TransactionStatusPending, bonusTx.TxStatus)
+	}
+
+	// balance must be unchanged since nothing has been paid/completed yet
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(1000).Equal(w.CreditBalance), "expected unchanged 1000, got %s", w.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestBonusCreditsCreationAtomicity_ZeroBonusNoRow() {
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100), // below any seeded slab, no override
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("bonus_zero_no_row"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.testData.wallet.ID
+	txs, err := s.GetStores().WalletRepo.ListAllWalletTransactions(s.GetContext(), filter)
+	s.NoError(err)
+
+	count := 0
+	for _, tx := range txs {
+		if tx.ID == resp.WalletTransaction.ID || tx.ParentTransactionID == resp.WalletTransaction.ID {
+			count++
+		}
+	}
+	s.Equal(1, count, "only the purchase transaction should exist, no zero-amount bonus row")
+}
+
+// --- 8.5 completePurchasedCreditTransaction with a linked bonus ---
+
+func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBonus_HappyPath() {
+	s.seedAutoComplete(false)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("bonus_completion_happy_path"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusPending, resp.WalletTransaction.TxStatus)
+
+	balanceBefore, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(1000).Equal(balanceBefore.CreditBalance))
+
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+
+	purchaseTx, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusCompleted, purchaseTx.TxStatus)
+
+	bonusTx := s.bonusTxByParent(purchaseTx.ID)
+	if s.NotNil(bonusTx) {
+		s.Equal(types.TransactionStatusCompleted, bonusTx.TxStatus)
+	}
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(2100).Equal(w.CreditBalance), "expected 1000 + 1000 + 100 = 2100, got %s", w.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_NoLinkedBonus_Regression() {
+	s.seedAutoComplete(false)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("no_bonus_regression"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err, "completion must succeed even when GetPendingTransactionByParent finds nothing")
+
+	purchaseTx, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+	s.Equal(types.TransactionStatusCompleted, purchaseTx.TxStatus)
+}
+
+func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBonus_Idempotent() {
+	s.seedAutoComplete(false)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("bonus_completion_idempotent"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+
+	w1, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+
+	// second call must be a no-op: the top-of-function pending-check short-circuits
+	err = s.service.(*walletService).CompletePurchasedCreditTransactionWithRetry(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+
+	w2, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(w1.CreditBalance.Equal(w2.CreditBalance), "balance must not change on a repeat completion call")
+
+	bonusTx := s.bonusTxByParent(resp.WalletTransaction.ID)
+	if s.NotNil(bonusTx) {
+		s.Equal(types.TransactionStatusCompleted, bonusTx.TxStatus)
+	}
+}
+
+// failingBonusWalletRepo wraps the in-memory wallet repo and fails the Nth call to
+// UpdateWalletBalance, used to simulate a mid-transaction failure on the bonus half of
+// completePurchasedCreditTransaction. NOTE: the in-memory/mock DB client's WithTx does not
+// implement real rollback (see testutil.MockPostgresClient.WithTx), so this test can only
+// assert that the error propagates out of completePurchasedCreditTransaction — it cannot
+// assert that the purchase-side write is rolled back, since the test harness has no such
+// mechanism. Real atomicity is provided by Postgres's actual transaction in production.
+type failingBonusWalletRepo struct {
+	wallet.Repository
+	callCount int
+	failOnErr int
+}
+
+func (r *failingBonusWalletRepo) UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error {
+	r.callCount++
+	if r.callCount == r.failOnErr {
+		return ierr.NewError("injected failure on bonus balance update").Mark(ierr.ErrDatabase)
+	}
+	return r.Repository.UpdateWalletBalance(ctx, walletID, finalBalance, newCreditBalance)
+}
+
+func (s *WalletServiceSuite) TestCompletePurchasedCreditTransaction_WithLinkedBonus_PartialFailurePropagates() {
+	s.seedAutoComplete(false)
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1000),
+		BonusCreditsToAdd: lo.ToPtr(decimal.NewFromInt(100)),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("bonus_completion_partial_failure"),
+	}
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, req)
+	s.NoError(err)
+
+	realRepo := s.service.(*walletService).ServiceParams.WalletRepo
+	failingRepo := &failingBonusWalletRepo{Repository: realRepo, failOnErr: 2} // 1st call = purchase, 2nd = bonus
+
+	failingParams := s.service.(*walletService).ServiceParams
+	failingParams.WalletRepo = failingRepo
+	failingService := NewWalletService(failingParams).(*walletService)
+
+	// Call the non-retrying entrypoint directly: CompletePurchasedCreditTransactionWithRetry
+	// would retry and, since the mock has no rollback, find the purchase tx already marked
+	// completed from the first (failed) attempt and short-circuit as a false success.
+	err = failingService.completePurchasedCreditTransaction(s.GetContext(), resp.WalletTransaction.ID)
+	s.Error(err, "the injected failure on the bonus half must surface as an error")
 }

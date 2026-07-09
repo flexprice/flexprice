@@ -44,6 +44,11 @@ type WalletOperation struct {
 	// For Expiry Credits, this is the ID of the parent credit transaction
 	// so that we can use the same credits for the expiry debit transaction
 	ParentCreditTxID string `json:"-"`
+	// BonusCreditAmount, when set and greater than zero on a credit operation, creates a second
+	// wallet_transaction row (reason PURCHASED_CREDIT_BONUS, parent_transaction_id = this
+	// operation's transaction ID) crediting this many bonus credits in the same DB transaction.
+	// nil for every caller except TopUpWallet's direct-purchase branch.
+	BonusCreditAmount *decimal.Decimal `json:"-"`
 }
 
 func (w *WalletOperation) Validate() error {

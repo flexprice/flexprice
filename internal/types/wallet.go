@@ -68,6 +68,7 @@ const (
 	TransactionReasonManualBalanceDebit      TransactionReason = "MANUAL_BALANCE_DEBIT"
 	TransactionReasonCreditAdjustment        TransactionReason = "CREDIT_ADJUSTMENT"
 	TransactionReasonInvoiceVoidRefund       TransactionReason = "INVOICE_VOID_REFUND"
+	TransactionReasonPurchasedCreditBonus    TransactionReason = "PURCHASED_CREDIT_BONUS"
 )
 
 func (t TransactionReason) Validate() error {
@@ -87,6 +88,7 @@ func (t TransactionReason) Validate() error {
 		string(TransactionReasonManualBalanceDebit),
 		string(TransactionReasonCreditAdjustment),
 		string(TransactionReasonInvoiceVoidRefund),
+		string(TransactionReasonPurchasedCreditBonus),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid transaction reason").

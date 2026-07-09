@@ -376,6 +376,11 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		tx.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	var parentTransactionID *string
+	if tx.ParentTransactionID != "" {
+		parentTransactionID = &tx.ParentTransactionID
+	}
+
 	transaction, err := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
@@ -405,6 +410,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetEnvironmentID(tx.EnvironmentID).
 		SetIdempotencyKey(tx.IdempotencyKey).
 		SetNillablePriority(tx.Priority).
+		SetNillableParentTransactionID(parentTransactionID).
 		Save(ctx)
 
 	if err != nil {
@@ -534,6 +540,47 @@ func (r *walletRepository) GetTransactionByIdempotencyKey(ctx context.Context, i
 			WithHint("Failed to retrieve transaction by idempotency key").
 			WithReportableDetails(map[string]interface{}{
 				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return walletdomain.TransactionFromEnt(t), nil
+}
+
+// GetPendingTransactionByParent returns the pending bonus transaction whose
+// parent_transaction_id is parentTransactionID, if one exists.
+func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, parentTransactionID string) (*walletdomain.Transaction, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "wallet", "get_pending_transaction_by_parent", map[string]interface{}{
+		"parent_transaction_id": parentTransactionID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	t, err := client.WalletTransaction.Query().
+		Where(
+			wallettransaction.ParentTransactionID(parentTransactionID),
+			wallettransaction.TransactionStatusEQ(types.TransactionStatusPending),
+			wallettransaction.TenantID(types.GetTenantID(ctx)),
+			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Pending bonus transaction not found").
+				WithReportableDetails(map[string]interface{}{
+					"parent_transaction_id": parentTransactionID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve pending bonus transaction").
+			WithReportableDetails(map[string]interface{}{
+				"parent_transaction_id": parentTransactionID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
