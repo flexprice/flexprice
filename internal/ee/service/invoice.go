@@ -1148,7 +1148,7 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 		return nil
 	}
 
-	chargeResult, err := provider.ChargeSavedPaymentMethod(ctx, interfaces.ChargeSavedPaymentMethodRequest{
+	_, err = provider.ChargeSavedPaymentMethod(ctx, interfaces.ChargeSavedPaymentMethodRequest{
 		InvoiceID:       inv.ID,
 		CustomerID:      inv.CustomerID,
 		GatewayMethodID: gatewayMethodID,
@@ -1159,21 +1159,10 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 	if err != nil {
 		// Treat all gateway errors as ambiguous — we cannot distinguish a definitive
 		// failure from a network timeout where the charge may have been accepted.
-		// Hold the lock for the remaining TTL; the operator can retry after expiry.
 		s.Logger.Error(ctx, "razorpay auto-charge submission failed",
 			"invoice_id", inv.ID, "gateway_method_id", gatewayMethodID, "error", err)
-		return nil
+		return err
 	}
-
-	s.Logger.Info(ctx, "razorpay auto-charge submitted",
-		"invoice_id", inv.ID,
-		"gateway_method_id", gatewayMethodID,
-		"provider_payment_intent_id", chargeResult.ProviderPaymentIntentID,
-		"status", chargeResult.Status,
-		"ttl_minutes", int(autoChargeLockTTL.Minutes()),
-	)
-	// Lock stays held until TTL expiry; invoice status is updated to "paid" by
-	// the existing payment.authorized webhook handler when Razorpay confirms.
 
 	return nil
 }
