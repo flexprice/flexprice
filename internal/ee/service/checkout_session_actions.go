@@ -7,9 +7,60 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+type checkoutPaymentAction string
+
+const (
+	checkoutActionPaymentLink       checkoutPaymentAction = "payment_link"
+	checkoutActionAuthorizationLink checkoutPaymentAction = "authorization_link"
+	checkoutActionAutoCharge        checkoutPaymentAction = "auto_charge"
+)
+
+// normalizeCheckoutPaymentProviderConfig applies the one explicit default this
+// gate depends on: an unset CollectionMethod becomes send_invoice. A single,
+// visible normalization step applied once at request entry — not an
+// assumption buried inside later branching. See design spec §6.1.
+func normalizeCheckoutPaymentProviderConfig(cfg types.CheckoutPaymentProviderConfig) types.CheckoutPaymentProviderConfig {
+	if cfg.CollectionMethod == "" {
+		cfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+	return cfg
+}
+
+// resolveCheckoutPaymentAction implements the checkout gate from
+// docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §6.1. cfg
+// MUST already be normalized (normalizeCheckoutPaymentProviderConfig) before
+// calling this. The decision to attempt authorization is driven only by two
+// explicit signals on cfg — normalized CollectionMethod and the presence of
+// Razorpay.PreferredPaymentMethod — never inferred from Subscription's own
+// CollectionMethod default or any other source. v1 only supports the UPI
+// rail, so any other preferred method falls back to a payment link.
+func resolveCheckoutPaymentAction(
+	mandateLimits map[string]types.MandateLimit,
+	cfg types.CheckoutPaymentProviderConfig,
+	existingConfirmedTokenFound bool,
+) checkoutPaymentAction {
+	if cfg.CollectionMethod != types.CollectionMethodChargeAutomatically {
+		return checkoutActionPaymentLink
+	}
+	if cfg.Razorpay == nil || cfg.Razorpay.PreferredPaymentMethod == "" {
+		return checkoutActionPaymentLink
+	}
+	if cfg.Razorpay.PreferredPaymentMethod != types.PaymentMethodTypeUPI {
+		return checkoutActionPaymentLink
+	}
+	if _, configured := mandateLimits["upi"]; !configured {
+		return checkoutActionPaymentLink
+	}
+	if existingConfirmedTokenFound {
+		return checkoutActionAutoCharge
+	}
+	return checkoutActionAuthorizationLink
+}
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
 	switch session.Action {
@@ -88,7 +139,50 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		req.CancelURL = *session.CancelURL
 	}
 
-	resp, err := provider.CreatePaymentLink(ctx, req)
+	cfg := types.CheckoutPaymentProviderConfig{}
+	if session.PaymentProviderConfig != nil {
+		cfg = *session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig()
+	}
+	cfg = normalizeCheckoutPaymentProviderConfig(cfg)
+
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	mandateLimitsCfg, err := GetSetting[types.PaymentMandateLimits](settingsSvc, ctx, types.SettingKeyPaymentMandateLimits)
+	if err != nil {
+		mandateLimitsCfg = types.PaymentMandateLimits{MandateLimits: map[string]types.MandateLimit{}}
+	}
+
+	existingTokenFound := false
+	if cfg.Razorpay != nil && cfg.Razorpay.PreferredPaymentMethod == types.PaymentMethodTypeUPI {
+		if methods, listErr := provider.ListSavedPaymentMethods(ctx, interfaces.ListSavedPaymentMethodsRequest{
+			CustomerID: session.CustomerID, EnvironmentID: session.EnvironmentID,
+		}); listErr == nil {
+			_, existingTokenFound = razorpay.SelectUsableToken(methods, cfg.Razorpay.PreferredPaymentMethod, payResp.Amount)
+		}
+		// listErr swallowed intentionally — fail open (design spec §3.3): treat as
+		// "no confirmed token," proceed to CreateAuthorizationLink below.
+	}
+
+	action := resolveCheckoutPaymentAction(mandateLimitsCfg.MandateLimits, cfg, existingTokenFound)
+
+	var resp *interfaces.CheckoutProviderResponse
+	switch action {
+	case checkoutActionAuthorizationLink:
+		settingsCeiling := mandateLimitsCfg.MandateLimits["upi"].MaxAmount
+		if err := validateMandateCeiling(cfg.Razorpay.MaxAmount, settingsCeiling); err != nil {
+			return nil, err
+		}
+		effectiveCeiling := resolveMandateCeiling(cfg.Razorpay.MaxAmount, settingsCeiling)
+		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
+			InvoiceID: req.InvoiceID, CustomerID: req.CustomerID, PaymentID: req.PaymentID,
+			Amount: req.Amount, Currency: req.Currency, MaxAmount: &effectiveCeiling,
+			PreferredMethod: cfg.Razorpay.PreferredPaymentMethod,
+			EnvironmentID:   req.EnvironmentID, SuccessURL: req.SuccessURL, CancelURL: req.CancelURL, Metadata: req.Metadata,
+		})
+	default: // checkoutActionPaymentLink, checkoutActionAutoCharge — checkout itself still needs
+		// SOME NextAction to show the caller; the actual auto-charge attempt happens
+		// independently at invoice-finalize time (a later task, Task 15), not here.
+		resp, err = provider.CreatePaymentLink(ctx, req)
+	}
 	if err != nil {
 		return nil, err
 	}
