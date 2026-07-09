@@ -1,9 +1,11 @@
 package razorpay
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -77,4 +79,14 @@ func TestSelectUsableToken_FiltersOutOverCeiling(t *testing.T) {
 	pm := newTestProviderPaymentMethod("token_low_ceiling", types.PaymentMethodStatusActive, time.Now())
 	_, ok := SelectUsableToken([]*interfaces.ProviderPaymentMethod{pm}, types.PaymentMethodTypeUPI, decimal.NewFromInt(999999))
 	require.False(t, ok, "invoice total exceeds token's MaxAmount (1000), must not be selected")
+}
+
+func TestCreateAuthorizationLink_RejectsNonUPIPreferredMethod(t *testing.T) {
+	t.Parallel()
+	a := &CheckoutAdapter{} // zero-value is fine — the method-guard rejects before touching any field
+	_, err := a.CreateAuthorizationLink(context.Background(), interfaces.AuthorizationLinkRequest{
+		PreferredMethod: types.PaymentMethodTypeCard,
+	})
+	require.Error(t, err)
+	require.True(t, ierr.IsNotImplemented(err))
 }

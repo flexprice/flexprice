@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -131,6 +132,15 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	ctx context.Context,
 	req interfaces.AuthorizationLinkRequest,
 ) (*interfaces.CheckoutProviderResponse, error) {
+	// v1 only supports UPI registration (docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5)
+	// — reject explicitly rather than silently ignoring PreferredMethod and always
+	// registering a UPI mandate regardless of what was actually requested.
+	if req.PreferredMethod != "" && req.PreferredMethod != types.PaymentMethodTypeUPI {
+		return nil, ierr.NewErrorf("razorpay authorization link registration does not support method %q", req.PreferredMethod).
+			WithHint("Only UPI is supported for Razorpay mandate registration in v1").
+			Mark(ierr.ErrNotImplemented)
+	}
+
 	customerResp, err := a.CustomerSvc.GetCustomer(ctx, req.CustomerID)
 	if err != nil {
 		return nil, err
@@ -144,7 +154,12 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		customerInfo["email"] = c.Email
 	}
 	// Note: contact/phone not available in FlexPrice customer model (see payment.go's
-	// CreatePaymentLink for the same caveat).
+	// CreatePaymentLink for the same caveat). VERIFY AT IMPLEMENTATION TIME: unlike
+	// CreatePaymentLink's endpoint, docs/prds/razorpau-runbook.md's tested example
+	// payloads for subscription_registration/auth_links DO include "contact" — its
+	// customer-dedup-on-contact/email claim was specifically confirmed with contact
+	// present. Behavior with email-only is unverified; test against Razorpay test mode
+	// before relying on this in production.
 
 	data := map[string]interface{}{
 		"customer":     customerInfo,
@@ -234,7 +249,10 @@ func (a *CheckoutAdapter) ChargeSavedPaymentMethod(
 	if c.Email != "" {
 		paymentData["email"] = c.Email
 	}
-	// Note: contact/phone not available in FlexPrice customer model.
+	// Note: contact/phone not available in FlexPrice customer model. VERIFY AT
+	// IMPLEMENTATION TIME: docs/prds/razorpau-runbook.md's tested example payload for
+	// payments/create/recurring also includes "contact" — email-only is unverified
+	// against live Razorpay test mode.
 
 	payment, err := a.Svc.client.CreateRecurringPayment(ctx, paymentData)
 	if err != nil {
