@@ -99,13 +99,6 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.CheckoutSessionExpiryWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
-		{
-			ID:        types.ScheduleIDRazorpayReconciliationSweep,
-			Interval:  20 * time.Minute,
-			Workflow:  cronWorkflows.RazorpayReconciliationSweepWorkflow,
-			Input:     models.RazorpayReconciliationSweepWorkflowInput{},
-			TaskQueue: types.TemporalTaskQueueCron,
-		},
 	}
 }
 

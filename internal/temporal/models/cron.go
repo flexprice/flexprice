@@ -136,22 +136,3 @@ type CheckoutSessionExpiryWorkflowResult struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 }
-
-// ===================== Razorpay Autocharge Claim Reconciliation =====================
-
-// RazorpayReconciliationSweepWorkflowInput is the input for
-// RazorpayReconciliationSweepWorkflow. No fields required — the activity
-// fetches all stuck claims across tenants itself.
-type RazorpayReconciliationSweepWorkflowInput struct{}
-
-// RazorpayReconciliationSweepWorkflowResult captures outcome metrics for
-// ResolveStuckClaims — design spec §8's reconciliation sweep over
-// InvoiceCharge/TokenCycleCharge claims stuck in "claimed".
-type RazorpayReconciliationSweepWorkflowResult struct {
-	Total          int `json:"total"`
-	Succeeded      int `json:"succeeded"`
-	Failed         int `json:"failed"`
-	StillPending   int `json:"still_pending"`
-	AbandonedNoRef int `json:"abandoned_no_payment_ref"`
-	Errors         int `json:"errors"`
-}
