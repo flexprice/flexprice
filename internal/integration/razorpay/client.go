@@ -33,6 +33,9 @@ type RazorpayClient interface {
 	CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
 	CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error)
 	CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error)
+	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
+	// Returns the first matching order or ierr.ErrNotFound if none exist.
+	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -490,4 +493,43 @@ func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[str
 	}
 
 	return result, nil
+}
+
+// FetchOrdersByReceipt fetches the first Razorpay order whose receipt matches the given string.
+func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryParams := map[string]interface{}{
+		"receipt": receipt,
+		"count":   1,
+	}
+	result, err := rc.Order.All(queryParams, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay orders by receipt",
+			"error", err,
+			"receipt", receipt)
+		return nil, ierr.NewError("failed to fetch orders by receipt").
+			WithHint("Unable to query Razorpay orders").
+			WithReportableDetails(map[string]interface{}{"receipt": receipt, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, _ := result["items"].([]interface{})
+	if len(items) == 0 {
+		return nil, ierr.NewError("no order found with receipt").
+			WithHint("No Razorpay order matches this receipt").
+			WithReportableDetails(map[string]interface{}{"receipt": receipt}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	order, ok := items[0].(map[string]interface{})
+	if !ok {
+		return nil, ierr.NewError("invalid order response from Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	return order, nil
 }
