@@ -65,6 +65,7 @@ func buildActivityFactory(
 		testutil.NewInMemoryFeatureStore(),
 		encSvc,
 		nil, // TemporalService — not needed in activity unit tests
+		nil, // Locker — not needed in activity unit tests
 	)
 }
 
