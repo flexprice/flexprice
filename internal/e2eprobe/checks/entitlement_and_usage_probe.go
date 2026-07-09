@@ -66,7 +66,7 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "customer usage summary %s: %w", customerID, err)
 	}
 
-	if _, err := p.client.Subscriptions().GetUsage(ctx, types.DtoGetUsageBySubscriptionRequest{
+	if _, err := p.client.Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{
 		SubscriptionID: subID,
 	}); err != nil {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "sub usage %s: %w", subID, err)
@@ -82,7 +82,7 @@ func extractCustomerID(resp interface{}) string {
 	if !ok || r == nil {
 		return ""
 	}
-	inner := r.GetDtoCustomerResponse()
+	inner := r.GetCustomerResponse()
 	if inner == nil || inner.ID == nil {
 		return ""
 	}

@@ -38,7 +38,7 @@ func TestWalletDebitVerification_Phase1TopUpHappyPath(t *testing.T) {
 	walletID := "wallet_p1"
 	internalCustID := "internal_p1"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	// Start balance = 10.00; topup = 5.00 → expected ≥ 15.00 after topup.
@@ -48,7 +48,7 @@ func TestWalletDebitVerification_Phase1TopUpHappyPath(t *testing.T) {
 	// Analytics phase: immediately return a sum ≥ expected (10 × 1.00 = 10.00).
 	usage := "10.0000"
 	eventName := "e2eprobe_sum"
-	fc.events.analyticsItems = []types.DtoUsageAnalyticItem{
+	fc.events.analyticsItems = []types.UsageAnalyticItem{
 		{EventName: &eventName, TotalUsage: &usage},
 	}
 
@@ -89,7 +89,7 @@ func TestWalletDebitVerification_Phase1TopUpFailure(t *testing.T) {
 	walletID := "wallet_fail"
 	internalCustID := "internal_fail"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	fc.wallets.balance = "10.0000"
@@ -128,7 +128,7 @@ func TestWalletDebitVerification_Phase2AnalyticsTimeout(t *testing.T) {
 	walletID := "wallet_ana"
 	internalCustID := "internal_ana"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	fc.wallets.balance = "10.0000"
@@ -168,7 +168,7 @@ func TestWalletDebitVerification_Phase2IngestDropDetected(t *testing.T) {
 	walletID := "wallet_drop"
 	internalCustID := "internal_drop"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	fc.wallets.balance = "10.0000"
@@ -178,7 +178,7 @@ func TestWalletDebitVerification_Phase2IngestDropDetected(t *testing.T) {
 	// The fake doesn't echo back ingested events when listRawItems is set, so
 	// we pre-seed it to simulate a partial ingest landing.
 	eventName := "e2eprobe_sum"
-	fc.events.listRawItems = []types.DtoEvent{
+	fc.events.listRawItems = []types.Event{
 		{ID: strPtr("e1"), EventName: &eventName},
 		{ID: strPtr("e2"), EventName: &eventName},
 		{ID: strPtr("e3"), EventName: &eventName},
@@ -225,7 +225,7 @@ func TestWalletDebitVerification_Phase2AnalyticsSuccess(t *testing.T) {
 	walletID := "wallet_ana2"
 	internalCustID := "internal_ana2"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	fc.wallets.balance = "10.0000"
@@ -234,7 +234,7 @@ func TestWalletDebitVerification_Phase2AnalyticsSuccess(t *testing.T) {
 	// 5 events × 1.00 = 5.00 expected; return 5.0 in analytics immediately.
 	usage := "5.0000"
 	eventName := "e2eprobe_sum"
-	fc.events.analyticsItems = []types.DtoUsageAnalyticItem{
+	fc.events.analyticsItems = []types.UsageAnalyticItem{
 		{EventName: &eventName, TotalUsage: &usage},
 	}
 

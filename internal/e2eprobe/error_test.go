@@ -29,10 +29,10 @@ func TestErrorf_EnrichesAPIError(t *testing.T) {
 	}
 }
 
-func TestErrorf_EnrichesErrorsErrorResponse(t *testing.T) {
+func TestErrorf_EnrichesErrorResponse(t *testing.T) {
 	// Mimic the production case: a typed response with empty fields → Error()
 	// marshals to literal "{}". The status code lives on HTTPMeta.
-	eer := &sdkerrors.ErrorsErrorResponse{
+	eer := &sdkerrors.ErrorResponse{
 		HTTPMeta: types.HTTPMetadata{
 			Response: &http.Response{StatusCode: 500},
 		},

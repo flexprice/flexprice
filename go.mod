@@ -1,6 +1,6 @@
 module github.com/flexprice/flexprice
 
-go 1.25.0
+go 1.25.10
 
 require (
 	entgo.io/ent v0.14.1
@@ -18,7 +18,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/chargebee/chargebee-go/v3 v3.39.0
 	github.com/cockroachdb/errors v1.11.3
-	github.com/flexprice/go-sdk/v2 v2.0.16
+	github.com/flexprice/go-sdk/v2 v2.0.24
 	github.com/getsentry/sentry-go v0.43.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.2

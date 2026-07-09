@@ -121,7 +121,7 @@ func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error
 // Persistent seed customers use the prefix `e2eprobe-cust-persistent-` and
 // the name "E2EProbe Persistent N" — both substrings are distinct enough
 // that none of the three checks fires on them.
-func isEphemeralCustomer(c types.DtoCustomerResponse) bool {
+func isEphemeralCustomer(c types.CustomerResponse) bool {
 	if c.ExternalID != nil && strings.HasPrefix(*c.ExternalID, "e2eprobe-cust-eph-") {
 		return true
 	}
@@ -140,7 +140,7 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 		return e2eprobe.Errorf(map[string]string{}, "janitor sweepOrphans: query customers: %w", err)
 	}
 
-	listResp := resp.GetDtoListCustomersResponse()
+	listResp := resp.GetListCustomersResponse()
 	if listResp == nil {
 		return nil
 	}
@@ -155,10 +155,7 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 		if cust.CreatedAt == nil {
 			continue
 		}
-		createdAt, parseErr := parseRFC3339(*cust.CreatedAt)
-		if parseErr != nil {
-			continue
-		}
+		createdAt := *cust.CreatedAt
 		if createdAt.After(cutoff) {
 			continue // too fresh — leave it
 		}
@@ -227,7 +224,7 @@ func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) 
 		)
 		return
 	}
-	listResp := subResp.GetDtoListSubscriptionsResponse()
+	listResp := subResp.GetListSubscriptionsResponse()
 	if listResp == nil {
 		return
 	}
@@ -241,7 +238,7 @@ func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) 
 		if sub.SubscriptionStatus != nil && *sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
 			continue
 		}
-		_, cErr := j.client.Subscriptions().Cancel(ctx, *sub.ID, types.DtoCancelSubscriptionRequest{
+		_, cErr := j.client.Subscriptions().Cancel(ctx, *sub.ID, types.CancelSubscriptionRequest{
 			CancellationType:               immediate,
 			CancelImmediatelyInovicePolicy: &generateInvoice,
 			Reason:                         strPtrJanitor("e2eprobe-janitor-orphan-sweep"),

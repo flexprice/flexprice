@@ -35,12 +35,11 @@ func (p *AnalyticsProbe) Run(ctx context.Context) error {
 	window := analyticsWindows[int(idx)%len(analyticsWindows)]
 	end := time.Now().UTC()
 	start := end.Add(-window)
-	startStr, endStr := start.Format(time.RFC3339), end.Format(time.RFC3339)
 
-	req := types.DtoGetUsageAnalyticsRequest{
-		ExternalCustomerID: customer,
-		StartTime:          &startStr,
-		EndTime:            &endStr,
+	req := types.GetUsageAnalyticsRequest{
+		ExternalCustomerID: &customer,
+		StartTime:          &start,
+		EndTime:            &end,
 	}
 	if _, err := p.client.Events().GetUsageAnalytics(ctx, req); err != nil {
 		return e2eprobe.Errorf(map[string]string{
