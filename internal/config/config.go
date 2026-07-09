@@ -74,13 +74,6 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
-	WebhookLogging             WebhookLoggingConfig             `mapstructure:"webhook_logging" validate:"omitempty"`
-}
-
-// WebhookLoggingConfig controls which inbound webhook requests are persisted to the DB.
-type WebhookLoggingConfig struct {
-	TenantIDs      []string `mapstructure:"tenant_ids"`
-	EnvironmentIDs []string `mapstructure:"environment_ids"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -725,6 +718,7 @@ func NewConfig() (*Configuration, error) {
 	// every leaf key, so a FLEXPRICE_* env var always lands regardless of which config.yaml a
 	// deployment mounts (baked file on ECS, ConfigMap on GKE) — and no new key can be
 	// forgotten. Runs once at startup; reflection cost is irrelevant. See bindEnvs below.
+	// clickhouse.protocol (FLEXPRICE_CLICKHOUSE_PROTOCOL) is bound automatically here.
 	bindEnvs(v, reflect.TypeOf(Configuration{}))
 
 	// Exception capture is on by default. Struct `default:` tags aren't applied at runtime
@@ -776,16 +770,6 @@ func NewConfig() (*Configuration, error) {
 			return nil, fmt.Errorf("failed to parse FLEXPRICE_USER_ENV_MAPPING JSON: %v", err)
 		}
 		cfg.EnvAccess.UserEnvMapping = userEnvMapping
-	}
-
-	// Parse webhook logging tenant/environment ID lists from env vars.
-	// Viper cannot split comma-separated env vars into []string reliably,
-	// so we read os.Getenv directly and split manually.
-	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_TENANT_IDS"); raw != "" {
-		cfg.WebhookLogging.TenantIDs = strings.Split(raw, ",")
-	}
-	if raw := os.Getenv("FLEXPRICE_WEBHOOK_LOGGING_ENVIRONMENT_IDS"); raw != "" {
-		cfg.WebhookLogging.EnvironmentIDs = strings.Split(raw, ",")
 	}
 
 	return &cfg, nil
@@ -957,6 +941,13 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 			Password: c.Password,
 		},
 		ConnOpenStrategy: clickhouse.ConnOpenInOrder,
+		// Bounded dial/read deadlines. Without DialTimeout the native driver can
+		// block forever on connect: ClickHouse Cloud behind AWS PrivateLink is
+		// fronted by multiple AZ ENIs, and an in-order dial to an ENI that never
+		// completes the TCP/native handshake hangs indefinitely with no default
+		// deadline. A finite DialTimeout makes it fail over to the next address.
+		DialTimeout: 10 * time.Second,
+		ReadTimeout: 30 * time.Second,
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}

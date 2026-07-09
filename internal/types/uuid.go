@@ -113,6 +113,7 @@ const (
 	UUID_PREFIX_SUBSCRIPTION_PHASE         = "phase"
 	UUID_PREFIX_SYSTEM_EVENT               = "sys_event"
 	UUID_PREFIX_COMMITMENT_BUCKET          = "bucket"
+	UUID_PREFIX_INCOMING_WEBHOOK_EVENT     = "fp_webhook"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

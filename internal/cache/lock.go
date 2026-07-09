@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -22,10 +23,11 @@ type redisLocker struct {
 	client redis.UniversalClient
 }
 
-func NewRedisLocker(cache RedisCache) (Locker, error) {
+func NewRedisLocker(cache RedisCache, logger *logger.Logger) (Locker, error) {
 	// When Redis is unreachable at startup, NewRedisCache returns a typed-nil
 	// *redisCacheImpl wrapped in RedisCache (the connection error is already logged by InitializeRedisCache)
 	if cache == nil {
+		logger.Info(context.Background(), "NewRedisLocker: Cache is nil, returning nil Locker")
 		return nil, nil
 	}
 	redisClient, ok := cache.(*redisCacheImpl)
@@ -33,9 +35,11 @@ func NewRedisLocker(cache RedisCache) (Locker, error) {
 		return nil, fmt.Errorf("NewRedisLocker: unsupported RedisCache implementation %T", cache)
 	}
 	if redisClient == nil || redisClient.client == nil {
+		logger.Info(context.Background(), "NewRedisLocker: Redis client is nil, returning nil Locker")
 		return nil, nil
 	}
 
+	logger.Info(context.Background(), "NewRedisLocker: Initialized Redis Locker")
 	return &redisLocker{
 		client: redisClient.client,
 	}, nil

@@ -18,6 +18,8 @@ func main() {
 	// Parse command line flags
 	dryRun := flag.Bool("dry-run", false, "Print migration SQL without executing it")
 	timeout := flag.Int("timeout", 300, "Timeout in seconds for the migration")
+	clickhouse := flag.Bool("clickhouse", false, "Run ClickHouse migrations (migrations/clickhouse/*.sql) instead of Postgres")
+	chDir := flag.String("clickhouse-dir", "migrations/clickhouse", "Directory of ClickHouse .sql migration files")
 	flag.Parse()
 
 	// Load configuration
@@ -30,6 +32,22 @@ func main() {
 	logger, err := logger.NewLogger(cfg)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
+	}
+
+	// ClickHouse migrations: separate path, idempotent .sql files.
+	if *clickhouse {
+		if *dryRun {
+			log.Fatalf("-dry-run is not supported with -clickhouse")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
+		defer cancel()
+		logger.Info(ctx, "Running ClickHouse migrations...", "address", cfg.ClickHouse.Address, "database", cfg.ClickHouse.Database, "tls", cfg.ClickHouse.TLS)
+		if err := runClickHouseMigrations(ctx, cfg, *chDir, logger); err != nil {
+			logger.Fatal(ctx, "ClickHouse migration failed", "error", err)
+		}
+		logger.Info(ctx, "ClickHouse migrations completed successfully")
+		fmt.Println("Migration process completed")
+		return
 	}
 
 	// Get DSN from config

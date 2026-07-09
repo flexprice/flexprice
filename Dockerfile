@@ -20,8 +20,8 @@ ENV CGO_ENABLED=0 \
     GOOS=linux
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server cmd/server/main.go && \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate cmd/migrate/main.go
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate
 
 # Typst stage
 FROM ghcr.io/typst/typst:v0.13.1 AS typst
