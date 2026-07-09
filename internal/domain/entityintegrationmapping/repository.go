@@ -14,4 +14,9 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (int, error)
 	Update(ctx context.Context, mapping *EntityIntegrationMapping) error
 	Delete(ctx context.Context, mapping *EntityIntegrationMapping) error
+
+	// GetByEntity looks up a mapping by its (entity_type, entity_id, provider_type)
+	// tuple — the same tuple the unique index is built on. Returns ierr.ErrNotFound
+	// if no mapping exists.
+	GetByEntity(ctx context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*EntityIntegrationMapping, error)
 }

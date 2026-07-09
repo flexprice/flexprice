@@ -95,6 +95,11 @@ func (s *InMemoryEntityIntegrationMappingStore) Delete(ctx context.Context, mapp
 	return s.InMemoryStore.Delete(ctx, mapping.ID)
 }
 
+// GetByEntity looks up a mapping by its (entity_type, entity_id, provider_type) tuple.
+func (s *InMemoryEntityIntegrationMappingStore) GetByEntity(ctx context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	return s.GetByEntityAndProvider(ctx, entityID, entityType, providerType)
+}
+
 // GetByEntityAndProvider retrieves an entity integration mapping by entity and provider
 func (s *InMemoryEntityIntegrationMappingStore) GetByEntityAndProvider(ctx context.Context, entityID string, entityType types.IntegrationEntityType, providerType string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	// Create a filter function that matches by entity and provider
