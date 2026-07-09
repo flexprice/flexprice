@@ -80,6 +80,12 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 		return h.handlePaymentLinkPaid(ctx, event, environmentID, services)
 	case EventPaymentLinkCancelled, EventPaymentLinkExpired:
 		return h.handlePaymentLinkFailed(ctx, event, environmentID, services)
+	case EventTokenConfirmed:
+		return h.handleTokenConfirmed(ctx, event, environmentID, services)
+	case EventTokenRejected, EventTokenCancelled:
+		return h.handleTokenRejectedOrCancelled(ctx, event, environmentID, services)
+	case EventPaymentAuthorized:
+		return h.handlePaymentAuthorized(ctx, event, environmentID, services)
 	default:
 		h.logger.Info(ctx, "unhandled Razorpay webhook event type", "type", event.Event)
 		return nil // Not an error, just unhandled
@@ -316,6 +322,36 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"error_code", payment.ErrorCode,
 		"error_description", payment.ErrorDescription)
 
+	return nil
+}
+
+// handleTokenConfirmed drives checkout-completion when a mandate registration
+// (which charges the first invoice as part of the same call) is confirmed.
+// No PaymentMethod row is written — the mandate token is never stored locally
+// (design spec §4); this handler only marks the associated invoice/payment
+// paid, reusing the exact same mechanism handlePaymentCaptured already uses.
+func (h *Handler) handleTokenConfirmed(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+	payment := event.Payload.Payment.Entity
+	h.logger.Info(ctx, "received token.confirmed webhook", "razorpay_payment_id", payment.ID, "environment_id", environmentID)
+	return h.handlePaymentCaptured(ctx, event, environmentID, services)
+}
+
+// handleTokenRejectedOrCancelled logs the mandate-lifecycle event. No local
+// state to mutate (no PaymentMethod row exists) — the next
+// ListSavedPaymentMethods call at invoice-finalize time will simply no longer
+// see this token as confirmed, per design spec §4.
+func (h *Handler) handleTokenRejectedOrCancelled(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+	h.logger.Info(ctx, "received token rejected/cancelled webhook", "event_type", event.Event, "environment_id", environmentID)
+	return nil
+}
+
+// handlePaymentAuthorized logs the intermediate authorization state. Final
+// state transitions are still driven exclusively by payment.captured/failed
+// (design spec §9) — this handler exists so the event is no longer silently
+// dropped to default, not to add a new state transition.
+func (h *Handler) handlePaymentAuthorized(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+	payment := event.Payload.Payment.Entity
+	h.logger.Info(ctx, "received payment.authorized webhook", "razorpay_payment_id", payment.ID, "environment_id", environmentID)
 	return nil
 }
 
