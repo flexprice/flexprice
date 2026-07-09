@@ -566,8 +566,26 @@ Docker Compose demonstrates this pattern with separate services: `flexprice-api`
 ## Cursor Cloud specific instructions
 
 Durable, non-obvious notes for running this backend inside a Cursor Cloud VM. Standard
-commands live in `SETUP.md`, `LOCAL_TESTING.md`, and the `Makefile`; this section only
-records the gotchas that are not obvious from those docs.
+commands live in `SETUP.md`, `LOCAL_TESTING.md`, `docs/REMOTE_DEV_INSTANCE_SETUP.md`, and
+the `Makefile`; this section only records the gotchas that are not obvious from those docs.
+
+### Two supported setup approaches
+1. **Self-contained Docker local (default in the Cloud VM).** Committed `.env.local` +
+   local Docker infra + `make run-local`. Needs no external secrets — this is what the
+   Cloud VM is provisioned for and what the steps below use.
+2. **Against shared staging infra** (see `docs/REMOTE_DEV_INSTANCE_SETUP.md`). Point a
+   locally-built server at already-deployed Postgres/Kafka/ClickHouse/Temporal by adding a
+   `./.env` (chmod `600`, staging creds from the team secrets manager, **never committed**)
+   and running `make run-server`. Use this only when staging credentials are supplied to
+   the VM as secrets; do not create `.env` if you want the local-Docker path.
+
+**Critical env-loading distinction** (drives which approach runs):
+`make run-server` loads `.env` only; the `make run-local*` targets load `.env` **then layer
+`.env.local` on top**, so local Docker endpoints override any staging values in `.env`.
+Likewise `make migrate-local` uses `.env.local` while `make migrate-ent` uses `.env`.
+
+Toolchain PATH (Go pinned by `go.mod`, `typst` from `scripts/install-typst.sh`):
+`export PATH="/usr/local/go/bin:$HOME/.local/bin:$PATH"`.
 
 ### Docker daemon is not auto-started
 Docker is pre-installed in the VM image but there is **no systemd/service manager**, so
