@@ -31,16 +31,15 @@ type CheckoutProvider interface {
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.
 type CheckoutProviderRequest struct {
-	InvoiceID     string
-	CustomerID    string
-	Amount        decimal.Decimal
-	Currency      string
-	PaymentID     string // FlexPrice payment ID — embedded in provider metadata for idempotency
-	EnvironmentID string
-	SuccessURL    string
-	FailureURL    string
-	CancelURL     string
-	Metadata      map[string]string
+	InvoiceID  string
+	CustomerID string
+	Amount     decimal.Decimal
+	Currency   string
+	PaymentID  string // FlexPrice payment ID — embedded in provider metadata for idempotency
+	SuccessURL string
+	FailureURL string
+	CancelURL  string
+	Metadata   map[string]string
 }
 
 // CheckoutProviderResponse is the unified output from all checkout provider adapters.
@@ -63,7 +62,6 @@ type AuthorizationLinkRequest struct {
 	MaxAmount       *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
 	ExpiresAt       *time.Time
 	PreferredMethod types.PaymentMethodType
-	EnvironmentID   string
 	SuccessURL      string
 	CancelURL       string
 	Metadata        map[string]string
@@ -92,7 +90,6 @@ type ChargeSavedPaymentMethodRequest struct {
 	GatewayMethodID string
 	Amount          decimal.Decimal
 	Currency        string
-	EnvironmentID   string
 	Metadata        map[string]string
 }
 

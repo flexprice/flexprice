@@ -1154,7 +1154,6 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 		GatewayMethodID: gatewayMethodID,
 		Amount:          inv.Total,
 		Currency:        inv.Currency,
-		EnvironmentID:   inv.EnvironmentID,
 	})
 	if err != nil {
 		// Treat all gateway errors as ambiguous — we cannot distinguish a definitive

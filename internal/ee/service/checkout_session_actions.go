@@ -119,12 +119,11 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	}
 
 	req := interfaces.CheckoutProviderRequest{
-		InvoiceID:     *session.CheckoutInvoiceID,
-		CustomerID:    session.CustomerID,
-		Amount:        payResp.Amount,
-		Currency:      payResp.Currency,
-		PaymentID:     payResp.ID,
-		EnvironmentID: session.EnvironmentID,
+		InvoiceID:  *session.CheckoutInvoiceID,
+		CustomerID: session.CustomerID,
+		Amount:     payResp.Amount,
+		Currency:   payResp.Currency,
+		PaymentID:  payResp.ID,
 	}
 	if len(session.Metadata) > 0 {
 		req.Metadata = map[string]string(session.Metadata)
@@ -174,10 +173,16 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		}
 		effectiveCeiling := resolveMandateCeiling(cfg.Razorpay.MaxMandateLimit, settingsCeiling)
 		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
-			InvoiceID: req.InvoiceID, CustomerID: req.CustomerID, PaymentID: req.PaymentID,
-			Amount: req.Amount, Currency: req.Currency, MaxAmount: &effectiveCeiling,
+			InvoiceID:       req.InvoiceID,
+			CustomerID:      req.CustomerID,
+			PaymentID:       req.PaymentID,
+			Amount:          req.Amount,
+			Currency:        req.Currency,
+			MaxAmount:       &effectiveCeiling,
 			PreferredMethod: cfg.Razorpay.PreferredPaymentMethod,
-			EnvironmentID:   req.EnvironmentID, SuccessURL: req.SuccessURL, CancelURL: req.CancelURL, Metadata: req.Metadata,
+			SuccessURL:      req.SuccessURL,
+			CancelURL:       req.CancelURL,
+			Metadata:        req.Metadata,
 		})
 	default: // checkoutActionPaymentLink, checkoutActionAutoCharge — checkout itself still needs
 		// SOME NextAction to show the caller; the actual auto-charge attempt happens

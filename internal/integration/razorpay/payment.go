@@ -45,7 +45,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
 		"currency", req.Currency,
-		"environment_id", req.EnvironmentID,
 	)
 
 	// Validate invoice and check payment eligibility
@@ -169,11 +168,10 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 
 	// Build notes with metadata and line items
 	notes := map[string]interface{}{
-		"flexprice_invoice_id":     req.InvoiceID,
-		"flexprice_customer_id":    req.CustomerID,
-		"flexprice_payment_id":     req.PaymentID,
-		"flexprice_environment_id": req.EnvironmentID,
-		"payment_source":           "flexprice",
+		"flexprice_invoice_id":  req.InvoiceID,
+		"flexprice_customer_id": req.CustomerID,
+		"flexprice_payment_id":  req.PaymentID,
+		"payment_source":        "flexprice",
 	}
 
 	// Add all line items to notes with name as key and amount as value
