@@ -28,6 +28,7 @@ type AutoChargeRequest struct {
 // AutoChargeResult is the output of PaymentService.AutoCharge.
 type AutoChargeResult struct {
 	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
+	RazorpayOrderID   string // Razorpay order_xxx — always populated when a new or existing order was resolved
 	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
 }
 
@@ -828,7 +829,10 @@ func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoCharge
 			"invoice_id", req.InvoiceID,
 			"order_id", orderID,
 			"status", status)
-		return &AutoChargeResult{AlreadySubmitted: true}, nil
+		return &AutoChargeResult{
+			AlreadySubmitted: true,
+			RazorpayOrderID:  orderID,
+		}, nil
 	default:
 		return nil, ierr.NewErrorf("unexpected Razorpay order status %q for receipt %s", status, req.InvoiceID).
 			Mark(ierr.ErrInternal)
@@ -870,7 +874,10 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 		"invoice_id", req.InvoiceID,
 		"order_id", orderID,
 		"razorpay_payment_id", razorpayPaymentID)
-	return &AutoChargeResult{RazorpayPaymentID: razorpayPaymentID}, nil
+	return &AutoChargeResult{
+		RazorpayPaymentID: razorpayPaymentID,
+		RazorpayOrderID:   orderID,
+	}, nil
 }
 
 // isOrderAlreadyProcessingError reports whether the Razorpay error indicates the order

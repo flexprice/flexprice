@@ -351,6 +351,9 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		// Do not return — charge is submitted; webhook reconciles via flexprice_payment_id.
 	}
 
+	// Persist audit mappings (non-fatal — charge is already submitted).
+	s.createAutoChargeMappings(ctx, inv.ID, pymnt.ID, result)
+
 	s.logger.Info(ctx, "auto-charge submitted successfully",
 		"invoice_id", inv.ID,
 		"payment_id", pymnt.ID,
@@ -358,6 +361,70 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		"already_submitted", result.AlreadySubmitted)
 
 	return nil
+}
+
+// createAutoChargeMappings persists two EntityIntegrationMapping records after a
+// successful auto-charge submission:
+//
+//   - invoice → Razorpay order  (provider_entity_type=order in metadata to distinguish
+//     from the invoice→razorpay_invoice mapping created on the send-invoice path)
+//   - payment → Razorpay payment (pay_xxx, omitted when AlreadySubmitted and no ID)
+//
+// Both writes are best-effort: failures are logged but do not abort the charge.
+// The primary reconciliation path (notes.flexprice_payment_id on the webhook) is
+// independent of these mappings.
+func (s *InvoiceSyncService) createAutoChargeMappings(
+	ctx context.Context,
+	invoiceID string,
+	paymentID string,
+	result *AutoChargeResult,
+) {
+	if s.entityIntegrationMappingRepo == nil {
+		return
+	}
+
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// 1. Invoice → Razorpay order
+	if result.RazorpayOrderID != "" {
+		orderMapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityType:       types.IntegrationEntityTypeInvoice,
+			EntityID:         invoiceID,
+			ProviderType:     string(types.SecretProviderRazorpay),
+			ProviderEntityID: result.RazorpayOrderID,
+			Metadata: map[string]interface{}{
+				"provider_entity_type": "order",
+			},
+			EnvironmentID: environmentID,
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, orderMapping); err != nil {
+			s.logger.Warn(ctx, "failed to create invoice→order mapping (non-fatal)",
+				"invoice_id", invoiceID,
+				"razorpay_order_id", result.RazorpayOrderID,
+				"error", err)
+		}
+	}
+
+	// 2. Payment → Razorpay payment
+	if result.RazorpayPaymentID != "" {
+		paymentMapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityType:       types.IntegrationEntityTypePayment,
+			EntityID:         paymentID,
+			ProviderType:     string(types.SecretProviderRazorpay),
+			ProviderEntityID: result.RazorpayPaymentID,
+			EnvironmentID:    environmentID,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, paymentMapping); err != nil {
+			s.logger.Warn(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",
+				"payment_id", paymentID,
+				"razorpay_payment_id", result.RazorpayPaymentID,
+				"error", err)
+		}
+	}
 }
 
 // SyncInvoiceToRazorpay syncs a FlexPrice invoice to Razorpay
