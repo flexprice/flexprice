@@ -98,7 +98,7 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 	payload := &webhookDto.SpendAlertEvent{
 		Subscription:  sub,
 		AlertType:     internalEvent.AlertType,
-		AlertState:    internalEvent.AlertStatus,
+		AlertStatus:   internalEvent.AlertStatus,
 		AlertSettings: internalEvent.AlertInfo.AlertSettings,
 		CurrentSpend:  internalEvent.AlertInfo.ValueAtTime.String(),
 		TriggeredAt:   internalEvent.AlertInfo.Timestamp,

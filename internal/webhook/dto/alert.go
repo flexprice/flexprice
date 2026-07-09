@@ -36,7 +36,7 @@ type SpendAlertEvent struct {
 	SubscriptionLineItem *subscription.SubscriptionLineItem `json:"subscription_line_item,omitempty"`
 	Group                *dto.GroupResponse                 `json:"group,omitempty"`
 	AlertType            types.AlertType                    `json:"alert_type"`
-	AlertState           types.AlertState                   `json:"alert_state"`
+	AlertStatus          types.AlertState                   `json:"alert_status"`
 	AlertSettings        *types.AlertSettings               `json:"alert_settings,omitempty"`
 	CurrentSpend         string                             `json:"current_spend"`
 	TriggeredAt          time.Time                          `json:"triggered_at"`
