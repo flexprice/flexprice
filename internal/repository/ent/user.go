@@ -412,7 +412,7 @@ func (r *userRepository) SetCache(ctx context.Context, user *domainUser.User) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, user.ID)
+	cacheKey := cache.GenerateKey(nil, cache.PrefixUser, types.GetTenantID(ctx), user.ID)
 	r.redisCache.Set(ctx, cacheKey, user, cache.ExpiryDefaultRedis)
 }
 
@@ -422,7 +422,7 @@ func (r *userRepository) GetCache(ctx context.Context, id string) *domainUser.Us
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, id)
+	cacheKey := cache.GenerateKey(nil, cache.PrefixUser, types.GetTenantID(ctx), id)
 	value, found := r.redisCache.Get(ctx, cacheKey)
 	if !found {
 		return nil
@@ -440,6 +440,6 @@ func (r *userRepository) DeleteCache(ctx context.Context, id string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixUser, id)
+	cacheKey := cache.GenerateKey(nil, cache.PrefixUser, types.GetTenantID(ctx), id)
 	r.redisCache.Delete(ctx, cacheKey)
 }
