@@ -174,6 +174,11 @@ func IsTooManyRequests(err error) bool {
 	return errors.Is(err, ErrTooManyRequests)
 }
 
+// IsNotImplemented checks if an error marks an optional capability as unsupported
+func IsNotImplemented(err error) bool {
+	return errors.Is(err, ErrNotImplemented)
+}
+
 // ResolveError returns both the HTTP status code and machine-readable error
 // code for the given error in a single pass over errMappings.
 func ResolveError(err error) (httpStatus int, code ErrorCode) {
