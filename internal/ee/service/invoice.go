@@ -1527,6 +1527,11 @@ func (s *invoiceService) executeAutoCharge(
 			"invoice_id", inv.ID)
 		return nil
 	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.Logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
+		}
+	}()
 
 	freshInv, err := s.InvoiceRepo.Get(ctx, inv.ID)
 	if err != nil {
