@@ -194,6 +194,10 @@ type CreateDraftInvoiceRequest struct {
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
 	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
+	// CollectionMethod is set by the service only (not in JSON). For renewal invoices, it is
+	// copied down from the parent Subscription's CollectionMethod at draft-creation time. Nil
+	// for one-off invoices, which fall back to send_invoice behavior at read time.
+	CollectionMethod *types.CollectionMethod `json:"-"`
 }
 
 // Validate validates the draft invoice creation request.
@@ -273,6 +277,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		InvoiceStatus:          types.InvoiceStatusDraft,
 		PaymentStatus:          types.PaymentStatusPending,
 		IssueDate:              issueDate,
+		CollectionMethod:       r.CollectionMethod,
 		BaseModel:              baseModel,
 	}, nil
 }

@@ -572,6 +572,20 @@ func (ic *InvoiceCreate) SetNillableRecalculatedInvoiceID(s *string) *InvoiceCre
 	return ic
 }
 
+// SetCollectionMethod sets the "collection_method" field.
+func (ic *InvoiceCreate) SetCollectionMethod(tm types.CollectionMethod) *InvoiceCreate {
+	ic.mutation.SetCollectionMethod(tm)
+	return ic
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceCreate {
+	if tm != nil {
+		ic.SetCollectionMethod(*tm)
+	}
+	return ic
+}
+
 // SetID sets the "id" field.
 func (ic *InvoiceCreate) SetID(s string) *InvoiceCreate {
 	ic.mutation.SetID(s)
@@ -789,6 +803,11 @@ func (ic *InvoiceCreate) check() error {
 	if _, ok := ic.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Invoice.version"`)}
 	}
+	if v, ok := ic.mutation.CollectionMethod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Invoice.collection_method": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -991,6 +1010,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.RecalculatedInvoiceID(); ok {
 		_spec.SetField(invoice.FieldRecalculatedInvoiceID, field.TypeString, value)
 		_node.RecalculatedInvoiceID = &value
+	}
+	if value, ok := ic.mutation.CollectionMethod(); ok {
+		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
+		_node.CollectionMethod = &value
 	}
 	if nodes := ic.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

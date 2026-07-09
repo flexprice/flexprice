@@ -347,6 +347,7 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 		req.BillingReason = types.InvoiceBillingReasonProration
 	}
 	req.SubscriptionCustomerID = &sub.CustomerID
+	req.CollectionMethod = lo.ToPtr(types.CollectionMethod(sub.CollectionMethod))
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
@@ -1839,6 +1840,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
+	draftReq.CollectionMethod = lo.ToPtr(types.CollectionMethod(subscription.CollectionMethod))
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
 		return nil, nil, err

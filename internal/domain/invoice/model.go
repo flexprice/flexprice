@@ -134,6 +134,13 @@ type Invoice struct {
 	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
 
+	// CollectionMethod is optional — nil means "not explicitly set." For one-off
+	// invoices this defaults to send_invoice behavior (backward compatible). For
+	// renewal invoices it's copied down from the parent Subscription's
+	// CollectionMethod at invoice-creation time, making the invoice
+	// self-describing. See docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5.4.
+	CollectionMethod *types.CollectionMethod `db:"collection_method" json:"collection_method,omitempty"`
+
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
 }
@@ -198,6 +205,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Version:                    e.Version,
 		EnvironmentID:              e.EnvironmentID,
 		RecalculatedInvoiceID:      e.RecalculatedInvoiceID,
+		CollectionMethod:           e.CollectionMethod,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

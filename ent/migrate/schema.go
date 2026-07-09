@@ -1124,6 +1124,7 @@ var (
 		{Name: "total_prepaid_credits_applied", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "recalculated_invoice_id", Type: field.TypeString, Nullable: true},
+		{Name: "collection_method", Type: field.TypeString, Nullable: true},
 	}
 	// InvoicesTable holds the schema information for the "invoices" table.
 	InvoicesTable = &schema.Table{

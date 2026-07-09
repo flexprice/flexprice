@@ -100,6 +100,8 @@ const (
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldRecalculatedInvoiceID holds the string denoting the recalculated_invoice_id field in the database.
 	FieldRecalculatedInvoiceID = "recalculated_invoice_id"
+	// FieldCollectionMethod holds the string denoting the collection_method field in the database.
+	FieldCollectionMethod = "collection_method"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -167,6 +169,7 @@ var Columns = []string{
 	FieldTotalPrepaidCreditsApplied,
 	FieldIdempotencyKey,
 	FieldRecalculatedInvoiceID,
+	FieldCollectionMethod,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -437,6 +440,11 @@ func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 // ByRecalculatedInvoiceID orders the results by the recalculated_invoice_id field.
 func ByRecalculatedInvoiceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRecalculatedInvoiceID, opts...).ToFunc()
+}
+
+// ByCollectionMethod orders the results by the collection_method field.
+func ByCollectionMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCollectionMethod, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.
