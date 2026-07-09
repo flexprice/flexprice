@@ -82,28 +82,6 @@ func SelectUsableToken(
 	}), true
 }
 
-// ListSavedPaymentMethods resolves the Razorpay customer_id, fetches tokens
-// live via Token.All, and normalizes them.
-func (a *CheckoutAdapter) ListSavedPaymentMethods(
-	ctx context.Context,
-	req interfaces.ListSavedPaymentMethodsRequest,
-) ([]*interfaces.ProviderPaymentMethod, error) {
-	razorpayCustomerID, err := a.Svc.customerSvc.GetRazorpayCustomerID(ctx, req.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	rawTokens, err := a.Svc.client.GetCustomerTokens(ctx, razorpayCustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	return lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
-		pm, err := NormalizeRazorpayToken(raw)
-		return pm, err == nil && pm != nil
-	}), nil
-}
-
 // CreateAuthorizationLink registers a UPI Autopay mandate combined with the
 // first invoice payment.
 func (a *CheckoutAdapter) CreateAuthorizationLink(
@@ -166,65 +144,3 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	}, nil
 }
 
-// ChargeSavedPaymentMethod charges a specific token via Order + recurring
-// Payment. Returns "processing" — the actual capture/failure outcome only
-// arrives via webhook (payment.captured/failed); it must NEVER be reported as
-// a final success here.
-func (a *CheckoutAdapter) ChargeSavedPaymentMethod(
-	ctx context.Context,
-	req interfaces.ChargeSavedPaymentMethodRequest,
-) (*interfaces.ChargeResult, error) {
-	razorpayCustomerID, err := a.Svc.customerSvc.GetRazorpayCustomerID(ctx, req.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	amountPaise := toPaise(req.Amount)
-
-	order, err := a.Svc.client.CreateOrder(ctx, map[string]interface{}{
-		"amount":          amountPaise,
-		"currency":        req.Currency,
-		"payment_capture": true,
-		"notes": map[string]interface{}{
-			"flexprice_invoice_id": req.InvoiceID,
-			"flexprice_payment_id": req.PaymentID,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	orderID, _ := order["id"].(string)
-
-	customerResp, err := a.CustomerSvc.GetCustomer(ctx, req.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-	c := customerResp.Customer
-
-	paymentData := map[string]interface{}{
-		"amount":      amountPaise,
-		"currency":    req.Currency,
-		"order_id":    orderID,
-		"customer_id": razorpayCustomerID,
-		"token":       req.GatewayMethodID,
-		"recurring":   true,
-		"description": "Auto-charge for invoice " + req.InvoiceID,
-		"notes": map[string]interface{}{
-			"flexprice_invoice_id": req.InvoiceID,
-			"flexprice_payment_id": req.PaymentID,
-		},
-	}
-	if c.Email != "" {
-		paymentData["email"] = c.Email
-	}
-
-	payment, err := a.Svc.client.CreateRecurringPayment(ctx, paymentData)
-	if err != nil {
-		return nil, err
-	}
-
-	paymentID, _ := payment["id"].(string)
-	return &interfaces.ChargeResult{
-		ProviderPaymentIntentID: paymentID,
-	}, nil
-}
