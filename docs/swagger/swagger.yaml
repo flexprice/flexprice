@@ -8041,6 +8041,37 @@ definitions:
     - CancellationTypeImmediate
     - CancellationTypeEndOfPeriod
     - CancellationTypeScheduledDate
+  types.CheckoutAction:
+    enum:
+    - create_subscription
+    type: string
+    x-enum-varnames:
+    - CheckoutActionCreateSubscription
+  types.CheckoutConfiguration:
+    properties:
+      create_subscription_params:
+        $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  types.CheckoutPaymentProvider:
+    enum:
+    - razorpay
+    type: string
+    x-enum-varnames:
+    - CheckoutPaymentProviderRazorpay
+  types.CheckoutStatus:
+    enum:
+    - initiated
+    - pending
+    - completed
+    - failed
+    - expired
+    type: string
+    x-enum-varnames:
+    - CheckoutStatusInitiated
+    - CheckoutStatusPending
+    - CheckoutStatusCompleted
+    - CheckoutStatusFailed
+    - CheckoutStatusExpired
   types.CollectionMethod:
     enum:
     - charge_automatically
@@ -8136,6 +8167,34 @@ definitions:
     x-enum-varnames:
     - CouponTypeFixed
     - CouponTypePercentage
+  types.CreateSubscriptionParams:
+    properties:
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      currency:
+        type: string
+      end_date:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      plan_id:
+        type: string
+      start_date:
+        type: string
+    type: object
+  types.CreateSubscriptionResult:
+    properties:
+      invoice_id:
+        type: string
+      payment_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
   types.CreditBreakdown:
     properties:
       free:
@@ -8865,6 +8924,21 @@ definitions:
     - PauseStatusScheduled
     - PauseStatusCompleted
     - PauseStatusCancelled
+  types.PaymentAction:
+    properties:
+      type:
+        $ref: '#/definitions/types.PaymentActionType'
+      url:
+        type: string
+    type: object
+  types.PaymentActionType:
+    enum:
+    - checkout_url
+    - payment_link
+    type: string
+    x-enum-varnames:
+    - PaymentActionTypeCheckoutURL
+    - PaymentActionTypePaymentLink
   types.PaymentBehavior:
     enum:
     - allow_incomplete
@@ -9704,6 +9778,31 @@ definitions:
     x-enum-varnames:
     - TaxRateTypePercentage
     - TaxRateTypeFixed
+  types.TimeOfDayBucket:
+    properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      id:
+        description: |-
+          ID is server-assigned. Stable for the lifetime of the line item;
+          invoice breakdown and analytics responses reference this ID.
+        type: string
+      overage_factor:
+        type: number
+      price_id:
+        description: |-
+          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+          Immutable post-create; changing pricing requires a successor line item.
+        type: string
+      start:
+        $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
+    type: object
   types.TimeRangeFilter:
     properties:
       end_time:
@@ -10701,65 +10800,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  types.CheckoutAction:
-    enum:
-    - create_subscription
-    type: string
-    x-enum-varnames:
-    - CheckoutActionCreateSubscription
-  types.CheckoutConfiguration:
-    properties:
-      create_subscription_params:
-        $ref: '#/definitions/types.CreateSubscriptionParams'
-    type: object
-  types.CheckoutPaymentProvider:
-    enum:
-    - razorpay
-    type: string
-    x-enum-varnames:
-    - CheckoutPaymentProviderRazorpay
-  types.CheckoutStatus:
-    enum:
-    - initiated
-    - pending
-    - completed
-    - failed
-    - expired
-    type: string
-    x-enum-varnames:
-    - CheckoutStatusInitiated
-    - CheckoutStatusPending
-    - CheckoutStatusCompleted
-    - CheckoutStatusFailed
-    - CheckoutStatusExpired
-  types.CreateSubscriptionParams:
-    properties:
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      currency:
-        type: string
-      end_date:
-        type: string
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      plan_id:
-        type: string
-      start_date:
-        type: string
-    type: object
-  types.CreateSubscriptionResult:
-    properties:
-      invoice_id:
-        type: string
-      payment_id:
-        type: string
-      subscription_id:
-        type: string
-    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -10772,46 +10812,6 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
-    type: object
-  types.PaymentAction:
-    properties:
-      type:
-        $ref: '#/definitions/types.PaymentActionType'
-      url:
-        type: string
-    type: object
-  types.PaymentActionType:
-    enum:
-    - checkout_url
-    - payment_link
-    type: string
-    x-enum-varnames:
-    - PaymentActionTypeCheckoutURL
-    - PaymentActionTypePaymentLink
-  types.TimeOfDayBucket:
-    properties:
-      commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
-      commitment_value:
-        type: string
-      end:
-        $ref: '#/definitions/types.Bucket'
-      id:
-        description: |-
-          ID is server-assigned. Stable for the lifetime of the line item;
-          invoice breakdown and analytics responses reference this ID.
-        type: string
-      overage_factor:
-        type: number
-      price_id:
-        description: |-
-          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
-          Immutable post-create; changing pricing requires a successor line item.
-        type: string
-      start:
-        $ref: '#/definitions/types.Bucket'
-      true_up_enabled:
-        type: boolean
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
