@@ -22,7 +22,7 @@ func TestCreateCheckoutSessionRequest_Validate_RejectsMismatchedProviderConfig(t
 				PlanID: "plan_1", Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 			},
 		},
-		PaymentProviderConfig: types.CheckoutPaymentProviderConfig{
+		PaymentProviderConfig: &types.CheckoutPaymentProviderConfig{
 			Razorpay: &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
 		},
 	}
@@ -41,7 +41,7 @@ func TestCreateCheckoutSessionRequest_ToCheckoutSession_CarriesPaymentProviderCo
 				PlanID: "plan_1", Currency: "inr", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 			},
 		},
-		PaymentProviderConfig: types.CheckoutPaymentProviderConfig{
+		PaymentProviderConfig: &types.CheckoutPaymentProviderConfig{
 			CollectionMethod: types.CollectionMethodChargeAutomatically,
 			Razorpay:         &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
 		},

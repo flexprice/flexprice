@@ -17,7 +17,7 @@ type CreateCheckoutSessionRequest struct {
 	Action                types.CheckoutAction                `json:"action" binding:"required"`
 	PaymentProvider       types.CheckoutPaymentProvider       `json:"payment_provider" binding:"required"`
 	Configuration         types.CheckoutConfiguration         `json:"configuration"`
-	PaymentProviderConfig types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
+	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
 	IdempotencyKey        *string                             `json:"idempotency_key,omitempty"`
 	SuccessURL            *string                             `json:"success_url,omitempty"`
 	FailureURL            *string                             `json:"failure_url,omitempty"`
@@ -42,7 +42,7 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
-	if err := r.PaymentProviderConfig.Validate(r.PaymentProvider); err != nil {
+	if err := r.PaymentProviderConfig.Validate(r.PaymentProvider); err != nil { // nil-safe: Validate handles nil receiver
 		return err
 	}
 
@@ -63,7 +63,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, cu
 		CheckoutStatus:        types.CheckoutStatusInitiated,
 		PaymentProvider:       r.PaymentProvider,
 		Configuration:         domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
-		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(&r.PaymentProviderConfig),
+		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(r.PaymentProviderConfig),
 		IdempotencyKey:        r.IdempotencyKey,
 		SuccessURL:            r.SuccessURL,
 		FailureURL:            r.FailureURL,
