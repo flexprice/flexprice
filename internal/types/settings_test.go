@@ -19,8 +19,8 @@ func TestPaymentMandateLimits_Validate(t *testing.T) {
 	t.Run("valid with upi entry", func(t *testing.T) {
 		t.Parallel()
 		c := PaymentMandateLimits{
-			MandateLimits: map[string]MandateLimit{
-				"upi": {MaxAmount: decimal.NewFromInt(15000), Currency: "INR"},
+			MandateLimits: map[PaymentMethodType]MandateLimit{
+				PaymentMethodTypeUPI: {MaxAmount: decimal.NewFromInt(15000), Currency: "INR"},
 			},
 		}
 		require.NoError(t, c.Validate())
@@ -28,15 +28,15 @@ func TestPaymentMandateLimits_Validate(t *testing.T) {
 
 	t.Run("empty map is valid — presence of a key is what enables a rail", func(t *testing.T) {
 		t.Parallel()
-		c := PaymentMandateLimits{MandateLimits: map[string]MandateLimit{}}
+		c := PaymentMandateLimits{MandateLimits: map[PaymentMethodType]MandateLimit{}}
 		require.NoError(t, c.Validate())
 	})
 
 	t.Run("negative max_amount is invalid", func(t *testing.T) {
 		t.Parallel()
 		c := PaymentMandateLimits{
-			MandateLimits: map[string]MandateLimit{
-				"upi": {MaxAmount: decimal.NewFromInt(-1)},
+			MandateLimits: map[PaymentMethodType]MandateLimit{
+				PaymentMethodTypeUPI: {MaxAmount: decimal.NewFromInt(-1)},
 			},
 		}
 		require.Error(t, c.Validate())

@@ -112,8 +112,6 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
-// PaymentAction extracts the safe-to-expose action from a provider result.
-// All other fields in CheckoutProviderResult are sensitive gateway data.
 func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	if r == nil {
 		return nil
@@ -121,12 +119,8 @@ func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	return r.NextAction
 }
 
-// ── payment_provider_config ──────────────────────────────────────────────────
-
-// CheckoutPaymentProviderConfig is the per-checkout-request declaration of
-// payment-provider behavior — stored in CheckoutSession.payment_provider_config,
-// a dedicated column sibling to Configuration (not nested inside it). See
-// docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5.2.
+// CheckoutPaymentProviderConfig is the per-checkout payment behavior config,
+// stored in CheckoutSession.payment_provider_config.
 type CheckoutPaymentProviderConfig struct {
 	CollectionMethod CollectionMethod               `json:"collection_method,omitempty"`
 	Razorpay         *RazorpayPaymentProviderConfig `json:"razorpay,omitempty"`
@@ -134,34 +128,25 @@ type CheckoutPaymentProviderConfig struct {
 
 type RazorpayPaymentProviderConfig struct {
 	PreferredPaymentMethod PaymentMethodType `json:"preferred_payment_method,omitempty"`
-	// MaxAmount optionally tightens the environment's Settings-level ceiling
-	// (payment_mandate_limits) for this specific checkout request. Must not
-	// exceed the Settings value — validated in the service layer (needs DB
-	// access), not here. See design spec §5.3.
-	MaxAmount *decimal.Decimal `json:"max_amount,omitempty"`
+	MaxMandateLimit        *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
 }
 
-// Validate checks structural validity only: at most one provider sub-object,
-// and it must match the top-level payment_provider. The cross-check against
-// the environment's Settings-level ceiling happens in the service layer.
 func (c *CheckoutPaymentProviderConfig) Validate(provider CheckoutPaymentProvider) error {
 	if c == nil {
 		return nil
 	}
-	if c.Razorpay != nil {
-		if provider != CheckoutPaymentProviderRazorpay {
-			return ierr.NewError("payment_provider_config.razorpay is set but payment_provider is not razorpay").
-				WithHint("Only populate the provider sub-object matching the top-level payment_provider field").
-				Mark(ierr.ErrValidation)
+	switch provider {
+	case CheckoutPaymentProviderRazorpay:
+		if c.Razorpay == nil {
+			return nil
 		}
 		if c.Razorpay.PreferredPaymentMethod != "" {
 			if err := c.Razorpay.PreferredPaymentMethod.Validate(); err != nil {
 				return err
 			}
 		}
-		if c.Razorpay.MaxAmount != nil && c.Razorpay.MaxAmount.IsNegative() {
-			return ierr.NewError("payment_provider_config.razorpay.max_amount must not be negative").
-				Mark(ierr.ErrValidation)
+		if c.Razorpay.MaxMandateLimit != nil && c.Razorpay.MaxMandateLimit.IsNegative() {
+			return ierr.NewError("razorpay.max_mandate_limit must not be negative").Mark(ierr.ErrValidation)
 		}
 	}
 	return nil

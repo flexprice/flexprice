@@ -14,14 +14,14 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		mandateLimits      map[string]types.MandateLimit
+		mandateLimits      map[types.PaymentMethodType]types.MandateLimit
 		providerConfig     types.CheckoutPaymentProviderConfig
 		existingTokenFound bool
 		want               checkoutPaymentAction
 	}{
 		{
 			name:          "unset collection_method (normalized to send_invoice) falls back to payment link",
-			mandateLimits: map[string]types.MandateLimit{"upi": {MaxAmount: upiCeiling}},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{types.PaymentMethodTypeUPI: {MaxAmount: upiCeiling}},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				Razorpay: &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
 			},
@@ -29,7 +29,7 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 		},
 		{
 			name:          "explicit send_invoice falls back to payment link even with everything else configured",
-			mandateLimits: map[string]types.MandateLimit{"upi": {MaxAmount: upiCeiling}},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{types.PaymentMethodTypeUPI: {MaxAmount: upiCeiling}},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				CollectionMethod: types.CollectionMethodSendInvoice,
 				Razorpay:         &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
@@ -38,7 +38,7 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 		},
 		{
 			name:          "charge_automatically but no preferred_payment_method set falls back to payment link",
-			mandateLimits: map[string]types.MandateLimit{"upi": {MaxAmount: upiCeiling}},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{types.PaymentMethodTypeUPI: {MaxAmount: upiCeiling}},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				CollectionMethod: types.CollectionMethodChargeAutomatically,
 				Razorpay:         nil,
@@ -47,7 +47,7 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 		},
 		{
 			name:          "no settings entry for preferred method falls back to payment link",
-			mandateLimits: map[string]types.MandateLimit{},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				CollectionMethod: types.CollectionMethodChargeAutomatically,
 				Razorpay:         &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
@@ -56,7 +56,7 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 		},
 		{
 			name:          "charge_automatically + preferred_payment_method + configured + no existing token creates authorization link",
-			mandateLimits: map[string]types.MandateLimit{"upi": {MaxAmount: upiCeiling}},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{types.PaymentMethodTypeUPI: {MaxAmount: upiCeiling}},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				CollectionMethod: types.CollectionMethodChargeAutomatically,
 				Razorpay:         &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},
@@ -66,7 +66,7 @@ func TestResolveCheckoutPaymentAction(t *testing.T) {
 		},
 		{
 			name:          "charge_automatically + preferred_payment_method + configured + existing confirmed token skips straight to autocharge",
-			mandateLimits: map[string]types.MandateLimit{"upi": {MaxAmount: upiCeiling}},
+			mandateLimits: map[types.PaymentMethodType]types.MandateLimit{types.PaymentMethodTypeUPI: {MaxAmount: upiCeiling}},
 			providerConfig: types.CheckoutPaymentProviderConfig{
 				CollectionMethod: types.CollectionMethodChargeAutomatically,
 				Razorpay:         &types.RazorpayPaymentProviderConfig{PreferredPaymentMethod: types.PaymentMethodTypeUPI},

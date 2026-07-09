@@ -1085,7 +1085,7 @@ func (s *invoiceService) attemptRazorpayAutoCharge(ctx context.Context, inv *inv
 			"invoice_id", inv.ID, "error", err)
 		return
 	}
-	if _, configured := mandateLimitsCfg.MandateLimits["upi"]; !configured {
+	if _, configured := mandateLimitsCfg.MandateLimits[types.PaymentMethodTypeUPI]; !configured {
 		s.Logger.Debug(ctx, "no mandate ceiling configured for upi rail, skipping auto-charge",
 			"invoice_id", inv.ID)
 		return

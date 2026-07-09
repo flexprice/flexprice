@@ -360,14 +360,14 @@ func (c EventIngestionFilterConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
-// PaymentMandateLimits holds per-rail auto-charge ceilings (keyed by "upi", "card", etc.).
+// PaymentMandateLimits holds per-rail auto-charge ceilings (keyed by PaymentMethodType).
 // This is a safety ceiling, not the auto-charge opt-in — that lives in the checkout request.
 type PaymentMandateLimits struct {
-	MandateLimits map[string]MandateLimit `json:"mandate_limits"`
+	MandateLimits map[PaymentMethodType]MandateLimit `json:"mandate_limits"`
 }
 
 type MandateLimit struct {
-	MaxAmount decimal.Decimal `json:"max_amount"`
+	MaxAmount decimal.Decimal `json:"max_amount" swaggertype:"string"`
 	Currency  string          `json:"currency,omitempty"`
 }
 
@@ -538,8 +538,8 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	defaultPaymentMandateLimits := PaymentMandateLimits{
-		MandateLimits: map[string]MandateLimit{
-			"upi": {MaxAmount: decimal.NewFromInt(100000), Currency: "INR"},
+		MandateLimits: map[PaymentMethodType]MandateLimit{
+			PaymentMethodTypeUPI: {MaxAmount: decimal.NewFromInt(100000), Currency: "INR"},
 		},
 	}
 	defaultPaymentMandateLimitsMap, err := utils.ToMap(defaultPaymentMandateLimits)

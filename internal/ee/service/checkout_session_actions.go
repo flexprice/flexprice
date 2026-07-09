@@ -40,7 +40,7 @@ func normalizeCheckoutPaymentProviderConfig(cfg types.CheckoutPaymentProviderCon
 // CollectionMethod default or any other source. v1 only supports the UPI
 // rail, so any other preferred method falls back to a payment link.
 func resolveCheckoutPaymentAction(
-	mandateLimits map[string]types.MandateLimit,
+	mandateLimits map[types.PaymentMethodType]types.MandateLimit,
 	cfg types.CheckoutPaymentProviderConfig,
 	existingConfirmedTokenFound bool,
 ) checkoutPaymentAction {
@@ -53,7 +53,7 @@ func resolveCheckoutPaymentAction(
 	if cfg.Razorpay.PreferredPaymentMethod != types.PaymentMethodTypeUPI {
 		return checkoutActionPaymentLink
 	}
-	if _, configured := mandateLimits["upi"]; !configured {
+	if _, configured := mandateLimits[types.PaymentMethodTypeUPI]; !configured {
 		return checkoutActionPaymentLink
 	}
 	if existingConfirmedTokenFound {
@@ -148,7 +148,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	mandateLimitsCfg, err := GetSetting[types.PaymentMandateLimits](settingsSvc, ctx, types.SettingKeyPaymentMandateLimits)
 	if err != nil {
-		mandateLimitsCfg = types.PaymentMandateLimits{MandateLimits: map[string]types.MandateLimit{}}
+		mandateLimitsCfg = types.PaymentMandateLimits{MandateLimits: map[types.PaymentMethodType]types.MandateLimit{}}
 	}
 
 	existingTokenFound := false
@@ -168,11 +168,11 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	var resp *interfaces.CheckoutProviderResponse
 	switch action {
 	case checkoutActionAuthorizationLink:
-		settingsCeiling := mandateLimitsCfg.MandateLimits["upi"].MaxAmount
-		if err := validateMandateCeiling(cfg.Razorpay.MaxAmount, settingsCeiling); err != nil {
+		settingsCeiling := mandateLimitsCfg.MandateLimits[types.PaymentMethodTypeUPI].MaxAmount
+		if err := validateMandateCeiling(cfg.Razorpay.MaxMandateLimit, settingsCeiling); err != nil {
 			return nil, err
 		}
-		effectiveCeiling := resolveMandateCeiling(cfg.Razorpay.MaxAmount, settingsCeiling)
+		effectiveCeiling := resolveMandateCeiling(cfg.Razorpay.MaxMandateLimit, settingsCeiling)
 		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
 			InvoiceID: req.InvoiceID, CustomerID: req.CustomerID, PaymentID: req.PaymentID,
 			Amount: req.Amount, Currency: req.Currency, MaxAmount: &effectiveCeiling,
