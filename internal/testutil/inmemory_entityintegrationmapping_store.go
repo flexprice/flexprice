@@ -95,11 +95,6 @@ func (s *InMemoryEntityIntegrationMappingStore) Delete(ctx context.Context, mapp
 	return s.InMemoryStore.Delete(ctx, mapping.ID)
 }
 
-// GetByEntity looks up a mapping by its (entity_type, entity_id, provider_type) tuple.
-func (s *InMemoryEntityIntegrationMappingStore) GetByEntity(ctx context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
-	return s.GetByEntityAndProvider(ctx, entityID, entityType, providerType)
-}
-
 // ListScopedClaimedByEntityTypesAndProvider implements the cross-tenant claim
 // lookup used by the reconciliation sweep, matching entries whose
 // Metadata["status"] is "claimed" for the given entity types + provider type,

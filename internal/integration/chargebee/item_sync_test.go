@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -279,15 +278,6 @@ func (m *memMappingRepo) Update(_ context.Context, mapping *entityintegrationmap
 func (m *memMappingRepo) Delete(_ context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
 	delete(m.byID, mapping.ID)
 	return nil
-}
-
-func (m *memMappingRepo) GetByEntity(_ context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
-	for _, v := range m.byID {
-		if v.EntityType == entityType && v.EntityID == entityID && v.ProviderType == providerType {
-			return v, nil
-		}
-	}
-	return nil, ierr.NewError("entity integration mapping not found").Mark(ierr.ErrNotFound)
 }
 
 func (m *memMappingRepo) ListScopedClaimedByEntityTypesAndProvider(_ context.Context, entityTypes []types.IntegrationEntityType, providerType string) ([]entityintegrationmapping.ScopedClaim, error) {

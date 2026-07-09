@@ -31,11 +31,6 @@ type Repository interface {
 	Update(ctx context.Context, mapping *EntityIntegrationMapping) error
 	Delete(ctx context.Context, mapping *EntityIntegrationMapping) error
 
-	// GetByEntity looks up a mapping by its (entity_type, entity_id, provider_type)
-	// tuple — the same tuple the unique index is built on. Returns ierr.ErrNotFound
-	// if no mapping exists.
-	GetByEntity(ctx context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*EntityIntegrationMapping, error)
-
 	// ListScopedClaimedByEntityTypesAndProvider returns claim rows (status
 	// "claimed" per Metadata["status"]) across ALL tenants and environments for
 	// the given entity types + provider type. Used by the reconciliation sweep

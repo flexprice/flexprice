@@ -356,65 +356,6 @@ func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping
 	return nil
 }
 
-// GetByEntity looks up a mapping by its (entity_type, entity_id, provider_type)
-// tuple — the same tuple the unique index is built on.
-func (r *entityIntegrationMappingRepository) GetByEntity(ctx context.Context, entityType types.IntegrationEntityType, entityID string, providerType string) (*domainEntityIntegrationMapping.EntityIntegrationMapping, error) {
-	client := r.client.Reader(ctx)
-
-	r.log.Debug(ctx, "getting entity integration mapping by entity",
-		"entity_type", entityType,
-		"entity_id", entityID,
-		"provider_type", providerType,
-	)
-
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "entity_integration_mapping", "get_by_entity", map[string]interface{}{
-		"entity_type":   entityType,
-		"entity_id":     entityID,
-		"provider_type": providerType,
-	})
-	defer FinishSpan(span)
-
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	mapping, err := client.EntityIntegrationMapping.Query().
-		Where(
-			entityintegrationmapping.EntityType(string(entityType)),
-			entityintegrationmapping.EntityID(entityID),
-			entityintegrationmapping.ProviderType(providerType),
-			entityintegrationmapping.TenantID(tenantID),
-			entityintegrationmapping.EnvironmentID(environmentID),
-		).
-		Only(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-
-		if ent.IsNotFound(err) {
-			return nil, ierr.NewError("entity integration mapping not found").
-				WithHint("The specified entity integration mapping does not exist").
-				WithReportableDetails(map[string]any{
-					"entity_type":   entityType,
-					"entity_id":     entityID,
-					"provider_type": providerType,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-
-		return nil, ierr.WithError(err).
-			WithHint("Failed to retrieve entity integration mapping").
-			Mark(ierr.ErrInternal)
-	}
-
-	domainMapping := domainEntityIntegrationMapping.FromEnt(mapping)
-
-	// Set cache
-	r.SetCache(ctx, domainMapping)
-
-	return domainMapping, nil
-}
-
 // ListScopedClaimedByEntityTypesAndProvider returns idempotency-claim mapping
 // rows (InvoiceCharge / TokenCycleCharge) whose Metadata["status"] is
 // "claimed", across ALL tenants and environments, for the given entity types
