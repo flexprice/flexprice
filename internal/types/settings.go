@@ -360,13 +360,8 @@ func (c EventIngestionFilterConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
-// PaymentMandateLimits configures, per environment, the auto-charge ceiling
-// for each payment rail. Keyed by rail/method type ("upi", "card", ...) — NOT
-// by provider name. This is a tunable safety ceiling, not the auto-charge
-// opt-in switch — the real opt-in gate lives entirely in the checkout
-// request's own collection_method/preferred_payment_method fields. Clearing
-// an entry is still a valid per-rail kill switch.
-// See docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5.1.
+// PaymentMandateLimits holds per-rail auto-charge ceilings (keyed by "upi", "card", etc.).
+// This is a safety ceiling, not the auto-charge opt-in — that lives in the checkout request.
 type PaymentMandateLimits struct {
 	MandateLimits map[string]MandateLimit `json:"mandate_limits"`
 }
