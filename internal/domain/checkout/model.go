@@ -102,6 +102,10 @@ func (j *JSONBCheckoutProviderResult) ToProviderResult() *types.CheckoutProvider
 }
 
 // JSONBCheckoutPaymentProviderConfig wraps CheckoutPaymentProviderConfig for JSONB storage.
+// Pointer-based (mirrors JSONBCheckoutResult, not JSONBCheckoutConfiguration) so a
+// checkout session with no payment-provider-specific config persists as a real SQL
+// NULL rather than an empty '{}' object — this column is genuinely optional, unlike
+// Configuration, which every session populates.
 type JSONBCheckoutPaymentProviderConfig types.CheckoutPaymentProviderConfig
 
 func (j *JSONBCheckoutPaymentProviderConfig) Scan(value interface{}) error {
@@ -117,16 +121,19 @@ func (j *JSONBCheckoutPaymentProviderConfig) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, j)
 }
 
-func (j JSONBCheckoutPaymentProviderConfig) Value() (driver.Value, error) {
+func (j *JSONBCheckoutPaymentProviderConfig) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
 	return json.Marshal(j)
 }
 
-func ToJSONBCheckoutPaymentProviderConfig(c types.CheckoutPaymentProviderConfig) JSONBCheckoutPaymentProviderConfig {
-	return JSONBCheckoutPaymentProviderConfig(c)
+func ToJSONBCheckoutPaymentProviderConfig(c *types.CheckoutPaymentProviderConfig) *JSONBCheckoutPaymentProviderConfig {
+	return (*JSONBCheckoutPaymentProviderConfig)(c)
 }
 
-func (j JSONBCheckoutPaymentProviderConfig) ToCheckoutPaymentProviderConfig() types.CheckoutPaymentProviderConfig {
-	return types.CheckoutPaymentProviderConfig(j)
+func (j *JSONBCheckoutPaymentProviderConfig) ToCheckoutPaymentProviderConfig() *types.CheckoutPaymentProviderConfig {
+	return (*types.CheckoutPaymentProviderConfig)(j)
 }
 
 // CheckoutSession is a single-use session that drives a B2C payment flow.
@@ -167,7 +174,9 @@ type CheckoutSession struct {
 
 	// PaymentProviderConfig holds provider-specific payment configuration
 	// (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
-	PaymentProviderConfig JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config" json:"payment_provider_config,omitempty"`
+	// Nil for sessions that don't declare one (e.g. Stripe checkouts, or any
+	// caller that never set payment_provider_config on the request).
+	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config" json:"payment_provider_config,omitempty"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.

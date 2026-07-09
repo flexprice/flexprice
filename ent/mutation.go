@@ -4887,7 +4887,7 @@ type CheckoutSessionMutation struct {
 	checkout_invoice_id     *string
 	checkout_payment_id     *string
 	configuration           *types.CheckoutConfiguration
-	payment_provider_config *types.CheckoutPaymentProviderConfig
+	payment_provider_config **types.CheckoutPaymentProviderConfig
 	result                  **types.CheckoutResult
 	provider_result         **types.CheckoutProviderResult
 	idempotency_key         *string
@@ -5579,12 +5579,12 @@ func (m *CheckoutSessionMutation) ResetConfiguration() {
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (m *CheckoutSessionMutation) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) {
+func (m *CheckoutSessionMutation) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) {
 	m.payment_provider_config = &tppc
 }
 
 // PaymentProviderConfig returns the value of the "payment_provider_config" field in the mutation.
-func (m *CheckoutSessionMutation) PaymentProviderConfig() (r types.CheckoutPaymentProviderConfig, exists bool) {
+func (m *CheckoutSessionMutation) PaymentProviderConfig() (r *types.CheckoutPaymentProviderConfig, exists bool) {
 	v := m.payment_provider_config
 	if v == nil {
 		return
@@ -5595,7 +5595,7 @@ func (m *CheckoutSessionMutation) PaymentProviderConfig() (r types.CheckoutPayme
 // OldPaymentProviderConfig returns the old "payment_provider_config" field's value of the CheckoutSession entity.
 // If the CheckoutSession object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutSessionMutation) OldPaymentProviderConfig(ctx context.Context) (v types.CheckoutPaymentProviderConfig, err error) {
+func (m *CheckoutSessionMutation) OldPaymentProviderConfig(ctx context.Context) (v *types.CheckoutPaymentProviderConfig, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPaymentProviderConfig is only allowed on UpdateOne operations")
 	}
@@ -6508,7 +6508,7 @@ func (m *CheckoutSessionMutation) SetField(name string, value ent.Value) error {
 		m.SetConfiguration(v)
 		return nil
 	case checkoutsession.FieldPaymentProviderConfig:
-		v, ok := value.(types.CheckoutPaymentProviderConfig)
+		v, ok := value.(*types.CheckoutPaymentProviderConfig)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

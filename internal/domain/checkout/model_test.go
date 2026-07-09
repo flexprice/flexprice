@@ -10,7 +10,7 @@ import (
 func TestJSONBCheckoutPaymentProviderConfig_ScanValueRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	original := types.CheckoutPaymentProviderConfig{
+	original := &types.CheckoutPaymentProviderConfig{
 		CollectionMethod: types.CollectionMethodChargeAutomatically,
 		Razorpay: &types.RazorpayPaymentProviderConfig{
 			PreferredPaymentMethod: types.PaymentMethodTypeUPI,
@@ -26,4 +26,13 @@ func TestJSONBCheckoutPaymentProviderConfig_ScanValueRoundTrip(t *testing.T) {
 	var roundTripped JSONBCheckoutPaymentProviderConfig
 	require.NoError(t, roundTripped.Scan(rawBytes))
 	require.Equal(t, original, roundTripped.ToCheckoutPaymentProviderConfig())
+}
+
+func TestJSONBCheckoutPaymentProviderConfig_NilValueIsSQLNull(t *testing.T) {
+	t.Parallel()
+
+	var wrapped *JSONBCheckoutPaymentProviderConfig
+	raw, err := wrapped.Value()
+	require.NoError(t, err)
+	require.Nil(t, raw, "an absent payment_provider_config must persist as SQL NULL, not an empty object")
 }

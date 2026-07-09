@@ -138,16 +138,8 @@ func (csu *CheckoutSessionUpdate) SetNillableConfiguration(tc *types.CheckoutCon
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (csu *CheckoutSessionUpdate) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
+func (csu *CheckoutSessionUpdate) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
 	csu.mutation.SetPaymentProviderConfig(tppc)
-	return csu
-}
-
-// SetNillablePaymentProviderConfig sets the "payment_provider_config" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillablePaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
-	if tppc != nil {
-		csu.SetPaymentProviderConfig(*tppc)
-	}
 	return csu
 }
 
@@ -640,16 +632,8 @@ func (csuo *CheckoutSessionUpdateOne) SetNillableConfiguration(tc *types.Checkou
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (csuo *CheckoutSessionUpdateOne) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
+func (csuo *CheckoutSessionUpdateOne) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
 	csuo.mutation.SetPaymentProviderConfig(tppc)
-	return csuo
-}
-
-// SetNillablePaymentProviderConfig sets the "payment_provider_config" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillablePaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
-	if tppc != nil {
-		csuo.SetPaymentProviderConfig(*tppc)
-	}
 	return csuo
 }
 

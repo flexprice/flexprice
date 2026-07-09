@@ -178,16 +178,8 @@ func (csc *CheckoutSessionCreate) SetConfiguration(tc types.CheckoutConfiguratio
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (csc *CheckoutSessionCreate) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
+func (csc *CheckoutSessionCreate) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
 	csc.mutation.SetPaymentProviderConfig(tppc)
-	return csc
-}
-
-// SetNillablePaymentProviderConfig sets the "payment_provider_config" field if the given value is not nil.
-func (csc *CheckoutSessionCreate) SetNillablePaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
-	if tppc != nil {
-		csc.SetPaymentProviderConfig(*tppc)
-	}
 	return csc
 }
 

@@ -51,7 +51,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
 		SetConfiguration(types.CheckoutConfiguration(s.Configuration)).
-		SetPaymentProviderConfig(types.CheckoutPaymentProviderConfig(s.PaymentProviderConfig)).
+		SetPaymentProviderConfig((*types.CheckoutPaymentProviderConfig)(s.PaymentProviderConfig)).
 		SetResult((*types.CheckoutResult)(s.Result)).
 		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
 		SetNillableIdempotencyKey(s.IdempotencyKey).
@@ -446,7 +446,7 @@ func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
 		CheckoutInvoiceID:     e.CheckoutInvoiceID,
 		CheckoutPaymentID:     e.CheckoutPaymentID,
 		Configuration:         domainCheckout.JSONBCheckoutConfiguration(e.Configuration),
-		PaymentProviderConfig: domainCheckout.JSONBCheckoutPaymentProviderConfig(e.PaymentProviderConfig),
+		PaymentProviderConfig: (*domainCheckout.JSONBCheckoutPaymentProviderConfig)(e.PaymentProviderConfig),
 		Result:                (*domainCheckout.JSONBCheckoutResult)(e.Result),
 		ProviderResult:        (*domainCheckout.JSONBCheckoutProviderResult)(e.ProviderResult),
 		IdempotencyKey:        e.IdempotencyKey,

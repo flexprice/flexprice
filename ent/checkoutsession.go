@@ -48,7 +48,7 @@ type CheckoutSession struct {
 	// Configuration holds the value of the "configuration" field.
 	Configuration types.CheckoutConfiguration `json:"configuration,omitempty"`
 	// PaymentProviderConfig holds the value of the "payment_provider_config" field.
-	PaymentProviderConfig types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
+	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
 	// Result holds the value of the "result" field.
 	Result *types.CheckoutResult `json:"result,omitempty"`
 	// ProviderResult holds the value of the "provider_result" field.
