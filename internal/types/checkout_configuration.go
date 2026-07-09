@@ -127,7 +127,7 @@ type CheckoutPaymentProviderConfig struct {
 	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
 }
 
-func (c *CheckoutPaymentProviderConfig) Validate(_ CheckoutPaymentProvider) error {
+func (c *CheckoutPaymentProviderConfig) Validate() error {
 	if c == nil {
 		return nil
 	}

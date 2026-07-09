@@ -42,7 +42,7 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
-	if err := r.PaymentProviderConfig.Validate(r.PaymentProvider); err != nil {
+	if err := r.PaymentProviderConfig.Validate(); err != nil {
 		return err
 	}
 

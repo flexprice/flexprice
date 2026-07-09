@@ -80,13 +80,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		Metadata:   session.Metadata,
 	}
 
-	cfg := types.CheckoutPaymentProviderConfig{}
-	if session.PaymentProviderConfig != nil {
-		cfg = *session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig()
-	}
-	if cfg.CollectionMethod == "" {
-		cfg.CollectionMethod = types.CollectionMethodSendInvoice
-	}
+	cfg := lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig())
 
 	var resp *interfaces.CheckoutProviderResponse
 

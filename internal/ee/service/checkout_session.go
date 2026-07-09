@@ -30,6 +30,21 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 		return nil, err
 	}
 
+	cfg := &types.CheckoutPaymentProviderConfig{}
+	if req.PaymentProviderConfig != nil {
+		cfg = req.PaymentProviderConfig
+	}
+	if cfg.CollectionMethod == "" {
+		cfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Write the normalized config back so ToCheckoutSession persists the resolved defaults.
+	req.PaymentProviderConfig = cfg
+
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.CustomerExternalID)
 	if err != nil {
 		return nil, err
@@ -322,10 +337,8 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		SubscriptionStatus: types.SubscriptionStatusDraft,
 	}
 
-	// also extract the collection method from the session configuration if present
-	collectionMethod := session.PaymentProviderConfig.CollectionMethod
-	if collectionMethod != "" {
-		subReq.CollectionMethod = lo.ToPtr(collectionMethod)
+	if session.PaymentProviderConfig != nil && session.PaymentProviderConfig.CollectionMethod != "" {
+		subReq.CollectionMethod = lo.ToPtr(session.PaymentProviderConfig.CollectionMethod)
 	}
 
 	subSvc := NewSubscriptionService(s.ServiceParams)
