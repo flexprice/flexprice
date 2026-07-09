@@ -12,17 +12,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// normalizeCheckoutPaymentProviderConfig applies the one explicit default this
-// gate depends on: an unset CollectionMethod becomes send_invoice. A single,
-// visible normalization step applied once at request entry — not an
-// assumption buried inside later branching. See design spec §6.1.
-func normalizeCheckoutPaymentProviderConfig(cfg types.CheckoutPaymentProviderConfig) types.CheckoutPaymentProviderConfig {
-	if cfg.CollectionMethod == "" {
-		cfg.CollectionMethod = types.CollectionMethodSendInvoice
-	}
-	return cfg
-}
-
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
 	switch session.Action {
 	case types.CheckoutActionCreateSubscription:
@@ -95,11 +84,15 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	if session.PaymentProviderConfig != nil {
 		cfg = *session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig()
 	}
-	cfg = normalizeCheckoutPaymentProviderConfig(cfg)
+	if cfg.CollectionMethod == "" {
+		cfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
 
 	var resp *interfaces.CheckoutProviderResponse
 
-	if cfg.CollectionMethod == types.CollectionMethodChargeAutomatically {
+	switch cfg.CollectionMethod {
+
+	case types.CollectionMethodChargeAutomatically:
 		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
 			InvoiceID:       req.InvoiceID,
 			CustomerID:      req.CustomerID,
@@ -112,9 +105,10 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
 		})
-	} else {
+	case types.CollectionMethodSendInvoice:
 		resp, err = provider.CreatePaymentLink(ctx, req)
 	}
+
 	if err != nil {
 		return nil, err
 	}
