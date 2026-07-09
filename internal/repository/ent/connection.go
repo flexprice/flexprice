@@ -357,6 +357,12 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			}
 			return data
 		}
+	case types.SecretProviderTabs:
+		if encryptedSecretData.Tabs != nil {
+			return map[string]interface{}{
+				"api_key": encryptedSecretData.Tabs.APIKey,
+			}
+		}
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks != nil {
 			result := map[string]interface{}{

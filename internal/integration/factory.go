@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -21,13 +22,13 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
-	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	paddlewebhook "github.com/flexprice/flexprice/internal/integration/paddle/webhook"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
@@ -35,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	"github.com/flexprice/flexprice/internal/integration/tabs"
 	"github.com/flexprice/flexprice/internal/integration/whop"
 	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
@@ -53,6 +55,7 @@ type Factory struct {
 	connectionRepo               connection.Repository
 	customerRepo                 customer.Repository
 	subscriptionRepo             subscription.Repository
+	planRepo                     plan.Repository
 	invoiceRepo                  invoice.Repository
 	paymentRepo                  payment.Repository
 	paymentMethodRepo            paymentmethod.Repository
@@ -69,7 +72,7 @@ type Factory struct {
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
-	lifecycle       *payments.PaymentLifecycle
+	lifecycle      *payments.PaymentLifecycle
 }
 
 // NewFactory creates a new integration factory
@@ -79,6 +82,7 @@ func NewFactory(
 	connectionRepo connection.Repository,
 	customerRepo customer.Repository,
 	subscriptionRepo subscription.Repository,
+	planRepo plan.Repository,
 	invoiceRepo invoice.Repository,
 	paymentRepo payment.Repository,
 	paymentMethodRepo paymentmethod.Repository,
@@ -95,6 +99,7 @@ func NewFactory(
 		connectionRepo:               connectionRepo,
 		customerRepo:                 customerRepo,
 		subscriptionRepo:             subscriptionRepo,
+		planRepo:                     planRepo,
 		invoiceRepo:                  invoiceRepo,
 		paymentRepo:                  paymentRepo,
 		paymentMethodRepo:            paymentMethodRepo,
@@ -672,6 +677,38 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 	}, nil
 }
 
+// GetTabsIntegration returns a complete Tabs integration setup for the current environment. It
+// mirrors the other providers: it resolves the published Tabs connection and wires the invoice
+// sync service with the repositories it needs.
+func (f *Factory) GetTabsIntegration(ctx context.Context) (*TabsIntegration, error) {
+	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderTabs)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider tabs is not configured in this environment").
+			WithHint("Tabs connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+
+	client := tabs.NewClient(f.connectionRepo, f.encryptionService, f.logger)
+	invoiceSvc := tabs.NewInvoiceService(
+		client,
+		f.customerRepo,
+		f.subscriptionRepo,
+		f.planRepo,
+		f.priceRepo,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &TabsIntegration{
+		Client:     client,
+		InvoiceSvc: invoiceSvc,
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (Base, error) {
 	switch providerType {
@@ -695,6 +732,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetZohoBooksIntegration(ctx)
 	case types.SecretProviderWhop:
 		return f.GetWhopIntegration(ctx)
+	case types.SecretProviderTabs:
+		return f.GetTabsIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -718,6 +757,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderMoyasar,
 		types.SecretProviderZohoBooks,
 		types.SecretProviderWhop,
+		types.SecretProviderTabs,
 	}
 }
 
@@ -833,7 +873,7 @@ type MoyasarIntegration struct {
 	PaymentSvc        *moyasar.PaymentService
 	InvoiceSyncSvc    *moyasar.InvoiceSyncService
 	WebhookHandler    *moyasarwebhook.Handler
-	Lifecycle            *payments.PaymentLifecycle
+	Lifecycle         *payments.PaymentLifecycle
 	PaymentMethodRepo paymentmethod.Repository
 	Logger            *logger.Logger
 }
@@ -998,6 +1038,16 @@ type ZohoBooksIntegration struct {
 
 func (z *ZohoBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
 	return fmt.Errorf("invoice pull sync not supported for zohobooks")
+}
+
+// TabsIntegration contains all Tabs integration services
+type TabsIntegration struct {
+	Client     tabs.TabsClient
+	InvoiceSvc tabs.TabsInvoiceService
+}
+
+func (t *TabsIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for tabs")
 }
 
 // IntegrationProvider defines the interface for all integration providers
@@ -1187,6 +1237,15 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		}
 	}
 
+	// Check Tabs
+	tabsIntegration, err := f.GetTabsIntegration(ctx)
+	if err == nil {
+		tabsProvider := &TabsProvider{integration: tabsIntegration}
+		if tabsProvider.IsAvailable(ctx) {
+			providers = append(providers, tabsProvider)
+		}
+	}
+
 	return providers, nil
 }
 
@@ -1203,6 +1262,21 @@ func (p *WhopProvider) GetProviderType() types.SecretProvider {
 // IsAvailable checks if Whop integration is available
 func (p *WhopProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasWhopConnection(ctx)
+}
+
+// TabsProvider implements IntegrationProvider for Tabs
+type TabsProvider struct {
+	integration *TabsIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *TabsProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderTabs
+}
+
+// IsAvailable checks if Tabs integration is available
+func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasTabsConnection(ctx)
 }
 
 // GetStorageProvider returns an S3 storage client for the given connection

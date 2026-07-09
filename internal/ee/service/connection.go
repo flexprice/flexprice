@@ -353,6 +353,21 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			ProductID: encryptedSecretData.Whop.ProductID, // not sensitive, stored plain
 		}
 
+	case types.SecretProviderTabs:
+		if encryptedSecretData.Tabs == nil {
+			s.Logger.Info(context.Background(), "Tabs metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Tabs metadata is required").
+				WithHint("Tabs connection requires encrypted_secret_data with api_key").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedAPIKey, err := s.encryptionService.Encrypt(encryptedSecretData.Tabs.APIKey)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.Tabs = &types.TabsConnectionMetadata{
+			APIKey: encryptedAPIKey,
+		}
+
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
 			s.Logger.Info(context.Background(), "Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
