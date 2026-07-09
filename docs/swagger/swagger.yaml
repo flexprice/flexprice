@@ -7853,7 +7853,7 @@ definitions:
       timestamp:
         type: string
       value_at_time:
-        type: number
+        type: string
     type: object
   types.AlertLogFilter:
     properties:
@@ -7925,7 +7925,7 @@ definitions:
       condition:
         $ref: '#/definitions/types.AlertCondition'
       threshold:
-        type: number
+        type: string
     type: object
   types.AlertType:
     enum:
