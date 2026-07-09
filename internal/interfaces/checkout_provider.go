@@ -66,7 +66,8 @@ type AuthorizationLinkRequest struct {
 }
 
 type ListSavedPaymentMethodsRequest struct {
-	CustomerID, EnvironmentID string
+	CustomerID    string
+	EnvironmentID string
 }
 
 // ProviderPaymentMethod is a normalized view of one confirmed, usable token as it
