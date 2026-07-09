@@ -138,7 +138,23 @@ const (
 	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
 	SubscriptionModifyTypeCoupon           SubscriptionModifyType = "coupon"
 	SubscriptionModifyTypeTax              SubscriptionModifyType = "tax"
+	SubscriptionModifyTypeEndDate          SubscriptionModifyType = "end_date"
 )
+
+// SubModifyEndDateRequest is the payload for extending a subscription's end date.
+type SubModifyEndDateRequest struct {
+	// NewEndDate is the new subscription end. Must be strictly after the current end_date.
+	NewEndDate time.Time `json:"new_end_date" binding:"required"`
+}
+
+func (r *SubModifyEndDateRequest) Validate() error {
+	if r.NewEndDate.IsZero() {
+		return ierr.NewError("new_end_date is required").
+			WithHint("Provide a new_end_date to extend the subscription term").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
 
 // SubModifyCouponAction is the action to perform on a coupon association.
 type SubModifyCouponAction string
@@ -285,6 +301,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
+	EndDateParams          *SubModifyEndDateRequest         `json:"end_date_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -325,9 +342,15 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return r.TaxParams.Validate()
+	case SubscriptionModifyTypeEndDate:
+		if r.EndDateParams == nil {
+			return ierr.NewError("end_date_params is required for type 'end_date'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.EndDateParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax, end_date").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -393,6 +416,24 @@ type ChangedSubscription struct {
 	Status           types.SubscriptionStatus  `json:"status"`
 	TrialEnd         *time.Time                `json:"trial_end,omitempty"`
 	CurrentPeriodEnd *time.Time                `json:"current_period_end,omitempty"`
+	EndDate          *time.Time                `json:"end_date,omitempty"`
+}
+
+// ChangedCreditGrantAction describes how a credit grant changed.
+// @Description updated
+type ChangedCreditGrantAction string
+
+const (
+	ChangedCreditGrantActionUpdated ChangedCreditGrantAction = "updated"
+)
+
+// ChangedCreditGrant describes a credit grant mutated by a subscription modification.
+type ChangedCreditGrant struct {
+	ID      string                   `json:"id"`
+	Action  ChangedCreditGrantAction `json:"action"`
+	EndDate *time.Time               `json:"end_date,omitempty"`
+	// CreditGrant is the grant after the modification (execute) or projected (preview).
+	CreditGrant *CreditGrantResponse `json:"credit_grant,omitempty"`
 }
 
 // ChangedInvoice describes a proration invoice or wallet credit from a modification.
@@ -413,6 +454,7 @@ type ChangedResources struct {
 	LineItems     []ChangedLineItem     `json:"line_items,omitempty"`
 	Subscriptions []ChangedSubscription `json:"subscriptions,omitempty"`
 	Invoices      []ChangedInvoice      `json:"invoices,omitempty"`
+	CreditGrants  []ChangedCreditGrant  `json:"credit_grants,omitempty"`
 }
 
 // SubscriptionModifyResponse is the response from execute and preview endpoints.
