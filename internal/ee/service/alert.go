@@ -111,22 +111,23 @@ func (s *alertService) UpdateAlertSettings(ctx context.Context, id string, req d
 		return nil, err
 	}
 
-	// Merge the patch onto the stored config so omitted fields keep their value, then validate the result.
-	mergedConfig := alertSettings.Config.Merge(req.Config)
-	if err := mergedConfig.Validate(); err != nil {
+	// The caller sends the complete desired config
+	// a threshold left out is cleared, not retained
+	newConfig := req.Config
+	if err := newConfig.Validate(); err != nil {
 		return nil, err
 	}
 
 	// Gate the "above only" rule on the stored row's scope (the update payload carries no entity_type).
 	parentEntityType := types.AlertEntityType(lo.FromPtr(alertSettings.ParentEntityType))
 	if types.IsSubscriptionRootedAlert(alertSettings.EntityType, parentEntityType) {
-		if err := dto.ValidateSpendThreshold(mergedConfig); err != nil {
+		if err := dto.ValidateSpendThreshold(newConfig); err != nil {
 			return nil, err
 		}
 	}
 
-	alertSettings.Config = mergedConfig
-	alertSettings.Enabled = mergedConfig.IsAlertEnabled()
+	alertSettings.Config = newConfig
+	alertSettings.Enabled = newConfig.IsAlertEnabled()
 	alertSettings.UpdatedAt = time.Now().UTC()
 	alertSettings.UpdatedBy = types.GetUserID(ctx)
 

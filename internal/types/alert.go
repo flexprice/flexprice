@@ -530,22 +530,3 @@ func (At *AlertSettings) AlertState(ongoingBalance decimal.Decimal) (AlertState,
 func (at *AlertSettings) IsAlertEnabled() bool {
 	return at.AlertEnabled != nil && *at.AlertEnabled
 }
-
-// Merge overlays the patch's non-nil fields onto a copy of at. This is how updates stay partial:
-// {"alert_enabled": false} flips just that flag and leaves the existing thresholds alone.
-func (at *AlertSettings) Merge(patch *AlertSettings) *AlertSettings {
-	merged := *at
-	if patch.Critical != nil {
-		merged.Critical = patch.Critical
-	}
-	if patch.Warning != nil {
-		merged.Warning = patch.Warning
-	}
-	if patch.Info != nil {
-		merged.Info = patch.Info
-	}
-	if patch.AlertEnabled != nil {
-		merged.AlertEnabled = patch.AlertEnabled
-	}
-	return &merged
-}

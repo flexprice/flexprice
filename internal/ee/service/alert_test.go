@@ -252,7 +252,10 @@ func (s *AlertSettingsServiceSuite) TestCreateAlertSettings_DuplicateRejected() 
 	s.True(ierr.IsAlreadyExists(err))
 }
 
-func (s *AlertSettingsServiceSuite) TestUpdateAlertSettings_PatchesConfigAndSyncsEnabled() {
+// Update is a whole-object replace (same contract as WalletService.UpdateWallet's
+// existing.AlertSettings = req.AlertSettings) — sending a config with only Info populated must
+// clear the critical/warning thresholds the original had, not retain them.
+func (s *AlertSettingsServiceSuite) TestUpdateAlertSettings_ReplacesConfigAndSyncsEnabled() {
 	created, err := s.alertService.CreateAlertSettings(s.GetContext(), dto.CreateAlertSettingsRequest{
 		EntityType: types.AlertEntityTypeSubscription,
 		EntityID:   s.sub.ID,
@@ -261,54 +264,57 @@ func (s *AlertSettingsServiceSuite) TestUpdateAlertSettings_PatchesConfigAndSync
 	s.Require().NoError(err)
 	s.True(created.Enabled)
 
-	// Info stays at 300 so it still ranks below the warning (500) / critical (1000) that survive the patch.
-	disabledConfig := &types.AlertSettings{
+	// Info-only config (valid standalone, no warning/critical required).
+	replacementConfig := &types.AlertSettings{
 		AlertEnabled: lo.ToPtr(false),
 		Info:         &types.AlertThreshold{Threshold: decimal.NewFromInt(300), Condition: types.AlertConditionAbove},
 	}
 
 	updated, err := s.alertService.UpdateAlertSettings(s.GetContext(), created.ID, dto.UpdateAlertSettingsRequest{
-		Config: disabledConfig,
+		Config: replacementConfig,
 	})
 	s.Require().NoError(err)
 	s.False(updated.Enabled)
 	s.Require().NotNil(updated.Config.Info)
 	s.True(updated.Config.Info.Threshold.Equal(decimal.NewFromInt(300)))
 
-	// Fields the patch didn't mention (critical, warning) survive from the original fullConfig().
-	s.Require().NotNil(updated.Config.Critical)
-	s.True(updated.Config.Critical.Threshold.Equal(decimal.NewFromInt(1000)))
-	s.Require().NotNil(updated.Config.Warning)
-	s.True(updated.Config.Warning.Threshold.Equal(decimal.NewFromInt(500)))
+	// Not in the replacement config, so they're cleared — this is the whole point of replace
+	// semantics: a threshold must actually be removable, which merge semantics prevented.
+	s.Nil(updated.Config.Critical)
+	s.Nil(updated.Config.Warning)
 
 	// Identity fields are untouched by update.
 	s.Equal(types.AlertEntityTypeSubscription, updated.EntityType)
 	s.Equal(s.sub.ID, updated.EntityID)
 }
 
-// A warning-only patch would fail validation on its own (warning needs critical), but passes once
-// merged with a stored config that already has critical.
-func (s *AlertSettingsServiceSuite) TestUpdateAlertSettings_PartialPatchDoesNotRequireOtherFields() {
+// Removing a single threshold (sending the remaining config without it) must clear it, not retain
+// the stored value — the exact bug merge semantics caused (a threshold could never be removed).
+func (s *AlertSettingsServiceSuite) TestUpdateAlertSettings_RemovesSingleThreshold() {
 	created, err := s.alertService.CreateAlertSettings(s.GetContext(), dto.CreateAlertSettingsRequest{
 		EntityType: types.AlertEntityTypeSubscription,
 		EntityID:   s.sub.ID,
 		Config:     fullConfig(),
 	})
 	s.Require().NoError(err)
+	s.Require().NotNil(created.Config.Warning)
 
-	warningOnlyPatch := &types.AlertSettings{
-		Warning: &types.AlertThreshold{Threshold: decimal.NewFromInt(600), Condition: types.AlertConditionAbove},
+	// Drop warning; keep critical (1000) and info (250, still valid below critical without warning).
+	withoutWarning := &types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Critical:     &types.AlertThreshold{Threshold: decimal.NewFromInt(1000), Condition: types.AlertConditionAbove},
+		Info:         &types.AlertThreshold{Threshold: decimal.NewFromInt(250), Condition: types.AlertConditionAbove},
 	}
 
 	updated, err := s.alertService.UpdateAlertSettings(s.GetContext(), created.ID, dto.UpdateAlertSettingsRequest{
-		Config: warningOnlyPatch,
+		Config: withoutWarning,
 	})
 	s.Require().NoError(err)
-	s.Require().NotNil(updated.Config.Warning)
-	s.True(updated.Config.Warning.Threshold.Equal(decimal.NewFromInt(600)))
+	s.Nil(updated.Config.Warning, "removed warning threshold must be cleared, not retained")
 	s.Require().NotNil(updated.Config.Critical)
 	s.True(updated.Config.Critical.Threshold.Equal(decimal.NewFromInt(1000)))
-	s.True(updated.Enabled, "alert_enabled untouched by the patch must keep its stored value")
+	s.Require().NotNil(updated.Config.Info)
+	s.True(updated.Config.Info.Threshold.Equal(decimal.NewFromInt(250)))
 }
 
 func (s *AlertSettingsServiceSuite) TestDeleteAlertSettings_SoftDeleteExcludedFromList() {

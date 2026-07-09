@@ -114,15 +114,14 @@ func (r *CreateAlertSettingsRequest) ToAlertSettings(ctx context.Context) *alert
 	}
 }
 
-// UpdateAlertSettingsRequest is the body for PUT /v1/alerts/setting/:id. Only the config fields it
-// sets change; omitted ones keep their stored value (see types.AlertSettings.Merge). Identity
-// fields (entity_type, entity_id, parent_entity_type, parent_entity_id) can't be changed.
+// UpdateAlertSettingsRequest is the body for PUT /v1/alerts/setting/:id. Config replaces the
+// stored config wholesale, not a per-field merge. The caller must send the complete desired config every time;
+// a threshold left out of the request is cleared, not left alone.
 type UpdateAlertSettingsRequest struct {
 	Config *types.AlertSettings `json:"config" validate:"required"`
 }
 
-// Validate only checks field shape. Config is a patch that can be incomplete on its own, so the
-// full config validation runs in AlertService.UpdateAlertSettings on the merged result.
+// Validate checks field shape.
 func (r *UpdateAlertSettingsRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
