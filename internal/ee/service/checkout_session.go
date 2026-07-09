@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/shopspring/decimal"
 )
 
 type CheckoutSessionService = interfaces.CheckoutSessionService
@@ -360,34 +359,6 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 	return subResp, invResp, nil
 }
 
-// validateMandateCeiling rejects a per-request ceiling override that exceeds
-// the environment's Settings-level ceiling. Silently capping would be more
-// surprising than an explicit rejection. See design spec §5.3.
-func validateMandateCeiling(requestMaxAmount *decimal.Decimal, settingsMaxAmount decimal.Decimal) error {
-	if requestMaxAmount == nil {
-		return nil
-	}
-	if requestMaxAmount.GreaterThan(settingsMaxAmount) {
-		return ierr.NewError("requested max_amount exceeds the environment's configured mandate ceiling").
-			WithHint("Lower payment_provider_config.razorpay.max_amount or raise the environment's payment_mandate_limits setting").
-			WithReportableDetails(map[string]any{
-				"requested_max_amount": requestMaxAmount.String(),
-				"settings_max_amount":  settingsMaxAmount.String(),
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// resolveMandateCeiling returns the effective ceiling: the request's override
-// if provided (already validated not to exceed Settings via
-// validateMandateCeiling), otherwise the Settings-level value.
-func resolveMandateCeiling(requestMaxAmount *decimal.Decimal, settingsMaxAmount decimal.Decimal) decimal.Decimal {
-	if requestMaxAmount != nil {
-		return *requestMaxAmount
-	}
-	return settingsMaxAmount
-}
 
 func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv *invoice.Invoice, provider types.CheckoutPaymentProvider) (*dto.PaymentResponse, error) {
 	var gateway types.PaymentGatewayType

@@ -122,32 +122,22 @@ func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 // CheckoutPaymentProviderConfig is the per-checkout payment behavior config,
 // stored in CheckoutSession.payment_provider_config.
 type CheckoutPaymentProviderConfig struct {
-	CollectionMethod CollectionMethod               `json:"collection_method,omitempty"`
-	Razorpay         *RazorpayPaymentProviderConfig `json:"razorpay,omitempty"`
+	CollectionMethod CollectionMethod  `json:"collection_method,omitempty"`
+	PreferredMethod  PaymentMethodType `json:"preferred_method,omitempty"`
+	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
 }
 
-type RazorpayPaymentProviderConfig struct {
-	PreferredPaymentMethod PaymentMethodType `json:"preferred_payment_method,omitempty"`
-	MaxMandateLimit        *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
-}
-
-func (c *CheckoutPaymentProviderConfig) Validate(provider CheckoutPaymentProvider) error {
+func (c *CheckoutPaymentProviderConfig) Validate(_ CheckoutPaymentProvider) error {
 	if c == nil {
 		return nil
 	}
-	switch provider {
-	case CheckoutPaymentProviderRazorpay:
-		if c.Razorpay == nil {
-			return nil
+	if c.PreferredMethod != "" {
+		if err := c.PreferredMethod.Validate(); err != nil {
+			return err
 		}
-		if c.Razorpay.PreferredPaymentMethod != "" {
-			if err := c.Razorpay.PreferredPaymentMethod.Validate(); err != nil {
-				return err
-			}
-		}
-		if c.Razorpay.MaxMandateLimit != nil && c.Razorpay.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
-			return ierr.NewError("razorpay.max_mandate_limit must be greater than or equal to 1").Mark(ierr.ErrValidation)
-		}
+	}
+	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
 	}
 	return nil
 }

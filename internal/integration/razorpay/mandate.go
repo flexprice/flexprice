@@ -128,13 +128,6 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	if c.Email != "" {
 		customerInfo["email"] = c.Email
 	}
-	// Note: contact/phone not available in FlexPrice customer model (see payment.go's
-	// CreatePaymentLink for the same caveat). VERIFY AT IMPLEMENTATION TIME: unlike
-	// CreatePaymentLink's endpoint, docs/prds/razorpau-runbook.md's tested example
-	// payloads for subscription_registration/auth_links DO include "contact" — its
-	// customer-dedup-on-contact/email claim was specifically confirmed with contact
-	// present. Behavior with email-only is unverified; test against Razorpay test mode
-	// before relying on this in production.
 
 	data := map[string]interface{}{
 		"customer":     customerInfo,
