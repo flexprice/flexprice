@@ -634,3 +634,27 @@ Then `curl http://localhost:8080/health` → `{"status":"ok"}`. Auth for `/v1/*`
   `~/.local/bin` (needs network) and appends that dir to `~/.bashrc`.
 - **`make lint` is non-blocking** (prints `LL008` dev-checkpoint warnings and exits 0). Use
   `make lint-ci` for the errors-only gate.
+
+### Integration sanity suite (`integration-testing-suite/go`)
+End-to-end billing lifecycle against a running server (see `make test-suite`). To run it
+against the local server, mint a DB-backed key (it embeds the environment, so the suite
+needs no `x-environment-id`) and point a target at `localhost:8080/v1`:
+
+```bash
+# sign up -> returns JWT + tenant_id; then create a private key scoped to the tenant's env
+curl -s -X POST localhost:8080/v1/auth/signup -H 'Content-Type: application/json' \
+  -d '{"email":"dev@flexprice.local","password":"password12345","tenant_name":"Dev"}'
+# GET /v1/environments (Bearer <token>) -> env id; then:
+curl -s -X POST localhost:8080/v1/secrets/api/keys -H "Authorization: Bearer <token>" \
+  -H "X-Environment-ID: <env>" -H 'Content-Type: application/json' \
+  -d '{"name":"suite","type":"private_key"}'          # returns api_key once (sk_...)
+
+FLEXPRICE_API_KEY=<sk_...> FLEXPRICE_API_HOST=localhost:8080/v1 make test-suite
+```
+
+Notes: the suite exits non-zero only on **core** (Phase 1–5) failures; Phase 7 cleanup
+failures (e.g. `DeleteTaxAssociation` "unknown content-type … Status 200", an SDK quirk)
+are reported but non-fatal. The usage-processing wait (Phase 4) may time out in ~30s on a
+cold consumer without failing the run. The suite module tracks the same Go version as the
+root `go.mod` (`go 1.25.0`); the base toolchain on the box is older, so Go auto-downloads
+`1.25.0` (already cached after the first build) — do not force `GOTOOLCHAIN=local`.
