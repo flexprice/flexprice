@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	razorpay "github.com/razorpay/razorpay-go"
 )
 
@@ -391,39 +392,40 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 	return razorpayInvoice, nil
 }
 
-// GetCustomerTokens fetches all tokens registered against a Razorpay customer.
-// GET /v1/customers/{id}/tokens — SDK: Token.All.
-func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error) {
-	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+// sdkClient is a convenience wrapper that initialises the Razorpay SDK client
+// and returns a ready-to-use *razorpay.Client or a pre-formatted error.
+func (c *Client) sdkClient(ctx context.Context) (*razorpay.Client, error) {
+	rc, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
 		return nil, ierr.NewError("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
 	}
+	return rc, nil
+}
 
-	result, err := razorpayClient.Token.All(razorpayCustomerID, nil, nil)
+// GetCustomerTokens fetches all tokens registered against a Razorpay customer.
+// GET /v1/customers/{id}/tokens — SDK: Token.All.
+func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Token.All(razorpayCustomerID, nil, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to list Razorpay customer tokens", "error", err, "customer_id", razorpayCustomerID)
 		return nil, ierr.NewError("failed to list Razorpay customer tokens").
 			WithHint("Unable to list tokens from Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": razorpayCustomerID,
-				"error":       err.Error(),
-			}).
+			WithReportableDetails(map[string]interface{}{"customer_id": razorpayCustomerID, "error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
 
-	items, ok := result["items"].([]interface{})
-	if !ok {
-		return []map[string]interface{}{}, nil
-	}
-	tokens := make([]map[string]interface{}, 0, len(items))
-	for _, item := range items {
-		if m, ok := item.(map[string]interface{}); ok {
-			tokens = append(tokens, m)
-		}
-	}
-	return tokens, nil
+	items, _ := result["items"].([]interface{})
+	return lo.FilterMap(items, func(item interface{}, _ int) (map[string]interface{}, bool) {
+		m, ok := item.(map[string]interface{})
+		return m, ok
+	}), nil
 }
 
 // CreateAuthorizationLink registers a UPI Autopay mandate combined with the
@@ -431,21 +433,17 @@ func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID strin
 // dedicated SDK helper exists for this endpoint (confirmed against
 // razorpay-go@v1.4.0 source), so this goes through the embedded raw request client.
 func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	rc, err := c.sdkClient(ctx)
 	if err != nil {
-		return nil, ierr.NewError("failed to initialize Razorpay client").
-			WithHint("Unable to connect to Razorpay").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	result, err := razorpayClient.Post("/v1/subscription_registration/auth_links", data, nil)
+	result, err := rc.Post("/v1/subscription_registration/auth_links", data, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay authorization link", "error", err)
 		return nil, ierr.NewError("failed to create Razorpay authorization link").
 			WithHint("Unable to create authorization link in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
 
@@ -455,21 +453,17 @@ func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]in
 
 // CreateOrder creates a Razorpay Order for a subsequent recurring charge. POST /v1/orders.
 func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error) {
-	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	rc, err := c.sdkClient(ctx)
 	if err != nil {
-		return nil, ierr.NewError("failed to initialize Razorpay client").
-			WithHint("Unable to connect to Razorpay").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	result, err := razorpayClient.Order.Create(orderData, nil)
+	result, err := rc.Order.Create(orderData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay order", "error", err)
 		return nil, ierr.NewError("failed to create Razorpay order").
 			WithHint("Unable to create order in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
 
@@ -481,21 +475,17 @@ func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface
 // /v1/payments/create/recurring — SDK: Payment.CreateRecurringPayment (confirmed
 // present in razorpay-go@v1.4.0's resources/payment.go).
 func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error) {
-	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	rc, err := c.sdkClient(ctx)
 	if err != nil {
-		return nil, ierr.NewError("failed to initialize Razorpay client").
-			WithHint("Unable to connect to Razorpay").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	result, err := razorpayClient.Payment.CreateRecurringPayment(paymentData, nil)
+	result, err := rc.Payment.CreateRecurringPayment(paymentData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
 		return nil, ierr.NewError("failed to create Razorpay recurring payment").
 			WithHint("Unable to charge the stored token in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
 
