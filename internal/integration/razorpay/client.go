@@ -28,6 +28,10 @@ type RazorpayClient interface {
 	CreateInvoice(ctx context.Context, invoiceData map[string]interface{}) (map[string]interface{}, error)
 	GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error
+	GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error)
+	CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
+	CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error)
+	CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -35,6 +39,12 @@ type Client struct {
 	connectionRepo    connection.Repository
 	encryptionService security.EncryptionService
 	logger            *logger.Logger
+	// baseURLOverride, when set, redirects the underlying Razorpay SDK client
+	// at a different base URL. It is only ever set by tests (via a package-
+	// internal constructor) so they can point the SDK at an httptest.Server;
+	// production code (NewClient) never sets it, so real traffic always goes
+	// to Razorpay's actual API.
+	baseURLOverride string
 }
 
 // NewClient creates a new Razorpay client
@@ -190,6 +200,10 @@ func (c *Client) GetRazorpaySDKClient(ctx context.Context) (*razorpay.Client, *R
 	// preserve the SDK's configured timeout.
 	if razorpayClient.Request != nil && razorpayClient.Request.HTTPClient != nil {
 		razorpayClient.Request.HTTPClient.Transport = httpclient.OtelTransport(razorpayClient.Request.HTTPClient.Transport)
+	}
+
+	if c.baseURLOverride != "" {
+		razorpayClient.BaseURL = c.baseURLOverride
 	}
 
 	return razorpayClient, config, nil
@@ -385,4 +399,116 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 		"invoice_id", invoiceID,
 		"status", razorpayInvoice["status"])
 	return razorpayInvoice, nil
+}
+
+// GetCustomerTokens fetches all tokens registered against a Razorpay customer.
+// GET /v1/customers/{id}/tokens — SDK: Token.All.
+func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error) {
+	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.NewError("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := razorpayClient.Token.All(razorpayCustomerID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to list Razorpay customer tokens", "error", err, "customer_id", razorpayCustomerID)
+		return nil, ierr.NewError("failed to list Razorpay customer tokens").
+			WithHint("Unable to list tokens from Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": razorpayCustomerID,
+				"error":       err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, ok := result["items"].([]interface{})
+	if !ok {
+		return []map[string]interface{}{}, nil
+	}
+	tokens := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		if m, ok := item.(map[string]interface{}); ok {
+			tokens = append(tokens, m)
+		}
+	}
+	return tokens, nil
+}
+
+// CreateAuthorizationLink registers a UPI Autopay mandate combined with the
+// first invoice payment. POST /v1/subscription_registration/auth_links — no
+// dedicated SDK helper exists for this endpoint (confirmed against
+// razorpay-go@v1.4.0 source), so this goes through the embedded raw request client.
+func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.NewError("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := razorpayClient.Post("/v1/subscription_registration/auth_links", data, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay authorization link", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay authorization link").
+			WithHint("Unable to create authorization link in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"error": err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay authorization link", "id", result["id"])
+	return result, nil
+}
+
+// CreateOrder creates a Razorpay Order for a subsequent recurring charge. POST /v1/orders.
+func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error) {
+	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.NewError("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := razorpayClient.Order.Create(orderData, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay order", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay order").
+			WithHint("Unable to create order in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"error": err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay order", "order_id", result["id"])
+	return result, nil
+}
+
+// CreateRecurringPayment charges a stored token against an Order. POST
+// /v1/payments/create/recurring — SDK: Payment.CreateRecurringPayment (confirmed
+// present in razorpay-go@v1.4.0's resources/payment.go).
+func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error) {
+	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.NewError("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := razorpayClient.Payment.CreateRecurringPayment(paymentData, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay recurring payment").
+			WithHint("Unable to charge the stored token in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"error": err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay recurring payment", "payment_id", result["id"])
+	return result, nil
 }
