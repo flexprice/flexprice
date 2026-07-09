@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 )
 
 type CheckoutSessionService = interfaces.CheckoutSessionService
@@ -321,6 +322,12 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		SubscriptionStatus: types.SubscriptionStatusDraft,
 	}
 
+	// also extract the collection method from the session configuration if present
+	collectionMethod := session.PaymentProviderConfig.CollectionMethod
+	if collectionMethod != "" {
+		subReq.CollectionMethod = lo.ToPtr(collectionMethod)
+	}
+
 	subSvc := NewSubscriptionService(s.ServiceParams)
 	subResp, err := subSvc.CreateSubscription(ctx, subReq)
 	if err != nil {
@@ -358,7 +365,6 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 
 	return subResp, invResp, nil
 }
-
 
 func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv *invoice.Invoice, provider types.CheckoutPaymentProvider) (*dto.PaymentResponse, error) {
 	var gateway types.PaymentGatewayType
