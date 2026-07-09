@@ -17,16 +17,6 @@ type CheckoutProvider interface {
 	// charging the first invoice as part of the same authorization. Providers
 	// that don't support this return an error marked ierr.ErrNotImplemented.
 	CreateAuthorizationLink(ctx context.Context, req AuthorizationLinkRequest) (*CheckoutProviderResponse, error)
-
-	// ListSavedPaymentMethods returns the customer's currently usable payment
-	// methods/tokens at the gateway, read live — never cached, never persisted
-	// locally. Providers that don't support this return ierr.ErrNotImplemented.
-	ListSavedPaymentMethods(ctx context.Context, req ListSavedPaymentMethodsRequest) ([]*ProviderPaymentMethod, error)
-
-	// ChargeSavedPaymentMethod charges a specific GatewayMethodID (from
-	// ListSavedPaymentMethods) for a given amount. Providers that don't support
-	// this return ierr.ErrNotImplemented.
-	ChargeSavedPaymentMethod(ctx context.Context, req ChargeSavedPaymentMethodRequest) (*ChargeResult, error)
 }
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.
@@ -67,10 +57,6 @@ type AuthorizationLinkRequest struct {
 	Metadata        map[string]string
 }
 
-type ListSavedPaymentMethodsRequest struct {
-	CustomerID string
-}
-
 // ProviderPaymentMethod is a normalized view of one confirmed, usable token as it
 // exists at the gateway right now. Only active tokens are returned — callers never
 // need to filter by status. Never persisted — read fresh on every call.
@@ -81,19 +67,4 @@ type ProviderPaymentMethod struct {
 	ExpiresAt        *time.Time
 	CreatedAt        time.Time
 	ProviderMetadata map[string]string
-}
-
-type ChargeSavedPaymentMethodRequest struct {
-	InvoiceID       string
-	CustomerID      string
-	PaymentID       string
-	GatewayMethodID string
-	Amount          decimal.Decimal
-	Currency        string
-	Metadata        map[string]string
-}
-
-type ChargeResult struct {
-	ProviderPaymentIntentID string
-	ProviderMetadata        map[string]string
 }
