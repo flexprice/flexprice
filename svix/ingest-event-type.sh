@@ -22,7 +22,7 @@ jq -c '.data[]' "$INPUT_FILE" | while read -r item; do
     -d "$payload")
 
   http_code=$(echo "$response" | tail -1)
-  body=$(echo "$response" | head -1)
+  body=$(echo "$response" | sed '$d')
 
   if [[ "$http_code" == "201" ]]; then
     echo "  ✓ Created ($http_code)"
