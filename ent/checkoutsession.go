@@ -47,6 +47,8 @@ type CheckoutSession struct {
 	CheckoutPaymentID *string `json:"checkout_payment_id,omitempty"`
 	// Configuration holds the value of the "configuration" field.
 	Configuration types.CheckoutConfiguration `json:"configuration,omitempty"`
+	// PaymentProviderConfig holds the value of the "payment_provider_config" field.
+	PaymentProviderConfig types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
 	// Result holds the value of the "result" field.
 	Result *types.CheckoutResult `json:"result,omitempty"`
 	// ProviderResult holds the value of the "provider_result" field.
@@ -77,7 +79,7 @@ func (*CheckoutSession) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case checkoutsession.FieldConfiguration, checkoutsession.FieldResult, checkoutsession.FieldProviderResult, checkoutsession.FieldMetadata:
+		case checkoutsession.FieldConfiguration, checkoutsession.FieldPaymentProviderConfig, checkoutsession.FieldResult, checkoutsession.FieldProviderResult, checkoutsession.FieldMetadata:
 			values[i] = new([]byte)
 		case checkoutsession.FieldID, checkoutsession.FieldTenantID, checkoutsession.FieldStatus, checkoutsession.FieldCreatedBy, checkoutsession.FieldUpdatedBy, checkoutsession.FieldEnvironmentID, checkoutsession.FieldCustomerID, checkoutsession.FieldAction, checkoutsession.FieldCheckoutStatus, checkoutsession.FieldPaymentProvider, checkoutsession.FieldCheckoutInvoiceID, checkoutsession.FieldCheckoutPaymentID, checkoutsession.FieldIdempotencyKey, checkoutsession.FieldSuccessURL, checkoutsession.FieldFailureURL, checkoutsession.FieldCancelURL, checkoutsession.FieldFailureReason:
 			values[i] = new(sql.NullString)
@@ -190,6 +192,14 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &cs.Configuration); err != nil {
 					return fmt.Errorf("unmarshal field configuration: %w", err)
+				}
+			}
+		case checkoutsession.FieldPaymentProviderConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field payment_provider_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &cs.PaymentProviderConfig); err != nil {
+					return fmt.Errorf("unmarshal field payment_provider_config: %w", err)
 				}
 			}
 		case checkoutsession.FieldResult:
@@ -353,6 +363,9 @@ func (cs *CheckoutSession) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("configuration=")
 	builder.WriteString(fmt.Sprintf("%v", cs.Configuration))
+	builder.WriteString(", ")
+	builder.WriteString("payment_provider_config=")
+	builder.WriteString(fmt.Sprintf("%v", cs.PaymentProviderConfig))
 	builder.WriteString(", ")
 	builder.WriteString("result=")
 	builder.WriteString(fmt.Sprintf("%v", cs.Result))

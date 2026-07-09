@@ -51,6 +51,7 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
 		SetConfiguration(types.CheckoutConfiguration(s.Configuration)).
+		SetPaymentProviderConfig(types.CheckoutPaymentProviderConfig(s.PaymentProviderConfig)).
 		SetResult((*types.CheckoutResult)(s.Result)).
 		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
 		SetNillableIdempotencyKey(s.IdempotencyKey).
@@ -436,25 +437,26 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 
 func fromEntCheckout(e *ent.CheckoutSession) *domainCheckout.CheckoutSession {
 	s := &domainCheckout.CheckoutSession{
-		ID:                e.ID,
-		EnvironmentID:     e.EnvironmentID,
-		CustomerID:        e.CustomerID,
-		Action:            e.Action,
-		CheckoutStatus:    types.CheckoutStatus(e.CheckoutStatus),
-		PaymentProvider:   e.PaymentProvider,
-		CheckoutInvoiceID: e.CheckoutInvoiceID,
-		CheckoutPaymentID: e.CheckoutPaymentID,
-		Configuration:     domainCheckout.JSONBCheckoutConfiguration(e.Configuration),
-		Result:            (*domainCheckout.JSONBCheckoutResult)(e.Result),
-		ProviderResult:    (*domainCheckout.JSONBCheckoutProviderResult)(e.ProviderResult),
-		IdempotencyKey:    e.IdempotencyKey,
-		SuccessURL:        e.SuccessURL,
-		FailureURL:        e.FailureURL,
-		CancelURL:         e.CancelURL,
-		CompletedAt:       e.CompletedAt,
-		CancelledAt:       e.CancelledAt,
-		FailureReason:     e.FailureReason,
-		Metadata:          types.Metadata(e.Metadata),
+		ID:                    e.ID,
+		EnvironmentID:         e.EnvironmentID,
+		CustomerID:            e.CustomerID,
+		Action:                e.Action,
+		CheckoutStatus:        types.CheckoutStatus(e.CheckoutStatus),
+		PaymentProvider:       e.PaymentProvider,
+		CheckoutInvoiceID:     e.CheckoutInvoiceID,
+		CheckoutPaymentID:     e.CheckoutPaymentID,
+		Configuration:         domainCheckout.JSONBCheckoutConfiguration(e.Configuration),
+		PaymentProviderConfig: domainCheckout.JSONBCheckoutPaymentProviderConfig(e.PaymentProviderConfig),
+		Result:                (*domainCheckout.JSONBCheckoutResult)(e.Result),
+		ProviderResult:        (*domainCheckout.JSONBCheckoutProviderResult)(e.ProviderResult),
+		IdempotencyKey:        e.IdempotencyKey,
+		SuccessURL:            e.SuccessURL,
+		FailureURL:            e.FailureURL,
+		CancelURL:             e.CancelURL,
+		CompletedAt:           e.CompletedAt,
+		CancelledAt:           e.CancelledAt,
+		FailureReason:         e.FailureReason,
+		Metadata:              types.Metadata(e.Metadata),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

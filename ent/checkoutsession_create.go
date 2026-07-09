@@ -177,6 +177,20 @@ func (csc *CheckoutSessionCreate) SetConfiguration(tc types.CheckoutConfiguratio
 	return csc
 }
 
+// SetPaymentProviderConfig sets the "payment_provider_config" field.
+func (csc *CheckoutSessionCreate) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
+	csc.mutation.SetPaymentProviderConfig(tppc)
+	return csc
+}
+
+// SetNillablePaymentProviderConfig sets the "payment_provider_config" field if the given value is not nil.
+func (csc *CheckoutSessionCreate) SetNillablePaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
+	if tppc != nil {
+		csc.SetPaymentProviderConfig(*tppc)
+	}
+	return csc
+}
+
 // SetResult sets the "result" field.
 func (csc *CheckoutSessionCreate) SetResult(tr *types.CheckoutResult) *CheckoutSessionCreate {
 	csc.mutation.SetResult(tr)
@@ -514,6 +528,10 @@ func (csc *CheckoutSessionCreate) createSpec() (*CheckoutSession, *sqlgraph.Crea
 	if value, ok := csc.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
 		_node.Configuration = value
+	}
+	if value, ok := csc.mutation.PaymentProviderConfig(); ok {
+		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
+		_node.PaymentProviderConfig = value
 	}
 	if value, ok := csc.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)

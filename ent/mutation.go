@@ -4870,38 +4870,39 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // CheckoutSessionMutation represents an operation that mutates the CheckoutSession nodes in the graph.
 type CheckoutSessionMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	customer_id         *string
-	action              *types.CheckoutAction
-	checkout_status     *types.CheckoutStatus
-	payment_provider    *types.CheckoutPaymentProvider
-	checkout_invoice_id *string
-	checkout_payment_id *string
-	configuration       *types.CheckoutConfiguration
-	result              **types.CheckoutResult
-	provider_result     **types.CheckoutProviderResult
-	idempotency_key     *string
-	success_url         *string
-	failure_url         *string
-	cancel_url          *string
-	expires_at          *time.Time
-	completed_at        *time.Time
-	cancelled_at        *time.Time
-	failure_reason      *string
-	metadata            *map[string]string
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*CheckoutSession, error)
-	predicates          []predicate.CheckoutSession
+	op                      Op
+	typ                     string
+	id                      *string
+	tenant_id               *string
+	status                  *string
+	created_at              *time.Time
+	updated_at              *time.Time
+	created_by              *string
+	updated_by              *string
+	environment_id          *string
+	customer_id             *string
+	action                  *types.CheckoutAction
+	checkout_status         *types.CheckoutStatus
+	payment_provider        *types.CheckoutPaymentProvider
+	checkout_invoice_id     *string
+	checkout_payment_id     *string
+	configuration           *types.CheckoutConfiguration
+	payment_provider_config *types.CheckoutPaymentProviderConfig
+	result                  **types.CheckoutResult
+	provider_result         **types.CheckoutProviderResult
+	idempotency_key         *string
+	success_url             *string
+	failure_url             *string
+	cancel_url              *string
+	expires_at              *time.Time
+	completed_at            *time.Time
+	cancelled_at            *time.Time
+	failure_reason          *string
+	metadata                *map[string]string
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*CheckoutSession, error)
+	predicates              []predicate.CheckoutSession
 }
 
 var _ ent.Mutation = (*CheckoutSessionMutation)(nil)
@@ -5577,6 +5578,55 @@ func (m *CheckoutSessionMutation) ResetConfiguration() {
 	m.configuration = nil
 }
 
+// SetPaymentProviderConfig sets the "payment_provider_config" field.
+func (m *CheckoutSessionMutation) SetPaymentProviderConfig(tppc types.CheckoutPaymentProviderConfig) {
+	m.payment_provider_config = &tppc
+}
+
+// PaymentProviderConfig returns the value of the "payment_provider_config" field in the mutation.
+func (m *CheckoutSessionMutation) PaymentProviderConfig() (r types.CheckoutPaymentProviderConfig, exists bool) {
+	v := m.payment_provider_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentProviderConfig returns the old "payment_provider_config" field's value of the CheckoutSession entity.
+// If the CheckoutSession object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutSessionMutation) OldPaymentProviderConfig(ctx context.Context) (v types.CheckoutPaymentProviderConfig, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentProviderConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentProviderConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentProviderConfig: %w", err)
+	}
+	return oldValue.PaymentProviderConfig, nil
+}
+
+// ClearPaymentProviderConfig clears the value of the "payment_provider_config" field.
+func (m *CheckoutSessionMutation) ClearPaymentProviderConfig() {
+	m.payment_provider_config = nil
+	m.clearedFields[checkoutsession.FieldPaymentProviderConfig] = struct{}{}
+}
+
+// PaymentProviderConfigCleared returns if the "payment_provider_config" field was cleared in this mutation.
+func (m *CheckoutSessionMutation) PaymentProviderConfigCleared() bool {
+	_, ok := m.clearedFields[checkoutsession.FieldPaymentProviderConfig]
+	return ok
+}
+
+// ResetPaymentProviderConfig resets all changes to the "payment_provider_config" field.
+func (m *CheckoutSessionMutation) ResetPaymentProviderConfig() {
+	m.payment_provider_config = nil
+	delete(m.clearedFields, checkoutsession.FieldPaymentProviderConfig)
+}
+
 // SetResult sets the "result" field.
 func (m *CheckoutSessionMutation) SetResult(tr *types.CheckoutResult) {
 	m.result = &tr
@@ -6150,7 +6200,7 @@ func (m *CheckoutSessionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CheckoutSessionMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, checkoutsession.FieldTenantID)
 	}
@@ -6192,6 +6242,9 @@ func (m *CheckoutSessionMutation) Fields() []string {
 	}
 	if m.configuration != nil {
 		fields = append(fields, checkoutsession.FieldConfiguration)
+	}
+	if m.payment_provider_config != nil {
+		fields = append(fields, checkoutsession.FieldPaymentProviderConfig)
 	}
 	if m.result != nil {
 		fields = append(fields, checkoutsession.FieldResult)
@@ -6262,6 +6315,8 @@ func (m *CheckoutSessionMutation) Field(name string) (ent.Value, bool) {
 		return m.CheckoutPaymentID()
 	case checkoutsession.FieldConfiguration:
 		return m.Configuration()
+	case checkoutsession.FieldPaymentProviderConfig:
+		return m.PaymentProviderConfig()
 	case checkoutsession.FieldResult:
 		return m.Result()
 	case checkoutsession.FieldProviderResult:
@@ -6321,6 +6376,8 @@ func (m *CheckoutSessionMutation) OldField(ctx context.Context, name string) (en
 		return m.OldCheckoutPaymentID(ctx)
 	case checkoutsession.FieldConfiguration:
 		return m.OldConfiguration(ctx)
+	case checkoutsession.FieldPaymentProviderConfig:
+		return m.OldPaymentProviderConfig(ctx)
 	case checkoutsession.FieldResult:
 		return m.OldResult(ctx)
 	case checkoutsession.FieldProviderResult:
@@ -6450,6 +6507,13 @@ func (m *CheckoutSessionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConfiguration(v)
 		return nil
+	case checkoutsession.FieldPaymentProviderConfig:
+		v, ok := value.(types.CheckoutPaymentProviderConfig)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentProviderConfig(v)
+		return nil
 	case checkoutsession.FieldResult:
 		v, ok := value.(*types.CheckoutResult)
 		if !ok {
@@ -6572,6 +6636,9 @@ func (m *CheckoutSessionMutation) ClearedFields() []string {
 	if m.FieldCleared(checkoutsession.FieldCheckoutPaymentID) {
 		fields = append(fields, checkoutsession.FieldCheckoutPaymentID)
 	}
+	if m.FieldCleared(checkoutsession.FieldPaymentProviderConfig) {
+		fields = append(fields, checkoutsession.FieldPaymentProviderConfig)
+	}
 	if m.FieldCleared(checkoutsession.FieldResult) {
 		fields = append(fields, checkoutsession.FieldResult)
 	}
@@ -6633,6 +6700,9 @@ func (m *CheckoutSessionMutation) ClearField(name string) error {
 		return nil
 	case checkoutsession.FieldCheckoutPaymentID:
 		m.ClearCheckoutPaymentID()
+		return nil
+	case checkoutsession.FieldPaymentProviderConfig:
+		m.ClearPaymentProviderConfig()
 		return nil
 	case checkoutsession.FieldResult:
 		m.ClearResult()
@@ -6716,6 +6786,9 @@ func (m *CheckoutSessionMutation) ResetField(name string) error {
 		return nil
 	case checkoutsession.FieldConfiguration:
 		m.ResetConfiguration()
+		return nil
+	case checkoutsession.FieldPaymentProviderConfig:
+		m.ResetPaymentProviderConfig()
 		return nil
 	case checkoutsession.FieldResult:
 		m.ResetResult()
