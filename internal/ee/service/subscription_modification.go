@@ -803,19 +803,21 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		// Use InvoiceTypeOneOff so ComputeInvoice uses the explicit delta amount rather
 		// than recomputing from the subscription's (now-updated) line items.
 		// SubscriptionID is set for reference/traceability only.
+		collectionMethod := types.CollectionMethod(sub.CollectionMethod)
 		inv, err := invoiceSvc.CreateInvoice(ctx, dto.CreateInvoiceRequest{
-			CustomerID:     billingCustomer,
-			SubscriptionID: &sub.ID,
-			InvoiceType:    types.InvoiceTypeOneOff,
-			Currency:       sub.Currency,
-			BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
-			AmountDue:      result.NetAmount,
-			Total:          result.NetAmount,
-			Subtotal:       result.NetAmount,
-			PeriodStart:    &effectiveDate,
-			PeriodEnd:      &periodEnd,
-			BillingPeriod:  &billingPeriod,
-			LineItems:      lineItems,
+			CustomerID:       billingCustomer,
+			SubscriptionID:   &sub.ID,
+			InvoiceType:      types.InvoiceTypeOneOff,
+			Currency:         sub.Currency,
+			BillingReason:    types.InvoiceBillingReasonSubscriptionUpdate,
+			AmountDue:        result.NetAmount,
+			Total:            result.NetAmount,
+			Subtotal:         result.NetAmount,
+			PeriodStart:      &effectiveDate,
+			PeriodEnd:        &periodEnd,
+			BillingPeriod:    &billingPeriod,
+			LineItems:        lineItems,
+			CollectionMethod: &collectionMethod,
 		})
 		if err != nil {
 			sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)

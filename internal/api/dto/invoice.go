@@ -118,26 +118,34 @@ type CreateInvoiceRequest struct {
 	// issue_date overrides the user-facing date of the invoice.
 	// Defaults to created_at if not provided.
 	IssueDate *time.Time `json:"issue_date,omitempty"`
+
+	// CollectionMethod is set by the service only (not in JSON). For invoices
+	// tied to a subscription (renewals and mid-cycle proration invoices alike),
+	// it should be copied down from the parent Subscription's CollectionMethod
+	// at creation time. Nil for one-off invoices, which fall back to
+	// send_invoice behavior at read time.
+	CollectionMethod *types.CollectionMethod `json:"-"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
 // extracting only the fields needed for empty draft creation.
 func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 	return CreateDraftInvoiceRequest{
-		CustomerID:     r.CustomerID,
-		SubscriptionID: r.SubscriptionID,
-		InvoiceType:    r.InvoiceType,
-		Currency:       r.Currency,
-		PeriodStart:    r.PeriodStart,
-		PeriodEnd:      r.PeriodEnd,
-		BillingPeriod:  r.BillingPeriod,
-		BillingReason:  r.BillingReason,
-		Description:    r.Description,
-		DueDate:        r.DueDate,
-		Metadata:       r.Metadata,
-		IdempotencyKey: r.IdempotencyKey,
-		InvoicePDFURL:  r.InvoicePDFURL,
-		IssueDate:      r.IssueDate,
+		CustomerID:       r.CustomerID,
+		SubscriptionID:   r.SubscriptionID,
+		InvoiceType:      r.InvoiceType,
+		Currency:         r.Currency,
+		PeriodStart:      r.PeriodStart,
+		PeriodEnd:        r.PeriodEnd,
+		BillingPeriod:    r.BillingPeriod,
+		BillingReason:    r.BillingReason,
+		Description:      r.Description,
+		DueDate:          r.DueDate,
+		Metadata:         r.Metadata,
+		IdempotencyKey:   r.IdempotencyKey,
+		InvoicePDFURL:    r.InvoicePDFURL,
+		IssueDate:        r.IssueDate,
+		CollectionMethod: r.CollectionMethod,
 	}
 }
 
