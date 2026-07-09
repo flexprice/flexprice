@@ -41,7 +41,7 @@ func main() {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeout)*time.Second)
 		defer cancel()
-		logger.Info(ctx, "Running ClickHouse migrations...", "address", cfg.ClickHouse.Address, "database", cfg.ClickHouse.Database)
+		logger.Info(ctx, "Running ClickHouse migrations...", "address", cfg.ClickHouse.Address, "database", cfg.ClickHouse.Database, "tls", cfg.ClickHouse.TLS)
 		if err := runClickHouseMigrations(ctx, cfg, *chDir, logger); err != nil {
 			logger.Fatal(ctx, "ClickHouse migration failed", "error", err)
 		}
