@@ -1179,6 +1179,16 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 				return err
 			}
 
+			// KNOWN GAP (fix alongside Task 17, the reconciliation sweep — the first
+			// thing that actually sets a claim to "failed"): design spec §10 calls for
+			// this re-read to be a locked SELECT ... FOR UPDATE, to close the race where
+			// two concurrent attempts both observe status="failed" and both re-claim via
+			// Update below. GetByEntity currently does a plain, unlocked read. This is a
+			// real but narrow window — currently unreachable since nothing in this
+			// codebase sets a claim's status to "failed" yet (this function never does,
+			// per design; only the future reconciliation sweep will) — but must be closed
+			// (e.g. an Ent .ForUpdate()-locked variant) before Task 17 introduces the
+			// first "failed" status transition.
 			existing, getErr := s.EntityIntegrationMappingRepo.GetByEntity(txCtx, types.IntegrationEntityTypeInvoiceCharge, inv.ID, providerType)
 			if getErr != nil {
 				return getErr
