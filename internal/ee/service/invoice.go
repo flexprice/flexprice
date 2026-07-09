@@ -1093,8 +1093,7 @@ func (s *invoiceService) attemptRazorpayAutoCharge(ctx context.Context, inv *inv
 	// confirmed live view of the customer's tokens. Falls through to the existing
 	// manual Payment Link path elsewhere — out of scope here.
 	methods, err := provider.ListSavedPaymentMethods(ctx, interfaces.ListSavedPaymentMethodsRequest{
-		CustomerID:    inv.CustomerID,
-		EnvironmentID: inv.EnvironmentID,
+		FlexpriceCustomerID: inv.CustomerID,
 	})
 	if err != nil {
 		s.Logger.Warn(ctx, "failed to list saved payment methods, skipping auto-charge",

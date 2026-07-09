@@ -55,19 +55,20 @@ type CheckoutProviderResponse struct {
 // AuthorizationLinkRequest is the unified input for mandate/authorization
 // registration across any provider that supports it.
 type AuthorizationLinkRequest struct {
-	InvoiceID, CustomerID, PaymentID     string
-	Amount                               decimal.Decimal
-	Currency                             string
-	MaxAmount                            *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
-	ExpiresAt                            *time.Time
-	PreferredMethod                      types.PaymentMethodType
-	EnvironmentID, SuccessURL, CancelURL string
-	Metadata                             map[string]string
+	InvoiceID, CustomerID, PaymentID string
+	Amount                           decimal.Decimal
+	Currency                         string
+	MaxAmount                        *decimal.Decimal // nil = no ceiling (e.g. plain saved card); set = mandate-style cap (e.g. UPI)
+	ExpiresAt                        *time.Time
+	PreferredMethod                  types.PaymentMethodType
+	EnvironmentID                    string
+	SuccessURL                       string
+	CancelURL                        string
+	Metadata                         map[string]string
 }
 
 type ListSavedPaymentMethodsRequest struct {
-	CustomerID    string
-	EnvironmentID string
+	FlexpriceCustomerID string
 }
 
 // ProviderPaymentMethod is a normalized view of one confirmed, usable token as it

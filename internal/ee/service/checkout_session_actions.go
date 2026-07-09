@@ -155,7 +155,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	if cfg.CollectionMethod == types.CollectionMethodChargeAutomatically &&
 		cfg.Razorpay != nil && cfg.Razorpay.PreferredPaymentMethod == types.PaymentMethodTypeUPI {
 		if methods, listErr := provider.ListSavedPaymentMethods(ctx, interfaces.ListSavedPaymentMethodsRequest{
-			CustomerID: session.CustomerID, EnvironmentID: session.EnvironmentID,
+			FlexpriceCustomerID: session.CustomerID,
 		}); listErr == nil {
 			_, existingTokenFound = razorpay.SelectUsableToken(methods, cfg.Razorpay.PreferredPaymentMethod, payResp.Amount)
 		}
