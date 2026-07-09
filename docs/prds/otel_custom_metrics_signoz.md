@@ -3,6 +3,8 @@
 **Status:** Design / ERD (no implementation in this PR)  
 **Goal:** Extend the existing OTLP → SigNoz pipeline (traces + logs) with **custom metrics**, and define an instrumentation surface so call sites can add metrics without touching exporters.
 
+**Starter use case:** outbound **webhook** pipeline only (publish → Kafka → deliver via Svix/native). Broader catalogs are deferred until real alert needs show up.
+
 ---
 
 ## 1. Current state
@@ -25,16 +27,20 @@ SigNoz Cloud ingest (same as traces/logs today):
 ingest.in2.signoz.cloud:443  +  signoz-ingestion-key
 ```
 
+**Also already in SigNoz:** AWS CloudWatch metrics (including Kafka). Do **not** re-instrument infra lag/throughput that CloudWatch already covers.
+
 ---
 
 ## 2. Design principles
 
-1. **Mirror traces/logs config** — `otel.metrics.*` with the same endpoint / protocol / auth / headers resolution as traces and logs.
+1. **Separate metrics config** — `otel.metrics.*` so metrics can be enabled/disabled independently of traces and logs (same endpoint/auth resolution pattern).
 2. **One MeterProvider per process** — init once in Fx lifecycle; shut down on stop (flush pending export).
-3. **Thin domain API** — services never import OTLP exporters; they call `internal/metrics` helpers (or inject a small `Recorder` interface).
-4. **Metrics ≠ re-aggregated traces** — only emit what spans/logs cannot answer cheaply (gauges, lag, backlog, business counters, pool saturation).
-5. **Cardinality budget** — prefer low-cardinality labels (`tenant_id` only when essential and bounded; never `customer_id` / `invoice_id` / raw event IDs on metrics).
-6. **Fail open** — if metrics are disabled or export fails, business paths must not error.
+3. **Dedicated `internal/metrics` package** — services never import OTLP exporters or call raw `otel.Meter` at call sites; they use a thin injected `Recorder`.
+4. **Inject `Recorder` into services** — prefer Fx / `ServiceParams` injection for testability (`Noop` when disabled).
+5. **Selective, need-driven metrics** — only instrument pipelines where we today rely on Postgres polling / ad-hoc queries for SLIs (starting with webhooks). Do not blanket-metric every Kafka publish or consumer.
+6. **Traces for activity, metrics for rates/gaps** — consumer handlers and Temporal workflows/activities should **start spans** at entry; that is enough to observe those activities. Do not add parallel “job started / jobs running” metrics.
+7. **Cardinality budget** — low-cardinality labels only; never `customer_id` / `invoice_id` / raw event IDs on metrics.
+8. **Fail open** — if metrics are disabled or export fails, business paths must not error.
 
 ---
 
@@ -62,13 +68,12 @@ erDiagram
     APP_COMPONENT ||--|| RESOURCE : "api|consumer|temporal_worker"
 
     RECORDER ||--|{ INSTRUMENT : "wraps"
-    SERVICE_LAYER ||--o| RECORDER : "inject / package helpers"
-    KAFKA_CONSUMER ||--o| RECORDER : "lag, DLQ, throughput"
-    TEMPORAL_WORKER ||--o| RECORDER : "workflow/activity outcomes"
-    WALLET_INVOICE ||--o| RECORDER : "business gauges/counters"
+    SERVICE_LAYER ||--o| RECORDER : "inject"
+    WEBHOOK_PUBLISHER ||--o| RECORDER : "published counter"
+    WEBHOOK_HANDLER ||--o| RECORDER : "delivered counter"
 ```
 
-### 3.2 Code / package relationships (how we add metrics easily)
+### 3.2 Code / package relationships
 
 ```mermaid
 erDiagram
@@ -83,22 +88,21 @@ erDiagram
     LOGGER_PKG ||--o| RESOURCE_HELPER : "same attrs as logs"
 
     FX_MAIN ||--|| METRICS_MODULE : "fx.Provide + lifecycle"
-    SERVICE_PARAMS ||--o| RECORDER : "optional inject"
-    CALL_SITE ||--|| RECORDER : "Inc / Observe / Set"
+    SERVICE_PARAMS ||--o| RECORDER : "inject"
+    WEBHOOK_CALL_SITES ||--|| RECORDER : "Published / Delivered"
 
-    SIGNOZ_DASHBOARD ||--|{ METRIC_NAME : "PromQL / ClickHouse metrics"
-    ALERT_RULE ||--|{ METRIC_NAME : "lag, DLQ, failure rate"
+    SIGNOZ_DASHBOARD ||--|{ METRIC_NAME : "webhook publish vs deliver"
+    ALERT_RULE ||--|{ METRIC_NAME : "publish-deliver gap / failure rate"
 ```
 
-### 3.3 Signal ownership by deployment mode
+### 3.3 Who emits the starter metrics
 
-| `app.component`     | Owns primarily |
-| ------------------- | -------------- |
-| `api`               | Ingest accept/reject, cache hit ratio, pool wait, payment/webhook outbound |
-| `consumer`          | Kafka lag, DLQ, processing lag, ClickHouse batch flush, feature/meter usage throughput |
-| `temporal_worker`   | Workflow/activity start/complete/fail, queue wait, invoice compute duration |
+| `app.component` | Webhook role |
+| --------------- | ------------ |
+| `api` (and any producer of system events) | `flexprice.webhook.published` when enqueueing to the system-events / webhook Kafka topic |
+| `consumer` (webhook delivery handler) | `flexprice.webhook.delivered` when Svix/native send succeeds (and failure outcome on the same counter) |
 
-All three share the same MeterProvider + SigNoz endpoint; resource attribute `app.component` separates series.
+Same MeterProvider + SigNoz endpoint; `app.component` separates series.
 
 ---
 
@@ -154,57 +158,62 @@ internal/metrics/
   provider.go        # build exporter + resource + PeriodicReader
   recorder.go        # Recorder interface + noop + otel impl
   instruments.go     # well-known metric names + attribute keys
-  kafka.go           # helpers: RecordLag, RecordDLQ, ...
-  billing.go         # helpers: InvoiceComputed, WalletAlertTransition, ...
+  webhook.go         # WebhookPublished / WebhookDelivered helpers
 ```
+
+Keep the package small. Add new helper files only when a **new** product pipeline needs metrics (not preemptively for Kafka/Temporal/CH).
 
 ### 5.2 Call-site pattern (preferred)
 
 ```go
 // Inject once via Fx / ServiceParams
-type EventConsumptionService struct {
+type webhookPublisher struct {
     metrics metrics.Recorder
     // ...
 }
 
-func (s *EventConsumptionService) handle(ctx context.Context, batch []*events.Event) error {
-    start := time.Now()
-    err := s.persist(ctx, batch)
-    s.metrics.EventBatchProcessed(ctx, metrics.EventBatchAttrs{
-        Topic:   topic,
-        Outcome: metrics.OutcomeFrom(err),
-        Size:    len(batch),
-    }, time.Since(start))
+func (p *webhookPublisher) Publish(ctx context.Context, event *types.WebhookEvent) error {
+    err := p.publisher.Publish(ctx, msg)
+    p.metrics.WebhookPublished(ctx, metrics.WebhookAttrs{
+        EventName: event.EventName, // bounded enum / known webhook types only
+        Outcome:   metrics.OutcomeFrom(err),
+        Transport: "kafka",         // or "memory" in tests
+    })
     return err
 }
 ```
 
-Helpers hide instrument names and enforce allowed attributes:
+Delivery side (Svix / native handler):
+
+```go
+p.metrics.WebhookDelivered(ctx, metrics.WebhookAttrs{
+    EventName: event.EventName,
+    Outcome:   metrics.OutcomeFrom(err), // ok | error
+    Provider:  "svix",                   // or "native"
+})
+```
+
+Minimal `Recorder` for Phase 1:
 
 ```go
 type Recorder interface {
-    EventBatchProcessed(ctx context.Context, a EventBatchAttrs, d time.Duration)
-    KafkaConsumerLag(ctx context.Context, a KafkaLagAttrs, lag int64)
-    KafkaDLQPublished(ctx context.Context, a KafkaDLQAttrs)
-    InvoiceLifecycle(ctx context.Context, a InvoiceAttrs)          // counter
-    WalletAlertTransition(ctx context.Context, a WalletAlertAttrs) // counter
-    CacheResult(ctx context.Context, a CacheAttrs)                 // hit|miss
-    // ...
+    WebhookPublished(ctx context.Context, a WebhookAttrs)
+    WebhookDelivered(ctx context.Context, a WebhookAttrs)
 }
 
 func Noop() Recorder // always safe when metrics disabled
 ```
 
+Grow the interface only when a new use case is approved — do not pre-add Kafka lag / Temporal / ClickHouse methods.
+
 ### 5.3 Why not raw `otel.Meter` at every call site?
 
 | Raw Meter everywhere | Thin `Recorder` |
 | -------------------- | --------------- |
-| Inconsistent names (`events_processed` vs `event.processed`) | Single catalog in `instruments.go` |
-| Easy to explode cardinality | Attributes validated / typed structs |
+| Inconsistent names | Single catalog in `instruments.go` |
+| Easy to explode cardinality | Attributes via typed structs |
 | Hard to unit-test | Swap `Noop` / in-memory fake |
 | Exporter details leak | Services stay exporter-agnostic |
-
-Optional escape hatch: `Recorder.Meter()` for one-off experiments, then graduate into named helpers.
 
 ### 5.4 Init sketch (Fx)
 
@@ -231,144 +240,139 @@ Share resource construction with `internal/tracing` (extract `internal/otelresou
 
 ## 6. What NOT to push as custom metrics
 
-Already (or better) available from **API traces / spans / logs** — do not duplicate as first-class custom metrics:
+### 6.1 Covered by traces / logs (use spans, not metrics)
 
-| Signal from traces/logs | Why skip as custom metric |
-| ----------------------- | ------------------------- |
+| Signal | Prefer |
+| ------ | ------ |
 | HTTP RPS, latency, status | otelgin / HTTP server spans |
-| Handler / service error rate | exception span events + status |
+| Handler / service errors | exception span events + status |
 | Postgres / ClickHouse / Redis **per-query** latency | storage spans (when enabled) |
 | Outbound HTTP client latency | otelhttp client spans |
-| Individual request failure reasons | logs + span attributes |
-| Exact stack traces | exceptions / logs |
+| **Consumer handler start / work** | start a **trace/span** at handler entry |
+| **Temporal workflow / activity start / execution** | start a **trace/span** at workflow/activity entry — no “jobs running” counters |
 
-**Rule of thumb:** if a PromQL-style question needs a **gauge**, **queue depth**, **lag**, **batch size**, **hit ratio**, or **business state transition rate**, it belongs in metrics. If it is “how slow/erroring was this request path?”, use traces.
+**Side note (explicit):** wherever we need visibility into “this consumer handler ran” or “this Temporal job started,” instrument with **traces**, not metrics or extra logs. Spans already give timing, errors, and correlation in SigNoz. Metrics are reserved for aggregate rates and publish→deliver gaps that spans do not answer cheaply.
+
+### 6.2 Covered by AWS CloudWatch → SigNoz (do not duplicate)
+
+| Signal | Why skip |
+| ------ | -------- |
+| Kafka consumer lag, broker throughput, partition counts | Already ingested from CloudWatch |
+| Other AWS infra gauges already in SigNoz | Prefer CloudWatch series |
+
+### 6.3 Explicitly out of scope for now (do not add in Phase 1)
+
+| Rejected earlier idea | Reason |
+| --------------------- | ------ |
+| Kafka lag / DLQ / retry / processed counters (generic) | Infra lag via CloudWatch; handler visibility via traces |
+| Event / meter-usage / feature-usage / costsheet Kafka publish metrics | High volume; not the alerting pain; keep Kafka publish metrics **selective** |
+| ClickHouse insert rows / duration / bytes | Not needed; query spans if debugging |
+| Temporal workflow/activity counts or durations as metrics | Use traces at Temporal entrypoints |
+| Invoice compute / lifecycle metrics | Defer until a concrete alert need |
+| Wallet alert / auto-topup / debit metrics | Defer |
+| Cache hit ratio / DB pool gauges | Defer |
+| Periodic `webhook.pending` gauge from Postgres | Prefer publish vs deliver **counter gap** first; revisit if gap alerts are insufficient |
 
 ---
 
-## 7. Starter metrics catalog (Phase 1)
+## 7. Starter metrics: webhook publish → deliver
 
-Focus on FlexPrice’s OLAP/OLTP split: Kafka → ClickHouse metering, Temporal billing, wallets/webhooks. Names use `flexprice.*` prefix for easy SigNoz discovery.
+### 7.1 Why this first
 
-### 7.1 Pipeline / Kafka (consumer) — highest priority
+Today, webhook pipeline health is often inferred by **querying the `system_events` Postgres table** (pending / stale undelivered rows). That works but is slow for alerting and does not give a clean publish vs deliver rate in SigNoz.
 
-| Metric | Type | Unit | Labels (low-card) | Why traces are not enough |
-| ------ | ---- | ---- | ----------------- | ------------------------- |
-| `flexprice.kafka.consumer.lag` | Gauge / async UpDown | messages | `topic`, `consumer_group`, `partition` (optional) | Lag is **state between polls**, not a request span attribute |
-| `flexprice.kafka.messages.processed` | Counter | messages | `topic`, `handler`, `outcome` | Throughput + failure mix over time without sampling bias |
-| `flexprice.kafka.messages.retries` | Counter | retries | `topic`, `handler` | Retry loops are invisible as “success” spans |
-| `flexprice.kafka.dlq.published` | Counter | messages | `topic`, `handler` | Poison/DLQ is rare; needs a dedicated counter for alerts |
-| `flexprice.events.ingest_to_ch.lag_ms` | Histogram | ms | `pipeline` (`events`\|`feature_usage`\|`meter_usage`\|`costsheet`) | **Business lag**: `now - event.timestamp` or `ingested_at - timestamp`; not HTTP duration |
-| `flexprice.events.batch.size` | Histogram | events | `pipeline` | Batching efficiency; spans usually record one batch op without distribution over time |
-| `flexprice.events.rejected` | Counter | events | `reason` (`validation`\|`auth`\|`throttle`\|…) | Accept path may 200 on enqueue; rejects need aggregate rates |
+We want:
 
-Existing hook point: `StartKafkaLagMonitoringSpan` in tracing — **replace or dual-write** lag as a real gauge rather than only a monitoring span.
+1. A counter when a webhook **system event is published** onto the webhook/Kafka path (`internal/webhook/publisher`).
+2. A counter when that webhook is **successfully delivered** (or fails) via Svix or native HTTP (`internal/webhook/handler`).
+3. Same low-cardinality dimensions on both sides so SigNoz can compare rates and approximate **pipeline lag / stuck volume** (published − delivered over a window), without scraping Postgres on every alert evaluation.
 
-### 7.2 ClickHouse write path
+**Selective Kafka publish tracking:** only the webhook publisher path — **not** usage-event / meter-usage Kafka publishes.
 
-| Metric | Type | Labels | Why |
-| ------ | ---- | ------ | --- |
-| `flexprice.clickhouse.insert.rows` | Counter | `table`, `outcome` | Volume + failure rate independent of span sampling |
-| `flexprice.clickhouse.insert.duration_ms` | Histogram | `table` | Insert batch duration distribution for capacity |
-| `flexprice.clickhouse.insert.bytes` | Histogram (optional) | `table` | Payload size pressure |
+### 7.2 Metrics
 
-### 7.3 Temporal / invoice generation (worker)
+| Metric | Type | Unit | Labels (low-card) | Emit where |
+| ------ | ---- | ---- | ----------------- | ---------- |
+| `flexprice.webhook.published` | Counter | events | `event_name` (bounded), `outcome` (`ok`\|`error`), `transport` (`kafka`\|`memory`) | Webhook publisher after enqueue attempt |
+| `flexprice.webhook.delivered` | Counter | events | `event_name`, `outcome` (`ok`\|`error`), `provider` (`svix`\|`native`) | Delivery handler after Svix/native attempt |
 
-| Metric | Type | Labels | Why |
-| ------ | ---- | ------ | --- |
-| `flexprice.temporal.workflow.started` | Counter | `workflow_type` | Volume by workflow type |
-| `flexprice.temporal.workflow.completed` | Counter | `workflow_type`, `outcome` | Success/fail/cancel rates |
-| `flexprice.temporal.activity.duration_ms` | Histogram | `activity_type`, `outcome` | Activity cost beyond parent workflow span sampling |
-| `flexprice.invoice.compute.duration_ms` | Histogram | `flow_type`, `outcome` | Core billing CPU; alert on p95 growth |
-| `flexprice.invoice.lifecycle` | Counter | `from_status`, `to_status` (bounded enum) | State-machine throughput (draft→finalized, etc.) |
+Optional later (not required for first cut):
 
-### 7.4 Wallets / credits (business SLIs)
+- `reason` on deliver failures (bounded enum: `svix_app_missing`, `http_4xx`, …) — only if alert routing needs it.
+- Histogram of publish→deliver latency **if** we can pass a publish timestamp through the message without high cardinality (derive from `system_events.created_at` in the consumer span/metric record once).
 
-| Metric | Type | Labels | Why |
-| ------ | ---- | ------ | --- |
-| `flexprice.wallet.alert.transition` | Counter | `alert_type`, `to_state` (`ok`\|`in_alarm`) | Alert churn; not visible as HTTP metrics |
-| `flexprice.wallet.auto_topup.triggered` | Counter | `outcome` | Side-effect rate for prepaid reliability |
-| `flexprice.wallet.debit.outcome` | Counter | `outcome` (`ok`\|`insufficient`\|`error`) | Soft-fail business outcomes that may still be 2xx |
+### 7.3 Correlation model (for lag / stuck alerts)
 
-Avoid gauges of **absolute wallet balance** per wallet (cardinality + PII/business sensitivity). Use alerts already in product; metrics only for **rates of transitions**.
+```text
+Producer (API / service)
+  → persist system_events (existing)
+  → Kafka publish
+  → metrics: webhook.published{outcome=ok}
 
-### 7.5 Webhooks / integrations
+Consumer (webhook handler)
+  → build payload
+  → Svix / native HTTP
+  → metrics: webhook.delivered{outcome=ok|error}
+  → OnDelivered / failure persistence (existing)
+```
 
-| Metric | Type | Labels | Why |
-| ------ | ---- | ------ | --- |
-| `flexprice.webhook.delivery` | Counter | `direction` (`outbound`\|`inbound`), `provider`, `outcome` | Delivery SLI across async retries |
-| `flexprice.webhook.pending` | Gauge (periodic) | `state` (`pending`\|`stale`) | Backlog of undelivered system events — classic gauge |
-| `flexprice.payment.provider` | Counter | `provider`, `operation`, `outcome` | Stripe/etc. success mix without scraping every span |
+**Alert ideas (SigNoz):**
 
-### 7.6 Runtime saturation (all modes)
+- `rate(published{outcome=ok}) - rate(delivered{outcome=ok})` sustained positive → backlog growing.
+- `rate(delivered{outcome=error}) / rate(delivered)` above threshold → delivery breakage.
+- Still keep Postgres stale-pending checks as a safety net until metric alerts prove reliable.
 
-| Metric | Type | Labels | Why |
-| ------ | ---- | ------ | --- |
-| `flexprice.cache.ops` | Counter | `cache` (`memory`\|`redis`), `result` (`hit`\|`miss`\|`error`) | Hit ratio needs counters; spans are awkward for ratios |
-| `flexprice.db.pool.in_use` | Gauge | `db` (`postgres`\|`clickhouse`\|`redis`) | Pool exhaustion is process state |
-| `flexprice.db.pool.wait_ms` | Histogram | `db` | Wait for connection — often missing from business spans |
-| `process.*` / Go runtime | (optional Phase 2) | — | Prefer OTel host/runtime instrumentation later; not custom |
+Traces remain useful on the same path (publish span + deliver span linked by `system_event` id in **span attributes**, not metric labels).
+
+### 7.4 Hook points in code (implementation hint only)
+
+| Step | Likely file | Action |
+| ---- | ----------- | ------ |
+| Publish | `internal/webhook/publisher/publisher.go` | `WebhookPublished` after publish success/failure |
+| Deliver | `internal/webhook/handler/handler.go` (`deliverSvix` / native) | `WebhookDelivered` after send attempt |
+
+No metrics on generic event/meter Kafka producers.
 
 ---
 
 ## 8. Cardinality & tenancy rules
 
-**Allowed by default:** `app.component`, `topic`, `handler`, `pipeline`, `workflow_type`, `activity_type`, `outcome`, `provider`, `table`, `cache`, `db`, bounded enums (`flow_type`, `alert_type`).
+**Allowed by default for webhook metrics:** `event_name` (known webhook type enum), `outcome`, `transport`, `provider`, plus resource attrs (`service.name`, `app.component`, env).
 
-**Use sparingly:** `tenant_id` — only on business metrics where you already alert per tenant **and** tenant count is known-bounded; prefer recording tenant in traces/logs and keep metrics global or by `environment_id` only if needed.
+**Use sparingly:** `tenant_id` — default **off** for Phase 1; add only if per-tenant webhook alerts are required and tenant count is bounded.
 
-**Never on metrics:** `customer_id`, `subscription_id`, `invoice_id`, `event_id`, `wallet_id`, free-text `error_message`, high-cardinality URLs.
+**Never on metrics:** `customer_id`, `subscription_id`, `invoice_id`, `system_event_id`, `message_uuid`, free-text errors, URLs.
 
 ---
 
 ## 9. SigNoz usage (after export works)
 
-1. Confirm series under Metrics → filter `service.name` / `flexprice.*`.
-2. Dashboards (suggested panels):
-   - Kafka lag by topic/group
-   - Event pipeline lag p50/p95 (`ingest_to_ch.lag_ms`)
-   - DLQ rate
-   - Invoice compute p95 + workflow failure rate
-   - Webhook pending gauge + delivery failure rate
-   - Cache hit ratio = `hit / (hit+miss)`
-3. Alerts (starter):
-   - `kafka.consumer.lag` > threshold for N minutes
-   - `kafka.dlq.published` rate > 0 sustained
-   - `events.ingest_to_ch.lag_ms` p95 regression
-   - `webhook.pending{state="stale"}` growth
-   - `temporal.workflow.completed{outcome="failed"}` rate spike
+1. Confirm `flexprice.webhook.published` / `flexprice.webhook.delivered` under Metrics.
+2. Dashboard: publish rate, deliver success rate, deliver error rate, publish−deliver gap.
+3. Alerts: sustained gap; elevated deliver error ratio.
+4. Use traces on the webhook consumer for per-message debugging; use metrics for pipeline SLIs.
 
 ---
 
 ## 10. Implementation phases
 
-### Phase 0 — Platform (this ERD → next PR)
+### Phase 0 — Platform (follow-up implementation PR; not this doc PR)
 
 1. Add `OtelMetricsConfig` + env bindings + `config.yaml` comments.
-2. Add `internal/metrics` MeterProvider + Fx module + Noop Recorder.
+2. Add `internal/metrics` MeterProvider + Fx module + Noop `Recorder`.
 3. Wire module in `cmd/server/main.go` next to tracing.
-4. Smoke: one `flexprice.metrics.export_up` counter = 1 to prove SigNoz ingest.
+4. Inject `Recorder` where webhook publisher/handler are constructed.
 
-### Phase 1 — Pipeline SLIs (highest ROI)
+### Phase 1 — Webhook SLI only
 
-1. Kafka lag gauge (replace span-only monitoring).
-2. Processed / retry / DLQ counters on Watermill router hooks.
-3. Event → ClickHouse lag histogram + batch size.
-4. ClickHouse insert counters/histograms at repository boundary.
+1. `WebhookPublished` on webhook Kafka (selective) publish path.
+2. `WebhookDelivered` on Svix/native success/failure.
+3. SigNoz panels + alert drafts for publish−deliver gap.
+4. Validate against existing `system_events` pending queries; then decide whether Postgres alerts can be reduced.
 
-### Phase 2 — Billing & money path
+### Phase 2+ — Only when a concrete need appears
 
-1. Temporal workflow/activity counters + invoice compute histogram.
-2. Wallet alert / auto-topup counters.
-3. Webhook pending gauge + delivery counter.
-4. Payment provider outcome counter.
-
-### Phase 3 — Saturation & polish
-
-1. Cache hit/miss, DB pool gauges.
-2. Shared `otelresource` helper.
-3. SigNoz dashboard JSON / alert as-code (optional).
-4. Docs in `ARCHITECTURE.md` observability row.
+Add new `Recorder` methods per approved use case. Do **not** pre-build Kafka/Temporal/ClickHouse/wallet catalogs.
 
 ---
 
@@ -376,27 +380,28 @@ Avoid gauges of **absolute wallet balance** per wallet (cardinality + PII/busine
 
 | Layer | Approach |
 | ----- | -------- |
-| Unit | `Recorder` fake: assert Inc/Observe called with attrs |
-| Config | Contract test: env → `OtelMetricsConfig` (like existing otel traces/logs tests) |
-| Integration | Optional: OTLP collector mock or SigNoz staging with `export_up` |
+| Unit | `Recorder` fake: assert `WebhookPublished` / `WebhookDelivered` attrs |
+| Config | Contract test: env → `OtelMetricsConfig` |
+| Integration | Optional smoke counter or webhook path against SigNoz staging |
 | Safety | Metrics disabled → Noop; exporter errors → OTel error handler log only |
 
 ---
 
 ## 12. Open decisions (resolve in implementation PR)
 
-1. **Share vs split MeterProvider resource builder** with tracing — recommend extract shared helper.
-2. **Inject `Recorder` into `ServiceParams` vs package-level** — prefer inject for testability; package helpers OK for middleware/router.
-3. **Kafka lag collection** — in-process gauge from consumer metadata vs external exporter; prefer in-process first (we already have lag monitoring span hooks).
-4. **Delta vs cumulative temporality** — default cumulative (Prometheus/SigNoz-friendly) unless SigNoz docs for the account say otherwise.
-5. **Whether `tenant_id` appears on any Phase 1 metric** — default **no**.
+1. **Share vs split resource builder** with tracing — recommend extract shared helper.
+2. **`event_name` label set** — use existing webhook event name enum; reject free-form strings.
+3. **Delta vs cumulative temporality** — default cumulative unless SigNoz account docs say otherwise.
+4. **`tenant_id` on webhook metrics** — default **no** for Phase 1.
+5. **Whether deliver failures increment the same counter with `outcome=error` or a separate counter** — prefer one counter + `outcome` label.
 
 ---
 
 ## 13. Success criteria
 
 - Enabling `FLEXPRICE_OTEL_METRICS_*` alone starts exporting to the same SigNoz project as traces/logs.
-- Adding a new business metric is a **typed helper + one call site**, not exporter boilerplate.
-- Phase 1 metrics answer: “Is the metering pipeline falling behind?” and “Are we losing messages to DLQ?” without digging through sampled traces.
-- No high-cardinality labels in the starter set.
+- Adding a metric is a **typed Recorder helper + inject + one call site**, not exporter boilerplate.
+- Phase 1 answers: “How many webhook events are we publishing?” and “How many are we successfully delivering?” and supports a publish−deliver gap alert — without Postgres polling as the primary signal.
+- No Kafka lag, Temporal job counts, ClickHouse insert, or usage-event publish metrics in the first implementation.
+- Consumer/Temporal activity visibility continues to rely on **traces**, not new metrics.
 - API/consumer/worker remain correct when metrics are off.
