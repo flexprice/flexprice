@@ -22718,7 +22718,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value_at_time": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -22822,7 +22822,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertCondition"
                 },
                 "threshold": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },

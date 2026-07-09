@@ -66,7 +66,7 @@ func (at AlertType) Validate() error {
 
 type AlertInfo struct {
 	AlertSettings *AlertSettings  `json:"alert_settings,omitempty"`
-	ValueAtTime   decimal.Decimal `json:"value_at_time"`
+	ValueAtTime   decimal.Decimal `json:"value_at_time" swaggertype:"string"`
 	Timestamp     time.Time       `json:"timestamp"`
 }
 
@@ -284,7 +284,7 @@ func (at *AlertSettings) Validate() error {
 }
 
 type AlertThreshold struct {
-	Threshold decimal.Decimal `json:"threshold"`
+	Threshold decimal.Decimal `json:"threshold" swaggertype:"string"`
 	Condition AlertCondition  `json:"condition"`
 }
 
