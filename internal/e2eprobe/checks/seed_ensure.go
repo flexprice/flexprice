@@ -38,6 +38,11 @@ func boolPtr(b bool) *bool          { return &b }
 // created with: info at 25, warning at 10, critical at 0 (all "below").
 // Fires wallet.credit_balance.dropped webhooks; consumed by the
 // low-wallet-alert-listener check.
+//
+// Blocked on go-sdk v2.0.16 misgenerating AlertThreshold.Threshold as
+// *float64 (server returns decimal string). Fix: add `swaggertype:"string"`
+// to internal/types/alertlogs.go AlertThreshold.Threshold + AlertInfo.ValueAtTime,
+// then regenerate + publish SDKs.
 func lowBalanceAlertSettings() *types.AlertSettings {
 	below := types.AlertConditionBelow
 	return &types.AlertSettings{
