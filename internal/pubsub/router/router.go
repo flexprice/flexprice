@@ -42,6 +42,11 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	logger.Info(context.Background(), "DLQ publisher initialized")
 
 	router.AddMiddleware(
+		// Outermost: starts a root span per message so the reader/writer DB
+		// router can record db.resolved_target on it, and rolls the handler's
+		// success/failure onto that span. Placed before Recoverer so a handler
+		// panic is converted to an error underneath it and still closes the span.
+		consumerTraceMiddleware(tracingSvc),
 		middleware.Recoverer,
 		middleware.CorrelationID,
 	)
@@ -77,6 +82,38 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 
 	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", kc.Brokers, "dlq_topic", kc.TopicDLQ)
 	return publisher, nil
+}
+
+// consumerTraceMiddleware starts a root span for every consumed message and
+// attaches it to the message context, so the reader/writer DB router can record
+// db.resolved_target on it (handlers otherwise process on a bare context with no
+// span, and the tag is silently dropped). The span is named kafka.consume.<handler>
+// and its status is set from the handler's returned error.
+//
+// Any handler that derives its ctx from msg.Context() inherits this span for free.
+// Handlers that intentionally detach from the message lifecycle — e.g. onboarding,
+// which hands work to a goroutine outliving the message via context.Background() —
+// do NOT inherit it and own their own span, because a message-scoped span cannot
+// cover work that outlives the message.
+//
+// Nil/disabled tracing is safe: StartKafkaConsumerSpan returns a nil *Span whose
+// methods no-op, and SetContext(ctx) with the unchanged ctx is a no-op.
+func consumerTraceMiddleware(tracingSvc *tracing.Service) message.HandlerMiddleware {
+	return func(h message.HandlerFunc) message.HandlerFunc {
+		return func(msg *message.Message) ([]*message.Message, error) {
+			span, ctx := tracingSvc.StartKafkaConsumerSpan(msg.Context(), message.HandlerNameFromCtx(msg.Context()))
+			msg.SetContext(ctx)
+			defer span.Finish()
+
+			msgs, err := h(msg)
+			if err != nil {
+				span.SetStatusError(err)
+			} else {
+				span.SetStatusOK()
+			}
+			return msgs, err
+		}
+	}
 }
 
 // AddNoPublishHandler adds a handler that doesn't publish messages.

@@ -228,14 +228,9 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 		return nil // non-retriable
 	}
 
-	ctx := types.WithWriterPinning(context.Background())
+	ctx := types.WithWriterPinning(msg.Context())
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-
-	// Start a root span so the reader/writer DB router can record
-	// db.resolved_target on it while this message is processed.
-	span, ctx := kafka.StartConsumerSpan(ctx, "meter_usage_tracking")
-	defer span.Finish()
 
 	if err := s.processEvent(ctx, &event); err != nil {
 		s.Logger.Error(context.Background(), "failed to process event for meter usage tracking",

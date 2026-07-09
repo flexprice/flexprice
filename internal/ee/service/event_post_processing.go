@@ -234,7 +234,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	)
 
 	// Create a background context with tenant ID
-	ctx := types.WithWriterPinning(context.Background())
+	ctx := types.WithWriterPinning(msg.Context())
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
@@ -242,11 +242,6 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	if environmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
-
-	// Start a root span so the reader/writer DB router can record
-	// db.resolved_target on it while this message is processed.
-	span, ctx := kafka.StartConsumerSpan(ctx, "event_post_processing")
-	defer span.Finish()
 
 	// Unmarshal the event
 	var event events.Event

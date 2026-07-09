@@ -366,7 +366,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	event.EventName = strings.TrimSpace(event.EventName)
 
 	// Create a background context with tenant ID
-	ctx := types.WithWriterPinning(context.Background())
+	ctx := types.WithWriterPinning(msg.Context())
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
@@ -374,11 +374,6 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	if environmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
-
-	// Start a root span so the reader/writer DB router can record
-	// db.resolved_target on it while this message is processed.
-	span, ctx := kafka.StartConsumerSpan(ctx, "feature_usage_tracking")
-	defer span.Finish()
 
 	if tenantID == "" {
 		s.Logger.Info(context.Background(), "tenant id is required for feature usage tracking: event_id", event.ID,

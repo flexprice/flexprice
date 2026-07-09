@@ -201,11 +201,6 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 	ctx := types.SetTenantID(types.WithWriterPinning(msg.Context()), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 
-	// Start a root span so the reader/writer DB router can record
-	// db.resolved_target on it while this batch is processed.
-	span, ctx := kafka.StartConsumerSpan(ctx, "raw_event_consumption")
-	defer span.Finish()
-
 	// Fetch the ingestion filter once per batch (one DB read per Kafka message).
 	// On a real settings-store error (not ErrNotFound) we fail the batch so Kafka retries it.
 	filterEnabled, allowlist, err := s.loadIngestionFilter(ctx)
