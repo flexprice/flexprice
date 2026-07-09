@@ -98,6 +98,5 @@ type ChargeSavedPaymentMethodRequest struct {
 
 type ChargeResult struct {
 	ProviderPaymentIntentID string
-	Status                  types.PaymentStatus // PROCESSING (submitted, awaiting webhook) | SUCCEEDED | FAILED
 	ProviderMetadata        map[string]string
 }

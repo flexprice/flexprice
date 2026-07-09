@@ -11,28 +11,29 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// toPaise converts a major-unit decimal (rupees) to paise for Razorpay API calls.
+func toPaise(major decimal.Decimal) int64 {
+	return major.Mul(decimal.NewFromInt(100)).IntPart()
+}
+
+// fromPaise converts a paise float64 (as returned by Razorpay) to a major-unit decimal.
+func fromPaise(paise float64) decimal.Decimal {
+	return decimal.NewFromFloat(paise).Div(decimal.NewFromInt(100))
+}
+
 // normalizeRazorpayToken converts a raw token object (as returned by
 // Token.All/Client.GetCustomerTokens) into the generic interfaces.ProviderPaymentMethod
-// shape. Amounts arrive from Razorpay in paise; converted to major-unit decimal
-// here so callers never handle paise directly.
+// shape. Returns nil, nil for non-confirmed tokens so callers skip them cleanly.
 func normalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPaymentMethod, error) {
-	pm := &interfaces.ProviderPaymentMethod{
-		ProviderMetadata: map[string]string{},
-	}
-
-	if id, ok := raw["id"].(string); ok {
-		pm.GatewayMethodID = id
-	}
-
 	// Only confirmed tokens are usable; skip anything else.
-	confirmed := false
-	if details, ok := raw["recurring_details"].(map[string]interface{}); ok {
-		if s, ok := details["status"].(string); ok {
-			confirmed = s == "confirmed"
-		}
-	}
-	if !confirmed {
+	details, _ := raw["recurring_details"].(map[string]interface{})
+	if status, _ := details["status"].(string); status != "confirmed" {
 		return nil, nil
+	}
+
+	pm := &interfaces.ProviderPaymentMethod{
+		GatewayMethodID:  lo.ValueOr(raw, "id", "").(string),
+		ProviderMetadata: map[string]string{},
 	}
 
 	method, _ := raw["method"].(string)
@@ -43,16 +44,14 @@ func normalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 		pm.Method = types.PaymentMethodTypeCard
 	}
 
-	if maxAmountPaise, ok := raw["max_amount"].(float64); ok && maxAmountPaise > 0 {
-		major := decimal.NewFromFloat(maxAmountPaise).Div(decimal.NewFromInt(100))
+	if paise, ok := raw["max_amount"].(float64); ok && paise > 0 {
+		major := fromPaise(paise)
 		pm.MaxAmount = &major
 	}
-
 	if expiredAtUnix, ok := raw["expired_at"].(float64); ok && expiredAtUnix > 0 {
 		t := time.Unix(int64(expiredAtUnix), 0).UTC()
 		pm.ExpiresAt = &t
 	}
-
 	if createdAtUnix, ok := raw["created_at"].(float64); ok {
 		pm.CreatedAt = time.Unix(int64(createdAtUnix), 0).UTC()
 	}
@@ -61,10 +60,9 @@ func normalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 }
 
 // SelectUsableToken applies the deterministic selection algorithm: filter for
-// confirmed, non-expired, matching-method, under-ceiling; sort by CreatedAt
-// descending; take the first. Exported because both the checkout-time dedup
-// check (a different package) and this package's own auto-charge path need
-// the exact same selection logic.
+// confirmed, non-expired, matching-method, under-ceiling; pick the newest.
+// Exported because both the checkout-time dedup check and the auto-charge path
+// need the exact same logic.
 func SelectUsableToken(
 	methods []*interfaces.ProviderPaymentMethod,
 	preferredMethod types.PaymentMethodType,
@@ -72,27 +70,16 @@ func SelectUsableToken(
 ) (*interfaces.ProviderPaymentMethod, bool) {
 	now := time.Now().UTC()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
-		if pm.Method != preferredMethod {
-			return false
-		}
-		if pm.ExpiresAt != nil && now.After(*pm.ExpiresAt) {
-			return false
-		}
-		if pm.MaxAmount != nil && pm.MaxAmount.LessThan(invoiceTotal) {
-			return false
-		}
-		return true
+		return pm.Method == preferredMethod &&
+			(pm.ExpiresAt == nil || !now.After(*pm.ExpiresAt)) &&
+			(pm.MaxAmount == nil || !pm.MaxAmount.LessThan(invoiceTotal))
 	})
 	if len(usable) == 0 {
 		return nil, false
 	}
-	best := usable[0]
-	for _, pm := range usable[1:] {
-		if pm.CreatedAt.After(best.CreatedAt) {
-			best = pm
-		}
-	}
-	return best, true
+	return lo.MaxBy(usable, func(a, b *interfaces.ProviderPaymentMethod) bool {
+		return a.CreatedAt.After(b.CreatedAt)
+	}), true
 }
 
 // ListSavedPaymentMethods resolves the Razorpay customer_id, fetches tokens
@@ -111,15 +98,10 @@ func (a *CheckoutAdapter) ListSavedPaymentMethods(
 		return nil, err
 	}
 
-	result := make([]*interfaces.ProviderPaymentMethod, 0, len(rawTokens))
-	for _, raw := range rawTokens {
+	return lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
 		pm, err := normalizeRazorpayToken(raw)
-		if err != nil || pm == nil {
-			continue
-		}
-		result = append(result, pm)
-	}
-	return result, nil
+		return pm, err == nil && pm != nil
+	}), nil
 }
 
 // CreateAuthorizationLink registers a UPI Autopay mandate combined with the
@@ -157,7 +139,7 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	data := map[string]interface{}{
 		"customer":     customerInfo,
 		"type":         "link",
-		"amount":       req.Amount.Mul(decimal.NewFromInt(100)).IntPart(), // major unit → paise
+		"amount":       toPaise(req.Amount),
 		"currency":     req.Currency,
 		"description":  "Subscription authorization",
 		"receipt":      req.InvoiceID,
@@ -171,7 +153,7 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 
 	subReg := map[string]interface{}{"method": "upi"}
 	if req.MaxAmount != nil {
-		subReg["max_amount"] = req.MaxAmount.Mul(decimal.NewFromInt(100)).IntPart()
+		subReg["max_amount"] = toPaise(*req.MaxAmount)
 	}
 	if req.ExpiresAt != nil {
 		subReg["expire_at"] = req.ExpiresAt.Unix()
@@ -204,7 +186,7 @@ func (a *CheckoutAdapter) ChargeSavedPaymentMethod(
 		return nil, err
 	}
 
-	amountPaise := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+	amountPaise := toPaise(req.Amount)
 
 	order, err := a.Svc.client.CreateOrder(ctx, map[string]interface{}{
 		"amount":          amountPaise,
@@ -242,10 +224,6 @@ func (a *CheckoutAdapter) ChargeSavedPaymentMethod(
 	if c.Email != "" {
 		paymentData["email"] = c.Email
 	}
-	// Note: contact/phone not available in FlexPrice customer model. VERIFY AT
-	// IMPLEMENTATION TIME: docs/prds/razorpau-runbook.md's tested example payload for
-	// payments/create/recurring also includes "contact" — email-only is unverified
-	// against live Razorpay test mode.
 
 	payment, err := a.Svc.client.CreateRecurringPayment(ctx, paymentData)
 	if err != nil {
@@ -255,6 +233,5 @@ func (a *CheckoutAdapter) ChargeSavedPaymentMethod(
 	paymentID, _ := payment["id"].(string)
 	return &interfaces.ChargeResult{
 		ProviderPaymentIntentID: paymentID,
-		Status:                  types.PaymentStatusProcessing, // ambiguous ack — final status via webhook only
 	}, nil
 }
