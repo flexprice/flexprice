@@ -87,6 +87,15 @@ func (w *WalletOperation) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if w.BonusCreditAmount != nil && w.BonusCreditAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("bonus_credit_amount cannot be negative").
+			WithHint("Bonus credit amount must be zero or positive").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_credit_amount": w.BonusCreditAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := w.TransactionReason.Validate(); err != nil {
 		return err
 	}

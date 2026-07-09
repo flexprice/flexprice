@@ -568,6 +568,7 @@ func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, pa
 		Only(ctx)
 
 	if err != nil {
+		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
 				WithHint("Pending bonus transaction not found").
@@ -576,7 +577,6 @@ func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, pa
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve pending bonus transaction").
 			WithReportableDetails(map[string]interface{}{

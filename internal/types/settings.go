@@ -414,11 +414,27 @@ func (c BonusCreditsTopupConfig) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if slab.Threshold.LessThan(decimal.Zero) {
+			return ierr.NewError("bonus_credits_topup_config: slab threshold cannot be negative").
+				WithHint("Threshold must be zero or positive").
+				WithReportableDetails(map[string]any{
+					"threshold": slab.Threshold,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 		if slab.Bonus.Type != BonusValueTypeFlat && slab.Bonus.Type != BonusValueTypePercentage {
 			return ierr.NewErrorf("bonus_credits_topup_config: bonus type must be %s or %s", BonusValueTypeFlat, BonusValueTypePercentage).
 				WithHint("Only flat or percentage bonus types are supported").
 				WithReportableDetails(map[string]any{
 					"bonus_type": slab.Bonus.Type,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if slab.Bonus.Value.LessThan(decimal.Zero) {
+			return ierr.NewError("bonus_credits_topup_config: bonus value cannot be negative").
+				WithHint("Bonus value must be zero or positive").
+				WithReportableDetails(map[string]any{
+					"bonus_value": slab.Bonus.Value,
 				}).
 				Mark(ierr.ErrValidation)
 		}

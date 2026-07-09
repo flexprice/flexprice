@@ -147,6 +147,9 @@ func (WalletTransaction) Fields() []ent.Field {
 			Nillable().
 			Comment("Lower number indicates higher priority. Nil values are treated as lowest priority."),
 		field.String("parent_transaction_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			Optional().
 			Immutable(),
 	}
