@@ -96,10 +96,10 @@ func (p *LowBalanceAlertProbe) Run(ctx context.Context) error {
 			"external_customer_id": ext, "wallet_id": walletID,
 		}, "read canary balance: %w", err)
 	}
-	if balResp == nil || balResp.DtoWalletBalanceResponse == nil {
+	if balResp == nil || balResp.WalletBalanceResponse == nil {
 		return nil
 	}
-	b := balResp.DtoWalletBalanceResponse
+	b := balResp.WalletBalanceResponse
 
 	state := "unknown"
 	if b.AlertState != nil {
@@ -134,7 +134,7 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 	baseline := maxReceipt(p.listener.SeenThresholds(walletID))
 
 	amountStr := strconv.Itoa(p.opts.UsageAmount)
-	ingestReq := types.DtoIngestEventRequest{
+	ingestReq := types.IngestEventRequest{
 		EventName:          "e2eprobe_sum",
 		ExternalCustomerID: ext,
 		Properties: map[string]string{
@@ -180,7 +180,7 @@ func maxReceipt(seen map[string]time.Time) time.Time {
 }
 
 func (p *LowBalanceAlertProbe) recover(ctx context.Context, walletID, ext string, attrs map[string]string) error {
-	topUpReq := types.DtoTopUpWalletRequest{
+	topUpReq := types.TopUpWalletRequest{
 		Amount:            strPtr(p.opts.RecoveryTopUp),
 		Description:       strPtr("e2eprobe alert canary recovery top-up"),
 		TransactionReason: types.TransactionReasonPurchasedCreditDirect,

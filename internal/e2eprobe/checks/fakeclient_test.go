@@ -50,14 +50,14 @@ func (c *fakeClient) NewAsyncEventClient() e2eprobe.AsyncEventClient {
 
 type fakeCustomers struct {
 	mu          sync.Mutex
-	created     []types.DtoCreateCustomerRequest
+	created     []types.CreateCustomerRequest
 	byExt       map[string]string
 	getErr      error
 	deleted     []string // internal customer IDs passed to Delete
-	queryResult []types.DtoCustomerResponse
+	queryResult []types.CustomerResponse
 }
 
-func (f *fakeCustomers) Create(_ context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
+func (f *fakeCustomers) Create(_ context.Context, req types.CreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id := "cust_" + req.ExternalID
@@ -72,7 +72,7 @@ func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.Ge
 	id, ok := f.byExt[ext]
 	if ok {
 		return &dtos.GetCustomerByExternalIDResponse{
-			DtoCustomerResponse: &types.DtoCustomerResponse{ID: &id},
+			CustomerResponse: &types.CustomerResponse{ID: &id},
 		}, nil
 	}
 	// getErr simulates an injected error from tests.
@@ -95,7 +95,7 @@ func (f *fakeCustomers) GetEntitlements(_ context.Context, _ string) (*dtos.GetC
 func (f *fakeCustomers) GetUsageSummary(_ context.Context, _ dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
 	return &dtos.GetCustomerUsageSummaryResponse{}, nil
 }
-func (f *fakeCustomers) Update(_ context.Context, _ types.DtoUpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
+func (f *fakeCustomers) Update(_ context.Context, _ types.UpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
 	return &dtos.UpdateCustomerResponse{}, nil
 }
 func (f *fakeCustomers) Delete(_ context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
@@ -111,7 +111,7 @@ func (f *fakeCustomers) Query(_ context.Context, _ types.CustomerFilter) (*dtos.
 		return &dtos.QueryCustomerResponse{}, nil
 	}
 	return &dtos.QueryCustomerResponse{
-		DtoListCustomersResponse: &types.DtoListCustomersResponse{Items: f.queryResult},
+		ListCustomersResponse: &types.ListCustomersResponse{Items: f.queryResult},
 	}, nil
 }
 
@@ -119,23 +119,23 @@ func (f *fakeCustomers) Query(_ context.Context, _ types.CustomerFilter) (*dtos.
 
 type fakePlans struct {
 	mu      sync.Mutex
-	created []types.DtoCreatePlanRequest
-	plans   []types.DtoPlanResponse
+	created []types.CreatePlanRequest
+	plans   []types.PlanResponse
 }
 
-func (f *fakePlans) Create(_ context.Context, req types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error) {
+func (f *fakePlans) Create(_ context.Context, req types.CreatePlanRequest) (*dtos.CreatePlanResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id := fmt.Sprintf("plan_%d", len(f.plans)+1)
 	f.created = append(f.created, req)
-	plan := types.DtoPlanResponse{ID: &id, LookupKey: req.LookupKey}
+	plan := types.PlanResponse{ID: &id, LookupKey: req.LookupKey}
 	f.plans = append(f.plans, plan)
-	return &dtos.CreatePlanResponse{DtoPlanResponse: &types.DtoPlanResponse{ID: &id, LookupKey: req.LookupKey}}, nil
+	return &dtos.CreatePlanResponse{PlanResponse: &types.PlanResponse{ID: &id, LookupKey: req.LookupKey}}, nil
 }
 func (f *fakePlans) Query(_ context.Context, filter types.PlanFilter) (*dtos.QueryPlanResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var matched []types.DtoPlanResponse
+	var matched []types.PlanResponse
 	for _, p := range f.plans {
 		if filter.LookupKey != nil && p.LookupKey != nil && *filter.LookupKey != *p.LookupKey {
 			continue
@@ -146,7 +146,7 @@ func (f *fakePlans) Query(_ context.Context, filter types.PlanFilter) (*dtos.Que
 		return &dtos.QueryPlanResponse{}, nil
 	}
 	return &dtos.QueryPlanResponse{
-		DtoListPlansResponse: &types.DtoListPlansResponse{Items: matched},
+		ListPlansResponse: &types.ListPlansResponse{Items: matched},
 	}, nil
 }
 func (f *fakePlans) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, error) {
@@ -157,10 +157,10 @@ func (f *fakePlans) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, err
 
 type fakePrices struct {
 	mu      sync.Mutex
-	created []types.DtoCreatePriceRequest
+	created []types.CreatePriceRequest
 }
 
-func (f *fakePrices) Create(_ context.Context, req types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error) {
+func (f *fakePrices) Create(_ context.Context, req types.CreatePriceRequest) (*dtos.CreatePriceResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, req)
@@ -174,19 +174,19 @@ func (f *fakePrices) Query(_ context.Context, _ types.PriceFilter) (*dtos.QueryP
 
 type fakeFeatures struct {
 	mu       sync.Mutex
-	created  []types.DtoCreateFeatureRequest
-	features []types.DtoFeatureResponse
+	created  []types.CreateFeatureRequest
+	features []types.FeatureResponse
 }
 
-func (f *fakeFeatures) Create(_ context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
+func (f *fakeFeatures) Create(_ context.Context, req types.CreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id := fmt.Sprintf("feat_%d", len(f.features)+1)
 	meterID := fmt.Sprintf("meter_%d", len(f.features)+1)
-	feat := types.DtoFeatureResponse{ID: &id, LookupKey: req.LookupKey, MeterID: &meterID}
+	feat := types.FeatureResponse{ID: &id, LookupKey: req.LookupKey, MeterID: &meterID}
 	f.features = append(f.features, feat)
 	f.created = append(f.created, req)
-	return &dtos.CreateFeatureResponse{DtoFeatureResponse: &feat}, nil
+	return &dtos.CreateFeatureResponse{FeatureResponse: &feat}, nil
 }
 func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dtos.QueryFeatureResponse, error) {
 	f.mu.Lock()
@@ -199,7 +199,7 @@ func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dt
 	if filter.LookupKey != nil {
 		wantKeys[*filter.LookupKey] = true
 	}
-	var matched []types.DtoFeatureResponse
+	var matched []types.FeatureResponse
 	for _, feat := range f.features {
 		if len(wantKeys) == 0 {
 			matched = append(matched, feat)
@@ -213,7 +213,7 @@ func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dt
 		return &dtos.QueryFeatureResponse{}, nil
 	}
 	return &dtos.QueryFeatureResponse{
-		DtoListFeaturesResponse: &types.DtoListFeaturesResponse{Items: matched},
+		ListFeaturesResponse: &types.ListFeaturesResponse{Items: matched},
 	}, nil
 }
 
@@ -221,16 +221,16 @@ func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dt
 
 type fakeSubscriptions struct {
 	mu        sync.Mutex
-	created   []types.DtoCreateSubscriptionRequest
+	created   []types.CreateSubscriptionRequest
 	cancelled []string
 	gets      int
 	nextID    int
-	subs      map[string]types.DtoSubscriptionResponse
+	subs      map[string]types.SubscriptionResponse
 	subErr    error
 	cancelErr error
 }
 
-func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
+func (f *fakeSubscriptions) Create(_ context.Context, req types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.subErr != nil {
@@ -239,11 +239,11 @@ func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscri
 	f.nextID++
 	id := fmt.Sprintf("sub_%d", f.nextID)
 	if f.subs == nil {
-		f.subs = map[string]types.DtoSubscriptionResponse{}
+		f.subs = map[string]types.SubscriptionResponse{}
 	}
-	f.subs[id] = types.DtoSubscriptionResponse{ID: &id}
+	f.subs[id] = types.SubscriptionResponse{ID: &id}
 	f.created = append(f.created, req)
-	return &dtos.CreateSubscriptionResponse{DtoSubscriptionResponse: &types.DtoSubscriptionResponse{ID: &id}}, nil
+	return &dtos.CreateSubscriptionResponse{SubscriptionResponse: &types.SubscriptionResponse{ID: &id}}, nil
 }
 func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	f.mu.Lock()
@@ -260,9 +260,9 @@ func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscrip
 	if !ok {
 		return nil, errors.New("subscription not found")
 	}
-	return &dtos.GetSubscriptionResponse{DtoSubscriptionResponse: &sub}, nil
+	return &dtos.GetSubscriptionResponse{SubscriptionResponse: &sub}, nil
 }
-func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
+func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.CancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.cancelErr != nil {
@@ -274,7 +274,7 @@ func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCanc
 func (f *fakeSubscriptions) Query(_ context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var matched []types.DtoSubscriptionResponse
+	var matched []types.SubscriptionResponse
 	for _, sub := range f.subs {
 		if filter.ExternalCustomerID != nil || filter.PlanID != nil {
 			// Only return if it matches all provided filters; since fakeSubscriptions
@@ -288,22 +288,22 @@ func (f *fakeSubscriptions) Query(_ context.Context, filter types.SubscriptionFi
 		return &dtos.QuerySubscriptionResponse{}, nil
 	}
 	return &dtos.QuerySubscriptionResponse{
-		DtoListSubscriptionsResponse: &types.DtoListSubscriptionsResponse{Items: matched},
+		ListSubscriptionsResponse: &types.ListSubscriptionsResponse{Items: matched},
 	}, nil
 }
-func (f *fakeSubscriptions) ActivateSubscription(_ context.Context, _ string, _ types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+func (f *fakeSubscriptions) ActivateSubscription(_ context.Context, _ string, _ types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
 	return &dtos.ActivateSubscriptionResponse{}, nil
 }
 func (f *fakeSubscriptions) GetEntitlements(_ context.Context, _ string, _ []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
 }
-func (f *fakeSubscriptions) GetUsage(_ context.Context, _ types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
+func (f *fakeSubscriptions) GetUsage(_ context.Context, _ types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return &dtos.GetSubscriptionUsageResponse{}, nil
 }
-func (f *fakeSubscriptions) CreateLineItem(_ context.Context, _ string, _ types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
+func (f *fakeSubscriptions) CreateLineItem(_ context.Context, _ string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil
 }
-func (f *fakeSubscriptions) UpdateLineItem(_ context.Context, _ string, _ types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
+func (f *fakeSubscriptions) UpdateLineItem(_ context.Context, _ string, _ types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
 	return &dtos.UpdateSubscriptionLineItemResponse{}, nil
 }
 
@@ -311,11 +311,11 @@ func (f *fakeSubscriptions) UpdateLineItem(_ context.Context, _ string, _ types.
 
 type fakeWallets struct {
 	mu      sync.Mutex
-	created []types.DtoCreateWalletRequest
+	created []types.CreateWalletRequest
 	// walletItems allows tests to populate wallets returned by Query.
-	walletItems []types.DtoWalletResponse
+	walletItems []types.WalletResponse
 	// walletsByCustomerID maps internal customer ID → wallets (for GetWalletsByCustomerID).
-	walletsByCustomerID map[string][]types.DtoWalletResponse
+	walletsByCustomerID map[string][]types.WalletResponse
 	balance             string
 	balErr              error
 	topUpErr            error
@@ -325,13 +325,13 @@ type fakeWallets struct {
 	incrementBalanceOnTopUp bool
 }
 
-func (f *fakeWallets) Create(_ context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
+func (f *fakeWallets) Create(_ context.Context, req types.CreateWalletRequest) (*dtos.CreateWalletResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	walletID := fmt.Sprintf("wallet_%d", len(f.created)+1)
 	f.created = append(f.created, req)
 	return &dtos.CreateWalletResponse{
-		DtoWalletResponse: &types.DtoWalletResponse{ID: &walletID},
+		WalletResponse: &types.WalletResponse{ID: &walletID},
 	}, nil
 }
 func (f *fakeWallets) GetWalletsByCustomerID(_ context.Context, customerID string) (*dtos.GetWalletsByCustomerIDResponse, error) {
@@ -339,7 +339,7 @@ func (f *fakeWallets) GetWalletsByCustomerID(_ context.Context, customerID strin
 	defer f.mu.Unlock()
 	if f.walletsByCustomerID != nil {
 		if wallets, ok := f.walletsByCustomerID[customerID]; ok {
-			return &dtos.GetWalletsByCustomerIDResponse{DtoWalletResponses: wallets}, nil
+			return &dtos.GetWalletsByCustomerIDResponse{WalletResponses: wallets}, nil
 		}
 	}
 	return &dtos.GetWalletsByCustomerIDResponse{}, nil
@@ -366,10 +366,10 @@ func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBa
 		return &dtos.GetWalletBalanceResponse{}, nil
 	}
 	return &dtos.GetWalletBalanceResponse{
-		DtoWalletBalanceResponse: &types.DtoWalletBalanceResponse{Balance: &f.balance},
+		WalletBalanceResponse: &types.WalletBalanceResponse{Balance: &f.balance},
 	}, nil
 }
-func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.topUpErr != nil {
@@ -391,24 +391,24 @@ func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.DtoTopUpWalle
 
 type fakeEvents struct {
 	mu           sync.Mutex
-	ingested     []types.DtoIngestEventRequest
+	ingested     []types.IngestEventRequest
 	analytics    int
 	anaErr       error
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
-	analyticsItems []types.DtoUsageAnalyticItem
+	analyticsItems []types.UsageAnalyticItem
 	// listRawItems, when set, is returned in ListRaw responses. Otherwise
 	// ListRaw echoes back the ingested events that match the filter.
-	listRawItems []types.DtoEvent
+	listRawItems []types.Event
 	listRawErr   error
 }
 
-func (f *fakeEvents) Ingest(_ context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
+func (f *fakeEvents) Ingest(_ context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.ingested = append(f.ingested, req)
 	return &dtos.IngestEventResponse{}, nil
 }
-func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.analytics++
@@ -417,14 +417,14 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAna
 	}
 	if len(f.analyticsItems) > 0 {
 		return &dtos.GetUsageAnalyticsResponse{
-			DtoGetUsageAnalyticsResponse: &types.DtoGetUsageAnalyticsResponse{
+			GetUsageAnalyticsResponse: &types.GetUsageAnalyticsResponse{
 				Items: f.analyticsItems,
 			},
 		}, nil
 	}
 	return &dtos.GetUsageAnalyticsResponse{}, nil
 }
-func (f *fakeEvents) ListRaw(_ context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+func (f *fakeEvents) ListRaw(_ context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.listRawErr != nil {
@@ -432,11 +432,11 @@ func (f *fakeEvents) ListRaw(_ context.Context, req types.DtoGetEventsRequest) (
 	}
 	if f.listRawItems != nil {
 		return &dtos.ListRawEventsResponse{
-			DtoGetEventsResponse: &types.DtoGetEventsResponse{Events: f.listRawItems},
+			GetEventsResponse: &types.GetEventsResponse{Events: f.listRawItems},
 		}, nil
 	}
 	// Default: echo back ingested events matching the property filters.
-	var matched []types.DtoEvent
+	var matched []types.Event
 	for _, in := range f.ingested {
 		if req.ExternalCustomerID != nil && in.ExternalCustomerID != *req.ExternalCustomerID {
 			continue
@@ -466,14 +466,14 @@ func (f *fakeEvents) ListRaw(_ context.Context, req types.DtoGetEventsRequest) (
 		if !ok {
 			continue
 		}
-		ev := types.DtoEvent{EventName: strPtr(in.EventName)}
+		ev := types.Event{EventName: strPtr(in.EventName)}
 		if in.EventID != nil {
 			ev.ID = in.EventID
 		}
 		matched = append(matched, ev)
 	}
 	return &dtos.ListRawEventsResponse{
-		DtoGetEventsResponse: &types.DtoGetEventsResponse{Events: matched},
+		GetEventsResponse: &types.GetEventsResponse{Events: matched},
 	}, nil
 }
 
@@ -483,7 +483,7 @@ type fakeInvoices struct {
 	mu         sync.Mutex
 	queries    int
 	queryErr   error
-	invoices   []types.DtoInvoiceResponse
+	invoices   []types.InvoiceResponse
 	lastFilter types.InvoiceFilter
 }
 
@@ -499,7 +499,7 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 		return &dtos.QueryInvoiceResponse{}, nil
 	}
 	return &dtos.QueryInvoiceResponse{
-		DtoListInvoicesResponse: &types.DtoListInvoicesResponse{Items: f.invoices},
+		ListInvoicesResponse: &types.ListInvoicesResponse{Items: f.invoices},
 	}, nil
 }
 func (f *fakeInvoices) Get(_ context.Context, _ string) (*dtos.GetInvoiceResponse, error) {

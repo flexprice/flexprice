@@ -29,12 +29,12 @@ func TestCancelCustomerFlow_CancelsOldest(t *testing.T) {
 	cancelled := types.SubscriptionStatusCancelled
 	extCustID := "e2eprobe-cust-eph-old"
 	internalCustID := "cust-internal-old"
-	fc.subs.subs = map[string]types.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]types.SubscriptionResponse{
 		"sub_old": {
 			ID:                 strPtr("sub_old"),
 			SubscriptionStatus: &cancelled,
 			CustomerID:         strPtr(internalCustID),
-			Customer:           &types.DtoCustomerResponse{ExternalID: strPtr(extCustID)},
+			Customer:           &types.CustomerResponse{ExternalID: strPtr(extCustID)},
 		},
 		"sub_mid": {ID: strPtr("sub_mid")},
 	}
@@ -90,7 +90,7 @@ func TestCancelCustomerFlow_CancelErrorButAlreadyCancelled_IsSuccess(t *testing.
 	fc.subs.cancelErr = errors.New("{}")
 	// But Get reports the sub IS cancelled — that's the partial-success state.
 	cancelled := types.SubscriptionStatusCancelled
-	fc.subs.subs = map[string]types.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]types.SubscriptionResponse{
 		"sub_already_cancelled": {
 			ID:                 strPtr("sub_already_cancelled"),
 			SubscriptionStatus: &cancelled,
@@ -121,7 +121,7 @@ func TestCancelCustomerFlow_StatusNeverCancelled_TimesOut(t *testing.T) {
 
 	// Sub stays ACTIVE — never transitions to cancelled.
 	active := types.SubscriptionStatusActive
-	fc.subs.subs = map[string]types.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]types.SubscriptionResponse{
 		"sub_stuck": {ID: strPtr("sub_stuck"), SubscriptionStatus: &active},
 	}
 

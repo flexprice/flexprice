@@ -29,27 +29,22 @@ const (
 	AlertCanaryInitialBalance = "30.00"
 )
 
-func strPtr(s string) *string       { return &s }
-func int64Ptr(i int64) *int64       { return &i }
-func float64Ptr(f float64) *float64 { return &f }
-func boolPtr(b bool) *bool          { return &b }
+func strPtr(s string) *string { return &s }
+func int64Ptr(i int64) *int64 { return &i }
+func boolPtr(b bool) *bool    { return &b }
 
 // lowBalanceAlertSettings returns the alert thresholds seed wallets are
 // created with: info at 25, warning at 10, critical at 0 (all "below").
 // Fires wallet.credit_balance.dropped webhooks; consumed by the
-// low-wallet-alert-listener check.
-//
-// Blocked on go-sdk v2.0.16 misgenerating AlertThreshold.Threshold as
-// *float64 (server returns decimal string). Fix: add `swaggertype:"string"`
-// to internal/types/alertlogs.go AlertThreshold.Threshold + AlertInfo.ValueAtTime,
-// then regenerate + publish SDKs.
+// low-wallet-alert-listener check. Thresholds are decimal strings —
+// go-sdk v2.0.24 corrected AlertThreshold.Threshold to *string.
 func lowBalanceAlertSettings() *types.AlertSettings {
 	below := types.AlertConditionBelow
 	return &types.AlertSettings{
 		AlertEnabled: boolPtr(true),
-		Info:         &types.AlertThreshold{Threshold: float64Ptr(25), Condition: &below},
-		Warning:      &types.AlertThreshold{Threshold: float64Ptr(10), Condition: &below},
-		Critical:     &types.AlertThreshold{Threshold: float64Ptr(0), Condition: &below},
+		Info:         &types.AlertThreshold{Threshold: strPtr("25"), Condition: &below},
+		Warning:      &types.AlertThreshold{Threshold: strPtr("10"), Condition: &below},
+		Critical:     &types.AlertThreshold{Threshold: strPtr("0"), Condition: &below},
 	}
 }
 
@@ -179,9 +174,9 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "query_features"}, "query features: %w", err)
 	}
-	byLookup := map[string]types.DtoFeatureResponse{}
-	if existResp.DtoListFeaturesResponse != nil {
-		for _, f := range existResp.DtoListFeaturesResponse.Items {
+	byLookup := map[string]types.FeatureResponse{}
+	if existResp.ListFeaturesResponse != nil {
+		for _, f := range existResp.ListFeaturesResponse.Items {
 			if f.LookupKey != nil {
 				byLookup[*f.LookupKey] = f
 			}
@@ -201,7 +196,7 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		}
 
 		aggType := spec.aggType
-		meterReq := types.DtoCreateMeterRequest{
+		meterReq := types.CreateMeterRequest{
 			Name:       spec.eventName,
 			EventName:  spec.eventName,
 			ResetUsage: types.ResetUsageBillingPeriod,
@@ -225,7 +220,7 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 			meterReq.Filters = spec.filters
 		}
 
-		req := types.DtoCreateFeatureRequest{
+		req := types.CreateFeatureRequest{
 			Name:      spec.displayName,
 			Type:      types.FeatureTypeMetered,
 			LookupKey: strPtr(spec.lookupKey),
@@ -236,10 +231,10 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"feature_lookup_key": spec.lookupKey}, "create feature %s: %w", spec.lookupKey, err)
 		}
-		if resp.DtoFeatureResponse == nil {
+		if resp.FeatureResponse == nil {
 			return e2eprobe.Errorf(map[string]string{"feature_lookup_key": spec.lookupKey}, "create feature %s: empty response", spec.lookupKey)
 		}
-		feat := resp.DtoFeatureResponse
+		feat := resp.FeatureResponse
 		if feat.ID != nil {
 			out.FeatureIDs = append(out.FeatureIDs, *feat.ID)
 		}
@@ -262,7 +257,7 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 		if errors.As(err, &apiErr) && apiErr.StatusCode != http.StatusNotFound {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "lookup customer %s: %w", ext, err)
 		}
-		req := types.DtoCreateCustomerRequest{
+		req := types.CreateCustomerRequest{
 			ExternalID: ext,
 			Name:       strPtr(fmt.Sprintf("E2EProbe Persistent %d", i)),
 			Email:      strPtr(fmt.Sprintf("%s@e2eprobe.flexprice.invalid", ext)),
@@ -304,7 +299,7 @@ func (s *SeedEnsure) ensureAlertCanaryCustomer(ctx context.Context) error {
 	if errors.As(err, &apiErr) && apiErr.StatusCode != http.StatusNotFound {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "lookup alert canary: %w", err)
 	}
-	req := types.DtoCreateCustomerRequest{
+	req := types.CreateCustomerRequest{
 		ExternalID: ext,
 		Name:       strPtr("E2EProbe Alert Canary"),
 		Email:      strPtr(fmt.Sprintf("%s@e2eprobe.flexprice.invalid", ext)),
@@ -332,15 +327,15 @@ func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error 
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "query_plans"}, "query plans: %w", err)
 	}
-	if resp.DtoListPlansResponse != nil && len(resp.DtoListPlansResponse.Items) > 0 {
-		plan := resp.DtoListPlansResponse.Items[0]
+	if resp.ListPlansResponse != nil && len(resp.ListPlansResponse.Items) > 0 {
+		plan := resp.ListPlansResponse.Items[0]
 		if plan.ID != nil {
 			out.PlanIDs = []string{*plan.ID}
 		}
 		return nil
 	}
 
-	req := types.DtoCreatePlanRequest{
+	req := types.CreatePlanRequest{
 		Name:        "E2EProbe Plan",
 		LookupKey:   strPtr(e2eprobePlanLookupKey),
 		Description: strPtr("Plan used by the e2eprobe synthetic monitoring harness"),
@@ -353,10 +348,10 @@ func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error 
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"plan_lookup_key": e2eprobePlanLookupKey}, "create plan: %w", err)
 	}
-	if createResp.DtoPlanResponse == nil || createResp.DtoPlanResponse.ID == nil {
+	if createResp.PlanResponse == nil || createResp.PlanResponse.ID == nil {
 		return e2eprobe.Errorf(map[string]string{"plan_lookup_key": e2eprobePlanLookupKey}, "create plan: empty response")
 	}
-	out.PlanIDs = []string{*createResp.DtoPlanResponse.ID}
+	out.PlanIDs = []string{*createResp.PlanResponse.ID}
 	return nil
 }
 
@@ -380,8 +375,8 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 
 	existByLookup := map[string]bool{}
 	existByMeter := map[string]bool{}
-	if existResp.DtoListPricesResponse != nil {
-		for _, p := range existResp.DtoListPricesResponse.Items {
+	if existResp.ListPricesResponse != nil {
+		for _, p := range existResp.ListPricesResponse.Items {
 			if p.LookupKey != nil {
 				existByLookup[*p.LookupKey] = true
 			}
@@ -393,11 +388,10 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 
 	// Base recurring fixed price.
 	if !existByLookup["e2eprobe_base_price"] {
-		baseReq := types.DtoCreatePriceRequest{
+		baseReq := types.CreatePriceRequest{
 			EntityID:           planID,
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeFixed,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingModel:       types.BillingModelFlatFee,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
@@ -426,11 +420,10 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 		if existByLookup[usageKey] {
 			continue
 		}
-		usageReq := types.DtoCreatePriceRequest{
+		usageReq := types.CreatePriceRequest{
 			EntityID:           planID,
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeUsage,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingModel:       types.BillingModelFlatFee,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
@@ -466,8 +459,8 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extID, "plan_id": planID}, "query subs for customer %s: %w", extID, err)
 		}
-		if existResp.DtoListSubscriptionsResponse != nil && len(existResp.DtoListSubscriptionsResponse.Items) > 0 {
-			existing := existResp.DtoListSubscriptionsResponse.Items[0]
+		if existResp.ListSubscriptionsResponse != nil && len(existResp.ListSubscriptionsResponse.Items) > 0 {
+			existing := existResp.ListSubscriptionsResponse.Items[0]
 			if existing.ID != nil {
 				seeds.PersistentSubIDs = append(seeds.PersistentSubIDs, *existing.ID)
 			}
@@ -476,15 +469,14 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 
 		billingCycle := types.BillingCycleAnniversary
 		now := time.Now().UTC()
-		req := types.DtoCreateSubscriptionRequest{
+		req := types.CreateSubscriptionRequest{
 			ExternalCustomerID: &extID,
 			PlanID:             planID,
 			Currency:           "usd",
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			BillingCycle:       &billingCycle,
-			StartDate:          strPtr(now.Format(time.RFC3339)),
+			StartDate:          &now,
 			Metadata: map[string]string{
 				"e2eprobe":        "true",
 				"e2eprobe_role":   "seed",
@@ -495,18 +487,18 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extID, "plan_id": planID}, "create sub for customer %s: %w", extID, err)
 		}
-		if createResp.DtoSubscriptionResponse == nil || createResp.DtoSubscriptionResponse.ID == nil {
+		if createResp.SubscriptionResponse == nil || createResp.SubscriptionResponse.ID == nil {
 			continue // defensive: empty response, skip
 		}
-		subID := *createResp.DtoSubscriptionResponse.ID
+		subID := *createResp.SubscriptionResponse.ID
 		seeds.PersistentSubIDs = append(seeds.PersistentSubIDs, subID)
 
 		// Activate if in draft status.
-		subStatus := createResp.DtoSubscriptionResponse.SubscriptionStatus
+		subStatus := createResp.SubscriptionResponse.SubscriptionStatus
 		if subStatus != nil && *subStatus == types.SubscriptionStatusDraft {
 			_, activateErr := s.client.Subscriptions().ActivateSubscription(ctx, subID,
-				types.DtoActivateDraftSubscriptionRequest{
-					StartDate: now.Format(time.RFC3339),
+				types.ActivateDraftSubscriptionRequest{
+					StartDate: now,
 				},
 			)
 			if activateErr != nil && s.logger != nil {
@@ -541,17 +533,17 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "get customer %s for wallet: %w", extCustID, err)
 		}
-		if custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
+		if custResp.CustomerResponse == nil || custResp.CustomerResponse.ID == nil {
 			continue // can't look up wallets without internal ID
 		}
-		internalCustID := *custResp.DtoCustomerResponse.ID
+		internalCustID := *custResp.CustomerResponse.ID
 
 		// Query wallets for this customer by internal ID.
 		walletsResp, err := s.client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "get wallets for customer %s: %w", extCustID, err)
 		}
-		if walletsResp != nil && len(walletsResp.DtoWalletResponses) > 0 {
+		if walletsResp != nil && len(walletsResp.WalletResponses) > 0 {
 			continue // wallet already exists
 		}
 
@@ -559,7 +551,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		// critical=0). Enables the low-wallet-alert-listener check end-to-end:
 		// Flexprice fires wallet.credit_balance.dropped webhooks as the balance
 		// crosses each threshold, and the listener validates + tracks receipts.
-		createReq := types.DtoCreateWalletRequest{
+		createReq := types.CreateWalletRequest{
 			ExternalCustomerID: &extCustID,
 			Currency:           "USD",
 			Metadata: map[string]string{
@@ -572,13 +564,13 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "create wallet for customer %s: %w", extCustID, err)
 		}
-		if walletResp.DtoWalletResponse == nil || walletResp.DtoWalletResponse.ID == nil {
+		if walletResp.WalletResponse == nil || walletResp.WalletResponse.ID == nil {
 			continue // defensive
 		}
-		walletID := *walletResp.DtoWalletResponse.ID
+		walletID := *walletResp.WalletResponse.ID
 
 		// Top up to starting balance of 100 USD.
-		topUpReq := types.DtoTopUpWalletRequest{
+		topUpReq := types.TopUpWalletRequest{
 			Amount:            strPtr("100.00"),
 			Description:       strPtr("e2eprobe initial seed top-up"),
 			TransactionReason: types.TransactionReasonPurchasedCreditDirect,
@@ -598,20 +590,20 @@ func (s *SeedEnsure) ensureAlertCanaryWallet(ctx context.Context, extCustID stri
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "get alert canary %s: %w", extCustID, err)
 	}
-	if custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
+	if custResp.CustomerResponse == nil || custResp.CustomerResponse.ID == nil {
 		return nil
 	}
-	internalCustID := *custResp.DtoCustomerResponse.ID
+	internalCustID := *custResp.CustomerResponse.ID
 
 	walletsResp, err := s.client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "get alert canary wallets: %w", err)
 	}
-	if walletsResp != nil && len(walletsResp.DtoWalletResponses) > 0 {
+	if walletsResp != nil && len(walletsResp.WalletResponses) > 0 {
 		return nil
 	}
 
-	createReq := types.DtoCreateWalletRequest{
+	createReq := types.CreateWalletRequest{
 		ExternalCustomerID: strPtr(extCustID),
 		Currency:           "USD",
 		Metadata: map[string]string{
@@ -624,12 +616,12 @@ func (s *SeedEnsure) ensureAlertCanaryWallet(ctx context.Context, extCustID stri
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "create alert canary wallet: %w", err)
 	}
-	if walletResp.DtoWalletResponse == nil || walletResp.DtoWalletResponse.ID == nil {
+	if walletResp.WalletResponse == nil || walletResp.WalletResponse.ID == nil {
 		return nil
 	}
-	walletID := *walletResp.DtoWalletResponse.ID
+	walletID := *walletResp.WalletResponse.ID
 
-	topUpReq := types.DtoTopUpWalletRequest{
+	topUpReq := types.TopUpWalletRequest{
 		Amount:            strPtr(AlertCanaryInitialBalance),
 		Description:       strPtr("e2eprobe alert canary initial top-up"),
 		TransactionReason: types.TransactionReasonPurchasedCreditDirect,

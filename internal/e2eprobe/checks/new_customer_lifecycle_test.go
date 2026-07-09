@@ -14,10 +14,10 @@ func TestNewCustomerLifecycle(t *testing.T) {
 	origExtract := extractSubscriptionID
 	extractSubscriptionID = func(resp interface{}) string {
 		r, ok := resp.(*dtos.CreateSubscriptionResponse)
-		if !ok || r == nil || r.DtoSubscriptionResponse == nil || r.DtoSubscriptionResponse.ID == nil {
+		if !ok || r == nil || r.SubscriptionResponse == nil || r.SubscriptionResponse.ID == nil {
 			return ""
 		}
-		return *r.DtoSubscriptionResponse.ID
+		return *r.SubscriptionResponse.ID
 	}
 	t.Cleanup(func() { extractSubscriptionID = origExtract })
 

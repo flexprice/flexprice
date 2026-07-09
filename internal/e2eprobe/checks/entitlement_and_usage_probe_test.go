@@ -11,7 +11,7 @@ import (
 // returns a populated customer ID, all four downstream API calls fire.
 func TestEntitlementAndUsageProbe_HitsAllFour(t *testing.T) {
 	fc := newFakeClient()
-	// Pre-seed the fake so GetByExternalID("c0") returns a populated DtoCustomerResponse.
+	// Pre-seed the fake so GetByExternalID("c0") returns a populated CustomerResponse.
 	fc.customers.byExt["c0"] = "cust_c0"
 	reg := e2eprobe.NewRegistry()
 	reg.LoadSeeds(e2eprobe.Seeds{
