@@ -226,7 +226,6 @@ const (
 	PaymentMethodStatusActive   PaymentMethodStatus = "ACTIVE"
 	PaymentMethodStatusInactive PaymentMethodStatus = "INACTIVE"
 	PaymentMethodStatusExpired  PaymentMethodStatus = "EXPIRED"
-	PaymentMethodStatusPending  PaymentMethodStatus = "PENDING"
 )
 
 func (s PaymentMethodStatus) String() string {
@@ -238,7 +237,6 @@ func (s PaymentMethodStatus) Validate() error {
 		PaymentMethodStatusActive,
 		PaymentMethodStatusInactive,
 		PaymentMethodStatusExpired,
-		PaymentMethodStatusPending,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment method status").

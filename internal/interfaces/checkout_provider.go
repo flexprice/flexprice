@@ -69,12 +69,12 @@ type ListSavedPaymentMethodsRequest struct {
 	CustomerID, EnvironmentID string
 }
 
-// ProviderPaymentMethod is a normalized view of one payment method/token as it
-// exists at the gateway right now. Never persisted — read fresh on every call.
+// ProviderPaymentMethod is a normalized view of one confirmed, usable token as it
+// exists at the gateway right now. Only active tokens are returned — callers never
+// need to filter by status. Never persisted — read fresh on every call.
 type ProviderPaymentMethod struct {
-	GatewayMethodID  string // opaque id at the gateway (Razorpay's token_id, Stripe's payment_method id, PayPal's vault_id)
-	Method           types.PaymentMethodType
-	Status           types.PaymentMethodStatus
+	GatewayMethodID  string                  // opaque id at the gateway
+	Method           types.PaymentMethodType // e.g. PaymentMethodTypeUPI
 	MaxAmount        *decimal.Decimal
 	ExpiresAt        *time.Time
 	CreatedAt        time.Time
@@ -82,12 +82,14 @@ type ProviderPaymentMethod struct {
 }
 
 type ChargeSavedPaymentMethodRequest struct {
-	InvoiceID, CustomerID, PaymentID string
-	GatewayMethodID                  string
-	Amount                           decimal.Decimal
-	Currency                         string
-	EnvironmentID                    string
-	Metadata                         map[string]string
+	InvoiceID       string
+	CustomerID      string
+	PaymentID       string
+	GatewayMethodID string
+	Amount          decimal.Decimal
+	Currency        string
+	EnvironmentID   string
+	Metadata        map[string]string
 }
 
 type ChargeResult struct {

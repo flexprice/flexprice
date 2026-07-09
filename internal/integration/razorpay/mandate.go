@@ -24,24 +24,23 @@ func normalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 		pm.GatewayMethodID = id
 	}
 
+	// Only confirmed tokens are usable; skip anything else.
+	confirmed := false
+	if details, ok := raw["recurring_details"].(map[string]interface{}); ok {
+		if s, ok := details["status"].(string); ok {
+			confirmed = s == "confirmed"
+		}
+	}
+	if !confirmed {
+		return nil, nil
+	}
+
 	method, _ := raw["method"].(string)
 	switch method {
 	case "upi":
 		pm.Method = types.PaymentMethodTypeUPI
 	case "card":
 		pm.Method = types.PaymentMethodTypeCard
-	}
-
-	pm.Status = types.PaymentMethodStatusPending
-	if details, ok := raw["recurring_details"].(map[string]interface{}); ok {
-		if status, ok := details["status"].(string); ok {
-			switch status {
-			case "confirmed":
-				pm.Status = types.PaymentMethodStatusActive
-			case "rejected", "cancelled":
-				pm.Status = types.PaymentMethodStatusInactive
-			}
-		}
 	}
 
 	if maxAmountPaise, ok := raw["max_amount"].(float64); ok && maxAmountPaise > 0 {
@@ -73,9 +72,6 @@ func SelectUsableToken(
 ) (*interfaces.ProviderPaymentMethod, bool) {
 	now := time.Now().UTC()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
-		if pm.Status != types.PaymentMethodStatusActive {
-			return false
-		}
 		if pm.Method != preferredMethod {
 			return false
 		}
@@ -118,8 +114,8 @@ func (a *CheckoutAdapter) ListSavedPaymentMethods(
 	result := make([]*interfaces.ProviderPaymentMethod, 0, len(rawTokens))
 	for _, raw := range rawTokens {
 		pm, err := normalizeRazorpayToken(raw)
-		if err != nil {
-			continue // skip malformed entries rather than failing the whole list
+		if err != nil || pm == nil {
+			continue
 		}
 		result = append(result, pm)
 	}

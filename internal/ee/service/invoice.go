@@ -1032,9 +1032,6 @@ func evaluateMandateUsability(
 		if pm.Method != preferredMethod {
 			continue
 		}
-		if pm.Status != types.PaymentMethodStatusActive {
-			continue
-		}
 		if pm.ExpiresAt != nil && now.After(*pm.ExpiresAt) {
 			anyExpiredMatch = true
 			continue
