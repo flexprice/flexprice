@@ -105,8 +105,15 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
 		})
+
 	case types.CollectionMethodSendInvoice:
 		resp, err = provider.CreatePaymentLink(ctx, req)
+
+	default:
+		return nil, ierr.NewError("unsupported collection method").
+			WithHint("Unsupported collection method").
+			WithReportableDetails(map[string]any{"collection_method": cfg.CollectionMethod}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if err != nil {
