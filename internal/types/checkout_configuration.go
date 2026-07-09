@@ -4,6 +4,7 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/shopspring/decimal"
 )
 
 type CheckoutConfiguration struct {
@@ -118,4 +119,50 @@ func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 		return nil
 	}
 	return r.NextAction
+}
+
+// ── payment_provider_config ──────────────────────────────────────────────────
+
+// CheckoutPaymentProviderConfig is the per-checkout-request declaration of
+// payment-provider behavior — stored in CheckoutSession.payment_provider_config,
+// a dedicated column sibling to Configuration (not nested inside it). See
+// docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5.2.
+type CheckoutPaymentProviderConfig struct {
+	CollectionMethod CollectionMethod               `json:"collection_method,omitempty"`
+	Razorpay         *RazorpayPaymentProviderConfig `json:"razorpay,omitempty"`
+}
+
+type RazorpayPaymentProviderConfig struct {
+	PreferredPaymentMethod PaymentMethodType `json:"preferred_payment_method,omitempty"`
+	// MaxAmount optionally tightens the environment's Settings-level ceiling
+	// (payment_mandate_limits) for this specific checkout request. Must not
+	// exceed the Settings value — validated in the service layer (needs DB
+	// access), not here. See design spec §5.3.
+	MaxAmount *decimal.Decimal `json:"max_amount,omitempty"`
+}
+
+// Validate checks structural validity only: at most one provider sub-object,
+// and it must match the top-level payment_provider. The cross-check against
+// the environment's Settings-level ceiling happens in the service layer.
+func (c *CheckoutPaymentProviderConfig) Validate(provider CheckoutPaymentProvider) error {
+	if c == nil {
+		return nil
+	}
+	if c.Razorpay != nil {
+		if provider != CheckoutPaymentProviderRazorpay {
+			return ierr.NewError("payment_provider_config.razorpay is set but payment_provider is not razorpay").
+				WithHint("Only populate the provider sub-object matching the top-level payment_provider field").
+				Mark(ierr.ErrValidation)
+		}
+		if c.Razorpay.PreferredPaymentMethod != "" {
+			if err := c.Razorpay.PreferredPaymentMethod.Validate(); err != nil {
+				return err
+			}
+		}
+		if c.Razorpay.MaxAmount != nil && c.Razorpay.MaxAmount.IsNegative() {
+			return ierr.NewError("payment_provider_config.razorpay.max_amount must not be negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
