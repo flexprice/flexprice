@@ -29,6 +29,7 @@ const (
 	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
 	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
 	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
+	SettingKeyPaymentMandateLimits     SettingKey = "payment_mandate_limits"
 )
 
 func (s *SettingKey) Validate() error {
@@ -44,6 +45,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyCustomAnalytics,
 		SettingKeyCustomerPortalConfig,
 		SettingKeyEventIngestionFilter,
+		SettingKeyPaymentMandateLimits,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -358,6 +360,33 @@ func (c EventIngestionFilterConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
+// PaymentMandateLimits configures, per environment, the auto-charge ceiling
+// for each payment rail. Keyed by rail/method type ("upi", "card", ...) — NOT
+// by provider name. This is a tunable safety ceiling, not the auto-charge
+// opt-in switch — the real opt-in gate lives entirely in the checkout
+// request's own collection_method/preferred_payment_method fields. Clearing
+// an entry is still a valid per-rail kill switch.
+// See docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5.1.
+type PaymentMandateLimits struct {
+	MandateLimits map[string]MandateLimit `json:"mandate_limits"`
+}
+
+type MandateLimit struct {
+	MaxAmount decimal.Decimal `json:"max_amount"`
+	Currency  string          `json:"currency,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c PaymentMandateLimits) Validate() error {
+	for rail, limit := range c.MandateLimits {
+		if limit.MaxAmount.IsNegative() {
+			return ierr.NewErrorf("max_amount for rail %q must not be negative", rail).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -513,6 +542,16 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultPaymentMandateLimits := PaymentMandateLimits{
+		MandateLimits: map[string]MandateLimit{
+			"upi": {MaxAmount: decimal.NewFromInt(100000), Currency: "INR"},
+		},
+	}
+	defaultPaymentMandateLimitsMap, err := utils.ToMap(defaultPaymentMandateLimits)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
@@ -565,6 +604,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyEventIngestionFilter,
 			DefaultValue: defaultEventIngestionFilterConfigMap,
 			Description:  "Controls which external customer IDs are forwarded from raw events to the events pipeline (pilot allowlist)",
+		},
+		SettingKeyPaymentMandateLimits: {
+			Key:          SettingKeyPaymentMandateLimits,
+			DefaultValue: defaultPaymentMandateLimitsMap,
+			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
 		},
 	}, nil
 }
@@ -667,6 +711,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyEventIngestionFilter:
 		config, err := utils.ToStruct[EventIngestionFilterConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyPaymentMandateLimits:
+		config, err := utils.ToStruct[PaymentMandateLimits](value)
 		if err != nil {
 			return err
 		}
