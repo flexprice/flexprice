@@ -101,7 +101,7 @@ func (a *CheckoutAdapter) ListSavedPaymentMethods(
 	ctx context.Context,
 	req interfaces.ListSavedPaymentMethodsRequest,
 ) ([]*interfaces.ProviderPaymentMethod, error) {
-	razorpayCustomerID, err := a.Svc.customerSvc.GetRazorpayCustomerID(ctx, req.FlexpriceCustomerID)
+	razorpayCustomerID, err := a.Svc.customerSvc.GetRazorpayCustomerID(ctx, req.CustomerID)
 	if err != nil {
 		return nil, err
 	}
