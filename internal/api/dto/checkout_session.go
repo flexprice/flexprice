@@ -13,16 +13,16 @@ import (
 
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
 type CreateCheckoutSessionRequest struct {
-	CustomerExternalID    string                              `json:"customer_external_id" binding:"required"`
-	Action                types.CheckoutAction                `json:"action" binding:"required"`
-	PaymentProvider       types.CheckoutPaymentProvider       `json:"payment_provider" binding:"required"`
-	Configuration         types.CheckoutConfiguration         `json:"configuration"`
+	CustomerExternalID    string                               `json:"customer_external_id" binding:"required"`
+	Action                types.CheckoutAction                 `json:"action" binding:"required"`
+	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required"`
+	Configuration         types.CheckoutConfiguration          `json:"configuration"`
 	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
-	IdempotencyKey        *string                             `json:"idempotency_key,omitempty"`
-	SuccessURL            *string                             `json:"success_url,omitempty"`
-	FailureURL            *string                             `json:"failure_url,omitempty"`
-	CancelURL             *string                             `json:"cancel_url,omitempty"`
-	Metadata              map[string]string                   `json:"metadata,omitempty"`
+	IdempotencyKey        *string                              `json:"idempotency_key,omitempty"`
+	SuccessURL            *string                              `json:"success_url,omitempty"`
+	FailureURL            *string                              `json:"failure_url,omitempty"`
+	CancelURL             *string                              `json:"cancel_url,omitempty"`
+	Metadata              map[string]string                    `json:"metadata,omitempty"`
 }
 
 func (r *CreateCheckoutSessionRequest) Validate() error {
@@ -42,7 +42,7 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
-	if err := r.PaymentProviderConfig.Validate(r.PaymentProvider); err != nil { // nil-safe: Validate handles nil receiver
+	if err := r.PaymentProviderConfig.Validate(r.PaymentProvider); err != nil {
 		return err
 	}
 
