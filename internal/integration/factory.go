@@ -40,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/whop"
 	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -65,6 +66,7 @@ type Factory struct {
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
+	locker                       cache.Locker
 
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
@@ -92,6 +94,7 @@ func NewFactory(
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
 	temporalSvc temporalservice.TemporalService,
+	locker cache.Locker,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -109,6 +112,7 @@ func NewFactory(
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
+		locker:                       locker,
 		temporalSvc:                  temporalSvc,
 	}
 }
@@ -269,12 +273,15 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.logger,
 	)
 
-	// Create invoice sync service
+	// Create invoice sync service (paymentSvc wired below via SetPaymentService
+	// because InvoiceSyncService and PaymentService have a mutual dependency).
 	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
 		razorpayClient,
 		customerSvc.(*razorpay.CustomerService),
 		f.invoiceRepo,
+		f.paymentRepo,
 		f.entityIntegrationMappingRepo,
+		f.locker,
 		f.logger,
 	)
 
@@ -285,6 +292,9 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		invoiceSyncSvc,
 		f.logger,
 	)
+
+	// Wire back: InvoiceSyncService needs PaymentService for AutoCharge calls.
+	invoiceSyncSvc.SetPaymentService(paymentSvc)
 
 	// Create webhook handler
 	webhookHandler := razorpaywebhook.NewHandler(
