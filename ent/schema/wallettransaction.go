@@ -163,11 +163,11 @@ func (WalletTransaction) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "created_at"),
 		index.Fields("tenant_id", "environment_id", "wallet_id", "type", "credits_available", "expiry_date").
 			StorageKey("idx_tenant_wallet_type_credits_available_expiry_date").
-			Annotations(entsql.IndexWhere("credits_available > 0 AND type = 'credit'")),
+			Annotations(entsql.IndexWhere("((credits_available > (0)::numeric) AND ((type)::text = 'credit'::text))")),
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().
 			Annotations(
-				entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'"),
+				entsql.IndexWhere("((idempotency_key IS NOT NULL) AND ((idempotency_key)::text <> ''::text) AND ((status)::text = 'published'::text))"),
 			).
 			StorageKey("idx_tenant_environment_idempotency_key"),
 	}

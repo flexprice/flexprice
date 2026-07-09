@@ -142,10 +142,10 @@ func (CreditNote) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "credit_note_number").
 			Unique().
 			StorageKey(Idx_tenant_environment_credit_note_number_unique).
-			Annotations(entsql.IndexWhere("credit_note_number IS NOT NULL AND credit_note_number != '' AND status = 'published'")),
+			Annotations(entsql.IndexWhere("((credit_note_number IS NOT NULL) AND ((credit_note_number)::text <> ''::text) AND ((status)::text = 'published'::text))")),
 
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
-			Annotations(entsql.IndexWhere("idempotency_key IS NOT NULL AND idempotency_key != ''")),
+			Annotations(entsql.IndexWhere("((idempotency_key IS NOT NULL) AND ((idempotency_key)::text <> ''::text))")),
 
 		index.Fields("tenant_id", "environment_id", "invoice_id"),
 

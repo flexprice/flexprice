@@ -244,7 +244,7 @@ func (Subscription) Indexes() []ent.Index {
 	return []ent.Index{
 		// Common query patterns from repository layer
 		index.Fields("tenant_id", "environment_id", "customer_id", "status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 		index.Fields("tenant_id", "environment_id", "plan_id", "status"),
 		index.Fields("tenant_id", "environment_id", "subscription_status", "status"),
 		// For billing period updates
@@ -252,6 +252,6 @@ func (Subscription) Indexes() []ent.Index {
 		// Drives the plan-price sync's "which subs are behind?" lookup.
 		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence").
 			Annotations(entsql.IndexWhere(
-				"status = 'published' AND subscription_type IN ('standalone','delegated_invoicing','parent','grouped_invoicing')")),
+				"(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))")),
 	}
 }

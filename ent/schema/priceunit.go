@@ -82,6 +82,6 @@ func (PriceUnit) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }

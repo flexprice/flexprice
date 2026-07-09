@@ -174,11 +174,11 @@ func (CreditGrant) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "status"),
 		index.Fields("tenant_id", "environment_id", "scope", "plan_id").
-			Annotations(entsql.IndexWhere("plan_id IS NOT NULL")).
+			Annotations(entsql.IndexWhere("(plan_id IS NOT NULL)")).
 			StorageKey("idx_plan_id_not_null"),
 
 		index.Fields("tenant_id", "environment_id", "scope", "subscription_id").
-			Annotations(entsql.IndexWhere("subscription_id IS NOT NULL")).
+			Annotations(entsql.IndexWhere("(subscription_id IS NOT NULL)")).
 			StorageKey("idx_subscription_id_not_null"),
 	}
 }
