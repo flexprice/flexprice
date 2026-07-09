@@ -124,16 +124,16 @@ type CreateInvoiceRequest struct {
 // extracting only the fields needed for empty draft creation.
 func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 	return CreateDraftInvoiceRequest{
-		CustomerID:       r.CustomerID,
-		SubscriptionID:   r.SubscriptionID,
-		InvoiceType:      r.InvoiceType,
-		Currency:         r.Currency,
-		PeriodStart:      r.PeriodStart,
-		PeriodEnd:        r.PeriodEnd,
-		BillingPeriod:    r.BillingPeriod,
-		BillingReason:    r.BillingReason,
-		Description:      r.Description,
-		DueDate:          r.DueDate,
+		CustomerID:     r.CustomerID,
+		SubscriptionID: r.SubscriptionID,
+		InvoiceType:    r.InvoiceType,
+		Currency:       r.Currency,
+		PeriodStart:    r.PeriodStart,
+		PeriodEnd:      r.PeriodEnd,
+		BillingPeriod:  r.BillingPeriod,
+		BillingReason:  r.BillingReason,
+		Description:    r.Description,
+		DueDate:        r.DueDate,
 		Metadata:       r.Metadata,
 		IdempotencyKey: r.IdempotencyKey,
 		InvoicePDFURL:  r.InvoicePDFURL,
@@ -191,9 +191,9 @@ type CreateDraftInvoiceRequest struct {
 	Description            string                     `json:"description,omitempty"`
 	DueDate                *time.Time                 `json:"due_date,omitempty"`
 	Metadata               types.Metadata             `json:"metadata,omitempty"`
-	IdempotencyKey *string    `json:"idempotency_key,omitempty"`
-	InvoicePDFURL  *string    `json:"invoice_pdf_url,omitempty"`
-	IssueDate      *time.Time `json:"issue_date,omitempty"`
+	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
+	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
+	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
 }
 
 // Validate validates the draft invoice creation request.
@@ -272,8 +272,8 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		InvoicePDFURL:          r.InvoicePDFURL,
 		InvoiceStatus:          types.InvoiceStatusDraft,
 		PaymentStatus:          types.PaymentStatusPending,
-		IssueDate: issueDate,
-		BaseModel: baseModel,
+		IssueDate:              issueDate,
+		BaseModel:              baseModel,
 	}, nil
 }
 
