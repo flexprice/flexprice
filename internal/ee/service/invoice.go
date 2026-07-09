@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
@@ -989,6 +991,297 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
+
+	if inv.CollectionMethod != nil && *inv.CollectionMethod == types.CollectionMethodChargeAutomatically {
+		s.attemptRazorpayAutoCharge(ctx, inv) // logs and falls back internally; never fails FinalizeInvoice
+	}
+
+	return nil
+}
+
+// mandateUsabilityResult is the outcome of evaluateMandateUsability: either a
+// usable token was found, or not — and if not, whether the closest match was
+// specifically expired (as opposed to simply absent/over-ceiling/rejected),
+// since that distinction drives whether a fresh authorization link should be
+// offered as a fast-follow.
+type mandateUsabilityResult struct {
+	Usable  bool
+	Token   *interfaces.ProviderPaymentMethod
+	Expired bool
+}
+
+// evaluateMandateUsability is a pure function: given the customer's currently
+// saved payment methods at the gateway, decide whether one of them can be used
+// to auto-charge invoiceTotal via preferredMethod (e.g. UPI). Mirrors the
+// selection rules in razorpay.SelectUsableToken (confirmed, unexpired,
+// method-matching, under-ceiling) but additionally reports whether the reason
+// for "not usable" was specifically an expired mandate, so callers can decide
+// whether to trigger a fresh CreateAuthorizationLink.
+func evaluateMandateUsability(
+	methods []*interfaces.ProviderPaymentMethod,
+	preferredMethod types.PaymentMethodType,
+	invoiceTotal decimal.Decimal,
+) mandateUsabilityResult {
+	now := time.Now().UTC()
+	anyExpiredMatch := false
+
+	for _, pm := range methods {
+		if pm == nil {
+			continue
+		}
+		if pm.Method != preferredMethod {
+			continue
+		}
+		if pm.Status != types.PaymentMethodStatusActive {
+			continue
+		}
+		if pm.ExpiresAt != nil && now.After(*pm.ExpiresAt) {
+			anyExpiredMatch = true
+			continue
+		}
+		if pm.MaxAmount != nil && pm.MaxAmount.LessThan(invoiceTotal) {
+			continue
+		}
+		return mandateUsabilityResult{Usable: true, Token: pm}
+	}
+
+	return mandateUsabilityResult{Usable: false, Expired: anyExpiredMatch}
+}
+
+// errAutoChargeShortCircuit is a sentinel returned from inside AutoChargeInvoice's
+// transaction closure to signal "this invoice was already claimed/succeeded by
+// another attempt — stop, but this is not a failure." It never escapes
+// AutoChargeInvoice.
+var errAutoChargeShortCircuit = errors.New("auto-charge already claimed or succeeded")
+
+// attemptRazorpayAutoCharge is the best-effort hook invoked right after an
+// invoice is finalized. It NEVER returns an error to the caller — every
+// failure path logs and returns, falling through to the existing manual
+// Payment Link flow elsewhere in the codebase, which this function does not
+// touch.
+func (s *invoiceService) attemptRazorpayAutoCharge(ctx context.Context, inv *invoice.Invoice) {
+	// 1. Razorpay connection exists and has invoice-outbound enabled?
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderRazorpay)
+	if err != nil || conn == nil {
+		s.Logger.Debug(ctx, "razorpay connection not available, skipping auto-charge",
+			"invoice_id", inv.ID, "error", err)
+		return
+	}
+	if !conn.IsInvoiceOutboundEnabled() {
+		s.Logger.Debug(ctx, "invoice outbound disabled for razorpay connection, skipping auto-charge",
+			"invoice_id", inv.ID, "connection_id", conn.ID)
+		return
+	}
+
+	// 2. Resolve the checkout provider adapter.
+	customerSvc := NewCustomerService(s.ServiceParams)
+	invoiceSvc := NewInvoiceService(s.ServiceParams)
+	provider, err := s.IntegrationFactory.GetCheckoutProvider(ctx, types.CheckoutPaymentProviderRazorpay, customerSvc, invoiceSvc)
+	if err != nil {
+		s.Logger.Info(ctx, "failed to get razorpay checkout provider, skipping auto-charge",
+			"invoice_id", inv.ID, "error", err)
+		return
+	}
+
+	// 3. Mandate ceiling configured for UPI?
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	mandateLimitsCfg, err := GetSetting[types.PaymentMandateLimits](settingsSvc, ctx, types.SettingKeyPaymentMandateLimits)
+	if err != nil {
+		s.Logger.Debug(ctx, "failed to load payment_mandate_limits setting, skipping auto-charge",
+			"invoice_id", inv.ID, "error", err)
+		return
+	}
+	if _, configured := mandateLimitsCfg.MandateLimits["upi"]; !configured {
+		s.Logger.Debug(ctx, "no mandate ceiling configured for upi rail, skipping auto-charge",
+			"invoice_id", inv.ID)
+		return
+	}
+
+	// 4. List saved payment methods. Unlike the checkout-time lookup (which fails
+	// open), an error here is FAIL CLOSED: we cannot safely auto-charge without a
+	// confirmed live view of the customer's tokens. Falls through to the existing
+	// manual Payment Link path elsewhere — out of scope here.
+	methods, err := provider.ListSavedPaymentMethods(ctx, interfaces.ListSavedPaymentMethodsRequest{
+		CustomerID:    inv.CustomerID,
+		EnvironmentID: inv.EnvironmentID,
+	})
+	if err != nil {
+		s.Logger.Warn(ctx, "failed to list saved payment methods, skipping auto-charge",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+		return
+	}
+
+	// 5. Evaluate usability.
+	result := evaluateMandateUsability(methods, types.PaymentMethodTypeUPI, inv.Total)
+	if !result.Usable {
+		if result.Expired {
+			// Deferred fast-follow: fire a fresh CreateAuthorizationLink. Not
+			// implemented here — just log the intent.
+			s.Logger.Info(ctx, "mandate expired, auto-charge skipped; fresh authorization link is a deferred fast-follow",
+				"invoice_id", inv.ID, "customer_id", inv.CustomerID)
+		} else {
+			s.Logger.Debug(ctx, "no usable mandate found, skipping auto-charge",
+				"invoice_id", inv.ID, "customer_id", inv.CustomerID)
+		}
+		return
+	}
+
+	// 6. Usable token found — attempt the charge.
+	if err := s.AutoChargeInvoice(ctx, inv, result.Token.GatewayMethodID, provider); err != nil {
+		s.Logger.Error(ctx, "auto-charge attempt failed",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+	}
+}
+
+// AutoChargeInvoice attempts to charge inv via gatewayMethodID on provider,
+// guaranteeing "never charge twice" using two Postgres-unique-constraint-backed
+// idempotency claims (EntityIntegrationMapping rows):
+//
+//  1. Claim A — one row per (InvoiceCharge, invoice_id, razorpay): stops two
+//     concurrent finalize-triggered attempts on the SAME invoice from both firing.
+//  2. Claim B — one row per (TokenCycleCharge, gateway_token+subscription+cycle
+//     idempotency key, razorpay): enforces the NPCI one-debit-per-token-per-cycle
+//     rule even across DIFFERENT invoices that might otherwise both attempt to
+//     charge the same mandate in the same billing cycle.
+//
+// The external HTTP call (ChargeSavedPaymentMethod) happens strictly AFTER the
+// claiming transaction commits — never inside it.
+func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Invoice, gatewayMethodID string, provider interfaces.CheckoutProvider) error {
+	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
+	lock, err := s.Locker.AcquireLock(ctx, lockKey, 60*time.Second)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
+		return err
+	}
+	if !lock.AcquiredSuccessfully() {
+		s.Logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	providerType := string(types.SecretProviderRazorpay)
+
+	txErr := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Claim A: one attempt per invoice.
+		claimA := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityID:         inv.ID,
+			EntityType:       types.IntegrationEntityTypeInvoiceCharge,
+			ProviderType:     providerType,
+			ProviderEntityID: gatewayMethodID,
+			Metadata:         map[string]interface{}{"status": "claimed"},
+			EnvironmentID:    inv.EnvironmentID,
+			BaseModel:        types.GetDefaultBaseModel(txCtx),
+		}
+
+		if err := s.EntityIntegrationMappingRepo.Create(txCtx, claimA); err != nil {
+			if !ierr.IsAlreadyExists(err) {
+				return err
+			}
+
+			existing, getErr := s.EntityIntegrationMappingRepo.GetByEntity(txCtx, types.IntegrationEntityTypeInvoiceCharge, inv.ID, providerType)
+			if getErr != nil {
+				return getErr
+			}
+
+			status, _ := existing.Metadata["status"].(string)
+			switch status {
+			case "succeeded", "claimed":
+				// Another attempt already owns (or completed) this invoice.
+				return errAutoChargeShortCircuit
+			case "failed":
+				// Re-claim for retry.
+				existing.Metadata["status"] = "claimed"
+				if err := s.EntityIntegrationMappingRepo.Update(txCtx, existing); err != nil {
+					return err
+				}
+			default:
+				// Unknown status — treat conservatively as already owned.
+				return errAutoChargeShortCircuit
+			}
+		}
+
+		// Claim B: one successful attempt per gateway token per subscription per
+		// billing cycle (NPCI one-debit-per-cycle rule). Only applies to
+		// subscription invoices.
+		if inv.SubscriptionID != nil {
+			sub, err := s.SubRepo.Get(txCtx, *inv.SubscriptionID)
+			if err != nil {
+				return err
+			}
+
+			cycleKey := s.idempGen.GenerateKey(idempotency.ScopeTokenCycleCharge, map[string]interface{}{
+				"gateway_method_id": gatewayMethodID,
+				"subscription_id":   sub.ID,
+				"cycle_start":       sub.CurrentPeriodStart.Format(time.RFC3339),
+			})
+
+			claimB := &entityintegrationmapping.EntityIntegrationMapping{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+				EntityID:         cycleKey,
+				EntityType:       types.IntegrationEntityTypeTokenCycleCharge,
+				ProviderType:     providerType,
+				ProviderEntityID: gatewayMethodID,
+				Metadata:         map[string]interface{}{"status": "claimed"},
+				EnvironmentID:    inv.EnvironmentID,
+				BaseModel:        types.GetDefaultBaseModel(txCtx),
+			}
+
+			// A conflict here rolls back the WHOLE transaction — including claim A —
+			// because a second concurrent attempt for the same token+subscription+cycle
+			// must fail entirely, not just skip this step.
+			if err := s.EntityIntegrationMappingRepo.Create(txCtx, claimB); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		if txErr == errAutoChargeShortCircuit {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release auto-charge lock after short-circuit", "invoice_id", inv.ID, "error", releaseErr)
+			}
+			return nil
+		}
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.Logger.Error(ctx, "failed to release auto-charge lock after claim failure", "invoice_id", inv.ID, "error", releaseErr)
+		}
+		return txErr
+	}
+
+	// Claims committed — now perform the external charge, strictly outside the
+	// transaction.
+	chargeResult, err := provider.ChargeSavedPaymentMethod(ctx, interfaces.ChargeSavedPaymentMethodRequest{
+		InvoiceID:       inv.ID,
+		CustomerID:      inv.CustomerID,
+		GatewayMethodID: gatewayMethodID,
+		Amount:          inv.Total,
+		Currency:        inv.Currency,
+		EnvironmentID:   inv.EnvironmentID,
+	})
+	if err != nil {
+		// Ambiguous submission failure: leave the claim "claimed" for a later
+		// reconciliation sweep to resolve — do NOT mark it "failed" here, since we
+		// cannot be sure the charge wasn't actually accepted by the gateway.
+		s.Logger.Error(ctx, "razorpay auto-charge submission failed",
+			"invoice_id", inv.ID, "gateway_method_id", gatewayMethodID, "error", err)
+		// Lock intentionally stays held — released only by TTL expiry or a later
+		// reconciliation pass.
+		return nil
+	}
+
+	s.Logger.Info(ctx, "razorpay auto-charge submitted",
+		"invoice_id", inv.ID,
+		"gateway_method_id", gatewayMethodID,
+		"provider_payment_intent_id", chargeResult.ProviderPaymentIntentID,
+		"status", chargeResult.Status,
+	)
+	// Lock intentionally stays held — only released by a later webhook handler
+	// or TTL expiry. Claim rows are NOT updated to "succeeded" here; that
+	// happens in the webhook handler since ChargeSavedPaymentMethod only
+	// returns an ambiguous "submitted" ack, never a final result.
 
 	return nil
 }
