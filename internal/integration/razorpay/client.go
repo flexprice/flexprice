@@ -39,12 +39,6 @@ type Client struct {
 	connectionRepo    connection.Repository
 	encryptionService security.EncryptionService
 	logger            *logger.Logger
-	// baseURLOverride, when set, redirects the underlying Razorpay SDK client
-	// at a different base URL. It is only ever set by tests (via a package-
-	// internal constructor) so they can point the SDK at an httptest.Server;
-	// production code (NewClient) never sets it, so real traffic always goes
-	// to Razorpay's actual API.
-	baseURLOverride string
 }
 
 // NewClient creates a new Razorpay client
@@ -200,10 +194,6 @@ func (c *Client) GetRazorpaySDKClient(ctx context.Context) (*razorpay.Client, *R
 	// preserve the SDK's configured timeout.
 	if razorpayClient.Request != nil && razorpayClient.Request.HTTPClient != nil {
 		razorpayClient.Request.HTTPClient.Transport = httpclient.OtelTransport(razorpayClient.Request.HTTPClient.Transport)
-	}
-
-	if c.baseURLOverride != "" {
-		razorpayClient.BaseURL = c.baseURLOverride
 	}
 
 	return razorpayClient, config, nil
@@ -509,6 +499,5 @@ func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[str
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Info(ctx, "successfully created Razorpay recurring payment", "payment_id", result["id"])
 	return result, nil
 }
