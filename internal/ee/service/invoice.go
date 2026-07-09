@@ -1419,6 +1419,13 @@ func (s *invoiceService) findOrCreateAutoChargePayment(
 			s.Logger.Info(ctx, "auto-charge payment previously failed, skipping",
 				"invoice_id", inv.ID, "payment_id", existing.ID)
 			return nil, true, nil
+		default:
+			// REFUNDED, PARTIALLY_REFUNDED, VOIDED, or any future status — skip to
+			// avoid reusing a terminal record as the charge idempotency anchor.
+			s.Logger.Warn(ctx, "auto-charge payment in unexpected state, skipping",
+				"invoice_id", inv.ID, "payment_id", existing.ID,
+				"payment_status", existing.PaymentStatus)
+			return nil, true, nil
 		}
 	}
 
@@ -1549,7 +1556,8 @@ func (s *invoiceService) executeAutoCharge(
 		return err
 	}
 	if freshPayment.PaymentStatus == types.PaymentStatusProcessing ||
-		freshPayment.PaymentStatus == types.PaymentStatusSucceeded {
+		freshPayment.PaymentStatus == types.PaymentStatusSucceeded ||
+		freshPayment.PaymentStatus == types.PaymentStatusOverpaid {
 		s.Logger.Info(ctx, "payment already progressed, skipping auto-charge",
 			"invoice_id", inv.ID, "payment_status", freshPayment.PaymentStatus)
 		return nil
@@ -1570,6 +1578,10 @@ func (s *invoiceService) executeAutoCharge(
 	}
 
 	freshPayment.PaymentStatus = types.PaymentStatusProcessing
+	// Reconcile the amount to the freshInv snapshot — the payment record may have
+	// been created against a stale AmountRemaining if a concurrent partial payment
+	// landed between the outer read and the lock.
+	freshPayment.Amount = freshInv.AmountRemaining
 	if result.RazorpayPaymentID != "" {
 		freshPayment.GatewayPaymentID = &result.RazorpayPaymentID
 	}
