@@ -381,6 +381,8 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		"count", len(records),
 	)
 
+	s.runMeterUsagePostInsertSideEffects(ctx, event)
+
 	return nil
 }
 

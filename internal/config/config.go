@@ -470,6 +470,7 @@ type MeterUsageTrackingConfig struct {
 	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
+	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
