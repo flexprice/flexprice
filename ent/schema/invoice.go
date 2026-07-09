@@ -225,12 +225,6 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("ID of the replacement invoice created when this invoice was recalculated after voiding"),
-
-		field.String("collection_method").
-			Optional().
-			Nillable().
-			GoType(types.CollectionMethod("")).
-			Comment("How this invoice is collected: charge_automatically or send_invoice. Nil means unset (defaults to send_invoice behavior for one-off invoices; copied from Subscription.CollectionMethod for renewal invoices)"),
 	}
 }
 

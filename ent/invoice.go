@@ -104,8 +104,6 @@ type Invoice struct {
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// ID of the replacement invoice created when this invoice was recalculated after voiding
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
-	// How this invoice is collected: charge_automatically or send_invoice. Nil means unset (defaults to send_invoice behavior for one-off invoices; copied from Subscription.CollectionMethod for renewal invoices)
-	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceQuery when eager-loading is set.
 	Edges        InvoiceEdges `json:"edges"`
@@ -154,7 +152,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID, invoice.FieldCollectionMethod:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldIssueDate, invoice.FieldLastComputedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -452,13 +450,6 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.RecalculatedInvoiceID = new(string)
 				*i.RecalculatedInvoiceID = value.String
 			}
-		case invoice.FieldCollectionMethod:
-			if value, ok := values[j].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field collection_method", values[j])
-			} else if value.Valid {
-				i.CollectionMethod = new(types.CollectionMethod)
-				*i.CollectionMethod = types.CollectionMethod(value.String)
-			}
 		default:
 			i.selectValues.Set(columns[j], values[j])
 		}
@@ -667,11 +658,6 @@ func (i *Invoice) String() string {
 	if v := i.RecalculatedInvoiceID; v != nil {
 		builder.WriteString("recalculated_invoice_id=")
 		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := i.CollectionMethod; v != nil {
-		builder.WriteString("collection_method=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteByte(')')
 	return builder.String()

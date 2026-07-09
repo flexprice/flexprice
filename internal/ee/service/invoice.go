@@ -347,7 +347,6 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 		req.BillingReason = types.InvoiceBillingReasonProration
 	}
 	req.SubscriptionCustomerID = &sub.CustomerID
-	req.CollectionMethod = lo.ToPtr(types.CollectionMethod(sub.CollectionMethod))
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
@@ -990,8 +989,11 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
 
-	if inv.CollectionMethod != nil && *inv.CollectionMethod == types.CollectionMethodChargeAutomatically {
-		s.attemptRazorpayAutoCharge(ctx, inv) // logs and falls back internally; never fails FinalizeInvoice
+	if inv.SubscriptionID != nil {
+		if sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID); err == nil && sub != nil &&
+			types.CollectionMethod(sub.CollectionMethod) == types.CollectionMethodChargeAutomatically {
+			s.attemptRazorpayAutoCharge(ctx, inv) // logs and falls back internally; never fails FinalizeInvoice
+		}
 	}
 
 	return nil
@@ -2027,7 +2029,6 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
-	draftReq.CollectionMethod = lo.ToPtr(types.CollectionMethod(subscription.CollectionMethod))
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
 		return nil, nil, err

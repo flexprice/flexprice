@@ -602,26 +602,6 @@ func (iu *InvoiceUpdate) ClearRecalculatedInvoiceID() *InvoiceUpdate {
 	return iu
 }
 
-// SetCollectionMethod sets the "collection_method" field.
-func (iu *InvoiceUpdate) SetCollectionMethod(tm types.CollectionMethod) *InvoiceUpdate {
-	iu.mutation.SetCollectionMethod(tm)
-	return iu
-}
-
-// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (iu *InvoiceUpdate) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceUpdate {
-	if tm != nil {
-		iu.SetCollectionMethod(*tm)
-	}
-	return iu
-}
-
-// ClearCollectionMethod clears the value of the "collection_method" field.
-func (iu *InvoiceUpdate) ClearCollectionMethod() *InvoiceUpdate {
-	iu.mutation.ClearCollectionMethod()
-	return iu
-}
-
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iu *InvoiceUpdate) AddLineItemIDs(ids ...string) *InvoiceUpdate {
 	iu.mutation.AddLineItemIDs(ids...)
@@ -929,12 +909,6 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
-	}
-	if value, ok := iu.mutation.CollectionMethod(); ok {
-		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
-	}
-	if iu.mutation.CollectionMethodCleared() {
-		_spec.ClearField(invoice.FieldCollectionMethod, field.TypeString)
 	}
 	if iu.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1616,26 +1590,6 @@ func (iuo *InvoiceUpdateOne) ClearRecalculatedInvoiceID() *InvoiceUpdateOne {
 	return iuo
 }
 
-// SetCollectionMethod sets the "collection_method" field.
-func (iuo *InvoiceUpdateOne) SetCollectionMethod(tm types.CollectionMethod) *InvoiceUpdateOne {
-	iuo.mutation.SetCollectionMethod(tm)
-	return iuo
-}
-
-// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (iuo *InvoiceUpdateOne) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceUpdateOne {
-	if tm != nil {
-		iuo.SetCollectionMethod(*tm)
-	}
-	return iuo
-}
-
-// ClearCollectionMethod clears the value of the "collection_method" field.
-func (iuo *InvoiceUpdateOne) ClearCollectionMethod() *InvoiceUpdateOne {
-	iuo.mutation.ClearCollectionMethod()
-	return iuo
-}
-
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iuo *InvoiceUpdateOne) AddLineItemIDs(ids ...string) *InvoiceUpdateOne {
 	iuo.mutation.AddLineItemIDs(ids...)
@@ -1973,12 +1927,6 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.RecalculatedInvoiceIDCleared() {
 		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
-	}
-	if value, ok := iuo.mutation.CollectionMethod(); ok {
-		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
-	}
-	if iuo.mutation.CollectionMethodCleared() {
-		_spec.ClearField(invoice.FieldCollectionMethod, field.TypeString)
 	}
 	if iuo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

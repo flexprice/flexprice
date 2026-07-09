@@ -271,21 +271,19 @@ func (s *lineItemProrationService) settleCharge(
 	billingPeriod := string(sub.BillingPeriod)
 	periodEnd := sub.CurrentPeriodEnd
 
-	collectionMethod := types.CollectionMethod(sub.CollectionMethod)
 	inv, err := invoiceSvc.CreateInvoice(ctx, dto.CreateInvoiceRequest{
-		CustomerID:       billingCustomer,
-		SubscriptionID:   &sub.ID,
-		InvoiceType:      types.InvoiceTypeOneOff,
-		Currency:         sub.Currency,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionUpdate,
-		AmountDue:        summary.TotalChargeAmount,
-		Total:            summary.TotalChargeAmount,
-		Subtotal:         summary.TotalChargeAmount,
-		PeriodStart:      &effectiveDate,
-		PeriodEnd:        &periodEnd,
-		BillingPeriod:    &billingPeriod,
-		LineItems:        summary.ChargeLineItems,
-		CollectionMethod: &collectionMethod,
+		CustomerID:    billingCustomer,
+		SubscriptionID: &sub.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      sub.Currency,
+		BillingReason: types.InvoiceBillingReasonSubscriptionUpdate,
+		AmountDue:     summary.TotalChargeAmount,
+		Total:         summary.TotalChargeAmount,
+		Subtotal:      summary.TotalChargeAmount,
+		PeriodStart:   &effectiveDate,
+		PeriodEnd:     &periodEnd,
+		BillingPeriod: &billingPeriod,
+		LineItems:     summary.ChargeLineItems,
 	})
 	if err != nil {
 		s.params.Logger.Error(ctx, "failed to create proration charge invoice", "error", err)

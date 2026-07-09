@@ -29377,7 +29377,6 @@ type InvoiceMutation struct {
 	total_prepaid_credits_applied *decimal.Decimal
 	idempotency_key               *string
 	recalculated_invoice_id       *string
-	collection_method             *types.CollectionMethod
 	clearedFields                 map[string]struct{}
 	line_items                    map[string]struct{}
 	removedline_items             map[string]struct{}
@@ -31424,55 +31423,6 @@ func (m *InvoiceMutation) ResetRecalculatedInvoiceID() {
 	delete(m.clearedFields, invoice.FieldRecalculatedInvoiceID)
 }
 
-// SetCollectionMethod sets the "collection_method" field.
-func (m *InvoiceMutation) SetCollectionMethod(tm types.CollectionMethod) {
-	m.collection_method = &tm
-}
-
-// CollectionMethod returns the value of the "collection_method" field in the mutation.
-func (m *InvoiceMutation) CollectionMethod() (r types.CollectionMethod, exists bool) {
-	v := m.collection_method
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCollectionMethod returns the old "collection_method" field's value of the Invoice entity.
-// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldCollectionMethod(ctx context.Context) (v *types.CollectionMethod, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCollectionMethod is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCollectionMethod requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCollectionMethod: %w", err)
-	}
-	return oldValue.CollectionMethod, nil
-}
-
-// ClearCollectionMethod clears the value of the "collection_method" field.
-func (m *InvoiceMutation) ClearCollectionMethod() {
-	m.collection_method = nil
-	m.clearedFields[invoice.FieldCollectionMethod] = struct{}{}
-}
-
-// CollectionMethodCleared returns if the "collection_method" field was cleared in this mutation.
-func (m *InvoiceMutation) CollectionMethodCleared() bool {
-	_, ok := m.clearedFields[invoice.FieldCollectionMethod]
-	return ok
-}
-
-// ResetCollectionMethod resets all changes to the "collection_method" field.
-func (m *InvoiceMutation) ResetCollectionMethod() {
-	m.collection_method = nil
-	delete(m.clearedFields, invoice.FieldCollectionMethod)
-}
-
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by ids.
 func (m *InvoiceMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -31615,7 +31565,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 43)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -31742,9 +31692,6 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.recalculated_invoice_id != nil {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
-	if m.collection_method != nil {
-		fields = append(fields, invoice.FieldCollectionMethod)
-	}
 	return fields
 }
 
@@ -31837,8 +31784,6 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.IdempotencyKey()
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.RecalculatedInvoiceID()
-	case invoice.FieldCollectionMethod:
-		return m.CollectionMethod()
 	}
 	return nil, false
 }
@@ -31932,8 +31877,6 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldIdempotencyKey(ctx)
 	case invoice.FieldRecalculatedInvoiceID:
 		return m.OldRecalculatedInvoiceID(ctx)
-	case invoice.FieldCollectionMethod:
-		return m.OldCollectionMethod(ctx)
 	}
 	return nil, fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -32237,13 +32180,6 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetRecalculatedInvoiceID(v)
 		return nil
-	case invoice.FieldCollectionMethod:
-		v, ok := value.(types.CollectionMethod)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCollectionMethod(v)
-		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -32388,9 +32324,6 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldRecalculatedInvoiceID) {
 		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
 	}
-	if m.FieldCleared(invoice.FieldCollectionMethod) {
-		fields = append(fields, invoice.FieldCollectionMethod)
-	}
 	return fields
 }
 
@@ -32491,9 +32424,6 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ClearRecalculatedInvoiceID()
-		return nil
-	case invoice.FieldCollectionMethod:
-		m.ClearCollectionMethod()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice nullable field %s", name)
@@ -32628,9 +32558,6 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldRecalculatedInvoiceID:
 		m.ResetRecalculatedInvoiceID()
-		return nil
-	case invoice.FieldCollectionMethod:
-		m.ResetCollectionMethod()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
