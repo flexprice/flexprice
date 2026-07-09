@@ -290,6 +290,34 @@ func (m *memMappingRepo) GetByEntity(_ context.Context, entityType types.Integra
 	return nil, ierr.NewError("entity integration mapping not found").Mark(ierr.ErrNotFound)
 }
 
+func (m *memMappingRepo) ListScopedClaimedByEntityTypesAndProvider(_ context.Context, entityTypes []types.IntegrationEntityType, providerType string) ([]entityintegrationmapping.ScopedClaim, error) {
+	entityTypeSet := make(map[types.IntegrationEntityType]bool, len(entityTypes))
+	for _, et := range entityTypes {
+		entityTypeSet[et] = true
+	}
+	out := make([]entityintegrationmapping.ScopedClaim, 0)
+	for _, v := range m.byID {
+		if !entityTypeSet[v.EntityType] || v.ProviderType != providerType {
+			continue
+		}
+		status, _ := v.Metadata["status"].(string)
+		if status != "claimed" {
+			continue
+		}
+		out = append(out, entityintegrationmapping.ScopedClaim{
+			MappingID:     v.ID,
+			TenantID:      v.TenantID,
+			EnvironmentID: v.EnvironmentID,
+			EntityID:      v.EntityID,
+			EntityType:    string(v.EntityType),
+			ProviderType:  v.ProviderType,
+			Metadata:      v.Metadata,
+			CreatedAt:     v.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
 func (m *memMappingRepo) listByProvider(provider string) []*entityintegrationmapping.EntityIntegrationMapping {
 	out := make([]*entityintegrationmapping.EntityIntegrationMapping, 0)
 	for _, v := range m.byID {

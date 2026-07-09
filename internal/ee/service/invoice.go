@@ -1161,9 +1161,16 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 
 	providerType := string(types.SecretProviderRazorpay)
 
+	// claimA and claimB are captured here so that, after the claiming
+	// transaction commits and the external charge is submitted, we can persist
+	// the resulting provider payment intent ID onto the claim row(s) — without
+	// this, the reconciliation sweep (Task 17) would have nothing to
+	// Payment.Fetch against for the common case of a successful submission.
+	var claimA, claimB *entityintegrationmapping.EntityIntegrationMapping
+
 	txErr := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Claim A: one attempt per invoice.
-		claimA := &entityintegrationmapping.EntityIntegrationMapping{
+		claimA = &entityintegrationmapping.EntityIntegrationMapping{
 			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 			EntityID:         inv.ID,
 			EntityType:       types.IntegrationEntityTypeInvoiceCharge,
@@ -1205,6 +1212,10 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 				if err := s.EntityIntegrationMappingRepo.Update(txCtx, existing); err != nil {
 					return err
 				}
+				// existing (not the failed-Create claimA local) is the row that's
+				// actually persisted — track it so the payment_id gets written to
+				// the right row after the charge is submitted below.
+				claimA = existing
 			default:
 				// Unknown status — treat conservatively as already owned.
 				return errAutoChargeShortCircuit
@@ -1226,7 +1237,7 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 				"cycle_start":       sub.CurrentPeriodStart.Format(time.RFC3339),
 			})
 
-			claimB := &entityintegrationmapping.EntityIntegrationMapping{
+			claimB = &entityintegrationmapping.EntityIntegrationMapping{
 				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 				EntityID:         cycleKey,
 				EntityType:       types.IntegrationEntityTypeTokenCycleCharge,
@@ -1292,6 +1303,31 @@ func (s *invoiceService) AutoChargeInvoice(ctx context.Context, inv *invoice.Inv
 	// or TTL expiry. Claim rows are NOT updated to "succeeded" here; that
 	// happens in the webhook handler since ChargeSavedPaymentMethod only
 	// returns an ambiguous "submitted" ack, never a final result.
+
+	// Persist the provider payment intent ID onto the claim row(s) so the
+	// reconciliation sweep (design spec §8) has something to Payment.Fetch
+	// against for the common case — a successful submission whose final
+	// status is still pending. Best-effort: a failure here just means the
+	// sweep falls back to its "payment_id absent" path (treats the claim as
+	// abandoned) for this claim, so we log and continue rather than failing
+	// the whole auto-charge attempt after the gateway already accepted it.
+	if chargeResult.ProviderPaymentIntentID != "" {
+		for _, claim := range []*entityintegrationmapping.EntityIntegrationMapping{claimA, claimB} {
+			if claim == nil {
+				continue
+			}
+			claim.Metadata["payment_id"] = chargeResult.ProviderPaymentIntentID
+			if err := s.EntityIntegrationMappingRepo.Update(ctx, claim); err != nil {
+				s.Logger.Error(ctx, "failed to persist payment_id onto auto-charge claim",
+					"invoice_id", inv.ID,
+					"mapping_id", claim.ID,
+					"entity_type", claim.EntityType,
+					"provider_payment_intent_id", chargeResult.ProviderPaymentIntentID,
+					"error", err,
+				)
+			}
+		}
+	}
 
 	return nil
 }

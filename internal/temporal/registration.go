@@ -53,6 +53,7 @@ type cronActivityBundle struct {
 	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
 	moyasarAuthPaymentSettlement *cronActivities.MoyasarAuthPaymentSettlementActivities
 	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
+	razorpayReconciliationSweep  *cronActivities.RazorpayReconciliationSweepActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -278,6 +279,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
+		razorpayReconciliationSweep:  cronActivities.NewRazorpayReconciliationSweepActivities(params.EntityIntegrationMappingRepo, params.IntegrationFactory, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -509,6 +511,7 @@ func buildWorkerConfig(
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
 			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
 			cronWorkflows.CheckoutSessionExpiryWorkflow,
+			cronWorkflows.RazorpayReconciliationSweepWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -523,6 +526,7 @@ func buildWorkerConfig(
 			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
 			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
 			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
+			cron.razorpayReconciliationSweep.ResolveStuckClaimsActivity,
 		)
 	}
 	return WorkerConfig{

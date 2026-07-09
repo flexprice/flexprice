@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -412,6 +413,66 @@ func (r *entityIntegrationMappingRepository) GetByEntity(ctx context.Context, en
 	r.SetCache(ctx, domainMapping)
 
 	return domainMapping, nil
+}
+
+// ListScopedClaimedByEntityTypesAndProvider returns idempotency-claim mapping
+// rows (InvoiceCharge / TokenCycleCharge) whose Metadata["status"] is
+// "claimed", across ALL tenants and environments, for the given entity types
+// and provider type. Bypasses tenant/environment scoping via raw SQL — same
+// pattern as paymentRepository.ListScopedByDestinationStatusGateway — since
+// the reconciliation sweep cron runs outside any single tenant's context.
+func (r *entityIntegrationMappingRepository) ListScopedClaimedByEntityTypesAndProvider(ctx context.Context, entityTypes []types.IntegrationEntityType, providerType string) ([]domainEntityIntegrationMapping.ScopedClaim, error) {
+	span := StartRepositorySpan(ctx, "entity_integration_mapping", "list_scoped_claimed_by_entity_types_and_provider", map[string]interface{}{
+		"entity_types":  entityTypes,
+		"provider_type": providerType,
+	})
+	defer FinishSpan(span)
+
+	entityTypeStrs := make([]string, len(entityTypes))
+	for i, et := range entityTypes {
+		entityTypeStrs[i] = string(et)
+	}
+
+	const query = `
+		SELECT id, tenant_id, environment_id, entity_id, entity_type, provider_type, metadata, created_at
+		FROM entity_integration_mappings
+		WHERE entity_type    = ANY($1)
+		  AND provider_type  = $2
+		  AND status         = 'published'
+		  AND metadata ->> 'status' = 'claimed'`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, pq.Array(entityTypeStrs), providerType)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to list scoped claimed entity integration mappings").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result []domainEntityIntegrationMapping.ScopedClaim
+	for rows.Next() {
+		var (
+			row         domainEntityIntegrationMapping.ScopedClaim
+			metadataRaw []byte
+		)
+		if err := rows.Scan(&row.MappingID, &row.TenantID, &row.EnvironmentID, &row.EntityID, &row.EntityType, &row.ProviderType, &metadataRaw, &row.CreatedAt); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan scoped claimed entity integration mapping row").Mark(ierr.ErrDatabase)
+		}
+		if len(metadataRaw) > 0 {
+			if err := json.Unmarshal(metadataRaw, &row.Metadata); err != nil {
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).WithHint("failed to unmarshal claim metadata").Mark(ierr.ErrDatabase)
+			}
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate scoped claimed entity integration mapping rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
 }
 
 // Provider-specific queries

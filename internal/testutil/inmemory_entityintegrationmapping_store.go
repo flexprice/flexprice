@@ -100,6 +100,48 @@ func (s *InMemoryEntityIntegrationMappingStore) GetByEntity(ctx context.Context,
 	return s.GetByEntityAndProvider(ctx, entityID, entityType, providerType)
 }
 
+// ListScopedClaimedByEntityTypesAndProvider implements the cross-tenant claim
+// lookup used by the reconciliation sweep, matching entries whose
+// Metadata["status"] is "claimed" for the given entity types + provider type,
+// across all tenants/environments (no ctx-based scoping, matching the raw-SQL
+// production implementation's semantics).
+func (s *InMemoryEntityIntegrationMappingStore) ListScopedClaimedByEntityTypesAndProvider(ctx context.Context, entityTypes []types.IntegrationEntityType, providerType string) ([]entityintegrationmapping.ScopedClaim, error) {
+	entityTypeSet := make(map[types.IntegrationEntityType]bool, len(entityTypes))
+	for _, et := range entityTypes {
+		entityTypeSet[et] = true
+	}
+
+	filterFn := func(_ context.Context, m *entityintegrationmapping.EntityIntegrationMapping, _ interface{}) bool {
+		if !entityTypeSet[m.EntityType] || m.ProviderType != providerType {
+			return false
+		}
+		status, _ := m.Metadata["status"].(string)
+		return status == "claimed"
+	}
+
+	mappings, err := s.InMemoryStore.List(context.Background(), nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list scoped claimed entity integration mappings").
+			Mark(ierr.ErrDatabase)
+	}
+
+	result := make([]entityintegrationmapping.ScopedClaim, 0, len(mappings))
+	for _, m := range mappings {
+		result = append(result, entityintegrationmapping.ScopedClaim{
+			MappingID:     m.ID,
+			TenantID:      m.TenantID,
+			EnvironmentID: m.EnvironmentID,
+			EntityID:      m.EntityID,
+			EntityType:    string(m.EntityType),
+			ProviderType:  m.ProviderType,
+			Metadata:      lo.Assign(map[string]interface{}{}, m.Metadata),
+			CreatedAt:     m.CreatedAt,
+		})
+	}
+	return result, nil
+}
+
 // GetByEntityAndProvider retrieves an entity integration mapping by entity and provider
 func (s *InMemoryEntityIntegrationMappingStore) GetByEntityAndProvider(ctx context.Context, entityID string, entityType types.IntegrationEntityType, providerType string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	// Create a filter function that matches by entity and provider
