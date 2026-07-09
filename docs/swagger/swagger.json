@@ -22150,7 +22150,7 @@
                     "type": "string"
                 },
                 "value_at_time": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -22254,7 +22254,7 @@
                     "$ref": "#/definitions/types.AlertCondition"
                 },
                 "threshold": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
