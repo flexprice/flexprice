@@ -145,8 +145,8 @@ func (c *CheckoutPaymentProviderConfig) Validate(provider CheckoutPaymentProvide
 				return err
 			}
 		}
-		if c.Razorpay.MaxMandateLimit != nil && c.Razorpay.MaxMandateLimit.IsNegative() {
-			return ierr.NewError("razorpay.max_mandate_limit must not be negative").Mark(ierr.ErrValidation)
+		if c.Razorpay.MaxMandateLimit != nil && c.Razorpay.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
+			return ierr.NewError("razorpay.max_mandate_limit must be greater than or equal to 1").Mark(ierr.ErrValidation)
 		}
 	}
 	return nil

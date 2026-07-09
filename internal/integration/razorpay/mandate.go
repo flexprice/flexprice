@@ -132,9 +132,6 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	ctx context.Context,
 	req interfaces.AuthorizationLinkRequest,
 ) (*interfaces.CheckoutProviderResponse, error) {
-	// v1 only supports UPI registration (docs/superpowers/specs/2026-07-09-razorpay-autocharge-design.md §5)
-	// — reject explicitly rather than silently ignoring PreferredMethod and always
-	// registering a UPI mandate regardless of what was actually requested.
 	if req.PreferredMethod != "" && req.PreferredMethod != types.PaymentMethodTypeUPI {
 		return nil, ierr.NewErrorf("razorpay authorization link registration does not support method %q", req.PreferredMethod).
 			WithHint("Only UPI is supported for Razorpay mandate registration in v1").
