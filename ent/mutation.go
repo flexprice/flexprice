@@ -20632,31 +20632,33 @@ func (m *CreditNoteLineItemMutation) ResetEdge(name string) error {
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
 type CustomerMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	metadata            *map[string]string
-	external_id         *string
-	name                *string
-	email               *string
-	address_line1       *string
-	address_line2       *string
-	address_city        *string
-	address_state       *string
-	address_postal_code *string
-	address_country     *string
-	timezone            *string
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*Customer, error)
-	predicates          []predicate.Customer
+	op                                  Op
+	typ                                 string
+	id                                  *string
+	tenant_id                           *string
+	status                              *string
+	created_at                          *time.Time
+	updated_at                          *time.Time
+	created_by                          *string
+	updated_by                          *string
+	environment_id                      *string
+	metadata                            *map[string]string
+	external_id                         *string
+	name                                *string
+	email                               *string
+	address_line1                       *string
+	address_line2                       *string
+	address_city                        *string
+	address_state                       *string
+	address_postal_code                 *string
+	address_country                     *string
+	timezone                            *string
+	allowed_integration_providers       *[]string
+	appendallowed_integration_providers []string
+	clearedFields                       map[string]struct{}
+	done                                bool
+	oldValue                            func(context.Context) (*Customer, error)
+	predicates                          []predicate.Customer
 }
 
 var _ ent.Mutation = (*CustomerMutation)(nil)
@@ -21567,6 +21569,71 @@ func (m *CustomerMutation) ResetTimezone() {
 	delete(m.clearedFields, customer.FieldTimezone)
 }
 
+// SetAllowedIntegrationProviders sets the "allowed_integration_providers" field.
+func (m *CustomerMutation) SetAllowedIntegrationProviders(s []string) {
+	m.allowed_integration_providers = &s
+	m.appendallowed_integration_providers = nil
+}
+
+// AllowedIntegrationProviders returns the value of the "allowed_integration_providers" field in the mutation.
+func (m *CustomerMutation) AllowedIntegrationProviders() (r []string, exists bool) {
+	v := m.allowed_integration_providers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowedIntegrationProviders returns the old "allowed_integration_providers" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldAllowedIntegrationProviders(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowedIntegrationProviders is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowedIntegrationProviders requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowedIntegrationProviders: %w", err)
+	}
+	return oldValue.AllowedIntegrationProviders, nil
+}
+
+// AppendAllowedIntegrationProviders adds s to the "allowed_integration_providers" field.
+func (m *CustomerMutation) AppendAllowedIntegrationProviders(s []string) {
+	m.appendallowed_integration_providers = append(m.appendallowed_integration_providers, s...)
+}
+
+// AppendedAllowedIntegrationProviders returns the list of values that were appended to the "allowed_integration_providers" field in this mutation.
+func (m *CustomerMutation) AppendedAllowedIntegrationProviders() ([]string, bool) {
+	if len(m.appendallowed_integration_providers) == 0 {
+		return nil, false
+	}
+	return m.appendallowed_integration_providers, true
+}
+
+// ClearAllowedIntegrationProviders clears the value of the "allowed_integration_providers" field.
+func (m *CustomerMutation) ClearAllowedIntegrationProviders() {
+	m.allowed_integration_providers = nil
+	m.appendallowed_integration_providers = nil
+	m.clearedFields[customer.FieldAllowedIntegrationProviders] = struct{}{}
+}
+
+// AllowedIntegrationProvidersCleared returns if the "allowed_integration_providers" field was cleared in this mutation.
+func (m *CustomerMutation) AllowedIntegrationProvidersCleared() bool {
+	_, ok := m.clearedFields[customer.FieldAllowedIntegrationProviders]
+	return ok
+}
+
+// ResetAllowedIntegrationProviders resets all changes to the "allowed_integration_providers" field.
+func (m *CustomerMutation) ResetAllowedIntegrationProviders() {
+	m.allowed_integration_providers = nil
+	m.appendallowed_integration_providers = nil
+	delete(m.clearedFields, customer.FieldAllowedIntegrationProviders)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -21601,7 +21668,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -21656,6 +21723,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.timezone != nil {
 		fields = append(fields, customer.FieldTimezone)
 	}
+	if m.allowed_integration_providers != nil {
+		fields = append(fields, customer.FieldAllowedIntegrationProviders)
+	}
 	return fields
 }
 
@@ -21700,6 +21770,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.AddressCountry()
 	case customer.FieldTimezone:
 		return m.Timezone()
+	case customer.FieldAllowedIntegrationProviders:
+		return m.AllowedIntegrationProviders()
 	}
 	return nil, false
 }
@@ -21745,6 +21817,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddressCountry(ctx)
 	case customer.FieldTimezone:
 		return m.OldTimezone(ctx)
+	case customer.FieldAllowedIntegrationProviders:
+		return m.OldAllowedIntegrationProviders(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -21880,6 +21954,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTimezone(v)
 		return nil
+	case customer.FieldAllowedIntegrationProviders:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowedIntegrationProviders(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -21946,6 +22027,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldTimezone) {
 		fields = append(fields, customer.FieldTimezone)
 	}
+	if m.FieldCleared(customer.FieldAllowedIntegrationProviders) {
+		fields = append(fields, customer.FieldAllowedIntegrationProviders)
+	}
 	return fields
 }
 
@@ -21995,6 +22079,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldTimezone:
 		m.ClearTimezone()
+		return nil
+	case customer.FieldAllowedIntegrationProviders:
+		m.ClearAllowedIntegrationProviders()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -22057,6 +22144,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldTimezone:
 		m.ResetTimezone()
+		return nil
+	case customer.FieldAllowedIntegrationProviders:
+		m.ResetAllowedIntegrationProviders()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)

@@ -86,6 +86,11 @@ func (Customer) Fields() []ent.Field {
 			}).
 			Default("UTC").
 			Optional(),
+		// allowed_integration_providers is an ordered priority list of provider
+		// identifiers (types.SecretProvider values) used to resolve invoice sync
+		// to a single integration. NULL/empty ⇒ first enabled provider by fixed code order.
+		field.JSON("allowed_integration_providers", []string{}).
+			Optional(),
 	}
 }
 

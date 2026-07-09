@@ -2955,6 +2955,9 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	return nil
 }
 
+// publishSystemEvent publishes a webhook-shaped system event for an invoice. Downstream
+// integration dispatchers resolve the invoice's single sync target by re-reading the invoice
+// (and its customer), so only the invoice id is carried in the payload.
 func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, invoiceID string) {
 	webhookPayload, err := json.Marshal(struct {
 		InvoiceID string `json:"invoice_id"`
@@ -4190,7 +4193,10 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 		return nil // No subscription to sync for non-subscription invoices
 	}
 
-	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})
+	payload, err := json.Marshal(map[string]string{
+		"invoice_id":  invoiceID,
+		"customer_id": inv.CustomerID,
+	})
 	if err != nil {
 		return err
 	}
@@ -4201,7 +4207,7 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 		Payload:       payload,
 	}
 	return integrationevents.DispatchInvoiceVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "",
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.CustomerRepo, s.InvoiceRepo, s.Logger, event, "",
 	)
 }
 

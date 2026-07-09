@@ -44,6 +44,40 @@ const (
 	SecretProviderWhop       SecretProvider = "whop"
 )
 
+// SecretProvidersFromStrings converts a slice of raw provider strings (as stored in
+// JSON columns) into typed SecretProvider values, preserving order.
+func SecretProvidersFromStrings(values []string) []SecretProvider {
+	if values == nil {
+		return nil
+	}
+	return lo.Map(values, func(v string, _ int) SecretProvider {
+		return SecretProvider(v)
+	})
+}
+
+// DerefSecretProviders converts a slice of *SecretProvider (the pointer form used in API
+// request DTOs) into a value slice, preserving order. Nil entries become the zero value;
+// callers should validate for nil first when that matters.
+func DerefSecretProviders(providers []*SecretProvider) []SecretProvider {
+	if providers == nil {
+		return nil
+	}
+	return lo.Map(providers, func(p *SecretProvider, _ int) SecretProvider {
+		return lo.FromPtr(p)
+	})
+}
+
+// SecretProvidersToStrings converts typed SecretProvider values back into raw strings
+// for persistence, preserving order.
+func SecretProvidersToStrings(providers []SecretProvider) []string {
+	if providers == nil {
+		return nil
+	}
+	return lo.Map(providers, func(p SecretProvider, _ int) string {
+		return string(p)
+	})
+}
+
 func (p SecretProvider) Validate() error {
 	allowedSecretProviders := []SecretProvider{
 		SecretProviderFlexPrice,

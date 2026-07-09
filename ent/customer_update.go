@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -268,6 +269,24 @@ func (cu *CustomerUpdate) ClearTimezone() *CustomerUpdate {
 	return cu
 }
 
+// SetAllowedIntegrationProviders sets the "allowed_integration_providers" field.
+func (cu *CustomerUpdate) SetAllowedIntegrationProviders(s []string) *CustomerUpdate {
+	cu.mutation.SetAllowedIntegrationProviders(s)
+	return cu
+}
+
+// AppendAllowedIntegrationProviders appends s to the "allowed_integration_providers" field.
+func (cu *CustomerUpdate) AppendAllowedIntegrationProviders(s []string) *CustomerUpdate {
+	cu.mutation.AppendAllowedIntegrationProviders(s)
+	return cu
+}
+
+// ClearAllowedIntegrationProviders clears the value of the "allowed_integration_providers" field.
+func (cu *CustomerUpdate) ClearAllowedIntegrationProviders() *CustomerUpdate {
+	cu.mutation.ClearAllowedIntegrationProviders()
+	return cu
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cu *CustomerUpdate) Mutation() *CustomerMutation {
 	return cu.mutation
@@ -413,6 +432,17 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.TimezoneCleared() {
 		_spec.ClearField(customer.FieldTimezone, field.TypeString)
+	}
+	if value, ok := cu.mutation.AllowedIntegrationProviders(); ok {
+		_spec.SetField(customer.FieldAllowedIntegrationProviders, field.TypeJSON, value)
+	}
+	if value, ok := cu.mutation.AppendedAllowedIntegrationProviders(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, customer.FieldAllowedIntegrationProviders, value)
+		})
+	}
+	if cu.mutation.AllowedIntegrationProvidersCleared() {
+		_spec.ClearField(customer.FieldAllowedIntegrationProviders, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -674,6 +704,24 @@ func (cuo *CustomerUpdateOne) ClearTimezone() *CustomerUpdateOne {
 	return cuo
 }
 
+// SetAllowedIntegrationProviders sets the "allowed_integration_providers" field.
+func (cuo *CustomerUpdateOne) SetAllowedIntegrationProviders(s []string) *CustomerUpdateOne {
+	cuo.mutation.SetAllowedIntegrationProviders(s)
+	return cuo
+}
+
+// AppendAllowedIntegrationProviders appends s to the "allowed_integration_providers" field.
+func (cuo *CustomerUpdateOne) AppendAllowedIntegrationProviders(s []string) *CustomerUpdateOne {
+	cuo.mutation.AppendAllowedIntegrationProviders(s)
+	return cuo
+}
+
+// ClearAllowedIntegrationProviders clears the value of the "allowed_integration_providers" field.
+func (cuo *CustomerUpdateOne) ClearAllowedIntegrationProviders() *CustomerUpdateOne {
+	cuo.mutation.ClearAllowedIntegrationProviders()
+	return cuo
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cuo *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return cuo.mutation
@@ -849,6 +897,17 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.TimezoneCleared() {
 		_spec.ClearField(customer.FieldTimezone, field.TypeString)
+	}
+	if value, ok := cuo.mutation.AllowedIntegrationProviders(); ok {
+		_spec.SetField(customer.FieldAllowedIntegrationProviders, field.TypeJSON, value)
+	}
+	if value, ok := cuo.mutation.AppendedAllowedIntegrationProviders(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, customer.FieldAllowedIntegrationProviders, value)
+		})
+	}
+	if cuo.mutation.AllowedIntegrationProvidersCleared() {
+		_spec.ClearField(customer.FieldAllowedIntegrationProviders, field.TypeJSON)
 	}
 	_node = &Customer{config: cuo.config}
 	_spec.Assign = _node.assignValues

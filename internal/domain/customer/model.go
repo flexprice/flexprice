@@ -45,6 +45,11 @@ type Customer struct {
 	// Metadata
 	Metadata map[string]string `db:"metadata" json:"metadata"`
 
+	// AllowedIntegrationProviders is an ordered priority list of providers that this
+	// customer's invoices may sync to. Invoice sync resolves to the first entry with an
+	// enabled outbound connection. Empty/nil ⇒ first enabled provider by fixed code order.
+	AllowedIntegrationProviders []types.SecretProvider `db:"allowed_integration_providers" json:"allowed_integration_providers,omitempty"`
+
 	// EnvironmentID is the environment identifier for the customer
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
 
@@ -57,19 +62,20 @@ func FromEnt(c *ent.Customer) *Customer {
 		return nil
 	}
 	return &Customer{
-		ID:                c.ID,
-		ExternalID:        c.ExternalID,
-		Name:              c.Name,
-		Email:             c.Email,
-		AddressLine1:      c.AddressLine1,
-		AddressLine2:      c.AddressLine2,
-		AddressCity:       c.AddressCity,
-		AddressState:      c.AddressState,
-		AddressPostalCode: c.AddressPostalCode,
-		AddressCountry:    c.AddressCountry,
-		Timezone:          c.Timezone,
-		Metadata:          c.Metadata,
-		EnvironmentID:     c.EnvironmentID,
+		ID:                          c.ID,
+		ExternalID:                  c.ExternalID,
+		Name:                        c.Name,
+		Email:                       c.Email,
+		AddressLine1:                c.AddressLine1,
+		AddressLine2:                c.AddressLine2,
+		AddressCity:                 c.AddressCity,
+		AddressState:                c.AddressState,
+		AddressPostalCode:           c.AddressPostalCode,
+		AddressCountry:              c.AddressCountry,
+		Timezone:                    c.Timezone,
+		Metadata:                    c.Metadata,
+		AllowedIntegrationProviders: types.SecretProvidersFromStrings(c.AllowedIntegrationProviders),
+		EnvironmentID:               c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
 			Status:    types.Status(c.Status),

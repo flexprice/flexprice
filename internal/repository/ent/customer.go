@@ -70,6 +70,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetAddressCountry(c.AddressCountry).
 		SetTimezone(c.Timezone).
 		SetMetadata(c.Metadata).
+		SetAllowedIntegrationProviders(types.SecretProvidersToStrings(c.AllowedIntegrationProviders)).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
@@ -344,6 +345,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetAddressCountry(c.AddressCountry).
 		SetTimezone(c.Timezone).
 		SetMetadata(c.Metadata).
+		SetAllowedIntegrationProviders(types.SecretProvidersToStrings(c.AllowedIntegrationProviders)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
