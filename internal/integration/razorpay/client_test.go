@@ -136,3 +136,60 @@ func TestClient_CreateAuthorizationLink_PostsToRegistrationEndpoint(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, "https://rzp.io/i/testlink", result["short_url"])
 }
+
+func TestClient_CreateOrder_PostsToOrdersEndpoint(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/orders", r.URL.Path)
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":       "order_test123",
+			"amount":   50000,
+			"currency": "INR",
+			"status":   "created",
+		})
+	}))
+	defer server.Close()
+
+	c := newTestClientPointingAt(t, server.URL)
+
+	result, err := c.CreateOrder(context.Background(), map[string]interface{}{
+		"amount":          50000,
+		"currency":        "INR",
+		"payment_capture": true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "order_test123", result["id"])
+}
+
+func TestClient_CreateRecurringPayment_PostsToRecurringPaymentEndpoint(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/payments/create/recurring", r.URL.Path)
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":     "pay_test123",
+			"status": "created",
+		})
+	}))
+	defer server.Close()
+
+	c := newTestClientPointingAt(t, server.URL)
+
+	result, err := c.CreateRecurringPayment(context.Background(), map[string]interface{}{
+		"email":       "t@example.com",
+		"contact":     "9999999999",
+		"amount":      50000,
+		"currency":    "INR",
+		"order_id":    "order_test123",
+		"customer_id": "cust_test123",
+		"token":       "token_test123",
+		"recurring":   true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "pay_test123", result["id"])
+}
