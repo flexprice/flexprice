@@ -21,10 +21,10 @@ func fromPaise(paise float64) decimal.Decimal {
 	return decimal.NewFromFloat(paise).Div(decimal.NewFromInt(100))
 }
 
-// normalizeRazorpayToken converts a raw token object (as returned by
-// Token.All/Client.GetCustomerTokens) into the generic interfaces.ProviderPaymentMethod
-// shape. Returns nil, nil for non-confirmed tokens so callers skip them cleanly.
-func normalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPaymentMethod, error) {
+// NormalizeRazorpayToken converts a raw token object (as returned by
+// Client.GetCustomerTokens) into the generic interfaces.ProviderPaymentMethod shape.
+// Returns nil, nil for non-confirmed tokens so callers skip them cleanly.
+func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPaymentMethod, error) {
 	// Only confirmed tokens are usable; skip anything else.
 	details, _ := raw["recurring_details"].(map[string]interface{})
 	if status, _ := details["status"].(string); status != "confirmed" {
@@ -99,7 +99,7 @@ func (a *CheckoutAdapter) ListSavedPaymentMethods(
 	}
 
 	return lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
-		pm, err := normalizeRazorpayToken(raw)
+		pm, err := NormalizeRazorpayToken(raw)
 		return pm, err == nil && pm != nil
 	}), nil
 }
