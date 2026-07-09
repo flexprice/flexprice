@@ -755,6 +755,12 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 // Returns AlreadySubmitted=true when a prior attempt already reached Razorpay — in
 // that case the webhook (payment.captured / payment.failed) will reconcile state.
 func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
+	s.logger.Info(ctx, "initiating Razorpay auto-charge",
+		"invoice_id", req.InvoiceID,
+		"razorpay_customer_id", req.RazorpayCustomerID,
+		"amount", req.Amount.String(),
+		"currency", req.Currency)
+
 	amountPaise := toPaise(req.Amount)
 
 	orderData := map[string]interface{}{
@@ -777,17 +783,24 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 		return nil, err
 	}
 
-	orderID, _ := order["id"].(string)
+	orderID, ok := order["id"].(string)
+	if !ok || orderID == "" {
+		s.logger.Warn(ctx, "Razorpay CreateOrder response missing order ID",
+			"invoice_id", req.InvoiceID)
+		return nil, ierr.NewError("razorpay order ID missing in response").Mark(ierr.ErrInternal)
+	}
 	return s.submitRecurringPayment(ctx, req, orderID)
 }
 
-// isReceiptDuplicateError reports whether err is Razorpay's "duplicate receipt" error.
+// isReceiptDuplicateError reports whether err is Razorpay's "duplicate receipt" error
+// ("An order with the same receipt value has already been created").
+// We match a narrow phrase to avoid false-positives on other receipt-related messages.
 func isReceiptDuplicateError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "receipt") && (strings.Contains(msg, "already") || strings.Contains(msg, "duplicate"))
+	return strings.Contains(msg, "same receipt") || strings.Contains(msg, "receipt already")
 }
 
 // handleExistingOrder fetches the existing Razorpay order (matched by receipt) and
@@ -799,7 +812,10 @@ func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoCharge
 	}
 
 	status, _ := order["status"].(string)
-	orderID, _ := order["id"].(string)
+	orderID, ok := order["id"].(string)
+	if !ok || orderID == "" {
+		return nil, ierr.NewError("Razorpay order missing ID in FetchOrdersByReceipt response").Mark(ierr.ErrInternal)
+	}
 
 	switch status {
 	case "created":
@@ -850,15 +866,21 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 	}
 
 	razorpayPaymentID, _ := payment["id"].(string)
+	s.logger.Info(ctx, "recurring payment submitted to Razorpay",
+		"invoice_id", req.InvoiceID,
+		"order_id", orderID,
+		"razorpay_payment_id", razorpayPaymentID)
 	return &AutoChargeResult{RazorpayPaymentID: razorpayPaymentID}, nil
 }
 
 // isOrderAlreadyProcessingError reports whether the Razorpay error indicates the order
-// already has a payment in progress.
+// already has a payment in progress ("Order already has a payment").
+// We match the specific Razorpay phrase to avoid false-positives on generic
+// "order ... payment" text (e.g. "payment failed for the order").
 func isOrderAlreadyProcessingError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "order") && strings.Contains(msg, "payment")
+	return strings.Contains(msg, "order already")
 }
