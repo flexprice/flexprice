@@ -241,7 +241,11 @@ func (r *subscriptionScheduleRepository) GetBySubscriptionID(ctx context.Context
 
 	entities, err := client.SubscriptionSchedule.
 		Query().
-		Where(subscriptionschedule.SubscriptionIDEQ(subscriptionID)).
+		Where(
+			subscriptionschedule.SubscriptionIDEQ(subscriptionID),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		Order(ent.Desc(subscriptionschedule.FieldCreatedAt)).
 		All(ctx)
 
@@ -275,6 +279,8 @@ func (r *subscriptionScheduleRepository) GetPendingBySubscriptionAndType(
 			subscriptionschedule.SubscriptionIDEQ(subscriptionID),
 			subscriptionschedule.ScheduleTypeEQ(scheduleType),
 			subscriptionschedule.StatusEQ(string(types.ScheduleStatusPending)),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -304,7 +310,7 @@ func (r *subscriptionScheduleRepository) List(ctx context.Context, filter *types
 	query := client.SubscriptionSchedule.Query()
 
 	// Apply filters
-	query = r.applyFilters(query, filter)
+	query = r.applyFilters(ctx, query, filter)
 
 	// Apply pagination
 	if filter.QueryFilter != nil {
@@ -339,7 +345,7 @@ func (r *subscriptionScheduleRepository) Count(ctx context.Context, filter *type
 	query := client.SubscriptionSchedule.Query()
 
 	// Apply filters
-	query = r.applyFilters(query, filter)
+	query = r.applyFilters(ctx, query, filter)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -353,9 +359,15 @@ func (r *subscriptionScheduleRepository) Count(ctx context.Context, filter *type
 
 // applyFilters applies filter conditions to the query
 func (r *subscriptionScheduleRepository) applyFilters(
+	ctx context.Context,
 	query *ent.SubscriptionScheduleQuery,
 	filter *types.SubscriptionScheduleFilter,
 ) *ent.SubscriptionScheduleQuery {
+	query = query.Where(
+		subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+		subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+	)
+
 	if filter == nil {
 		return query
 	}
