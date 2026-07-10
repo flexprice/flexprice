@@ -228,7 +228,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 		return nil // non-retriable
 	}
 
-	ctx := types.WithWriterPinning(context.Background())
+	ctx := msg.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
