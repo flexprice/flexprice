@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"sort"
 	"testing"
@@ -194,7 +195,7 @@ func (s *RawEventConsumptionSuite) TestProcessMessage_FilterBehavior() {
 				Data:          data,
 			}
 
-			err := s.svc.processMessage(buildBatchMsg(batch))
+			err := s.svc.processMessage(context.Background(), buildBatchMsg(batch))
 
 			if tc.wantErr {
 				s.Error(err)
@@ -233,7 +234,7 @@ func (s *RawEventConsumptionSuite) TestInvalidBentoEvent_SkippedBeforeFilterChec
 		},
 	}
 
-	err := s.svc.processMessage(buildBatchMsg(batch))
+	err := s.svc.processMessage(context.Background(), buildBatchMsg(batch))
 	s.NoError(err)
 	s.Equal([]string{"org_001"}, s.publishedExternalIDs())
 }
@@ -242,7 +243,7 @@ func (s *RawEventConsumptionSuite) TestInvalidBentoEvent_SkippedBeforeFilterChec
 // returns an immediate non-retriable error (no retries would help).
 func (s *RawEventConsumptionSuite) TestMalformedBatchPayload_ReturnsNonRetriableError() {
 	msg := message.NewMessage("test-uuid", []byte("not-json"))
-	err := s.svc.processMessage(msg)
+	err := s.svc.processMessage(context.Background(), msg)
 	s.Error(err)
 	s.Contains(err.Error(), "non-retriable unmarshal error")
 }
@@ -272,7 +273,7 @@ func (s *RawEventConsumptionSuite) TestSettingsRepoError_FailsBatchForRetry() {
 		Data:          []json.RawMessage{json.RawMessage(validBentoPayload("org_001", "evt_001"))},
 	}
 
-	err := s.svc.processMessage(buildBatchMsg(batch))
+	err := s.svc.processMessage(context.Background(), buildBatchMsg(batch))
 	s.Error(err, "corrupt setting value should fail the batch for retry")
 	s.Equal(0, len(s.outputPubSub.GetMessages(testOutputTopic)),
 		"no events should be forwarded when filter config is unreadable")
@@ -293,7 +294,7 @@ func (s *RawEventConsumptionSuite) TestTenantFallbackFromConfig() {
 		},
 	}
 
-	err := s.svc.processMessage(buildBatchMsg(batch))
+	err := s.svc.processMessage(context.Background(), buildBatchMsg(batch))
 	s.NoError(err)
 	s.Equal([]string{"org_001"}, s.publishedExternalIDs())
 }
