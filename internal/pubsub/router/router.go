@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Router manages all message routing
@@ -42,11 +43,12 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	logger.Info(context.Background(), "DLQ publisher initialized")
 
 	router.AddMiddleware(
-		// Outermost: starts a root span per message so the reader/writer DB
-		// router can record db.resolved_target on it, and rolls the handler's
-		// success/failure onto that span. Placed before Recoverer so a handler
-		// panic is converted to an error underneath it and still closes the span.
-		consumerTraceMiddleware(tracingSvc),
+		// Outermost: establishes the per-message context — installs the writer-pin
+		// holder (read-your-writes) and starts the db.resolved_target span, rolling
+		// the handler's success/failure onto it. Placed before Recoverer so a
+		// handler panic is converted to an error underneath it and still closes the
+		// span.
+		consumerContextMiddleware(tracingSvc),
 		middleware.Recoverer,
 		middleware.CorrelationID,
 	)
@@ -98,10 +100,22 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 //
 // Nil/disabled tracing is safe: StartKafkaConsumerSpan returns a nil *Span whose
 // methods no-op, and SetContext(ctx) with the unchanged ctx is a no-op.
-func consumerTraceMiddleware(tracingSvc *tracing.Service) message.HandlerMiddleware {
+func consumerContextMiddleware(tracingSvc *tracing.Service) message.HandlerMiddleware {
 	return func(h message.HandlerFunc) message.HandlerFunc {
 		return func(msg *message.Message) ([]*message.Message, error) {
-			span, ctx := tracingSvc.StartKafkaConsumerSpan(msg.Context(), message.HandlerNameFromCtx(msg.Context()))
+			// Install the writer-pin holder for this message's unit of work, so a
+			// write anywhere in the handler pins later reads to the primary
+			// (read-your-writes). Handlers that derive their ctx from msg.Context()
+			// inherit it and no longer call WithWriterPinning themselves.
+			//
+			// Exception: onboarding uses context.Background() (its work outlives the
+			// message via a goroutine) so it does NOT inherit this and installs its
+			// own pin — see onboarding.processMessage.
+			ctx := types.WithWriterPinning(msg.Context())
+
+			// Start a root span on that ctx so the reader/writer DB router can record
+			// db.resolved_target on it, and roll the handler's outcome onto the span.
+			span, ctx := tracingSvc.StartKafkaConsumerSpan(ctx, message.HandlerNameFromCtx(ctx))
 			msg.SetContext(ctx)
 			defer span.Finish()
 

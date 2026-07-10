@@ -47,7 +47,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
-	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -63,11 +62,6 @@ func InitTracing(tracingSvc *tracing.Service) {
 	entRepo.SetTracingService(tracingSvc)
 	clickhouseRepo.SetTracingService(tracingSvc)
 	cache.SetTracingService(tracingSvc)
-	// Package-level default so the Kafka consumer handlers (which build a fresh
-	// context.Background() per message and don't take *tracing.Service) can start
-	// a root span via kafka.StartConsumerSpan — without which db.resolved_target
-	// is never recorded on the consumer workloads.
-	kafka.SetTracingService(tracingSvc)
 }
 
 // RepositoryParams holds common dependencies for repositories

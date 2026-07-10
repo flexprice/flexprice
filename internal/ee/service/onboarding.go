@@ -267,17 +267,8 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 	bgCtx = context.WithValue(bgCtx, types.CtxEnvironmentID, eventMsg.EnvironmentID)
 	bgCtx = context.WithValue(bgCtx, types.CtxUserID, eventMsg.UserID)
 
-	// Start a root span so the reader/writer DB router can record
-	// db.resolved_target on it while events are generated. The work runs in a
-	// goroutine that outlives this handler, so the span is finished when that
-	// goroutine completes (not via defer here) or the tag would be dropped.
-	span, bgCtx := kafka.StartConsumerSpan(bgCtx, "onboarding")
-
 	// Start a goroutine to generate events at a rate of 1 per second
-	go func() {
-		defer span.Finish()
-		s.generateEvents(bgCtx, &eventMsg)
-	}()
+	go s.generateEvents(bgCtx, &eventMsg)
 
 	return nil
 }

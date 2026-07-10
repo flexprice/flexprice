@@ -228,7 +228,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	}
 
 	// Create a background context with tenant ID
-	ctx := types.WithWriterPinning(msg.Context())
+	ctx := msg.Context()
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
