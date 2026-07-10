@@ -20,6 +20,7 @@ import (
 const (
 	// Event sources for tracking where alerts originated
 	EventSourceFeatureUsage      = "feature_usage"
+	EventSourceMeterUsage        = "meter_usage"
 	EventSourceWalletTransaction = "wallet_transaction"
 )
 

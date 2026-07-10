@@ -500,39 +500,23 @@ func (s *featureUsageTrackingService) generateUniqueHash(event *events.Event, me
 func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context, event *events.Event) ([]*events.FeatureUsage, error) {
 	results := make([]*events.FeatureUsage, 0)
 
-	// STEP 1: Lookup customer
-	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
+	// STEP 1: Lookup customer (and optionally run onboarding workflow)
+	customer, err := ResolveCustomerForUsageEvent(ctx, s.ServiceParams, event)
 	if err != nil {
-		s.Logger.Debug(ctx, "customer not found for event",
+		s.Logger.Error(ctx, "failed to resolve customer for event",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
 		)
+		return results, err
+	}
 
-		// Try to auto-create customer via workflow if configured
-		customer, err = s.handleMissingCustomer(ctx, event)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to handle missing customer",
-				"event_id", event.ID,
-				"external_customer_id", event.ExternalCustomerID,
-				"error", err,
-			)
-			return results, err
-		}
-
-		if customer == nil {
-			s.Logger.Debug(ctx, "skipping event - no customer and no auto-creation workflow configured",
-				"event_id", event.ID,
-				"external_customer_id", event.ExternalCustomerID,
-			)
-			return results, nil
-		}
-
-		s.Logger.Info(ctx, "customer auto-created via workflow",
+	if customer == nil {
+		s.Logger.Debug(ctx, "skipping event - no customer and no auto-creation workflow configured",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
-			"customer_id", customer.ID,
 		)
+		return results, nil
 	}
 
 	// Set the customer ID in the event if it's not already set
@@ -829,185 +813,6 @@ func (s *featureUsageTrackingService) isSubscriptionValidForEventV2(
 	}
 
 	return true
-}
-
-func (s *featureUsageTrackingService) handleMissingCustomer(
-	ctx context.Context,
-	event *events.Event,
-) (*customer.Customer, error) {
-	// Get workflow config from settings
-	settingsService := &settingsService{ServiceParams: s.ServiceParams}
-	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](
-		settingsService,
-		ctx,
-		types.SettingKeyCustomerOnboarding,
-	)
-	if err != nil {
-		s.Logger.Debug(ctx, "failed to get workflow config",
-			"event_id", event.ID,
-			"error", err,
-		)
-		return nil, nil // No config, skip auto-creation
-	}
-
-	if workflowConfig == nil || len(workflowConfig.Actions) == 0 {
-		s.Logger.Debug(ctx, "no workflow config found for customer onboarding",
-			"event_id", event.ID,
-		)
-		return nil, nil // No config, skip auto-creation
-	}
-
-	// Check if workflow has create_customer action as the first action
-	hasCreateCustomer := false
-	if len(workflowConfig.Actions) > 0 {
-		if workflowConfig.Actions[0].GetAction() == workflowModels.WorkflowActionCreateCustomer {
-			hasCreateCustomer = true
-		}
-	}
-
-	if !hasCreateCustomer {
-		s.Logger.Debug(ctx, "workflow config does not have create_customer as first action",
-			"event_id", event.ID,
-		)
-		return nil, nil // No create_customer action, skip auto-creation
-	}
-
-	s.Logger.Info(ctx, "executing customer onboarding workflow synchronously",
-		"event_id", event.ID,
-		"external_customer_id", event.ExternalCustomerID,
-		"action_count", len(workflowConfig.Actions),
-	)
-
-	// Prepare workflow input with ExternalCustomerID and event timestamp
-	input := &workflowModels.CustomerOnboardingWorkflowInput{
-		ExternalCustomerID: event.ExternalCustomerID,
-		EventTimestamp:     &event.Timestamp, // Pass event timestamp for subscription start date
-		TenantID:           types.GetTenantID(ctx),
-		EnvironmentID:      types.GetEnvironmentID(ctx),
-		UserID:             types.GetUserID(ctx),
-		WorkflowConfig:     *workflowConfig,
-	}
-
-	// Validate input
-	if err := input.Validate(); err != nil {
-		s.Logger.Error(ctx, "invalid workflow input for customer onboarding",
-			"error", err,
-			"event_id", event.ID,
-			"external_customer_id", event.ExternalCustomerID,
-		)
-		return nil, ierr.WithError(err).
-			WithHint("Invalid workflow input for customer onboarding").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Get global temporal service
-	temporalSvc := temporalservice.GetGlobalTemporalService()
-	if temporalSvc == nil {
-		return nil, ierr.NewError("temporal service not available").
-			WithHint("Customer onboarding workflow requires Temporal service").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	// Execute workflow synchronously with 30-second timeout
-	result, err := temporalSvc.ExecuteWorkflowSync(
-		ctx,
-		types.TemporalCustomerOnboardingWorkflow,
-		input,
-		30, // 30 seconds timeout per user decision
-	)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to execute customer onboarding workflow synchronously",
-			"error", err,
-			"event_id", event.ID,
-			"external_customer_id", event.ExternalCustomerID,
-		)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to execute customer onboarding workflow").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	// Check workflow result
-	workflowResult, ok := result.(*workflowModels.CustomerOnboardingWorkflowResult)
-	if !ok {
-		return nil, ierr.NewError("invalid workflow result type").
-			WithHint("Expected CustomerOnboardingWorkflowResult").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	if workflowResult.Status != "completed" {
-		errorMsg := "workflow did not complete successfully"
-		if workflowResult.ErrorSummary != nil {
-			errorMsg = *workflowResult.ErrorSummary
-		}
-		return nil, ierr.NewError(errorMsg).
-			WithHint("Customer onboarding workflow failed").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-				"workflow_status":      workflowResult.Status,
-				"actions_executed":     workflowResult.ActionsExecuted,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	// Get the created customer ID from workflow results
-	var customerID string
-	for _, actionResult := range workflowResult.Results {
-		if actionResult.ActionType == workflowModels.WorkflowActionCreateCustomer &&
-			actionResult.Status == workflowModels.WorkflowStatusCompleted &&
-			actionResult.ResourceID != "" {
-			customerID = actionResult.ResourceID
-			break
-		}
-	}
-
-	if customerID == "" {
-		return nil, ierr.NewError("customer ID not found in workflow results").
-			WithHint("Workflow completed but customer was not created").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	// Fetch the created customer
-	createdCustomer, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch created customer").
-			WithReportableDetails(map[string]interface{}{
-				"event_id":             event.ID,
-				"external_customer_id": event.ExternalCustomerID,
-				"customer_id":          customerID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	s.Logger.Info(ctx, "customer onboarding workflow completed successfully",
-		"event_id", event.ID,
-		"external_customer_id", event.ExternalCustomerID,
-		"customer_id", customerID,
-		"actions_executed", workflowResult.ActionsExecuted,
-	)
-
-	return createdCustomer, nil
 }
 
 // Check if an event matches the meter filters
