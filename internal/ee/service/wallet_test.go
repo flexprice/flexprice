@@ -3055,6 +3055,14 @@ func bonusSlabsForTest() []types.BonusCreditsSlab {
 
 func TestFindBonusSlab(t *testing.T) {
 	slabsNoZeroCatchAll := bonusSlabsForTest()[:2] // only 5000, 1000 — no 0 catch-all
+	slabsWithNonGteHighest := []types.BonusCreditsSlab{
+		{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}},
+		{Threshold: decimal.NewFromInt(1000), Operator: types.GREATER_THAN_EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypePercentage, Value: decimal.NewFromInt(10)}},
+	}
+	slabsAllNonGte := []types.BonusCreditsSlab{
+		{Threshold: decimal.NewFromInt(5000), Operator: types.GREATER_THAN, Bonus: types.BonusValue{Type: types.BonusValueTypeFlat, Value: decimal.NewFromInt(750)}},
+		{Threshold: decimal.NewFromInt(1000), Operator: types.EQUAL, Bonus: types.BonusValue{Type: types.BonusValueTypePercentage, Value: decimal.NewFromInt(10)}},
+	}
 
 	tests := []struct {
 		name    string
@@ -3070,6 +3078,8 @@ func TestFindBonusSlab(t *testing.T) {
 		{"empty slabs", []types.BonusCreditsSlab{}, decimal.NewFromInt(100), true, decimal.Decimal{}},
 		{"zero credits with catch-all", bonusSlabsForTest(), decimal.Zero, false, decimal.Zero},
 		{"zero credits without catch-all", slabsNoZeroCatchAll, decimal.Zero, true, decimal.Decimal{}},
+		{"skips non-gte highest, matches next gte", slabsWithNonGteHighest, decimal.NewFromInt(10000), false, decimal.NewFromInt(1000)},
+		{"all non-gte slabs skipped", slabsAllNonGte, decimal.NewFromInt(10000), true, decimal.Decimal{}},
 	}
 
 	for _, tt := range tests {

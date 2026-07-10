@@ -695,8 +695,9 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 // descending by Threshold (enforced by BonusCreditsTopupConfig.Validate) — first match wins.
 func findBonusSlab(slabs []types.BonusCreditsSlab, credits decimal.Decimal) *types.BonusCreditsSlab {
 	for i := range slabs {
-		// Operator is always gte: BonusCreditsSlab.Operator is validated as
-		// `oneof=gte` wherever the setting is saved (BonusCreditsTopupConfig.Validate).
+		if slabs[i].Operator != types.GREATER_THAN_EQUAL {
+			continue
+		}
 		if credits.GreaterThanOrEqual(slabs[i].Threshold) {
 			return &slabs[i]
 		}
