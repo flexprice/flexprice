@@ -138,7 +138,7 @@ func (r *Router) AddNoPublishHandler(
 	topicName string,
 	topicDLQ string,
 	subscriber message.Subscriber,
-	handlerFunc func(msg *message.Message) error,
+	handlerFunc func(ctx context.Context, msg *message.Message) error,
 	middlewares ...message.HandlerMiddleware,
 ) {
 	handler := r.router.AddNoPublisherHandler(
@@ -146,7 +146,15 @@ func (r *Router) AddNoPublishHandler(
 		topicName,
 		subscriber,
 		func(msg *message.Message) error {
-			err := handlerFunc(msg)
+			tenantID := msg.Metadata.Get("tenant_id")
+			environmentID := msg.Metadata.Get("environment_id")
+
+			ctx, cancel := context.WithTimeout(msg.Context(), 600*time.Second)
+			defer cancel()
+			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+
+			err := handlerFunc(ctx, msg)
 			if err != nil {
 				r.tracing.CaptureException(context.Background(), err)
 				r.logger.Error(context.Background(), "handler failed",

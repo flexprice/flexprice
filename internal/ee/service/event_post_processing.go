@@ -212,41 +212,31 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 }
 
 // Process a single event message
-func (s *eventPostProcessingService) processMessage(msg *message.Message) error {
+func (s *eventPostProcessingService) processMessage(ctx context.Context, msg *message.Message) error {
 	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && tenantID != s.Config.FeatureFlag.ForceV1ForTenant {
-		s.Logger.Debug(context.Background(), "skipping event post-processing for tenant as its not a part of v1 pipeline",
+		s.Logger.Debug(ctx, "skipping event post-processing for tenant as its not a part of v1 pipeline",
 			"tenant_id", tenantID,
 			"force_v1_for_tenant", s.Config.FeatureFlag.ForceV1ForTenant,
 		)
 		return nil
 	}
 
-	s.Logger.Debug(context.Background(), "processing event from message queue in event post processing service",
+	s.Logger.Debug(ctx, "processing event from message queue in event post processing service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 	)
 
-	// Create a background context with tenant ID
-	ctx := msg.Context()
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	}
-
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
-
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event for post-processing",
+		s.Logger.Error(ctx, "failed to unmarshal event for post-processing",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -265,14 +255,14 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 			ExternalCustomerID: event.ExternalCustomerID,
 		})
 		if err != nil {
-			s.Logger.Error(context.Background(), "failed to update event with ingested_at",
+			s.Logger.Error(ctx, "failed to update event with ingested_at",
 				"error", err,
 			)
 			return err
 		}
 
 		if len(events) == 0 {
-			s.Logger.Info(context.Background(), "event not found",
+			s.Logger.Info(ctx, "event not found",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
@@ -286,7 +276,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// validate tenant id
 	if foundEvent.TenantID != tenantID {
-		s.Logger.Info(context.Background(), "invalid tenant id",
+		s.Logger.Info(ctx, "invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
 			"message_uuid", msg.UUID,
@@ -296,7 +286,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// Process the event
 	if err := s.processEvent(ctx, foundEvent); err != nil {
-		s.Logger.Error(context.Background(), "failed to process event",
+		s.Logger.Error(ctx, "failed to process event",
 			"error", err,
 			"event_id", foundEvent.ID,
 			"event_name", foundEvent.EventName,
@@ -304,7 +294,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		return err // Return error for retry
 	}
 
-	s.Logger.Info(context.Background(), "event processed successfully",
+	s.Logger.Info(ctx, "event processed successfully",
 		"event_id", foundEvent.ID,
 		"event_name", foundEvent.EventName,
 	)

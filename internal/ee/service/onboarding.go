@@ -233,22 +233,22 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 }
 
 // processMessage processes a single onboarding event message
-func (s *onboardingService) processMessage(msg *message.Message) error {
+func (s *onboardingService) processMessage(ctx context.Context, msg *message.Message) error {
 	// We don't need the message context anymore since we're using a background context
 	// Just log the message UUID for tracing
-	s.Logger.Debug(context.Background(), "received onboarding event message", "message_uuid", msg.UUID)
+	s.Logger.Debug(ctx, "received onboarding event message", "message_uuid", msg.UUID)
 
 	// Unmarshal the message
 	var eventMsg types.OnboardingEventsMessage
 	if err := eventMsg.Unmarshal(msg.Payload); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal onboarding event message",
+		s.Logger.Error(ctx, "failed to unmarshal onboarding event message",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
 	}
 
-	s.Logger.Info(context.Background(), "processing onboarding events",
+	s.Logger.Info(ctx, "processing onboarding events",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"subscription_id", eventMsg.SubscriptionID,
@@ -260,7 +260,7 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 
 	// Create a new background context instead of using the message context
 	// This prevents the event generation from being cancelled when the HTTP request completes
-	bgCtx := types.WithWriterPinning(context.Background())
+	bgCtx := types.WithWriterPinning(ctx)
 
 	// Copy tenant ID from original context to background context
 	bgCtx = context.WithValue(bgCtx, types.CtxTenantID, eventMsg.TenantID)
