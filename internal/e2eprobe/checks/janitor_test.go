@@ -61,8 +61,8 @@ func TestJanitor(t *testing.T) {
 func TestJanitor_SweepOrphans(t *testing.T) {
 	// Populate Flexprice with two old ephemeral customers and one fresh one.
 	// The janitor orphan sweep should delete the old ones but leave the fresh one.
-	oldTime := time.Now().Add(-5 * time.Hour).UTC().Format(time.RFC3339)
-	freshTime := time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339)
+	oldTime := time.Now().Add(-5 * time.Hour).UTC()
+	freshTime := time.Now().Add(-10 * time.Minute).UTC()
 
 	oldID1 := "cust-internal-old-1"
 	oldExtID1 := "e2eprobe-cust-eph-old-1"
@@ -71,30 +71,30 @@ func TestJanitor_SweepOrphans(t *testing.T) {
 	freshID := "cust-internal-fresh"
 
 	fc := newFakeClient()
-	fc.customers.queryResult = []types.DtoCustomerResponse{
+	fc.customers.queryResult = []types.CustomerResponse{
 		{
 			ID:         strPtr(oldID1),
 			ExternalID: strPtr(oldExtID1),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 			Metadata:   map[string]string{"e2eprobe_role": "ephemeral"},
 		},
 		{
 			ID:         strPtr(oldID2),
 			ExternalID: strPtr(oldExtID2),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 			Metadata:   map[string]string{"e2eprobe_role": "ephemeral"},
 		},
 		{
 			ID:         strPtr(freshID),
 			ExternalID: strPtr("e2eprobe-cust-eph-fresh"),
-			CreatedAt:  strPtr(freshTime),
+			CreatedAt:  &freshTime,
 			Metadata:   map[string]string{"e2eprobe_role": "ephemeral"},
 		},
 		{
 			// persistent customer — should never be touched
 			ID:         strPtr("cust-internal-persistent"),
 			ExternalID: strPtr("e2eprobe-cust-persistent-0"),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 			Metadata:   map[string]string{"e2eprobe_cohort": "persistent"},
 		},
 	}
@@ -124,36 +124,36 @@ func TestJanitor_SweepOrphans(t *testing.T) {
 // any of which is sufficient. Customers in the wild may lack the metadata
 // tag if they were created by an older e2eprobe version.
 func TestJanitor_SweepOrphans_DetectsByNameOrPrefix(t *testing.T) {
-	oldTime := time.Now().Add(-5 * time.Hour).UTC().Format(time.RFC3339)
+	oldTime := time.Now().Add(-5 * time.Hour).UTC()
 
 	fc := newFakeClient()
-	fc.customers.queryResult = []types.DtoCustomerResponse{
+	fc.customers.queryResult = []types.CustomerResponse{
 		// Detected by external_id prefix only (no metadata, no helpful name).
 		{
 			ID:         strPtr("by-prefix"),
 			ExternalID: strPtr("e2eprobe-cust-eph-prefix-only"),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 		},
 		// Detected by name only (no metadata, no prefix).
 		{
 			ID:         strPtr("by-name"),
 			ExternalID: strPtr("some-other-id"),
 			Name:       strPtr("E2EProbe Ephemeral random"),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 		},
 		// Persistent — must NOT match (no Ephemeral in name, persistent prefix).
 		{
 			ID:         strPtr("persistent"),
 			ExternalID: strPtr("e2eprobe-cust-persistent-0"),
 			Name:       strPtr("E2EProbe Persistent 0"),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 		},
 		// Unrelated tenant customer — must NOT match.
 		{
 			ID:         strPtr("unrelated"),
 			ExternalID: strPtr("some-real-customer"),
 			Name:       strPtr("Acme Corp"),
-			CreatedAt:  strPtr(oldTime),
+			CreatedAt:  &oldTime,
 		},
 	}
 

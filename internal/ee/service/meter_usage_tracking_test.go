@@ -1,14 +1,20 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -341,4 +347,79 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 	hash1 := s.svc.generateUniqueHash(event, m1)
 	assert.Empty(s.T(), hash1)
 	assert.NotEqual(s.T(), hash1, hash2)
+}
+
+func TestResolveCustomerForUsageEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = types.SetTenantID(ctx, types.DefaultTenantID)
+	ctx = types.SetEnvironmentID(ctx, "env_test")
+
+	customerStore := testutil.NewInMemoryCustomerStore()
+	params := ServiceParams{
+		Logger:       logger.NewNoopLogger(),
+		CustomerRepo: customerStore,
+	}
+
+	t.Run("returns nil when external customer id is empty", func(t *testing.T) {
+		cust, err := ResolveCustomerForUsageEvent(ctx, params, &events.Event{ID: "evt_1"})
+		require.NoError(t, err)
+		assert.Nil(t, cust)
+	})
+
+	t.Run("returns existing customer", func(t *testing.T) {
+		existing := &customer.Customer{
+			ID:            "cust_int_1",
+			ExternalID:    "ext_1",
+			EnvironmentID: "env_test",
+			BaseModel:     types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+		}
+		require.NoError(t, customerStore.Create(ctx, existing))
+
+		cust, err := ResolveCustomerForUsageEvent(ctx, params, &events.Event{
+			ID:                 "evt_2",
+			ExternalCustomerID: "ext_1",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, cust)
+		assert.Equal(t, existing.ID, cust.ID)
+	})
+}
+
+func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = types.SetTenantID(ctx, types.DefaultTenantID)
+	ctx = types.SetEnvironmentID(ctx, "env_test")
+
+	customerStore := testutil.NewInMemoryCustomerStore()
+	existing := &customer.Customer{
+		ID:            "cust_int_1",
+		ExternalID:    "ext_1",
+		EnvironmentID: "env_test",
+		BaseModel:     types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+	}
+	require.NoError(t, customerStore.Create(ctx, existing))
+
+	svc := &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger:       logger.NewNoopLogger(),
+			CustomerRepo: customerStore,
+			Config: &config.Configuration{
+				MeterUsageTracking: config.MeterUsageTrackingConfig{
+					WalletAlertPushEnabled: false,
+				},
+			},
+		},
+	}
+
+	event := &events.Event{
+		ID:                 "evt_1",
+		ExternalCustomerID: "ext_1",
+	}
+
+	svc.runMeterUsagePostInsertSideEffects(ctx, event)
+	assert.Equal(t, existing.ID, event.CustomerID)
 }

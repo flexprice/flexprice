@@ -71517,6 +71517,7 @@ type WalletTransactionMutation struct {
 	transaction_reason    *types.TransactionReason
 	priority              *int
 	addpriority           *int
+	parent_transaction_id *string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*WalletTransaction, error)
@@ -72789,6 +72790,55 @@ func (m *WalletTransactionMutation) ResetPriority() {
 	delete(m.clearedFields, wallettransaction.FieldPriority)
 }
 
+// SetParentTransactionID sets the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) SetParentTransactionID(s string) {
+	m.parent_transaction_id = &s
+}
+
+// ParentTransactionID returns the value of the "parent_transaction_id" field in the mutation.
+func (m *WalletTransactionMutation) ParentTransactionID() (r string, exists bool) {
+	v := m.parent_transaction_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentTransactionID returns the old "parent_transaction_id" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldParentTransactionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentTransactionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentTransactionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentTransactionID: %w", err)
+	}
+	return oldValue.ParentTransactionID, nil
+}
+
+// ClearParentTransactionID clears the value of the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) ClearParentTransactionID() {
+	m.parent_transaction_id = nil
+	m.clearedFields[wallettransaction.FieldParentTransactionID] = struct{}{}
+}
+
+// ParentTransactionIDCleared returns if the "parent_transaction_id" field was cleared in this mutation.
+func (m *WalletTransactionMutation) ParentTransactionIDCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldParentTransactionID]
+	return ok
+}
+
+// ResetParentTransactionID resets all changes to the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) ResetParentTransactionID() {
+	m.parent_transaction_id = nil
+	delete(m.clearedFields, wallettransaction.FieldParentTransactionID)
+}
+
 // Where appends a list predicates to the WalletTransactionMutation builder.
 func (m *WalletTransactionMutation) Where(ps ...predicate.WalletTransaction) {
 	m.predicates = append(m.predicates, ps...)
@@ -72823,7 +72873,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -72905,6 +72955,9 @@ func (m *WalletTransactionMutation) Fields() []string {
 	if m.priority != nil {
 		fields = append(fields, wallettransaction.FieldPriority)
 	}
+	if m.parent_transaction_id != nil {
+		fields = append(fields, wallettransaction.FieldParentTransactionID)
+	}
 	return fields
 }
 
@@ -72967,6 +73020,8 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.TransactionReason()
 	case wallettransaction.FieldPriority:
 		return m.Priority()
+	case wallettransaction.FieldParentTransactionID:
+		return m.ParentTransactionID()
 	}
 	return nil, false
 }
@@ -73030,6 +73085,8 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldTransactionReason(ctx)
 	case wallettransaction.FieldPriority:
 		return m.OldPriority(ctx)
+	case wallettransaction.FieldParentTransactionID:
+		return m.OldParentTransactionID(ctx)
 	}
 	return nil, fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -73228,6 +73285,13 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetPriority(v)
 		return nil
+	case wallettransaction.FieldParentTransactionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentTransactionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -73312,6 +73376,9 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldPriority) {
 		fields = append(fields, wallettransaction.FieldPriority)
 	}
+	if m.FieldCleared(wallettransaction.FieldParentTransactionID) {
+		fields = append(fields, wallettransaction.FieldParentTransactionID)
+	}
 	return fields
 }
 
@@ -73364,6 +73431,9 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 		return nil
 	case wallettransaction.FieldPriority:
 		m.ClearPriority()
+		return nil
+	case wallettransaction.FieldParentTransactionID:
+		m.ClearParentTransactionID()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction nullable field %s", name)
@@ -73453,6 +73523,9 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case wallettransaction.FieldParentTransactionID:
+		m.ResetParentTransactionID()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)

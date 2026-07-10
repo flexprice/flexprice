@@ -68,20 +68,20 @@ func lookupWalletIDsAndCustomerForExternalCustomer(ctx context.Context, client e
 		}
 		return nil, "", fmt.Errorf("get customer: %w", err)
 	}
-	if custResp == nil || custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
+	if custResp == nil || custResp.CustomerResponse == nil || custResp.CustomerResponse.ID == nil {
 		return nil, "", nil
 	}
-	internalCustID := *custResp.DtoCustomerResponse.ID
+	internalCustID := *custResp.CustomerResponse.ID
 
 	walletsResp, err := client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
 	if err != nil {
 		return nil, internalCustID, fmt.Errorf("get wallets by customer: %w", err)
 	}
-	if walletsResp == nil || len(walletsResp.DtoWalletResponses) == 0 {
+	if walletsResp == nil || len(walletsResp.WalletResponses) == 0 {
 		return nil, internalCustID, nil
 	}
-	ids := make([]string, 0, len(walletsResp.DtoWalletResponses))
-	for _, w := range walletsResp.DtoWalletResponses {
+	ids := make([]string, 0, len(walletsResp.WalletResponses))
+	for _, w := range walletsResp.WalletResponses {
 		if w.ID != nil {
 			ids = append(ids, *w.ID)
 		}

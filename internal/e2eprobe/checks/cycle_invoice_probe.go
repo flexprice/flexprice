@@ -125,7 +125,7 @@ func extractBillingCycleLength(resp interface{}) time.Duration {
 	if !ok || r == nil {
 		return 30 * 24 * time.Hour // conservative default
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil {
 		return 30 * 24 * time.Hour
 	}
@@ -151,7 +151,7 @@ func extractSubCustomerID(resp interface{}) string {
 	if !ok || r == nil {
 		return ""
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil || inner.CustomerID == nil {
 		return ""
 	}
@@ -162,14 +162,14 @@ func extractSubCustomerID(resp interface{}) string {
 // SDK QueryInvoiceResponse, filtering client-side to only include invoices that
 // belong to the given subID. Returns nil when no matching invoices are present.
 //
-// Note: DtoInvoiceResponse.SubscriptionID is populated by the server; if the
+// Note: InvoiceResponse.SubscriptionID is populated by the server; if the
 // server omits it the filter falls back to returning all invoices for the customer.
 func extractLatestInvoiceForSub(resp interface{}, subID string) *latestInvoice {
 	r, ok := resp.(*sdkdtos.QueryInvoiceResponse)
 	if !ok || r == nil {
 		return nil
 	}
-	inner := r.GetDtoListInvoicesResponse()
+	inner := r.GetListInvoicesResponse()
 	if inner == nil {
 		return nil
 	}
@@ -187,10 +187,7 @@ func extractLatestInvoiceForSub(resp interface{}, subID string) *latestInvoice {
 		if inv.PeriodEnd == nil {
 			continue
 		}
-		t, err := time.Parse(time.RFC3339, *inv.PeriodEnd)
-		if err != nil {
-			continue
-		}
+		t := *inv.PeriodEnd
 		if best == nil || t.After(best.PeriodEnd) {
 			cp := latestInvoice{PeriodEnd: t}
 			best = &cp
@@ -207,15 +204,11 @@ func extractSubAge(resp interface{}) time.Duration {
 	if !ok || r == nil {
 		return 0
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil || inner.CreatedAt == nil {
 		return 0
 	}
-	t, err := time.Parse(time.RFC3339, *inner.CreatedAt)
-	if err != nil {
-		return 0
-	}
-	age := time.Since(t)
+	age := time.Since(*inner.CreatedAt)
 	if age < 0 {
 		return 0
 	}
