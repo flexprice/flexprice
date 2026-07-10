@@ -165,7 +165,8 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 		default:
 			// REFUNDED, PARTIALLY_REFUNDED, VOIDED, or any future status — skip to
 			// avoid reusing a terminal record as the charge idempotency anchor.
-			s.logger.Error(ctx, "auto-charge payment in unexpected state, skipping",
+			s.logger.Error(ctx,
+				"error", "auto-charge payment in unexpected state, skipping",
 				"invoice_id", inv.ID, "payment_id", existing.ID,
 				"payment_status", existing.PaymentStatus)
 			return nil, true, nil
@@ -266,6 +267,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 ) error {
 	if s.paymentSvc == nil {
 		s.logger.Error(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
+			"error", "paymentSvc not set on InvoiceSyncService",
 			"invoice_id", inv.ID)
 		return nil
 	}
