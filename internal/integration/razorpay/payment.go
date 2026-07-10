@@ -798,6 +798,7 @@ func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) 
 	orderID, ok := order["id"].(string)
 	if !ok || orderID == "" {
 		s.logger.Error(ctx, "Razorpay CreateOrder response missing order ID",
+			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, ierr.NewError("razorpay order ID missing in response").Mark(ierr.ErrInternal)
 	}
