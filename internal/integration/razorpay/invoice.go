@@ -165,7 +165,7 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 		default:
 			// REFUNDED, PARTIALLY_REFUNDED, VOIDED, or any future status — skip to
 			// avoid reusing a terminal record as the charge idempotency anchor.
-			s.logger.Warn(ctx, "auto-charge payment in unexpected state, skipping",
+			s.logger.Error(ctx, "auto-charge payment in unexpected state, skipping",
 				"invoice_id", inv.ID, "payment_id", existing.ID,
 				"payment_status", existing.PaymentStatus)
 			return nil, true, nil
@@ -191,7 +191,7 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	if createErr := s.paymentRepo.Create(ctx, newPayment); createErr != nil {
 		// Log the original error before the idempotency re-fetch so the cause is
 		// preserved in observability if the re-fetch itself fails.
-		s.logger.Warn(ctx, "auto-charge payment create failed, attempting idempotency re-fetch",
+		s.logger.Error(ctx, "auto-charge payment create failed, attempting idempotency re-fetch",
 			"invoice_id", inv.ID, "error", createErr)
 		retrieved, fetchErr := s.paymentRepo.GetByIdempotencyKey(ctx, key)
 		if fetchErr != nil {
@@ -220,14 +220,14 @@ func (s *InvoiceSyncService) tryAutoCharge(
 
 	razorpayCustomerID, err := s.customerSvc.GetRazorpayCustomerID(ctx, inv.CustomerID)
 	if err != nil {
-		s.logger.Warn(ctx, "failed to resolve Razorpay customer ID, falling through to send invoice",
+		s.logger.Info(ctx, "failed to resolve Razorpay customer ID, falling through to send invoice",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
 		return false, nil
 	}
 
 	rawTokens, err := s.client.GetCustomerTokens(ctx, razorpayCustomerID)
 	if err != nil {
-		s.logger.Warn(ctx, "failed to list customer tokens, falling through to send invoice",
+		s.logger.Info(ctx, "failed to list customer tokens, falling through to send invoice",
 			"invoice_id", inv.ID, "error", err)
 		return false, nil
 	}
@@ -265,7 +265,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	tokenID string,
 ) error {
 	if s.paymentSvc == nil {
-		s.logger.Warn(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
+		s.logger.Error(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
 			"invoice_id", inv.ID)
 		return nil
 	}
@@ -400,7 +400,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			BaseModel:     types.GetDefaultBaseModel(ctx),
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, orderMapping); err != nil {
-			s.logger.Warn(ctx, "failed to create invoice→order mapping (non-fatal)",
+			s.logger.Info(ctx, "failed to create invoice→order mapping (non-fatal)",
 				"invoice_id", invoiceID,
 				"razorpay_order_id", result.RazorpayOrderID,
 				"error", err)
@@ -419,7 +419,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			BaseModel:        types.GetDefaultBaseModel(ctx),
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, paymentMapping); err != nil {
-			s.logger.Warn(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",
+			s.logger.Info(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",
 				"payment_id", paymentID,
 				"razorpay_payment_id", result.RazorpayPaymentID,
 				"error", err)

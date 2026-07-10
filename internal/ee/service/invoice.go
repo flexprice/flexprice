@@ -1362,7 +1362,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 
 		_, updateErr := s.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{Metadata: &metadata})
 		if updateErr != nil {
-			s.Logger.Warn(ctx, "failed to update invoice metadata with Razorpay URLs (non-fatal)",
+			s.Logger.Error(ctx, "failed to update invoice metadata with Razorpay URLs (non-fatal)",
 				"error", updateErr, "invoice_id", inv.ID)
 		}
 	}
