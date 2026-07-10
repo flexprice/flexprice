@@ -189,13 +189,12 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 }
 
 // processMessage processes a single event message from Kafka
-func (s *eventConsumptionService) processMessage(msg *message.Message) error {
-
+func (s *eventConsumptionService) processMessage(ctx context.Context, msg *message.Message) error {
 	partitionKey := msg.Metadata.Get("partition_key")
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
-	s.Logger.Debug(context.Background(), "processing event from message queue in event consumption service",
+	s.Logger.Debug(ctx, "processing event from message queue in event consumption service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -205,11 +204,11 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event",
+		s.Logger.Error(ctx, "failed to unmarshal event",
 			"error", err,
 			"payload", string(msg.Payload),
 		)
-		s.tracingService.CaptureException(context.Background(), err)
+		s.tracingService.CaptureException(ctx, err)
 
 		// Return error for non-retriable parse errors
 		// Watermill's poison queue middleware will handle moving it to DLQ
@@ -227,17 +226,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		environmentID = event.EnvironmentID
 	}
 
-	// Create a background context with tenant ID
-	ctx := msg.Context()
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	}
-
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
-
-	s.Logger.Debug(context.Background(), "processing event in event consumption service",
+	s.Logger.Debug(ctx, "processing event in event consumption service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -249,7 +238,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
 
-	s.Logger.Debug(context.Background(), "creating billing event",
+	s.Logger.Debug(ctx, "creating billing event",
 		"tenant_id", s.Config.Billing.TenantID,
 		"environment_id", s.Config.Billing.EnvironmentID,
 		"external_customer_id", event.ExternalCustomerID,
@@ -274,7 +263,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			"system",
 			s.Config.Billing.EnvironmentID,
 		)
-		s.Logger.Debug(context.Background(), "appending billing event",
+		s.Logger.Debug(ctx, "appending billing event",
 			"tenant_id", s.Config.Billing.TenantID,
 			"environment_id", s.Config.Billing.EnvironmentID,
 			"external_customer_id", event.ExternalCustomerID,
@@ -284,13 +273,13 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	}
 
 	// Insert events into ClickHouse
-	s.Logger.Debug(context.Background(), "inserting events into ClickHouse",
+	s.Logger.Debug(ctx, "inserting events into ClickHouse",
 		"event_id", event.ID,
 		"events_to_insert_count", len(eventsToInsert),
 	)
 
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.Error(context.Background(), "failed to insert events",
+		s.Logger.Error(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -306,7 +295,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Only for the tenants that are forced to v1
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
 		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Error(context.Background(), "failed to publish event to post-processing service",
+			s.Logger.Error(ctx, "failed to publish event to post-processing service",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -319,7 +308,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		}
 	}
 
-	s.Logger.Debug(context.Background(), "successfully processed event",
+	s.Logger.Debug(ctx, "successfully processed event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
