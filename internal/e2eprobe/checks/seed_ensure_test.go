@@ -33,7 +33,7 @@ func TestSeedEnsure(t *testing.T) {
 				for _, spec := range seedFeatureSpecs {
 					lk := spec.lookupKey
 					mID := "meter_" + spec.eventName
-					fc.features.features = append(fc.features.features, types.DtoFeatureResponse{
+					fc.features.features = append(fc.features.features, types.FeatureResponse{
 						ID:        strPtr("feat_" + spec.lookupKey),
 						LookupKey: &lk,
 						MeterID:   &mID,
@@ -47,7 +47,7 @@ func TestSeedEnsure(t *testing.T) {
 				// Pre-populate 1 plan.
 				lk := e2eprobePlanLookupKey
 				planID := "plan_existing"
-				fc.plans.plans = append(fc.plans.plans, types.DtoPlanResponse{
+				fc.plans.plans = append(fc.plans.plans, types.PlanResponse{
 					ID:        &planID,
 					LookupKey: &lk,
 				})
@@ -94,7 +94,7 @@ func TestSeedEnsure(t *testing.T) {
 				for _, spec := range seedFeatureSpecs {
 					lk := spec.lookupKey
 					mID := "meter_" + spec.eventName
-					fc.features.features = append(fc.features.features, types.DtoFeatureResponse{
+					fc.features.features = append(fc.features.features, types.FeatureResponse{
 						ID:        strPtr("feat_" + spec.lookupKey),
 						LookupKey: &lk,
 						MeterID:   &mID,

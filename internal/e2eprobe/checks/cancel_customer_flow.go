@@ -55,7 +55,7 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 	// defeats the cycle-invoice-probe's coverage of the invoice generation
 	// path for these customers.
 	generateInvoice := types.CancelImmediatelyInvoicePolicyGenerateInvoice
-	if _, err := s.client.Subscriptions().Cancel(ctx, target.ID, types.DtoCancelSubscriptionRequest{
+	if _, err := s.client.Subscriptions().Cancel(ctx, target.ID, types.CancelSubscriptionRequest{
 		CancellationType:               cancelType,
 		ProrationBehavior:              &prorate,
 		CancelImmediatelyInovicePolicy: &generateInvoice,
@@ -160,13 +160,13 @@ func (s *CancelCustomerFlow) pollSubStatusCancelled(ctx context.Context, subID s
 // subscription with SubscriptionStatus == "cancelled".
 func isCancelled(resp interface{}) bool {
 	type subGetter interface {
-		GetDtoSubscriptionResponse() *types.DtoSubscriptionResponse
+		GetSubscriptionResponse() *types.SubscriptionResponse
 	}
 	g, ok := resp.(subGetter)
 	if !ok || g == nil {
 		return false
 	}
-	inner := g.GetDtoSubscriptionResponse()
+	inner := g.GetSubscriptionResponse()
 	if inner == nil {
 		return false
 	}
@@ -180,13 +180,13 @@ func isCancelled(resp interface{}) bool {
 // observedSubStatus extracts the subscription_status string for error messages.
 func observedSubStatus(resp interface{}) string {
 	type subGetter interface {
-		GetDtoSubscriptionResponse() *types.DtoSubscriptionResponse
+		GetSubscriptionResponse() *types.SubscriptionResponse
 	}
 	g, ok := resp.(subGetter)
 	if !ok || g == nil {
 		return "unknown"
 	}
-	inner := g.GetDtoSubscriptionResponse()
+	inner := g.GetSubscriptionResponse()
 	if inner == nil || inner.SubscriptionStatus == nil {
 		return "unknown"
 	}
@@ -200,7 +200,7 @@ func extractSubExternalCustomerID(resp interface{}) string {
 	if !ok || r == nil {
 		return ""
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil || inner.Customer == nil || inner.Customer.ExternalID == nil {
 		return ""
 	}

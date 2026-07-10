@@ -56,7 +56,7 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 	now := time.Now().UTC()
 	ext := fmt.Sprintf("e2eprobe-cust-eph-%d", now.UnixNano())
 
-	if _, err := s.client.Customers().Create(ctx, types.DtoCreateCustomerRequest{
+	if _, err := s.client.Customers().Create(ctx, types.CreateCustomerRequest{
 		ExternalID: ext,
 		Name:       strPtr("E2EProbe Ephemeral"),
 		Metadata: map[string]string{
@@ -70,17 +70,15 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 	}
 	s.reg.RegisterEphemeral("customer", ext, now)
 
-	startDate := now.Format(time.RFC3339)
 	billingCycle := types.BillingCycleAnniversary
-	subResp, err := s.client.Subscriptions().Create(ctx, types.DtoCreateSubscriptionRequest{
+	subResp, err := s.client.Subscriptions().Create(ctx, types.CreateSubscriptionRequest{
 		ExternalCustomerID: &ext,
 		PlanID:             planID,
 		Currency:           "usd",
-		BillingCadence:     types.BillingCadenceRecurring,
 		BillingPeriod:      types.BillingPeriodMonthly,
 		BillingPeriodCount: int64Ptr(1),
 		BillingCycle:       &billingCycle,
-		StartDate:          &startDate,
+		StartDate:          &now,
 		Metadata: map[string]string{
 			"e2eprobe":        "true",
 			"e2eprobe_cohort": "ephemeral",
@@ -97,7 +95,7 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 	s.reg.RegisterEphemeral("subscription", subID, now)
 
 	for i := 0; i < 3; i++ {
-		if _, err := s.client.Events().Ingest(ctx, types.DtoIngestEventRequest{
+		if _, err := s.client.Events().Ingest(ctx, types.IngestEventRequest{
 			EventName:          "e2eprobe_count",
 			ExternalCustomerID: ext,
 			Properties: map[string]string{
@@ -120,12 +118,10 @@ func (s *NewCustomerLifecycle) pollAnalytics(ctx context.Context, ext string) er
 	for {
 		end := time.Now().UTC()
 		start := end.Add(-1 * time.Hour)
-		startStr, endStr := start.Format(time.RFC3339), end.Format(time.RFC3339)
-		// NOTE: ExternalCustomerID is string (not *string) in v2.0.16
-		_, err := s.client.Events().GetUsageAnalytics(ctx, types.DtoGetUsageAnalyticsRequest{
-			ExternalCustomerID: ext,
-			StartTime:          &startStr,
-			EndTime:            &endStr,
+		_, err := s.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
+			ExternalCustomerID: &ext,
+			StartTime:          &start,
+			EndTime:            &end,
 		})
 		if err == nil {
 			return nil
@@ -147,7 +143,7 @@ var extractSubscriptionID = func(resp interface{}) string {
 	if !ok || r == nil {
 		return ""
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil || inner.ID == nil {
 		return ""
 	}

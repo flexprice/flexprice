@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Router manages all message routing
@@ -42,6 +43,12 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	logger.Info(context.Background(), "DLQ publisher initialized")
 
 	router.AddMiddleware(
+		// Outermost: establishes the per-message context — installs the writer-pin
+		// holder (read-your-writes) and starts the db.resolved_target span, rolling
+		// the handler's success/failure onto it. Placed before Recoverer so a
+		// handler panic is converted to an error underneath it and still closes the
+		// span.
+		consumerContextMiddleware(tracingSvc),
 		middleware.Recoverer,
 		middleware.CorrelationID,
 	)
@@ -79,6 +86,50 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 	return publisher, nil
 }
 
+// consumerTraceMiddleware starts a root span for every consumed message and
+// attaches it to the message context, so the reader/writer DB router can record
+// db.resolved_target on it (handlers otherwise process on a bare context with no
+// span, and the tag is silently dropped). The span is named kafka.consume.<handler>
+// and its status is set from the handler's returned error.
+//
+// Any handler that derives its ctx from msg.Context() inherits this span for free.
+// Handlers that intentionally detach from the message lifecycle — e.g. onboarding,
+// which hands work to a goroutine outliving the message via context.Background() —
+// do NOT inherit it and own their own span, because a message-scoped span cannot
+// cover work that outlives the message.
+//
+// Nil/disabled tracing is safe: StartKafkaConsumerSpan returns a nil *Span whose
+// methods no-op, and SetContext(ctx) with the unchanged ctx is a no-op.
+func consumerContextMiddleware(tracingSvc *tracing.Service) message.HandlerMiddleware {
+	return func(h message.HandlerFunc) message.HandlerFunc {
+		return func(msg *message.Message) ([]*message.Message, error) {
+			// Install the writer-pin holder for this message's unit of work, so a
+			// write anywhere in the handler pins later reads to the primary
+			// (read-your-writes). Handlers that derive their ctx from msg.Context()
+			// inherit it and no longer call WithWriterPinning themselves.
+			//
+			// Exception: onboarding uses context.Background() (its work outlives the
+			// message via a goroutine) so it does NOT inherit this and installs its
+			// own pin — see onboarding.processMessage.
+			ctx := types.WithWriterPinning(msg.Context())
+
+			// Start a root span on that ctx so the reader/writer DB router can record
+			// db.resolved_target on it, and roll the handler's outcome onto the span.
+			span, ctx := tracingSvc.StartKafkaConsumerSpan(ctx, message.HandlerNameFromCtx(ctx))
+			msg.SetContext(ctx)
+			defer span.Finish()
+
+			msgs, err := h(msg)
+			if err != nil {
+				span.SetStatusError(err)
+			} else {
+				span.SetStatusOK()
+			}
+			return msgs, err
+		}
+	}
+}
+
 // AddNoPublishHandler adds a handler that doesn't publish messages.
 // topicDLQ overrides the global DLQ topic for this handler; pass "" to use
 // the global kafka.topic_dlq fallback.
@@ -87,7 +138,7 @@ func (r *Router) AddNoPublishHandler(
 	topicName string,
 	topicDLQ string,
 	subscriber message.Subscriber,
-	handlerFunc func(msg *message.Message) error,
+	handlerFunc func(ctx context.Context, msg *message.Message) error,
 	middlewares ...message.HandlerMiddleware,
 ) {
 	handler := r.router.AddNoPublisherHandler(
@@ -95,7 +146,15 @@ func (r *Router) AddNoPublishHandler(
 		topicName,
 		subscriber,
 		func(msg *message.Message) error {
-			err := handlerFunc(msg)
+			tenantID := msg.Metadata.Get("tenant_id")
+			environmentID := msg.Metadata.Get("environment_id")
+
+			ctx, cancel := context.WithTimeout(msg.Context(), 600*time.Second)
+			defer cancel()
+			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+
+			err := handlerFunc(ctx, msg)
 			if err != nil {
 				r.tracing.CaptureException(context.Background(), err)
 				r.logger.Error(context.Background(), "handler failed",

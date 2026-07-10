@@ -138,7 +138,7 @@ func (v *WalletDebitVerification) phase1TopUp(ctx context.Context, extCustID, in
 	}
 
 	topUpStr := v.opts.TopUpAmount
-	if _, err := v.client.Wallets().TopUp(ctx, walletID, types.DtoTopUpWalletRequest{
+	if _, err := v.client.Wallets().TopUp(ctx, walletID, types.TopUpWalletRequest{
 		Amount:            &topUpStr,
 		Description:       strPtr("e2eprobe wallet-ops-verification phase1"),
 		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
@@ -198,7 +198,7 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 		eventID := fmt.Sprintf("e2eprobe-wdv-%s-%d", batchTag, i)
 		eventIDs = append(eventIDs, eventID)
 		eid := eventID
-		req := types.DtoIngestEventRequest{
+		req := types.IngestEventRequest{
 			EventID:            &eid,
 			EventName:          "e2eprobe_sum",
 			ExternalCustomerID: extCustID,
@@ -246,12 +246,11 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 		end := time.Now().UTC()
 		// Look back from the ingest time with a small buffer to ensure coverage.
 		start := ingestTime.Add(-1 * time.Minute).UTC()
-		startStr, endStr := start.Format(time.RFC3339), end.Format(time.RFC3339)
 
-		resp, err := v.client.Events().GetUsageAnalytics(ctx, types.DtoGetUsageAnalyticsRequest{
-			ExternalCustomerID: extCustID,
-			StartTime:          &startStr,
-			EndTime:            &endStr,
+		resp, err := v.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
+			ExternalCustomerID: &extCustID,
+			StartTime:          &start,
+			EndTime:            &end,
 		})
 		if err == nil {
 			lastSum = extractAnalyticsSum(resp, "e2eprobe_sum")
@@ -293,21 +292,21 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 func (v *WalletDebitVerification) confirmEventsLanded(ctx context.Context, extCustID, batchTag string, ingestTime time.Time) int {
 	deadline := time.Now().Add(v.opts.LandedPollTimeout)
 	eventName := "e2eprobe_sum"
-	startStr := ingestTime.Add(-1 * time.Minute).UTC().Format(time.RFC3339)
+	startTime := ingestTime.Add(-1 * time.Minute).UTC()
 	var maxSeen int
 	for {
-		endStr := time.Now().UTC().Format(time.RFC3339)
+		endTime := time.Now().UTC()
 		pageSize := int64(v.opts.EventCount * 2)
-		resp, err := v.client.Events().ListRaw(ctx, types.DtoGetEventsRequest{
+		resp, err := v.client.Events().ListRaw(ctx, types.GetEventsRequest{
 			EventName:          &eventName,
 			ExternalCustomerID: &extCustID,
 			PropertyFilters:    map[string][]string{"debit_batch": {batchTag}},
-			StartTime:          &startStr,
-			EndTime:            &endStr,
+			StartTime:          &startTime,
+			EndTime:            &endTime,
 			PageSize:           &pageSize,
 		})
 		if err == nil && resp != nil {
-			inner := resp.GetDtoGetEventsResponse()
+			inner := resp.GetGetEventsResponse()
 			if inner != nil {
 				n := len(inner.Events)
 				if n > maxSeen {
@@ -345,7 +344,7 @@ var extractBalanceFloat = func(resp interface{}) (float64, error) {
 	if !ok || r == nil {
 		return 0, fmt.Errorf("unexpected response type %T", resp)
 	}
-	inner := r.GetDtoWalletBalanceResponse()
+	inner := r.GetWalletBalanceResponse()
 	if inner == nil || inner.Balance == nil {
 		return 0, fmt.Errorf("response missing balance field")
 	}
@@ -364,7 +363,7 @@ var extractAnalyticsSum = func(resp interface{}, eventName string) float64 {
 	if !ok || r == nil {
 		return 0
 	}
-	inner := r.GetDtoGetUsageAnalyticsResponse()
+	inner := r.GetGetUsageAnalyticsResponse()
 	if inner == nil {
 		return 0
 	}

@@ -204,33 +204,23 @@ func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter
 }
 
 // Process a single event message for cost sheet usage tracking
-func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) error {
+func (s *costsheetUsageTrackingService) processMessage(ctx context.Context, msg *message.Message) error {
 	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
-	s.Logger.Debug(context.Background(), "processing event from message queue in cost sheet usage tracking service",
+	s.Logger.Debug(ctx, "processing event from message queue in cost sheet usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 	)
 
-	// Create a background context with tenant ID
-	ctx := types.WithWriterPinning(context.Background())
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	}
-
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
-
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event for cost sheet usage tracking",
+		s.Logger.Error(ctx, "failed to unmarshal event for cost sheet usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -239,7 +229,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 	// validate tenant id
 	if event.TenantID != tenantID {
-		s.Logger.Info(context.Background(), "invalid tenant id",
+		s.Logger.Info(ctx, "invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
 			"message_uuid", msg.UUID,
@@ -249,7 +239,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 	// Process the event
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to process event for cost sheet usage tracking",
+		s.Logger.Error(ctx, "failed to process event for cost sheet usage tracking",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -257,7 +247,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 		return err // Return error for retry
 	}
 
-	s.Logger.Info(context.Background(), "event for cost sheet usage tracking processed successfully",
+	s.Logger.Info(ctx, "event for cost sheet usage tracking processed successfully",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 	)

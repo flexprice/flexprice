@@ -28,7 +28,7 @@ type CreateCustomerRequest struct {
 	ExternalID string `json:"external_id" validate:"required"`
 
 	// name is the full name or company name of the customer
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required,max=255"`
 
 	// email is the customer's email address and must be a valid email format if provided
 	Email string `json:"email" validate:"omitempty,email"`
