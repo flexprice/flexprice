@@ -150,10 +150,11 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 	}
 
 	// For authorization-link (mandate) checkouts, payment_link.paid is never fired by
-	// Razorpay — only payment.captured is. Delegate entirely to CompleteCheckoutSession,
-	// which activates the subscription, finalizes the invoice, marks the payment
-	// succeeded, and completes the session — identical to the payment_link.paid path.
-	if h.completeCheckoutSessionIfPending(ctx, flexpricePaymentID, payment.ID, services) {
+	// Razorpay — only payment.captured is. Delegate entirely to the checkout-session
+	// handling below, which activates the subscription, finalizes the invoice, marks
+	// the payment succeeded, and completes the session — identical to the
+	// payment_link.paid path. If the session already expired, refund instead.
+	if h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services) {
 		return nil
 	}
 
@@ -353,7 +354,7 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	h.completeCheckoutSessionIfPending(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
+	h.handleCheckoutSessionForPayment(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
 	return nil
 }
 
@@ -410,32 +411,87 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	return nil
 }
 
-// completeCheckoutSessionIfPending looks up a pending checkout session by FlexPrice
-// payment ID and calls CompleteCheckoutSession if one exists. It is used by both the
-// payment_link.paid path (standard payment links) and the payment.captured path
-// (authorization / mandate links) so that both flows correctly activate the
-// subscription, finalize the invoice, and mark the session completed.
-// Returns true if a checkout session was found and the completion attempt was made
-// (regardless of whether it succeeded), false if no session was found (caller should
-// proceed with standalone payment handling). Errors are logged but not returned.
-func (h *Handler) completeCheckoutSessionIfPending(
+// handleCheckoutSessionForPayment looks up the checkout session (regardless of
+// status) associated with flexpricePaymentID and acts based on its current state:
+//   - Pending: completes the session (activates subscription, finalizes invoice,
+//     marks the session completed) — the normal on-time webhook path.
+//   - Expired: the cleanup cron already archived the draft Payment/Invoice/
+//     Subscription before this webhook arrived. Since the customer never received
+//     the product, the captured amount is refunded instead.
+//   - Any other status (Completed, Failed, Initiated): no-op — handles duplicate/
+//     retried webhook delivery after the session already reached a terminal state.
+//
+// Returns true if a checkout session was found and handled (regardless of outcome),
+// false if no session exists at all (caller should fall through to standalone
+// payment handling). Errors are logged but not returned — webhooks must always
+// succeed.
+func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
 	razorpayPaymentID string,
 	services *ServiceDependencies,
 ) bool {
+	session := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+	if session == nil {
+		return false
+	}
+
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusPending:
+		h.completeCheckoutSession(ctx, session.ID, flexpricePaymentID, razorpayPaymentID, services)
+	case types.CheckoutStatusExpired:
+		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
+			h.logger.Error(ctx, "failed to refund late-captured payment on expired checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", razorpayPaymentID,
+			)
+		}
+	default:
+		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
+			"session_id", session.ID,
+			"session_status", session.CheckoutStatus,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID,
+		)
+	}
+	return true
+}
+
+// findCheckoutSessionForPayment looks up the checkout session associated with a
+// FlexPrice payment ID, regardless of its current status. Returns nil if no
+// checkout session exists for this payment at all (e.g. a standalone invoice
+// payment link, not a checkout).
+func (h *Handler) findCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	services *ServiceDependencies,
+) *dto.CheckoutSessionResponse {
 	filter := types.NewDefaultCheckoutSessionFilter()
 	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
-	filter.CheckoutStatuses = []types.CheckoutStatus{types.CheckoutStatusPending}
 	filter.Limit = lo.ToPtr(1)
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
 	sessions, err := services.CheckoutSessionService.List(ctx, filter)
 	if err != nil || sessions == nil || len(sessions.Items) == 0 {
-		return false
+		return nil
 	}
+	return sessions.Items[0]
+}
 
-	sessionID := sessions.Items[0].ID
+// completeCheckoutSession calls CompleteCheckoutSession for a session already known
+// to exist and be Pending. Used by handleCheckoutSessionForPayment for both the
+// payment_link.paid path (standard payment links) and the payment.captured path
+// (authorization / mandate links) so that both flows correctly activate the
+// subscription, finalize the invoice, and mark the session completed.
+func (h *Handler) completeCheckoutSession(
+	ctx context.Context,
+	sessionID string,
+	flexpricePaymentID string,
+	razorpayPaymentID string,
+	services *ServiceDependencies,
+) {
 	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: razorpayPaymentID,
 	}); err != nil {
@@ -446,7 +502,6 @@ func (h *Handler) completeCheckoutSessionIfPending(
 			"razorpay_payment_id", razorpayPaymentID,
 		)
 	}
-	return true
 }
 
 // convertPaymentToMap converts a Payment struct to a map using JSON marshaling

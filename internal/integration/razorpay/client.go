@@ -36,6 +36,9 @@ type RazorpayClient interface {
 	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
 	// Returns the first matching order or ierr.ErrNotFound if none exist.
 	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
+	// RefundPayment issues a full refund for a captured payment (POST /v1/payments/{id}/refund).
+	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
+	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -532,4 +535,31 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 	}
 
 	return order, nil
+}
+
+// RefundPayment issues a refund for a captured Razorpay payment. POST
+// /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
+func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to refund Razorpay payment",
+			"error", err, "payment_id", paymentID, "amount_paise", amountPaise)
+		return nil, ierr.NewError("failed to refund Razorpay payment").
+			WithHint("Unable to refund the payment in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":   paymentID,
+				"amount_paise": amountPaise,
+				"error":        err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully refunded Razorpay payment",
+		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
+	return result, nil
 }
