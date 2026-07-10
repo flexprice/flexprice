@@ -200,6 +200,11 @@ func Priority(v int) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldPriority, v))
 }
 
+// ParentTransactionID applies equality check predicate on the "parent_transaction_id" field. It's identical to ParentTransactionIDEQ.
+func ParentTransactionID(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldParentTransactionID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldTenantID, v))
@@ -1819,6 +1824,81 @@ func PriorityIsNil() predicate.WalletTransaction {
 // PriorityNotNil applies the NotNil predicate on the "priority" field.
 func PriorityNotNil() predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldNotNull(FieldPriority))
+}
+
+// ParentTransactionIDEQ applies the EQ predicate on the "parent_transaction_id" field.
+func ParentTransactionIDEQ(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDNEQ applies the NEQ predicate on the "parent_transaction_id" field.
+func ParentTransactionIDNEQ(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNEQ(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDIn applies the In predicate on the "parent_transaction_id" field.
+func ParentTransactionIDIn(vs ...string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIn(FieldParentTransactionID, vs...))
+}
+
+// ParentTransactionIDNotIn applies the NotIn predicate on the "parent_transaction_id" field.
+func ParentTransactionIDNotIn(vs ...string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotIn(FieldParentTransactionID, vs...))
+}
+
+// ParentTransactionIDGT applies the GT predicate on the "parent_transaction_id" field.
+func ParentTransactionIDGT(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGT(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDGTE applies the GTE predicate on the "parent_transaction_id" field.
+func ParentTransactionIDGTE(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGTE(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDLT applies the LT predicate on the "parent_transaction_id" field.
+func ParentTransactionIDLT(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLT(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDLTE applies the LTE predicate on the "parent_transaction_id" field.
+func ParentTransactionIDLTE(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLTE(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDContains applies the Contains predicate on the "parent_transaction_id" field.
+func ParentTransactionIDContains(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldContains(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDHasPrefix applies the HasPrefix predicate on the "parent_transaction_id" field.
+func ParentTransactionIDHasPrefix(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldHasPrefix(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDHasSuffix applies the HasSuffix predicate on the "parent_transaction_id" field.
+func ParentTransactionIDHasSuffix(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldHasSuffix(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDIsNil applies the IsNil predicate on the "parent_transaction_id" field.
+func ParentTransactionIDIsNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIsNull(FieldParentTransactionID))
+}
+
+// ParentTransactionIDNotNil applies the NotNil predicate on the "parent_transaction_id" field.
+func ParentTransactionIDNotNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotNull(FieldParentTransactionID))
+}
+
+// ParentTransactionIDEqualFold applies the EqualFold predicate on the "parent_transaction_id" field.
+func ParentTransactionIDEqualFold(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEqualFold(FieldParentTransactionID, v))
+}
+
+// ParentTransactionIDContainsFold applies the ContainsFold predicate on the "parent_transaction_id" field.
+func ParentTransactionIDContainsFold(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldContainsFold(FieldParentTransactionID, v))
 }
 
 // And groups predicates with the AND operator between them.

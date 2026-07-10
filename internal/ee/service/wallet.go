@@ -571,6 +571,24 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			Mark(ierr.ErrValidation)
 	}
 
+	// Resolve bonus credits from the tenant's slab config when the caller didn't pass an
+	// explicit override. Only "purchased" (paid) top-up reasons trigger slab resolution;
+	// req.BonusCreditsToAdd is mutated in place so every downstream step just reads it.
+	if req.BonusCreditsToAdd == nil &&
+		(req.TransactionReason == types.TransactionReasonPurchasedCreditDirect ||
+			req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced) {
+		settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
+		bonusCfg, err := GetSetting[types.BonusCreditsTopupConfig](settingsSvc, ctx, types.SettingKeyBonusCreditsTopupConfig)
+		if err != nil {
+			return nil, err
+		}
+		if bonusCfg.Enabled {
+			if slab := findBonusSlab(bonusCfg.Slabs, req.CreditsToAdd); slab != nil {
+				req.BonusCreditsToAdd = lo.ToPtr(resolveBonusCredits(slab, req.CreditsToAdd))
+			}
+		}
+	}
+
 	// Generate idempotency key
 	var idempotencyKey string
 	if lo.FromPtr(req.IdempotencyKey) != "" {
@@ -644,6 +662,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ExpiryDateTime:    req.ExpiryDateUTC, // ExpiryDateUTC is the preferred input: a full-precision timestamp
 		IdempotencyKey:    idempotencyKey,
 		Priority:          req.Priority,
+		BonusCreditAmount: req.BonusCreditsToAdd,
 	}
 
 	// Process wallet credit immediately
@@ -670,6 +689,32 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		InvoiceID:         nil,
 		Wallet:            walletResp,
 	}, nil
+}
+
+// findBonusSlab returns the highest-threshold slab that credits clears. Requires slabs sorted
+// descending by Threshold (enforced by BonusCreditsTopupConfig.Validate) — first match wins.
+func findBonusSlab(slabs []types.BonusCreditsSlab, credits decimal.Decimal) *types.BonusCreditsSlab {
+	for i := range slabs {
+		if slabs[i].Operator != types.GREATER_THAN_EQUAL {
+			continue
+		}
+		if credits.GreaterThanOrEqual(slabs[i].Threshold) {
+			return &slabs[i]
+		}
+	}
+	return nil
+}
+
+// resolveBonusCredits turns a matched slab into an actual credit amount.
+func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Decimal) decimal.Decimal {
+	switch slab.Bonus.Type {
+	case types.BonusValueTypeFlat:
+		return slab.Bonus.Value
+	case types.BonusValueTypePercentage:
+		return creditsToAdd.Mul(slab.Bonus.Value).Div(decimal.NewFromInt(100))
+	default:
+		return decimal.Zero
+	}
 }
 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
@@ -764,9 +809,61 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			return err
 		}
 
-		// If auto-complete is enabled, update wallet balance immediately
+		walletTransactionID = tx.ID
+
+		// Create the bonus grant, sharing the purchase tx's fate: same status (pending or
+		// completed), completed atomically with the purchase when the purchase completes here.
+		var bonusAmountInCurrency decimal.Decimal
+		if req.BonusCreditsToAdd != nil && req.BonusCreditsToAdd.GreaterThan(decimal.Zero) {
+			bonusCreditBalanceBefore := balanceAfter
+			bonusCreditBalanceAfter := balanceAfter
+			if autoCompleteEnabled {
+				bonusCreditBalanceAfter = balanceAfter.Add(*req.BonusCreditsToAdd)
+			}
+
+			bonusAmountInCurrency = s.GetCurrencyAmountFromCredits(*req.BonusCreditsToAdd, w.TopupConversionRate)
+
+			bonusTx := &wallet.Transaction{
+				ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+				WalletID:            walletID,
+				CustomerID:          w.CustomerID,
+				Type:                types.TransactionTypeCredit,
+				CreditAmount:        *req.BonusCreditsToAdd,
+				Amount:              bonusAmountInCurrency,
+				TxStatus:            txStatus, // shares the purchase tx's status: pending or completed
+				ReferenceType:       types.WalletTxReferenceTypeExternal,
+				ReferenceID:         lo.FromPtr(idempotencyKey),
+				Description:         "Bonus credits for purchase",
+				Metadata:            txMetadata,
+				TransactionReason:   types.TransactionReasonPurchasedCreditBonus,
+				ParentTransactionID: tx.ID,
+				EnvironmentID:       w.EnvironmentID,
+				CreditBalanceBefore: bonusCreditBalanceBefore,
+				CreditBalanceAfter:  bonusCreditBalanceAfter,
+				Currency:            w.Currency,
+				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				BaseModel:           types.GetDefaultBaseModel(ctx),
+			}
+
+			bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable()
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to compute credits available for bonus transaction").
+					Mark(ierr.ErrInternal)
+			}
+
+			if err := s.WalletRepo.CreateTransaction(ctx, bonusTx); err != nil {
+				return err
+			}
+
+			if autoCompleteEnabled {
+				balanceAfter = bonusCreditBalanceAfter
+			}
+		}
+
+		// If auto-complete is enabled, update wallet balance immediately (purchase + bonus, if any)
 		if autoCompleteEnabled {
-			finalBalance := w.Balance.Add(tx.Amount)
+			finalBalance := w.Balance.Add(tx.Amount).Add(bonusAmountInCurrency)
 			if err := s.WalletRepo.UpdateWalletBalance(ctx, walletID, finalBalance, balanceAfter); err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to update wallet balance").
@@ -780,8 +877,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				"new_credit_balance", balanceAfter.String(),
 			)
 		}
-
-		walletTransactionID = tx.ID
 
 		// Step 2: Create invoice for credit purchase with wallet_transaction_id in metadata
 		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate)
@@ -1020,6 +1115,43 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			"credits_added", tx.CreditAmount.String(),
 			"new_balance", newCreditBalance.String(),
 		)
+
+		// Complete the pending bonus grant earned from this purchase, in the same transaction.
+		bonusTx, err := s.WalletRepo.GetPendingTransactionByParent(ctx, tx.ID)
+		if err != nil && !ierr.IsNotFound(err) {
+			return err
+		}
+		if bonusTx != nil {
+			bonusTx.TxStatus = types.TransactionStatusCompleted
+			bonusTx.CreditBalanceBefore = newCreditBalance
+			bonusTx.CreditBalanceAfter = newCreditBalance.Add(bonusTx.CreditAmount)
+			if bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable(); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to compute credits available for bonus transaction").
+					Mark(ierr.ErrInternal)
+			}
+			bonusTx.UpdatedAt = time.Now().UTC()
+
+			if err := s.WalletRepo.UpdateTransaction(ctx, bonusTx); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to update bonus wallet transaction").
+					Mark(ierr.ErrInternal)
+			}
+
+			bonusFinalBalance := finalBalance.Add(bonusTx.Amount)
+			if err := s.WalletRepo.UpdateWalletBalance(ctx, bonusTx.WalletID, bonusFinalBalance, bonusTx.CreditBalanceAfter); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to update wallet balance for bonus transaction").
+					Mark(ierr.ErrInternal)
+			}
+
+			s.Logger.Info(ctx, "completed linked bonus credit transaction",
+				"wallet_transaction_id", bonusTx.ID,
+				"parent_transaction_id", tx.ID,
+				"wallet_id", bonusTx.WalletID,
+				"bonus_credits_added", bonusTx.CreditAmount.String(),
+			)
+		}
 
 		return nil
 	})
@@ -1872,6 +2004,44 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		// Step 6: Create transaction record
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
 			return err
+		}
+
+		// Create the bonus grant earned from this purchase, in the same transaction, already
+		// completed — no reason to round-trip through pending when the purchase completes here.
+		if req.BonusCreditAmount != nil && req.BonusCreditAmount.GreaterThan(decimal.Zero) {
+			bonusCreditBalanceBefore := newCreditBalance
+			newCreditBalance = newCreditBalance.Add(*req.BonusCreditAmount)
+
+			bonusTx := &wallet.Transaction{
+				ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+				WalletID:            req.WalletID,
+				CustomerID:          w.CustomerID,
+				Type:                types.TransactionTypeCredit,
+				Amount:              s.GetCurrencyAmountFromCredits(*req.BonusCreditAmount, w.TopupConversionRate),
+				CreditAmount:        *req.BonusCreditAmount,
+				Description:         "Bonus credits for purchase",
+				Metadata:            metadata,
+				TxStatus:            types.TransactionStatusCompleted,
+				TransactionReason:   types.TransactionReasonPurchasedCreditBonus,
+				ParentTransactionID: tx.ID,
+				CreditBalanceBefore: bonusCreditBalanceBefore,
+				CreditBalanceAfter:  newCreditBalance,
+				Currency:            w.Currency,
+				EnvironmentID:       types.GetEnvironmentID(ctx),
+				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				BaseModel:           types.GetDefaultBaseModel(ctx),
+			}
+			bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable()
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to compute credits available for bonus transaction").
+					Mark(ierr.ErrInternal)
+			}
+			if err := s.WalletRepo.CreateTransaction(ctx, bonusTx); err != nil {
+				return err
+			}
+
+			finalBalance = s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
 		}
 
 		// Step 7: Update wallet balance atomically

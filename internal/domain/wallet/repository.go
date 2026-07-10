@@ -21,6 +21,9 @@ type Repository interface {
 	// Transaction operations
 	GetTransactionByID(ctx context.Context, id string) (*Transaction, error)
 	GetTransactionByIdempotencyKey(ctx context.Context, idempotencyKey string) (*Transaction, error)
+	// GetPendingTransactionByParent returns the pending bonus transaction whose
+	// parent_transaction_id is parentTransactionID, if one exists (ent.IsNotFound if not).
+	GetPendingTransactionByParent(ctx context.Context, parentTransactionID string) (*Transaction, error)
 	ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
 	ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
 	CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error)
