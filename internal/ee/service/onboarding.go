@@ -260,7 +260,7 @@ func (s *onboardingService) processMessage(ctx context.Context, msg *message.Mes
 
 	// Create a new background context instead of using the message context
 	// This prevents the event generation from being cancelled when the HTTP request completes
-	bgCtx := types.WithWriterPinning(ctx)
+	bgCtx := types.WithWriterPinning(context.Background())
 
 	// Copy tenant ID from original context to background context
 	bgCtx = context.WithValue(bgCtx, types.CtxTenantID, eventMsg.TenantID)
