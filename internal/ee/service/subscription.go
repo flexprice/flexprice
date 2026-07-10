@@ -1498,7 +1498,7 @@ func (s *subscriptionService) handleCreditGrants(
 	if subscription.TrialEnd != nil {
 		startDate = lo.FromPtr(subscription.TrialEnd)
 	}
-	return s.handleCreditGrantsWithStart(ctx, subscription, creditGrantRequests, startDate)
+	return s.handleCreditGrantsWithStart(ctx, subscription, creditGrantRequests, startDate, nil)
 }
 
 // handleCreditGrantsWithStart materializes the given credit grant requests onto the
@@ -1510,6 +1510,7 @@ func (s *subscriptionService) handleCreditGrantsWithStart(
 	subscription *subscription.Subscription,
 	creditGrantRequests []dto.CreateCreditGrantRequest,
 	startDate time.Time,
+	endDateOverride *time.Time,
 ) error {
 	if len(creditGrantRequests) == 0 {
 		return nil
@@ -1556,13 +1557,22 @@ func (s *subscriptionService) handleCreditGrantsWithStart(
 		}
 	}
 
+	// Cap the grant end at the addon's end date when materializing addon-sourced
+	// grants: min(addonEnd, subscriptionEnd). Plan/subscription grants pass a nil
+	// override and keep the subscription end. This stops recurring grants from a
+	// time-bounded (onetime) addon from continuing to apply after the addon ends.
+	effectiveEnd := subscription.EndDate
+	if endDateOverride != nil && (effectiveEnd == nil || endDateOverride.Before(lo.FromPtr(effectiveEnd))) {
+		effectiveEnd = endDateOverride
+	}
+
 	// Create and apply credit grants anchored at startDate
 	for _, grantReq := range creditGrantRequests {
 		// Ensure subscription ID is set and scope is SUBSCRIPTION
 		grantReq.SubscriptionID = lo.ToPtr(subscription.ID)
 		grantReq.Scope = types.CreditGrantScopeSubscription
 		grantReq.StartDate = lo.ToPtr(startDate)
-		grantReq.EndDate = subscription.EndDate
+		grantReq.EndDate = effectiveEnd
 
 		// Use subscription start date as the anchor for the credit grant chain
 		grantReq.CreditGrantAnchor = lo.ToPtr(startDate)
@@ -4587,7 +4597,7 @@ func (s *subscriptionService) addAddonToSubscription(
 		// Materialize the addon's credit grants (if any) onto the subscription,
 		// anchored at the addon attach date so mid-cycle grants apply immediately.
 		// Kept in-transaction so grant application is atomic with the addon attach.
-		if err := s.materializeAddonCreditGrants(ctx, sub, req.AddonID, addonRequestedStart); err != nil {
+		if err := s.materializeAddonCreditGrants(ctx, sub, req.AddonID, addonRequestedStart, addonAssociation.EndDate); err != nil {
 			return err
 		}
 
@@ -4627,6 +4637,7 @@ func (s *subscriptionService) materializeAddonCreditGrants(
 	sub *subscription.Subscription,
 	addonID string,
 	startDate time.Time,
+	addonEndDate *time.Time,
 ) error {
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	addonGrants, err := creditGrantService.GetCreditGrantsByAddon(ctx, addonID)
@@ -4663,7 +4674,7 @@ func (s *subscriptionService) materializeAddonCreditGrants(
 		})
 	}
 
-	return s.handleCreditGrantsWithStart(ctx, sub, requests, startDate)
+	return s.handleCreditGrantsWithStart(ctx, sub, requests, startDate, addonEndDate)
 }
 
 // validateEntitlementCompatibility checks if addon entitlements are compatible with existing subscription entitlements
