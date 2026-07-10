@@ -1,6 +1,6 @@
 # CONN-SYNC-SELECT — Per-Customer Connection Sync Selection: let tenants choose which connections a customer's invoices/payments sync to
 
-- **Ticket:** _TBD_
+- **Ticket:** FLE-996
 - **Date:** 2026-07-09
 - **Author:** Gursimar
 - **Status:** Draft for review
