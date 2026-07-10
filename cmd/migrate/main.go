@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"entgo.io/ent/dialect/sql/schema"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -67,17 +68,33 @@ func main() {
 	// Run auto migration
 	logger.Info(ctx, "Running database migrations...")
 
+	// Safety guard: never let auto-migration drop or recreate (modify) an index.
+	// Ent/Atlas's partial-index predicate comparison is lossy (it false-detects
+	// drift between `status = 'published'` and Postgres' canonical
+	// `((status)::text = 'published'::text)`), which previously caused ~30 indexes
+	// on hot tables to be dropped+recreated on every run, taking exclusive table
+	// locks. Adding ModifyIndex to the skip set makes index DDL deliberate (handled
+	// via reviewed/versioned migrations), not an auto-migrate side effect. New
+	// indexes (AddIndex) are still created. See RCA: prod DDL-lock incident 2026-06-25.
+	//
+	// IMPORTANT: WithSkipChanges OVERWRITES Ent's default skip set, which is
+	// (DropIndex | DropColumn). We MUST re-include both here, or auto-migrate would
+	// start dropping columns (data loss). So the set is default + ModifyIndex.
+	migrateOpts := []schema.MigrateOption{
+		schema.WithSkipChanges(schema.DropIndex | schema.DropColumn | schema.ModifyIndex),
+	}
+
 	// Check if we're in dry-run mode
 	if *dryRun {
 		logger.Info(ctx, "Dry run mode - printing migration SQL without executing")
 		// In dry-run mode, we just print the SQL that would be executed
-		err = client.Schema.WriteTo(ctx, os.Stdout)
+		err = client.Schema.WriteTo(ctx, os.Stdout, migrateOpts...)
 		if err != nil {
 			logger.Fatal(ctx, "Failed to generate migration SQL", "error", err)
 		}
 	} else {
 		// Run the actual migration
-		err = client.Schema.Create(ctx)
+		err = client.Schema.Create(ctx, migrateOpts...)
 		if err != nil {
 			logger.Fatal(ctx, "Failed to create schema resources", "error", err)
 		}

@@ -75,6 +75,6 @@ func (PaymentMethod) Edges() []ent.Edge {
 func (PaymentMethod) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "customer_id", "status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }

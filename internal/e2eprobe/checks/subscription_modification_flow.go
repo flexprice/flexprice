@@ -42,7 +42,7 @@ var countLineItems = func(resp interface{}) int {
 	if !ok || r == nil {
 		return 0
 	}
-	inner := r.GetDtoSubscriptionResponse()
+	inner := r.GetSubscriptionResponse()
 	if inner == nil {
 		return 0
 	}

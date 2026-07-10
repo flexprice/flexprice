@@ -24,7 +24,7 @@ func (e *CheckError) Unwrap() error { return e.Err }
 //
 // If the wrapped error chain contains a Flexprice SDK error type, Errorf
 // auto-populates `status_code` and `error_body` attributes. This makes
-// otherwise-opaque "%s: {}" alerts (where the SDK's ErrorsErrorResponse.Error()
+// otherwise-opaque "%s: {}" alerts (where the SDK's ErrorResponse.Error()
 // marshals to the literal string "{}") actionable: callers don't have to
 // reach into the SDK type at every alert site.
 //
@@ -58,7 +58,7 @@ func AttributesFrom(err error) map[string]string {
 //
 //   - *sdkerrors.APIError — generic SDK API errors. Has explicit Body and
 //     StatusCode fields.
-//   - *sdkerrors.ErrorsErrorResponse — typed error response. Status code
+//   - *sdkerrors.ErrorResponse — typed error response. Status code
 //     lives on HTTPMeta.Response; the body marshals via json.Marshal of the
 //     struct (often "{}" when the server returns an unparseable response).
 //
@@ -74,13 +74,13 @@ func enrichWithSDKError(err error, attrs map[string]string) {
 		return
 	}
 
-	var eer *sdkerrors.ErrorsErrorResponse
+	var eer *sdkerrors.ErrorResponse
 	if errors.As(err, &eer) && eer != nil {
 		if eer.HTTPMeta.Response != nil {
 			setIfAbsent(attrs, "status_code", strconv.Itoa(eer.HTTPMeta.Response.StatusCode))
 		}
 		// Use eer.Error() (the SDK's own marshaling), not err.Error() (the
-		// fully-wrapped chain). For ErrorsErrorResponse with no populated
+		// fully-wrapped chain). For ErrorResponse with no populated
 		// fields this returns the bare "{}" we've been chasing — recording
 		// that explicitly is the whole point.
 		setIfAbsent(attrs, "error_body", eer.Error())

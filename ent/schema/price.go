@@ -300,12 +300,12 @@ func (Price) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != '' AND end_date IS NULL")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text) AND (end_date IS NULL))")),
 		index.Fields("tenant_id", "environment_id"),
 		index.Fields("start_date", "end_date"),
 		index.Fields("tenant_id", "environment_id", "group_id"),
 		// To get "what changed since the sub's last synced_price_sequence"
 		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "sequence").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }

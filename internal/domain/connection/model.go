@@ -237,6 +237,14 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Whop: whopMetadata,
 		}
+	case types.SecretProviderTabs:
+		tabsMetadata := &types.TabsConnectionMetadata{}
+		if apiKey, ok := metadata["api_key"].(string); ok {
+			tabsMetadata.APIKey = apiKey
+		}
+		return types.ConnectionMetadata{
+			Tabs: tabsMetadata,
+		}
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
 		if clientID, ok := metadata["client_id"].(string); ok {

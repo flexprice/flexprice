@@ -21,60 +21,60 @@ type Client interface {
 }
 
 type CustomerOps interface {
-	Create(ctx context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error)
+	Create(ctx context.Context, req types.CreateCustomerRequest) (*dtos.CreateCustomerResponse, error)
 	GetByExternalID(ctx context.Context, externalID string) (*dtos.GetCustomerByExternalIDResponse, error)
 	Get(ctx context.Context, id string) (*dtos.GetCustomerResponse, error)
 	GetEntitlements(ctx context.Context, id string) (*dtos.GetCustomerEntitlementsResponse, error)
 	GetUsageSummary(ctx context.Context, req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error)
-	Update(ctx context.Context, body types.DtoUpdateCustomerRequest, id, externalID *string) (*dtos.UpdateCustomerResponse, error)
+	Update(ctx context.Context, body types.UpdateCustomerRequest, id, externalID *string) (*dtos.UpdateCustomerResponse, error)
 	Delete(ctx context.Context, id string) (*dtos.DeleteCustomerResponse, error)
 	Query(ctx context.Context, filter types.CustomerFilter) (*dtos.QueryCustomerResponse, error)
 }
 
 type PlanOps interface {
-	Create(ctx context.Context, req types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error)
+	Create(ctx context.Context, req types.CreatePlanRequest) (*dtos.CreatePlanResponse, error)
 	Query(ctx context.Context, filter types.PlanFilter) (*dtos.QueryPlanResponse, error)
 	Get(ctx context.Context, id string) (*dtos.GetPlanResponse, error)
 }
 
 type PriceOps interface {
-	Create(ctx context.Context, req types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error)
+	Create(ctx context.Context, req types.CreatePriceRequest) (*dtos.CreatePriceResponse, error)
 	Query(ctx context.Context, filter types.PriceFilter) (*dtos.QueryPriceResponse, error)
 }
 
 type FeatureOps interface {
-	Create(ctx context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error)
+	Create(ctx context.Context, req types.CreateFeatureRequest) (*dtos.CreateFeatureResponse, error)
 	Query(ctx context.Context, filter types.FeatureFilter) (*dtos.QueryFeatureResponse, error)
 }
 
 type SubscriptionOps interface {
-	Create(ctx context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error)
+	Create(ctx context.Context, req types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error)
 	Get(ctx context.Context, id string) (*dtos.GetSubscriptionResponse, error)
-	Cancel(ctx context.Context, id string, body types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error)
+	Cancel(ctx context.Context, id string, body types.CancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error)
 	Query(ctx context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error)
-	ActivateSubscription(ctx context.Context, id string, body types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error)
+	ActivateSubscription(ctx context.Context, id string, body types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error)
 	GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error)
-	GetUsage(ctx context.Context, req types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
-	CreateLineItem(ctx context.Context, id string, body types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error)
-	UpdateLineItem(ctx context.Context, id string, body types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error)
+	GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
+	CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error)
+	UpdateLineItem(ctx context.Context, id string, body types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error)
 }
 
 type WalletOps interface {
-	Create(ctx context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error)
+	Create(ctx context.Context, req types.CreateWalletRequest) (*dtos.CreateWalletResponse, error)
 	Query(ctx context.Context, filter types.WalletFilter) (*dtos.QueryWalletResponse, error)
 	GetWalletsByCustomerID(ctx context.Context, customerID string) (*dtos.GetWalletsByCustomerIDResponse, error)
 	GetBalance(ctx context.Context, id string) (*dtos.GetWalletBalanceResponse, error)
-	TopUp(ctx context.Context, id string, body types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
+	TopUp(ctx context.Context, id string, body types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
 }
 
 type EventOps interface {
-	Ingest(ctx context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error)
-	GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
+	Ingest(ctx context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error)
+	GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
 	// ListRaw queries the raw events table. The probe uses this to verify
 	// synchronously-ingested events actually landed before polling the
 	// aggregation pipeline — separating "ingest dropped" from "aggregation
 	// dropped" in failure attribution.
-	ListRaw(ctx context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error)
+	ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error)
 }
 
 type InvoiceOps interface {
@@ -117,7 +117,7 @@ func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
 
 type customerOps struct{ s *flexprice.Customers }
 
-func (o customerOps) Create(ctx context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
+func (o customerOps) Create(ctx context.Context, req types.CreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
 	return o.s.CreateCustomer(ctx, req)
 }
 func (o customerOps) GetByExternalID(ctx context.Context, externalID string) (*dtos.GetCustomerByExternalIDResponse, error) {
@@ -132,7 +132,7 @@ func (o customerOps) GetEntitlements(ctx context.Context, id string) (*dtos.GetC
 func (o customerOps) GetUsageSummary(ctx context.Context, req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
 	return o.s.GetCustomerUsageSummary(ctx, req)
 }
-func (o customerOps) Update(ctx context.Context, body types.DtoUpdateCustomerRequest, id, externalID *string) (*dtos.UpdateCustomerResponse, error) {
+func (o customerOps) Update(ctx context.Context, body types.UpdateCustomerRequest, id, externalID *string) (*dtos.UpdateCustomerResponse, error) {
 	return o.s.UpdateCustomer(ctx, body, id, externalID)
 }
 func (o customerOps) Delete(ctx context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
@@ -144,7 +144,7 @@ func (o customerOps) Query(ctx context.Context, filter types.CustomerFilter) (*d
 
 type planOps struct{ s *flexprice.Plans }
 
-func (o planOps) Create(ctx context.Context, req types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error) {
+func (o planOps) Create(ctx context.Context, req types.CreatePlanRequest) (*dtos.CreatePlanResponse, error) {
 	return o.s.CreatePlan(ctx, req)
 }
 func (o planOps) Query(ctx context.Context, f types.PlanFilter) (*dtos.QueryPlanResponse, error) {
@@ -156,7 +156,7 @@ func (o planOps) Get(ctx context.Context, id string) (*dtos.GetPlanResponse, err
 
 type priceOps struct{ s *flexprice.Prices }
 
-func (o priceOps) Create(ctx context.Context, req types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error) {
+func (o priceOps) Create(ctx context.Context, req types.CreatePriceRequest) (*dtos.CreatePriceResponse, error) {
 	return o.s.CreatePrice(ctx, req)
 }
 func (o priceOps) Query(ctx context.Context, f types.PriceFilter) (*dtos.QueryPriceResponse, error) {
@@ -165,7 +165,7 @@ func (o priceOps) Query(ctx context.Context, f types.PriceFilter) (*dtos.QueryPr
 
 type featureOps struct{ s *flexprice.Features }
 
-func (o featureOps) Create(ctx context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
+func (o featureOps) Create(ctx context.Context, req types.CreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
 	return o.s.CreateFeature(ctx, req)
 }
 func (o featureOps) Query(ctx context.Context, f types.FeatureFilter) (*dtos.QueryFeatureResponse, error) {
@@ -174,37 +174,37 @@ func (o featureOps) Query(ctx context.Context, f types.FeatureFilter) (*dtos.Que
 
 type subscriptionOps struct{ s *flexprice.Subscriptions }
 
-func (o subscriptionOps) Create(ctx context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
+func (o subscriptionOps) Create(ctx context.Context, req types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
 	return o.s.CreateSubscription(ctx, req)
 }
 func (o subscriptionOps) Get(ctx context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	return o.s.GetSubscription(ctx, id)
 }
-func (o subscriptionOps) Cancel(ctx context.Context, id string, body types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
+func (o subscriptionOps) Cancel(ctx context.Context, id string, body types.CancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
 	return o.s.CancelSubscription(ctx, id, body)
 }
 func (o subscriptionOps) Query(ctx context.Context, f types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
 	return o.s.QuerySubscription(ctx, f)
 }
-func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, body types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, body types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
 	return o.s.ActivateSubscription(ctx, id, body)
 }
 func (o subscriptionOps) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs)
 }
-func (o subscriptionOps) GetUsage(ctx context.Context, req types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
+func (o subscriptionOps) GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return o.s.GetSubscriptionUsage(ctx, req)
 }
-func (o subscriptionOps) CreateLineItem(ctx context.Context, id string, body types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
+func (o subscriptionOps) CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return o.s.CreateSubscriptionLineItem(ctx, id, body)
 }
-func (o subscriptionOps) UpdateLineItem(ctx context.Context, id string, body types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
+func (o subscriptionOps) UpdateLineItem(ctx context.Context, id string, body types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
 	return o.s.UpdateSubscriptionLineItem(ctx, id, body)
 }
 
 type walletOps struct{ s *flexprice.Wallets }
 
-func (o walletOps) Create(ctx context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
+func (o walletOps) Create(ctx context.Context, req types.CreateWalletRequest) (*dtos.CreateWalletResponse, error) {
 	return o.s.CreateWallet(ctx, req)
 }
 func (o walletOps) Query(ctx context.Context, f types.WalletFilter) (*dtos.QueryWalletResponse, error) {
@@ -218,19 +218,19 @@ func (o walletOps) GetWalletsByCustomerID(ctx context.Context, customerID string
 func (o walletOps) GetBalance(ctx context.Context, id string) (*dtos.GetWalletBalanceResponse, error) {
 	return o.s.GetWalletBalance(ctx, id, nil)
 }
-func (o walletOps) TopUp(ctx context.Context, id string, body types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+func (o walletOps) TopUp(ctx context.Context, id string, body types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
 	return o.s.TopUpWallet(ctx, id, body)
 }
 
 type eventOps struct{ s *flexprice.Events }
 
-func (o eventOps) Ingest(ctx context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
+func (o eventOps) Ingest(ctx context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error) {
 	return o.s.IngestEvent(ctx, req)
 }
-func (o eventOps) GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+func (o eventOps) GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return o.s.GetUsageAnalytics(ctx, req)
 }
-func (o eventOps) ListRaw(ctx context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+func (o eventOps) ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
 	return o.s.ListRawEvents(ctx, req)
 }
 

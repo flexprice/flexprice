@@ -242,7 +242,7 @@ func (Invoice) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "customer_id", "invoice_status", "payment_status", "status").
 			StorageKey("idx_tenant_customer_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 		index.Fields("tenant_id", "environment_id", "subscription_id", "invoice_status", "payment_status", "status").
 			StorageKey("idx_tenant_subscription_status"),
 		index.Fields("tenant_id", "environment_id", "invoice_type", "invoice_status", "payment_status", "status").
@@ -253,7 +253,7 @@ func (Invoice) Indexes() []ent.Index {
 		// Invoice number is unique per tenant and environment
 		index.Fields("tenant_id", "environment_id", "invoice_number").
 			Unique().
-			Annotations(entsql.IndexWhere("invoice_number IS NOT NULL AND invoice_number != '' AND status = 'published'")).
+			Annotations(entsql.IndexWhere("((invoice_number IS NOT NULL) AND ((invoice_number)::text <> ''::text) AND ((status)::text = 'published'::text))")).
 			StorageKey(Idx_tenant_environment_invoice_number_unique),
 		// idempotency key is unique per tenant and environment
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
@@ -262,6 +262,6 @@ func (Invoice) Indexes() []ent.Index {
 			Annotations(entsql.IndexWhere("((idempotency_key IS NOT NULL) AND ((status)::text = 'published'::text) AND ((invoice_status)::text <> 'VOIDED'::text))")),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
-			Annotations(entsql.IndexWhere("invoice_status != 'VOIDED' AND subscription_id IS NOT NULL")),
+			Annotations(entsql.IndexWhere("(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))")),
 	}
 }

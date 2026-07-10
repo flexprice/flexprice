@@ -51,7 +51,7 @@ func TestWalletBalanceProbe_GetsBalance(t *testing.T) {
 	walletID := "wallet_001"
 	internalCustID := "internal_c0"
 	fc.customers.byExt = map[string]string{"c0": internalCustID}
-	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+	fc.wallets.walletsByCustomerID = map[string][]types.WalletResponse{
 		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
 	}
 	fc.wallets.balance = "100.00"

@@ -32,7 +32,7 @@ func TestMeterAggregationProbe_SuccessWhenSumPositive(t *testing.T) {
 
 	eventName := "e2eprobe_count"
 	usage := "42.0000"
-	fc.events.analyticsItems = []types.DtoUsageAnalyticItem{
+	fc.events.analyticsItems = []types.UsageAnalyticItem{
 		{EventName: &eventName, TotalUsage: &usage},
 	}
 

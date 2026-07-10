@@ -14,7 +14,7 @@ import (
 
 type fakeCustomerOps struct{ createCalled int32 }
 
-func (f *fakeCustomerOps) Create(_ context.Context, _ types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
+func (f *fakeCustomerOps) Create(_ context.Context, _ types.CreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateCustomerResponse{}, nil
 }
@@ -30,7 +30,7 @@ func (f *fakeCustomerOps) GetEntitlements(_ context.Context, _ string) (*dtos.Ge
 func (f *fakeCustomerOps) GetUsageSummary(_ context.Context, _ dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
 	return &dtos.GetCustomerUsageSummaryResponse{}, nil
 }
-func (f *fakeCustomerOps) Update(_ context.Context, _ types.DtoUpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
+func (f *fakeCustomerOps) Update(_ context.Context, _ types.UpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.UpdateCustomerResponse{}, nil
 }
@@ -44,7 +44,7 @@ func (f *fakeCustomerOps) Query(_ context.Context, _ types.CustomerFilter) (*dto
 
 type fakePlanOps struct{ createCalled int32 }
 
-func (f *fakePlanOps) Create(_ context.Context, _ types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error) {
+func (f *fakePlanOps) Create(_ context.Context, _ types.CreatePlanRequest) (*dtos.CreatePlanResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreatePlanResponse{}, nil
 }
@@ -57,7 +57,7 @@ func (f *fakePlanOps) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, e
 
 type fakeFeatureOps struct{ createCalled int32 }
 
-func (f *fakeFeatureOps) Create(_ context.Context, _ types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
+func (f *fakeFeatureOps) Create(_ context.Context, _ types.CreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateFeatureResponse{}, nil
 }
@@ -67,42 +67,42 @@ func (f *fakeFeatureOps) Query(_ context.Context, _ types.FeatureFilter) (*dtos.
 
 type fakeSubOps struct{ createCalled int32 }
 
-func (f *fakeSubOps) Create(_ context.Context, _ types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
+func (f *fakeSubOps) Create(_ context.Context, _ types.CreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateSubscriptionResponse{}, nil
 }
 func (f *fakeSubOps) Get(_ context.Context, _ string) (*dtos.GetSubscriptionResponse, error) {
 	return &dtos.GetSubscriptionResponse{}, nil
 }
-func (f *fakeSubOps) Cancel(_ context.Context, _ string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
+func (f *fakeSubOps) Cancel(_ context.Context, _ string, _ types.CancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CancelSubscriptionResponse{}, nil
 }
 func (f *fakeSubOps) Query(_ context.Context, _ types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
 	return &dtos.QuerySubscriptionResponse{}, nil
 }
-func (f *fakeSubOps) ActivateSubscription(_ context.Context, _ string, _ types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+func (f *fakeSubOps) ActivateSubscription(_ context.Context, _ string, _ types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.ActivateSubscriptionResponse{}, nil
 }
 func (f *fakeSubOps) GetEntitlements(_ context.Context, _ string, _ []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
 }
-func (f *fakeSubOps) GetUsage(_ context.Context, _ types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
+func (f *fakeSubOps) GetUsage(_ context.Context, _ types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return &dtos.GetSubscriptionUsageResponse{}, nil
 }
-func (f *fakeSubOps) CreateLineItem(_ context.Context, _ string, _ types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
+func (f *fakeSubOps) CreateLineItem(_ context.Context, _ string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil
 }
-func (f *fakeSubOps) UpdateLineItem(_ context.Context, _ string, _ types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
+func (f *fakeSubOps) UpdateLineItem(_ context.Context, _ string, _ types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.UpdateSubscriptionLineItemResponse{}, nil
 }
 
 type fakeWalletOps struct{ createCalled int32 }
 
-func (f *fakeWalletOps) Create(_ context.Context, _ types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
+func (f *fakeWalletOps) Create(_ context.Context, _ types.CreateWalletRequest) (*dtos.CreateWalletResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreateWalletResponse{}, nil
 }
@@ -115,21 +115,21 @@ func (f *fakeWalletOps) GetWalletsByCustomerID(_ context.Context, _ string) (*dt
 func (f *fakeWalletOps) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBalanceResponse, error) {
 	return &dtos.GetWalletBalanceResponse{}, nil
 }
-func (f *fakeWalletOps) TopUp(_ context.Context, _ string, _ types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+func (f *fakeWalletOps) TopUp(_ context.Context, _ string, _ types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.TopUpWalletResponse{}, nil
 }
 
 type fakeEventOps struct{ ingestCalled int32 }
 
-func (f *fakeEventOps) Ingest(_ context.Context, _ types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
+func (f *fakeEventOps) Ingest(_ context.Context, _ types.IngestEventRequest) (*dtos.IngestEventResponse, error) {
 	atomic.AddInt32(&f.ingestCalled, 1)
 	return &dtos.IngestEventResponse{}, nil
 }
-func (f *fakeEventOps) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
+func (f *fakeEventOps) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return &dtos.GetUsageAnalyticsResponse{}, nil
 }
-func (f *fakeEventOps) ListRaw(_ context.Context, _ types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+func (f *fakeEventOps) ListRaw(_ context.Context, _ types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
 	return &dtos.ListRawEventsResponse{}, nil
 }
 
@@ -146,7 +146,7 @@ func (f *fakeInvoiceOps) Get(_ context.Context, _ string) (*dtos.GetInvoiceRespo
 
 type fakePriceOps struct{ createCalled int32 }
 
-func (f *fakePriceOps) Create(_ context.Context, _ types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error) {
+func (f *fakePriceOps) Create(_ context.Context, _ types.CreatePriceRequest) (*dtos.CreatePriceResponse, error) {
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.CreatePriceResponse{}, nil
 }
@@ -213,25 +213,25 @@ func TestDryRunClient_MutatingMethodsAreNoOps(t *testing.T) {
 	ctx := context.Background()
 
 	// Call all mutating methods; none should reach inner.
-	if _, err := dry.Customers().Create(ctx, types.DtoCreateCustomerRequest{ExternalID: "x"}); err != nil {
+	if _, err := dry.Customers().Create(ctx, types.CreateCustomerRequest{ExternalID: "x"}); err != nil {
 		t.Fatalf("Customers.Create: %v", err)
 	}
-	if _, err := dry.Plans().Create(ctx, types.DtoCreatePlanRequest{Name: "p"}); err != nil {
+	if _, err := dry.Plans().Create(ctx, types.CreatePlanRequest{Name: "p"}); err != nil {
 		t.Fatalf("Plans.Create: %v", err)
 	}
-	if _, err := dry.Prices().Create(ctx, types.DtoCreatePriceRequest{}); err != nil {
+	if _, err := dry.Prices().Create(ctx, types.CreatePriceRequest{}); err != nil {
 		t.Fatalf("Prices.Create: %v", err)
 	}
-	if _, err := dry.Features().Create(ctx, types.DtoCreateFeatureRequest{Name: "f"}); err != nil {
+	if _, err := dry.Features().Create(ctx, types.CreateFeatureRequest{Name: "f"}); err != nil {
 		t.Fatalf("Features.Create: %v", err)
 	}
-	if _, err := dry.Subscriptions().Create(ctx, types.DtoCreateSubscriptionRequest{}); err != nil {
+	if _, err := dry.Subscriptions().Create(ctx, types.CreateSubscriptionRequest{}); err != nil {
 		t.Fatalf("Subscriptions.Create: %v", err)
 	}
-	if _, err := dry.Wallets().Create(ctx, types.DtoCreateWalletRequest{}); err != nil {
+	if _, err := dry.Wallets().Create(ctx, types.CreateWalletRequest{}); err != nil {
 		t.Fatalf("Wallets.Create: %v", err)
 	}
-	if _, err := dry.Events().Ingest(ctx, types.DtoIngestEventRequest{EventName: "e"}); err != nil {
+	if _, err := dry.Events().Ingest(ctx, types.IngestEventRequest{EventName: "e"}); err != nil {
 		t.Fatalf("Events.Ingest: %v", err)
 	}
 	asyncClient := dry.NewAsyncEventClient()
@@ -298,38 +298,38 @@ func TestDryRunClient_PopulatedIDs(t *testing.T) {
 	dry := NewDryRunClient(inner, nil)
 	ctx := context.Background()
 
-	walletResp, err := dry.Wallets().Create(ctx, types.DtoCreateWalletRequest{})
+	walletResp, err := dry.Wallets().Create(ctx, types.CreateWalletRequest{})
 	if err != nil {
 		t.Fatalf("Wallets.Create: %v", err)
 	}
-	if walletResp.DtoWalletResponse == nil || walletResp.DtoWalletResponse.ID == nil || *walletResp.DtoWalletResponse.ID == "" {
+	if walletResp.WalletResponse == nil || walletResp.WalletResponse.ID == nil || *walletResp.WalletResponse.ID == "" {
 		t.Error("Wallets.Create dry-run response should have a non-empty fake ID")
 	}
 
-	subResp, err := dry.Subscriptions().Create(ctx, types.DtoCreateSubscriptionRequest{})
+	subResp, err := dry.Subscriptions().Create(ctx, types.CreateSubscriptionRequest{})
 	if err != nil {
 		t.Fatalf("Subscriptions.Create: %v", err)
 	}
-	if subResp.DtoSubscriptionResponse == nil || subResp.DtoSubscriptionResponse.ID == nil || *subResp.DtoSubscriptionResponse.ID == "" {
+	if subResp.SubscriptionResponse == nil || subResp.SubscriptionResponse.ID == nil || *subResp.SubscriptionResponse.ID == "" {
 		t.Error("Subscriptions.Create dry-run response should have a non-empty fake ID")
 	}
 
-	planResp, err := dry.Plans().Create(ctx, types.DtoCreatePlanRequest{Name: "p"})
+	planResp, err := dry.Plans().Create(ctx, types.CreatePlanRequest{Name: "p"})
 	if err != nil {
 		t.Fatalf("Plans.Create: %v", err)
 	}
-	if planResp.DtoPlanResponse == nil || planResp.DtoPlanResponse.ID == nil || *planResp.DtoPlanResponse.ID == "" {
+	if planResp.PlanResponse == nil || planResp.PlanResponse.ID == nil || *planResp.PlanResponse.ID == "" {
 		t.Error("Plans.Create dry-run response should have a non-empty fake ID")
 	}
 
-	featureResp, err := dry.Features().Create(ctx, types.DtoCreateFeatureRequest{Name: "f"})
+	featureResp, err := dry.Features().Create(ctx, types.CreateFeatureRequest{Name: "f"})
 	if err != nil {
 		t.Fatalf("Features.Create: %v", err)
 	}
-	if featureResp.DtoFeatureResponse == nil || featureResp.DtoFeatureResponse.ID == nil || *featureResp.DtoFeatureResponse.ID == "" {
+	if featureResp.FeatureResponse == nil || featureResp.FeatureResponse.ID == nil || *featureResp.FeatureResponse.ID == "" {
 		t.Error("Features.Create dry-run response should have a non-empty fake ID")
 	}
-	if featureResp.DtoFeatureResponse.MeterID == nil || *featureResp.DtoFeatureResponse.MeterID == "" {
+	if featureResp.FeatureResponse.MeterID == nil || *featureResp.FeatureResponse.MeterID == "" {
 		t.Error("Features.Create dry-run response should have a non-empty fake MeterID")
 	}
 }

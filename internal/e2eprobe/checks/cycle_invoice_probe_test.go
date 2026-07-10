@@ -26,7 +26,7 @@ func TestCycleInvoiceProbe_QueriesInvoicesByCustomerID(t *testing.T) {
 	fc := newFakeClient()
 	sub1, sub2 := "sub_1", "sub_2"
 	custID := "cust_abc"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		sub1: {ID: &sub1, CustomerID: &custID},
 		sub2: {ID: &sub2, CustomerID: &custID},
 	}
@@ -54,10 +54,10 @@ func TestCycleInvoiceProbe_ChecksFreshness(t *testing.T) {
 
 	monthly := sdktypes.BillingPeriodMonthly
 	count := int64(1)
-	createdAt := time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339) // 10 days old
+	createdAt := time.Now().Add(-10 * 24 * time.Hour) // 10 days old
 	subID := "sub_fresh"
 	custID := "cust_fresh"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {
 			ID:                 &subID,
 			CustomerID:         &custID,
@@ -69,8 +69,8 @@ func TestCycleInvoiceProbe_ChecksFreshness(t *testing.T) {
 
 	// Invoice period_end was 5 days ago — well within 2*30d freshness window.
 	// SubscriptionID is set so the client-side filter matches.
-	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339)
-	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
+	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour)
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
 		{SubscriptionID: &subID, PeriodEnd: &recentPeriodEnd},
 	}
 
@@ -109,10 +109,10 @@ func TestCycleInvoiceProbe_FailsOnStaleInvoice(t *testing.T) {
 
 	monthly := sdktypes.BillingPeriodMonthly
 	count := int64(1)
-	createdAt := time.Now().Add(-120 * 24 * time.Hour).Format(time.RFC3339)
+	createdAt := time.Now().Add(-120 * 24 * time.Hour)
 	subID := "sub_stale"
 	custID := "cust_stale"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {
 			ID:                 &subID,
 			CustomerID:         &custID,
@@ -124,8 +124,8 @@ func TestCycleInvoiceProbe_FailsOnStaleInvoice(t *testing.T) {
 
 	// Invoice period_end was 75 days ago — exceeds 2*30d = 60d.
 	// SubscriptionID is set so the client-side filter matches.
-	stalePeriodEnd := time.Now().Add(-75 * 24 * time.Hour).Format(time.RFC3339)
-	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
+	stalePeriodEnd := time.Now().Add(-75 * 24 * time.Hour)
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
 		{SubscriptionID: &subID, PeriodEnd: &stalePeriodEnd},
 	}
 
@@ -145,11 +145,11 @@ func TestCycleInvoiceProbe_ClientSideFiltersOtherSubInvoices(t *testing.T) {
 
 	monthly := sdktypes.BillingPeriodMonthly
 	count := int64(1)
-	createdAt := time.Now().Add(-120 * 24 * time.Hour).Format(time.RFC3339)
+	createdAt := time.Now().Add(-120 * 24 * time.Hour)
 	subID := "sub_target"
 	otherSubID := "sub_other"
 	custID := "cust_shared"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {
 			ID:                 &subID,
 			CustomerID:         &custID,
@@ -161,8 +161,8 @@ func TestCycleInvoiceProbe_ClientSideFiltersOtherSubInvoices(t *testing.T) {
 
 	// The customer has invoices but they belong to a different sub — the target sub
 	// has no invoices. The probe should soft-skip (sub is old but no invoices).
-	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339)
-	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
+	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour)
+	fc.invoices.invoices = []sdktypes.InvoiceResponse{
 		{SubscriptionID: &otherSubID, PeriodEnd: &recentPeriodEnd},
 	}
 
@@ -181,7 +181,7 @@ func TestCycleInvoiceProbe_ClientSideFiltersOtherSubInvoices(t *testing.T) {
 func TestCycleInvoiceProbe_NoCustomerIDSkips(t *testing.T) {
 	fc := newFakeClient()
 	subID := "sub_nocust"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {ID: &subID}, // no CustomerID
 	}
 	reg := e2eprobe.NewRegistry()

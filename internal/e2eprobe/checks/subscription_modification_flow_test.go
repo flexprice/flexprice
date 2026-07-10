@@ -22,7 +22,7 @@ func TestSubscriptionModificationFlow_AddsLineItem(t *testing.T) {
 	reg := e2eprobe.NewRegistry()
 	reg.RegisterEphemeral("subscription", "sub_a", time.Now().Add(-10*time.Minute))
 	subID := "sub_a"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {ID: &subID},
 	}
 	s := NewSubscriptionModificationFlow(fc, reg, "run-1")
@@ -40,7 +40,7 @@ func TestSubscriptionModificationFlow_CountsLineItems(t *testing.T) {
 	reg.RegisterEphemeral("subscription", subID, time.Now().Add(-10*time.Minute))
 
 	itemID := "item_1"
-	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
 		subID: {
 			ID: &subID,
 			LineItems: []sdktypes.SubscriptionSubscriptionLineItem{

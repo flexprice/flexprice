@@ -152,6 +152,7 @@ func DispatchInvoiceVendorSync(
 		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
 		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
 		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
 	} {
 		if err := trigger(); err != nil {
 			dispatchErrs = append(dispatchErrs, err)
@@ -641,6 +642,33 @@ func triggerZohoBooksIfEnabled(
 		EnvironmentID: in.EnvironmentID,
 	}
 	return executeWorkflow(ctx, temporalSvc, log, types.TemporalZohoBooksInvoiceSyncWorkflow, input, types.SecretProviderZohoBooks, in.InvoiceID)
+}
+
+func triggerTabsIfEnabled(
+	ctx context.Context,
+	connRepo connection.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	temporalSvc temporalservice.TemporalService,
+	log *logger.Logger,
+	in invoiceVendorSyncInput,
+) error {
+	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderTabs)
+	if err != nil {
+		return err
+	}
+	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
+		return nil
+	}
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderTabs) {
+		log.Info(ctx, "integration_events: invoice already synced to Tabs, skipping", "invoice_id", in.InvoiceID)
+		return nil
+	}
+	input := &temporalmodels.TabsInvoiceSyncWorkflowInput{
+		InvoiceID:     in.InvoiceID,
+		TenantID:      in.TenantID,
+		EnvironmentID: in.EnvironmentID,
+	}
+	return executeWorkflow(ctx, temporalSvc, log, types.TemporalTabsInvoiceSyncWorkflow, input, types.SecretProviderTabs, in.InvoiceID)
 }
 
 func triggerStripeCustomerSyncIfEnabled(

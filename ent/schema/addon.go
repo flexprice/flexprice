@@ -73,6 +73,6 @@ func (Addon) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
 			StorageKey(AddonTenantIDEnvironmentIDLookupKeyConstraint).
-			Annotations(entsql.IndexWhere("status = 'published'" + " AND lookup_key IS NOT NULL AND lookup_key != ''")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))")),
 	}
 }
