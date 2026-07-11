@@ -172,9 +172,10 @@ type SubscriptionService interface {
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
 
 	// TerminateSubscriptionResourcesAt terminates line items, addon associations, and credit
-	// grants for a subscription as of effectiveDate. Used by both processSubscriptionPeriod's
-	// period-rollover loop and the Temporal CheckCancellationActivity, so a previously scheduled
-	// cancellation's resources are terminated exactly once, at the point it actually fires.
+	// grants for a subscription as of effectiveDate. Called eagerly by CancelSubscription for
+	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and
+	// the Temporal CheckCancellationActivity when a previously scheduled cancellation fires, so
+	// resources are terminated exactly once, at the point cancellation actually takes effect.
 	TerminateSubscriptionResourcesAt(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error
 
 	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
