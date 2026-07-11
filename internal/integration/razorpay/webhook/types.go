@@ -18,11 +18,6 @@ const (
 	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
 	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
 	EventPaymentLinkExpired   RazorpayEventType = "payment_link.expired"
-
-	// UPI Autopay mandate token lifecycle events
-	EventTokenConfirmed RazorpayEventType = "token.confirmed"
-	EventTokenRejected  RazorpayEventType = "token.rejected"
-	EventTokenCancelled RazorpayEventType = "token.cancelled"
 )
 
 // RazorpayPaymentMethod represents the payment method used in Razorpay
