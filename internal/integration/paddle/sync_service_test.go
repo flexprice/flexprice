@@ -1001,6 +1001,9 @@ func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context
 }
 func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
 }
+func (m *mockSubscriptionService) TerminateSubscriptionResourcesAt(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error {
+	return nil
+}
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
 

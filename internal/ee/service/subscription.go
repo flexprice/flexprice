@@ -2064,7 +2064,7 @@ func (s *subscriptionService) CancelSubscription(
 		// period-rollover loop) so that reverting a pending schedule never leaves these resources
 		// terminated while the subscription itself is active again.
 		if req.CancellationType == types.CancellationTypeImmediate {
-			if err := s.terminateSubscriptionResourcesAt(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
+			if err := s.TerminateSubscriptionResourcesAt(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
 				return err
 			}
 		}
@@ -3214,7 +3214,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
 			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
 			reason := sub.Metadata["cancellation_reason"]
-			if err := s.terminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+			if err := s.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
 				return err
 			}
 		}
@@ -4659,14 +4659,14 @@ func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Conte
 	return nil
 }
 
-// terminateSubscriptionResourcesAt terminates all line items, addon associations, and credit
+// TerminateSubscriptionResourcesAt terminates all line items, addon associations, and credit
 // grants tied to a subscription as of effectiveDate. Called either synchronously (immediate
 // cancellation, from CancelSubscription) or from processSubscriptionPeriod's period-rollover
 // loop when a previously-scheduled cancellation actually fires. Never called at scheduling
 // time for end_of_period/scheduled_date cancellations — that's the whole point: a pending
 // schedule can then be reverted via the Cancel Subscription Schedule API without leaving
 // these resources terminated while the subscription itself goes back to active.
-func (s *subscriptionService) terminateSubscriptionResourcesAt(
+func (s *subscriptionService) TerminateSubscriptionResourcesAt(
 	ctx context.Context,
 	subscriptionID string,
 	effectiveDate time.Time,

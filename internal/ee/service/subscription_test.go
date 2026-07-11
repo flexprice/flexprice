@@ -4481,10 +4481,10 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResourcesAt_Idempote
 
 	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
 
-	s.NoError(subService.terminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
+	s.NoError(subService.TerminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
 	// Calling it again with the same effectiveDate must not error, even though every
 	// resource is already terminated (repo-level guards make this a no-op the second time).
-	s.NoError(subService.terminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
+	s.NoError(subService.TerminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}
