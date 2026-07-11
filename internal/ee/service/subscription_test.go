@@ -7900,3 +7900,60 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledC
 	s.Require().Len(schedules, 1)
 	s.Equal(types.ScheduleStatusExecuted, schedules[0].Status)
 }
+
+func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertRestoresCancelledAtAndLeavesResourcesUntouched() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_revert_cancelled_at",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_revert",
+	})
+	s.NoError(err)
+
+	scheduledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.True(scheduledSub.CancelAtPeriodEnd)
+	s.NotNil(scheduledSub.CancelAt)
+	s.NotNil(scheduledSub.CancelledAt)
+
+	changeService := NewSubscriptionChangeService(subService.ServiceParams)
+	scheduleService := NewSubscriptionScheduleService(subService.ServiceParams, changeService)
+	err = scheduleService.CancelBySubscriptionAndType(ctx, sub.ID, types.SubscriptionScheduleChangeTypeCancellation)
+	s.NoError(err)
+
+	revertedSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusActive, revertedSub.SubscriptionStatus)
+	s.False(revertedSub.CancelAtPeriodEnd)
+	s.Nil(revertedSub.CancelAt)
+	s.Nil(revertedSub.EndDate)
+	s.Nil(revertedSub.CancelledAt, "cancelled_at must be cleared on revert, otherwise it permanently blocks future plan-change schedules")
+
+	// Line items were never touched to begin with (fixed in Task 1), so there's
+	// nothing left to restore here — this just confirms they're still fine post-revert.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	for _, li := range lineItems {
+		s.True(li.EndDate.IsZero())
+	}
+}

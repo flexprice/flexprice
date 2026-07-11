@@ -486,6 +486,12 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	sub.CancelAtPeriodEnd = config.OriginalCancelAtPeriodEnd
 	sub.CancelAt = config.OriginalCancelAt
 	sub.EndDate = config.OriginalEndDate
+	// A subscription can't already have a pending cancellation when a new one is scheduled
+	// (cancelAllPendingSchedules/CancelSubscription's own validation prevent that), so nil is
+	// always the correct prior value here. Without this, CancelledAt (set unconditionally by
+	// updateSubscriptionForCancellation at scheduling time) stays permanently non-nil after a
+	// revert, which later spuriously blocks executePlanChange's cancellation guard.
+	sub.CancelledAt = nil
 	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
 	// Nil-safe: old schedule records without this field are handled gracefully.
 	if config.OriginalCurrentPeriodEnd != nil {
