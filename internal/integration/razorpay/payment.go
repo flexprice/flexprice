@@ -902,7 +902,7 @@ func isOrderAlreadyProcessingError(err error) bool {
 	return strings.Contains(msg, "order already")
 }
 
-const refundLockTTL = 1 * time.Minute
+const refundLockTTL = 15 * time.Minute
 
 // Full refund when payment lands after checkout expired or failed.
 func (s *PaymentService) RefundLateCapturedPayment(
