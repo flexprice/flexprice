@@ -12,8 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	razorpay "github.com/razorpay/razorpay-go"
+	"github.com/samber/lo"
 )
 
 // RazorpayClient defines the interface for Razorpay API operations
@@ -559,7 +559,5 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPais
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Info(ctx, "successfully refunded Razorpay payment",
-		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
 	return result, nil
 }

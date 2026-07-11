@@ -233,10 +233,10 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.CustomerPortalConfig](s, ctx, key)
 	case types.SettingKeyEventIngestionFilter:
 		return getSettingByKey[types.EventIngestionFilterConfig](s, ctx, key)
-	case types.SettingKeyBonusCreditsTopupConfig:
-		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyPaymentMandateLimits:
 		return getSettingByKey[types.PaymentMandateLimits](s, ctx, key)
+	case types.SettingKeyBonusCreditsTopupConfig:
+		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -281,10 +281,10 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.CustomerPortalConfig](s, ctx, key, req)
 	case types.SettingKeyEventIngestionFilter:
 		return updateSettingByKey[types.EventIngestionFilterConfig](s, ctx, key, req)
-	case types.SettingKeyBonusCreditsTopupConfig:
-		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyPaymentMandateLimits:
 		return updateSettingByKey[types.PaymentMandateLimits](s, ctx, key, req)
+	case types.SettingKeyBonusCreditsTopupConfig:
+		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
