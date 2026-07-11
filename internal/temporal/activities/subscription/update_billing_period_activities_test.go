@@ -192,6 +192,15 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_TerminatesResourc
 	s.NoError(err)
 	s.Require().NotNil(scheduledSub.CancelAt)
 
+	// Sanity check: still untouched immediately after scheduling.
+	aaFilterBefore := types.NewNoLimitAddonAssociationFilter()
+	aaFilterBefore.EntityIDs = []string{sub.ID}
+	aaFilterBefore.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associationsBefore, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilterBefore)
+	s.NoError(err)
+	s.Require().NotEmpty(associationsBefore)
+	s.Equal(types.AddonStatusActive, associationsBefore[0].AddonStatus)
+
 	// Drive the Temporal activity directly, as ProcessSubscriptionBillingWorkflow would,
 	// with a period whose End is at/after CancelAt so it decides to cancel.
 	input := subscriptionModels.CheckSubscriptionCancellationActivityInput{
