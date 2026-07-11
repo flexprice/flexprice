@@ -188,7 +188,7 @@ func (s *WebhookCheckoutBranchingSuite) SetupTest() {
 	}
 
 	razorpayPaymentSvc := razorpay.NewPaymentService(
-		s.client, nil, nil, webhookTestLocker{}, webhookTestMappingStore{}, logger.NewNoopLogger(),
+		s.client, nil, nil, webhookTestLocker{}, logger.NewNoopLogger(),
 	)
 	s.handler = NewHandler(s.client, razorpayPaymentSvc, webhookTestMappingStore{}, logger.NewNoopLogger())
 
