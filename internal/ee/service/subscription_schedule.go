@@ -509,5 +509,19 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 		"restored_cancel_at_period_end", sub.CancelAtPeriodEnd,
 	)
 
+	// Cascade the reverted state to any inherited (child) subscriptions. CancelSubscription
+	// unconditionally cascades cancellation fields to children at scheduling time
+	// (CascadeCancelToInheritedSubscriptions), so a revert must undo that too — otherwise
+	// children stay stuck with stale CancelAtPeriodEnd/CancelAt/CancelledAt/EndDate and get
+	// wrongly cancelled on their own later. Reuses the same cascade function, called with the
+	// now-reverted parent struct; it's a no-op for non-parent subscriptions.
+	subService, ok := NewSubscriptionService(s.ServiceParams).(*subscriptionService)
+	if !ok {
+		return fmt.Errorf("failed to obtain subscriptionService for cascade")
+	}
+	if err := subService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
+		return fmt.Errorf("failed to cascade reverted state to inherited subscriptions: %w", err)
+	}
+
 	return nil
 }

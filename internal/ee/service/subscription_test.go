@@ -7957,3 +7957,81 @@ func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertRestoresCancelledAtA
 		s.True(li.EndDate.IsZero())
 	}
 }
+
+func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertCascadesToInheritedSubscriptions() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_revert_cascade",
+		Name:       "Child Revert Cascade",
+		Email:      "child-revert-cascade@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	// Schedule a scheduled_date cancellation on the parent — this type sets EndDate
+	// immediately too, giving us a non-nil field to assert cascaded and reverted on the child.
+	effectiveDate := parentSub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	_, err := s.service.CancelSubscription(ctx, parentSub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeScheduledDate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_revert_cascade",
+		CancelAt:          &effectiveDate,
+	})
+	s.NoError(err)
+
+	// The cascade must have already propagated to the child at scheduling time.
+	scheduledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, inherited.ID)
+	s.NoError(err)
+	s.True(scheduledChild.CancelAtPeriodEnd)
+	s.NotNil(scheduledChild.CancelAt)
+	s.NotNil(scheduledChild.CancelledAt)
+	s.NotNil(scheduledChild.EndDate)
+
+	// Revert the parent's schedule.
+	changeService := NewSubscriptionChangeService(subService.ServiceParams)
+	scheduleService := NewSubscriptionScheduleService(subService.ServiceParams, changeService)
+	err = scheduleService.CancelBySubscriptionAndType(ctx, parentSub.ID, types.SubscriptionScheduleChangeTypeCancellation)
+	s.NoError(err)
+
+	// The child must be reverted too, not just the parent.
+	revertedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, inherited.ID)
+	s.NoError(err)
+	s.False(revertedChild.CancelAtPeriodEnd, "inherited subscription's CancelAtPeriodEnd should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.CancelAt, "inherited subscription's CancelAt should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.CancelledAt, "inherited subscription's CancelledAt should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.EndDate, "inherited subscription's EndDate should be cleared when the parent's schedule is reverted")
+
+	revertedParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parentSub.ID)
+	s.NoError(err)
+	s.False(revertedParent.CancelAtPeriodEnd)
+	s.Nil(revertedParent.CancelAt)
+	s.Nil(revertedParent.CancelledAt)
+}
