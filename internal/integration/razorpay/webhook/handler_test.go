@@ -32,7 +32,7 @@ type webhookTestRazorpayClient struct {
 }
 
 func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
-	return map[string]interface{}{"refunded": false}, nil
+	return map[string]interface{}{"refund_status": nil}, nil
 }
 
 func (c *webhookTestRazorpayClient) RefundPayment(_ context.Context, paymentID string, _ int64) (map[string]interface{}, error) {

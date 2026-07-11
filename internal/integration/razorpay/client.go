@@ -40,7 +40,9 @@ type RazorpayClient interface {
 	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
 	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
 	// FetchPayment retrieves a payment's current state from Razorpay (GET /v1/payments/{id}),
-	// including whether it has already been refunded ("refunded" bool, "amount_refunded" int).
+	// including its refund state ("refund_status" string: null/"partial"/"full", and
+	// "amount_refunded" int in the smallest currency unit). There is no boolean
+	// "refunded" field on this entity.
 	FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error)
 }
 
@@ -542,13 +544,21 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 
 // RefundPayment issues a refund for a captured Razorpay payment. POST
 // /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
+//
+// Sends X-Refund-Idempotency deterministically derived from paymentID (this flow
+// only ever issues one full refund per payment): retrying with the same key
+// returns the original refund instead of creating a duplicate, per
+// https://razorpay.com/docs/api/refunds/normal-refunds-idempotent/. The key must
+// be at least 10 chars of [A-Za-z0-9_-]; "refund_" + paymentID always satisfies
+// that given Razorpay's own payment ID format (e.g. pay_XXXXXXXXXXXXXX).
 func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, nil)
+	headers := map[string]string{"X-Refund-Idempotency": "refund_" + paymentID}
+	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, headers)
 	if err != nil {
 		c.logger.Error(ctx, "failed to refund Razorpay payment",
 			"error", err, "payment_id", paymentID, "amount_paise", amountPaise)

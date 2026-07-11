@@ -956,13 +956,15 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 }
 
-// Skip if Razorpay already shows this payment as refunded.
+// Skip if Razorpay already shows this payment as fully refunded. Razorpay's Payment
+// entity has no boolean "refunded" field — refund state is reported via
+// "refund_status" (null/"partial"/"full").
 func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID string, amountPaise int64) (string, error) {
 	if current, err := s.client.FetchPayment(ctx, razorpayPaymentID); err != nil {
 		s.logger.Info(ctx, "failed to check current Razorpay refund status before submitting, proceeding anyway",
 			"razorpay_payment_id", razorpayPaymentID, "error", err)
-	} else if refunded, _ := current["refunded"].(bool); refunded {
-		s.logger.Info(ctx, "payment already refunded at Razorpay, skipping duplicate submission",
+	} else if refundStatus, _ := current["refund_status"].(string); refundStatus == "full" {
+		s.logger.Info(ctx, "payment already fully refunded at Razorpay, skipping duplicate submission",
 			"razorpay_payment_id", razorpayPaymentID)
 		return "", nil
 	}
