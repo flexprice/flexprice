@@ -176,7 +176,7 @@ type CheckoutSession struct {
 	// (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
 	// Nil for sessions that don't declare one (e.g. Stripe checkouts, or any
 	// caller that never set payment_provider_config on the request).
-	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config" json:"payment_provider_config,omitempty"`
+	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
