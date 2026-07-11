@@ -44,10 +44,7 @@ type PaymentService struct {
 	logger                       *logger.Logger
 }
 
-// NewPaymentService creates a new Razorpay payment service. locker and
-// entityIntegrationMappingRepo are used by RefundLateCapturedPayment; pass nil for
-// locker to disable that refund path (it will log and no-op rather than risk a
-// double-refund without a distributed lock).
+// NewPaymentService creates a Razorpay payment service. locker is required.
 func NewPaymentService(
 	client RazorpayClient,
 	customerSvc RazorpayCustomerService,
@@ -56,6 +53,7 @@ func NewPaymentService(
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *PaymentService {
+
 	return &PaymentService{
 		client:                       client,
 		customerSvc:                  customerSvc,
@@ -904,38 +902,24 @@ func isOrderAlreadyProcessingError(err error) bool {
 	return strings.Contains(msg, "order already")
 }
 
-// refundLockTTL is the distributed lock TTL for the late-webhook refund path.
 const refundLockTTL = 1 * time.Minute
 
-// RefundLateCapturedPayment refunds a payment captured after its checkout session
-// expired (session was archived before the webhook arrived). Issues a full refund
-// since the customer never received the product.
-//
-// Idempotent under duplicate/concurrent delivery: a lock serializes concurrent
-// attempts and status is re-checked after acquiring it. Gateway errors are logged
-// but not retried — webhook handlers always return 200 OK.
+// Full refund when payment lands after checkout expired or failed.
 func (s *PaymentService) RefundLateCapturedPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
 	razorpayPaymentID string,
 	paymentService interfaces.PaymentService,
-) error {
-	if s.locker == nil {
-		s.logger.Error(ctx, "cannot refund late-captured payment: locker not configured",
-			"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID)
-		return nil
-	}
-
-	lockKey := fmt.Sprintf("razorpay:webhook-refund:%s:%s:%s", types.GetTenantID(ctx), types.GetEnvironmentID(ctx), flexpricePaymentID)
+) {
+	lockKey := cache.GenerateKey(ctx, cache.PrefixRazorpayWebhookRefundLock, flexpricePaymentID)
 	lock, err := s.locker.AcquireLock(ctx, lockKey, refundLockTTL)
 	if err != nil {
 		s.logger.Error(ctx, "failed to acquire refund lock", "payment_id", flexpricePaymentID, "error", err)
-		return nil
+		return
 	}
 	if !lock.AcquiredSuccessfully() {
-		s.logger.Info(ctx, "refund already in progress for this payment, skipping",
-			"payment_id", flexpricePaymentID)
-		return nil
+		s.logger.Info(ctx, "refund already in progress for this payment, skipping", "payment_id", flexpricePaymentID)
+		return
 	}
 	defer func() {
 		if releaseErr := lock.Release(ctx); releaseErr != nil {
@@ -943,30 +927,23 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		}
 	}()
 
-	pymnt, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get payment record for refund",
-			"payment_id", flexpricePaymentID, "error", err)
-		return nil
+		s.logger.Error(ctx, "failed to get payment record for refund", "payment_id", flexpricePaymentID, "error", err)
+		return
+	}
+	if existingPayment.PaymentStatus == types.PaymentStatusRefunded || existingPayment.PaymentStatus == types.PaymentStatusPartiallyRefunded {
+		s.logger.Info(ctx, "payment already refunded, skipping", "payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
+		return
 	}
 
-	switch pymnt.PaymentStatus {
-	case types.PaymentStatusRefunded, types.PaymentStatusPartiallyRefunded:
-		s.logger.Info(ctx, "payment already refunded, skipping",
-			"payment_id", flexpricePaymentID, "status", pymnt.PaymentStatus)
-		return nil
-	}
-
-	amountPaise := toPaise(pymnt.Amount)
-	refundResp, err := s.client.RefundPayment(ctx, razorpayPaymentID, amountPaise)
+	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
 	if err != nil {
-		s.logger.Error(ctx, "failed to submit Razorpay refund for late-captured expired-checkout payment",
-			"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID,
-			"amount_paise", amountPaise, "error", err)
-		return nil
+		s.logger.Error(ctx, "failed to refund late-captured payment at Razorpay",
+			"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID, "error", err)
+		return
 	}
 
-	refundID, _ := refundResp["id"].(string)
 	now := time.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
@@ -974,43 +951,49 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		GatewayPaymentID: &razorpayPaymentID,
 	}
 	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
-		s.logger.Error(ctx, "refund succeeded at Razorpay but failed to update FlexPrice payment status",
+		s.logger.Error(ctx, "refund confirmed at Razorpay but failed to update FlexPrice payment status",
 			"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
-		return nil
-	}
-
-	s.createRefundMapping(ctx, flexpricePaymentID, refundID)
-
-	s.logger.Info(ctx, "refunded late-captured payment on expired checkout session",
-		"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID,
-		"razorpay_refund_id", refundID, "amount_paise", amountPaise)
-
-	return nil
-}
-
-// createRefundMapping persists a best-effort EntityIntegrationMapping audit record
-// after a successful refund (payment → Razorpay refund ID). Mirrors
-// InvoiceSyncService.createAutoChargeMappings. Failure is logged but non-fatal — the
-// refund itself already succeeded.
-func (s *PaymentService) createRefundMapping(ctx context.Context, flexpricePaymentID string, refundID string) {
-	if s.entityIntegrationMappingRepo == nil || refundID == "" {
 		return
 	}
 
-	mapping := &entityintegrationmapping.EntityIntegrationMapping{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
-		EntityType:       types.IntegrationEntityTypePayment,
-		EntityID:         flexpricePaymentID,
-		ProviderType:     string(types.SecretProviderRazorpay),
-		ProviderEntityID: refundID,
-		Metadata: map[string]interface{}{
-			"provider_entity_type": "refund",
-		},
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
+	if s.entityIntegrationMappingRepo != nil && refundID != "" {
+		mapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityType:       types.IntegrationEntityTypePayment,
+			EntityID:         flexpricePaymentID,
+			ProviderType:     string(types.SecretProviderRazorpay),
+			ProviderEntityID: refundID,
+			Metadata: map[string]interface{}{
+				"provider_entity_type": "refund",
+			},
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+			s.logger.Info(ctx, "failed to create payment→refund mapping (non-fatal)",
+				"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
+		}
 	}
-	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
-		s.logger.Info(ctx, "failed to create payment→refund mapping (non-fatal)",
-			"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
+
+	s.logger.Info(ctx, "refunded late-captured payment on expired checkout session",
+		"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID, "razorpay_refund_id", refundID)
+}
+
+// Skip if Razorpay already shows this payment as refunded.
+func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID string, amountPaise int64) (string, error) {
+	if current, err := s.client.FetchPayment(ctx, razorpayPaymentID); err != nil {
+		s.logger.Info(ctx, "failed to check current Razorpay refund status before submitting, proceeding anyway",
+			"razorpay_payment_id", razorpayPaymentID, "error", err)
+	} else if refunded, _ := current["refunded"].(bool); refunded {
+		s.logger.Info(ctx, "payment already refunded at Razorpay, skipping duplicate submission",
+			"razorpay_payment_id", razorpayPaymentID)
+		return "", nil
 	}
+
+	refundResp, err := s.client.RefundPayment(ctx, razorpayPaymentID, amountPaise)
+	if err != nil {
+		return "", err
+	}
+	refundID, _ := refundResp["id"].(string)
+	return refundID, nil
 }
