@@ -136,6 +136,11 @@ func (c *CheckoutPaymentProviderConfig) Validate() error {
 			return err
 		}
 	}
+
+	if err := c.CollectionMethod.Validate(); err != nil {
+		return err
+	}
+
 	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
 		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
 	}
