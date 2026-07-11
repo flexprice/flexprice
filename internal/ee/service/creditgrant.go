@@ -905,6 +905,10 @@ func (s *creditGrantService) processScheduledApplication(
 		// Cancel every application scheduled after this one — the grant's EndDate isn't
 		// necessarily set at this point (this path runs during scheduled processing, not
 		// deletion), so use the current application's scheduled date as the cutoff instead.
+		// cga.ScheduledFor is a safe cutoff here because at most one Pending/Failed
+		// application is ever open per grant at a time — if that invariant changes (e.g. we
+		// start pre-generating multiple future scheduled applications instead of one at a
+		// time), this cutoff must be revisited.
 		err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant, cga.ScheduledFor)
 		if err != nil {
 			s.Logger.Error(ctx, "Failed to cancel future credit grant applications", "application_id", cga.ID, "error", err)
