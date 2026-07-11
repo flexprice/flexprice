@@ -291,7 +291,6 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		customerSvc,
 		invoiceSyncSvc,
 		f.locker,
-		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
 

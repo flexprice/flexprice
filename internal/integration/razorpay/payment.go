@@ -8,7 +8,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
-	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -36,12 +35,11 @@ type AutoChargeResult struct {
 
 // PaymentService handles Razorpay payment operations
 type PaymentService struct {
-	client                       RazorpayClient
-	customerSvc                  RazorpayCustomerService
-	invoiceSyncSvc               *InvoiceSyncService
-	locker                       cache.Locker
-	entityIntegrationMappingRepo entityintegrationmapping.Repository
-	logger                       *logger.Logger
+	client         RazorpayClient
+	customerSvc    RazorpayCustomerService
+	invoiceSyncSvc *InvoiceSyncService
+	locker         cache.Locker
+	logger         *logger.Logger
 }
 
 // NewPaymentService creates a Razorpay payment service. locker is required.
@@ -50,17 +48,14 @@ func NewPaymentService(
 	customerSvc RazorpayCustomerService,
 	invoiceSyncSvc *InvoiceSyncService,
 	locker cache.Locker,
-	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *PaymentService {
-
 	return &PaymentService{
-		client:                       client,
-		customerSvc:                  customerSvc,
-		invoiceSyncSvc:               invoiceSyncSvc,
-		locker:                       locker,
-		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
-		logger:                       logger,
+		client:         client,
+		customerSvc:    customerSvc,
+		invoiceSyncSvc: invoiceSyncSvc,
+		locker:         locker,
+		logger:         logger,
 	}
 }
 
@@ -944,11 +939,14 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return
 	}
 
-	now := time.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       &now,
-		GatewayPaymentID: &razorpayPaymentID,
+		RefundedAt:       lo.ToPtr(time.Now()),
+		GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
+	}
+	if refundID != "" {
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
+		updateReq.Metadata = &metadata
 	}
 	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
 		s.logger.Error(ctx, "refund confirmed at Razorpay but failed to update FlexPrice payment status",
@@ -956,27 +954,6 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return
 	}
 
-	if s.entityIntegrationMappingRepo != nil && refundID != "" {
-		mapping := &entityintegrationmapping.EntityIntegrationMapping{
-			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
-			EntityType:       types.IntegrationEntityTypePayment,
-			EntityID:         flexpricePaymentID,
-			ProviderType:     string(types.SecretProviderRazorpay),
-			ProviderEntityID: refundID,
-			Metadata: map[string]interface{}{
-				"provider_entity_type": "refund",
-			},
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			BaseModel:     types.GetDefaultBaseModel(ctx),
-		}
-		if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
-			s.logger.Info(ctx, "failed to create payment→refund mapping (non-fatal)",
-				"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
-		}
-	}
-
-	s.logger.Info(ctx, "refunded late-captured payment on expired checkout session",
-		"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID, "razorpay_refund_id", refundID)
 }
 
 // Skip if Razorpay already shows this payment as refunded.
