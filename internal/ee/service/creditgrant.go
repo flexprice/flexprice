@@ -1206,11 +1206,12 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 		return err
 	}
 
-	// Cancel each application
+	// Cancel each application. Propagate failures so the caller's transaction rolls back —
+	// letting one fail silently would let grant.EndDate commit while a post-cutoff application
+	// stays pending and later grants credits the cancellation was supposed to prevent.
 	for _, app := range applications {
 		if err := s.cancelCreditGrantApplication(ctx, app); err != nil {
-			// Log error already done in helper, continue processing remaining applications
-			continue
+			return err
 		}
 	}
 

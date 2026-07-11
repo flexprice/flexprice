@@ -4466,7 +4466,7 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResourcesAt_Idempote
 	s.NoError(err)
 
 	creditGrantService := NewCreditGrantService(subService.ServiceParams)
-	_, err = creditGrantService.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+	creditGrantResp, err := creditGrantService.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
 		Name:           "Idempotency Test Grant",
 		Scope:          types.CreditGrantScopeSubscription,
 		SubscriptionID: &sub.ID,
@@ -4494,6 +4494,20 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResourcesAt_Idempote
 		s.False(li.EndDate.IsZero())
 		s.True(li.EndDate.Equal(effectiveDate))
 	}
+
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaFilter.EntityIDs = []string{sub.ID}
+	aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associations)
+	s.Require().NotNil(associations[0].EndDate)
+	s.True(associations[0].EndDate.Equal(effectiveDate), "addon association EndDate must equal the exact effective date, not just be non-nil")
+
+	gotGrant, err := creditGrantService.GetCreditGrant(ctx, creditGrantResp.CreditGrant.ID)
+	s.NoError(err)
+	s.Require().NotNil(gotGrant.EndDate)
+	s.True(gotGrant.EndDate.Equal(effectiveDate), "credit grant EndDate must equal the exact effective date, not just be non-nil")
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
@@ -7877,7 +7891,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledC
 	s.NoError(err)
 	s.Equal(types.SubscriptionStatusCancelled, firedSub.SubscriptionStatus)
 
-	// Line items must now be terminated.
+	// Line items must now be terminated, at the exact effective date.
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}
 	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
@@ -7885,14 +7899,16 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledC
 	s.NotEmpty(lineItems)
 	for _, li := range lineItems {
 		s.False(li.EndDate.IsZero(), "line item %s should be terminated once the cancellation has fired", li.ID)
+		s.True(li.EndDate.Equal(*scheduledSub.CancelAt), "line item %s EndDate should equal the exact effective date", li.ID)
 	}
 
-	// Addon association must now be cancelled.
+	// Addon association must now be cancelled, at the exact effective date.
 	associationsAfter, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
 	s.NoError(err)
 	s.Require().NotEmpty(associationsAfter)
 	s.Equal(types.AddonStatusCancelled, associationsAfter[0].AddonStatus)
-	s.NotNil(associationsAfter[0].EndDate)
+	s.Require().NotNil(associationsAfter[0].EndDate)
+	s.True(associationsAfter[0].EndDate.Equal(*scheduledSub.CancelAt), "addon association EndDate should equal the exact effective date")
 
 	// The cancellation schedule must be marked executed.
 	schedules, err := s.GetStores().SubscriptionScheduleRepo.GetBySubscriptionID(ctx, sub.ID)

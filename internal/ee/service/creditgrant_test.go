@@ -864,6 +864,26 @@ func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant_OnlyCancelsApplicati
 	}
 	s.NoError(s.GetStores().CreditGrantApplicationRepo.Create(s.GetContext(), afterApp))
 
+	// Scheduled exactly at the cutoff — must stay pending. This pins the filter as strictly
+	// "after" (ScheduledForGT), not "at or after"; if that ever changed to >=, this app would be
+	// wrongly cancelled and only this boundary case would catch it.
+	atCutoffApp := &creditgrantapplication.CreditGrantApplication{
+		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
+		CreditGrantID:                   creditGrantResp.CreditGrant.ID,
+		SubscriptionID:                  s.testData.subscription.ID,
+		ScheduledFor:                    effectiveDate,
+		PeriodStart:                     effectiveDate,
+		ApplicationStatus:               types.ApplicationStatusPending,
+		ApplicationReason:               types.ApplicationReasonRecurringCreditGrant,
+		SubscriptionStatusAtApplication: s.testData.subscription.SubscriptionStatus,
+		Credits:                         decimal.NewFromInt(100),
+		Metadata:                        types.Metadata{},
+		IdempotencyKey:                  "at_effective_date",
+		EnvironmentID:                   types.GetEnvironmentID(s.GetContext()),
+		BaseModel:                       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CreditGrantApplicationRepo.Create(s.GetContext(), atCutoffApp))
+
 	err = s.creditGrantService.DeleteCreditGrant(s.GetContext(), dto.DeleteCreditGrantRequest{
 		CreditGrantID: creditGrantResp.CreditGrant.ID,
 		EffectiveDate: &effectiveDate,
@@ -873,6 +893,10 @@ func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant_OnlyCancelsApplicati
 	gotBefore, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), beforeApp.ID)
 	s.NoError(err)
 	s.Equal(types.ApplicationStatusPending, gotBefore.ApplicationStatus, "application scheduled before the effective date must remain untouched")
+
+	gotAtCutoff, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), atCutoffApp.ID)
+	s.NoError(err)
+	s.Equal(types.ApplicationStatusPending, gotAtCutoff.ApplicationStatus, "application scheduled exactly at the effective date must remain untouched (strictly-after cutoff)")
 
 	gotAfter, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), afterApp.ID)
 	s.NoError(err)
