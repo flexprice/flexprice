@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -40,7 +41,6 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/whop"
 	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"

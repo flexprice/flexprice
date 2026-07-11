@@ -96,6 +96,8 @@ const (
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
 	PrefixPriceSyncLock = "price_sync:plan:"
+	// PrefixRazorpayWebhookRefundLock is the Redis key prefix for late-webhook refund locks.
+	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

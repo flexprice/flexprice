@@ -407,7 +407,9 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	return nil
 }
 
-// Finds the checkout session for this payment. Pending → complete. Expired → refund.
+// Finds the checkout session for this payment. Pending → complete. Expired or
+// Failed (link cancelled/expired at Razorpay, or fulfillment failed after capture)
+// → refund, since either way the session ended without delivering the product.
 // Otherwise ignore. True if a session exists; false = standalone payment.
 func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
@@ -432,15 +434,8 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"razorpay_payment_id", razorpayPaymentID,
 			)
 		}
-	case types.CheckoutStatusExpired:
-		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
-			h.logger.Error(ctx, "failed to refund late-captured payment on expired checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_payment_id", flexpricePaymentID,
-				"razorpay_payment_id", razorpayPaymentID,
-			)
-		}
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+		h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService)
 	default:
 		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
 			"session_id", session.ID,

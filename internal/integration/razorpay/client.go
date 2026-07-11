@@ -39,6 +39,9 @@ type RazorpayClient interface {
 	// RefundPayment issues a full refund for a captured payment (POST /v1/payments/{id}/refund).
 	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
 	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
+	// FetchPayment retrieves a payment's current state from Razorpay (GET /v1/payments/{id}),
+	// including whether it has already been refunded ("refunded" bool, "amount_refunded" int).
+	FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -555,6 +558,30 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPais
 				"payment_id":   paymentID,
 				"amount_paise": amountPaise,
 				"error":        err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully refunded Razorpay payment",
+		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
+	return result, nil
+}
+
+// FetchPayment retrieves a payment's current state from Razorpay. SDK: Payment.Fetch.
+func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Payment.Fetch(paymentID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay payment", "error", err, "payment_id", paymentID)
+		return nil, ierr.NewError("failed to fetch Razorpay payment").
+			WithHint("Unable to retrieve the payment from Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentID,
+				"error":      err.Error(),
 			}).
 			Mark(ierr.ErrInternal)
 	}
