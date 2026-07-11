@@ -3205,6 +3205,20 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				"end_date", *sub.EndDate)
 		}
 
+		// Terminate line items, addon associations, and credit grants now that the previously
+		// scheduled cancellation has actually fired. Gated on CancelAtPeriodEnd+CancelAt, which is
+		// set only by CancelSubscription's end_of_period/scheduled_date path (see
+		// updateSubscriptionForCancellation) — this never fires for a bare EndDate set through some
+		// other path (e.g. the generic subscription-update endpoint), which never had termination
+		// deferred in the first place and must be left alone.
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
+			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+			reason := sub.Metadata["cancellation_reason"]
+			if err := s.terminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+				return err
+			}
+		}
+
 		// Update the subscription
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err

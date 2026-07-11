@@ -7792,3 +7792,111 @@ func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_OnetimeAddon_En
 	s.Require().NotNil(associations[0].EndDate)
 	s.True(associations[0].EndDate.Equal(expectedEnd), "one-time addon association EndDate should be recomputed from activation start date")
 }
+
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledCancellationTermination() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_fire_scheduled_cancellation",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(24 * time.Hour),
+		BillingAnchor:      s.testData.now.Add(-24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	// Attach an addon so we can verify it gets terminated at fire time, not before.
+	addonID := "addon_fire_scheduled_cancellation"
+	priceID := "price_addon_fire_scheduled_cancellation"
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:   addonID,
+		StartDate: &addAddonNow,
+	})
+	s.NoError(err)
+
+	// Schedule an end-of-period cancellation effective at CurrentPeriodEnd.
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_fire_scheduled_cancellation",
+	})
+	s.NoError(err)
+
+	scheduledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.True(scheduledSub.CancelAtPeriodEnd)
+	s.Require().NotNil(scheduledSub.CancelAt)
+
+	// Sanity check: still untouched immediately after scheduling.
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaFilter.EntityIDs = []string{sub.ID}
+	aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associationsBefore, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associationsBefore)
+	s.Equal(types.AddonStatusActive, associationsBefore[0].AddonStatus)
+
+	// Drive period processing past the effective cancellation date.
+	processAt := scheduledSub.CancelAt.Add(time.Hour)
+	err = subService.processSubscriptionPeriod(ctx, scheduledSub, processAt)
+	s.NoError(err)
+
+	firedSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, firedSub.SubscriptionStatus)
+
+	// Line items must now be terminated.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	s.NotEmpty(lineItems)
+	for _, li := range lineItems {
+		s.False(li.EndDate.IsZero(), "line item %s should be terminated once the cancellation has fired", li.ID)
+	}
+
+	// Addon association must now be cancelled.
+	associationsAfter, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associationsAfter)
+	s.Equal(types.AddonStatusCancelled, associationsAfter[0].AddonStatus)
+	s.NotNil(associationsAfter[0].EndDate)
+
+	// The cancellation schedule must be marked executed.
+	schedules, err := s.GetStores().SubscriptionScheduleRepo.GetBySubscriptionID(ctx, sub.ID)
+	s.NoError(err)
+	s.Require().Len(schedules, 1)
+	s.Equal(types.ScheduleStatusExecuted, schedules[0].Status)
+}
