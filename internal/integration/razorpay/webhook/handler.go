@@ -149,11 +149,8 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	// For authorization-link (mandate) checkouts, payment_link.paid is never fired by
-	// Razorpay — only payment.captured is. Delegate entirely to CompleteCheckoutSession,
-	// which activates the subscription, finalizes the invoice, marks the payment
-	// succeeded, and completes the session — identical to the payment_link.paid path.
-	if h.completeCheckoutSessionIfPending(ctx, flexpricePaymentID, payment.ID, services) {
+	// Mandate checkouts only send payment.captured — handle like payment_link.paid below.
+	if h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services) {
 		return nil
 	}
 
@@ -353,7 +350,7 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	h.completeCheckoutSessionIfPending(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
+	h.handleCheckoutSessionForPayment(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
 	return nil
 }
 
@@ -410,43 +407,62 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	return nil
 }
 
-// completeCheckoutSessionIfPending looks up a pending checkout session by FlexPrice
-// payment ID and calls CompleteCheckoutSession if one exists. It is used by both the
-// payment_link.paid path (standard payment links) and the payment.captured path
-// (authorization / mandate links) so that both flows correctly activate the
-// subscription, finalize the invoice, and mark the session completed.
-// Returns true if a checkout session was found and the completion attempt was made
-// (regardless of whether it succeeded), false if no session was found (caller should
-// proceed with standalone payment handling). Errors are logged but not returned.
-func (h *Handler) completeCheckoutSessionIfPending(
+// Finds the checkout session for this payment. Pending → complete. Expired or
+// Failed (link cancelled/expired at Razorpay, or fulfillment failed after capture)
+// → refund, since either way the session ended without delivering the product.
+// Otherwise ignore. True if a session exists; false = standalone payment.
+func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
 	razorpayPaymentID string,
 	services *ServiceDependencies,
 ) bool {
-	filter := types.NewDefaultCheckoutSessionFilter()
-	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
-	filter.CheckoutStatuses = []types.CheckoutStatus{types.CheckoutStatusPending}
-	filter.Limit = lo.ToPtr(1)
-	filter.Status = lo.ToPtr(types.StatusPublished)
-
-	sessions, err := services.CheckoutSessionService.List(ctx, filter)
-	if err != nil || sessions == nil || len(sessions.Items) == 0 {
+	session := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+	if session == nil {
 		return false
 	}
 
-	sessionID := sessions.Items[0].ID
-	if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, &types.CheckoutProviderResult{
-		ProviderPaymentIntentID: razorpayPaymentID,
-	}); err != nil {
-		h.logger.Error(ctx, "failed to complete checkout session",
-			"error", err,
-			"session_id", sessionID,
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusPending:
+		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: razorpayPaymentID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", razorpayPaymentID,
+			)
+		}
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+		h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService)
+	default:
+		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
+			"session_id", session.ID,
+			"session_status", session.CheckoutStatus,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", razorpayPaymentID,
 		)
 	}
 	return true
+}
+
+// Checkout session for this payment ID, any status. Nil if not a checkout.
+func (h *Handler) findCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	services *ServiceDependencies,
+) *dto.CheckoutSessionResponse {
+	filter := types.NewDefaultCheckoutSessionFilter()
+	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
+	filter.Limit = lo.ToPtr(1)
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	sessions, err := services.CheckoutSessionService.List(ctx, filter)
+	if err != nil || sessions == nil || len(sessions.Items) == 0 {
+		return nil
+	}
+	return sessions.Items[0]
 }
 
 // convertPaymentToMap converts a Payment struct to a map using JSON marshaling

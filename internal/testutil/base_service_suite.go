@@ -177,7 +177,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.FeatureRepo,
 		encryptionService,
 		nil, // TemporalService — not needed in unit tests
-		nil, // Locker — not needed in unit tests
+		NewInMemoryRedisLocker(nil),
 	)
 }
 

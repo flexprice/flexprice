@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -37,20 +38,23 @@ type PaymentService struct {
 	client         RazorpayClient
 	customerSvc    RazorpayCustomerService
 	invoiceSyncSvc *InvoiceSyncService
+	locker         cache.Locker
 	logger         *logger.Logger
 }
 
-// NewPaymentService creates a new Razorpay payment service
+// NewPaymentService creates a Razorpay payment service. locker is required.
 func NewPaymentService(
 	client RazorpayClient,
 	customerSvc RazorpayCustomerService,
 	invoiceSyncSvc *InvoiceSyncService,
+	locker cache.Locker,
 	logger *logger.Logger,
 ) *PaymentService {
 	return &PaymentService{
 		client:         client,
 		customerSvc:    customerSvc,
 		invoiceSyncSvc: invoiceSyncSvc,
+		locker:         locker,
 		logger:         logger,
 	}
 }
@@ -891,4 +895,84 @@ func isOrderAlreadyProcessingError(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "order already")
+}
+
+const refundLockTTL = 15 * time.Minute
+
+// Full refund when payment lands after checkout expired or failed.
+func (s *PaymentService) RefundLateCapturedPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	razorpayPaymentID string,
+	paymentService interfaces.PaymentService,
+) {
+	lockKey := cache.GenerateKey(ctx, cache.PrefixRazorpayWebhookRefundLock, flexpricePaymentID)
+	lock, err := s.locker.AcquireLock(ctx, lockKey, refundLockTTL)
+	if err != nil {
+		s.logger.Error(ctx, "failed to acquire refund lock", "payment_id", flexpricePaymentID, "error", err)
+		return
+	}
+	if !lock.AcquiredSuccessfully() {
+		s.logger.Info(ctx, "refund already in progress for this payment, skipping", "payment_id", flexpricePaymentID)
+		return
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release refund lock", "payment_id", flexpricePaymentID, "error", releaseErr)
+		}
+	}()
+
+	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get payment record for refund", "payment_id", flexpricePaymentID, "error", err)
+		return
+	}
+	if existingPayment.PaymentStatus == types.PaymentStatusRefunded || existingPayment.PaymentStatus == types.PaymentStatusPartiallyRefunded {
+		s.logger.Info(ctx, "payment already refunded, skipping", "payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
+		return
+	}
+
+	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
+	if err != nil {
+		s.logger.Error(ctx, "failed to refund late-captured payment at Razorpay",
+			"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID, "error", err)
+		return
+	}
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
+		RefundedAt:       lo.ToPtr(time.Now()),
+		GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
+	}
+	if refundID != "" {
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
+		updateReq.Metadata = &metadata
+	}
+	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
+		s.logger.Error(ctx, "refund confirmed at Razorpay but failed to update FlexPrice payment status",
+			"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
+		return
+	}
+
+}
+
+// Skip if Razorpay already shows this payment as fully refunded. Razorpay's Payment
+// entity has no boolean "refunded" field — refund state is reported via
+// "refund_status" (null/"partial"/"full").
+func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID string, amountPaise int64) (string, error) {
+	if current, err := s.client.FetchPayment(ctx, razorpayPaymentID); err != nil {
+		s.logger.Info(ctx, "failed to check current Razorpay refund status before submitting, proceeding anyway",
+			"razorpay_payment_id", razorpayPaymentID, "error", err)
+	} else if refundStatus, _ := current["refund_status"].(string); refundStatus == "full" {
+		s.logger.Info(ctx, "payment already fully refunded at Razorpay, skipping duplicate submission",
+			"razorpay_payment_id", razorpayPaymentID)
+		return "", nil
+	}
+
+	refundResp, err := s.client.RefundPayment(ctx, razorpayPaymentID, amountPaise)
+	if err != nil {
+		return "", err
+	}
+	refundID, _ := refundResp["id"].(string)
+	return refundID, nil
 }
