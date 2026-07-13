@@ -213,9 +213,11 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 
 	if tenantID == "" && event.TenantID != "" {
 		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	event.EventName = strings.TrimSpace(event.EventName)
