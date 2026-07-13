@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -150,6 +151,20 @@ func (cgc *CreditGrantCreate) SetSubscriptionID(s string) *CreditGrantCreate {
 func (cgc *CreditGrantCreate) SetNillableSubscriptionID(s *string) *CreditGrantCreate {
 	if s != nil {
 		cgc.SetSubscriptionID(*s)
+	}
+	return cgc
+}
+
+// SetAddonID sets the "addon_id" field.
+func (cgc *CreditGrantCreate) SetAddonID(s string) *CreditGrantCreate {
+	cgc.mutation.SetAddonID(s)
+	return cgc
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableAddonID(s *string) *CreditGrantCreate {
+	if s != nil {
+		cgc.SetAddonID(*s)
 	}
 	return cgc
 }
@@ -340,6 +355,11 @@ func (cgc *CreditGrantCreate) SetPlan(p *Plan) *CreditGrantCreate {
 // SetSubscription sets the "subscription" edge to the Subscription entity.
 func (cgc *CreditGrantCreate) SetSubscription(s *Subscription) *CreditGrantCreate {
 	return cgc.SetSubscriptionID(s.ID)
+}
+
+// SetAddon sets the "addon" edge to the Addon entity.
+func (cgc *CreditGrantCreate) SetAddon(a *Addon) *CreditGrantCreate {
+	return cgc.SetAddonID(a.ID)
 }
 
 // Mutation returns the CreditGrantMutation object of the builder.
@@ -626,6 +646,23 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.SubscriptionID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := cgc.mutation.AddonIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   creditgrant.AddonTable,
+			Columns: []string{creditgrant.AddonColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.AddonID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

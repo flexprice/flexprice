@@ -37,48 +37,26 @@ func WebhookLoggingMiddleware(
 		for k, v := range c.Request.Header {
 			headers[k] = v
 		}
-
-		persisted := false
-		if repo != nil {
-			req := &domainIncomingWebhookEvent.IncomingWebhookEvent{
-				ID:            types.GenerateUUID(),
-				TenantID:      tenantID,
-				EnvironmentID: environmentID,
-				Provider:      provider,
-				Method:        c.Request.Method,
-				Path:          c.Request.URL.Path,
-				RequestID:     requestID,
-				Headers:       headers,
-				Body:          string(peek),
-			}
-			if err := repo.Create(c.Request.Context(), req); err != nil {
-				if log != nil {
-					log.Error(c.Request.Context(), "failed to persist webhook event",
-						"error", err,
-						"provider", provider,
-						"tenant_id", tenantID,
-						"environment_id", environmentID,
-					)
-				}
-			} else {
-				persisted = true
-			}
+		req := &domainIncomingWebhookEvent.IncomingWebhookEvent{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INCOMING_WEBHOOK_EVENT),
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			Provider:      provider,
+			Method:        c.Request.Method,
+			Path:          c.Request.URL.Path,
+			RequestID:     requestID,
+			Headers:       headers,
+			Body:          string(peek),
 		}
-
-		c.Next()
-
-		if log != nil {
-			log.Debug(c.Request.Context(), "inbound webhook request",
+		if err := repo.Create(c.Request.Context(), req); err != nil {
+			log.Error(c.Request.Context(), "failed to persist webhook event",
+				"error", err,
 				"provider", provider,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
-				"method", c.Request.Method,
-				"path", c.Request.URL.Path,
-				"request_id", requestID,
-				"payload_size_bytes", len(peek),
-				"persisted", persisted,
 			)
 		}
+		c.Next()
 	}
 }
 

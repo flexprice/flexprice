@@ -187,6 +187,7 @@ data:
       consumer_group: {{ .Values.meterUsageTracking.consumerGroup | quote }}
       topic_dlq: {{ .Values.meterUsageTracking.topicDLQ | quote }}
       redis_deduplication_enabled: {{ .Values.meterUsageTracking.redisDeduplicationEnabled }}
+      wallet_alert_push_enabled: {{ .Values.meterUsageTracking.walletAlertPushEnabled | default false }}
 
     meter_usage_tracking_lazy:
       enabled: {{ .Values.meterUsageTrackingLazy.enabled }}

@@ -9,26 +9,26 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-// UnmatchedEventPayloadBuilder builds the event.unmatched payload. Pass-through:
+// RejectedEventPayloadBuilder builds the event.rejected payload. Pass-through:
 // the event snapshot is already in the message, so no re-fetch.
-type UnmatchedEventPayloadBuilder struct {
+type RejectedEventPayloadBuilder struct {
 	services *Services
 }
 
-func NewUnmatchedEventPayloadBuilder(services *Services) PayloadBuilder {
-	return &UnmatchedEventPayloadBuilder{services: services}
+func NewRejectedEventPayloadBuilder(services *Services) PayloadBuilder {
+	return &RejectedEventPayloadBuilder{services: services}
 }
 
-func (b *UnmatchedEventPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
-	var internal webhookDto.InternalUnmatchedEvent
+func (b *RejectedEventPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
+	var internal webhookDto.InternalRejectedEvent
 	if err := json.Unmarshal(data, &internal); err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Unable to unmarshal unmatched event payload").
+			WithHint("Unable to unmarshal rejected event payload").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if internal.Event.ID == "" || internal.Event.EventName == "" {
-		return nil, ierr.NewError("invalid data for unmatched event").
+		return nil, ierr.NewError("invalid data for rejected event").
 			WithHint("Please provide a valid event ID and event name").
 			WithReportableDetails(map[string]any{
 				"event_id":   internal.Event.ID,
@@ -37,5 +37,5 @@ func (b *UnmatchedEventPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	return json.Marshal(webhookDto.NewUnmatchedEventWebhookPayload(&internal, eventType))
+	return json.Marshal(webhookDto.NewRejectedEventWebhookPayload(&internal, eventType))
 }

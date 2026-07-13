@@ -19,6 +19,9 @@ const (
 	IntegrationEntityTypeItem         IntegrationEntityType = "item"
 	IntegrationEntityTypeItemPrice    IntegrationEntityType = "item_price"
 	IntegrationEntityTypePrice        IntegrationEntityType = "price"
+	// IntegrationEntityTypeInvoiceLineItem maps a flexprice invoice line item to a provider-side
+	// charge (e.g. a Tabs obligation), used to make per-line-item invoice sync idempotent.
+	IntegrationEntityTypeInvoiceLineItem IntegrationEntityType = "invoice_line_item"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -37,10 +40,11 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypeItem,
 		IntegrationEntityTypeItemPrice,
 		IntegrationEntityTypePrice,
+		IntegrationEntityTypeInvoiceLineItem,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price").
+			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price, invoice_line_item").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

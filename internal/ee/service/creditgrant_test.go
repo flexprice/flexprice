@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -90,6 +91,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
+		AddonRepo:                  s.GetStores().AddonRepo,
 	}
 
 	s.creditGrantService = NewCreditGrantService(serviceParams)
@@ -2368,4 +2370,157 @@ func (s *CreditGrantServiceTestSuite) TestCatchUp_FutureStartDate() {
 	applied, pending := s.countCGAStatuses(resp.CreditGrant.ID)
 	s.Equal(0, applied, "expected no applied CGAs for future grant")
 	s.Equal(1, pending, "expected 1 pending CGA waiting for future schedule")
+}
+
+// ---------------------------------------------------------------------------
+// Addon-scoped credit grants
+// ---------------------------------------------------------------------------
+
+// createTestAddon creates and stores a published addon for use in tests.
+func (s *CreditGrantServiceTestSuite) createTestAddon(id, lookupKey, name string) *addon.Addon {
+	a := &addon.Addon{
+		ID:            id,
+		LookupKey:     lookupKey,
+		Name:          name,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().AddonRepo.Create(s.GetContext(), a))
+	return a
+}
+
+// An ADDON-scoped grant is an inert template: it is stored with scope=ADDON and
+// addon_id set (subscription_id/plan_id nil) and does NOT initialize a workflow,
+// so no credit grant application is created and no wallet is touched.
+func (s *CreditGrantServiceTestSuite) TestCreateAddonScopedCreditGrant_IsInertTemplate() {
+	a := s.createTestAddon("addon_cg_inert", "addon_cg_inert", "Credit Booster")
+
+	req := dto.CreateCreditGrantRequest{
+		Name:           "Addon Monthly Credits",
+		Scope:          types.CreditGrantScopeAddon,
+		AddonID:        &a.ID,
+		Credits:        decimal.NewFromInt(5000),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeBillingCycle,
+		Priority:       lo.ToPtr(1),
+	}
+
+	resp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.CreditGrantScopeAddon, resp.CreditGrant.Scope)
+	s.Equal(a.ID, lo.FromPtr(resp.CreditGrant.AddonID))
+	s.Nil(resp.CreditGrant.SubscriptionID)
+	s.Nil(resp.CreditGrant.PlanID)
+
+	// Inert: no credit grant application created (no wallet effect).
+	filter := &types.CreditGrantApplicationFilter{
+		CreditGrantIDs: []string{resp.CreditGrant.ID},
+		QueryFilter:    types.NewDefaultQueryFilter(),
+	}
+	apps, err := s.GetStores().CreditGrantApplicationRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(apps, 0)
+}
+
+// Validation for ADDON-scoped grants: addon_id is required, the addon must exist,
+// and start/end dates are not allowed (it is a template, like a plan grant).
+func (s *CreditGrantServiceTestSuite) TestCreateAddonScopedCreditGrant_Validation() {
+	a := s.createTestAddon("addon_cg_val", "addon_cg_val", "Credit Booster")
+	now := s.testData.now
+
+	base := func() dto.CreateCreditGrantRequest {
+		return dto.CreateCreditGrantRequest{
+			Name:           "Addon Grant",
+			Scope:          types.CreditGrantScopeAddon,
+			AddonID:        &a.ID,
+			Credits:        decimal.NewFromInt(100),
+			Cadence:        types.CreditGrantCadenceOneTime,
+			ExpirationType: types.CreditGrantExpiryTypeNever,
+		}
+	}
+
+	s.Run("missing addon_id", func() {
+		req := base()
+		req.AddonID = nil
+		_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), req)
+		s.Error(err)
+	})
+
+	s.Run("nonexistent addon", func() {
+		req := base()
+		req.AddonID = lo.ToPtr("addon_does_not_exist")
+		_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), req)
+		s.Error(err)
+	})
+
+	s.Run("start_date not allowed for addon scope", func() {
+		req := base()
+		req.StartDate = &now
+		_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), req)
+		s.Error(err)
+	})
+}
+
+// All of an addon's grants must share the same conversion rates (same rule plans have).
+func (s *CreditGrantServiceTestSuite) TestAddonGrants_UniformConversionRate() {
+	a := s.createTestAddon("addon_cg_cr", "addon_cg_cr", "Credit Booster")
+
+	first := dto.CreateCreditGrantRequest{
+		Name:           "Grant 1",
+		Scope:          types.CreditGrantScopeAddon,
+		AddonID:        &a.ID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceOneTime,
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		ConversionRate: lo.ToPtr(decimal.NewFromInt(1)),
+	}
+	_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), first)
+	s.NoError(err)
+
+	second := first
+	second.Name = "Grant 2"
+	second.ConversionRate = lo.ToPtr(decimal.NewFromInt(2)) // mismatched rate
+	_, err = s.creditGrantService.CreateCreditGrant(s.GetContext(), second)
+	s.Error(err)
+}
+
+// GetCreditGrantsByAddon returns only that addon's ADDON-scoped grants, not plan grants.
+func (s *CreditGrantServiceTestSuite) TestGetCreditGrantsByAddon() {
+	a := s.createTestAddon("addon_cg_get", "addon_cg_get", "Credit Booster")
+
+	for i := 0; i < 2; i++ {
+		req := dto.CreateCreditGrantRequest{
+			Name:           fmt.Sprintf("Addon Grant %d", i),
+			Scope:          types.CreditGrantScopeAddon,
+			AddonID:        &a.ID,
+			Credits:        decimal.NewFromInt(10),
+			Cadence:        types.CreditGrantCadenceOneTime,
+			ExpirationType: types.CreditGrantExpiryTypeNever,
+		}
+		_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), req)
+		s.NoError(err)
+	}
+
+	// A plan-scoped grant that must NOT be returned by GetCreditGrantsByAddon.
+	planGrant := dto.CreateCreditGrantRequest{
+		Name:           "Plan Grant",
+		Scope:          types.CreditGrantScopePlan,
+		PlanID:         &s.testData.plan.ID,
+		Credits:        decimal.NewFromInt(10),
+		Cadence:        types.CreditGrantCadenceOneTime,
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+	}
+	_, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), planGrant)
+	s.NoError(err)
+
+	resp, err := s.creditGrantService.GetCreditGrantsByAddon(s.GetContext(), a.ID)
+	s.NoError(err)
+	s.Len(resp.Items, 2)
+	for _, cg := range resp.Items {
+		s.Equal(types.CreditGrantScopeAddon, cg.Scope)
+		s.Equal(a.ID, lo.FromPtr(cg.AddonID))
+	}
 }

@@ -3509,7 +3509,12 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			Source:         string(types.UsageSourceAnalytics),
 		}
 
-		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+		var usage *dto.GetUsageBySubscriptionResponse
+		if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
+			usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+		} else {
+			usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+		}
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get usage for subscription", "subscription_id", subscriptionID, "error", err)
 			continue

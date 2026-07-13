@@ -456,6 +456,40 @@ func (s *InMemoryWalletStore) GetTransactionByIdempotencyKey(ctx context.Context
 	return transactions[0], nil
 }
 
+func (s *InMemoryWalletStore) GetPendingTransactionByParent(ctx context.Context, parentTransactionID string) (*wallet.Transaction, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	filterFn := func(ctx context.Context, tx *wallet.Transaction, _ interface{}) bool {
+		return tx.ParentTransactionID == parentTransactionID &&
+			tx.TxStatus == types.TransactionStatusPending &&
+			tx.TenantID == tenantID &&
+			tx.EnvironmentID == environmentID &&
+			tx.Status == types.StatusPublished
+	}
+
+	transactions, err := s.transactions.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve pending bonus transaction").
+			WithReportableDetails(map[string]interface{}{
+				"parent_transaction_id": parentTransactionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(transactions) == 0 {
+		return nil, ierr.NewError("pending bonus transaction not found").
+			WithHint("Pending bonus transaction not found").
+			WithReportableDetails(map[string]interface{}{
+				"parent_transaction_id": parentTransactionID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	return transactions[0], nil
+}
+
 func (s *InMemoryWalletStore) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
 	transactions, err := s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
 	if err != nil {

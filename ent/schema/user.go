@@ -56,7 +56,7 @@ func (User) Indexes() []ent.Index {
 		index.Fields("email").
 			Unique().
 			StorageKey("idx_user_email_unique").
-			Annotations(entsql.IndexWhere("status = 'published' AND email IS NOT NULL AND email != ''")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (email IS NOT NULL) AND ((email)::text <> ''::text))")),
 		index.Fields("tenant_id", "status", "type").
 			StorageKey("idx_user_tenant_status"),
 		index.Fields("tenant_id", "created_at").

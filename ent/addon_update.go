@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/addon"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
@@ -130,6 +131,21 @@ func (au *AddonUpdate) AddEntitlements(e ...*Entitlement) *AddonUpdate {
 	return au.AddEntitlementIDs(ids...)
 }
 
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (au *AddonUpdate) AddCreditGrantIDs(ids ...string) *AddonUpdate {
+	au.mutation.AddCreditGrantIDs(ids...)
+	return au
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (au *AddonUpdate) AddCreditGrants(c ...*CreditGrant) *AddonUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return au.AddCreditGrantIDs(ids...)
+}
+
 // Mutation returns the AddonMutation object of the builder.
 func (au *AddonUpdate) Mutation() *AddonMutation {
 	return au.mutation
@@ -154,6 +170,27 @@ func (au *AddonUpdate) RemoveEntitlements(e ...*Entitlement) *AddonUpdate {
 		ids[i] = e[i].ID
 	}
 	return au.RemoveEntitlementIDs(ids...)
+}
+
+// ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
+func (au *AddonUpdate) ClearCreditGrants() *AddonUpdate {
+	au.mutation.ClearCreditGrants()
+	return au
+}
+
+// RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
+func (au *AddonUpdate) RemoveCreditGrantIDs(ids ...string) *AddonUpdate {
+	au.mutation.RemoveCreditGrantIDs(ids...)
+	return au
+}
+
+// RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
+func (au *AddonUpdate) RemoveCreditGrants(c ...*CreditGrant) *AddonUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return au.RemoveCreditGrantIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -292,6 +329,51 @@ func (au *AddonUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if au.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := au.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !au.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := au.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, au.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{addon.Label}
@@ -413,6 +495,21 @@ func (auo *AddonUpdateOne) AddEntitlements(e ...*Entitlement) *AddonUpdateOne {
 	return auo.AddEntitlementIDs(ids...)
 }
 
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (auo *AddonUpdateOne) AddCreditGrantIDs(ids ...string) *AddonUpdateOne {
+	auo.mutation.AddCreditGrantIDs(ids...)
+	return auo
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (auo *AddonUpdateOne) AddCreditGrants(c ...*CreditGrant) *AddonUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return auo.AddCreditGrantIDs(ids...)
+}
+
 // Mutation returns the AddonMutation object of the builder.
 func (auo *AddonUpdateOne) Mutation() *AddonMutation {
 	return auo.mutation
@@ -437,6 +534,27 @@ func (auo *AddonUpdateOne) RemoveEntitlements(e ...*Entitlement) *AddonUpdateOne
 		ids[i] = e[i].ID
 	}
 	return auo.RemoveEntitlementIDs(ids...)
+}
+
+// ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
+func (auo *AddonUpdateOne) ClearCreditGrants() *AddonUpdateOne {
+	auo.mutation.ClearCreditGrants()
+	return auo
+}
+
+// RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
+func (auo *AddonUpdateOne) RemoveCreditGrantIDs(ids ...string) *AddonUpdateOne {
+	auo.mutation.RemoveCreditGrantIDs(ids...)
+	return auo
+}
+
+// RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
+func (auo *AddonUpdateOne) RemoveCreditGrants(c ...*CreditGrant) *AddonUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return auo.RemoveCreditGrantIDs(ids...)
 }
 
 // Where appends a list predicates to the AddonUpdate builder.
@@ -598,6 +716,51 @@ func (auo *AddonUpdateOne) sqlSave(ctx context.Context) (_node *Addon, err error
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if auo.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := auo.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !auo.mutation.CreditGrantsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := auo.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

@@ -7,12 +7,15 @@ import (
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -29,7 +32,7 @@ func (s *MeterUsageTrackingSuite) SetupTest() {
 	s.svc = &meterUsageTrackingService{}
 }
 
-// --- fakes for publishUnmatchedEventWebhook tests ---
+// --- fakes for publishRejectedEventWebhook tests ---
 
 type fakeWebhookPublisher struct {
 	events []*types.WebhookEvent
@@ -41,35 +44,21 @@ func (f *fakeWebhookPublisher) PublishWebhook(_ context.Context, event *types.We
 }
 func (f *fakeWebhookPublisher) Close() error { return nil }
 
-// fakeLocker simulates Redis SetNX: the first AcquireLock for a key succeeds,
-// subsequent ones fail (until, in real Redis, the TTL expires).
-type fakeLocker struct{ held map[string]bool }
-
-func (l *fakeLocker) AcquireLock(_ context.Context, key string, _ time.Duration) (cache.Lock, error) {
-	if l.held == nil {
-		l.held = map[string]bool{}
-	}
-	if l.held[key] {
-		return &fakeLock{success: false}, nil
-	}
-	l.held[key] = true
-	return &fakeLock{success: true}, nil
+// newInMemoryLocker returns testutil's in-memory Redis locker (SetNX + TTL
+// semantics), so the throttle behaves exactly like production against real Redis.
+func newInMemoryLocker() cache.Locker {
+	return testutil.NewInMemoryRedisLocker(testutil.NewInMemoryRedis().(*testutil.InMemoryRedis))
 }
 
-type fakeLock struct{ success bool }
-
-func (l *fakeLock) AcquiredSuccessfully() bool      { return l.success }
-func (l *fakeLock) Release(_ context.Context) error { return nil }
-
-func newUnmatchedTestService(enabled bool, window time.Duration, locker cache.Locker) (*meterUsageTrackingService, *fakeWebhookPublisher) {
+func newRejectedTestService(enabled bool, window time.Duration, locker cache.Locker) (*meterUsageTrackingService, *fakeWebhookPublisher) {
 	pub := &fakeWebhookPublisher{}
 	svc := &meterUsageTrackingService{
 		ServiceParams: ServiceParams{
 			Logger: logger.NewNoopLogger(),
 			Config: &config.Configuration{
 				MeterUsageTracking: config.MeterUsageTrackingConfig{
-					UnmatchedEventWebhookEnabled: enabled,
-					UnmatchedEventWebhookWindow:  window,
+					RejectedEventWebhookEnabled: enabled,
+					RejectedEventWebhookWindow:  window,
 				},
 			},
 			WebhookPublisher: pub,
@@ -79,7 +68,7 @@ func newUnmatchedTestService(enabled bool, window time.Duration, locker cache.Lo
 	return svc, pub
 }
 
-func unmatchedTestEvent(name string) *events.Event {
+func rejectedTestEvent(name string) *events.Event {
 	return &events.Event{
 		ID:                 "evt_" + name,
 		TenantID:           types.DefaultTenantID,
@@ -90,42 +79,42 @@ func unmatchedTestEvent(name string) *events.Event {
 	}
 }
 
-func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_DisabledNoop() {
-	svc, pub := newUnmatchedTestService(false, 10*time.Minute, &fakeLocker{})
-	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_DisabledNoop() {
+	svc, pub := newRejectedTestService(false, 10*time.Minute, newInMemoryLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	assert.Empty(s.T(), pub.events)
 }
 
-func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_EnabledPublishes() {
-	svc, pub := newUnmatchedTestService(true, 10*time.Minute, &fakeLocker{})
-	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() {
+	svc, pub := newRejectedTestService(true, 10*time.Minute, newInMemoryLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 
 	assert.Len(s.T(), pub.events, 1)
 	got := pub.events[0]
-	assert.Equal(s.T(), types.WebhookEventEventUnmatched, got.EventName)
+	assert.Equal(s.T(), types.WebhookEventEventRejected, got.EventName)
 	assert.Equal(s.T(), types.SystemEntityTypeEvent, got.EntityType)
 	assert.Equal(s.T(), "evt_api_call", got.EntityID)
 }
 
-func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_ThrottledPerEventName() {
-	locker := &fakeLocker{}
-	svc, pub := newUnmatchedTestService(true, 10*time.Minute, locker)
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_ThrottledPerEventName() {
+	locker := newInMemoryLocker()
+	svc, pub := newRejectedTestService(true, 10*time.Minute, locker)
 
 	// Same event name three times within the window -> only the first fires.
 	for i := 0; i < 3; i++ {
-		svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	}
 	assert.Len(s.T(), pub.events, 1)
 
 	// A different event name is throttled independently -> fires once more.
-	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("other_event"), types.UnmatchedEventReasonNoMatchingMeter)
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("other_event"), types.RejectedEventReasonNoMatchingMeter)
 	assert.Len(s.T(), pub.events, 2)
 }
 
-func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_NoLockerFiresEveryTime() {
-	svc, pub := newUnmatchedTestService(true, 10*time.Minute, nil) // no Locker -> fail-open
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_NoLockerFiresEveryTime() {
+	svc, pub := newRejectedTestService(true, 10*time.Minute, nil) // no Locker -> fail-open
 	for i := 0; i < 3; i++ {
-		svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	}
 	assert.Len(s.T(), pub.events, 3)
 }
@@ -446,4 +435,79 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 	hash1 := s.svc.generateUniqueHash(event, m1)
 	assert.Empty(s.T(), hash1)
 	assert.NotEqual(s.T(), hash1, hash2)
+}
+
+func TestResolveCustomerForUsageEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = types.SetTenantID(ctx, types.DefaultTenantID)
+	ctx = types.SetEnvironmentID(ctx, "env_test")
+
+	customerStore := testutil.NewInMemoryCustomerStore()
+	params := ServiceParams{
+		Logger:       logger.NewNoopLogger(),
+		CustomerRepo: customerStore,
+	}
+
+	t.Run("returns nil when external customer id is empty", func(t *testing.T) {
+		cust, err := ResolveCustomerForUsageEvent(ctx, params, &events.Event{ID: "evt_1"})
+		require.NoError(t, err)
+		assert.Nil(t, cust)
+	})
+
+	t.Run("returns existing customer", func(t *testing.T) {
+		existing := &customer.Customer{
+			ID:            "cust_int_1",
+			ExternalID:    "ext_1",
+			EnvironmentID: "env_test",
+			BaseModel:     types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+		}
+		require.NoError(t, customerStore.Create(ctx, existing))
+
+		cust, err := ResolveCustomerForUsageEvent(ctx, params, &events.Event{
+			ID:                 "evt_2",
+			ExternalCustomerID: "ext_1",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, cust)
+		assert.Equal(t, existing.ID, cust.ID)
+	})
+}
+
+func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = types.SetTenantID(ctx, types.DefaultTenantID)
+	ctx = types.SetEnvironmentID(ctx, "env_test")
+
+	customerStore := testutil.NewInMemoryCustomerStore()
+	existing := &customer.Customer{
+		ID:            "cust_int_1",
+		ExternalID:    "ext_1",
+		EnvironmentID: "env_test",
+		BaseModel:     types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+	}
+	require.NoError(t, customerStore.Create(ctx, existing))
+
+	svc := &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger:       logger.NewNoopLogger(),
+			CustomerRepo: customerStore,
+			Config: &config.Configuration{
+				MeterUsageTracking: config.MeterUsageTrackingConfig{
+					WalletAlertPushEnabled: false,
+				},
+			},
+		},
+	}
+
+	event := &events.Event{
+		ID:                 "evt_1",
+		ExternalCustomerID: "ext_1",
+	}
+
+	svc.runMeterUsagePostInsertSideEffects(ctx, event)
+	assert.Equal(t, existing.ID, event.CustomerID)
 }

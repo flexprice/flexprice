@@ -160,28 +160,21 @@ func (s *usageBenchmarkService) RegisterHandler(router *pubsubRouter.Router, cfg
 }
 
 // processMessage is the internal watermill handler delegate.
-func (s *usageBenchmarkService) processMessage(msg *message.Message) error {
-	return s.ProcessMessageForTest(msg)
+func (s *usageBenchmarkService) processMessage(ctx context.Context, msg *message.Message) error {
+	return s.ProcessMessageForTest(ctx, msg)
 }
 
 // ProcessMessageForTest is exported so unit tests can call it directly.
 // Dispatches by event Kind; empty Kind is treated as subscription for back-compat
 // with events already in flight when this code rolled out.
-func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) error {
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
-
+func (s *usageBenchmarkService) ProcessMessageForTest(ctx context.Context, msg *message.Message) error {
 	var evt events.UsageBenchmarkEvent
 	if err := json.Unmarshal(msg.Payload, &evt); err != nil {
 		if s.Logger != nil {
-			s.Logger.Error(context.Background(), "usage benchmark: failed to unmarshal event", "error", err)
+			s.Logger.Error(ctx, "usage benchmark: failed to unmarshal event", "error", err)
 		}
 		return nil
 	}
-
-	ctx := types.WithWriterPinning(context.Background())
-	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
 	switch evt.Kind {
 	case events.UsageBenchmarkKindAnalytics:

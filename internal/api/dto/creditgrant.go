@@ -19,6 +19,7 @@ type CreateCreditGrantRequest struct {
 	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
+	AddonID                *string                              `json:"addon_id,omitempty"`
 	Credits                decimal.Decimal                      `json:"credits" binding:"required" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
@@ -153,9 +154,27 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
+	case types.CreditGrantScopeAddon:
+		if r.AddonID == nil || *r.AddonID == "" {
+			return errors.NewError("addon_id is required for ADDON-scoped grants").
+				WithHint("Please provide a valid addon ID").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
+		// ADDON-scoped grants are templates (like PLAN): start/end dates are not allowed
+		if r.StartDate != nil || r.EndDate != nil {
+			return errors.NewError("start_date and end_date are not allowed for ADDON-scoped grants").
+				WithHint("Start date and end date are not allowed for ADDON-scoped grants").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
 	default:
 		return errors.NewError("invalid scope").
-			WithHint("Scope must be either PLAN or SUBSCRIPTION").
+			WithHint("Scope must be one of PLAN, SUBSCRIPTION or ADDON").
 			WithReportableDetails(map[string]interface{}{
 				"scope": r.Scope,
 			}).
@@ -286,10 +305,23 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 		if r.CreditGrantAnchor != nil {
 			cg.CreditGrantAnchor = r.CreditGrantAnchor
 		}
-		// PlanID can be provided for subscription-scoped grants
+		// PlanID can be provided for subscription-scoped grants (provenance)
 		if r.PlanID != nil {
 			cg.PlanID = r.PlanID
 		}
+		// AddonID can be provided for subscription-scoped grants (provenance)
+		if r.AddonID != nil {
+			cg.AddonID = r.AddonID
+		}
+
+	case types.CreditGrantScopeAddon:
+		cg.AddonID = r.AddonID
+		// For ADDON scope (template), these fields must be nil
+		cg.SubscriptionID = nil
+		cg.PlanID = nil
+		cg.StartDate = nil
+		cg.EndDate = nil
+		cg.CreditGrantAnchor = nil
 	}
 
 	// Set fields based on cadence
@@ -440,6 +472,9 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 type CancelFutureSubscriptionGrantsRequest struct {
 	SubscriptionID string     `json:"subscription_id" binding:"required"`
 	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
+	// AddonID, when set, scopes cancellation to grants materialized from this addon
+	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
+	AddonID *string `json:"addon_id,omitempty"`
 }
 
 // Validate validates the cancel future subscription grants request

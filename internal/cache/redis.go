@@ -60,6 +60,7 @@ func InitializeRedisCache(cfg *config.Configuration, log *logger.Logger) RedisCa
 		log.Error(context.Background(), "Failed to create Redis client", "error", err)
 		return nil
 	}
+	log.Info(context.Background(), "Redis cache initialized")
 	rc := &redisCacheImpl{
 		client: client.GetClient(),
 		config: cfg,

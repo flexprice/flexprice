@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUnmatchedEventPayloadBuilder_BuildPayload(t *testing.T) {
-	b := NewUnmatchedEventPayloadBuilder(nil)
+func TestRejectedEventPayloadBuilder_BuildPayload(t *testing.T) {
+	b := NewRejectedEventPayloadBuilder(nil)
 
-	internal := webhookDto.InternalUnmatchedEvent{
-		Reason: types.UnmatchedEventReasonNoMatchingMeter,
-		Event: webhookDto.UnmatchedEventData{
+	internal := webhookDto.InternalRejectedEvent{
+		Reason: types.RejectedEventReasonNoMatchingMeter,
+		Event: webhookDto.RejectedEventData{
 			ID:                 "evt_1",
 			EventName:          "api_kall", // typo'd name
 			ExternalCustomerID: "cust_ext_9",
@@ -27,31 +27,31 @@ func TestUnmatchedEventPayloadBuilder_BuildPayload(t *testing.T) {
 	data, err := json.Marshal(internal)
 	require.NoError(t, err)
 
-	out, err := b.BuildPayload(context.Background(), types.WebhookEventEventUnmatched, data)
+	out, err := b.BuildPayload(context.Background(), types.WebhookEventEventRejected, data)
 	require.NoError(t, err)
 
-	var payload webhookDto.UnmatchedEventWebhookPayload
+	var payload webhookDto.RejectedEventWebhookPayload
 	require.NoError(t, json.Unmarshal(out, &payload))
 
-	assert.Equal(t, types.WebhookEventEventUnmatched, payload.EventType)
-	assert.Equal(t, types.UnmatchedEventReasonNoMatchingMeter, payload.Reason)
+	assert.Equal(t, types.WebhookEventEventRejected, payload.EventType)
+	assert.Equal(t, types.RejectedEventReasonNoMatchingMeter, payload.Reason)
 	assert.Equal(t, "evt_1", payload.Event.ID)
 	assert.Equal(t, "api_kall", payload.Event.EventName)
 	assert.Equal(t, "cust_ext_9", payload.Event.ExternalCustomerID)
 }
 
-func TestUnmatchedEventPayloadBuilder_BuildPayload_InvalidData(t *testing.T) {
-	b := NewUnmatchedEventPayloadBuilder(nil)
+func TestRejectedEventPayloadBuilder_BuildPayload_InvalidData(t *testing.T) {
+	b := NewRejectedEventPayloadBuilder(nil)
 
 	// malformed JSON
-	_, err := b.BuildPayload(context.Background(), types.WebhookEventEventUnmatched, json.RawMessage(`{`))
+	_, err := b.BuildPayload(context.Background(), types.WebhookEventEventRejected, json.RawMessage(`{`))
 	assert.Error(t, err)
 
 	// missing required event id/name
-	data, _ := json.Marshal(webhookDto.InternalUnmatchedEvent{
-		Reason: types.UnmatchedEventReasonNoMatchingMeter,
-		Event:  webhookDto.UnmatchedEventData{},
+	data, _ := json.Marshal(webhookDto.InternalRejectedEvent{
+		Reason: types.RejectedEventReasonNoMatchingMeter,
+		Event:  webhookDto.RejectedEventData{},
 	})
-	_, err = b.BuildPayload(context.Background(), types.WebhookEventEventUnmatched, data)
+	_, err = b.BuildPayload(context.Background(), types.WebhookEventEventRejected, data)
 	assert.Error(t, err)
 }

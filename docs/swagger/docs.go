@@ -22718,7 +22718,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value_at_time": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -22822,7 +22822,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertCondition"
                 },
                 "threshold": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -22977,6 +22977,49 @@ const docTemplate = `{
                 "CancellationTypeScheduledDate"
             ]
         },
+        "types.CheckoutAction": {
+            "type": "string",
+            "enum": [
+                "create_subscription"
+            ],
+            "x-enum-varnames": [
+                "CheckoutActionCreateSubscription"
+            ]
+        },
+        "types.CheckoutConfiguration": {
+            "type": "object",
+            "properties": {
+                "create_subscription_params": {
+                    "$ref": "#/definitions/types.CreateSubscriptionParams"
+                }
+            }
+        },
+        "types.CheckoutPaymentProvider": {
+            "type": "string",
+            "enum": [
+                "razorpay"
+            ],
+            "x-enum-varnames": [
+                "CheckoutPaymentProviderRazorpay"
+            ]
+        },
+        "types.CheckoutStatus": {
+            "type": "string",
+            "enum": [
+                "initiated",
+                "pending",
+                "completed",
+                "failed",
+                "expired"
+            ],
+            "x-enum-varnames": [
+                "CheckoutStatusInitiated",
+                "CheckoutStatusPending",
+                "CheckoutStatusCompleted",
+                "CheckoutStatusFailed",
+                "CheckoutStatusExpired"
+            ]
+        },
         "types.CollectionMethod": {
             "type": "string",
             "enum": [
@@ -23110,6 +23153,49 @@ const docTemplate = `{
                 "CouponTypeFixed",
                 "CouponTypePercentage"
             ]
+        },
+        "types.CreateSubscriptionParams": {
+            "type": "object",
+            "properties": {
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CreateSubscriptionResult": {
+            "type": "object",
+            "properties": {
+                "invoice_id": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
         },
         "types.CreditBreakdown": {
             "type": "object",
@@ -24066,6 +24152,28 @@ const docTemplate = `{
                 "PauseStatusScheduled",
                 "PauseStatusCompleted",
                 "PauseStatusCancelled"
+            ]
+        },
+        "types.PaymentAction": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/types.PaymentActionType"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PaymentActionType": {
+            "type": "string",
+            "enum": [
+                "checkout_url",
+                "payment_link"
+            ],
+            "x-enum-varnames": [
+                "PaymentActionTypeCheckoutURL",
+                "PaymentActionTypePaymentLink"
             ]
         },
         "types.PaymentBehavior": {
@@ -25212,6 +25320,37 @@ const docTemplate = `{
                 "TaxRateTypePercentage",
                 "TaxRateTypeFixed"
             ]
+        },
+        "types.TimeOfDayBucket": {
+            "type": "object",
+            "properties": {
+                "commitment_type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "commitment_value": {
+                    "type": "string"
+                },
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "id": {
+                    "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID.",
+                    "type": "string"
+                },
+                "overage_factor": {
+                    "type": "number"
+                },
+                "price_id": {
+                    "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item.",
+                    "type": "string"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "true_up_enabled": {
+                    "type": "boolean"
+                }
+            }
         },
         "types.TimeRangeFilter": {
             "type": "object",
@@ -26525,92 +26664,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.CheckoutAction": {
-            "type": "string",
-            "enum": [
-                "create_subscription"
-            ],
-            "x-enum-varnames": [
-                "CheckoutActionCreateSubscription"
-            ]
-        },
-        "types.CheckoutConfiguration": {
-            "type": "object",
-            "properties": {
-                "create_subscription_params": {
-                    "$ref": "#/definitions/types.CreateSubscriptionParams"
-                }
-            }
-        },
-        "types.CheckoutPaymentProvider": {
-            "type": "string",
-            "enum": [
-                "razorpay"
-            ],
-            "x-enum-varnames": [
-                "CheckoutPaymentProviderRazorpay"
-            ]
-        },
-        "types.CheckoutStatus": {
-            "type": "string",
-            "enum": [
-                "initiated",
-                "pending",
-                "completed",
-                "failed",
-                "expired"
-            ],
-            "x-enum-varnames": [
-                "CheckoutStatusInitiated",
-                "CheckoutStatusPending",
-                "CheckoutStatusCompleted",
-                "CheckoutStatusFailed",
-                "CheckoutStatusExpired"
-            ]
-        },
-        "types.CreateSubscriptionParams": {
-            "type": "object",
-            "properties": {
-                "billing_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CreateSubscriptionResult": {
-            "type": "object",
-            "properties": {
-                "invoice_id": {
-                    "type": "string"
-                },
-                "payment_id": {
-                    "type": "string"
-                },
-                "subscription_id": {
-                    "type": "string"
-                }
-            }
-        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -26629,59 +26682,6 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
-            }
-        },
-        "types.PaymentAction": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "$ref": "#/definitions/types.PaymentActionType"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.PaymentActionType": {
-            "type": "string",
-            "enum": [
-                "checkout_url",
-                "payment_link"
-            ],
-            "x-enum-varnames": [
-                "PaymentActionTypeCheckoutURL",
-                "PaymentActionTypePaymentLink"
-            ]
-        },
-        "types.TimeOfDayBucket": {
-            "type": "object",
-            "properties": {
-                "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
-                },
-                "commitment_value": {
-                    "type": "string"
-                },
-                "end": {
-                    "$ref": "#/definitions/types.Bucket"
-                },
-                "id": {
-                    "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID.",
-                    "type": "string"
-                },
-                "overage_factor": {
-                    "type": "number"
-                },
-                "price_id": {
-                    "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item.",
-                    "type": "string"
-                },
-                "start": {
-                    "$ref": "#/definitions/types.Bucket"
-                },
-                "true_up_enabled": {
-                    "type": "boolean"
-                }
             }
         },
         "webhookDto.AlertWebhookPayload": {

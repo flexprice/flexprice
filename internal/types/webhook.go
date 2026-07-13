@@ -121,12 +121,16 @@ const (
 
 // event (usage ingestion) webhook event names
 const (
-	// WebhookEventEventUnmatched fires when an ingested event produces no meter usage.
-	WebhookEventEventUnmatched WebhookEventName = "event.unmatched"
+	// WebhookEventEventRejected fires when an ingested event produces no meter usage.
+	WebhookEventEventRejected WebhookEventName = "event.rejected"
 )
 
-// UnmatchedEventReason explains why an event matched no meter.
-type UnmatchedEventReason = string
+// RejectedEventReason explains why an event matched no meter.
+type RejectedEventReason = string
 
-// no meter matched — either none registered for the event name, or filters/quantity excluded all
-const UnmatchedEventReasonNoMatchingMeter UnmatchedEventReason = "no_matching_meter"
+const (
+	// no meter registered for the event name
+	RejectedEventReasonNoMeterForName RejectedEventReason = "no_meter_for_event_name"
+	// meters exist for the name but none matched (filters/quantity)
+	RejectedEventReasonNoMatchingMeter RejectedEventReason = "no_matching_meter"
+)

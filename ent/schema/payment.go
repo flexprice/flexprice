@@ -144,6 +144,6 @@ func (Payment) Indexes() []ent.Index {
 			StorageKey("idx_tenant_payment_method_status"),
 		index.Fields("tenant_id", "environment_id", "payment_gateway", "gateway_payment_id").
 			StorageKey("idx_tenant_gateway_payment").
-			Annotations(entsql.IndexWhere("payment_gateway IS NOT NULL AND gateway_payment_id IS NOT NULL")),
+			Annotations(entsql.IndexWhere("((payment_gateway IS NOT NULL) AND (gateway_payment_id IS NOT NULL))")),
 	}
 }

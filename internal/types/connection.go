@@ -345,6 +345,21 @@ func (w *WhopConnectionMetadata) Validate() error {
 	return nil
 }
 
+// TabsConnectionMetadata represents Tabs-specific connection metadata
+type TabsConnectionMetadata struct {
+	APIKey string `json:"api_key"` // Tabs API Key (encrypted)
+}
+
+// Validate validates the Tabs connection metadata
+func (t *TabsConnectionMetadata) Validate() error {
+	if t.APIKey == "" {
+		return ierr.NewError("api_key is required").
+			WithHint("Tabs API key is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // GenericConnectionMetadata represents generic connection metadata
 type GenericConnectionMetadata struct {
 	Data map[string]interface{} `json:"data"`
@@ -373,6 +388,7 @@ type ConnectionMetadata struct {
 	Paddle     *PaddleConnectionMetadata     `json:"paddle,omitempty"`
 	ZohoBooks  *ZohoBooksConnectionMetadata  `json:"zoho_books,omitempty"`
 	Whop       *WhopConnectionMetadata       `json:"whop,omitempty"`
+	Tabs       *TabsConnectionMetadata       `json:"tabs,omitempty"`
 	Generic    *GenericConnectionMetadata    `json:"generic,omitempty"`
 	Settings   *ConnectionSettings           `json:"settings,omitempty"`
 }
@@ -457,6 +473,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.Whop.Validate()
+	case SecretProviderTabs:
+		if c.Tabs == nil {
+			return ierr.NewError("tabs metadata is required").
+				WithHint("Tabs metadata is required for tabs provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.Tabs.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {

@@ -131,27 +131,30 @@ const (
 // AddonMutation represents an operation that mutates the Addon nodes in the graph.
 type AddonMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	lookup_key          *string
-	name                *string
-	description         *string
-	metadata            *map[string]interface{}
-	clearedFields       map[string]struct{}
-	entitlements        map[string]struct{}
-	removedentitlements map[string]struct{}
-	clearedentitlements bool
-	done                bool
-	oldValue            func(context.Context) (*Addon, error)
-	predicates          []predicate.Addon
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	lookup_key           *string
+	name                 *string
+	description          *string
+	metadata             *map[string]interface{}
+	clearedFields        map[string]struct{}
+	entitlements         map[string]struct{}
+	removedentitlements  map[string]struct{}
+	clearedentitlements  bool
+	credit_grants        map[string]struct{}
+	removedcredit_grants map[string]struct{}
+	clearedcredit_grants bool
+	done                 bool
+	oldValue             func(context.Context) (*Addon, error)
+	predicates           []predicate.Addon
 }
 
 var _ ent.Mutation = (*AddonMutation)(nil)
@@ -773,6 +776,60 @@ func (m *AddonMutation) ResetEntitlements() {
 	m.removedentitlements = nil
 }
 
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by ids.
+func (m *AddonMutation) AddCreditGrantIDs(ids ...string) {
+	if m.credit_grants == nil {
+		m.credit_grants = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.credit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// ClearCreditGrants clears the "credit_grants" edge to the CreditGrant entity.
+func (m *AddonMutation) ClearCreditGrants() {
+	m.clearedcredit_grants = true
+}
+
+// CreditGrantsCleared reports if the "credit_grants" edge to the CreditGrant entity was cleared.
+func (m *AddonMutation) CreditGrantsCleared() bool {
+	return m.clearedcredit_grants
+}
+
+// RemoveCreditGrantIDs removes the "credit_grants" edge to the CreditGrant entity by IDs.
+func (m *AddonMutation) RemoveCreditGrantIDs(ids ...string) {
+	if m.removedcredit_grants == nil {
+		m.removedcredit_grants = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.credit_grants, ids[i])
+		m.removedcredit_grants[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedCreditGrants returns the removed IDs of the "credit_grants" edge to the CreditGrant entity.
+func (m *AddonMutation) RemovedCreditGrantsIDs() (ids []string) {
+	for id := range m.removedcredit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// CreditGrantsIDs returns the "credit_grants" edge IDs in the mutation.
+func (m *AddonMutation) CreditGrantsIDs() (ids []string) {
+	for id := range m.credit_grants {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetCreditGrants resets all changes to the "credit_grants" edge.
+func (m *AddonMutation) ResetCreditGrants() {
+	m.credit_grants = nil
+	m.clearedcredit_grants = false
+	m.removedcredit_grants = nil
+}
+
 // Where appends a list predicates to the AddonMutation builder.
 func (m *AddonMutation) Where(ps ...predicate.Addon) {
 	m.predicates = append(m.predicates, ps...)
@@ -1109,9 +1166,12 @@ func (m *AddonMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AddonMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.entitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
+	}
+	if m.credit_grants != nil {
+		edges = append(edges, addon.EdgeCreditGrants)
 	}
 	return edges
 }
@@ -1126,15 +1186,24 @@ func (m *AddonMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case addon.EdgeCreditGrants:
+		ids := make([]ent.Value, 0, len(m.credit_grants))
+		for id := range m.credit_grants {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AddonMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.removedentitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
+	}
+	if m.removedcredit_grants != nil {
+		edges = append(edges, addon.EdgeCreditGrants)
 	}
 	return edges
 }
@@ -1149,15 +1218,24 @@ func (m *AddonMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case addon.EdgeCreditGrants:
+		ids := make([]ent.Value, 0, len(m.removedcredit_grants))
+		for id := range m.removedcredit_grants {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AddonMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedentitlements {
 		edges = append(edges, addon.EdgeEntitlements)
+	}
+	if m.clearedcredit_grants {
+		edges = append(edges, addon.EdgeCreditGrants)
 	}
 	return edges
 }
@@ -1168,6 +1246,8 @@ func (m *AddonMutation) EdgeCleared(name string) bool {
 	switch name {
 	case addon.EdgeEntitlements:
 		return m.clearedentitlements
+	case addon.EdgeCreditGrants:
+		return m.clearedcredit_grants
 	}
 	return false
 }
@@ -1186,6 +1266,9 @@ func (m *AddonMutation) ResetEdge(name string) error {
 	switch name {
 	case addon.EdgeEntitlements:
 		m.ResetEntitlements()
+		return nil
+	case addon.EdgeCreditGrants:
+		m.ResetCreditGrants()
 		return nil
 	}
 	return fmt.Errorf("unknown Addon edge %s", name)
@@ -14096,6 +14179,8 @@ type CreditGrantMutation struct {
 	clearedplan              bool
 	subscription             *string
 	clearedsubscription      bool
+	addon                    *string
+	clearedaddon             bool
 	done                     bool
 	oldValue                 func(context.Context) (*CreditGrant, error)
 	predicates               []predicate.CreditGrant
@@ -14664,6 +14749,55 @@ func (m *CreditGrantMutation) SubscriptionIDCleared() bool {
 func (m *CreditGrantMutation) ResetSubscriptionID() {
 	m.subscription = nil
 	delete(m.clearedFields, creditgrant.FieldSubscriptionID)
+}
+
+// SetAddonID sets the "addon_id" field.
+func (m *CreditGrantMutation) SetAddonID(s string) {
+	m.addon = &s
+}
+
+// AddonID returns the value of the "addon_id" field in the mutation.
+func (m *CreditGrantMutation) AddonID() (r string, exists bool) {
+	v := m.addon
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddonID returns the old "addon_id" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldAddonID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddonID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddonID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddonID: %w", err)
+	}
+	return oldValue.AddonID, nil
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (m *CreditGrantMutation) ClearAddonID() {
+	m.addon = nil
+	m.clearedFields[creditgrant.FieldAddonID] = struct{}{}
+}
+
+// AddonIDCleared returns if the "addon_id" field was cleared in this mutation.
+func (m *CreditGrantMutation) AddonIDCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldAddonID]
+	return ok
+}
+
+// ResetAddonID resets all changes to the "addon_id" field.
+func (m *CreditGrantMutation) ResetAddonID() {
+	m.addon = nil
+	delete(m.clearedFields, creditgrant.FieldAddonID)
 }
 
 // SetCredits sets the "credits" field.
@@ -15430,6 +15564,33 @@ func (m *CreditGrantMutation) ResetSubscription() {
 	m.clearedsubscription = false
 }
 
+// ClearAddon clears the "addon" edge to the Addon entity.
+func (m *CreditGrantMutation) ClearAddon() {
+	m.clearedaddon = true
+	m.clearedFields[creditgrant.FieldAddonID] = struct{}{}
+}
+
+// AddonCleared reports if the "addon" edge to the Addon entity was cleared.
+func (m *CreditGrantMutation) AddonCleared() bool {
+	return m.AddonIDCleared() || m.clearedaddon
+}
+
+// AddonIDs returns the "addon" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// AddonID instead. It exists only for internal usage by the builders.
+func (m *CreditGrantMutation) AddonIDs() (ids []string) {
+	if id := m.addon; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAddon resets all changes to the "addon" edge.
+func (m *CreditGrantMutation) ResetAddon() {
+	m.addon = nil
+	m.clearedaddon = false
+}
+
 // Where appends a list predicates to the CreditGrantMutation builder.
 func (m *CreditGrantMutation) Where(ps ...predicate.CreditGrant) {
 	m.predicates = append(m.predicates, ps...)
@@ -15464,7 +15625,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -15497,6 +15658,9 @@ func (m *CreditGrantMutation) Fields() []string {
 	}
 	if m.subscription != nil {
 		fields = append(fields, creditgrant.FieldSubscriptionID)
+	}
+	if m.addon != nil {
+		fields = append(fields, creditgrant.FieldAddonID)
 	}
 	if m.credits != nil {
 		fields = append(fields, creditgrant.FieldCredits)
@@ -15570,6 +15734,8 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.PlanID()
 	case creditgrant.FieldSubscriptionID:
 		return m.SubscriptionID()
+	case creditgrant.FieldAddonID:
+		return m.AddonID()
 	case creditgrant.FieldCredits:
 		return m.Credits()
 	case creditgrant.FieldConversionRate:
@@ -15629,6 +15795,8 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPlanID(ctx)
 	case creditgrant.FieldSubscriptionID:
 		return m.OldSubscriptionID(ctx)
+	case creditgrant.FieldAddonID:
+		return m.OldAddonID(ctx)
 	case creditgrant.FieldCredits:
 		return m.OldCredits(ctx)
 	case creditgrant.FieldConversionRate:
@@ -15742,6 +15910,13 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSubscriptionID(v)
+		return nil
+	case creditgrant.FieldAddonID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddonID(v)
 		return nil
 	case creditgrant.FieldCredits:
 		v, ok := value.(decimal.Decimal)
@@ -15925,6 +16100,9 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldSubscriptionID) {
 		fields = append(fields, creditgrant.FieldSubscriptionID)
 	}
+	if m.FieldCleared(creditgrant.FieldAddonID) {
+		fields = append(fields, creditgrant.FieldAddonID)
+	}
 	if m.FieldCleared(creditgrant.FieldConversionRate) {
 		fields = append(fields, creditgrant.FieldConversionRate)
 	}
@@ -15986,6 +16164,9 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 		return nil
 	case creditgrant.FieldSubscriptionID:
 		m.ClearSubscriptionID()
+		return nil
+	case creditgrant.FieldAddonID:
+		m.ClearAddonID()
 		return nil
 	case creditgrant.FieldConversionRate:
 		m.ClearConversionRate()
@@ -16061,6 +16242,9 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 	case creditgrant.FieldSubscriptionID:
 		m.ResetSubscriptionID()
 		return nil
+	case creditgrant.FieldAddonID:
+		m.ResetAddonID()
+		return nil
 	case creditgrant.FieldCredits:
 		m.ResetCredits()
 		return nil
@@ -16109,12 +16293,15 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *CreditGrantMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.plan != nil {
 		edges = append(edges, creditgrant.EdgePlan)
 	}
 	if m.subscription != nil {
 		edges = append(edges, creditgrant.EdgeSubscription)
+	}
+	if m.addon != nil {
+		edges = append(edges, creditgrant.EdgeAddon)
 	}
 	return edges
 }
@@ -16131,13 +16318,17 @@ func (m *CreditGrantMutation) AddedIDs(name string) []ent.Value {
 		if id := m.subscription; id != nil {
 			return []ent.Value{*id}
 		}
+	case creditgrant.EdgeAddon:
+		if id := m.addon; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *CreditGrantMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	return edges
 }
 
@@ -16149,12 +16340,15 @@ func (m *CreditGrantMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *CreditGrantMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedplan {
 		edges = append(edges, creditgrant.EdgePlan)
 	}
 	if m.clearedsubscription {
 		edges = append(edges, creditgrant.EdgeSubscription)
+	}
+	if m.clearedaddon {
+		edges = append(edges, creditgrant.EdgeAddon)
 	}
 	return edges
 }
@@ -16167,6 +16361,8 @@ func (m *CreditGrantMutation) EdgeCleared(name string) bool {
 		return m.clearedplan
 	case creditgrant.EdgeSubscription:
 		return m.clearedsubscription
+	case creditgrant.EdgeAddon:
+		return m.clearedaddon
 	}
 	return false
 }
@@ -16181,6 +16377,9 @@ func (m *CreditGrantMutation) ClearEdge(name string) error {
 	case creditgrant.EdgeSubscription:
 		m.ClearSubscription()
 		return nil
+	case creditgrant.EdgeAddon:
+		m.ClearAddon()
+		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant unique edge %s", name)
 }
@@ -16194,6 +16393,9 @@ func (m *CreditGrantMutation) ResetEdge(name string) error {
 		return nil
 	case creditgrant.EdgeSubscription:
 		m.ResetSubscription()
+		return nil
+	case creditgrant.EdgeAddon:
+		m.ResetAddon()
 		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant edge %s", name)
@@ -71444,6 +71646,7 @@ type WalletTransactionMutation struct {
 	transaction_reason    *types.TransactionReason
 	priority              *int
 	addpriority           *int
+	parent_transaction_id *string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*WalletTransaction, error)
@@ -72716,6 +72919,55 @@ func (m *WalletTransactionMutation) ResetPriority() {
 	delete(m.clearedFields, wallettransaction.FieldPriority)
 }
 
+// SetParentTransactionID sets the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) SetParentTransactionID(s string) {
+	m.parent_transaction_id = &s
+}
+
+// ParentTransactionID returns the value of the "parent_transaction_id" field in the mutation.
+func (m *WalletTransactionMutation) ParentTransactionID() (r string, exists bool) {
+	v := m.parent_transaction_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentTransactionID returns the old "parent_transaction_id" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldParentTransactionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentTransactionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentTransactionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentTransactionID: %w", err)
+	}
+	return oldValue.ParentTransactionID, nil
+}
+
+// ClearParentTransactionID clears the value of the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) ClearParentTransactionID() {
+	m.parent_transaction_id = nil
+	m.clearedFields[wallettransaction.FieldParentTransactionID] = struct{}{}
+}
+
+// ParentTransactionIDCleared returns if the "parent_transaction_id" field was cleared in this mutation.
+func (m *WalletTransactionMutation) ParentTransactionIDCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldParentTransactionID]
+	return ok
+}
+
+// ResetParentTransactionID resets all changes to the "parent_transaction_id" field.
+func (m *WalletTransactionMutation) ResetParentTransactionID() {
+	m.parent_transaction_id = nil
+	delete(m.clearedFields, wallettransaction.FieldParentTransactionID)
+}
+
 // Where appends a list predicates to the WalletTransactionMutation builder.
 func (m *WalletTransactionMutation) Where(ps ...predicate.WalletTransaction) {
 	m.predicates = append(m.predicates, ps...)
@@ -72750,7 +73002,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -72832,6 +73084,9 @@ func (m *WalletTransactionMutation) Fields() []string {
 	if m.priority != nil {
 		fields = append(fields, wallettransaction.FieldPriority)
 	}
+	if m.parent_transaction_id != nil {
+		fields = append(fields, wallettransaction.FieldParentTransactionID)
+	}
 	return fields
 }
 
@@ -72894,6 +73149,8 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.TransactionReason()
 	case wallettransaction.FieldPriority:
 		return m.Priority()
+	case wallettransaction.FieldParentTransactionID:
+		return m.ParentTransactionID()
 	}
 	return nil, false
 }
@@ -72957,6 +73214,8 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldTransactionReason(ctx)
 	case wallettransaction.FieldPriority:
 		return m.OldPriority(ctx)
+	case wallettransaction.FieldParentTransactionID:
+		return m.OldParentTransactionID(ctx)
 	}
 	return nil, fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -73155,6 +73414,13 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetPriority(v)
 		return nil
+	case wallettransaction.FieldParentTransactionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentTransactionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)
 }
@@ -73239,6 +73505,9 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldPriority) {
 		fields = append(fields, wallettransaction.FieldPriority)
 	}
+	if m.FieldCleared(wallettransaction.FieldParentTransactionID) {
+		fields = append(fields, wallettransaction.FieldParentTransactionID)
+	}
 	return fields
 }
 
@@ -73291,6 +73560,9 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 		return nil
 	case wallettransaction.FieldPriority:
 		m.ClearPriority()
+		return nil
+	case wallettransaction.FieldParentTransactionID:
+		m.ClearParentTransactionID()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction nullable field %s", name)
@@ -73380,6 +73652,9 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case wallettransaction.FieldParentTransactionID:
+		m.ResetParentTransactionID()
 		return nil
 	}
 	return fmt.Errorf("unknown WalletTransaction field %s", name)

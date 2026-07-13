@@ -24414,7 +24414,8 @@
             "type": "string"
           },
           "value_at_time": {
-            "type": "number"
+            "type": "string",
+            "format": "date-time"
           }
         },
         "x-speakeasy-name-override": "AlertInfo"
@@ -24524,7 +24525,7 @@
             "$ref": "#/components/schemas/types.AlertCondition"
           },
           "threshold": {
-            "type": "number"
+            "type": "string"
           }
         },
         "x-speakeasy-name-override": "AlertThreshold"
@@ -24691,6 +24692,53 @@
         ],
         "x-speakeasy-name-override": "CancellationType"
       },
+      "types.CheckoutAction": {
+        "type": "string",
+        "enum": [
+          "create_subscription"
+        ],
+        "x-enum-varnames": [
+          "CheckoutActionCreateSubscription"
+        ],
+        "x-speakeasy-name-override": "CheckoutAction"
+      },
+      "types.CheckoutConfiguration": {
+        "type": "object",
+        "properties": {
+          "create_subscription_params": {
+            "$ref": "#/components/schemas/types.CreateSubscriptionParams"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutConfiguration"
+      },
+      "types.CheckoutPaymentProvider": {
+        "type": "string",
+        "enum": [
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "CheckoutPaymentProviderRazorpay"
+        ],
+        "x-speakeasy-name-override": "CheckoutPaymentProvider"
+      },
+      "types.CheckoutStatus": {
+        "type": "string",
+        "enum": [
+          "initiated",
+          "pending",
+          "completed",
+          "failed",
+          "expired"
+        ],
+        "x-enum-varnames": [
+          "CheckoutStatusInitiated",
+          "CheckoutStatusPending",
+          "CheckoutStatusCompleted",
+          "CheckoutStatusFailed",
+          "CheckoutStatusExpired"
+        ],
+        "x-speakeasy-name-override": "CheckoutStatus"
+      },
       "types.CollectionMethod": {
         "type": "string",
         "enum": [
@@ -24830,6 +24878,53 @@
           "CouponTypePercentage"
         ],
         "x-speakeasy-name-override": "CouponType"
+      },
+      "types.CreateSubscriptionParams": {
+        "type": "object",
+        "properties": {
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "x-speakeasy-name-override": "CreateSubscriptionParams"
+      },
+      "types.CreateSubscriptionResult": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          },
+          "subscription_id": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CreateSubscriptionResult"
       },
       "types.CreditBreakdown": {
         "type": "object",
@@ -25818,6 +25913,30 @@
           "PauseStatusCancelled"
         ],
         "x-speakeasy-name-override": "PauseStatus"
+      },
+      "types.PaymentAction": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentActionType"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAction"
+      },
+      "types.PaymentActionType": {
+        "type": "string",
+        "enum": [
+          "checkout_url",
+          "payment_link"
+        ],
+        "x-enum-varnames": [
+          "PaymentActionTypeCheckoutURL",
+          "PaymentActionTypePaymentLink"
+        ],
+        "x-speakeasy-name-override": "PaymentActionType"
       },
       "types.PaymentBehavior": {
         "type": "string",
@@ -26976,6 +27095,38 @@
           "TaxRateTypeFixed"
         ],
         "x-speakeasy-name-override": "TaxRateType"
+      },
+      "types.TimeOfDayBucket": {
+        "type": "object",
+        "properties": {
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
+          },
+          "overage_factor": {
+            "type": "number"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item."
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "true_up_enabled": {
+            "type": "boolean"
+          }
+        },
+        "x-speakeasy-name-override": "TimeOfDayBucket"
       },
       "types.TimeRangeFilter": {
         "type": "object",
@@ -28292,100 +28443,6 @@
           }
         }
       },
-      "types.CheckoutAction": {
-        "type": "string",
-        "enum": [
-          "create_subscription"
-        ],
-        "x-enum-varnames": [
-          "CheckoutActionCreateSubscription"
-        ],
-        "x-speakeasy-name-override": "CheckoutAction"
-      },
-      "types.CheckoutConfiguration": {
-        "type": "object",
-        "properties": {
-          "create_subscription_params": {
-            "$ref": "#/components/schemas/types.CreateSubscriptionParams"
-          }
-        },
-        "x-speakeasy-name-override": "CheckoutConfiguration"
-      },
-      "types.CheckoutPaymentProvider": {
-        "type": "string",
-        "enum": [
-          "razorpay"
-        ],
-        "x-enum-varnames": [
-          "CheckoutPaymentProviderRazorpay"
-        ],
-        "x-speakeasy-name-override": "CheckoutPaymentProvider"
-      },
-      "types.CheckoutStatus": {
-        "type": "string",
-        "enum": [
-          "initiated",
-          "pending",
-          "completed",
-          "failed",
-          "expired"
-        ],
-        "x-enum-varnames": [
-          "CheckoutStatusInitiated",
-          "CheckoutStatusPending",
-          "CheckoutStatusCompleted",
-          "CheckoutStatusFailed",
-          "CheckoutStatusExpired"
-        ],
-        "x-speakeasy-name-override": "CheckoutStatus"
-      },
-      "types.CreateSubscriptionParams": {
-        "type": "object",
-        "properties": {
-          "billing_period": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "currency": {
-            "type": "string"
-          },
-          "end_date": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "lookup_key": {
-            "type": "string"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "plan_id": {
-            "type": "string"
-          },
-          "start_date": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "x-speakeasy-name-override": "CreateSubscriptionParams"
-      },
-      "types.CreateSubscriptionResult": {
-        "type": "object",
-        "properties": {
-          "invoice_id": {
-            "type": "string"
-          },
-          "payment_id": {
-            "type": "string"
-          },
-          "subscription_id": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "CreateSubscriptionResult"
-      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -28407,62 +28464,6 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
-      },
-      "types.PaymentAction": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "$ref": "#/components/schemas/types.PaymentActionType"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "PaymentAction"
-      },
-      "types.PaymentActionType": {
-        "type": "string",
-        "enum": [
-          "checkout_url",
-          "payment_link"
-        ],
-        "x-enum-varnames": [
-          "PaymentActionTypeCheckoutURL",
-          "PaymentActionTypePaymentLink"
-        ],
-        "x-speakeasy-name-override": "PaymentActionType"
-      },
-      "types.TimeOfDayBucket": {
-        "type": "object",
-        "properties": {
-          "commitment_type": {
-            "$ref": "#/components/schemas/types.CommitmentType"
-          },
-          "commitment_value": {
-            "type": "string"
-          },
-          "end": {
-            "$ref": "#/components/schemas/types.Bucket"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
-          },
-          "overage_factor": {
-            "type": "number"
-          },
-          "price_id": {
-            "type": "string",
-            "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item."
-          },
-          "start": {
-            "$ref": "#/components/schemas/types.Bucket"
-          },
-          "true_up_enabled": {
-            "type": "boolean"
-          }
-        },
-        "x-speakeasy-name-override": "TimeOfDayBucket"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

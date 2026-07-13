@@ -198,13 +198,13 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 }
 
 // processMessage unmarshals the Kafka message and delegates to processEvent
-func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
-	tenantID := msg.Metadata.Get("tenant_id")
-	environmentID := msg.Metadata.Get("environment_id")
+func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *message.Message) error {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event for meter usage tracking",
+		s.Logger.Error(ctx, "failed to unmarshal event for meter usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -221,7 +221,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 	event.EventName = strings.TrimSpace(event.EventName)
 
 	if tenantID == "" || environmentID == "" {
-		s.Logger.Info(context.Background(), "tenant_id and environment_id are required for meter usage tracking",
+		s.Logger.Info(ctx, "tenant_id and environment_id are required for meter usage tracking",
 			"event_id", event.ID,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -229,12 +229,8 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 		return nil // non-retriable
 	}
 
-	ctx := types.WithWriterPinning(context.Background())
-	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to process event for meter usage tracking",
+		s.Logger.Error(ctx, "failed to process event for meter usage tracking",
 			"error", err,
 			"event_id", event.ID,
 		)
@@ -370,7 +366,11 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	if len(records) == 0 {
-		s.publishUnmatchedEventWebhook(ctx, event, types.UnmatchedEventReasonNoMatchingMeter)
+		reason := types.RejectedEventReasonNoMatchingMeter
+		if len(meters) == 0 {
+			reason = types.RejectedEventReasonNoMeterForName
+		}
+		s.publishRejectedEventWebhook(ctx, event, reason)
 		return nil
 	}
 
@@ -384,34 +384,36 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		"count", len(records),
 	)
 
+	s.runMeterUsagePostInsertSideEffects(ctx, event)
+
 	return nil
 }
 
-// publishUnmatchedEventWebhook fires the event.unmatched webhook when an event
+// publishRejectedEventWebhook fires the event.rejected webhook when an event
 // produced no meter usage. Opt-in, best-effort (failures are logged, never
 // returned), and throttled to once per window per (tenant, env, event_name).
-func (s *meterUsageTrackingService) publishUnmatchedEventWebhook(ctx context.Context, event *events.Event, reason types.UnmatchedEventReason) {
-	if !s.Config.MeterUsageTracking.UnmatchedEventWebhookEnabled || s.WebhookPublisher == nil {
+func (s *meterUsageTrackingService) publishRejectedEventWebhook(ctx context.Context, event *events.Event, reason types.RejectedEventReason) {
+	if !s.Config.MeterUsageTracking.RejectedEventWebhookEnabled || s.WebhookPublisher == nil {
 		return
 	}
 
 	// Throttle via a name-keyed lock (distinct from the event-ID dedup lock). The
 	// lock is never released — it expires by TTL, which is the window. No Locker =
 	// fail open (publish every time).
-	if window := s.Config.MeterUsageTracking.UnmatchedEventWebhookWindow; window > 0 && s.Locker != nil {
-		throttleKey := cache.GenerateKey(ctx, cache.PrefixEvent, "unmatched_webhook", event.EventName)
+	if window := s.Config.MeterUsageTracking.RejectedEventWebhookWindow; window > 0 && s.Locker != nil {
+		throttleKey := cache.GenerateKey(ctx, cache.PrefixEvent, "rejected_webhook", event.EventName)
 		lock, err := s.Locker.AcquireLock(ctx, throttleKey, window)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to acquire throttle lock for unmatched event webhook",
+			s.Logger.Error(ctx, "failed to acquire throttle lock for rejected event webhook",
 				"error", err, "event_name", event.EventName)
 		} else if !lock.AcquiredSuccessfully() {
 			return // already fired within the window
 		}
 	}
 
-	internal := webhookDto.InternalUnmatchedEvent{
+	internal := webhookDto.InternalRejectedEvent{
 		Reason: reason,
-		Event: webhookDto.UnmatchedEventData{
+		Event: webhookDto.RejectedEventData{
 			ID:                 event.ID,
 			EventName:          event.EventName,
 			CustomerID:         event.CustomerID,
@@ -424,14 +426,14 @@ func (s *meterUsageTrackingService) publishUnmatchedEventWebhook(ctx context.Con
 
 	webhookPayload, err := json.Marshal(internal)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to marshal unmatched event webhook payload",
+		s.Logger.Error(ctx, "failed to marshal rejected event webhook payload",
 			"error", err, "event_id", event.ID)
 		return
 	}
 
 	webhookEvent := &types.WebhookEvent{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
-		EventName:     types.WebhookEventEventUnmatched,
+		EventName:     types.WebhookEventEventRejected,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
@@ -442,7 +444,7 @@ func (s *meterUsageTrackingService) publishUnmatchedEventWebhook(ctx context.Con
 	}
 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish unmatched event webhook",
+		s.Logger.Error(ctx, "failed to publish rejected event webhook",
 			"error", err, "event_id", event.ID, "event_name", event.EventName)
 	}
 }

@@ -59,13 +59,11 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 
 	end := time.Now().UTC()
 	start := end.Add(-meterAggLookback)
-	startStr := start.Format(time.RFC3339)
-	endStr := end.Format(time.RFC3339)
 
-	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.DtoGetUsageAnalyticsRequest{
-		ExternalCustomerID: extCustID,
-		StartTime:          &startStr,
-		EndTime:            &endStr,
+	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
+		ExternalCustomerID: &extCustID,
+		StartTime:          &start,
+		EndTime:            &end,
 	})
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{

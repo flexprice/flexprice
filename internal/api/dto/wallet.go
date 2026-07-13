@@ -323,6 +323,11 @@ type TopUpWalletRequest struct {
 	// BillingReason indicates why this top-up was triggered (e.g. WALLET_AUTO_TOPUP).
 	// When set, it is stamped on the invoice created for PURCHASED_CREDIT_INVOICED transactions.
 	BillingReason types.InvoiceBillingReason `json:"-"`
+	// bonus_credits_to_add is an explicit override for the bonus credits granted alongside this
+	// purchase. When nil/omitted, the bonus is resolved from the tenant's
+	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
+	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
+	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -366,6 +371,15 @@ func (r *TopUpWalletRequest) Validate() error {
 	if r.Priority != nil && *r.Priority < 0 {
 		return ierr.NewError("priority must be greater than or equal to 0").
 			WithHint("Priority must be a non-negative integer").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.BonusCreditsToAdd != nil && r.BonusCreditsToAdd.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("bonus_credits_to_add must be greater than 0").
+			WithHint("To grant no bonus credits, omit bonus_credits_to_add entirely").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_credits_to_add": r.BonusCreditsToAdd,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
