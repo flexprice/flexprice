@@ -39,7 +39,7 @@ func main() {
 	baseURL := strings.TrimRight(cfg.Webhook.Svix.BaseURL, "/")
 	token := cfg.Webhook.Svix.AuthToken
 	if baseURL == "" || token == "" {
-		log.Fatalf("svix-migrate: webhook.svix_config.base_url and auth_token must be set (FLEXPRICE_SVIX_BASE_URL / FLEXPRICE_SVIX_API_KEY)")
+		log.Fatalf("svix-migrate: webhook.svix_config.base_url and auth_token must be set (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN)")
 	}
 
 	raw, err := dataFS.ReadFile("data.json")
