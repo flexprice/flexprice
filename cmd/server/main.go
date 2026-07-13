@@ -25,7 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pyroscope"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
-	s3 "github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -70,6 +70,13 @@ func init() {
 	time.Local = time.UTC
 }
 
+// provideInvoiceStorage constructs the platform Storage instance used for
+// Flexprice-owned invoice PDFs, wrapping storage.NewPlatformStorage with the
+// invoice-specific bucket/region from config so fx can provide it directly.
+func provideInvoiceStorage(cfg *config.Configuration, log *logger.Logger) (storage.Storage, error) {
+	return storage.NewPlatformStorage(cfg, cfg.S3.InvoiceBucketConfig.Bucket, cfg.S3.Region, log)
+}
+
 func main() {
 	// Initialize Fx application
 	var opts []fx.Option
@@ -93,7 +100,7 @@ func main() {
 			rbac.NewRBACService,
 
 			// storage
-			s3.NewService,
+			provideInvoiceStorage,
 
 			// Monitoring
 			tracing.NewService,
