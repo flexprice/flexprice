@@ -16,6 +16,7 @@ const (
 	ConnectionMetadataTypeStripe         ConnectionMetadataType = "stripe"
 	ConnectionMetadataTypeGeneric        ConnectionMetadataType = "generic"
 	ConnectionMetadataTypeS3             ConnectionMetadataType = "s3"
+	ConnectionMetadataTypeGCS            ConnectionMetadataType = "gcs"
 	ConnectionMetadataTypeHubSpot        ConnectionMetadataType = "hubspot"
 	ConnectionMetadataTypeRazorpay       ConnectionMetadataType = "razorpay"
 	ConnectionMetadataTypeChargebee      ConnectionMetadataType = "chargebee"
@@ -33,6 +34,7 @@ func (t ConnectionMetadataType) Validate() error {
 		ConnectionMetadataTypeStripe,
 		ConnectionMetadataTypeGeneric,
 		ConnectionMetadataTypeS3,
+		ConnectionMetadataTypeGCS,
 		ConnectionMetadataTypeHubSpot,
 		ConnectionMetadataTypeRazorpay,
 		ConnectionMetadataTypeChargebee,
@@ -46,7 +48,7 @@ func (t ConnectionMetadataType) Validate() error {
 	}
 	if !lo.Contains(allowedTypes, t) {
 		return ierr.NewError("invalid connection metadata type").
-			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay, chargebee, nomod, moyasar, paddle, zoho_books, whop, aws_marketplace, gcp_marketplace").
+			WithHint("Connection metadata type must be one of: stripe, generic, s3, gcs, hubspot, razorpay, chargebee, nomod, moyasar, paddle, zoho_books, whop, aws_marketplace, gcp_marketplace").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -78,6 +80,23 @@ func (s *S3ConnectionMetadata) Validate() error {
 	if s.AWSSecretAccessKey == "" {
 		return ierr.NewError("aws_secret_access_key is required").
 			WithHint("AWS secret access key is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// GCSConnectionMetadata represents GCS-specific connection metadata (encrypted secrets only)
+// This goes in the encrypted_secret_data column. v1 supports service-account JSON key only —
+// workload-identity-federation for customer-BYO GCS is a separate follow-up.
+type GCSConnectionMetadata struct {
+	ServiceAccountJSON string `json:"service_account_json"` // GCS service account key JSON (encrypted)
+}
+
+// Validate validates the GCS connection metadata
+func (g *GCSConnectionMetadata) Validate() error {
+	if g.ServiceAccountJSON == "" {
+		return ierr.NewError("service_account_json is required").
+			WithHint("GCS service account JSON key is required").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -688,6 +707,7 @@ func (g *GenericConnectionMetadata) Validate() error {
 type ConnectionMetadata struct {
 	Stripe           *StripeConnectionMetadata          `json:"stripe,omitempty"`
 	S3               *S3ConnectionMetadata              `json:"s3,omitempty"`
+	GCS              *GCSConnectionMetadata             `json:"gcs,omitempty"`
 	HubSpot          *HubSpotConnectionMetadata         `json:"hubspot,omitempty"`
 	Razorpay         *RazorpayConnectionMetadata        `json:"razorpay,omitempty"`
 	Chargebee        *ChargebeeConnectionMetadata       `json:"chargebee,omitempty"`
@@ -722,6 +742,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.S3.Validate()
+	case SecretProviderGCS:
+		if c.GCS == nil {
+			return ierr.NewError("gcs metadata is required").
+				WithHint("GCS metadata is required for gcs provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.GCS.Validate()
 	case SecretProviderHubSpot:
 		if c.HubSpot == nil {
 			return ierr.NewError("hubspot metadata is required").

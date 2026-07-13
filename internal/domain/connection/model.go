@@ -98,6 +98,14 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			S3: s3Metadata,
 		}
+	case types.SecretProviderGCS:
+		gcsMetadata := &types.GCSConnectionMetadata{}
+		if saJSON, ok := metadata["service_account_json"].(string); ok {
+			gcsMetadata.ServiceAccountJSON = saJSON
+		}
+		return types.ConnectionMetadata{
+			GCS: gcsMetadata,
+		}
 	case types.SecretProviderHubSpot:
 		hubspotMetadata := &types.HubSpotConnectionMetadata{}
 		if accessToken, ok := metadata["access_token"].(string); ok {
