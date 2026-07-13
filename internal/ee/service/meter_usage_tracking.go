@@ -384,13 +384,12 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		"count", len(records),
 	)
 
+	// Step 4: Run post-insert side effects
+	// This includes:
+	// 1. Resolving the customer for the event
+	// 2. Running the customer onboarding workflow
+	// 3. Checking for spend breaches and logging alerts
 	s.runMeterUsagePostInsertSideEffects(ctx, event)
-
-	// Step 4: Evaluate subscription/line-item/group spend alerts for the meters this event
-	// touched. Swallows its own errors — it must never fail processEvent, since the meter_usage
-	// write above already succeeded and a retry would just redo that insert.
-	meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
-	s.checkSpendBreachForEvent(ctx, event, meterIDs)
 
 	return nil
 }

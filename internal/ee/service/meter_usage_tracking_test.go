@@ -578,7 +578,7 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_Unknown
 	}
 
 	s.NotPanics(func() {
-		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_eval_test"})
+		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_eval_test"}, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }
@@ -590,7 +590,7 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAffec
 	}
 
 	s.NotPanics(func() {
-		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_does_not_exist"})
+		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_does_not_exist"}, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }
@@ -638,7 +638,7 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAlert
 	// attempting a billing calculation — which would otherwise fail/panic on this bare fixture
 	// (no price/meter usage data behind it).
 	s.NotPanics(func() {
-		s.svc.checkSpendBreachForEvent(ctx, event, []string{"meter_eval_test"})
+		s.svc.checkSpendBreachForEvent(ctx, event, []string{"meter_eval_test"}, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }
