@@ -102,7 +102,21 @@ func (p *GoogleDriveProvider) GetProviderName() FileProviderType {
 	return FileProviderTypeGoogleDrive
 }
 
-// S3Provider handles AWS S3 URLs
+// S3Provider handles AWS S3 URLs.
+//
+// This is used for user-supplied task import source URLs (task.Task.FileURL —
+// e.g. a customer pointing FlexPrice at a file in their own S3 bucket), not
+// FlexPrice's own storage exports/invoice PDFs; those go through
+// storage.Storage.PresignGet (see internal/ee/service/invoice.go), which has
+// FlexPrice's own bucket credentials in scope. This registry has no storage
+// credentials wired in at all, so it cannot presign arbitrary customer buckets;
+// it can only pass through URLs that are already directly HTTP-fetchable (e.g.
+// a pre-signed https://... URL the customer generated themselves). A raw
+// "s3://bucket/key" URI is NOT directly fetchable over HTTP and would fail at
+// the downstream httpclient.Client.Send call — that is a known, pre-existing
+// gap in this provider (not introduced here) that would require either
+// rejecting non-HTTP(S) schemes explicitly or wiring a presigning mechanism
+// with credentials for the customer's bucket; deferred as a separate follow-up.
 type S3Provider struct{}
 
 func (p *S3Provider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
@@ -121,7 +135,12 @@ func (p *S3Provider) GetProviderName() FileProviderType {
 	return FileProviderTypeS3
 }
 
-// GCSProvider handles Google Cloud Storage URLs
+// GCSProvider handles Google Cloud Storage URLs.
+//
+// Intentionally symmetric with S3Provider above (same shallow parse-and-pass-through
+// behavior, same "gs://" caveat): this registry has no storage credentials wired in,
+// so it cannot generate a presigned https:// URL for an arbitrary customer GCS bucket.
+// See the S3Provider doc comment for the full rationale and the deferred follow-up.
 type GCSProvider struct{}
 
 func (p *GCSProvider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
