@@ -1170,7 +1170,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	}
 
 	// Parse storage URL (format: s3://bucket/key or gs://bucket/key)
-	_, bucket, key, err := storage.ParseFileURL(t.FileURL)
+	provider, bucket, key, err := storage.ParseFileURL(t.FileURL)
 	if err != nil {
 		return "", err
 	}
@@ -1249,6 +1249,22 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		return "", ierr.WithError(err).
 			WithHint("Failed to initialize storage provider").
 			Mark(ierr.ErrInternal)
+	}
+
+	// Guard against a corrupted/stale FileURL whose scheme does not match the
+	// connection's actual configured storage backend (e.g. gs:// URL against
+	// an S3 connection) — presigning against the wrong backend would silently
+	// produce a URL for the wrong storage system.
+	if store.Provider() != provider {
+		return "", ierr.NewErrorf("file URL provider '%s' does not match connection's configured storage provider '%s'", provider, store.Provider()).
+			WithHint("File URL provider does not match connection's configured storage provider").
+			WithReportableDetails(map[string]interface{}{
+				"task_id":             id,
+				"connection_id":       scheduledTask.ConnectionID,
+				"file_url_provider":   provider,
+				"connection_provider": store.Provider(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	url, err := store.PresignGet(ctx, key, 30*time.Minute)
