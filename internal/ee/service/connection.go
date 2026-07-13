@@ -89,6 +89,17 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			}
 		}
 
+	case types.SecretProviderGCS:
+		if encryptedSecretData.GCS != nil {
+			encryptedSAJSON, err := s.encryptionService.Encrypt(encryptedSecretData.GCS.ServiceAccountJSON)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+			encryptedMetadata.GCS = &types.GCSConnectionMetadata{
+				ServiceAccountJSON: encryptedSAJSON,
+			}
+		}
+
 	case types.SecretProviderHubSpot:
 		if encryptedSecretData.HubSpot != nil {
 			encryptedAccessToken, err := s.encryptionService.Encrypt(encryptedSecretData.HubSpot.AccessToken)
@@ -535,7 +546,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	// Check if this is a Flexprice-managed S3 connection
-	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
+	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
 		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",
 			"tenant_id", conn.TenantID,
 			"connection_id", conn.ID)
@@ -555,15 +566,15 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 
 		// Set bucket and region from config
-		conn.SyncConfig.S3.Bucket = s.Config.FlexpriceS3Exports.Bucket
-		conn.SyncConfig.S3.Region = s.Config.FlexpriceS3Exports.Region
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceS3Exports.Bucket
+		conn.SyncConfig.Storage.Region = s.Config.FlexpriceS3Exports.Region
 		// Tenant + Environment isolation: tenant_id/environment_id
-		conn.SyncConfig.S3.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
+		conn.SyncConfig.Storage.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
 
 		s.Logger.Info(ctx, "injected flexprice S3 credentials",
-			"bucket", conn.SyncConfig.S3.Bucket,
-			"region", conn.SyncConfig.S3.Region,
-			"key_prefix", conn.SyncConfig.S3.KeyPrefix,
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"region", conn.SyncConfig.Storage.Region,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
 			"tenant_id", conn.TenantID,
 			"environment_id", conn.EnvironmentID)
 	}
