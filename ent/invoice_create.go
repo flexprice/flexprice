@@ -182,6 +182,34 @@ func (ic *InvoiceCreate) SetNillablePaymentStatus(ts *types.PaymentStatus) *Invo
 	return ic
 }
 
+// SetCollectionMethod sets the "collection_method" field.
+func (ic *InvoiceCreate) SetCollectionMethod(tm types.CollectionMethod) *InvoiceCreate {
+	ic.mutation.SetCollectionMethod(tm)
+	return ic
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceCreate {
+	if tm != nil {
+		ic.SetCollectionMethod(*tm)
+	}
+	return ic
+}
+
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (ic *InvoiceCreate) SetPaymentBehavior(tb types.PaymentBehavior) *InvoiceCreate {
+	ic.mutation.SetPaymentBehavior(tb)
+	return ic
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *InvoiceCreate {
+	if tb != nil {
+		ic.SetPaymentBehavior(*tb)
+	}
+	return ic
+}
+
 // SetCurrency sets the "currency" field.
 func (ic *InvoiceCreate) SetCurrency(s string) *InvoiceCreate {
 	ic.mutation.SetCurrency(s)
@@ -667,6 +695,14 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultPaymentStatus
 		ic.mutation.SetPaymentStatus(v)
 	}
+	if _, ok := ic.mutation.CollectionMethod(); !ok {
+		v := invoice.DefaultCollectionMethod
+		ic.mutation.SetCollectionMethod(v)
+	}
+	if _, ok := ic.mutation.PaymentBehavior(); !ok {
+		v := invoice.DefaultPaymentBehavior
+		ic.mutation.SetPaymentBehavior(v)
+	}
 	if _, ok := ic.mutation.AmountDue(); !ok {
 		v := invoice.DefaultAmountDue
 		ic.mutation.SetAmountDue(v)
@@ -762,6 +798,22 @@ func (ic *InvoiceCreate) check() error {
 	if v, ok := ic.mutation.PaymentStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
+	}
+	if _, ok := ic.mutation.CollectionMethod(); !ok {
+		return &ValidationError{Name: "collection_method", err: errors.New(`ent: missing required field "Invoice.collection_method"`)}
+	}
+	if v, ok := ic.mutation.CollectionMethod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Invoice.collection_method": %w`, err)}
+		}
+	}
+	if _, ok := ic.mutation.PaymentBehavior(); !ok {
+		return &ValidationError{Name: "payment_behavior", err: errors.New(`ent: missing required field "Invoice.payment_behavior"`)}
+	}
+	if v, ok := ic.mutation.PaymentBehavior(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_behavior": %w`, err)}
 		}
 	}
 	if _, ok := ic.mutation.Currency(); !ok {
@@ -875,6 +927,14 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
 		_node.PaymentStatus = value
+	}
+	if value, ok := ic.mutation.CollectionMethod(); ok {
+		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
+		_node.CollectionMethod = value
+	}
+	if value, ok := ic.mutation.PaymentBehavior(); ok {
+		_spec.SetField(invoice.FieldPaymentBehavior, field.TypeString, value)
+		_node.PaymentBehavior = value
 	}
 	if value, ok := ic.mutation.Currency(); ok {
 		_spec.SetField(invoice.FieldCurrency, field.TypeString, value)

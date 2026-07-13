@@ -142,9 +142,9 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"subscription", "subscription_line_item", "group"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"subscription"}},
 		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
@@ -1150,6 +1150,8 @@ var (
 		{Name: "invoice_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "invoice_status", Type: field.TypeString, Default: "DRAFT", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "payment_status", Type: field.TypeString, Default: "PENDING", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "collection_method", Type: field.TypeString, Default: "charge_automatically", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_behavior", Type: field.TypeString, Default: "default_active", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "amount_due", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "amount_paid", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
@@ -1207,12 +1209,12 @@ var (
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[25], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[38]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[40]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((invoice_number IS NOT NULL) AND ((invoice_number)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
@@ -1220,7 +1222,7 @@ var (
 			{
 				Name:    "idx_tenant_environment_idempotency_key_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[41]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[43]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((idempotency_key IS NOT NULL) AND ((status)::text = 'published'::text) AND ((invoice_status)::text <> 'VOIDED'::text))",
 				},
@@ -1228,7 +1230,7 @@ var (
 			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[32], InvoicesColumns[33]},
+				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[34], InvoicesColumns[35]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))",
 				},

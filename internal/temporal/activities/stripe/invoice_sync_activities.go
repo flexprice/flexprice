@@ -34,7 +34,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToStripe(ctx context.Context, input m
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
-	if err := a.invoiceService.SyncInvoiceToStripeIfEnabled(ctx, input.InvoiceID, input.CollectionMethod); err != nil {
+	if err := a.invoiceService.SyncInvoiceToStripeIfEnabled(ctx, input.InvoiceID); err != nil {
 		a.logger.Error(ctx, "failed to sync invoice to Stripe",
 			"error", err,
 			"invoice_id", input.InvoiceID,

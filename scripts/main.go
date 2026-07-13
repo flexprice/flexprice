@@ -139,6 +139,11 @@ var commands = []Command{
 		Description: "Create CUSTOMER_COUNT demo customers (default 1), each with subscription, $100 wallet top-up, and 500 meter events (Postgres + Kafka)",
 		Run:         internal.SetupDummyBillingCustomer,
 	},
+	{
+		Name:        "backfill-invoice-collection-method",
+		Description: "Backfill collection_method and payment_behavior on invoices from parent subscriptions (batches of 1k, idempotent)",
+		Run:         internal.BackfillInvoiceCollectionMethod,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters

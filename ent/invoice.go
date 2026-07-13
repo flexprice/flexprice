@@ -46,6 +46,10 @@ type Invoice struct {
 	InvoiceStatus types.InvoiceStatus `json:"invoice_status,omitempty"`
 	// PaymentStatus holds the value of the "payment_status" field.
 	PaymentStatus types.PaymentStatus `json:"payment_status,omitempty"`
+	// Determines how this invoice is collected
+	CollectionMethod types.CollectionMethod `json:"collection_method,omitempty"`
+	// Determines how payment for this invoice is handled
+	PaymentBehavior types.PaymentBehavior `json:"payment_behavior,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// AmountDue holds the value of the "amount_due" field.
@@ -152,7 +156,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldSubscriptionCustomerID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCollectionMethod, invoice.FieldPaymentBehavior, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldIssueDate, invoice.FieldLastComputedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -256,6 +260,18 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field payment_status", values[j])
 			} else if value.Valid {
 				i.PaymentStatus = types.PaymentStatus(value.String)
+			}
+		case invoice.FieldCollectionMethod:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field collection_method", values[j])
+			} else if value.Valid {
+				i.CollectionMethod = types.CollectionMethod(value.String)
+			}
+		case invoice.FieldPaymentBehavior:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field payment_behavior", values[j])
+			} else if value.Valid {
+				i.PaymentBehavior = types.PaymentBehavior(value.String)
 			}
 		case invoice.FieldCurrency:
 			if value, ok := values[j].(*sql.NullString); !ok {
@@ -538,6 +554,12 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payment_status=")
 	builder.WriteString(fmt.Sprintf("%v", i.PaymentStatus))
+	builder.WriteString(", ")
+	builder.WriteString("collection_method=")
+	builder.WriteString(fmt.Sprintf("%v", i.CollectionMethod))
+	builder.WriteString(", ")
+	builder.WriteString("payment_behavior=")
+	builder.WriteString(fmt.Sprintf("%v", i.PaymentBehavior))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(i.Currency)

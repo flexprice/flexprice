@@ -1087,52 +1087,60 @@ func init() {
 	invoiceDescPaymentStatus := invoiceFields[6].Descriptor()
 	// invoice.DefaultPaymentStatus holds the default value on creation for the payment_status field.
 	invoice.DefaultPaymentStatus = types.PaymentStatus(invoiceDescPaymentStatus.Default.(string))
+	// invoiceDescCollectionMethod is the schema descriptor for collection_method field.
+	invoiceDescCollectionMethod := invoiceFields[7].Descriptor()
+	// invoice.DefaultCollectionMethod holds the default value on creation for the collection_method field.
+	invoice.DefaultCollectionMethod = types.CollectionMethod(invoiceDescCollectionMethod.Default.(string))
+	// invoiceDescPaymentBehavior is the schema descriptor for payment_behavior field.
+	invoiceDescPaymentBehavior := invoiceFields[8].Descriptor()
+	// invoice.DefaultPaymentBehavior holds the default value on creation for the payment_behavior field.
+	invoice.DefaultPaymentBehavior = types.PaymentBehavior(invoiceDescPaymentBehavior.Default.(string))
 	// invoiceDescCurrency is the schema descriptor for currency field.
-	invoiceDescCurrency := invoiceFields[7].Descriptor()
+	invoiceDescCurrency := invoiceFields[9].Descriptor()
 	// invoice.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	invoice.CurrencyValidator = invoiceDescCurrency.Validators[0].(func(string) error)
 	// invoiceDescAmountDue is the schema descriptor for amount_due field.
-	invoiceDescAmountDue := invoiceFields[8].Descriptor()
+	invoiceDescAmountDue := invoiceFields[10].Descriptor()
 	// invoice.DefaultAmountDue holds the default value on creation for the amount_due field.
 	invoice.DefaultAmountDue = invoiceDescAmountDue.Default.(decimal.Decimal)
 	// invoiceDescAmountPaid is the schema descriptor for amount_paid field.
-	invoiceDescAmountPaid := invoiceFields[9].Descriptor()
+	invoiceDescAmountPaid := invoiceFields[11].Descriptor()
 	// invoice.DefaultAmountPaid holds the default value on creation for the amount_paid field.
 	invoice.DefaultAmountPaid = invoiceDescAmountPaid.Default.(decimal.Decimal)
 	// invoiceDescAmountRemaining is the schema descriptor for amount_remaining field.
-	invoiceDescAmountRemaining := invoiceFields[10].Descriptor()
+	invoiceDescAmountRemaining := invoiceFields[12].Descriptor()
 	// invoice.DefaultAmountRemaining holds the default value on creation for the amount_remaining field.
 	invoice.DefaultAmountRemaining = invoiceDescAmountRemaining.Default.(decimal.Decimal)
 	// invoiceDescSubtotal is the schema descriptor for subtotal field.
-	invoiceDescSubtotal := invoiceFields[11].Descriptor()
+	invoiceDescSubtotal := invoiceFields[13].Descriptor()
 	// invoice.DefaultSubtotal holds the default value on creation for the subtotal field.
 	invoice.DefaultSubtotal = invoiceDescSubtotal.Default.(decimal.Decimal)
 	// invoiceDescAdjustmentAmount is the schema descriptor for adjustment_amount field.
-	invoiceDescAdjustmentAmount := invoiceFields[12].Descriptor()
+	invoiceDescAdjustmentAmount := invoiceFields[14].Descriptor()
 	// invoice.DefaultAdjustmentAmount holds the default value on creation for the adjustment_amount field.
 	invoice.DefaultAdjustmentAmount = invoiceDescAdjustmentAmount.Default.(decimal.Decimal)
 	// invoiceDescRefundedAmount is the schema descriptor for refunded_amount field.
-	invoiceDescRefundedAmount := invoiceFields[13].Descriptor()
+	invoiceDescRefundedAmount := invoiceFields[15].Descriptor()
 	// invoice.DefaultRefundedAmount holds the default value on creation for the refunded_amount field.
 	invoice.DefaultRefundedAmount = invoiceDescRefundedAmount.Default.(decimal.Decimal)
 	// invoiceDescTotalTax is the schema descriptor for total_tax field.
-	invoiceDescTotalTax := invoiceFields[14].Descriptor()
+	invoiceDescTotalTax := invoiceFields[16].Descriptor()
 	// invoice.DefaultTotalTax holds the default value on creation for the total_tax field.
 	invoice.DefaultTotalTax = invoiceDescTotalTax.Default.(decimal.Decimal)
 	// invoiceDescTotalDiscount is the schema descriptor for total_discount field.
-	invoiceDescTotalDiscount := invoiceFields[15].Descriptor()
+	invoiceDescTotalDiscount := invoiceFields[17].Descriptor()
 	// invoice.DefaultTotalDiscount holds the default value on creation for the total_discount field.
 	invoice.DefaultTotalDiscount = invoiceDescTotalDiscount.Default.(decimal.Decimal)
 	// invoiceDescTotal is the schema descriptor for total field.
-	invoiceDescTotal := invoiceFields[16].Descriptor()
+	invoiceDescTotal := invoiceFields[18].Descriptor()
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[30].Descriptor()
+	invoiceDescVersion := invoiceFields[32].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	// invoiceDescTotalPrepaidCreditsApplied is the schema descriptor for total_prepaid_credits_applied field.
-	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[33].Descriptor()
+	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[35].Descriptor()
 	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
 	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()

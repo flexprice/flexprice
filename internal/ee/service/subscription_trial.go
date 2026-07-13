@@ -189,8 +189,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 	sub.CurrentPeriodStart = firstPeriodStart
 	sub.CurrentPeriodEnd = firstPeriodEnd
 
-	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
-	paymentParams = paymentParams.NormalizePaymentParameters()
+	paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 
 	var trialEndInvoice *dto.InvoiceResponse
 

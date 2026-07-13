@@ -2992,6 +2992,10 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		PreparedTaxRates: preparedTaxRates,
 	}
 
+	cm, pb := types.NormalizeCollectionMethodAndPaymentBehavior(sub.CollectionMethod, sub.PaymentBehavior)
+	req.CollectionMethod = &cm
+	req.PaymentBehavior = &pb
+
 	return req, nil
 }
 

@@ -83,6 +83,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		InvoiceType:                inv.InvoiceType,
 		InvoiceStatus:              inv.InvoiceStatus,
 		PaymentStatus:              inv.PaymentStatus,
+		CollectionMethod:           inv.CollectionMethod,
+		PaymentBehavior:            inv.PaymentBehavior,
 		Currency:                   inv.Currency,
 		AmountDue:                  inv.AmountDue,
 		AmountPaid:                 inv.AmountPaid,
@@ -277,15 +279,18 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*invoice.Invoice, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
+	// Mirror real DB GetForPeriod: include all statuses except VOIDED (do not exclude SKIPPED).
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusDraft,
+		types.InvoiceStatusSkipped,
+		types.InvoiceStatusFinalized,
+	}
 	invoices, err := s.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, inv := range invoices {
-		if inv.InvoiceStatus == types.InvoiceStatusVoided {
-			continue
-		}
 		if billingReason != "" && inv.BillingReason != billingReason {
 			continue
 		}

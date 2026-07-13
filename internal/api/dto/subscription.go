@@ -883,8 +883,7 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate payment behavior and collection method combination
-	if err := r.validatePaymentBehaviorForCollectionMethod(*r.CollectionMethod, *r.PaymentBehavior); err != nil {
+	if err := types.ValidateCollectionMethodAndPaymentBehavior(*r.CollectionMethod, *r.PaymentBehavior); err != nil {
 		return err
 	}
 
@@ -1168,55 +1167,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	}
-
-	return nil
-}
-
-// validatePaymentBehaviorForCollectionMethod validates that payment behavior is compatible with collection method
-func (r *CreateSubscriptionRequest) validatePaymentBehaviorForCollectionMethod(collectionMethod types.CollectionMethod, paymentBehavior types.PaymentBehavior) error {
-	switch collectionMethod {
-	case types.CollectionMethodChargeAutomatically:
-		// For charge_automatically, allow_incomplete, error_if_incomplete, and default_active are allowed
-		if paymentBehavior != types.PaymentBehaviorAllowIncomplete &&
-			paymentBehavior != types.PaymentBehaviorErrorIfIncomplete &&
-			paymentBehavior != types.PaymentBehaviorDefaultActive {
-			return ierr.NewError("invalid payment behavior for charge_automatically collection method").
-				WithHint("Only allow_incomplete, error_if_incomplete, and default_active are supported for charge_automatically collection method").
-				WithReportableDetails(map[string]interface{}{
-					"collection_method": collectionMethod,
-					"payment_behavior":  paymentBehavior,
-					"allowed_behaviors": []types.PaymentBehavior{
-						types.PaymentBehaviorAllowIncomplete,
-						types.PaymentBehaviorErrorIfIncomplete,
-						types.PaymentBehaviorDefaultActive,
-					},
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	case types.CollectionMethodSendInvoice:
-		// For send_invoice, only default_active and default_incomplete are allowed
-		if paymentBehavior != types.PaymentBehaviorDefaultActive && paymentBehavior != types.PaymentBehaviorDefaultIncomplete {
-			return ierr.NewError("invalid payment behavior for send_invoice collection method").
-				WithHint("Only default_active and default_incomplete are supported for send_invoice collection method").
-				WithReportableDetails(map[string]interface{}{
-					"collection_method": collectionMethod,
-					"payment_behavior":  paymentBehavior,
-					"allowed_behaviors": []types.PaymentBehavior{
-						types.PaymentBehaviorDefaultActive,
-						types.PaymentBehaviorDefaultIncomplete,
-					},
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-	default:
-		return ierr.NewError("unsupported collection method").
-			WithHint("Only charge_automatically and send_invoice collection methods are supported").
-			WithReportableDetails(map[string]interface{}{
-				"collection_method": collectionMethod,
-			}).
-			Mark(ierr.ErrValidation)
 	}
 
 	return nil

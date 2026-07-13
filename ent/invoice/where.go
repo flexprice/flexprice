@@ -135,6 +135,18 @@ func PaymentStatus(v types.PaymentStatus) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldPaymentStatus, vc))
 }
 
+// CollectionMethod applies equality check predicate on the "collection_method" field. It's identical to CollectionMethodEQ.
+func CollectionMethod(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldCollectionMethod, vc))
+}
+
+// PaymentBehavior applies equality check predicate on the "payment_behavior" field. It's identical to PaymentBehaviorEQ.
+func PaymentBehavior(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldPaymentBehavior, vc))
+}
+
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldCurrency, v))
@@ -1176,6 +1188,174 @@ func PaymentStatusEqualFold(v types.PaymentStatus) predicate.Invoice {
 func PaymentStatusContainsFold(v types.PaymentStatus) predicate.Invoice {
 	vc := string(v)
 	return predicate.Invoice(sql.FieldContainsFold(FieldPaymentStatus, vc))
+}
+
+// CollectionMethodEQ applies the EQ predicate on the "collection_method" field.
+func CollectionMethodEQ(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodNEQ applies the NEQ predicate on the "collection_method" field.
+func CollectionMethodNEQ(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldNEQ(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodIn applies the In predicate on the "collection_method" field.
+func CollectionMethodIn(vs ...types.CollectionMethod) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldIn(FieldCollectionMethod, v...))
+}
+
+// CollectionMethodNotIn applies the NotIn predicate on the "collection_method" field.
+func CollectionMethodNotIn(vs ...types.CollectionMethod) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldNotIn(FieldCollectionMethod, v...))
+}
+
+// CollectionMethodGT applies the GT predicate on the "collection_method" field.
+func CollectionMethodGT(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGT(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodGTE applies the GTE predicate on the "collection_method" field.
+func CollectionMethodGTE(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGTE(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodLT applies the LT predicate on the "collection_method" field.
+func CollectionMethodLT(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLT(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodLTE applies the LTE predicate on the "collection_method" field.
+func CollectionMethodLTE(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLTE(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodContains applies the Contains predicate on the "collection_method" field.
+func CollectionMethodContains(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContains(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodHasPrefix applies the HasPrefix predicate on the "collection_method" field.
+func CollectionMethodHasPrefix(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasPrefix(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodHasSuffix applies the HasSuffix predicate on the "collection_method" field.
+func CollectionMethodHasSuffix(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasSuffix(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodEqualFold applies the EqualFold predicate on the "collection_method" field.
+func CollectionMethodEqualFold(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEqualFold(FieldCollectionMethod, vc))
+}
+
+// CollectionMethodContainsFold applies the ContainsFold predicate on the "collection_method" field.
+func CollectionMethodContainsFold(v types.CollectionMethod) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContainsFold(FieldCollectionMethod, vc))
+}
+
+// PaymentBehaviorEQ applies the EQ predicate on the "payment_behavior" field.
+func PaymentBehaviorEQ(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEQ(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorNEQ applies the NEQ predicate on the "payment_behavior" field.
+func PaymentBehaviorNEQ(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldNEQ(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorIn applies the In predicate on the "payment_behavior" field.
+func PaymentBehaviorIn(vs ...types.PaymentBehavior) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldIn(FieldPaymentBehavior, v...))
+}
+
+// PaymentBehaviorNotIn applies the NotIn predicate on the "payment_behavior" field.
+func PaymentBehaviorNotIn(vs ...types.PaymentBehavior) predicate.Invoice {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Invoice(sql.FieldNotIn(FieldPaymentBehavior, v...))
+}
+
+// PaymentBehaviorGT applies the GT predicate on the "payment_behavior" field.
+func PaymentBehaviorGT(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGT(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorGTE applies the GTE predicate on the "payment_behavior" field.
+func PaymentBehaviorGTE(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldGTE(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorLT applies the LT predicate on the "payment_behavior" field.
+func PaymentBehaviorLT(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLT(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorLTE applies the LTE predicate on the "payment_behavior" field.
+func PaymentBehaviorLTE(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldLTE(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorContains applies the Contains predicate on the "payment_behavior" field.
+func PaymentBehaviorContains(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContains(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorHasPrefix applies the HasPrefix predicate on the "payment_behavior" field.
+func PaymentBehaviorHasPrefix(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasPrefix(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorHasSuffix applies the HasSuffix predicate on the "payment_behavior" field.
+func PaymentBehaviorHasSuffix(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldHasSuffix(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorEqualFold applies the EqualFold predicate on the "payment_behavior" field.
+func PaymentBehaviorEqualFold(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldEqualFold(FieldPaymentBehavior, vc))
+}
+
+// PaymentBehaviorContainsFold applies the ContainsFold predicate on the "payment_behavior" field.
+func PaymentBehaviorContainsFold(v types.PaymentBehavior) predicate.Invoice {
+	vc := string(v)
+	return predicate.Invoice(sql.FieldContainsFold(FieldPaymentBehavior, vc))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.

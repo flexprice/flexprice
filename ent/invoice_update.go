@@ -120,6 +120,34 @@ func (iu *InvoiceUpdate) SetNillablePaymentStatus(ts *types.PaymentStatus) *Invo
 	return iu
 }
 
+// SetCollectionMethod sets the "collection_method" field.
+func (iu *InvoiceUpdate) SetCollectionMethod(tm types.CollectionMethod) *InvoiceUpdate {
+	iu.mutation.SetCollectionMethod(tm)
+	return iu
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceUpdate {
+	if tm != nil {
+		iu.SetCollectionMethod(*tm)
+	}
+	return iu
+}
+
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (iu *InvoiceUpdate) SetPaymentBehavior(tb types.PaymentBehavior) *InvoiceUpdate {
+	iu.mutation.SetPaymentBehavior(tb)
+	return iu
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *InvoiceUpdate {
+	if tb != nil {
+		iu.SetPaymentBehavior(*tb)
+	}
+	return iu
+}
+
 // SetAmountDue sets the "amount_due" field.
 func (iu *InvoiceUpdate) SetAmountDue(d decimal.Decimal) *InvoiceUpdate {
 	iu.mutation.SetAmountDue(d)
@@ -757,6 +785,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := iu.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
 	}
+	if value, ok := iu.mutation.CollectionMethod(); ok {
+		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
+	}
+	if value, ok := iu.mutation.PaymentBehavior(); ok {
+		_spec.SetField(invoice.FieldPaymentBehavior, field.TypeString, value)
+	}
 	if value, ok := iu.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)
 	}
@@ -1104,6 +1138,34 @@ func (iuo *InvoiceUpdateOne) SetPaymentStatus(ts types.PaymentStatus) *InvoiceUp
 func (iuo *InvoiceUpdateOne) SetNillablePaymentStatus(ts *types.PaymentStatus) *InvoiceUpdateOne {
 	if ts != nil {
 		iuo.SetPaymentStatus(*ts)
+	}
+	return iuo
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (iuo *InvoiceUpdateOne) SetCollectionMethod(tm types.CollectionMethod) *InvoiceUpdateOne {
+	iuo.mutation.SetCollectionMethod(tm)
+	return iuo
+}
+
+// SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableCollectionMethod(tm *types.CollectionMethod) *InvoiceUpdateOne {
+	if tm != nil {
+		iuo.SetCollectionMethod(*tm)
+	}
+	return iuo
+}
+
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (iuo *InvoiceUpdateOne) SetPaymentBehavior(tb types.PaymentBehavior) *InvoiceUpdateOne {
+	iuo.mutation.SetPaymentBehavior(tb)
+	return iuo
+}
+
+// SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *InvoiceUpdateOne {
+	if tb != nil {
+		iuo.SetPaymentBehavior(*tb)
 	}
 	return iuo
 }
@@ -1774,6 +1836,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if value, ok := iuo.mutation.PaymentStatus(); ok {
 		_spec.SetField(invoice.FieldPaymentStatus, field.TypeString, value)
+	}
+	if value, ok := iuo.mutation.CollectionMethod(); ok {
+		_spec.SetField(invoice.FieldCollectionMethod, field.TypeString, value)
+	}
+	if value, ok := iuo.mutation.PaymentBehavior(); ok {
+		_spec.SetField(invoice.FieldPaymentBehavior, field.TypeString, value)
 	}
 	if value, ok := iuo.mutation.AmountDue(); ok {
 		_spec.SetField(invoice.FieldAmountDue, field.TypeOther, value)

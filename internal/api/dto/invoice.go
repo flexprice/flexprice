@@ -118,26 +118,36 @@ type CreateInvoiceRequest struct {
 	// issue_date overrides the user-facing date of the invoice.
 	// Defaults to created_at if not provided.
 	IssueDate *time.Time `json:"issue_date,omitempty"`
+
+	// collection_method determines how this invoice is collected (charge_automatically or send_invoice).
+	// Defaults to charge_automatically if not provided.
+	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
+
+	// payment_behavior determines how payment for this invoice is handled.
+	// Defaults to default_active if not provided.
+	PaymentBehavior *types.PaymentBehavior `json:"payment_behavior,omitempty"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
 // extracting only the fields needed for empty draft creation.
 func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 	return CreateDraftInvoiceRequest{
-		CustomerID:     r.CustomerID,
-		SubscriptionID: r.SubscriptionID,
-		InvoiceType:    r.InvoiceType,
-		Currency:       r.Currency,
-		PeriodStart:    r.PeriodStart,
-		PeriodEnd:      r.PeriodEnd,
-		BillingPeriod:  r.BillingPeriod,
-		BillingReason:  r.BillingReason,
-		Description:    r.Description,
-		DueDate:        r.DueDate,
-		Metadata:       r.Metadata,
-		IdempotencyKey: r.IdempotencyKey,
-		InvoicePDFURL:  r.InvoicePDFURL,
-		IssueDate:      r.IssueDate,
+		CustomerID:       r.CustomerID,
+		SubscriptionID:   r.SubscriptionID,
+		InvoiceType:      r.InvoiceType,
+		Currency:         r.Currency,
+		PeriodStart:      r.PeriodStart,
+		PeriodEnd:        r.PeriodEnd,
+		BillingPeriod:    r.BillingPeriod,
+		BillingReason:    r.BillingReason,
+		Description:      r.Description,
+		DueDate:          r.DueDate,
+		Metadata:         r.Metadata,
+		IdempotencyKey:   r.IdempotencyKey,
+		InvoicePDFURL:    r.InvoicePDFURL,
+		IssueDate:        r.IssueDate,
+		CollectionMethod: r.CollectionMethod,
+		PaymentBehavior:  r.PaymentBehavior,
 	}
 }
 
@@ -194,6 +204,8 @@ type CreateDraftInvoiceRequest struct {
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
 	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
+	CollectionMethod       *types.CollectionMethod    `json:"collection_method,omitempty"`
+	PaymentBehavior        *types.PaymentBehavior     `json:"payment_behavior,omitempty"`
 }
 
 // Validate validates the draft invoice creation request.
@@ -229,6 +241,21 @@ func (r *CreateDraftInvoiceRequest) Validate() error {
 			return ierr.NewError("period_end must be after period_start").
 				WithHint("period_end must be after period_start").
 				Mark(ierr.ErrValidation)
+		}
+	}
+	if r.CollectionMethod != nil {
+		if err := r.CollectionMethod.Validate(); err != nil {
+			return err
+		}
+	}
+	if r.PaymentBehavior != nil {
+		if err := r.PaymentBehavior.Validate(); err != nil {
+			return err
+		}
+	}
+	if r.CollectionMethod != nil && r.PaymentBehavior != nil {
+		if err := types.ValidateCollectionMethodAndPaymentBehavior(*r.CollectionMethod, *r.PaymentBehavior); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -273,6 +300,8 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		InvoiceStatus:          types.InvoiceStatusDraft,
 		PaymentStatus:          types.PaymentStatusPending,
 		IssueDate:              issueDate,
+		CollectionMethod:       lo.FromPtrOr(r.CollectionMethod, types.CollectionMethodChargeAutomatically),
+		PaymentBehavior:        lo.FromPtrOr(r.PaymentBehavior, types.PaymentBehaviorDefaultActive),
 		BaseModel:              baseModel,
 	}, nil
 }
@@ -525,9 +554,11 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		PeriodEnd:       r.PeriodEnd,
 		BillingReason:   string(r.BillingReason),
 		Metadata:        r.Metadata,
-		InvoicePDFURL:   r.InvoicePDFURL,
-		BaseModel:       types.GetDefaultBaseModel(ctx),
-		AmountRemaining: decimal.Zero,
+		InvoicePDFURL:    r.InvoicePDFURL,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+		AmountRemaining:  decimal.Zero,
+		CollectionMethod: lo.FromPtrOr(r.CollectionMethod, types.CollectionMethodChargeAutomatically),
+		PaymentBehavior:  lo.FromPtrOr(r.PaymentBehavior, types.PaymentBehaviorDefaultActive),
 	}
 
 	if inv.EnvironmentID == "" {
@@ -1273,52 +1304,20 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 	return nil
 }
 
-// PaymentParameters encapsulates payment-related parameters for invoice processing
+// PaymentParameters encapsulates payment-related parameters for invoice processing.
+// CollectionMethod/PaymentBehavior are no longer carried here — the invoice being processed
+// already has its own persisted CollectionMethod/PaymentBehavior fields, which are now the
+// single source of truth (see attemptPaymentForSubscriptionInvoice).
 type PaymentParameters struct {
-	// CollectionMethod defines how the payment should be collected (charge_automatically or send_invoice)
-	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
-
-	// PaymentBehavior defines the behavior when payment fails (default_active, error_if_incomplete, etc.)
-	PaymentBehavior *types.PaymentBehavior `json:"payment_behavior,omitempty"`
-
 	// PaymentMethodID is the optional ID of the payment method to use for automatic charges
 	PaymentMethodID *string `json:"payment_method_id,omitempty"`
 }
 
-// NewPaymentParameters creates a new PaymentParameters from subscription data
-func NewPaymentParameters(collectionMethod types.CollectionMethod, paymentBehavior types.PaymentBehavior, paymentMethodID *string) *PaymentParameters {
+// NewPaymentParameters creates a new PaymentParameters carrying just the payment method ID.
+func NewPaymentParameters(paymentMethodID *string) *PaymentParameters {
 	return &PaymentParameters{
-		CollectionMethod: &collectionMethod,
-		PaymentBehavior:  &paymentBehavior,
-		PaymentMethodID:  paymentMethodID,
+		PaymentMethodID: paymentMethodID,
 	}
-}
-
-// NewPaymentParametersFromSubscription creates PaymentParameters from subscription fields
-func NewPaymentParametersFromSubscription(collectionMethod string, paymentBehavior string, paymentMethodID *string) *PaymentParameters {
-	cm := types.CollectionMethod(collectionMethod)
-	pb := types.PaymentBehavior(paymentBehavior)
-	return &PaymentParameters{
-		CollectionMethod: &cm,
-		PaymentBehavior:  &pb,
-		PaymentMethodID:  paymentMethodID,
-	}
-}
-
-// NormalizePaymentParameters handles backward compatibility for old collection behaviors
-// If collection_method is "default_incomplete", it converts to charge_automatically + default_incomplete
-func (p *PaymentParameters) NormalizePaymentParameters() *PaymentParameters {
-	if p.CollectionMethod != nil && string(*p.CollectionMethod) == "default_incomplete" {
-		// Convert old default_incomplete collection behavior to new format
-		// collection_method: charge_automatically, payment_behavior: default_incomplete
-		normalized := &PaymentParameters{
-			CollectionMethod: lo.ToPtr(types.CollectionMethodChargeAutomatically),
-			PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultIncomplete),
-			PaymentMethodID:  p.PaymentMethodID,
-		}
-		return normalized
-	}
-	return p
 }
 
 type InvoiceVoidRequest struct {

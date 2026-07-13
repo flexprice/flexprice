@@ -26,9 +26,15 @@ func FromEnt(e *ent.AlertSettings) *AlertSettings {
 	}
 	return &AlertSettings{
 		ID:               e.ID,
-		EntityType:       e.EntityType,
-		EntityID:         e.EntityID,
-		ParentEntityType: (*string)(e.ParentEntityType),
+		EntityType: types.AlertEntityType(e.EntityType),
+		EntityID:   e.EntityID,
+		ParentEntityType: func() *string {
+			if e.ParentEntityType == nil {
+				return nil
+			}
+			s := string(*e.ParentEntityType)
+			return &s
+		}(),
 		ParentEntityID:   e.ParentEntityID,
 		Enabled:          e.Enabled,
 		Config:           &e.Config,
