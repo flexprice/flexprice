@@ -22,7 +22,7 @@ import (
 )
 
 type MeterUsageTrackingSuite struct {
-	suite.Suite
+	testutil.BaseServiceTestSuite
 	svc *meterUsageTrackingService
 }
 
@@ -31,30 +31,15 @@ func TestMeterUsageTracking(t *testing.T) {
 }
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
 	s.svc = &meterUsageTrackingService{}
 }
 
-// --- fakes for publishRejectedEventWebhook tests ---
-
-type fakeWebhookPublisher struct {
-	events []*types.WebhookEvent
-}
-
-func (f *fakeWebhookPublisher) PublishWebhook(_ context.Context, event *types.WebhookEvent) error {
-	f.events = append(f.events, event)
-	return nil
-}
-func (f *fakeWebhookPublisher) Close() error { return nil }
-
-// newInMemoryLocker returns testutil's in-memory Redis locker (SetNX + TTL
-// semantics), so the throttle behaves exactly like production against real Redis.
-func newInMemoryLocker() cache.Locker {
-	return testutil.NewInMemoryRedisLocker(testutil.NewInMemoryRedis().(*testutil.InMemoryRedis))
-}
-
-func newRejectedTestService(enabled bool, window time.Duration, locker cache.Locker) (*meterUsageTrackingService, *fakeWebhookPublisher) {
-	pub := &fakeWebhookPublisher{}
-	svc := &meterUsageTrackingService{
+// newRejectedService builds a meter-usage service wired to the suite's in-memory
+// webhook publisher and the given locker. Assert on published events via
+// s.GetPublishedWebhooks().
+func (s *MeterUsageTrackingSuite) newRejectedService(enabled bool, window time.Duration, locker cache.Locker) *meterUsageTrackingService {
+	return &meterUsageTrackingService{
 		ServiceParams: ServiceParams{
 			Logger: logger.NewNoopLogger(),
 			Config: &config.Configuration{
@@ -63,11 +48,10 @@ func newRejectedTestService(enabled bool, window time.Duration, locker cache.Loc
 					RejectedEventWebhookWindow:  window,
 				},
 			},
-			WebhookPublisher: pub,
+			WebhookPublisher: s.GetWebhookPublisher(),
 			Locker:           locker,
 		},
 	}
-	return svc, pub
 }
 
 func rejectedTestEvent(name string) *events.Event {
@@ -82,43 +66,43 @@ func rejectedTestEvent(name string) *events.Event {
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_DisabledNoop() {
-	svc, pub := newRejectedTestService(false, 10*time.Minute, newInMemoryLocker())
+	svc := s.newRejectedService(false, 10*time.Minute, s.GetLocker())
 	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
-	assert.Empty(s.T(), pub.events)
+	assert.Empty(s.T(), s.GetPublishedWebhooks())
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() {
-	svc, pub := newRejectedTestService(true, 10*time.Minute, newInMemoryLocker())
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
 	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 
-	assert.Len(s.T(), pub.events, 1)
-	got := pub.events[0]
+	published := s.GetPublishedWebhooks()
+	assert.Len(s.T(), published, 1)
+	got := published[0]
 	assert.Equal(s.T(), types.WebhookEventEventRejected, got.EventName)
 	assert.Equal(s.T(), types.SystemEntityTypeEvent, got.EntityType)
 	assert.Equal(s.T(), "evt_api_call", got.EntityID)
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_ThrottledPerEventName() {
-	locker := newInMemoryLocker()
-	svc, pub := newRejectedTestService(true, 10*time.Minute, locker)
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
 
 	// Same event name three times within the window -> only the first fires.
 	for i := 0; i < 3; i++ {
 		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	}
-	assert.Len(s.T(), pub.events, 1)
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 1)
 
 	// A different event name is throttled independently -> fires once more.
 	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("other_event"), types.RejectedEventReasonNoMatchingMeter)
-	assert.Len(s.T(), pub.events, 2)
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 2)
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_NoLockerFiresEveryTime() {
-	svc, pub := newRejectedTestService(true, 10*time.Minute, nil) // no Locker -> fail-open
+	svc := s.newRejectedService(true, 10*time.Minute, nil) // no Locker -> fail-open
 	for i := 0; i < 3; i++ {
 		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	}
-	assert.Len(s.T(), pub.events, 3)
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 3)
 }
 
 // --- checkMeterFilters tests ---

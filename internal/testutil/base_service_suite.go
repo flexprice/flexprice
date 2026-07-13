@@ -114,6 +114,7 @@ type BaseServiceTestSuite struct {
 	db                  postgres.IClient
 	inMemoryCache       cache.InMemoryCache
 	redisCache          cache.RedisCache
+	locker              cache.Locker
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -150,12 +151,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 
 	// Initialize encryption service
 	encryptionService, err := security.NewEncryptionService(s.config, s.logger)
@@ -262,17 +258,15 @@ func (s *BaseServiceTestSuite) setupStores() {
 	// Cache stores
 	s.inMemoryCache = cache.NewInMemoryCache()
 	s.redisCache = NewInMemoryRedis()
+	// Fresh locker per test — the in-memory locker keeps its own state map, so
+	// rebuilding it here keeps lock state from leaking across tests.
+	s.locker = NewInMemoryRedisLocker(s.redisCache.(*InMemoryRedis))
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -358,6 +352,20 @@ func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
 // GetRedisCache returns the test Redis cache
 func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
 	return s.redisCache
+}
+
+// GetLocker returns the test distributed locker (in-memory, SetNX + TTL).
+func (s *BaseServiceTestSuite) GetLocker() cache.Locker {
+	return s.locker
+}
+
+// GetPublishedWebhooks returns the webhook events captured by the in-memory
+// webhook publisher this suite injects. Empty if the publisher was replaced.
+func (s *BaseServiceTestSuite) GetPublishedWebhooks() []*types.WebhookEvent {
+	if p, ok := s.webhookPublisher.(*InMemoryWebhookPublisher); ok {
+		return p.Events()
+	}
+	return nil
 }
 
 // GetDB returns the test database client
