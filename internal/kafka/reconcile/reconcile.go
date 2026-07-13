@@ -10,12 +10,13 @@ import (
 type liveTopic struct {
 	Partitions        int32
 	ReplicationFactor int16
+	RetentionMs       int64
 }
 
 // Admin abstracts the cluster operations so the algorithm is testable.
 type Admin interface {
 	ListTopics() (map[string]liveTopic, error)
-	CreateTopic(name string, partitions int32, rf int16) error
+	CreateTopic(name string, partitions int32, rf int16, retentionMs int64) error
 	CreatePartitions(name string, count int32) error
 }
 
@@ -23,11 +24,12 @@ type Admin interface {
 type ActionKind int
 
 const (
-	ActionCreate     ActionKind = iota // topic absent -> create
-	ActionGrow                         // fewer partitions than desired -> grow
-	ActionSkipShrink                   // more partitions than desired -> warn, never act
-	ActionRFMismatch                   // replication factor differs -> warn, never act
-	ActionUnchanged                    // already matches desired
+	ActionCreate            ActionKind = iota // topic absent -> create (partitions, RF, retention all applied)
+	ActionGrow                                // fewer partitions than desired -> grow
+	ActionSkipShrink                          // more partitions than desired -> warn, never act
+	ActionRFMismatch                          // replication factor differs -> warn, never act
+	ActionRetentionMismatch                   // retention.ms differs -> warn, never act
+	ActionUnchanged                           // already matches desired
 )
 
 // Action is a single planned decision for one topic. It is the shared output
@@ -38,25 +40,28 @@ type Action struct {
 	// Topic is the desired sizing this action concerns.
 	Topic topicspec.ResolvedTopic
 	// Current cluster state. CurrentExists is false for ActionCreate.
-	CurrentPartitions int32
-	CurrentRF         int16
-	CurrentExists     bool
+	CurrentPartitions  int32
+	CurrentRF          int16
+	CurrentRetentionMs int64
+	CurrentExists      bool
 }
 
 // Result is a summary of what was applied, for logging.
 type Result struct {
-	Created       int
-	Grown         int
-	SkippedShrink int
-	RFMismatch    int
-	Unchanged     int
+	Created           int
+	Grown             int
+	SkippedShrink     int
+	RFMismatch        int
+	RetentionMismatch int
+	Unchanged         int
 }
 
 // Plan computes the forward-only, non-destructive decisions for each desired
 // topic without mutating the cluster. Sizing comes from an explicit
 // operator-authored spec (config.yaml's kafka.topics or the FLEXPRICE_KAFKA_TOPICS JSON
-// override), so partition growth is intentional. A topic may yield BOTH an
-// RF-mismatch action (warn) and a partition action (create/grow/skip/unchanged).
+// override), so partition growth is intentional. A topic may yield an
+// RF-mismatch action, a retention-mismatch action, AND a partition action
+// (create/grow/skip/unchanged) all at once — they are independent checks.
 func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 	live, err := a.ListTopics()
 	if err != nil {
@@ -81,6 +86,17 @@ func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 			})
 		}
 
+		if cur.RetentionMs != 0 && cur.RetentionMs != d.RetentionMs {
+			plan = append(plan, Action{
+				Kind:               ActionRetentionMismatch,
+				Topic:              d,
+				CurrentPartitions:  cur.Partitions,
+				CurrentRF:          cur.ReplicationFactor,
+				CurrentRetentionMs: cur.RetentionMs,
+				CurrentExists:      true,
+			})
+		}
+
 		base := Action{Topic: d, CurrentPartitions: cur.Partitions, CurrentRF: cur.ReplicationFactor, CurrentExists: true}
 		switch {
 		case int(cur.Partitions) < d.Partitions:
@@ -96,13 +112,14 @@ func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 }
 
 // Apply executes the mutating actions (create, grow). Warn-only actions
-// (skip-shrink, RF mismatch) and unchanged topics are counted but not acted on.
+// (skip-shrink, RF mismatch, retention mismatch) and unchanged topics are
+// counted but not acted on.
 func Apply(a Admin, plan []Action) (Result, error) {
 	var res Result
 	for _, act := range plan {
 		switch act.Kind {
 		case ActionCreate:
-			if err := a.CreateTopic(act.Topic.Name, int32(act.Topic.Partitions), act.Topic.ReplicationFactor); err != nil {
+			if err := a.CreateTopic(act.Topic.Name, int32(act.Topic.Partitions), act.Topic.ReplicationFactor, act.Topic.RetentionMs); err != nil {
 				return res, fmt.Errorf("create topic %s: %w", act.Topic.Name, err)
 			}
 			res.Created++
@@ -115,6 +132,8 @@ func Apply(a Admin, plan []Action) (Result, error) {
 			res.SkippedShrink++
 		case ActionRFMismatch:
 			res.RFMismatch++
+		case ActionRetentionMismatch:
+			res.RetentionMismatch++
 		case ActionUnchanged:
 			res.Unchanged++
 		}
@@ -123,8 +142,10 @@ func Apply(a Admin, plan []Action) (Result, error) {
 }
 
 // Reconcile plans then applies forward-only, non-destructive changes: create
-// missing, grow partitions, warn (never act) on shrink and RF mismatch. It
-// never deletes topics and never touches topics absent from desired.
+// missing (with partitions, RF, and retention.ms all applied), grow
+// partitions, warn (never act) on shrink, RF mismatch, and retention
+// mismatch. It never deletes topics and never touches topics absent from
+// desired.
 func Reconcile(a Admin, desired []topicspec.ResolvedTopic) (Result, error) {
 	plan, err := Plan(a, desired)
 	if err != nil {

@@ -72,23 +72,25 @@ func main() {
 	if err != nil {
 		log.Fatalf("reconcile failed: %v", err)
 	}
-	if res.SkippedShrink > 0 || res.RFMismatch > 0 {
-		log.Printf("WARN reconcile completed with warnings: skipped-shrink=%d rf-mismatch=%d", res.SkippedShrink, res.RFMismatch)
+	if res.SkippedShrink > 0 || res.RFMismatch > 0 || res.RetentionMismatch > 0 {
+		log.Printf("WARN reconcile completed with warnings: skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d", res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
 	}
-	log.Printf("kafka-migrate done: created=%d grown=%d unchanged=%d skipped-shrink=%d rf-mismatch=%d",
-		res.Created, res.Grown, res.Unchanged, res.SkippedShrink, res.RFMismatch)
+	log.Printf("kafka-migrate done: created=%d grown=%d unchanged=%d skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d",
+		res.Created, res.Grown, res.Unchanged, res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
 }
 
 func logAction(act reconcile.Action) {
 	switch act.Kind {
 	case reconcile.ActionCreate:
-		log.Printf("WOULD CREATE %s partitions=%d rf=%d", act.Topic.Name, act.Topic.Partitions, act.Topic.ReplicationFactor)
+		log.Printf("WOULD CREATE %s partitions=%d rf=%d retention_ms=%d", act.Topic.Name, act.Topic.Partitions, act.Topic.ReplicationFactor, act.Topic.RetentionMs)
 	case reconcile.ActionGrow:
 		log.Printf("WOULD GROW %s %d -> %d partitions", act.Topic.Name, act.CurrentPartitions, act.Topic.Partitions)
 	case reconcile.ActionSkipShrink:
 		log.Printf("WARN %s has MORE partitions (%d) than desired (%d); will skip", act.Topic.Name, act.CurrentPartitions, act.Topic.Partitions)
 	case reconcile.ActionRFMismatch:
 		log.Printf("WARN %s replication-factor mismatch: live=%d desired=%d; will NOT change (warn only)", act.Topic.Name, act.CurrentRF, act.Topic.ReplicationFactor)
+	case reconcile.ActionRetentionMismatch:
+		log.Printf("WARN %s retention.ms mismatch: live=%d desired=%d; will NOT change (warn only)", act.Topic.Name, act.CurrentRetentionMs, act.Topic.RetentionMs)
 	case reconcile.ActionUnchanged:
 		log.Printf("OK %s unchanged", act.Topic.Name)
 	}

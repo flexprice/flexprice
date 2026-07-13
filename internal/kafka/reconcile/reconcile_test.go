@@ -16,14 +16,15 @@ type fakeAdmin struct {
 }
 
 type createCall struct {
-	name       string
-	partitions int32
-	rf         int16
+	name        string
+	partitions  int32
+	rf          int16
+	retentionMs int64
 }
 
 func (f *fakeAdmin) ListTopics() (map[string]liveTopic, error) { return f.live, nil }
-func (f *fakeAdmin) CreateTopic(name string, partitions int32, rf int16) error {
-	f.created = append(f.created, createCall{name, partitions, rf})
+func (f *fakeAdmin) CreateTopic(name string, partitions int32, rf int16, retentionMs int64) error {
+	f.created = append(f.created, createCall{name, partitions, rf, retentionMs})
 	return nil
 }
 func (f *fakeAdmin) CreatePartitions(name string, count int32) error {
@@ -43,16 +44,17 @@ func desired(name string, parts int, rf int16) topicspec.ResolvedTopic {
 
 func TestReconcile(t *testing.T) {
 	tests := []struct {
-		name              string
-		live              map[string]liveTopic
-		failGrow          bool
-		desired           []topicspec.ResolvedTopic
-		wantErr           bool
-		wantCreated       int
-		wantGrown         int
-		wantSkippedShrink int
-		wantRFMismatch    int
-		checkAdmin        func(t *testing.T, f *fakeAdmin)
+		name                  string
+		live                  map[string]liveTopic
+		failGrow              bool
+		desired               []topicspec.ResolvedTopic
+		wantErr               bool
+		wantCreated           int
+		wantGrown             int
+		wantSkippedShrink     int
+		wantRFMismatch        int
+		wantRetentionMismatch int
+		checkAdmin            func(t *testing.T, f *fakeAdmin)
 	}{
 		{
 			name:        "creates missing topic",
@@ -61,7 +63,7 @@ func TestReconcile(t *testing.T) {
 			wantCreated: 1,
 			checkAdmin: func(t *testing.T, f *fakeAdmin) {
 				require.Len(t, f.created, 1)
-				assert.Equal(t, createCall{"events", 6, 3}, f.created[0])
+				assert.Equal(t, createCall{"events", 6, 3, 1000}, f.created[0])
 			},
 		},
 		{
@@ -102,6 +104,12 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name:                  "warns on retention mismatch but does not change",
+			live:                  map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3, RetentionMs: 500}},
+			desired:               []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantRetentionMismatch: 1,
+		},
+		{
 			name:     "propagates grow error",
 			live:     map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
 			failGrow: true,
@@ -123,6 +131,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, tc.wantGrown, res.Grown)
 			assert.Equal(t, tc.wantSkippedShrink, res.SkippedShrink)
 			assert.Equal(t, tc.wantRFMismatch, res.RFMismatch)
+			assert.Equal(t, tc.wantRetentionMismatch, res.RetentionMismatch)
 			if tc.checkAdmin != nil {
 				tc.checkAdmin(t, f)
 			}

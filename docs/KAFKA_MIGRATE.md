@@ -86,11 +86,16 @@ kafka-migrate: env=production topics=9 source=config dry-run=true
 `env:FLEXPRICE_KAFKA_TOPICS` (explicit override, expected for prod).
 
 Per-topic actions during apply:
-- `created=N` — topic didn't exist, created with desired partitions/RF.
+- `created=N` — topic didn't exist, created with desired partitions/RF/`retention.ms` all applied.
 - `grown=N` — topic existed with fewer partitions than desired, partitions added.
 - `unchanged=N` — already matches.
 - `skipped-shrink=N` — topic has **more** partitions than desired; never reduced automatically, review manually.
 - `rf-mismatch=N` — replication factor differs from desired; never changed automatically (Kafka RF changes require a partition reassignment, out of scope for this tool), review manually.
+- `retention-mismatch=N` — `retention.ms` differs from desired on an existing topic; never changed automatically (warn-only, same as RF), review manually and apply via `kafka-configs --alter` if intended.
+
+Note: RF and retention are only ever applied at **create** time. Once a topic exists,
+kafka-migrate will only grow its partitions — RF and retention drift are detected and
+logged but never auto-corrected.
 
 ## Verifying locally
 
