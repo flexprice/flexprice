@@ -105,17 +105,23 @@ type UsageAnalyticPoint struct {
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
-// UsageByFeatureResult represents aggregated usage data for a feature
-type UsageByFeatureResult struct {
-	SubLineItemID    string
-	FeatureID        string
-	MeterID          string
-	PriceID          string
-	SumTotal         decimal.Decimal `swaggertype:"string"`
-	MaxTotal         decimal.Decimal `swaggertype:"string"`
-	CountDistinctIDs uint64
-	CountUniqueQty   uint64
-	LatestQty        decimal.Decimal `swaggertype:"string"`
+// MaxBucketFeatureInfo describes a feature aggregated as MAX over bucketed windows.
+type MaxBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
+	GroupBy      []string
+}
+
+// SumBucketFeatureInfo describes a feature aggregated as SUM over bucketed windows.
+type SumBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
 }
 
 type UsageByCostSheetResult struct {

@@ -241,7 +241,6 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 	invoiceRepo := entRepo.NewInvoiceRepository(client, log, redisCache)
 	eventRepo := chRepo.NewEventRepository(chStore, log)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
-	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, log)
 
 	// Create service params (required for wallet service which needs subscription and billing services)
 	serviceParams := service.ServiceParams{
@@ -263,7 +262,6 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 		InvoiceRepo:              invoiceRepo,
 		EventRepo:                eventRepo,
 		ProcessedEventRepo:       processedEventRepo,
-		FeatureUsageRepo:         featureUsageRepo,
 	}
 
 	// Create services

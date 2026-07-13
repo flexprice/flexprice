@@ -98,7 +98,6 @@ type Stores struct {
 	AlertLogsRepo                alertlogs.Repository
 	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
-	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
@@ -250,7 +249,6 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),
-		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
@@ -310,7 +308,6 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
-	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()

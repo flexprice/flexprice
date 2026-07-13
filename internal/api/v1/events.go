@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -21,25 +20,19 @@ import (
 
 type EventsHandler struct {
 	eventService                 service.EventService
-	eventPostProcessingService   service.EventPostProcessingService
-	featureUsageTrackingService  service.FeatureUsageTrackingService
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
 	meterUsageService            service.MeterUsageService
-	usageBenchmarkService        service.UsageBenchmarkService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, usageBenchmarkService service.UsageBenchmarkService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
-		eventPostProcessingService:   eventPostProcessingService,
-		featureUsageTrackingService:  featureUsageTrackingService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
 		meterUsageService:            meterUsageService,
-		usageBenchmarkService:        usageBenchmarkService,
 		config:                       config,
 		log:                          log,
 	}
@@ -391,95 +384,29 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		return
 	}
 
-	// Call the appropriate service based on feature flag.
-	// Priority: meter-usage > v1 forced > feature-usage > v1 default
-	var response *dto.GetUsageAnalyticsResponse
-
-	if h.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
-		params := &domainevents.MeterUsageDetailedAnalyticsParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerID:  req.ExternalCustomerID,
-			ExternalCustomerIDs: req.ExternalCustomerIDs,
-			FeatureIDs:          req.FeatureIDs,
-			StartTime:           req.StartTime,
-			EndTime:             req.EndTime,
-			GroupBy:             req.GroupBy,
-			PropertyFilters:     req.PropertyFilters,
-			Sources:             req.Sources,
-			WindowSize:          req.WindowSize,
-			Expand:              req.Expand,
-			IncludeChildren:     req.IncludeChildren,
-			BreakdownBucket:     req.BreakdownBucket,
-			// BillingAnchor omitted: service defaults to subscription's billing anchor
-		}
-		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)
-	} else if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {
-		// Use v1 (eventPostProcessingService) when flag is disabled
-		response, err = h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
-	} else {
-		// Use v2 (featureUsageTrackingService) when flag is enabled
-		response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
+	params := &domainevents.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerID:  req.ExternalCustomerID,
+		ExternalCustomerIDs: req.ExternalCustomerIDs,
+		FeatureIDs:          req.FeatureIDs,
+		StartTime:           req.StartTime,
+		EndTime:             req.EndTime,
+		GroupBy:             req.GroupBy,
+		PropertyFilters:     req.PropertyFilters,
+		Sources:             req.Sources,
+		WindowSize:          req.WindowSize,
+		Expand:              req.Expand,
+		IncludeChildren:     req.IncludeChildren,
+		BreakdownBucket:     req.BreakdownBucket,
 	}
-
+	response, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	h.publishAnalyticsBenchmark(ctx, &req)
-
 	c.JSON(http.StatusOK, response)
-}
-
-func (h *EventsHandler) GetUsageAnalyticsV2(c *gin.Context) {
-	ctx := c.Request.Context()
-	var err error
-
-	var req dto.GetUsageAnalyticsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Please check the request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	req.StartTime, req.EndTime, err = validateStartAndEndTime(req.StartTime, req.EndTime)
-	if err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Please check the request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	// Call the service to get detailed analytics
-	response, err := h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	h.publishAnalyticsBenchmark(ctx, &req)
-
-	c.JSON(http.StatusOK, response)
-}
-
-// publishAnalyticsBenchmark fires a benchmark trigger to Kafka after the live
-// analytics response is produced. Strict fire-and-forget: gated on the per-tenant
-// feature flag, never blocks or fails the live response, errors are logged only.
-func (h *EventsHandler) publishAnalyticsBenchmark(ctx context.Context, req *dto.GetUsageAnalyticsRequest) {
-	if h.usageBenchmarkService == nil || h.config == nil {
-		return
-	}
-	if !h.config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
-		return
-	}
-	if err := h.usageBenchmarkService.PublishAnalyticsEvent(ctx, req); err != nil {
-		h.log.Info(ctx, "analytics benchmark: failed to publish event",
-			"tenant_id", types.GetTenantID(ctx),
-			"error", err,
-		)
-	}
 }
 
 func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time, error) {
@@ -543,111 +470,6 @@ func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// @Summary Get Hugging Face inference data
-// @ID getHuggingfaceInferenceData
-// @Description Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation).
-// @Tags Events
-// @Produce json
-// @Security ApiKeyAuth
-// @Success 200 {object} dto.GetHuggingFaceBillingDataResponse
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /events/huggingface-inference [post]
-func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
-	ctx := c.Request.Context()
-	var err error
-
-	var req dto.GetHuggingFaceBillingDataRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Please check the request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	response, err := h.featureUsageTrackingService.GetHuggingFaceBillingData(ctx, &req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	c.JSON(http.StatusOK, response)
-}
-
-// @Summary Get event
-// @ID getEvent
-// @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Includes processing status and debug info.
-// @Tags Events
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} dto.GetEventByIDResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /events/{id} [get]
-func (h *EventsHandler) GetEventByID(c *gin.Context) {
-	ctx := c.Request.Context()
-	eventID := c.Param("id")
-
-	if eventID == "" {
-		c.Error(ierr.NewError("event ID is required").
-			WithHint("Please provide a valid event ID").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	response, err := h.featureUsageTrackingService.DebugEvent(ctx, eventID)
-	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to debug event", "error", err, "event_id", eventID)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-func (h *EventsHandler) ReprocessEvents(c *gin.Context) {
-	ctx := c.Request.Context()
-	var req dto.ReprocessEventsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	result, err := h.featureUsageTrackingService.TriggerReprocessEventsWorkflow(ctx, &req)
-	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to trigger reprocess events workflow", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
-}
-
-func (h *EventsHandler) ReprocessEventsInternal(c *gin.Context) {
-	ctx := c.Request.Context()
-	var req dto.InternalReprocessEventsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	result, err := h.featureUsageTrackingService.TriggerReprocessEventsWorkflowInternal(ctx, &req)
-	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to trigger internal reprocess events workflow", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
 }
 
 func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {

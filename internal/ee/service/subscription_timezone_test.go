@@ -75,7 +75,6 @@ func (s *SubscriptionTimezoneTestSuite) SetupTest() {
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 	}

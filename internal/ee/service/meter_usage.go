@@ -40,6 +40,11 @@ type MeterUsageService interface {
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
 	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
+	// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
+	// request shape used by callers that need to be signal-agnostic (e.g. the
+	// usage-analytics CSV exporter). It resolves tenant/environment from ctx.
+	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
+
 	// GetSubscriptionMeterUsage is the centralized meter-usage query function.
 	// Both analytics and billing paths call this per-subscription to get line-item-bounded usage.
 	GetSubscriptionMeterUsage(ctx context.Context, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
@@ -139,6 +144,45 @@ type dateRangeGroup struct {
 type lineItemWithMeter struct {
 	Item    *subscription.SubscriptionLineItem
 	MeterID string
+}
+
+// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
+// request shape used by callers that need to be signal-agnostic (e.g. the
+// usage-analytics CSV exporter).
+func (s *meterUsageService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	return s.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerID:  req.ExternalCustomerID,
+		ExternalCustomerIDs: req.ExternalCustomerIDs,
+		FeatureIDs:          req.FeatureIDs,
+		StartTime:           req.StartTime,
+		EndTime:             req.EndTime,
+		GroupBy:             req.GroupBy,
+		PropertyFilters:     req.PropertyFilters,
+		Sources:             req.Sources,
+		WindowSize:          req.WindowSize,
+		Expand:              req.Expand,
+		IncludeChildren:     req.IncludeChildren,
+	})
+}
+
+// AnalyticsData holds all data required for analytics processing.
+type AnalyticsData struct {
+	Customer              *customer.Customer
+	Subscriptions         []*subscription.Subscription
+	SubscriptionLineItems map[string]*subscription.SubscriptionLineItem
+	SubscriptionsMap      map[string]*subscription.Subscription
+	Analytics             []*events.DetailedUsageAnalytic
+	Features              map[string]*feature.Feature
+	Meters                map[string]*meter.Meter
+	Prices                map[string]*price.Price
+	PriceResponses        map[string]*dto.PriceResponse
+	Plans                 map[string]*plan.Plan
+	Addons                map[string]*addon.Addon
+	Groups                map[string]*group.Group
+	Currency              string
+	Params                *events.UsageAnalyticsParams
 }
 
 // ---------------------------------------------------------------------------

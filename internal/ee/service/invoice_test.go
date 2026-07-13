@@ -131,7 +131,6 @@ func (s *InvoiceServiceSuite) setupService() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:             s.GetStores().FeatureUsageRepo,
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 }
@@ -1424,7 +1423,6 @@ func (s *InvoiceServiceSuite) setupWallets() {
 		WalletRepo:               s.GetStores().WalletRepo,
 		PaymentRepo:              s.GetStores().PaymentRepo,
 		SettingsRepo:             s.GetStores().SettingsRepo,
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),

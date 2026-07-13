@@ -655,7 +655,7 @@ func (f SubscriptionScheduleFilter) Validate() error {
 	return nil
 }
 
-// UsageSource indicates the caller context for GetFeatureUsageBySubscription.
+// UsageSource indicates the caller context for GetMeterUsageBySubscription.
 // When InvoiceCreation, queries use FINAL for correct ReplacingMergeTree deduplication.
 // When Analytics or empty, FINAL is omitted for performance.
 const (

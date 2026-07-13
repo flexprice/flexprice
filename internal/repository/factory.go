@@ -86,10 +86,6 @@ func NewProcessedEventRepository(p RepositoryParams) events.ProcessedEventReposi
 	return clickhouseRepo.NewProcessedEventRepository(p.ClickHouseDB, p.Logger)
 }
 
-func NewFeatureUsageRepository(p RepositoryParams) events.FeatureUsageRepository {
-	return clickhouseRepo.NewFeatureUsageRepository(p.ClickHouseDB, p.Logger)
-}
-
 func NewRawEventRepository(p RepositoryParams) events.RawEventRepository {
 	return clickhouseRepo.NewRawEventRepository(p.ClickHouseDB, p.Logger)
 }
@@ -288,14 +284,6 @@ func NewCostSheetUsageRepository(p RepositoryParams) events.CostSheetUsageReposi
 
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
-}
-
-func NewUsageBenchmarkRepository(p RepositoryParams) events.UsageBenchmarkRepository {
-	return clickhouseRepo.NewUsageBenchmarkRepository(p.ClickHouseDB, p.Logger)
-}
-
-func NewMeterUsageBenchmarkRepository(p RepositoryParams) events.MeterUsageBenchmarkRepository {
-	return clickhouseRepo.NewMeterUsageBenchmarkRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {

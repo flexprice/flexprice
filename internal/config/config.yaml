@@ -313,40 +313,6 @@ event_processing_replay:
   rate_limit: 1
   consumer_group: "v1_event_processing_replay"
 
-event_post_processing:
-  enabled: true
-  topic: "events_post_processing"
-  rate_limit: 12
-  consumer_group: "v1_events_post_processing"
-  topic_backfill: "events_post_processing_backfill"
-  rate_limit_backfill: 1
-  consumer_group_backfill: "v1_events_post_processing_backfill"
-
-feature_usage_tracking:
-  enabled: true
-  topic: "events"
-  rate_limit: 1
-  consumer_group: "v1_feature_tracking_service"
-  backfill_enabled: true
-  wallet_alert_push_enabled: true
-  topic_backfill: "events_post_processing_backfill"
-  rate_limit_backfill: 1
-  consumer_group_backfill: "v1_feature_tracking_service_backfill"
-  topic_dlq: "feature_tracking_service_dlq"
-
-feature_usage_tracking_lazy:
-  enabled: true
-  topic: "events_lazy"
-  rate_limit: 1
-  consumer_group: "v1_feature_tracking_service_lazy"
-  topic_dlq: "feature_tracking_service_lazy_dlq"
-
-feature_usage_tracking_replay:
-  enabled: true
-  topic: "events_backfill"
-  rate_limit: 1
-  consumer_group: "v1_feature_tracking_service_replay"
-
 meter_usage_tracking:
   enabled: true
   topic: "events"
@@ -367,12 +333,6 @@ meter_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
-
-usage_benchmark:
-  enabled: false
-  topic: "staging_benchmarking"
-  rate_limit: 10
-  consumer_group: "v1_usage_benchmark_service"
 
 costsheet_usage_tracking:
   enabled: false
@@ -395,27 +355,12 @@ wallet_balance_alert:
   consumer_group: "v1_wallet_alert_service"
 
 feature_flag:
-  # This flag is used to enable/disable feature usage for analytics
-  enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
-  # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
-  force_v1_for_tenant: ""
-  # Switch /invoices/preview to use meter-usage
-  enable_meter_usage_for_preview_invoice: true
-  # Switch /events/analytics to use meter-usage
-  enable_meter_usage_for_analytics: true
-    # Switch invoice billing to use meter-usage
+  # Switch invoice billing to use meter-usage
   enable_meter_usage_for_billing: false
-  # Per-tenant rollout overrides for meter-usage. Resolution order per tenant:
+  # Per-tenant rollout overrides for meter-usage-for-billing. Resolution order per tenant:
   #   disabled_tenants > enabled_tenants > global enable_* flag above.
-  meter_usage_for_preview_invoice_enabled_tenants: []
-  meter_usage_for_preview_invoice_disabled_tenants: []
-  meter_usage_for_analytics_enabled_tenants: []
-  meter_usage_for_analytics_disabled_tenants: []
   meter_usage_for_billing_enabled_tenants: []
   meter_usage_for_billing_disabled_tenants: []
-  enable_usage_benchmark: false
-  usage_benchmark_enabled_tenants: []
-  usage_benchmark_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:

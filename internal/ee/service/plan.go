@@ -8,15 +8,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
-	eventsWorkflowModels "github.com/flexprice/flexprice/internal/temporal/models/events"
-	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -532,37 +529,6 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 			}
 
 			lineItemsCreated += totalCreated
-
-			// Trigger reprocess events for plan workflow non-blocking (fire-and-forget)
-			if temporalSvc := temporalService.GetGlobalTemporalService(); temporalSvc != nil {
-				pairs := make([]eventsWorkflowModels.MissingPair, len(missingPairs))
-				for j, p := range missingPairs {
-					pairs[j] = eventsWorkflowModels.MissingPair{
-						SubscriptionID: p.SubscriptionID,
-						PriceID:        p.PriceID,
-						CustomerID:     p.CustomerID,
-					}
-				}
-				workflowInput := eventsWorkflowModels.ReprocessEventsForPlanWorkflowInput{
-					MissingPairs:  pairs,
-					TenantID:      types.GetTenantID(ctx),
-					EnvironmentID: types.GetEnvironmentID(ctx),
-					UserID:        types.GetUserID(ctx),
-				}
-				workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
-				if err != nil {
-					s.Logger.Info(ctx, "failed to start reprocess events for plan workflow",
-						"plan_id", planID,
-						"missing_pairs_count", len(missingPairs),
-						"error", err)
-				} else {
-					s.Logger.Debug(ctx, "reprocess events for plan workflow started",
-						"plan_id", planID,
-						"missing_pairs_count", len(missingPairs),
-						"workflow_id", workflowRun.GetID(),
-						"run_id", workflowRun.GetRunID())
-				}
-			}
 		}
 
 		if nextSubID != nil {
@@ -764,37 +730,6 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		}
 		subsStamped += stamped
 		stampTotalDuration += time.Since(stampStart)
-
-		// Fire-and-forget reprocess workflow for the same set of newly-created pairs.
-		if len(missingPairs) > 0 {
-			if temporalSvc := temporalService.GetGlobalTemporalService(); temporalSvc != nil {
-				pairs := make([]eventsWorkflowModels.MissingPair, len(missingPairs))
-				for j, p := range missingPairs {
-					pairs[j] = eventsWorkflowModels.MissingPair{
-						SubscriptionID: p.SubscriptionID,
-						PriceID:        p.PriceID,
-						CustomerID:     p.CustomerID,
-					}
-				}
-				workflowInput := eventsWorkflowModels.ReprocessEventsForPlanWorkflowInput{
-					MissingPairs:  pairs,
-					TenantID:      types.GetTenantID(ctx),
-					EnvironmentID: types.GetEnvironmentID(ctx),
-					UserID:        types.GetUserID(ctx),
-				}
-				workflowRun, werr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
-				if werr != nil {
-					s.Logger.Info(ctx, "failed to start v2 reprocess events for plan workflow",
-						"plan_id", planID, "missing_pairs_count", len(missingPairs), "error", werr)
-				} else {
-					s.Logger.Debug(ctx, "v2 reprocess events for plan workflow started",
-						"plan_id", planID,
-						"missing_pairs_count", len(missingPairs),
-						"workflow_id", workflowRun.GetID(),
-						"run_id", workflowRun.GetRunID())
-				}
-			}
-		}
 	}
 
 	totalSyncDuration := time.Since(syncStartTime)
@@ -822,175 +757,12 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 	}, nil
 }
 
-func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missingPairs []planpricesync.PlanLineItemCreationDelta) error {
-	if len(missingPairs) == 0 {
-		return nil
-	}
-
-	// Group by price_id: for each price, collect customer IDs from pairs (then dedupe with lo.Uniq)
-	priceToCustomerIDs := make(map[string][]string)
-	for _, pair := range missingPairs {
-		if pair.CustomerID == "" {
-			continue
-		}
-		priceToCustomerIDs[pair.PriceID] = append(priceToCustomerIDs[pair.PriceID], pair.CustomerID)
-	}
-
-	priceIDs := lo.Keys(priceToCustomerIDs)
-	priceFilter := types.NewNoLimitPriceFilter().
-		WithPriceIDs(priceIDs).
-		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
-		WithAllowExpiredPrices(true)
-
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to fetch prices for reprocess events for plan", "price_ids", priceIDs, "error", err)
-		return err
-	}
-	priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
-
-	// Build meter_id -> event_name map for involved prices in one fetch.
-	meterIDs := lo.Uniq(lo.FilterMap(prices, func(p *domainPrice.Price, _ int) (string, bool) {
-		if p == nil || p.MeterID == "" {
-			return "", false
-		}
-		return p.MeterID, true
-	}))
-	meterService := NewMeterService(s.MeterRepo)
-	var meterIDToEventName map[string]string = make(map[string]string)
-
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.MeterIDs = meterIDs
-	meterFilter.Status = lo.ToPtr(types.StatusPublished)
-	metersResponse, meterErr := meterService.GetMeters(ctx, meterFilter)
-	if meterErr != nil {
-		return meterErr
-	}
-
-	for _, meterResp := range metersResponse.Items {
-		meterIDToEventName[meterResp.ID] = meterResp.EventName
-	}
-
-	// Single CustomerRepo.List for all unique customer IDs across all prices (avoids N DB calls)
-	allCustomerIDs := lo.Uniq(lo.FlatMap(lo.Values(priceToCustomerIDs), func(ids []string, _ int) []string { return ids }))
-	if len(allCustomerIDs) == 0 {
-		return nil
-	}
-	customerFilter := types.NewNoLimitCustomerFilter()
-	customerFilter.CustomerIDs = allCustomerIDs
-	customers, err := s.CustomerRepo.List(ctx, customerFilter)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to list customers for reprocess events for plan", "customer_ids", allCustomerIDs, "error", err)
-		return err
-	}
-	customerIDToExternalID := make(map[string]string, len(customers))
-	for _, c := range customers {
-		if c.ExternalID != "" {
-			customerIDToExternalID[c.ID] = c.ExternalID
-		}
-	}
-
-	now := time.Now().UTC()
-	const reprocessBatchSize = 100
-	temporalSvc := temporalService.GetGlobalTemporalService()
-
-	for _, priceID := range priceIDs {
-		price, ok := priceMap[priceID]
-		if !ok {
-			continue
-		}
-		customerIDs := lo.Uniq(priceToCustomerIDs[priceID])
-		if len(customerIDs) == 0 {
-			continue
-		}
-
-		endTime := now
-		if price.EndDate != nil {
-			endTime = lo.FromPtr(price.EndDate)
-		}
-
-		startTime := now
-		if price.StartDate != nil {
-			startTime = lo.FromPtr(price.StartDate)
-		}
-
-		if startTime.After(time.Now().UTC()) || endTime.Equal(time.Now().UTC()) {
-			continue
-		}
-
-		eventName, ok := meterIDToEventName[price.MeterID]
-		if !ok || eventName == "" {
-			s.Logger.Info(ctx, "skipping reprocess events for price due to missing meter-event mapping",
-				"price_id", priceID,
-				"meter_id", price.MeterID)
-			continue
-		}
-
-		for _, cid := range customerIDs {
-			extID, ok := customerIDToExternalID[cid]
-			if !ok || extID == "" {
-				continue
-			}
-			if temporalSvc == nil {
-				continue
-			}
-
-			eventsList, _, getEventsErr := s.EventRepo.GetEvents(ctx, &events.GetEventsParams{
-				ExternalCustomerID: extID,
-				EventName:          eventName,
-				StartTime:          startTime,
-				EndTime:            endTime,
-				PageSize:           1, // we only need to check if events exist in the time window
-				CountTotal:         false,
-			})
-			if getEventsErr != nil {
-				s.Logger.Info(ctx, "failed to get events for plan reprocess pre-check",
-					"price_id", priceID,
-					"external_customer_id", extID,
-					"event_name", eventName,
-					"start_time", startTime,
-					"end_time", endTime,
-					"error", getEventsErr)
-				continue
-			}
-			if len(eventsList) == 0 {
-				continue // no events for this customer, move to next
-			}
-
-			workflowInput := eventsWorkflowModels.ReprocessEventsWorkflowInput{
-				ExternalCustomerID: extID,
-				StartDate:          startTime,
-				EndDate:            endTime,
-				BatchSize:          reprocessBatchSize,
-				EventName:          eventName,
-				ForceReprocess:     true,
-				TenantID:           types.GetTenantID(ctx),
-				EnvironmentID:      types.GetEnvironmentID(ctx),
-				UserID:             types.GetUserID(ctx),
-			}
-			workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsWorkflow, workflowInput)
-			if err != nil {
-				s.Logger.Info(ctx, "failed to start reprocess events workflow for plan customer",
-					"price_id", priceID, "external_customer_id", extID, "error", err)
-			} else {
-				s.Logger.Debug(ctx, "reprocess events workflow started for plan customer",
-					"price_id", priceID, "external_customer_id", extID,
-					"workflow_id", workflowRun.GetID(), "run_id", workflowRun.GetRunID())
-			}
-		}
-	}
-
-	return nil
-}
-
 func createPlanLineItem(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	price *domainPrice.Price,
 	plan *plan.Plan,
 ) *subscription.SubscriptionLineItem {
-
-	// Merge price metadata with plan-sync tracking metadata for backtracking and analysis
 	metadata := make(map[string]string)
 	for k, v := range price.Metadata {
 		metadata[k] = v
@@ -1014,14 +786,9 @@ func createPlanLineItem(
 		EntityType:   types.SubscriptionLineItemEntityTypePlan,
 	}
 
-	lineItem := req.ToSubscriptionLineItem(ctx, lineItemParams)
-
-	return lineItem
+	return req.ToSubscriptionLineItem(ctx, lineItemParams)
 }
 
-// ClonePlan clones a plan and its associated active prices, published entitlements,
-// and published credit grants into a new plan within the same environment.
-// Cross-env plan cloning is handled exclusively by the environment clone Temporal workflow.
 func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("plan ID is required").
