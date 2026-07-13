@@ -1297,9 +1297,7 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 
 	conn, err := f.connectionRepo.Get(ctx, connectionID)
 	if err != nil {
-		return nil, ierr.NewError("failed to get storage connection by ID").
-			WithHintf("Connection ID '%s' not found", connectionID).
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	switch conn.ProviderType {

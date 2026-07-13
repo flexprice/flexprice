@@ -240,3 +240,48 @@ func TestFactory_GetStorageProvider_UnsupportedProviderType_ReturnsValidationErr
 	require.Error(t, err)
 	require.Nil(t, got)
 }
+
+// erroringConnectionRepo wraps an InMemoryConnectionStore but forces Get to fail with a
+// non-NotFound error, simulating a database outage/timeout rather than a missing row.
+type erroringConnectionRepo struct {
+	connection.Repository
+	getErr error
+}
+
+func (r *erroringConnectionRepo) Get(ctx context.Context, id string) (*connection.Connection, error) {
+	return nil, r.getErr
+}
+
+func TestFactory_GetStorageProvider_RepositoryFailure_PreservesOriginalErrorKind(t *testing.T) {
+	ctx := buildFactoryTestContext()
+
+	dbErr := ierr.NewError("connection to database lost").
+		WithHint("Transient database failure").
+		Mark(ierr.ErrDatabase)
+
+	repo := &erroringConnectionRepo{
+		Repository: testutil.NewInMemoryConnectionStore(),
+		getErr:     dbErr,
+	}
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{
+			EncryptionKey: "test-encryption-key-for-unit-tests-only",
+		},
+	}
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+
+	factory := buildStorageTestFactoryWithRepo(repo, cfg, log, encSvc)
+
+	got, err := factory.GetStorageProvider(ctx, "conn_whatever")
+	require.Error(t, err)
+	require.Nil(t, got)
+
+	// The critical assertion: a database failure must NOT be reclassified as ErrNotFound —
+	// that would mask real outages as "connection doesn't exist" and break upstream
+	// retry/error-handling logic.
+	require.False(t, ierr.IsNotFound(err), "database failure was incorrectly reclassified as NotFound: %v", err)
+	require.ErrorIs(t, err, dbErr)
+}
