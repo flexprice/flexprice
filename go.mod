@@ -3,6 +3,7 @@ module github.com/flexprice/flexprice
 go 1.25.12
 
 require (
+	cloud.google.com/go/storage v1.38.0
 	entgo.io/ent v0.14.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.35.0
 	github.com/PaddleHQ/paddle-go-sdk/v4 v4.2.0
@@ -82,6 +83,8 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.112.1 // indirect
+	cloud.google.com/go/iam v1.1.6 // indirect
 	github.com/beevik/etree v1.7.0 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
@@ -108,8 +111,10 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/term v0.44.0 // indirect
+	google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
