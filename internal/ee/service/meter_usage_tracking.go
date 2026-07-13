@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	goCache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -325,7 +326,8 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
-		return nil
+		// fall through — the record loop is a no-op and the len(records)==0
+		// check below fires the webhook (single call site).
 	}
 
 	// Step 2: Match meters by filters, dedup check, and build usage records
@@ -364,6 +366,11 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	if len(records) == 0 {
+		reason := types.RejectedEventReasonNoMatchingMeter
+		if len(meters) == 0 {
+			reason = types.RejectedEventReasonNoMeterForName
+		}
+		s.publishRejectedEventWebhook(ctx, event, reason)
 		return nil
 	}
 
@@ -380,6 +387,66 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	s.runMeterUsagePostInsertSideEffects(ctx, event)
 
 	return nil
+}
+
+// publishRejectedEventWebhook fires the event.rejected webhook when an event
+// produced no meter usage. Opt-in, best-effort (failures are logged, never
+// returned), and throttled to once per window per (tenant, env, event_name).
+func (s *meterUsageTrackingService) publishRejectedEventWebhook(ctx context.Context, event *events.Event, reason types.RejectedEventReason) {
+	if !s.Config.MeterUsageTracking.RejectedEventWebhookEnabled || s.WebhookPublisher == nil {
+		return
+	}
+
+	// Throttle via a name-keyed lock (distinct from the event-ID dedup lock). The
+	// lock is never released — it expires by TTL, which is the window. No Locker =
+	// fail open (publish every time).
+	if window := s.Config.MeterUsageTracking.RejectedEventWebhookWindow; window > 0 && s.Locker != nil {
+		throttleKey := cache.GenerateKey(ctx, cache.PrefixEvent, "rejected_webhook", event.EventName)
+		lock, err := s.Locker.AcquireLock(ctx, throttleKey, window)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to acquire throttle lock for rejected event webhook",
+				"error", err, "event_name", event.EventName)
+		} else if !lock.AcquiredSuccessfully() {
+			return // already fired within the window
+		}
+	}
+
+	internal := webhookDto.InternalRejectedEvent{
+		Reason: reason,
+		Event: webhookDto.RejectedEventData{
+			ID:                 event.ID,
+			EventName:          event.EventName,
+			CustomerID:         event.CustomerID,
+			ExternalCustomerID: event.ExternalCustomerID,
+			Source:             event.Source,
+			Properties:         event.Properties,
+			Timestamp:          event.Timestamp,
+		},
+	}
+
+	webhookPayload, err := json.Marshal(internal)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal rejected event webhook payload",
+			"error", err, "event_id", event.ID)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     types.WebhookEventEventRejected,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeEvent,
+		EntityID:      event.ID,
+	}
+
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Error(ctx, "failed to publish rejected event webhook",
+			"error", err, "event_id", event.ID, "event_name", event.EventName)
+	}
 }
 
 // checkMeterFilters validates that all meter filters match the event properties

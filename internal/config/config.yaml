@@ -327,6 +327,8 @@ meter_usage_tracking:
   topic_dlq: "meter_usage_tracking_service_dlq"
   redis_deduplication_enabled: false
   wallet_alert_push_enabled: false
+  rejected_event_webhook_enabled: false
+  rejected_event_webhook_window: "10m"
 
 meter_usage_tracking_lazy:
   enabled: true

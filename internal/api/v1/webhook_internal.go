@@ -24,6 +24,7 @@ var _ = []any{
 	(*webhookDto.WalletWebhookPayload)(nil),
 	(*webhookDto.TransactionWebhookPayload)(nil),
 	(*webhookDto.CreditNoteWebhookPayload)(nil),
+	(*webhookDto.RejectedEventWebhookPayload)(nil),
 }
 
 // WebhookEventInvoiceUpdateFinalized godoc
@@ -445,3 +446,13 @@ func WebhookEventCreditNoteCreated() {}
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.updated [post]
 func WebhookEventCreditNoteUpdated() {}
+
+// WebhookEventEventRejected godoc
+// @Summary event.rejected
+// @Description Fired when an ingested usage event produces no meter usage — either no meter is registered for its event name, or meters exist for the name but the event matched none of their filters. Throttled to at most once per configured window per event name. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.RejectedEventWebhookPayload "Webhook payload"
+// @Router /webhook-events/event.rejected [post]
+func WebhookEventEventRejected() {}

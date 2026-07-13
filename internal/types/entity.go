@@ -4,14 +4,15 @@ package types
 type SystemEntityType string
 
 const (
-	SystemEntityTypeFeature      SystemEntityType = "feature"
-	SystemEntityTypeCustomer     SystemEntityType = "customer"
-	SystemEntityTypePlan         SystemEntityType = "plan"
-	SystemEntityTypeSubscription SystemEntityType = "subscription"
-	SystemEntityTypeInvoice      SystemEntityType = "invoice"
-	SystemEntityTypePayment      SystemEntityType = "payment"
-	SystemEntityTypeCreditNote   SystemEntityType = "credit_note"
-	SystemEntityTypeWallet       SystemEntityType = "wallet"
+	SystemEntityTypeFeature         SystemEntityType = "feature"
+	SystemEntityTypeCustomer        SystemEntityType = "customer"
+	SystemEntityTypePlan            SystemEntityType = "plan"
+	SystemEntityTypeSubscription    SystemEntityType = "subscription"
+	SystemEntityTypeInvoice         SystemEntityType = "invoice"
+	SystemEntityTypePayment         SystemEntityType = "payment"
+	SystemEntityTypeCreditNote      SystemEntityType = "credit_note"
+	SystemEntityTypeWallet          SystemEntityType = "wallet"
 	SystemEntityTypeEntitlement     SystemEntityType = "entitlement"
 	SystemEntityTypeCheckoutSession SystemEntityType = "checkout_session"
+	SystemEntityTypeEvent           SystemEntityType = "event"
 )
