@@ -500,7 +500,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
-	if err := req.SyncConfig.Validate(); err != nil {
+	if err := req.SyncConfig.ValidateForProvider(req.ProviderType); err != nil {
 		return nil, err
 	}
 
@@ -668,14 +668,14 @@ func (s *connectionService) GetConnections(ctx context.Context, filter *types.Co
 func (s *connectionService) UpdateConnection(ctx context.Context, id string, req dto.UpdateConnectionRequest) (*dto.ConnectionResponse, error) {
 	s.Logger.Debug(ctx, "updating connection", "connection_id", id)
 
-	if err := req.SyncConfig.Validate(); err != nil {
-		return nil, err
-	}
-
 	// Get existing connection
 	conn, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get connection for update", "error", err, "connection_id", id)
+		return nil, err
+	}
+
+	if err := req.SyncConfig.ValidateForProvider(conn.ProviderType); err != nil {
 		return nil, err
 	}
 

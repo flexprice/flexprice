@@ -79,7 +79,15 @@ func DefaultSyncConfig() *SyncConfig {
 	}
 }
 
-// Validate validates the SyncConfig
+// Validate validates the SyncConfig without provider context.
+//
+// NOTE: this method is also invoked implicitly by Ent's generated code, because
+// ent/schema/connection.go declares sync_config as field.JSON(&types.SyncConfig{}),
+// and Ent's codegen auto-detects and calls a no-arg Validate() error method on any
+// JSON field type at Create()/Update() time. That call site has no provider-type
+// context available, so the embedded StorageExportConfig is checked with its
+// provider-agnostic Validate() (no S3-only Region requirement enforced here).
+// Callers that DO have provider context should call ValidateForProvider instead.
 func (s *SyncConfig) Validate() error {
 	if s == nil {
 		return nil
@@ -117,6 +125,28 @@ func (s *SyncConfig) Validate() error {
 			return ierr.NewError("invalid normalize_fixed_to billing period").
 				WithHint(err.Error()).
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// ValidateForProvider validates the SyncConfig for the given connection provider
+// type, additionally enforcing the S3-only Region requirement on the embedded
+// StorageExportConfig. Prefer this over the plain Validate() wherever the caller
+// has provider-type context (e.g. connection create/update).
+func (s *SyncConfig) ValidateForProvider(providerType SecretProvider) error {
+	if s == nil {
+		return nil
+	}
+
+	if err := s.Validate(); err != nil {
+		return err
+	}
+
+	if s.Storage != nil {
+		if err := s.Storage.ValidateForProvider(providerType); err != nil {
+			return err
 		}
 	}
 
