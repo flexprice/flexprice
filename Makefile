@@ -205,6 +205,20 @@ generate-migration:
 init-db: up migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 	@echo "Database initialization complete"
 
+# One-off: seed Svix event-types on a new/self-hosted env.
+# Reads webhook.svix_config.base_url / auth_token (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN).
+# Usage: make seed-svix
+.PHONY: seed-svix
+seed-svix:
+	@go run ./cmd/svix-migrate
+
+# Same, run inside the flexprice image (no local Go toolchain needed).
+# Usage: make seed-svix-docker [IMAGE=flexprice-app:local]
+IMAGE ?= flexprice-app:local
+.PHONY: seed-svix-docker
+seed-svix-docker:
+	@docker run --rm --env-file .env --entrypoint ./svix-migrate $(IMAGE)
+
 # Run postgres migrations
 migrate-postgres:
 	@echo "Running Postgres migrations..."

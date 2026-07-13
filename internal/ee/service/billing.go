@@ -80,6 +80,9 @@ type BillingService interface {
 	// CalculateFeatureUsageCharges calculates usage charges for a subscription.
 	// Set params.Source to types.UsageSourceInvoiceCreation to use FINAL on feature_usage in ClickHouse.
 	CalculateFeatureUsageCharges(ctx context.Context, params *dto.CalculateFeatureUsageChargesParams) (*dto.CalculateFeatureUsageChargesResult, error)
+
+	// CalculateMeterUsageCharges calculates usage charges for a subscription.
+	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 }
 
 type billingService struct {

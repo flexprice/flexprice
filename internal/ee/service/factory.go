@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -114,6 +115,7 @@ type ServiceParams struct {
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
+	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
@@ -197,6 +199,7 @@ func NewServiceParams(
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	settingsRepo settings.Repository,
 	alertLogsRepo alertlogs.Repository,
+	alertRepo alert.Repository,
 	groupRepo group.Repository,
 	scheduledTaskRepo scheduledtask.Repository,
 	prorationCalculator proration.Calculator,
@@ -265,6 +268,7 @@ func NewServiceParams(
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		SettingsRepo:                 settingsRepo,
 		AlertLogsRepo:                alertLogsRepo,
+		AlertRepo:                    alertRepo,
 		GroupRepo:                    groupRepo,
 		ScheduledTaskRepo:            scheduledTaskRepo,
 		ProrationCalculator:          prorationCalculator,

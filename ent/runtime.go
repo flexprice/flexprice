@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
+	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
@@ -197,6 +198,43 @@ func init() {
 	alertlogsDescAlertStatus := alertlogsFields[7].Descriptor()
 	// alertlogs.AlertStatusValidator is a validator for the "alert_status" field. It is called by the builders before save.
 	alertlogs.AlertStatusValidator = alertlogsDescAlertStatus.Validators[0].(func(string) error)
+	alertsettingsMixin := schema.AlertSettings{}.Mixin()
+	alertsettingsMixinFields0 := alertsettingsMixin[0].Fields()
+	_ = alertsettingsMixinFields0
+	alertsettingsMixinFields1 := alertsettingsMixin[1].Fields()
+	_ = alertsettingsMixinFields1
+	alertsettingsFields := schema.AlertSettings{}.Fields()
+	_ = alertsettingsFields
+	// alertsettingsDescTenantID is the schema descriptor for tenant_id field.
+	alertsettingsDescTenantID := alertsettingsMixinFields0[0].Descriptor()
+	// alertsettings.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	alertsettings.TenantIDValidator = alertsettingsDescTenantID.Validators[0].(func(string) error)
+	// alertsettingsDescStatus is the schema descriptor for status field.
+	alertsettingsDescStatus := alertsettingsMixinFields0[1].Descriptor()
+	// alertsettings.DefaultStatus holds the default value on creation for the status field.
+	alertsettings.DefaultStatus = alertsettingsDescStatus.Default.(string)
+	// alertsettingsDescCreatedAt is the schema descriptor for created_at field.
+	alertsettingsDescCreatedAt := alertsettingsMixinFields0[2].Descriptor()
+	// alertsettings.DefaultCreatedAt holds the default value on creation for the created_at field.
+	alertsettings.DefaultCreatedAt = alertsettingsDescCreatedAt.Default.(func() time.Time)
+	// alertsettingsDescUpdatedAt is the schema descriptor for updated_at field.
+	alertsettingsDescUpdatedAt := alertsettingsMixinFields0[3].Descriptor()
+	// alertsettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	alertsettings.DefaultUpdatedAt = alertsettingsDescUpdatedAt.Default.(func() time.Time)
+	// alertsettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	alertsettings.UpdateDefaultUpdatedAt = alertsettingsDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// alertsettingsDescEnvironmentID is the schema descriptor for environment_id field.
+	alertsettingsDescEnvironmentID := alertsettingsMixinFields1[0].Descriptor()
+	// alertsettings.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	alertsettings.DefaultEnvironmentID = alertsettingsDescEnvironmentID.Default.(string)
+	// alertsettingsDescEnabled is the schema descriptor for enabled field.
+	alertsettingsDescEnabled := alertsettingsFields[1].Descriptor()
+	// alertsettings.DefaultEnabled holds the default value on creation for the enabled field.
+	alertsettings.DefaultEnabled = alertsettingsDescEnabled.Default.(bool)
+	// alertsettingsDescEntityID is the schema descriptor for entity_id field.
+	alertsettingsDescEntityID := alertsettingsFields[3].Descriptor()
+	// alertsettings.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	alertsettings.EntityIDValidator = alertsettingsDescEntityID.Validators[0].(func(string) error)
 	authFields := schema.Auth{}.Fields()
 	_ = authFields
 	// authDescProvider is the schema descriptor for provider field.
@@ -541,19 +579,19 @@ func init() {
 	// creditgrant.ScopeValidator is a validator for the "scope" field. It is called by the builders before save.
 	creditgrant.ScopeValidator = creditgrantDescScope.Validators[0].(func(string) error)
 	// creditgrantDescCredits is the schema descriptor for credits field.
-	creditgrantDescCredits := creditgrantFields[5].Descriptor()
+	creditgrantDescCredits := creditgrantFields[6].Descriptor()
 	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
 	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
 	// creditgrantDescCadence is the schema descriptor for cadence field.
-	creditgrantDescCadence := creditgrantFields[8].Descriptor()
+	creditgrantDescCadence := creditgrantFields[9].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
 	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
-	creditgrantDescExpirationType := creditgrantFields[11].Descriptor()
+	creditgrantDescExpirationType := creditgrantFields[12].Descriptor()
 	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
 	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[15].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[16].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	creditgrantapplicationMixin := schema.CreditGrantApplication{}.Mixin()

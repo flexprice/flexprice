@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
+	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
@@ -80,6 +81,8 @@ type Client struct {
 	AddonAssociation *AddonAssociationClient
 	// AlertLogs is the client for interacting with the AlertLogs builders.
 	AlertLogs *AlertLogsClient
+	// AlertSettings is the client for interacting with the AlertSettings builders.
+	AlertSettings *AlertSettingsClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -188,6 +191,7 @@ func (c *Client) init() {
 	c.Addon = NewAddonClient(c.config)
 	c.AddonAssociation = NewAddonAssociationClient(c.config)
 	c.AlertLogs = NewAlertLogsClient(c.config)
+	c.AlertSettings = NewAlertSettingsClient(c.config)
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.CheckoutSession = NewCheckoutSessionClient(c.config)
@@ -330,6 +334,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Addon:                    NewAddonClient(cfg),
 		AddonAssociation:         NewAddonAssociationClient(cfg),
 		AlertLogs:                NewAlertLogsClient(cfg),
+		AlertSettings:            NewAlertSettingsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
@@ -399,6 +404,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Addon:                    NewAddonClient(cfg),
 		AddonAssociation:         NewAddonAssociationClient(cfg),
 		AlertLogs:                NewAlertLogsClient(cfg),
+		AlertSettings:            NewAlertSettingsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
@@ -475,17 +481,18 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
-		c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon, c.CouponApplication,
-		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
-		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntityIntegrationMapping,
-		c.Environment, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
-		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
-		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret,
-		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction, c.WorkflowExecution,
+		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.Auth,
+		c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon,
+		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
+		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
+		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
+		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
+		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -495,17 +502,18 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
-		c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon, c.CouponApplication,
-		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
-		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntityIntegrationMapping,
-		c.Environment, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
-		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
-		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask, c.Secret,
-		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction, c.WorkflowExecution,
+		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.Auth,
+		c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon,
+		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
+		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
+		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
+		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
+		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
+		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
+		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -520,6 +528,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AddonAssociation.mutate(ctx, m)
 	case *AlertLogsMutation:
 		return c.AlertLogs.mutate(ctx, m)
+	case *AlertSettingsMutation:
+		return c.AlertSettings.mutate(ctx, m)
 	case *AuthMutation:
 		return c.Auth.mutate(ctx, m)
 	case *BillingSequenceMutation:
@@ -736,6 +746,22 @@ func (c *AddonClient) QueryEntitlements(a *Addon) *EntitlementQuery {
 			sqlgraph.From(addon.Table, addon.FieldID, id),
 			sqlgraph.To(entitlement.Table, entitlement.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, addon.EntitlementsTable, addon.EntitlementsColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCreditGrants queries the credit_grants edge of a Addon.
+func (c *AddonClient) QueryCreditGrants(a *Addon) *CreditGrantQuery {
+	query := (&CreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addon.Table, addon.FieldID, id),
+			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, addon.CreditGrantsTable, addon.CreditGrantsColumn),
 		)
 		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
 		return fromV, nil
@@ -1031,6 +1057,139 @@ func (c *AlertLogsClient) mutate(ctx context.Context, m *AlertLogsMutation) (Val
 		return (&AlertLogsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AlertLogs mutation op: %q", m.Op())
+	}
+}
+
+// AlertSettingsClient is a client for the AlertSettings schema.
+type AlertSettingsClient struct {
+	config
+}
+
+// NewAlertSettingsClient returns a client for the AlertSettings from the given config.
+func NewAlertSettingsClient(c config) *AlertSettingsClient {
+	return &AlertSettingsClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `alertsettings.Hooks(f(g(h())))`.
+func (c *AlertSettingsClient) Use(hooks ...Hook) {
+	c.hooks.AlertSettings = append(c.hooks.AlertSettings, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `alertsettings.Intercept(f(g(h())))`.
+func (c *AlertSettingsClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AlertSettings = append(c.inters.AlertSettings, interceptors...)
+}
+
+// Create returns a builder for creating a AlertSettings entity.
+func (c *AlertSettingsClient) Create() *AlertSettingsCreate {
+	mutation := newAlertSettingsMutation(c.config, OpCreate)
+	return &AlertSettingsCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AlertSettings entities.
+func (c *AlertSettingsClient) CreateBulk(builders ...*AlertSettingsCreate) *AlertSettingsCreateBulk {
+	return &AlertSettingsCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AlertSettingsClient) MapCreateBulk(slice any, setFunc func(*AlertSettingsCreate, int)) *AlertSettingsCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AlertSettingsCreateBulk{err: fmt.Errorf("calling to AlertSettingsClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AlertSettingsCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AlertSettingsCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AlertSettings.
+func (c *AlertSettingsClient) Update() *AlertSettingsUpdate {
+	mutation := newAlertSettingsMutation(c.config, OpUpdate)
+	return &AlertSettingsUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AlertSettingsClient) UpdateOne(as *AlertSettings) *AlertSettingsUpdateOne {
+	mutation := newAlertSettingsMutation(c.config, OpUpdateOne, withAlertSettings(as))
+	return &AlertSettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AlertSettingsClient) UpdateOneID(id string) *AlertSettingsUpdateOne {
+	mutation := newAlertSettingsMutation(c.config, OpUpdateOne, withAlertSettingsID(id))
+	return &AlertSettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AlertSettings.
+func (c *AlertSettingsClient) Delete() *AlertSettingsDelete {
+	mutation := newAlertSettingsMutation(c.config, OpDelete)
+	return &AlertSettingsDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AlertSettingsClient) DeleteOne(as *AlertSettings) *AlertSettingsDeleteOne {
+	return c.DeleteOneID(as.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AlertSettingsClient) DeleteOneID(id string) *AlertSettingsDeleteOne {
+	builder := c.Delete().Where(alertsettings.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AlertSettingsDeleteOne{builder}
+}
+
+// Query returns a query builder for AlertSettings.
+func (c *AlertSettingsClient) Query() *AlertSettingsQuery {
+	return &AlertSettingsQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAlertSettings},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AlertSettings entity by its id.
+func (c *AlertSettingsClient) Get(ctx context.Context, id string) (*AlertSettings, error) {
+	return c.Query().Where(alertsettings.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AlertSettingsClient) GetX(ctx context.Context, id string) *AlertSettings {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AlertSettingsClient) Hooks() []Hook {
+	return c.hooks.AlertSettings
+}
+
+// Interceptors returns the client interceptors.
+func (c *AlertSettingsClient) Interceptors() []Interceptor {
+	return c.inters.AlertSettings
+}
+
+func (c *AlertSettingsClient) mutate(ctx context.Context, m *AlertSettingsMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AlertSettingsCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AlertSettingsUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AlertSettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AlertSettingsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AlertSettings mutation op: %q", m.Op())
 	}
 }
 
@@ -2407,6 +2566,22 @@ func (c *CreditGrantClient) QuerySubscription(cg *CreditGrant) *SubscriptionQuer
 			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.SubscriptionTable, creditgrant.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAddon queries the addon edge of a CreditGrant.
+func (c *CreditGrantClient) QueryAddon(cg *CreditGrant) *AddonQuery {
+	query := (&AddonClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cg.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
+			sqlgraph.To(addon.Table, addon.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.AddonTable, creditgrant.AddonColumn),
 		)
 		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
 		return fromV, nil
@@ -7896,27 +8071,27 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, CheckoutSession,
-		Connection, Costsheet, Coupon, CouponApplication, CouponAssociation,
-		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, EntityIntegrationMapping, Environment, Feature, Group,
-		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, ScheduledTask,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		Addon, AddonAssociation, AlertLogs, AlertSettings, Auth, BillingSequence,
+		CheckoutSession, Connection, Costsheet, Coupon, CouponApplication,
+		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
+		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
+		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
+		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, CheckoutSession,
-		Connection, Costsheet, Coupon, CouponApplication, CouponAssociation,
-		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, EntityIntegrationMapping, Environment, Feature, Group,
-		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, ScheduledTask,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		Addon, AddonAssociation, AlertLogs, AlertSettings, Auth, BillingSequence,
+		CheckoutSession, Connection, Costsheet, Coupon, CouponApplication,
+		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
+		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
+		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
+		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
+		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

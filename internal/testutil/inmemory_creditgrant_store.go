@@ -221,6 +221,18 @@ func (s *InMemoryCreditGrantStore) GetBySubscription(ctx context.Context, subscr
 	return s.List(ctx, filter)
 }
 
+// GetByAddon retrieves ADDON-scoped credit grants for a specific addon
+func (s *InMemoryCreditGrantStore) GetByAddon(ctx context.Context, addonID string) ([]*creditgrant.CreditGrant, error) {
+	filter := &types.CreditGrantFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		AddonIDs:    []string{addonID},
+		Scope:       lo.ToPtr(types.CreditGrantScopeAddon),
+	}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+
+	return s.List(ctx, filter)
+}
+
 // creditGrantFilterFn implements filtering logic for credit grants
 func creditGrantFilterFn(ctx context.Context, cg *creditgrant.CreditGrant, filter interface{}) bool {
 	f, ok := filter.(*types.CreditGrantFilter)
@@ -260,12 +272,16 @@ func creditGrantFilterFn(ctx context.Context, cg *creditgrant.CreditGrant, filte
 		}
 	}
 
-	// Check scope filter
-	if f.Scope != nil {
-		if *f.Scope == types.CreditGrantScopeSubscription && cg.SubscriptionID == nil {
+	// Check addon IDs filter
+	if len(f.AddonIDs) > 0 {
+		if cg.AddonID == nil || !lo.Contains(f.AddonIDs, *cg.AddonID) {
 			return false
 		}
-		if *f.Scope == types.CreditGrantScopePlan && cg.SubscriptionID != nil {
+	}
+
+	// Check scope filter
+	if f.Scope != nil {
+		if cg.Scope != *f.Scope {
 			return false
 		}
 	}

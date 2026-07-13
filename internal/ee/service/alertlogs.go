@@ -19,7 +19,7 @@ type AlertLogsService interface {
 	LogAlert(ctx context.Context, req *LogAlertRequest) error
 
 	// GetLatestAlert retrieves the latest alert log based on provided filters
-	GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*alertlogs.AlertLog, error)
+	GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string, alertSettingID *string, periodStart *time.Time) (*alertlogs.AlertLog, error)
 
 	// ListAlertsByEntity retrieves alert logs for a specific entity
 	ListAlertsByEntity(ctx context.Context, entityType types.AlertEntityType, entityID string, limit int) ([]*alertlogs.AlertLog, error)
@@ -38,6 +38,10 @@ type LogAlertRequest struct {
 	AlertType        types.AlertType       `json:"alert_type" validate:"required"`
 	AlertStatus      types.AlertState      `json:"alert_status" validate:"required"`
 	AlertInfo        types.AlertInfo       `json:"alert_info" validate:"required"`
+	// AlertSettingID, when set, dedups GetLatestAlert against this alert_settings row alone
+	// (instead of the entity/parent tuple) and requires PeriodStart to also be set.
+	AlertSettingID *string    `json:"alert_setting_id,omitempty"`
+	PeriodStart    *time.Time `json:"period_start,omitempty"`
 }
 
 // Validate validates the log alert request
@@ -94,6 +98,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		&req.AlertType,
 		req.ParentEntityType,
 		req.ParentEntityID,
+		req.AlertSettingID,
+		req.PeriodStart,
 	)
 	if err != nil {
 		return ierr.WithError(err).
@@ -189,6 +195,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		ParentEntityType: req.ParentEntityType,
 		ParentEntityID:   req.ParentEntityID,
 		CustomerID:       req.CustomerID,
+		AlertSettingID:   req.AlertSettingID,
 		AlertType:        req.AlertType,
 		AlertStatus:      req.AlertStatus,
 		AlertInfo:        req.AlertInfo,
@@ -254,9 +261,11 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 				"webhook_event", webhookEventName,
 			)
 		}
-	case types.AlertTypeFeatureWalletBalance:
+	case types.AlertTypeFeatureWalletBalance,
+		types.AlertTypeSubscriptionSpend,
+		types.AlertTypeSubscriptionLineItemSpend,
+		types.AlertTypeSubscriptionGroupSpend:
 		// Publish webhook event using the publishSystemEvent helper
-		// This will pass the alert log with parent entity fields (feature_id, wallet_id) to AlertPayloadBuilder
 		if webhookEventName != "" {
 			if err := s.publishSystemEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
 				s.Logger.Error(ctx, "failed to publish webhook event",
@@ -292,8 +301,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 
 // GetLatestAlert retrieves the latest alert log based on provided filters
 // All parameters except entityType and entityID are optional
-func (s *alertLogsService) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*alertlogs.AlertLog, error) {
-	return s.AlertLogsRepo.GetLatestAlert(ctx, entityType, entityID, alertType, parentEntityType, parentEntityID)
+func (s *alertLogsService) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string, alertSettingID *string, periodStart *time.Time) (*alertlogs.AlertLog, error) {
+	return s.AlertLogsRepo.GetLatestAlert(ctx, entityType, entityID, alertType, parentEntityType, parentEntityID, alertSettingID, periodStart)
 }
 
 func (s *alertLogsService) ListAlertsByEntity(ctx context.Context, entityType types.AlertEntityType, entityID string, limit int) ([]*alertlogs.AlertLog, error) {
@@ -342,6 +351,24 @@ var alertWebhookMapping = map[types.AlertType]map[types.AlertState]WebhookEventM
 			WebhookEvent: types.WebhookEventFeatureWalletBalanceAlert, // "feature.balance.threshold.alert"
 		},
 	},
+	types.AlertTypeSubscriptionSpend: {
+		types.AlertStateInAlarm: {WebhookEvent: types.WebhookEventSubscriptionSpendThresholdReached},
+		types.AlertStateWarning: {WebhookEvent: types.WebhookEventSubscriptionSpendThresholdReached},
+		types.AlertStateInfo:    {WebhookEvent: types.WebhookEventSubscriptionSpendThresholdReached},
+		types.AlertStateOk:      {WebhookEvent: types.WebhookEventSubscriptionSpendThresholdRecovered},
+	},
+	types.AlertTypeSubscriptionLineItemSpend: {
+		types.AlertStateInAlarm: {WebhookEvent: types.WebhookEventSubscriptionLineItemSpendThresholdReached},
+		types.AlertStateWarning: {WebhookEvent: types.WebhookEventSubscriptionLineItemSpendThresholdReached},
+		types.AlertStateInfo:    {WebhookEvent: types.WebhookEventSubscriptionLineItemSpendThresholdReached},
+		types.AlertStateOk:      {WebhookEvent: types.WebhookEventSubscriptionLineItemSpendThresholdRecovered},
+	},
+	types.AlertTypeSubscriptionGroupSpend: {
+		types.AlertStateInAlarm: {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdReached},
+		types.AlertStateWarning: {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdReached},
+		types.AlertStateInfo:    {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdReached},
+		types.AlertStateOk:      {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdRecovered},
+	},
 }
 
 // getWebhookEventName determines the appropriate webhook event name based on alert type and status
@@ -377,16 +404,33 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 		}
 
 		webhookPayload, err = json.Marshal(webhookDto.InternalAlertEvent{
-			FeatureID:   alertLog.EntityID,            // Feature ID
-			WalletID:    walletID,                     // Wallet ID from parent entity ID
-			CustomerID:  customerID,                   // Customer ID
-			AlertType:   string(alertLog.AlertType),   // Alert type
-			AlertStatus: string(alertLog.AlertStatus), // Alert status
+			FeatureID:   alertLog.EntityID, // Feature ID
+			WalletID:    walletID,          // Wallet ID from parent entity ID
+			CustomerID:  customerID,        // Customer ID
+			AlertType:   alertLog.AlertType,
+			AlertStatus: alertLog.AlertStatus,
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 			return err
 		}
+
+	case types.AlertTypeSubscriptionSpend, types.AlertTypeSubscriptionLineItemSpend, types.AlertTypeSubscriptionGroupSpend:
+		webhookPayload, err = json.Marshal(webhookDto.InternalAlertEvent{
+			EntityType:       alertLog.EntityType,
+			EntityID:         alertLog.EntityID,
+			ParentEntityID:   lo.FromPtr(alertLog.ParentEntityID),
+			ParentEntityType: types.AlertEntityTypeSubscription,
+			CustomerID:       lo.FromPtr(alertLog.CustomerID),
+			AlertType:        alertLog.AlertType,
+			AlertStatus:      alertLog.AlertStatus,
+			AlertInfo:        alertLog.AlertInfo,
+		})
+		if err != nil {
+			s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
+			return err
+		}
+
 	default:
 		return ierr.NewError("invalid alert type").
 			WithHint("Invalid alert type").

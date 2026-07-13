@@ -15,6 +15,9 @@ type AddonAssociation func(*sql.Selector)
 // AlertLogs is the predicate function for alertlogs builders.
 type AlertLogs func(*sql.Selector)
 
+// AlertSettings is the predicate function for alertsettings builders.
+type AlertSettings func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 

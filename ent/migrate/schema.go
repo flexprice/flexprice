@@ -91,6 +91,7 @@ var (
 		{Name: "alert_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_info", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "alert_setting_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// AlertLogsTable holds the schema information for the "alert_logs" table.
 	AlertLogsTable = &schema.Table{
@@ -122,6 +123,46 @@ var (
 				Name:    "idx_alertlogs_customer_type_status_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[12], AlertLogsColumns[13], AlertLogsColumns[14], AlertLogsColumns[3]},
+			},
+			{
+				Name:    "idx_alertlogs_alert_setting_id",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[16], AlertLogsColumns[3]},
+			},
+		},
+	}
+	// AlertSettingsColumns holds the columns for the "alert_settings" table.
+	AlertSettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AlertSettingsTable holds the schema information for the "alert_settings" table.
+	AlertSettingsTable = &schema.Table{
+		Name:       "alert_settings",
+		Columns:    AlertSettingsColumns,
+		PrimaryKey: []*schema.Column{AlertSettingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_alert_settings_entity",
+				Unique:  false,
+				Columns: []*schema.Column{AlertSettingsColumns[1], AlertSettingsColumns[7], AlertSettingsColumns[2], AlertSettingsColumns[8], AlertSettingsColumns[9], AlertSettingsColumns[10]},
+			},
+			{
+				Name:    "idx_alert_settings_parent",
+				Unique:  false,
+				Columns: []*schema.Column{AlertSettingsColumns[1], AlertSettingsColumns[7], AlertSettingsColumns[2], AlertSettingsColumns[8], AlertSettingsColumns[9], AlertSettingsColumns[11], AlertSettingsColumns[12]},
 			},
 		},
 	}
@@ -547,6 +588,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "credit_grant_anchor", Type: field.TypeTime, Nullable: true},
+		{Name: "addon_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "plan_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -557,14 +599,20 @@ var (
 		PrimaryKey: []*schema.Column{CreditGrantsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "credit_grants_plans_credit_grants",
+				Symbol:     "credit_grants_addons_credit_grants",
 				Columns:    []*schema.Column{CreditGrantsColumns[24]},
+				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "credit_grants_plans_credit_grants",
+				Columns:    []*schema.Column{CreditGrantsColumns[25]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "credit_grants_subscriptions_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[25]},
+				Columns:    []*schema.Column{CreditGrantsColumns[26]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -578,7 +626,7 @@ var (
 			{
 				Name:    "idx_plan_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(plan_id IS NOT NULL)",
 				},
@@ -586,9 +634,17 @@ var (
 			{
 				Name:    "idx_subscription_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[26]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(subscription_id IS NOT NULL)",
+				},
+			},
+			{
+				Name:    "idx_addon_id_not_null",
+				Unique:  false,
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "addon_id IS NOT NULL",
 				},
 			},
 		},
@@ -2567,6 +2623,7 @@ var (
 		AddonsTable,
 		AddonAssociationsTable,
 		AlertLogsTable,
+		AlertSettingsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,
@@ -2627,8 +2684,9 @@ func init() {
 	CouponAssociationsTable.ForeignKeys[0].RefTable = CouponsTable
 	CouponAssociationsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	CouponAssociationsTable.ForeignKeys[2].RefTable = SubscriptionLineItemsTable
-	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
-	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
+	CreditGrantsTable.ForeignKeys[0].RefTable = AddonsTable
+	CreditGrantsTable.ForeignKeys[1].RefTable = PlansTable
+	CreditGrantsTable.ForeignKeys[2].RefTable = SubscriptionsTable
 	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
 	EntitlementsTable.ForeignKeys[0].RefTable = AddonsTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable

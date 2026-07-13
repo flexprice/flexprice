@@ -38,6 +38,9 @@ type CreditGrantService interface {
 	// GetCreditGrantsBySubscription retrieves credit grants for a specific subscription
 	GetCreditGrantsBySubscription(ctx context.Context, subscriptionID string) (*dto.ListCreditGrantsResponse, error)
 
+	// GetCreditGrantsByAddon retrieves ADDON-scoped credit grants for a specific addon
+	GetCreditGrantsByAddon(ctx context.Context, addonID string) (*dto.ListCreditGrantsResponse, error)
+
 	// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
 	// This runs every 15 mins
 	// ProcessScheduledCreditGrantApplications processes scheduled credit grant applications
@@ -101,6 +104,31 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 		}
 	}
 
+	// Validate addon if addon_id is provided (addon_id presence is validated in DTO)
+	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
+		addon, err := s.AddonRepo.GetByID(ctx, lo.FromPtr(req.AddonID))
+		if err != nil {
+			return nil, err
+		}
+		if addon == nil {
+			return nil, ierr.NewError("addon not found").
+				WithHint(fmt.Sprintf("Addon with ID %s does not exist", lo.FromPtr(req.AddonID))).
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": lo.FromPtr(req.AddonID),
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		if addon.Status != types.StatusPublished {
+			return nil, ierr.NewError("addon is not published").
+				WithHint("Addon is not published").
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": lo.FromPtr(req.AddonID),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Validate based on scope
 	switch req.Scope {
 	case types.CreditGrantScopePlan:
@@ -112,6 +140,31 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 		if len(existingGrants.Items) > 0 {
 			validationError := ierr.NewError("all credit grants for a plan must have the same conversion_rate and topup_conversion_rate").
 				WithHint("All credit grants for a plan must have the same conversion rates").
+				Mark(ierr.ErrValidation)
+
+			for _, existingGrant := range existingGrants.Items {
+				// Check if conversion_rate doesn't match
+				if (req.ConversionRate == nil) != (existingGrant.ConversionRate == nil) ||
+					(req.ConversionRate != nil && !req.ConversionRate.Equal(lo.FromPtr(existingGrant.ConversionRate))) {
+					return nil, validationError
+				}
+
+				// Check if topup_conversion_rate doesn't match
+				if (req.TopupConversionRate == nil) != (existingGrant.TopupConversionRate == nil) ||
+					(req.TopupConversionRate != nil && !req.TopupConversionRate.Equal(lo.FromPtr(existingGrant.TopupConversionRate))) {
+					return nil, validationError
+				}
+			}
+		}
+	case types.CreditGrantScopeAddon:
+		existingGrants, err := s.GetCreditGrantsByAddon(ctx, lo.FromPtr(req.AddonID))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(existingGrants.Items) > 0 {
+			validationError := ierr.NewError("all credit grants for an addon must have the same conversion_rate and topup_conversion_rate").
+				WithHint("All credit grants for an addon must have the same conversion rates").
 				Mark(ierr.ErrValidation)
 
 			for _, existingGrant := range existingGrants.Items {
@@ -411,16 +464,20 @@ func (s *creditGrantService) DeleteCreditGrant(ctx context.Context, req dto.Dele
 
 	// For subscription-scoped grants, cancel future CGAs and set end date (do not delete or archive)
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Cancel all future applications for this specific grant
-		if err := s.cancelFutureGrantApplications(ctx, grant); err != nil {
-			return err
-		}
-
-		// Set end date to effective date or now
+		// Determine the effective date before mutating grant.EndDate, and use it explicitly as
+		// the cutoff for cancelling future applications. Previously cancelFutureGrantApplications
+		// read grant.EndDate directly, but that field wasn't assigned until after the call, so the
+		// cutoff was always nil and every pending/failed application got cancelled regardless of
+		// whether it was scheduled before or after the actual effective date.
 		endDate := time.Now().UTC()
 		if req.EffectiveDate != nil && !req.EffectiveDate.IsZero() {
 			endDate = lo.FromPtr(req.EffectiveDate)
 		}
+
+		if err := s.cancelFutureGrantApplications(ctx, grant, endDate); err != nil {
+			return err
+		}
+
 		grant.EndDate = &endDate
 		_, err = s.CreditGrantRepo.Update(ctx, grant)
 		if err != nil {
@@ -460,6 +517,17 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 	}
 
 	return resp, nil
+}
+
+func (s *creditGrantService) GetCreditGrantsByAddon(ctx context.Context, addonID string) (*dto.ListCreditGrantsResponse, error) {
+	// Create a filter for the addon's credit grants
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.AddonIDs = []string{addonID}
+	filter.WithStatus(types.StatusPublished)
+	filter.Scope = lo.ToPtr(types.CreditGrantScopeAddon)
+
+	// Use the standard list function to get the credit grants with expansion
+	return s.ListCreditGrants(ctx, filter)
 }
 
 func (s *creditGrantService) ProcessCreditGrantApplication(ctx context.Context, applicationID string) error {
@@ -898,7 +966,14 @@ func (s *creditGrantService) processScheduledApplication(
 		if err := s.cancelCreditGrantApplication(ctx, cga); err != nil {
 			return nil, err
 		}
-		err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant)
+		// Cancel every application scheduled after this one — the grant's EndDate isn't
+		// necessarily set at this point (this path runs during scheduled processing, not
+		// deletion), so use the current application's scheduled date as the cutoff instead.
+		// cga.ScheduledFor is a safe cutoff here because at most one Pending/Failed
+		// application is ever open per grant at a time — if that invariant changes (e.g. we
+		// start pre-generating multiple future scheduled applications instead of one at a
+		// time), this cutoff must be revisited.
+		err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant, cga.ScheduledFor)
 		if err != nil {
 			s.Logger.Error(ctx, "Failed to cancel future credit grant applications", "application_id", cga.ID, "error", err)
 			return nil, err
@@ -1172,8 +1247,8 @@ func (s *creditGrantService) cancelCreditGrantApplication(ctx context.Context, c
 	return nil
 }
 
-// cancelFutureGrantApplications cancels all future applications for a specific grant
-func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, grant *creditgrant.CreditGrant) error {
+// cancelFutureGrantApplications cancels all applications scheduled after effectiveDate for a specific grant
+func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, grant *creditgrant.CreditGrant, effectiveDate time.Time) error {
 	if grant.Scope != types.CreditGrantScopeSubscription || grant.SubscriptionID == nil {
 		return nil
 	}
@@ -1186,7 +1261,7 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 			types.ApplicationStatusPending,
 			types.ApplicationStatusFailed,
 		},
-		ScheduledAfter: grant.EndDate,
+		ScheduledAfter: &effectiveDate,
 		QueryFilter:    types.NewNoLimitQueryFilter(),
 	}
 
@@ -1195,11 +1270,12 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 		return err
 	}
 
-	// Cancel each application
+	// Cancel each application. Propagate failures so the caller's transaction rolls back —
+	// letting one fail silently would let grant.EndDate commit while a post-cutoff application
+	// stays pending and later grants credits the cancellation was supposed to prevent.
 	for _, app := range applications {
 		if err := s.cancelCreditGrantApplication(ctx, app); err != nil {
-			// Log error already done in helper, continue processing remaining applications
-			continue
+			return err
 		}
 	}
 
@@ -1212,10 +1288,15 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 		return err
 	}
 
-	// Get all credit grants for this subscription
+	// Get credit grants for this subscription. When AddonID is set, scope the
+	// cancellation to grants materialized from that addon (addon_id provenance),
+	// leaving plan-sourced and other-addon grants untouched.
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
+	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
+		filter.AddonIDs = []string{lo.FromPtr(req.AddonID)}
+	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {

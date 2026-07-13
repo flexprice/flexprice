@@ -96,6 +96,14 @@ const (
 	WebhookEventWalletOngoingBalanceDropped   WebhookEventName = "wallet.ongoing_balance.dropped"
 	WebhookEventWalletOngoingBalanceRecovered WebhookEventName = "wallet.ongoing_balance.recovered"
 
+	// subscription/line-item/group spend alert events (alert_settings table, Parts A/B/C).
+	WebhookEventSubscriptionSpendThresholdReached           WebhookEventName = "subscription.spend.threshold_reached"
+	WebhookEventSubscriptionSpendThresholdRecovered         WebhookEventName = "subscription.spend.threshold_recovered"
+	WebhookEventSubscriptionLineItemSpendThresholdReached   WebhookEventName = "subscription.line_item_spend.threshold_reached"
+	WebhookEventSubscriptionLineItemSpendThresholdRecovered WebhookEventName = "subscription.line_item_spend.threshold_recovered"
+	WebhookEventSubscriptionGroupSpendThresholdReached      WebhookEventName = "subscription.group_spend.threshold_reached"
+	WebhookEventSubscriptionGroupSpendThresholdRecovered    WebhookEventName = "subscription.group_spend.threshold_recovered"
+
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
 )
@@ -117,4 +125,20 @@ const (
 	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
+)
+
+// event (usage ingestion) webhook event names
+const (
+	// WebhookEventEventRejected fires when an ingested event produces no meter usage.
+	WebhookEventEventRejected WebhookEventName = "event.rejected"
+)
+
+// RejectedEventReason explains why an event matched no meter.
+type RejectedEventReason = string
+
+const (
+	// no meter registered for the event name
+	RejectedEventReasonNoMeterForName RejectedEventReason = "no_meter_for_event_name"
+	// meters exist for the name but none matched (filters/quantity)
+	RejectedEventReasonNoMatchingMeter RejectedEventReason = "no_matching_meter"
 )

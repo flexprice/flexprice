@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -139,6 +140,26 @@ func (cgu *CreditGrantUpdate) ClearSubscriptionID() *CreditGrantUpdate {
 	return cgu
 }
 
+// SetAddonID sets the "addon_id" field.
+func (cgu *CreditGrantUpdate) SetAddonID(s string) *CreditGrantUpdate {
+	cgu.mutation.SetAddonID(s)
+	return cgu
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (cgu *CreditGrantUpdate) SetNillableAddonID(s *string) *CreditGrantUpdate {
+	if s != nil {
+		cgu.SetAddonID(*s)
+	}
+	return cgu
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (cgu *CreditGrantUpdate) ClearAddonID() *CreditGrantUpdate {
+	cgu.mutation.ClearAddonID()
+	return cgu
+}
+
 // SetMetadata sets the "metadata" field.
 func (cgu *CreditGrantUpdate) SetMetadata(m map[string]string) *CreditGrantUpdate {
 	cgu.mutation.SetMetadata(m)
@@ -181,6 +202,11 @@ func (cgu *CreditGrantUpdate) SetSubscription(s *Subscription) *CreditGrantUpdat
 	return cgu.SetSubscriptionID(s.ID)
 }
 
+// SetAddon sets the "addon" edge to the Addon entity.
+func (cgu *CreditGrantUpdate) SetAddon(a *Addon) *CreditGrantUpdate {
+	return cgu.SetAddonID(a.ID)
+}
+
 // Mutation returns the CreditGrantMutation object of the builder.
 func (cgu *CreditGrantUpdate) Mutation() *CreditGrantMutation {
 	return cgu.mutation
@@ -195,6 +221,12 @@ func (cgu *CreditGrantUpdate) ClearPlan() *CreditGrantUpdate {
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (cgu *CreditGrantUpdate) ClearSubscription() *CreditGrantUpdate {
 	cgu.mutation.ClearSubscription()
+	return cgu
+}
+
+// ClearAddon clears the "addon" edge to the Addon entity.
+func (cgu *CreditGrantUpdate) ClearAddon() *CreditGrantUpdate {
+	cgu.mutation.ClearAddon()
 	return cgu
 }
 
@@ -382,6 +414,35 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if cgu.mutation.AddonCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   creditgrant.AddonTable,
+			Columns: []string{creditgrant.AddonColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := cgu.mutation.AddonIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   creditgrant.AddonTable,
+			Columns: []string{creditgrant.AddonColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cgu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditgrant.Label}
@@ -510,6 +571,26 @@ func (cguo *CreditGrantUpdateOne) ClearSubscriptionID() *CreditGrantUpdateOne {
 	return cguo
 }
 
+// SetAddonID sets the "addon_id" field.
+func (cguo *CreditGrantUpdateOne) SetAddonID(s string) *CreditGrantUpdateOne {
+	cguo.mutation.SetAddonID(s)
+	return cguo
+}
+
+// SetNillableAddonID sets the "addon_id" field if the given value is not nil.
+func (cguo *CreditGrantUpdateOne) SetNillableAddonID(s *string) *CreditGrantUpdateOne {
+	if s != nil {
+		cguo.SetAddonID(*s)
+	}
+	return cguo
+}
+
+// ClearAddonID clears the value of the "addon_id" field.
+func (cguo *CreditGrantUpdateOne) ClearAddonID() *CreditGrantUpdateOne {
+	cguo.mutation.ClearAddonID()
+	return cguo
+}
+
 // SetMetadata sets the "metadata" field.
 func (cguo *CreditGrantUpdateOne) SetMetadata(m map[string]string) *CreditGrantUpdateOne {
 	cguo.mutation.SetMetadata(m)
@@ -552,6 +633,11 @@ func (cguo *CreditGrantUpdateOne) SetSubscription(s *Subscription) *CreditGrantU
 	return cguo.SetSubscriptionID(s.ID)
 }
 
+// SetAddon sets the "addon" edge to the Addon entity.
+func (cguo *CreditGrantUpdateOne) SetAddon(a *Addon) *CreditGrantUpdateOne {
+	return cguo.SetAddonID(a.ID)
+}
+
 // Mutation returns the CreditGrantMutation object of the builder.
 func (cguo *CreditGrantUpdateOne) Mutation() *CreditGrantMutation {
 	return cguo.mutation
@@ -566,6 +652,12 @@ func (cguo *CreditGrantUpdateOne) ClearPlan() *CreditGrantUpdateOne {
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (cguo *CreditGrantUpdateOne) ClearSubscription() *CreditGrantUpdateOne {
 	cguo.mutation.ClearSubscription()
+	return cguo
+}
+
+// ClearAddon clears the "addon" edge to the Addon entity.
+func (cguo *CreditGrantUpdateOne) ClearAddon() *CreditGrantUpdateOne {
+	cguo.mutation.ClearAddon()
 	return cguo
 }
 
@@ -776,6 +868,35 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if cguo.mutation.AddonCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   creditgrant.AddonTable,
+			Columns: []string{creditgrant.AddonColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := cguo.mutation.AddonIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   creditgrant.AddonTable,
+			Columns: []string{creditgrant.AddonColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

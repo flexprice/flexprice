@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -24,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -94,6 +96,8 @@ type Stores struct {
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
+	AlertRepo                    alert.Repository
+	GroupRepo                    group.Repository
 	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
@@ -110,6 +114,7 @@ type BaseServiceTestSuite struct {
 	db                  postgres.IClient
 	inMemoryCache       cache.InMemoryCache
 	redisCache          cache.RedisCache
+	locker              cache.Locker
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -146,12 +151,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 
 	// Initialize encryption service
 	encryptionService, err := security.NewEncryptionService(s.config, s.logger)
@@ -247,6 +247,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
+		AlertRepo:                    NewInMemoryAlertSettingsStore(),
+		GroupRepo:                    NewInMemoryGroupStore(),
 		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
@@ -256,17 +258,15 @@ func (s *BaseServiceTestSuite) setupStores() {
 	// Cache stores
 	s.inMemoryCache = cache.NewInMemoryCache()
 	s.redisCache = NewInMemoryRedis()
+	// Fresh locker per test — the in-memory locker keeps its own state map, so
+	// rebuilding it here keeps lock state from leaking across tests.
+	s.locker = NewInMemoryRedisLocker(s.redisCache.(*InMemoryRedis))
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -307,6 +307,8 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
 	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
+	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
+	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
@@ -350,6 +352,20 @@ func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
 // GetRedisCache returns the test Redis cache
 func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
 	return s.redisCache
+}
+
+// GetLocker returns the test distributed locker (in-memory, SetNX + TTL).
+func (s *BaseServiceTestSuite) GetLocker() cache.Locker {
+	return s.locker
+}
+
+// GetPublishedWebhooks returns the webhook events captured by the in-memory
+// webhook publisher this suite injects. Empty if the publisher was replaced.
+func (s *BaseServiceTestSuite) GetPublishedWebhooks() []*types.WebhookEvent {
+	if p, ok := s.webhookPublisher.(*InMemoryWebhookPublisher); ok {
+		return p.Events()
+	}
+	return nil
 }
 
 // GetDB returns the test database client

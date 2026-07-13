@@ -38,4 +38,7 @@ type Repository interface {
 
 	// GetBySubscription retrieves credit grants for a specific subscription
 	GetBySubscription(ctx context.Context, subscriptionID string) ([]*CreditGrant, error)
+
+	// GetByAddon retrieves ADDON-scoped credit grants for a specific addon
+	GetByAddon(ctx context.Context, addonID string) ([]*CreditGrant, error)
 }
