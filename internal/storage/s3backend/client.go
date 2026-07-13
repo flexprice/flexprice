@@ -25,8 +25,13 @@ const defaultPresignExpiry = 30 * time.Minute
 
 // Config holds everything needed to construct an S3-backed storagetypes.Storage.
 type Config struct {
-	Bucket             string
-	Region             string
+	Bucket string
+	Region string
+	// KeyPrefix is NOT applied by this backend. Prefixing is the caller's
+	// responsibility: build the full key via storage.ObjectKey(prefix, ...)
+	// before calling Upload/Download/Exists/PresignGet. This field exists so
+	// callers that plumb a full job/connection config through can populate it
+	// for their own bookkeeping, but the backend never reads it.
 	KeyPrefix          string
 	CompressionGzip    bool
 	ServerSideEncrypt  string // "", "AES256", "aws:kms", "aws:kms:dsse"
