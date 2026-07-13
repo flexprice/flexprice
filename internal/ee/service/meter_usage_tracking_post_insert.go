@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -17,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"go.temporal.io/api/serviceerror"
 )
 
 // runMeterUsagePostInsertSideEffects runs customer resolution/onboarding and wallet
@@ -48,6 +51,14 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		event.CustomerID = cust.ID
 	}
 
+	// When the debouncer is on it supersedes the Kafka wallet-alert path and the
+	// inline spend-breach check — a single Temporal workflow (deduped per customer)
+	// runs both checks once per debounce window.
+	if s.Config.MeterUsageTracking.AlertDebounceEnabled {
+		s.scheduleMeterUsageAlertWorkflow(ctx, cust)
+		return
+	}
+
 	if s.Config.MeterUsageTracking.WalletAlertPushEnabled {
 		s.publishWalletBalanceAlert(ctx, event, cust)
 	}
@@ -56,6 +67,65 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
 		s.checkSpendBreachForEvent(ctx, event, meterIDs, cust)
 	}
+}
+
+// scheduleMeterUsageAlertWorkflow starts a debounced Temporal workflow that runs
+// spend-breach + wallet-balance checks for the customer after Config.AlertDebounceWindow.
+// The workflow ID is stable per (tenant, environment, customer); when a workflow with
+// that ID is already running (armed but not yet fired) Temporal rejects the start with
+// WorkflowExecutionAlreadyStarted — that error IS the dedupe signal and is swallowed.
+func (s *meterUsageTrackingService) scheduleMeterUsageAlertWorkflow(ctx context.Context, cust *customer.Customer) {
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Debug(ctx, "temporal service not available, skipping meter usage alert workflow",
+			"customer_id", cust.ID,
+		)
+		return
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	workflowID := fmt.Sprintf("%s_%s_%s_%s_%s",
+		types.UUID_PREFIX_WORKFLOW,
+		types.TemporalMeterUsageAlertWorkflow,
+		tenantID,
+		envID,
+		cust.ID,
+	)
+
+	options := workflowModels.StartWorkflowOptions{
+		ID:         workflowID,
+		TaskQueue:  types.TemporalMeterUsageAlertWorkflow.TaskQueueName(),
+		StartDelay: s.Config.MeterUsageTracking.AlertDebounceWindow,
+	}
+	input := workflowModels.MeterUsageAlertWorkflowInput{
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+		CustomerID:    cust.ID,
+	}
+
+	if _, err := temporalSvc.StartWorkflow(ctx, options, types.TemporalMeterUsageAlertWorkflow, input); err != nil {
+		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+		if errors.As(err, &alreadyStarted) {
+			s.Logger.Debug(ctx, "meter usage alert workflow already scheduled for customer, absorbed",
+				"customer_id", cust.ID,
+				"workflow_id", workflowID,
+			)
+			return
+		}
+		s.Logger.Error(ctx, "failed to schedule meter usage alert workflow",
+			"error", err,
+			"customer_id", cust.ID,
+			"workflow_id", workflowID,
+		)
+		return
+	}
+
+	s.Logger.Debug(ctx, "meter usage alert workflow scheduled",
+		"customer_id", cust.ID,
+		"workflow_id", workflowID,
+		"fires_in", s.Config.MeterUsageTracking.AlertDebounceWindow.String(),
+	)
 }
 
 // publishWalletBalanceAlert publishes a wallet balance alert for the given event and customer.
@@ -284,20 +354,36 @@ func executeCustomerOnboardingForEvent(ctx context.Context, params ServiceParams
 // configured spend thresholds — subscription total, a single line item, and/or a feature group —
 // and records any state change through alertLogsSvc.LogAlert, which handles the actual webhook dispatch.
 func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context, event *events.Event, meterIDs []string, cust *customer.Customer) {
-	// Resolves the subscription line items affected by this event's usage.
-	affectedLineItems, err := s.SubscriptionLineItemRepo.List(ctx, &types.SubscriptionLineItemFilter{
+	evaluateSpendBreachesForCustomer(ctx, s.ServiceParams, cust, meterIDs, &event.Timestamp, event.ID)
+}
+
+// CheckSpendBreachForCustomer evaluates spend thresholds for every currently-active
+// subscription line item on the customer, ignoring any meter filter. Used by the
+// MeterUsageAlertWorkflow debouncer where the exact set of meters that fired during
+// the debounce window isn't tracked — a full rescan is both simpler and correct.
+func CheckSpendBreachForCustomer(ctx context.Context, params ServiceParams, cust *customer.Customer) {
+	evaluateSpendBreachesForCustomer(ctx, params, cust, nil, nil, "")
+}
+
+// evaluateSpendBreachesForCustomer is the shared body used by both the sync
+// per-event check and the debounced customer-level check. meterIDs and periodStart
+// are optional filters; logEventID is a correlation hint for logs.
+func evaluateSpendBreachesForCustomer(ctx context.Context, params ServiceParams, cust *customer.Customer, meterIDs []string, periodStart *time.Time, logEventID string) {
+	// Resolves the active subscription line items to evaluate. Passing nil meterIDs
+	// / nil periodStart returns every active line item on the customer — that's the
+	// debouncer path. The per-event path narrows to the touched meters and period.
+	affectedLineItems, err := params.SubscriptionLineItemRepo.List(ctx, &types.SubscriptionLineItemFilter{
 		QueryFilter:        types.NewNoLimitQueryFilter(),
 		CustomerIDs:        []string{cust.ID},
 		MeterIDs:           meterIDs,
 		ActiveFilter:       true,
-		CurrentPeriodStart: &event.Timestamp,
+		CurrentPeriodStart: periodStart,
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list affected line items for spend alert evaluation", "error", err, "event_id", event.ID)
+		params.Logger.Error(ctx, "failed to list affected line items for spend alert evaluation", "error", err, "event_id", logEventID, "customer_id", cust.ID)
 		return
 	}
 	if len(affectedLineItems) == 0 {
-		// No active line item on any of this event's meters for this customer.
 		return
 	}
 
@@ -309,17 +395,17 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 
 	// Fetches every enabled alert configuration for all affected subscriptions.
 	// TODO: can fetch all alert settings for all affected subscriptions in one query (using parent_entity_id and parent_entity_type)
-	allSubCfgs, err := s.AlertRepo.List(ctx, &types.AlertSettingsFilter{
+	allSubCfgs, err := params.AlertRepo.List(ctx, &types.AlertSettingsFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		EntityType:  types.AlertEntityTypeSubscription,
 		EntityIDs:   subscriptionIDs,
 		Enabled:     lo.ToPtr(true),
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list subscription alert settings", "error", err, "event_id", event.ID)
+		params.Logger.Error(ctx, "failed to list subscription alert settings", "error", err, "event_id", logEventID)
 		return
 	}
-	allLineItemCfgs, err := s.AlertRepo.List(ctx, &types.AlertSettingsFilter{
+	allLineItemCfgs, err := params.AlertRepo.List(ctx, &types.AlertSettingsFilter{
 		QueryFilter:      types.NewNoLimitQueryFilter(),
 		EntityType:       types.AlertEntityTypeSubscriptionLineItem,
 		ParentEntityType: types.AlertEntityTypeSubscription,
@@ -327,10 +413,10 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		Enabled:          lo.ToPtr(true),
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list line item alert settings", "error", err, "event_id", event.ID)
+		params.Logger.Error(ctx, "failed to list line item alert settings", "error", err, "event_id", logEventID)
 		return
 	}
-	allGroupCfgs, err := s.AlertRepo.List(ctx, &types.AlertSettingsFilter{
+	allGroupCfgs, err := params.AlertRepo.List(ctx, &types.AlertSettingsFilter{
 		QueryFilter:      types.NewNoLimitQueryFilter(),
 		EntityType:       types.AlertEntityTypeGroup,
 		ParentEntityType: types.AlertEntityTypeSubscription,
@@ -338,12 +424,12 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		Enabled:          lo.ToPtr(true),
 	})
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list group alert settings", "error", err, "event_id", event.ID)
+		params.Logger.Error(ctx, "failed to list group alert settings", "error", err, "event_id", logEventID)
 		return
 	}
 
-	s.Logger.Debug(ctx, "batched alert settings fetched",
-		"event_id", event.ID,
+	params.Logger.Debug(ctx, "batched alert settings fetched",
+		"event_id", logEventID,
 		"subscription_ids", subscriptionIDs,
 		"sub_cfg_count", len(allSubCfgs),
 		"line_item_cfg_count", len(allLineItemCfgs),
@@ -356,9 +442,9 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		return
 	}
 
-	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
-	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
-	billingSvc := NewBillingService(s.ServiceParams)
+	alertLogsSvc := NewAlertLogsService(params)
+	subscriptionSvc := NewSubscriptionService(params)
+	billingSvc := NewBillingService(params)
 	now := time.Now().UTC()
 
 	// Evaluates each affected subscription independently.
@@ -379,7 +465,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 			return c.ParentEntityID != nil && *c.ParentEntityID == subscriptionID
 		})
 
-		s.Logger.Debug(ctx, "per-subscription alert config filter result",
+		params.Logger.Debug(ctx, "per-subscription alert config filter result",
 			"subscription_id", subscriptionID,
 			"has_subscription_cfg", subscriptionCfg != nil,
 			"line_item_cfg_count", len(lineItemCfgs),
@@ -391,9 +477,9 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		}
 
 		// Fetches the subscription with its line items populated.
-		sub, _, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+		sub, _, err := params.SubRepo.GetWithLineItems(ctx, subscriptionID)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to get subscription for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
+			params.Logger.Error(ctx, "failed to get subscription for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
 			continue
 		}
 
@@ -407,7 +493,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 			Source:         string(types.UsageSourceInvoiceCreation),
 		})
 		if err != nil {
-			s.Logger.Error(ctx, "failed to get meter usage for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
+			params.Logger.Error(ctx, "failed to get meter usage for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
 			continue
 		}
 
@@ -419,7 +505,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 			ctx, sub, usage, sub.CurrentPeriodStart, now, types.UsageSourceInvoiceCreation,
 		)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to calculate meter usage charges for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
+			params.Logger.Error(ctx, "failed to calculate meter usage charges for spend alert evaluation", "error", err, "subscription_id", subscriptionID)
 			continue
 		}
 
@@ -429,7 +515,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		if subscriptionCfg != nil {
 			state, err := subscriptionCfg.Config.AlertState(totalUsageCost)
 			if err != nil {
-				s.Logger.Error(ctx, "failed to determine subscription spend alert state", "error", err, "subscription_id", subscriptionID)
+				params.Logger.Error(ctx, "failed to determine subscription spend alert state", "error", err, "subscription_id", subscriptionID)
 			} else if err := alertLogsSvc.LogAlert(ctx, &LogAlertRequest{
 				AlertSettingID: &subscriptionCfg.ID,
 				PeriodStart:    &sub.CurrentPeriodStart,
@@ -444,7 +530,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 					Timestamp:     now,
 				},
 			}); err != nil {
-				s.Logger.Error(ctx, "failed to log subscription spend alert", "error", err, "subscription_id", subscriptionID)
+				params.Logger.Error(ctx, "failed to log subscription spend alert", "error", err, "subscription_id", subscriptionID)
 			}
 		}
 
@@ -464,7 +550,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 			}
 			state, err := cfg.Config.AlertState(amount)
 			if err != nil {
-				s.Logger.Error(ctx, "failed to determine line item spend alert state", "error", err, "subscription_line_item_id", cfg.EntityID)
+				params.Logger.Error(ctx, "failed to determine line item spend alert state", "error", err, "subscription_line_item_id", cfg.EntityID)
 				continue
 			}
 			parentEntityType := string(types.AlertEntityTypeSubscription)
@@ -484,7 +570,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 					Timestamp:     now,
 				},
 			}); err != nil {
-				s.Logger.Error(ctx, "failed to log line item spend alert", "error", err, "subscription_line_item_id", cfg.EntityID)
+				params.Logger.Error(ctx, "failed to log line item spend alert", "error", err, "subscription_line_item_id", cfg.EntityID)
 			}
 		}
 
@@ -500,12 +586,12 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 		subMeterIDs := lo.Uniq(lo.Map(sub.LineItems, func(li *subscription.SubscriptionLineItem, _ int) string {
 			return li.MeterID
 		}))
-		subFeatures, err := s.FeatureRepo.List(ctx, &types.FeatureFilter{
+		subFeatures, err := params.FeatureRepo.List(ctx, &types.FeatureFilter{
 			QueryFilter: types.NewNoLimitQueryFilter(),
 			MeterIDs:    subMeterIDs,
 		})
 		if err != nil {
-			s.Logger.Error(ctx, "failed to list features for group spend summation", "error", err, "subscription_id", subscriptionID)
+			params.Logger.Error(ctx, "failed to list features for group spend summation", "error", err, "subscription_id", subscriptionID)
 			continue
 		}
 		featuresByMeterID := make(map[string]*feature.Feature, len(subFeatures))
@@ -533,7 +619,7 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 			groupTotal := groupTotals[cfg.EntityID]
 			state, err := cfg.Config.AlertState(groupTotal)
 			if err != nil {
-				s.Logger.Error(ctx, "failed to determine group spend alert state", "error", err, "group_id", cfg.EntityID)
+				params.Logger.Error(ctx, "failed to determine group spend alert state", "error", err, "group_id", cfg.EntityID)
 				continue
 			}
 			parentEntityType := string(types.AlertEntityTypeSubscription)
@@ -553,8 +639,26 @@ func (s *meterUsageTrackingService) checkSpendBreachForEvent(ctx context.Context
 					Timestamp:     now,
 				},
 			}); err != nil {
-				s.Logger.Error(ctx, "failed to log group spend alert", "error", err, "group_id", cfg.EntityID)
+				params.Logger.Error(ctx, "failed to log group spend alert", "error", err, "group_id", cfg.EntityID)
 			}
 		}
 	}
+}
+
+// CheckWalletBalanceForCustomer runs the wallet balance alert check for the customer.
+// Used by the MeterUsageAlertWorkflow debouncer; ForceCalculateBalance bypasses the
+// in-memory throttle in walletService.CheckWalletBalanceAlert since Temporal already
+// dedupes the calls (one per customer per debounce window).
+func CheckWalletBalanceForCustomer(ctx context.Context, params ServiceParams, cust *customer.Customer) error {
+	alertEvent := &wallet.WalletBalanceAlertEvent{
+		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
+		Timestamp:             time.Now().UTC(),
+		Source:                EventSourceMeterUsage,
+		CustomerID:            cust.ID,
+		ForceCalculateBalance: true,
+		TenantID:              types.GetTenantID(ctx),
+		EnvironmentID:         types.GetEnvironmentID(ctx),
+	}
+	walletSvc := NewWalletService(params)
+	return walletSvc.CheckWalletBalanceAlert(ctx, alertEvent)
 }
