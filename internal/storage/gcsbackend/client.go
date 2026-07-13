@@ -2,6 +2,7 @@ package gcsbackend
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"io"
@@ -19,8 +20,9 @@ const defaultPresignExpiry = 30 * time.Minute
 
 // Config holds everything needed to construct a GCS-backed storage.Storage.
 type Config struct {
-	Bucket    string
-	KeyPrefix string
+	Bucket          string
+	KeyPrefix       string
+	CompressionGzip bool
 	// ServiceAccountJSON, if set, is used instead of ambient credentials
 	// (Workload Identity / Application Default Credentials).
 	ServiceAccountJSON []byte
@@ -67,15 +69,32 @@ func (c *client) FileURL(key string) string {
 }
 
 func (c *client) Upload(ctx context.Context, req *fpstorage.UploadRequest) (*fpstorage.UploadResponse, error) {
+	data := req.Data
+	originalSize := int64(len(data))
+	compressedSize := originalSize
+
+	if req.Compress && c.cfg.CompressionGzip {
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		if _, err := gz.Write(data); err != nil {
+			return nil, ierr.WithError(err).WithHint("failed to compress data").Mark(ierr.ErrSystem)
+		}
+		if err := gz.Close(); err != nil {
+			return nil, ierr.WithError(err).WithHint("failed to close gzip writer").Mark(ierr.ErrSystem)
+		}
+		data = buf.Bytes()
+		compressedSize = int64(len(data))
+	}
+
 	obj := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key)
 	w := obj.NewWriter(ctx)
 	if req.ContentType != "" {
 		w.ContentType = req.ContentType
 	} else {
-		w.ContentType = contentTypeFor(req.Format)
+		w.ContentType = contentTypeFor(req.Format, req.Compress && c.cfg.CompressionGzip)
 	}
 
-	if _, err := io.Copy(w, bytes.NewReader(req.Data)); err != nil {
+	if _, err := io.Copy(w, bytes.NewReader(data)); err != nil {
 		_ = w.Close()
 		return nil, ierr.WithError(err).
 			WithHint("failed to upload object to GCS").
@@ -90,11 +109,12 @@ func (c *client) Upload(ctx context.Context, req *fpstorage.UploadRequest) (*fps
 	}
 
 	return &fpstorage.UploadResponse{
-		FileURL:       c.FileURL(req.Key),
-		Bucket:        c.cfg.Bucket,
-		Key:           req.Key,
-		FileSizeBytes: int64(len(req.Data)),
-		UploadedAt:    time.Now(),
+		FileURL:        c.FileURL(req.Key),
+		Bucket:         c.cfg.Bucket,
+		Key:            req.Key,
+		FileSizeBytes:  originalSize,
+		CompressedSize: compressedSize,
+		UploadedAt:     time.Now(),
 	}, nil
 }
 
@@ -154,7 +174,10 @@ func (c *client) ValidateConnection(ctx context.Context) error {
 	return nil
 }
 
-func contentTypeFor(format fpstorage.UploadFormat) string {
+func contentTypeFor(format fpstorage.UploadFormat, compressed bool) string {
+	if compressed {
+		return "application/gzip"
+	}
 	switch format {
 	case fpstorage.UploadFormatCSV:
 		return "text/csv"

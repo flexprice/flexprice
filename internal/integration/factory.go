@@ -1370,6 +1370,7 @@ func (f *Factory) buildGCSStorage(conn *connection.Connection) (storage.Storage,
 	return gcsbackend.New(&gcsbackend.Config{
 		Bucket:             jobConfig.Bucket,
 		KeyPrefix:          jobConfig.KeyPrefix,
+		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
 		ServiceAccountJSON: []byte(saJSON),
 	}, f.logger)
 }
