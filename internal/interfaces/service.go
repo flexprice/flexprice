@@ -176,7 +176,7 @@ type SubscriptionService interface {
 	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and
 	// the Temporal CheckCancellationActivity when a previously scheduled cancellation fires, so
 	// resources are terminated exactly once, at the point cancellation actually takes effect.
-	TerminateSubscriptionResourcesAt(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error
+	TerminateSubscriptionResourcesAt(ctx context.Context, subscriptionID string, effectiveDate time.Time, cancellationReason string) error
 
 	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
 	// Used by Temporal activities and other callers that need to fire subscription lifecycle events.

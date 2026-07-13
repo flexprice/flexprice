@@ -3213,8 +3213,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// deferred in the first place and must be left alone.
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
 			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-			reason := sub.Metadata["cancellation_reason"]
-			if err := s.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+			cancellationReason := sub.Metadata["cancellation_reason"]
+			if err := s.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, cancellationReason); err != nil {
 				return err
 			}
 		}
@@ -4670,9 +4670,9 @@ func (s *subscriptionService) TerminateSubscriptionResourcesAt(
 	ctx context.Context,
 	subscriptionID string,
 	effectiveDate time.Time,
-	reason string,
+	cancellationReason string,
 ) error {
-	if err := s.cancelAddonsForSubscription(ctx, subscriptionID, effectiveDate, reason); err != nil {
+	if err := s.cancelAddonsForSubscription(ctx, subscriptionID, effectiveDate, cancellationReason); err != nil {
 		return err
 	}
 
