@@ -54,7 +54,7 @@ type Result struct {
 
 // Plan computes the forward-only, non-destructive decisions for each desired
 // topic without mutating the cluster. Sizing comes from an explicit
-// operator-authored spec (topics.yaml or the FLEXPRICE_KAFKA_TOPICS JSON
+// operator-authored spec (config.yaml's kafka.topics or the FLEXPRICE_KAFKA_TOPICS JSON
 // override), so partition growth is intentional. A topic may yield BOTH an
 // RF-mismatch action (warn) and a partition action (create/grow/skip/unchanged).
 func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {

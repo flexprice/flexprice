@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"log"
-	"strings"
 
 	"github.com/Shopify/sarama"
 	"github.com/flexprice/flexprice/internal/config"
@@ -13,7 +12,6 @@ import (
 )
 
 func main() {
-	specPath := flag.String("spec", "topics.yaml", "path to the baked base topics.yaml (used when FLEXPRICE_KAFKA_TOPICS is unset)")
 	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
 	flag.Parse()
 
@@ -22,24 +20,33 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces the baked file.
-	desired, source, err := topicspec.LoadDesired(*specPath)
+	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces config.yaml's
+	// kafka.topics_defaults/topics.
+	topics := make(map[string]topicspec.ConfigTopic, len(cfg.Kafka.Topics))
+	for name, t := range cfg.Kafka.Topics {
+		topics[name] = topicspec.ConfigTopic{Partitions: t.Partitions, ReplicationFactor: t.ReplicationFactor, RetentionMs: t.RetentionMs}
+	}
+	defaults := topicspec.ConfigDefaults{
+		ReplicationFactor: cfg.Kafka.TopicsDefaults.ReplicationFactor,
+		RetentionMs:       cfg.Kafka.TopicsDefaults.RetentionMs,
+	}
+	desired, source, err := topicspec.LoadDesired(defaults, topics)
 	if err != nil {
 		log.Fatalf("load desired topics: %v", err)
 	}
 	env := cfg.Logging.Environment
 	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, *dryRun)
-	if strings.HasPrefix(source, "file:") {
-		// The baked file carries the base/dev topic names (unprefixed), which are
+	if source == "config" {
+		// config.yaml carries the base/dev topic names (unprefixed), which are
 		// WRONG for a shared prod cluster. Every real deploy must set
 		// FLEXPRICE_KAFKA_TOPICS. Make a forgotten env-var loud.
-		log.Printf("WARN FLEXPRICE_KAFKA_TOPICS is NOT set — using the baked base topic list (%s). This is correct only for local/dev; a shared prod cluster needs the per-env JSON override or it may create wrong/unprefixed topics. Review the dry-run before applying.", source)
+		log.Printf("WARN FLEXPRICE_KAFKA_TOPICS is NOT set — using config.yaml's base topic list. This is correct only for local/dev; a shared prod cluster needs the per-env JSON override or it may create wrong/unprefixed topics. Review the dry-run before applying.")
 	}
 	for _, d := range desired {
 		log.Printf("desired topic: %s partitions=%d rf=%d", d.Name, d.Partitions, d.ReplicationFactor)
 	}
 
-	saramaCfg := kafka.GetSaramaConfig(cfg)
+	saramaCfg := kafka.GetSaramaConfig(&cfg.Kafka)
 
 	admin, err := sarama.NewClusterAdmin(cfg.Kafka.Brokers, saramaCfg)
 	if err != nil {

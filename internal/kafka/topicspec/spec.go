@@ -5,26 +5,24 @@ import (
 	"fmt"
 	"os"
 	"sort"
-
-	"gopkg.in/yaml.v3"
 )
 
 const envVar = "FLEXPRICE_KAFKA_TOPICS"
 
 type Defaults struct {
-	ReplicationFactor int16 `yaml:"replicationFactor" json:"replicationFactor"`
-	RetentionMs       int64 `yaml:"retentionMs" json:"retentionMs"`
+	ReplicationFactor int16 `json:"replicationFactor"`
+	RetentionMs       int64 `json:"retentionMs"`
 }
 
 type TopicSpec struct {
-	Partitions        int    `yaml:"partitions" json:"partitions"`
-	ReplicationFactor *int16 `yaml:"replicationFactor" json:"replicationFactor"`
-	RetentionMs       *int64 `yaml:"retentionMs" json:"retentionMs"`
+	Partitions        int    `json:"partitions"`
+	ReplicationFactor *int16 `json:"replicationFactor"`
+	RetentionMs       *int64 `json:"retentionMs"`
 }
 
 type Spec struct {
-	Defaults Defaults             `yaml:"defaults" json:"defaults"`
-	Topics   map[string]TopicSpec `yaml:"topics" json:"topics"`
+	Defaults Defaults             `json:"defaults"`
+	Topics   map[string]TopicSpec `json:"topics"`
 }
 
 type ResolvedTopic struct {
@@ -32,14 +30,6 @@ type ResolvedTopic struct {
 	Partitions        int
 	ReplicationFactor int16
 	RetentionMs       int64
-}
-
-func ParseYAML(data []byte) (*Spec, error) {
-	var s Spec
-	if err := yaml.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("parse topics yaml: %w", err)
-	}
-	return &s, nil
 }
 
 func ParseJSON(data []byte) (*Spec, error) {
@@ -80,15 +70,32 @@ func (s *Spec) Resolve() ([]ResolvedTopic, error) {
 	return out, nil
 }
 
+// ConfigDefaults/ConfigTopics mirror config.KafkaTopicsDefaults/KafkaTopicSpec
+// structurally (same fields) without importing internal/config, so the
+// config package doesn't need to depend back on topicspec. The caller
+// (cmd/kafka-migrate) converts cfg.Kafka.TopicsDefaults/Topics into these.
+type ConfigDefaults struct {
+	ReplicationFactor int16
+	RetentionMs       int64
+}
+
+type ConfigTopic struct {
+	Partitions        int
+	ReplicationFactor *int16
+	RetentionMs       *int64
+}
+
 // LoadDesired resolves the desired topic set and reports its source. If
 // FLEXPRICE_KAFKA_TOPICS is set (non-empty) it is parsed as JSON and FULLY
-// REPLACES the baked file. Otherwise the yaml file at yamlPath is used.
+// REPLACES the config.yaml-sourced base spec (no merge). Otherwise the base
+// spec (config.yaml's kafka.topics_defaults/topics, already loaded via Viper
+// by the caller) is used.
 //
-// The returned source string ("env:FLEXPRICE_KAFKA_TOPICS" or "file:<path>")
-// lets the caller log loudly which source won — the file fallback carries the
-// baked base/dev topic names (unprefixed), which are WRONG for a shared prod
+// The returned source string ("env:FLEXPRICE_KAFKA_TOPICS" or "config") lets
+// the caller log loudly which source won — the config.yaml fallback carries
+// the base/dev topic names (unprefixed), which are WRONG for a shared prod
 // cluster, so a deploy that forgot to set the env-var must be obvious in logs.
-func LoadDesired(yamlPath string) (topics []ResolvedTopic, source string, err error) {
+func LoadDesired(defaults ConfigDefaults, topics map[string]ConfigTopic) (out []ResolvedTopic, source string, err error) {
 	if v := os.Getenv(envVar); v != "" {
 		spec, perr := ParseJSON([]byte(v))
 		if perr != nil {
@@ -97,14 +104,14 @@ func LoadDesired(yamlPath string) (topics []ResolvedTopic, source string, err er
 		r, rerr := spec.Resolve()
 		return r, "env:" + envVar, rerr
 	}
-	data, rerr := os.ReadFile(yamlPath)
-	if rerr != nil {
-		return nil, "", fmt.Errorf("read topics spec %s: %w", yamlPath, rerr)
+
+	spec := &Spec{
+		Defaults: Defaults{ReplicationFactor: defaults.ReplicationFactor, RetentionMs: defaults.RetentionMs},
+		Topics:   make(map[string]TopicSpec, len(topics)),
 	}
-	spec, perr := ParseYAML(data)
-	if perr != nil {
-		return nil, "", perr
+	for name, t := range topics {
+		spec.Topics[name] = TopicSpec{Partitions: t.Partitions, ReplicationFactor: t.ReplicationFactor, RetentionMs: t.RetentionMs}
 	}
 	r, resErr := spec.Resolve()
-	return r, "file:" + yamlPath, resErr
+	return r, "config", resErr
 }
