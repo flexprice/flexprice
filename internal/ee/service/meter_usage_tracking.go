@@ -391,7 +391,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	// 1. Resolving the customer for the event
 	// 2. Running the customer onboarding workflow
 	// 3. Checking for spend breaches and logging alerts
-	s.runMeterUsagePostInsertSideEffects(ctx, event)
+	s.runMeterUsagePostInsertSideEffects(ctx, event, records)
 
 	return nil
 }

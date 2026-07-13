@@ -510,7 +510,7 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 		ExternalCustomerID: "ext_1",
 	}
 
-	svc.runMeterUsagePostInsertSideEffects(ctx, event)
+	svc.runMeterUsagePostInsertSideEffects(ctx, event, []*events.MeterUsage{})
 	assert.Equal(t, existing.ID, event.CustomerID)
 }
 
