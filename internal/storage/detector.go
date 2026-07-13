@@ -59,7 +59,7 @@ func (d *CloudDetector) probeGCP(ctx context.Context) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.Header.Get("Metadata-Flavor") == "Google" || resp.StatusCode == http.StatusOK
+	return resp.Header.Get("Metadata-Flavor") == "Google" && resp.StatusCode == http.StatusOK
 }
 
 func (d *CloudDetector) probeAWS(ctx context.Context) bool {
