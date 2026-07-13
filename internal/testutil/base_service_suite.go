@@ -151,12 +151,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 
 	// Initialize encryption service
 	encryptionService, err := security.NewEncryptionService(s.config, s.logger)
@@ -271,12 +266,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -367,6 +357,15 @@ func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
 // GetLocker returns the test distributed locker (in-memory, SetNX + TTL).
 func (s *BaseServiceTestSuite) GetLocker() cache.Locker {
 	return s.locker
+}
+
+// GetPublishedWebhooks returns the webhook events captured by the in-memory
+// webhook publisher this suite injects. Empty if the publisher was replaced.
+func (s *BaseServiceTestSuite) GetPublishedWebhooks() []*types.WebhookEvent {
+	if p, ok := s.webhookPublisher.(*InMemoryWebhookPublisher); ok {
+		return p.Events()
+	}
+	return nil
 }
 
 // GetDB returns the test database client
