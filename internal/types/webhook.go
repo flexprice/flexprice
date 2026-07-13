@@ -96,6 +96,14 @@ const (
 	WebhookEventWalletOngoingBalanceDropped   WebhookEventName = "wallet.ongoing_balance.dropped"
 	WebhookEventWalletOngoingBalanceRecovered WebhookEventName = "wallet.ongoing_balance.recovered"
 
+	// subscription/line-item/group spend alert events (alert_settings table, Parts A/B/C).
+	WebhookEventSubscriptionSpendThresholdReached           WebhookEventName = "subscription.spend.threshold_reached"
+	WebhookEventSubscriptionSpendThresholdRecovered         WebhookEventName = "subscription.spend.threshold_recovered"
+	WebhookEventSubscriptionLineItemSpendThresholdReached   WebhookEventName = "subscription.line_item_spend.threshold_reached"
+	WebhookEventSubscriptionLineItemSpendThresholdRecovered WebhookEventName = "subscription.line_item_spend.threshold_recovered"
+	WebhookEventSubscriptionGroupSpendThresholdReached      WebhookEventName = "subscription.group_spend.threshold_reached"
+	WebhookEventSubscriptionGroupSpendThresholdRecovered    WebhookEventName = "subscription.group_spend.threshold_recovered"
+
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
 )

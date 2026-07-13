@@ -23,6 +23,7 @@ const (
 	EntityPlan            Entity = "plan"
 	EntityAddon           Entity = "addon"
 	EntityGroup           Entity = "group"
+	EntityAlertSettings   Entity = "alert_settings"
 	EntitySubscription    Entity = "subscription"
 	EntityWallet          Entity = "wallet"
 	EntityTenant          Entity = "tenant"

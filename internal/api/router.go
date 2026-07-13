@@ -53,6 +53,7 @@ type Handlers struct {
 	Group                    *v1.GroupHandler
 	ScheduledTask            *v1.ScheduledTaskHandler
 	AlertLogsHandler         *v1.AlertLogsHandler
+	AlertSettingsHandler     *v1.AlertSettingsHandler
 	RBAC                     *v1.RBACHandler
 	OAuth                    *v1.OAuthHandler
 	Dashboard                *v1.DashboardHandler
@@ -707,6 +708,16 @@ func NewRouter(
 	{
 		// list alert logs by filter
 		alert.POST("/search", handlers.AlertLogsHandler.QueryAlertLogs)
+	}
+
+	// Alert settings routes (subscription / subscription line item / group spend alerts)
+	alertSetting := alert.Group("/setting")
+	{
+		alertSetting.POST("", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.CreateAlertSettings)
+		alertSetting.POST("/search", handlers.AlertSettingsHandler.QueryAlertSettings)
+		alertSetting.GET("/:id", handlers.AlertSettingsHandler.GetAlertSettings)
+		alertSetting.PUT("/:id", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.UpdateAlertSettings)
+		alertSetting.DELETE("/:id", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.DeleteAlertSettings)
 	}
 
 	// RBAC routes

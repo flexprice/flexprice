@@ -134,6 +134,11 @@ func AlertStatus(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldAlertStatus, v))
 }
 
+// AlertSettingID applies equality check predicate on the "alert_setting_id" field. It's identical to AlertSettingIDEQ.
+func AlertSettingID(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldAlertSettingID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldTenantID, v))
@@ -1052,6 +1057,81 @@ func AlertStatusEqualFold(v string) predicate.AlertLogs {
 // AlertStatusContainsFold applies the ContainsFold predicate on the "alert_status" field.
 func AlertStatusContainsFold(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldContainsFold(FieldAlertStatus, v))
+}
+
+// AlertSettingIDEQ applies the EQ predicate on the "alert_setting_id" field.
+func AlertSettingIDEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDNEQ applies the NEQ predicate on the "alert_setting_id" field.
+func AlertSettingIDNEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNEQ(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDIn applies the In predicate on the "alert_setting_id" field.
+func AlertSettingIDIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIn(FieldAlertSettingID, vs...))
+}
+
+// AlertSettingIDNotIn applies the NotIn predicate on the "alert_setting_id" field.
+func AlertSettingIDNotIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotIn(FieldAlertSettingID, vs...))
+}
+
+// AlertSettingIDGT applies the GT predicate on the "alert_setting_id" field.
+func AlertSettingIDGT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGT(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDGTE applies the GTE predicate on the "alert_setting_id" field.
+func AlertSettingIDGTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGTE(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDLT applies the LT predicate on the "alert_setting_id" field.
+func AlertSettingIDLT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLT(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDLTE applies the LTE predicate on the "alert_setting_id" field.
+func AlertSettingIDLTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLTE(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDContains applies the Contains predicate on the "alert_setting_id" field.
+func AlertSettingIDContains(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContains(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDHasPrefix applies the HasPrefix predicate on the "alert_setting_id" field.
+func AlertSettingIDHasPrefix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasPrefix(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDHasSuffix applies the HasSuffix predicate on the "alert_setting_id" field.
+func AlertSettingIDHasSuffix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasSuffix(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDIsNil applies the IsNil predicate on the "alert_setting_id" field.
+func AlertSettingIDIsNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIsNull(FieldAlertSettingID))
+}
+
+// AlertSettingIDNotNil applies the NotNil predicate on the "alert_setting_id" field.
+func AlertSettingIDNotNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotNull(FieldAlertSettingID))
+}
+
+// AlertSettingIDEqualFold applies the EqualFold predicate on the "alert_setting_id" field.
+func AlertSettingIDEqualFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEqualFold(FieldAlertSettingID, v))
+}
+
+// AlertSettingIDContainsFold applies the ContainsFold predicate on the "alert_setting_id" field.
+func AlertSettingIDContainsFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContainsFold(FieldAlertSettingID, v))
 }
 
 // And groups predicates with the AND operator between them.

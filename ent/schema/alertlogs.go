@@ -97,6 +97,16 @@ func (AlertLogs) Fields() []ent.Field {
 				"postgres": "jsonb",
 			}).
 			Immutable(),
+
+		// Alert setting ID (optional) - links back to the alert_settings row that produced this
+		// entry. Nil for wallet/feature-wallet-balance alerts, which don't use alert_settings.
+		field.String("alert_setting_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
 	}
 }
 
@@ -123,5 +133,8 @@ func (AlertLogs) Indexes() []ent.Index {
 		// Index for querying alerts by customer
 		index.Fields("tenant_id", "environment_id", "customer_id", "alert_type", "alert_status", "created_at").
 			StorageKey("idx_alertlogs_customer_type_status_created_at"),
+		// Index for the latest-alert-in-this-period lookup, keyed off alert_setting_id
+		index.Fields("tenant_id", "environment_id", "alert_setting_id", "created_at").
+			StorageKey("idx_alertlogs_alert_setting_id"),
 	}
 }

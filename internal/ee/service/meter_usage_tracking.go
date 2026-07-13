@@ -213,9 +213,11 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 
 	if tenantID == "" && event.TenantID != "" {
 		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	event.EventName = strings.TrimSpace(event.EventName)
@@ -384,6 +386,11 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		"count", len(records),
 	)
 
+	// Step 4: Run post-insert side effects
+	// This includes:
+	// 1. Resolving the customer for the event
+	// 2. Running the customer onboarding workflow
+	// 3. Checking for spend breaches and logging alerts
 	s.runMeterUsagePostInsertSideEffects(ctx, event)
 
 	return nil

@@ -91,6 +91,7 @@ var (
 		{Name: "alert_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "alert_info", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "alert_setting_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// AlertLogsTable holds the schema information for the "alert_logs" table.
 	AlertLogsTable = &schema.Table{
@@ -122,6 +123,46 @@ var (
 				Name:    "idx_alertlogs_customer_type_status_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[12], AlertLogsColumns[13], AlertLogsColumns[14], AlertLogsColumns[3]},
+			},
+			{
+				Name:    "idx_alertlogs_alert_setting_id",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[16], AlertLogsColumns[3]},
+			},
+		},
+	}
+	// AlertSettingsColumns holds the columns for the "alert_settings" table.
+	AlertSettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AlertSettingsTable holds the schema information for the "alert_settings" table.
+	AlertSettingsTable = &schema.Table{
+		Name:       "alert_settings",
+		Columns:    AlertSettingsColumns,
+		PrimaryKey: []*schema.Column{AlertSettingsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_alert_settings_entity",
+				Unique:  false,
+				Columns: []*schema.Column{AlertSettingsColumns[1], AlertSettingsColumns[7], AlertSettingsColumns[2], AlertSettingsColumns[8], AlertSettingsColumns[9], AlertSettingsColumns[10]},
+			},
+			{
+				Name:    "idx_alert_settings_parent",
+				Unique:  false,
+				Columns: []*schema.Column{AlertSettingsColumns[1], AlertSettingsColumns[7], AlertSettingsColumns[2], AlertSettingsColumns[8], AlertSettingsColumns[9], AlertSettingsColumns[11], AlertSettingsColumns[12]},
 			},
 		},
 	}
@@ -2582,6 +2623,7 @@ var (
 		AddonsTable,
 		AddonAssociationsTable,
 		AlertLogsTable,
+		AlertSettingsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,

@@ -24,6 +24,7 @@ type Services struct {
 	Tracing                *tracing.Service
 	CreditNoteService      service.CreditNoteService
 	CheckoutSessionService interfaces.CheckoutSessionService
+	GroupService           service.GroupService
 }
 
 // NewServices creates a new Services container
@@ -40,6 +41,7 @@ func NewServices(
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
 	checkoutSessionService interfaces.CheckoutSessionService,
+	groupService service.GroupService,
 ) *Services {
 	return &Services{
 		InvoiceService:         invoiceService,
@@ -54,5 +56,6 @@ func NewServices(
 		Tracing:                tracingSvc,
 		CreditNoteService:      creditNoteService,
 		CheckoutSessionService: checkoutSessionService,
+		GroupService:           groupService,
 	}
 }
