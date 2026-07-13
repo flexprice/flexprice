@@ -156,6 +156,11 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewAlertPayloadBuilder(f.services)
 	}
 
+	// event (usage ingestion) builder
+	f.builders[types.WebhookEventEventUnmatched] = func() PayloadBuilder {
+		return NewUnmatchedEventPayloadBuilder(f.services)
+	}
+
 	// checkout session builders
 	f.builders[types.WebhookEventCheckoutSessionInitiated] = func() PayloadBuilder {
 		return NewCheckoutSessionPayloadBuilder(f.services)

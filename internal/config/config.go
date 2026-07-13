@@ -477,6 +477,11 @@ type MeterUsageTrackingConfig struct {
 	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
+
+	// event.unmatched webhook (fired when an event produces no meter usage); opt-in.
+	UnmatchedEventWebhookEnabled bool `mapstructure:"unmatched_event_webhook_enabled" default:"false"`
+	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
+	UnmatchedEventWebhookWindow time.Duration `mapstructure:"unmatched_event_webhook_window" default:"10m"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

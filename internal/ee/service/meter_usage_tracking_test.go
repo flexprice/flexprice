@@ -1,11 +1,15 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +27,107 @@ func TestMeterUsageTracking(t *testing.T) {
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
 	s.svc = &meterUsageTrackingService{}
+}
+
+// --- fakes for publishUnmatchedEventWebhook tests ---
+
+type fakeWebhookPublisher struct {
+	events []*types.WebhookEvent
+}
+
+func (f *fakeWebhookPublisher) PublishWebhook(_ context.Context, event *types.WebhookEvent) error {
+	f.events = append(f.events, event)
+	return nil
+}
+func (f *fakeWebhookPublisher) Close() error { return nil }
+
+// fakeLocker simulates Redis SetNX: the first AcquireLock for a key succeeds,
+// subsequent ones fail (until, in real Redis, the TTL expires).
+type fakeLocker struct{ held map[string]bool }
+
+func (l *fakeLocker) AcquireLock(_ context.Context, key string, _ time.Duration) (cache.Lock, error) {
+	if l.held == nil {
+		l.held = map[string]bool{}
+	}
+	if l.held[key] {
+		return &fakeLock{success: false}, nil
+	}
+	l.held[key] = true
+	return &fakeLock{success: true}, nil
+}
+
+type fakeLock struct{ success bool }
+
+func (l *fakeLock) AcquiredSuccessfully() bool      { return l.success }
+func (l *fakeLock) Release(_ context.Context) error { return nil }
+
+func newUnmatchedTestService(enabled bool, window time.Duration, locker cache.Locker) (*meterUsageTrackingService, *fakeWebhookPublisher) {
+	pub := &fakeWebhookPublisher{}
+	svc := &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger: logger.NewNoopLogger(),
+			Config: &config.Configuration{
+				MeterUsageTracking: config.MeterUsageTrackingConfig{
+					UnmatchedEventWebhookEnabled: enabled,
+					UnmatchedEventWebhookWindow:  window,
+				},
+			},
+			WebhookPublisher: pub,
+			Locker:           locker,
+		},
+	}
+	return svc, pub
+}
+
+func unmatchedTestEvent(name string) *events.Event {
+	return &events.Event{
+		ID:                 "evt_" + name,
+		TenantID:           types.DefaultTenantID,
+		EnvironmentID:      "env_1",
+		EventName:          name,
+		ExternalCustomerID: "cust_ext_1",
+		Timestamp:          time.Now().UTC(),
+	}
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_DisabledNoop() {
+	svc, pub := newUnmatchedTestService(false, 10*time.Minute, &fakeLocker{})
+	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+	assert.Empty(s.T(), pub.events)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_EnabledPublishes() {
+	svc, pub := newUnmatchedTestService(true, 10*time.Minute, &fakeLocker{})
+	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+
+	assert.Len(s.T(), pub.events, 1)
+	got := pub.events[0]
+	assert.Equal(s.T(), types.WebhookEventEventUnmatched, got.EventName)
+	assert.Equal(s.T(), types.SystemEntityTypeEvent, got.EntityType)
+	assert.Equal(s.T(), "evt_api_call", got.EntityID)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_ThrottledPerEventName() {
+	locker := &fakeLocker{}
+	svc, pub := newUnmatchedTestService(true, 10*time.Minute, locker)
+
+	// Same event name three times within the window -> only the first fires.
+	for i := 0; i < 3; i++ {
+		svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), pub.events, 1)
+
+	// A different event name is throttled independently -> fires once more.
+	svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("other_event"), types.UnmatchedEventReasonNoMatchingMeter)
+	assert.Len(s.T(), pub.events, 2)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishUnmatchedWebhook_NoLockerFiresEveryTime() {
+	svc, pub := newUnmatchedTestService(true, 10*time.Minute, nil) // no Locker -> fail-open
+	for i := 0; i < 3; i++ {
+		svc.publishUnmatchedEventWebhook(context.Background(), unmatchedTestEvent("api_call"), types.UnmatchedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), pub.events, 3)
 }
 
 // --- checkMeterFilters tests ---

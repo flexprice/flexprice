@@ -118,3 +118,15 @@ const (
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
 )
+
+// event (usage ingestion) webhook event names
+const (
+	// WebhookEventEventUnmatched fires when an ingested event produces no meter usage.
+	WebhookEventEventUnmatched WebhookEventName = "event.unmatched"
+)
+
+// UnmatchedEventReason explains why an event matched no meter.
+type UnmatchedEventReason = string
+
+// no meter matched — either none registered for the event name, or filters/quantity excluded all
+const UnmatchedEventReasonNoMatchingMeter UnmatchedEventReason = "no_matching_meter"

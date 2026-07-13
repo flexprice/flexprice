@@ -326,6 +326,8 @@ meter_usage_tracking:
   consumer_group: "v1_meter_usage_tracking_service"
   topic_dlq: "meter_usage_tracking_service_dlq"
   redis_deduplication_enabled: false
+  unmatched_event_webhook_enabled: false
+  unmatched_event_webhook_window: "10m"
 
 meter_usage_tracking_lazy:
   enabled: true
