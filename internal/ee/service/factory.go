@@ -52,8 +52,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
-	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -66,7 +66,7 @@ type ServiceParams struct {
 	Config        *config.Configuration
 	DB            postgres.IClient
 	PDFGenerator  pdf.Generator
-	S3            s3.Service
+	Storage       storage.Storage
 	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
@@ -194,7 +194,7 @@ func NewServiceParams(
 	couponApplicationRepo coupon_application.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
-	s3Service s3.Service,
+	storageSvc storage.Storage,
 	client httpclient.Client,
 	addonRepo addon.Repository,
 	addonAssociationRepo addonassociation.Repository,
@@ -260,7 +260,7 @@ func NewServiceParams(
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
 		WebhookPublisher:             webhookPublisher,
-		S3:                           s3Service,
+		Storage:                      storageSvc,
 		Client:                       client,
 		CouponRepo:                   couponRepo,
 		CouponAssociationRepo:        couponAssociationRepo,
