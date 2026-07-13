@@ -8,8 +8,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -319,8 +319,11 @@ func (s *BillingActivities) CheckCancellationActivity(
 			// internal/ee/service/subscription.go — never fires for a bare EndDate set through
 			// some other path that never had termination deferred in the first place.
 			if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-				reason := sub.Metadata["cancellation_reason"]
-				if err := subscriptionService.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+				if err := subscriptionService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+					SubscriptionID:     sub.ID,
+					EffectiveDate:      *sub.CancelAt,
+					CancellationReason: sub.Metadata["cancellation_reason"],
+				}); err != nil {
 					return err
 				}
 			}
