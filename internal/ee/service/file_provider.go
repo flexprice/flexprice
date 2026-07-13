@@ -47,6 +47,7 @@ const (
 	FileProviderTypeDirect      FileProviderType = "direct"
 	FileProviderTypeGoogleDrive FileProviderType = "google_drive"
 	FileProviderTypeS3          FileProviderType = "s3"
+	FileProviderTypeGCS         FileProviderType = "gcs"
 	FileProviderTypeOneDrive    FileProviderType = "onedrive"
 	FileProviderTypeDropbox     FileProviderType = "dropbox"
 	FileProviderTypeGitHub      FileProviderType = "github"
@@ -118,6 +119,21 @@ func (p *S3Provider) GetDownloadURL(ctx context.Context, fileURL string) (string
 
 func (p *S3Provider) GetProviderName() FileProviderType {
 	return FileProviderTypeS3
+}
+
+// GCSProvider handles Google Cloud Storage URLs
+type GCSProvider struct{}
+
+func (p *GCSProvider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
+	_, err := url.Parse(fileURL)
+	if err != nil {
+		return "", ierr.WithError(err).WithHint("Invalid GCS URL").Mark(ierr.ErrValidation)
+	}
+	return fileURL, nil
+}
+
+func (p *GCSProvider) GetProviderName() FileProviderType {
+	return FileProviderTypeGCS
 }
 
 // OneDriveProvider handles Microsoft OneDrive URLs
@@ -223,6 +239,7 @@ func NewFileProviderRegistry() *FileProviderRegistry {
 	registry.RegisterProvider(&DirectURLProvider{})
 	registry.RegisterProvider(&GoogleDriveProvider{})
 	registry.RegisterProvider(&S3Provider{})
+	registry.RegisterProvider(&GCSProvider{})
 	registry.RegisterProvider(&OneDriveProvider{})
 	registry.RegisterProvider(&DropboxProvider{})
 	registry.RegisterProvider(&GitHubProvider{})
@@ -241,8 +258,11 @@ func (r *FileProviderRegistry) GetProvider(fileURL string) FileProvider {
 	if strings.Contains(fileURL, "drive.google.com") {
 		return r.providers[FileProviderTypeGoogleDrive]
 	}
-	if strings.Contains(fileURL, "amazonaws.com") || strings.Contains(fileURL, "s3.") {
+	if strings.Contains(fileURL, "amazonaws.com") || strings.Contains(fileURL, "s3.") || strings.HasPrefix(fileURL, "s3://") {
 		return r.providers[FileProviderTypeS3]
+	}
+	if strings.Contains(fileURL, "storage.googleapis.com") || strings.HasPrefix(fileURL, "gs://") {
+		return r.providers[FileProviderTypeGCS]
 	}
 	if strings.Contains(fileURL, "onedrive.live.com") || strings.Contains(fileURL, "1drv.ms") {
 		return r.providers[FileProviderTypeOneDrive]
