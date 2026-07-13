@@ -16,7 +16,8 @@ type SyncConfig struct {
 	Deal  *EntitySyncConfig `json:"deal,omitempty"`
 	Quote *EntitySyncConfig `json:"quote,omitempty"`
 	// Storage connection metadata (for Flexprice-managed or customer BYO storage connections; S3 or GCS)
-	Storage *StorageExportConfig `json:"storage,omitempty"`
+	// JSON tag stays "s3" for backward compatibility with existing DB rows; the Go field name is cloud-agnostic since GCS connections also use this config.
+	Storage *StorageExportConfig `json:"s3,omitempty"`
 	// InvoiceSyncSettings controls line-item transformation during outbound invoice sync
 	InvoiceSyncSettings *InvoiceSyncSettings `json:"invoice_sync_settings,omitempty"`
 }
