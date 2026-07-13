@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -22,14 +23,16 @@ import (
 // window. A single probe tick covers one meter, so all 8 meters get
 // exercised over 8 ticks.
 type MeterAggregationProbe struct {
-	client e2eprobe.Client
-	reg    e2eprobe.Registry
-	runID  string
-	cursor int64
+	client    e2eprobe.Client
+	reg       e2eprobe.Registry
+	runID     string
+	logger    *logger.Logger
+	startedAt time.Time
+	cursor    int64
 }
 
-func NewMeterAggregationProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string) *MeterAggregationProbe {
-	return &MeterAggregationProbe{client: c, reg: r, runID: runID}
+func NewMeterAggregationProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) *MeterAggregationProbe {
+	return &MeterAggregationProbe{client: c, reg: r, runID: runID, logger: lg, startedAt: time.Now()}
 }
 
 func (p *MeterAggregationProbe) Name() string        { return "meter-aggregation-probe" }
@@ -40,10 +43,26 @@ func (p *MeterAggregationProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe
 // window should show hundreds of events per meter if aggregation is healthy.
 const meterAggLookback = 30 * time.Minute
 
+// meterAggStartupGrace is how long the probe stays silent after boot before
+// asserting anything. Fresh boots have neither events nor aggregated rows in
+// ClickHouse yet — checking during that window is a guaranteed false page.
+// After the grace elapses, the lookback window is clamped to the elapsed
+// uptime until it reaches meterAggLookback.
+const meterAggStartupGrace = 5 * time.Minute
+
 func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
 	if len(seeds.PersistentCustomerIDs) == 0 || len(seeds.MeterIDs) == 0 {
 		return nil // seed-ensure hasn't completed yet
+	}
+
+	uptime := time.Since(p.startedAt)
+	if uptime < meterAggStartupGrace {
+		p.logDebug(ctx, "meter-aggregation-probe: within startup grace, skipping",
+			"uptime_sec", int(uptime.Seconds()),
+			"grace_sec", int(meterAggStartupGrace.Seconds()),
+			"run_id", p.runID)
+		return nil
 	}
 
 	// Round-robin through meter event names. Sort so order is stable
@@ -58,7 +77,14 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	extCustID := seeds.PersistentCustomerIDs[int(idx)%len(seeds.PersistentCustomerIDs)]
 
 	end := time.Now().UTC()
-	start := end.Add(-meterAggLookback)
+	// Never look further back than the probe has actually been running.
+	// Otherwise, at t=6m into a 30m lookback the empty [t=-24m..t=0] slice
+	// dominates and reports sum=0 even though the pipeline is healthy.
+	window := meterAggLookback
+	if uptime < meterAggLookback {
+		window = uptime
+	}
+	start := end.Add(-window)
 
 	resp, err := p.client.Events().GetUsageAnalytics(ctx, types.GetUsageAnalyticsRequest{
 		ExternalCustomerID: &extCustID,
@@ -69,21 +95,27 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 		return e2eprobe.Errorf(map[string]string{
 			"external_customer_id": extCustID,
 			"event_name":           eventName,
-			"window":               meterAggLookback.String(),
+			"window":               window.String(),
 		}, "analytics for %s/%s: %w", extCustID, eventName, err)
 	}
 
 	sum := extractAnalyticsSum(resp, eventName)
 	if sum > 0 {
+		p.logDebug(ctx, "meter-aggregation-probe: observed non-zero aggregated usage",
+			"event_name", eventName,
+			"external_customer_id", extCustID,
+			"window", window.String(),
+			"observed_sum", fmt.Sprintf("%.4f", sum),
+			"run_id", p.runID)
 		return nil
 	}
 	return e2eprobe.Errorf(map[string]string{
 		"external_customer_id": extCustID,
 		"event_name":           eventName,
-		"window":               meterAggLookback.String(),
+		"window":               window.String(),
 		"observed_sum":         fmt.Sprintf("%.4f", sum),
 	}, "meter %s has zero aggregated usage over %s window (event_ingest_driver should have produced events; aggregation pipeline may be broken)",
-		eventName, meterAggLookback)
+		eventName, window)
 }
 
 // sortedMeterEventNames returns the event names from meterIDs in stable sorted order.
@@ -94,4 +126,11 @@ func sortedMeterEventNames(meterIDs map[string]string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (p *MeterAggregationProbe) logDebug(ctx context.Context, msg string, kv ...any) {
+	if p.logger == nil {
+		return
+	}
+	p.logger.Debug(ctx, msg, kv...)
 }

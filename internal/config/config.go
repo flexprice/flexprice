@@ -495,6 +495,16 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+
+	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
+	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path
+	// and inline spend-breach check. First event schedules the workflow at now + window;
+	// subsequent events for the same customer are absorbed by Temporal workflow-ID dedup.
+	// When true, WalletAlertPushEnabled and SpendAlertWebhookEnabled are ignored.
+	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
+	// AlertDebounceWindow is the delay between the first event and the alert-check workflow
+	// firing. Includes a buffer to ensure ClickHouse has caught up with recent inserts.
+	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

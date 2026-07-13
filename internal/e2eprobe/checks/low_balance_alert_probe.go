@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -14,30 +15,39 @@ import (
 // alert threshold and asserts the corresponding webhook lands within a
 // bounded window. Missing webhook → check error → Slack via reporter.
 //
-// Flexprice's wallet alert-state machine is binary (ok / in_alarm), so we
-// cannot exercise info / warning / critical in one tick. The probe cycles:
+// Flexprice's wallet-alert webhook mapping only fires for the in_alarm and
+// ok states of AlertTypeLowOngoingBalance (see internal/ee/service/alertlogs.go
+// `alertWebhookMapping`). Landing on info or warning updates the wallet's
+// alert_state in the DB but produces no webhook. To trigger the drop event
+// we must therefore cross the CRITICAL threshold (0), not just info (25).
 //
-//   Tick T0 (wallet=ok):    ingest usage → drop projected balance below
-//                           the info threshold (25) → wait for the webhook.
-//   Tick T1 (wallet=in_alarm): top-up the wallet back to $30 to recover.
+// Cycle:
 //
-// One end-to-end verification per two ticks. At default 5m interval,
-// full cycle every 10m.
+//	Tick T0 (wallet=ok):    ingest usage large enough to push ongoing_balance
+//	                        below the critical threshold (0) → wait for the
+//	                        wallet.ongoing_balance.dropped webhook.
+//	Tick T1 (wallet=in_alarm): top-up the wallet back to $30 to recover.
+//
+// One end-to-end verification per two ticks. At default 5m interval, full
+// cycle every 10m.
 type LowBalanceAlertProbe struct {
 	client   e2eprobe.Client
 	reg      e2eprobe.Registry
 	listener *LowWalletAlertListener
 	runID    string
 	opts     LowBalanceAlertOpts
+	logger   *logger.Logger
 }
 
 // LowBalanceAlertOpts are runtime knobs. Zero-value falls through to sane
 // defaults set by NewLowBalanceAlertProbe.
 type LowBalanceAlertOpts struct {
 	// UsageAmount is the value of the "amount" property on the driver event.
-	// Combined with the $0.01 e2eprobe_sum unit price and the 30/25/10/0
-	// threshold spread, a single event with amount=600 pushes ongoing_balance
-	// from $30 to $24 (below info=25). Default 600.
+	// Combined with the $0.01 e2eprobe_sum unit price this maps directly to
+	// dollars of debit: amount=3500 → $35 usage → drops ongoing_balance from
+	// $30 to -$5, safely below the critical=0 threshold so the in_alarm
+	// webhook fires. Default 3500. (Anything ≤3000 lands in info/warning
+	// which have no webhook mapping — the probe would silently time out.)
 	UsageAmount int
 
 	// RecoveryTopUp is the credit re-added when the wallet is found in_alarm.
@@ -56,9 +66,9 @@ type LowBalanceAlertOpts struct {
 	PollInterval time.Duration
 }
 
-func NewLowBalanceAlertProbe(c e2eprobe.Client, r e2eprobe.Registry, listener *LowWalletAlertListener, runID string, opts LowBalanceAlertOpts) *LowBalanceAlertProbe {
+func NewLowBalanceAlertProbe(c e2eprobe.Client, r e2eprobe.Registry, listener *LowWalletAlertListener, runID string, lg *logger.Logger, opts LowBalanceAlertOpts) *LowBalanceAlertProbe {
 	if opts.UsageAmount == 0 {
-		opts.UsageAmount = 600
+		opts.UsageAmount = 3500
 	}
 	if opts.RecoveryTopUp == "" {
 		opts.RecoveryTopUp = AlertCanaryInitialBalance
@@ -69,7 +79,7 @@ func NewLowBalanceAlertProbe(c e2eprobe.Client, r e2eprobe.Registry, listener *L
 	if opts.PollInterval == 0 {
 		opts.PollInterval = 2 * time.Second
 	}
-	return &LowBalanceAlertProbe{client: c, reg: r, listener: listener, runID: runID, opts: opts}
+	return &LowBalanceAlertProbe{client: c, reg: r, listener: listener, runID: runID, logger: lg, opts: opts}
 }
 
 func (p *LowBalanceAlertProbe) Name() string        { return "low-balance-alert-probe" }
@@ -105,14 +115,22 @@ func (p *LowBalanceAlertProbe) Run(ctx context.Context) error {
 	if b.AlertState != nil {
 		state = string(*b.AlertState)
 	}
+	rtBal := ""
+	if b.RealTimeBalance != nil {
+		rtBal = *b.RealTimeBalance
+	}
 	attrs := map[string]string{
 		"external_customer_id": ext,
 		"wallet_id":            walletID,
 		"alert_state":          state,
 	}
-	if b.RealTimeBalance != nil {
-		attrs["real_time_balance"] = *b.RealTimeBalance
+	if rtBal != "" {
+		attrs["real_time_balance"] = rtBal
 	}
+
+	p.logDebug(ctx, "low-balance-alert-probe: fetched wallet balance",
+		"wallet_id", walletID, "alert_state", state, "real_time_balance", rtBal,
+		"external_customer_id", ext, "run_id", p.runID)
 
 	if state != "ok" {
 		// Recovery leg: top-up so the state machine can re-arm for the next
@@ -121,8 +139,8 @@ func (p *LowBalanceAlertProbe) Run(ctx context.Context) error {
 		return p.recover(ctx, walletID, ext, attrs)
 	}
 
-	// Drop leg: ingest usage to push ongoing_balance below the info threshold,
-	// then wait for the webhook to reach the listener.
+	// Drop leg: ingest usage to push ongoing_balance below the critical threshold,
+	// then wait for the wallet.ongoing_balance.dropped webhook.
 	return p.driveAndVerify(ctx, walletID, ext, attrs)
 }
 
@@ -147,10 +165,20 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 	if _, err := p.client.Events().Ingest(ctx, ingestReq); err != nil {
 		return e2eprobe.Errorf(attrs, "ingest canary drop event: %w", err)
 	}
+	p.logDebug(ctx, "low-balance-alert-probe: ingested drop event",
+		"wallet_id", walletID, "amount_units", amountStr,
+		"expected_debit_usd", decimalDollars(p.opts.UsageAmount),
+		"baseline_receipt", baseline.Format(time.RFC3339Nano),
+		"deadline_sec", int(p.opts.WebhookWait.Seconds()), "run_id", p.runID)
 
 	deadline := time.Now().Add(p.opts.WebhookWait)
 	for {
 		if newest := maxReceipt(p.listener.SeenThresholds(walletID)); newest.After(baseline) {
+			p.logDebug(ctx, "low-balance-alert-probe: webhook received within deadline",
+				"wallet_id", walletID,
+				"webhook_at", newest.Format(time.RFC3339Nano),
+				"elapsed_ms", time.Since(deadline.Add(-p.opts.WebhookWait)).Milliseconds(),
+				"run_id", p.runID)
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -188,7 +216,20 @@ func (p *LowBalanceAlertProbe) recover(ctx context.Context, walletID, ext string
 	if _, err := p.client.Wallets().TopUp(ctx, walletID, topUpReq); err != nil {
 		return e2eprobe.Errorf(attrs, "recovery top-up of canary wallet %s: %w", walletID, err)
 	}
+	p.logDebug(ctx, "low-balance-alert-probe: recovery top-up applied",
+		"wallet_id", walletID, "amount_usd", p.opts.RecoveryTopUp,
+		"external_customer_id", ext, "run_id", p.runID)
 	return nil
+}
+
+// logDebug is a nil-safe wrapper so tests / stub call-sites without a logger
+// don't panic. Emits at Debug level so probes stay quiet on default (Info)
+// runs; flip E2EPROBE_LOG_LEVEL=debug to surface the per-tick checkpoints.
+func (p *LowBalanceAlertProbe) logDebug(ctx context.Context, msg string, kv ...any) {
+	if p.logger == nil {
+		return
+	}
+	p.logger.Debug(ctx, msg, kv...)
 }
 
 // decimalDollars renders unit-count as dollars given the $0.01/unit price.
