@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -36,7 +37,15 @@ func buildStorageTestFactory(connectionRepo *testutil.InMemoryConnectionStore) (
 		panic("failed to create test encryption service: " + err.Error())
 	}
 
-	factory := integration.NewFactory(
+	return buildStorageTestFactoryWithRepo(connectionRepo, cfg, log, encSvc), encSvc
+}
+
+// buildStorageTestFactoryWithRepo is like buildStorageTestFactory but accepts any
+// connection.Repository implementation (interface, not concrete in-memory store), so tests
+// can inject a fake repository that returns arbitrary errors — e.g. to prove a non-NotFound
+// repository failure (DB outage, timeout) is not silently reclassified as ErrNotFound.
+func buildStorageTestFactoryWithRepo(connectionRepo connection.Repository, cfg *config.Configuration, log *logger.Logger, encSvc security.EncryptionService) *integration.Factory {
+	return integration.NewFactory(
 		cfg,
 		log,
 		connectionRepo,
@@ -53,8 +62,6 @@ func buildStorageTestFactory(connectionRepo *testutil.InMemoryConnectionStore) (
 		encSvc,
 		nil, // TemporalService — not needed for storage provider dispatch
 	)
-
-	return factory, encSvc
 }
 
 func seedS3Connection(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore, encSvc security.EncryptionService) *connection.Connection {
@@ -124,6 +131,92 @@ func TestFactory_GetStorageProvider_UnknownConnection_ReturnsNotFoundError(t *te
 	got, err := factory.GetStorageProvider(ctx, "conn_does_not_exist")
 	require.Error(t, err)
 	require.Nil(t, got)
+}
+
+// seedS3ConnectionWithEmptyCredentials mirrors seedS3Connection but leaves the encrypted
+// access-key/secret-key fields empty, simulating a corrupted or never-populated BYO
+// credential — the case that must be rejected rather than silently falling back to the
+// platform's ambient AWS credential chain.
+func seedS3ConnectionWithEmptyCredentials(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore) *connection.Connection {
+	t.Helper()
+
+	conn := &connection.Connection{
+		ID:           "conn_s3_empty_creds_test",
+		Name:         "Test S3 Connection With Empty Credentials",
+		ProviderType: types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{
+				AWSAccessKeyID:     "",
+				AWSSecretAccessKey: "",
+			},
+		},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				Bucket: "test-bucket",
+				Region: "us-east-1",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+func seedGCSConnectionWithEmptyCredentials(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore) *connection.Connection {
+	t.Helper()
+
+	conn := &connection.Connection{
+		ID:           "conn_gcs_empty_creds_test",
+		Name:         "Test GCS Connection With Empty Credentials",
+		ProviderType: types.SecretProviderGCS,
+		EncryptedSecretData: types.ConnectionMetadata{
+			GCS: &types.GCSConnectionMetadata{
+				ServiceAccountJSON: "",
+			},
+		},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				Bucket: "test-bucket",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+func TestFactory_GetStorageProvider_S3EmptyCredentials_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo)
+
+	conn := seedS3ConnectionWithEmptyCredentials(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+func TestFactory_GetStorageProvider_GCSEmptyCredentials_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo)
+
+	conn := seedGCSConnectionWithEmptyCredentials(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
 }
 
 func TestFactory_GetStorageProvider_UnsupportedProviderType_ReturnsValidationError(t *testing.T) {
