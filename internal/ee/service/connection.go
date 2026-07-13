@@ -519,6 +519,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	for _, existingConn := range existingConnections {
 		if existingConn.ProviderType == req.ProviderType &&
 			existingConn.ProviderType != types.SecretProviderS3 &&
+			existingConn.ProviderType != types.SecretProviderGCS &&
 			existingConn.Status == types.StatusPublished {
 			return nil, ierr.NewError("connection already exists").
 				WithHintf("A published connection for provider '%s' already exists in this environment", req.ProviderType).
