@@ -52,7 +52,12 @@ const meterAggStartupGrace = 5 * time.Minute
 
 func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
-	if len(seeds.PersistentCustomerIDs) == 0 || len(seeds.MeterIDs) == 0 {
+	// Only poll customers that actually receive ingest traffic.
+	customers := seeds.IngestCustomerIDs
+	if len(customers) == 0 {
+		customers = seeds.PersistentCustomerIDs
+	}
+	if len(customers) == 0 || len(seeds.MeterIDs) == 0 {
 		return nil // seed-ensure hasn't completed yet
 	}
 
@@ -74,7 +79,7 @@ func (p *MeterAggregationProbe) Run(ctx context.Context) error {
 	}
 	idx := atomic.AddInt64(&p.cursor, 1)
 	eventName := eventNames[int(idx)%len(eventNames)]
-	extCustID := seeds.PersistentCustomerIDs[int(idx)%len(seeds.PersistentCustomerIDs)]
+	extCustID := customers[int(idx)%len(customers)]
 
 	end := time.Now().UTC()
 	// Never look further back than the probe has actually been running.

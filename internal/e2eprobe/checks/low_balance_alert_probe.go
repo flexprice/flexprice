@@ -3,7 +3,9 @@ package checks
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
@@ -20,6 +22,12 @@ import (
 // `alertWebhookMapping`). Landing on info or warning updates the wallet's
 // alert_state in the DB but produces no webhook. To trigger the drop event
 // we must therefore cross the CRITICAL threshold (0), not just info (25).
+//
+// The canary wallet's ongoing_balance can drift arbitrarily between ticks —
+// prior in-flight events, manual top-ups by operators, other pipelines. So
+// the drop leg reads current real_time_balance and computes the ingest
+// units needed to push balance below critical with a small buffer, instead
+// of a fixed constant. See computeDriveUnits.
 //
 // Cycle:
 //
@@ -42,13 +50,24 @@ type LowBalanceAlertProbe struct {
 // LowBalanceAlertOpts are runtime knobs. Zero-value falls through to sane
 // defaults set by NewLowBalanceAlertProbe.
 type LowBalanceAlertOpts struct {
-	// UsageAmount is the value of the "amount" property on the driver event.
-	// Combined with the $0.01 e2eprobe_sum unit price this maps directly to
-	// dollars of debit: amount=3500 → $35 usage → drops ongoing_balance from
-	// $30 to -$5, safely below the critical=0 threshold so the in_alarm
-	// webhook fires. Default 3500. (Anything ≤3000 lands in info/warning
-	// which have no webhook mapping — the probe would silently time out.)
-	UsageAmount int
+	// MinUsageUnits is the floor on units per drop event. At $0.01/unit this
+	// is $35 by default. The actual amount ingested is
+	//   max(MinUsageUnits, ceil(real_time_balance × 100) + DropBufferUnits),
+	// so on a "cold" canary at initial-balance $30 we ingest MinUsageUnits
+	// (~$35, below critical=0), and on a drifted wallet at $657.7 we ingest
+	// ~65 970 units (~$659.70) to still cross critical.
+	MinUsageUnits int
+
+	// DropBufferUnits is added on top of the units needed to reach the
+	// critical threshold, so a tiny post-fetch usage bump on the server side
+	// can't leave us landing exactly on the threshold. $2 buffer default.
+	DropBufferUnits int
+
+	// MaxUsageUnits is a safety cap so a corrupted balance read (say a very
+	// large positive number) can't have us ingest millions of dollars of
+	// usage. Default 10_000_000 = $100_000 max per drop. Well above any
+	// realistic canary balance.
+	MaxUsageUnits int
 
 	// RecoveryTopUp is the credit re-added when the wallet is found in_alarm.
 	// Default matches AlertCanaryInitialBalance ($30).
@@ -67,8 +86,14 @@ type LowBalanceAlertOpts struct {
 }
 
 func NewLowBalanceAlertProbe(c e2eprobe.Client, r e2eprobe.Registry, listener *LowWalletAlertListener, runID string, lg *logger.Logger, opts LowBalanceAlertOpts) *LowBalanceAlertProbe {
-	if opts.UsageAmount == 0 {
-		opts.UsageAmount = 3500
+	if opts.MinUsageUnits == 0 {
+		opts.MinUsageUnits = 3500
+	}
+	if opts.DropBufferUnits == 0 {
+		opts.DropBufferUnits = 200
+	}
+	if opts.MaxUsageUnits == 0 {
+		opts.MaxUsageUnits = 10_000_000
 	}
 	if opts.RecoveryTopUp == "" {
 		opts.RecoveryTopUp = AlertCanaryInitialBalance
@@ -141,17 +166,49 @@ func (p *LowBalanceAlertProbe) Run(ctx context.Context) error {
 
 	// Drop leg: ingest usage to push ongoing_balance below the critical threshold,
 	// then wait for the wallet.ongoing_balance.dropped webhook.
-	return p.driveAndVerify(ctx, walletID, ext, attrs)
+	units := p.computeDriveUnits(rtBal)
+	return p.driveAndVerify(ctx, walletID, ext, units, attrs)
 }
 
-func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext string, attrs map[string]string) error {
+// computeDriveUnits returns the number of units to ingest so real_time_balance
+// (in dollars) crosses below the critical threshold (0) with DropBufferUnits
+// of headroom. Falls back to MinUsageUnits when the balance can't be parsed
+// or is already at/below zero.
+func (p *LowBalanceAlertProbe) computeDriveUnits(realTimeBalanceUSD string) int {
+	trimmed := strings.TrimSpace(realTimeBalanceUSD)
+	if trimmed == "" {
+		return p.opts.MinUsageUnits
+	}
+	bal, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil {
+		return p.opts.MinUsageUnits
+	}
+	if bal <= 0 {
+		// Balance already ≤ critical yet state reads "ok" — a state desync
+		// we can't fix here. Ingest the minimum so the alert pipeline still
+		// gets a fresh event to re-evaluate against, but don't blow up the
+		// event's dollar value.
+		return p.opts.MinUsageUnits
+	}
+	// At $0.01/unit, dollars × 100 = units.
+	needed := int(math.Ceil(bal*100)) + p.opts.DropBufferUnits
+	if needed < p.opts.MinUsageUnits {
+		return p.opts.MinUsageUnits
+	}
+	if needed > p.opts.MaxUsageUnits {
+		return p.opts.MaxUsageUnits
+	}
+	return needed
+}
+
+func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext string, units int, attrs map[string]string) error {
 	// Baseline the newest receipt timestamp per alert_type before ingest.
 	// SeenThresholds is keyed by alert_type so len() doesn't grow on repeat
 	// cycles — a re-fired "low_ongoing_balance" overwrites the same key.
 	// We must compare timestamps to detect a fresh delivery.
 	baseline := maxReceipt(p.listener.SeenThresholds(walletID))
 
-	amountStr := strconv.Itoa(p.opts.UsageAmount)
+	amountStr := strconv.Itoa(units)
 	ingestReq := types.IngestEventRequest{
 		EventName:          "e2eprobe_sum",
 		ExternalCustomerID: ext,
@@ -167,7 +224,7 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 	}
 	p.logDebug(ctx, "low-balance-alert-probe: ingested drop event",
 		"wallet_id", walletID, "amount_units", amountStr,
-		"expected_debit_usd", decimalDollars(p.opts.UsageAmount),
+		"expected_debit_usd", decimalDollars(units),
 		"baseline_receipt", baseline.Format(time.RFC3339Nano),
 		"deadline_sec", int(p.opts.WebhookWait.Seconds()), "run_id", p.runID)
 
@@ -184,7 +241,7 @@ func (p *LowBalanceAlertProbe) driveAndVerify(ctx context.Context, walletID, ext
 		if time.Now().After(deadline) {
 			return e2eprobe.Errorf(attrs,
 				"no low-balance webhook received within %s after ingesting $%s (rate=$0.01/unit) on wallet %s",
-				p.opts.WebhookWait, decimalDollars(p.opts.UsageAmount), walletID)
+				p.opts.WebhookWait, decimalDollars(units), walletID)
 		}
 		select {
 		case <-ctx.Done():

@@ -29,11 +29,17 @@ var analyticsWindows = []time.Duration{1 * time.Hour, 24 * time.Hour, 7 * 24 * t
 
 func (p *AnalyticsProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
-	if len(seeds.PersistentCustomerIDs) == 0 {
+	// Only poll customers that actually receive ingest traffic — the canary
+	// is deliberately isolated and would report zero usage otherwise.
+	customers := seeds.IngestCustomerIDs
+	if len(customers) == 0 {
+		customers = seeds.PersistentCustomerIDs
+	}
+	if len(customers) == 0 {
 		return nil
 	}
 	idx := atomic.AddInt64(&p.cursor, 1)
-	customer := seeds.PersistentCustomerIDs[int(idx)%len(seeds.PersistentCustomerIDs)]
+	customer := customers[int(idx)%len(customers)]
 	window := analyticsWindows[int(idx)%len(analyticsWindows)]
 	end := time.Now().UTC()
 	start := end.Add(-window)
