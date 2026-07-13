@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate && \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o kafka-migrate cmd/kafka-migrate && \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o kafka-migrate ./cmd/kafka-migrate && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o svix-migrate ./cmd/svix-migrate
 
 # Typst stage
