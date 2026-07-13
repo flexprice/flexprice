@@ -2515,7 +2515,9 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 
 	presignExpiry, parseErr := time.ParseDuration(s.Config.S3.InvoiceBucketConfig.PresignExpiryDuration)
 	if parseErr != nil {
-		presignExpiry = 0
+		return "", ierr.WithError(parseErr).
+			WithHint("Invalid invoice PDF presign expiry duration").
+			Mark(ierr.ErrValidation)
 	}
 
 	if !forceGenerate {
