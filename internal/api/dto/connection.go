@@ -92,6 +92,17 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			S3: s3Metadata,
 		}
 
+	case types.SecretProviderGCS:
+		gcsMetadata := &types.GCSConnectionMetadata{}
+
+		if saJSON, ok := flatMetadata["service_account_json"].(string); ok {
+			gcsMetadata.ServiceAccountJSON = saJSON
+		}
+
+		return types.ConnectionMetadata{
+			GCS: gcsMetadata,
+		}
+
 	case types.SecretProviderHubSpot:
 		hubspotMetadata := &types.HubSpotConnectionMetadata{}
 
@@ -351,7 +362,7 @@ type UpdateConnectionRequest struct {
 }
 
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
-	return cm.Stripe != nil || cm.S3 != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
+	return cm.Stripe != nil || cm.S3 != nil || cm.GCS != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
 		cm.Chargebee != nil || cm.QuickBooks != nil || cm.Nomod != nil || cm.Moyasar != nil ||
 		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Tabs != nil || cm.AWSMarketplace != nil || cm.Generic != nil || cm.Settings != nil
 }

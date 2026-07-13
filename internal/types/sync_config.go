@@ -15,8 +15,8 @@ type SyncConfig struct {
 	// CRM sync (HubSpot, Salesforce, etc.)
 	Deal  *EntitySyncConfig `json:"deal,omitempty"`
 	Quote *EntitySyncConfig `json:"quote,omitempty"`
-	// S3 connection metadata (for Flexprice-managed S3 connections)
-	S3 *S3ExportConfig `json:"s3,omitempty"`
+	// Storage connection metadata (for Flexprice-managed or customer BYO storage connections; S3 or GCS)
+	Storage *StorageExportConfig `json:"storage,omitempty"`
 	// InvoiceSyncSettings controls line-item transformation during outbound invoice sync
 	InvoiceSyncSettings *InvoiceSyncSettings `json:"invoice_sync_settings,omitempty"`
 }
@@ -104,9 +104,9 @@ func (s *SyncConfig) Validate() error {
 		return ierr.NewError("quote inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
-	// Validate S3 export config if present
-	if s.S3 != nil {
-		if err := s.S3.Validate(); err != nil {
+	// Validate storage export config if present
+	if s.Storage != nil {
+		if err := s.Storage.Validate(); err != nil {
 			return err
 		}
 	}

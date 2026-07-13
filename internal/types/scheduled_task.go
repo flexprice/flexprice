@@ -130,19 +130,19 @@ func (e S3EncryptionType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
-// S3ExportConfig represents S3 export configuration (non-sensitive settings)
-// This goes in the sync_config column
-type S3ExportConfig struct {
-	Bucket             string            `json:"bucket"`                         // S3 bucket name
-	Region             string            `json:"region"`                         // AWS region (e.g., "us-west-2")
-	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for S3 keys (e.g., "flexprice-exports/")
+// StorageExportConfig represents cloud storage export configuration (non-sensitive settings).
+// This goes in the sync_config column. Cloud-agnostic: used for both S3 and GCS connections.
+type StorageExportConfig struct {
+	Bucket             string            `json:"bucket"`                         // Storage bucket name
+	Region             string            `json:"region"`                         // Cloud region (e.g., "us-west-2"); unused for GCS
+	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for object keys (e.g., "flexprice-exports/")
 	Compression        S3CompressionType `json:"compression,omitempty"`          // Compression type: "gzip", "none" (default: "none")
 	Encryption         S3EncryptionType  `json:"encryption,omitempty"`           // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed S3 credentials instead of user-provided
+	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed storage credentials instead of user-provided
 }
 
-// Validate validates the S3 export configuration
-func (s *S3ExportConfig) Validate() error {
+// Validate validates the storage export configuration
+func (s *StorageExportConfig) Validate() error {
 	if s == nil {
 		return nil
 	}

@@ -34,7 +34,6 @@ import (
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
-	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/tabs"
@@ -44,6 +43,9 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/gcsbackend"
+	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -67,9 +69,6 @@ type Factory struct {
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
 	locker                       cache.Locker
-
-	// Storage clients (cached for reuse)
-	s3Client *s3.Client
 
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
@@ -1285,32 +1284,94 @@ func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasTabsConnection(ctx)
 }
 
-// GetStorageProvider returns an S3 storage client for the given connection
-// Currently only S3 is supported. In the future, Azure Blob Storage, Google Cloud Storage,
-// and other providers can be added by checking the connection's provider type.
-func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+// GetStorageProvider returns a cloud-agnostic Storage for the given connection,
+// dispatching to the S3 or GCS backend based on the connection's provider type.
+// This is the only entrypoint for customer BYO storage — callers never see a
+// concrete backend type.
+func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (storage.Storage, error) {
+	if connectionID == "" {
+		return nil, ierr.NewError("connection ID is required for storage").
+			WithHint("Provide a connection_id; multiple storage connections are supported per environment").
+			Mark(ierr.ErrValidation)
 	}
 
-	return f.s3Client, nil
+	conn, err := f.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, ierr.NewError("failed to get storage connection by ID").
+			WithHintf("Connection ID '%s' not found", connectionID).
+			Mark(ierr.ErrNotFound)
+	}
+
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		return f.buildS3Storage(conn)
+	case types.SecretProviderGCS:
+		return f.buildGCSStorage(conn)
+	default:
+		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
+			WithHint("Supported storage provider types: s3, gcs").
+			Mark(ierr.ErrValidation)
+	}
 }
 
-// GetS3Client returns the S3 client directly (for backward compatibility)
-// Deprecated: Use GetStorageProvider instead for future-proof code
-func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+func (f *Factory) buildS3Storage(conn *connection.Connection) (storage.Storage, error) {
+	if conn.EncryptedSecretData.S3 == nil {
+		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
 	}
-	return f.s3Client, nil
+
+	accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
+	}
+	secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
+	}
+	var sessionToken string
+	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
+		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+		}
+	}
+
+	jobConfig := conn.GetSyncConfig().Storage // bucket/region/prefix/compression/encryption/endpoint come from sync config
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	return s3backend.New(&s3backend.Config{
+		Bucket:             jobConfig.Bucket,
+		Region:             jobConfig.Region,
+		KeyPrefix:          jobConfig.KeyPrefix,
+		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
+		ServerSideEncrypt:  string(jobConfig.Encryption),
+		AWSAccessKeyID:     accessKey,
+		AWSSecretAccessKey: secretKey,
+		AWSSessionToken:    sessionToken,
+	}, f.logger)
+}
+
+func (f *Factory) buildGCSStorage(conn *connection.Connection) (storage.Storage, error) {
+	if conn.EncryptedSecretData.GCS == nil {
+		return nil, ierr.NewError("no GCS credentials found on connection").Mark(ierr.ErrValidation)
+	}
+
+	saJSON, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.GCS.ServiceAccountJSON)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt GCS service account JSON").Mark(ierr.ErrInternal)
+	}
+
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	return gcsbackend.New(&gcsbackend.Config{
+		Bucket:             jobConfig.Bucket,
+		KeyPrefix:          jobConfig.KeyPrefix,
+		ServiceAccountJSON: []byte(saJSON),
+	}, f.logger)
 }
 
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.

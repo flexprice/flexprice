@@ -32,7 +32,8 @@ type SecretProvider string
 const (
 	SecretProviderFlexPrice      SecretProvider = "flexprice"
 	SecretProviderStripe         SecretProvider = "stripe"
-	SecretProviderS3             SecretProvider = "s3" // supports multiple connections per environment
+	SecretProviderS3             SecretProvider = "s3"  // supports multiple connections per environment
+	SecretProviderGCS            SecretProvider = "gcs" // supports multiple connections per environment, service-account JSON creds
 	SecretProviderHubSpot        SecretProvider = "hubspot"
 	SecretProviderRazorpay       SecretProvider = "razorpay"
 	SecretProviderChargebee      SecretProvider = "chargebee"
@@ -51,6 +52,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderFlexPrice,
 		SecretProviderStripe,
 		SecretProviderS3,
+		SecretProviderGCS,
 		SecretProviderHubSpot,
 		SecretProviderRazorpay,
 		SecretProviderChargebee,
