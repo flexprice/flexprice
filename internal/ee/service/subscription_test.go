@@ -4422,7 +4422,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ScheduledDoesNotEagerl
 	s.Nil(gotGrant.EndDate, "credit grant should not be terminated while cancellation is only scheduled")
 }
 
-func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResourcesAt_IdempotentOnRetry() {
+func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_IdempotentOnRetry() {
 	ctx := s.GetContext()
 	subService := s.service.(*subscriptionService)
 
@@ -4481,10 +4481,18 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResourcesAt_Idempote
 
 	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
 
-	s.NoError(subService.TerminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
+	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID:     sub.ID,
+		EffectiveDate:      effectiveDate,
+		CancellationReason: "idempotency_test",
+	}))
 	// Calling it again with the same effectiveDate must not error, even though every
 	// resource is already terminated (repo-level guards make this a no-op the second time).
-	s.NoError(subService.TerminateSubscriptionResourcesAt(ctx, sub.ID, effectiveDate, "idempotency_test"))
+	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID:     sub.ID,
+		EffectiveDate:      effectiveDate,
+		CancellationReason: "idempotency_test",
+	}))
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}

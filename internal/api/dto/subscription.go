@@ -648,6 +648,17 @@ type ProrationDetail struct {
 	Description    string          `json:"description,omitempty"`
 }
 
+type TerminateSubscriptionResourcesRequest struct {
+	SubscriptionID     string    `json:"subscription_id" binding:"required"`
+	EffectiveDate      time.Time `json:"effective_date" binding:"required"`
+	CancellationReason string    `json:"cancellation_reason,omitempty"`
+}
+
+// Validate validates the terminate subscription resources request
+func (r *TerminateSubscriptionResourcesRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // Validate validates the cancellation request
 func (r *CancelSubscriptionRequest) Validate() error {
 	// Validate cancellation type

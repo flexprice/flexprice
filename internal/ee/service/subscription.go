@@ -2064,7 +2064,11 @@ func (s *subscriptionService) CancelSubscription(
 		// period-rollover loop) so that reverting a pending schedule never leaves these resources
 		// terminated while the subscription itself is active again.
 		if req.CancellationType == types.CancellationTypeImmediate {
-			if err := s.TerminateSubscriptionResourcesAt(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
+			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+				SubscriptionID:     subscription.ID,
+				EffectiveDate:      effectiveDate,
+				CancellationReason: req.Reason,
+			}); err != nil {
 				return err
 			}
 		}
@@ -3213,8 +3217,11 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// deferred in the first place and must be left alone.
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
 			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-			cancellationReason := sub.Metadata["cancellation_reason"]
-			if err := s.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, cancellationReason); err != nil {
+			if err := s.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+				SubscriptionID:     sub.ID,
+				EffectiveDate:      *sub.CancelAt,
+				CancellationReason: sub.Metadata["cancellation_reason"],
+			}); err != nil {
 				return err
 			}
 		}
@@ -4659,31 +4666,33 @@ func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Conte
 	return nil
 }
 
-// TerminateSubscriptionResourcesAt terminates all line items, addon associations, and credit
-// grants tied to a subscription as of effectiveDate. Called either synchronously (immediate
+// TerminateSubscriptionResources terminates all line items, addon associations, and credit
+// grants tied to a subscription as of req.EffectiveDate. Called either synchronously (immediate
 // cancellation, from CancelSubscription) or from processSubscriptionPeriod's period-rollover
 // loop when a previously-scheduled cancellation actually fires. Never called at scheduling
 // time for end_of_period/scheduled_date cancellations — that's the whole point: a pending
 // schedule can then be reverted via the Cancel Subscription Schedule API without leaving
 // these resources terminated while the subscription itself goes back to active.
-func (s *subscriptionService) TerminateSubscriptionResourcesAt(
+func (s *subscriptionService) TerminateSubscriptionResources(
 	ctx context.Context,
-	subscriptionID string,
-	effectiveDate time.Time,
-	cancellationReason string,
+	req dto.TerminateSubscriptionResourcesRequest,
 ) error {
-	if err := s.cancelAddonsForSubscription(ctx, subscriptionID, effectiveDate, cancellationReason); err != nil {
+	if err := req.Validate(); err != nil {
 		return err
 	}
 
-	if err := s.cancelAllLineItemsForSubscription(ctx, subscriptionID, effectiveDate); err != nil {
+	if err := s.cancelAddonsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate, req.CancellationReason); err != nil {
+		return err
+	}
+
+	if err := s.cancelAllLineItemsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
 		return err
 	}
 
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	if err := creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
-		SubscriptionID: subscriptionID,
-		EffectiveDate:  &effectiveDate,
+		SubscriptionID: req.SubscriptionID,
+		EffectiveDate:  &req.EffectiveDate,
 	}); err != nil {
 		return err
 	}

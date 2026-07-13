@@ -171,12 +171,12 @@ type SubscriptionService interface {
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
 
-	// TerminateSubscriptionResourcesAt terminates line items, addon associations, and credit
-	// grants for a subscription as of effectiveDate. Called eagerly by CancelSubscription for
+	// TerminateSubscriptionResources terminates line items, addon associations, and credit
+	// grants for a subscription as of req.EffectiveDate. Called eagerly by CancelSubscription for
 	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and
 	// the Temporal CheckCancellationActivity when a previously scheduled cancellation fires, so
 	// resources are terminated exactly once, at the point cancellation actually takes effect.
-	TerminateSubscriptionResourcesAt(ctx context.Context, subscriptionID string, effectiveDate time.Time, cancellationReason string) error
+	TerminateSubscriptionResources(ctx context.Context, req dto.TerminateSubscriptionResourcesRequest) error
 
 	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
 	// Used by Temporal activities and other callers that need to fire subscription lifecycle events.
