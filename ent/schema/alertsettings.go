@@ -41,7 +41,7 @@ func (AlertSettings) Fields() []ent.Field {
 		// alerts can join this table later without a migration; the CRUD narrows what's creatable
 		// today. No SchemaType needed — the generated enum validator already bounds the values.
 		field.Enum("entity_type").
-			GoType(types.AlertEntityType("")).
+			Values(string(types.AlertEntityTypeSubscription), string(types.AlertEntityTypeSubscriptionLineItem), string(types.AlertEntityTypeGroup)).
 			Immutable(),
 
 		// ID of the entity being monitored
@@ -55,7 +55,7 @@ func (AlertSettings) Fields() []ent.Field {
 		// Parent entity type (optional) - "subscription" for line-item and group rows, NULL for
 		// subscription rows. Shares entity_type's binding and wide value set for the same reason.
 		field.Enum("parent_entity_type").
-			GoType(types.AlertEntityType("")).
+			Values(string(types.AlertEntityTypeSubscription)).
 			Optional().
 			Nillable().
 			Immutable(),

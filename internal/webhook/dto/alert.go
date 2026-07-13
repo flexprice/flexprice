@@ -21,10 +21,11 @@ type InternalAlertEvent struct {
 	// for the feature/wallet-balance alert above. EntityID is the subscription itself for a
 	// subscription-level alert, or the line item/group for the other two scopes, in which case
 	// ParentEntityID is the subscription it rolls up to.
-	EntityType     types.AlertEntityType `json:"entity_type,omitempty"`
-	EntityID       string                `json:"entity_id,omitempty"`
-	ParentEntityID string                `json:"parent_entity_id,omitempty"`
-	AlertInfo      types.AlertInfo       `json:"alert_info,omitempty"`
+	EntityType       types.AlertEntityType `json:"entity_type,omitempty"`
+	EntityID         string                `json:"entity_id,omitempty"`
+	ParentEntityID   string                `json:"parent_entity_id,omitempty"`
+	ParentEntityType types.AlertEntityType `json:"parent_entity_type,omitempty"`
+	AlertInfo        types.AlertInfo       `json:"alert_info,omitempty"`
 }
 
 // SpendAlertEvent is the webhook payload for the three alert_settings spend alert types

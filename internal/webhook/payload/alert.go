@@ -84,7 +84,7 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 	// rolls up to is parent_entity_id. A subscription-level alert has no parent, so entity_id is
 	// already the subscription.
 	subscriptionID := internalEvent.EntityID
-	if internalEvent.ParentEntityID != "" {
+	if internalEvent.ParentEntityID != "" && internalEvent.ParentEntityType == types.AlertEntityTypeSubscription {
 		subscriptionID = internalEvent.ParentEntityID
 	}
 

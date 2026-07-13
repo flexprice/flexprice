@@ -417,13 +417,14 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 
 	case types.AlertTypeSubscriptionSpend, types.AlertTypeSubscriptionLineItemSpend, types.AlertTypeSubscriptionGroupSpend:
 		webhookPayload, err = json.Marshal(webhookDto.InternalAlertEvent{
-			EntityType:     alertLog.EntityType,
-			EntityID:       alertLog.EntityID,
-			ParentEntityID: lo.FromPtr(alertLog.ParentEntityID),
-			CustomerID:     lo.FromPtr(alertLog.CustomerID),
-			AlertType:      alertLog.AlertType,
-			AlertStatus:    alertLog.AlertStatus,
-			AlertInfo:      alertLog.AlertInfo,
+			EntityType:       alertLog.EntityType,
+			EntityID:         alertLog.EntityID,
+			ParentEntityID:   lo.FromPtr(alertLog.ParentEntityID),
+			ParentEntityType: types.AlertEntityTypeSubscription,
+			CustomerID:       lo.FromPtr(alertLog.CustomerID),
+			AlertType:        alertLog.AlertType,
+			AlertStatus:      alertLog.AlertStatus,
+			AlertInfo:        alertLog.AlertInfo,
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
