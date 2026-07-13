@@ -813,6 +813,98 @@ func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant() {
 	s.True(gotGrant.EndDate.Equal(s.testData.now) || (gotGrant.EndDate.After(s.testData.now.Add(-time.Second)) && gotGrant.EndDate.Before(s.testData.now.Add(time.Second))))
 }
 
+func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant_OnlyCancelsApplicationsAfterEffectiveDate() {
+	creditGrantReq := dto.CreateCreditGrantRequest{
+		Name:           "Ordering Bug Grant",
+		Scope:          types.CreditGrantScopeSubscription,
+		SubscriptionID: &s.testData.subscription.ID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		StartDate:      &s.testData.now,
+	}
+	creditGrantResp, err := s.creditGrantService.CreateCreditGrant(s.GetContext(), creditGrantReq)
+	s.NoError(err)
+
+	effectiveDate := s.testData.now.Add(15 * 24 * time.Hour)
+
+	beforeApp := &creditgrantapplication.CreditGrantApplication{
+		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
+		CreditGrantID:                   creditGrantResp.CreditGrant.ID,
+		SubscriptionID:                  s.testData.subscription.ID,
+		ScheduledFor:                    effectiveDate.Add(-5 * 24 * time.Hour), // still within the active window
+		PeriodStart:                     effectiveDate.Add(-5 * 24 * time.Hour),
+		ApplicationStatus:               types.ApplicationStatusPending,
+		ApplicationReason:               types.ApplicationReasonRecurringCreditGrant,
+		SubscriptionStatusAtApplication: s.testData.subscription.SubscriptionStatus,
+		Credits:                         decimal.NewFromInt(100),
+		Metadata:                        types.Metadata{},
+		IdempotencyKey:                  "before_effective_date",
+		EnvironmentID:                   types.GetEnvironmentID(s.GetContext()),
+		BaseModel:                       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CreditGrantApplicationRepo.Create(s.GetContext(), beforeApp))
+
+	afterApp := &creditgrantapplication.CreditGrantApplication{
+		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
+		CreditGrantID:                   creditGrantResp.CreditGrant.ID,
+		SubscriptionID:                  s.testData.subscription.ID,
+		ScheduledFor:                    effectiveDate.Add(5 * 24 * time.Hour), // after cancellation takes effect
+		PeriodStart:                     effectiveDate.Add(5 * 24 * time.Hour),
+		ApplicationStatus:               types.ApplicationStatusPending,
+		ApplicationReason:               types.ApplicationReasonRecurringCreditGrant,
+		SubscriptionStatusAtApplication: s.testData.subscription.SubscriptionStatus,
+		Credits:                         decimal.NewFromInt(100),
+		Metadata:                        types.Metadata{},
+		IdempotencyKey:                  "after_effective_date",
+		EnvironmentID:                   types.GetEnvironmentID(s.GetContext()),
+		BaseModel:                       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CreditGrantApplicationRepo.Create(s.GetContext(), afterApp))
+
+	// Scheduled exactly at the cutoff — must stay pending. This pins the filter as strictly
+	// "after" (ScheduledForGT), not "at or after"; if that ever changed to >=, this app would be
+	// wrongly cancelled and only this boundary case would catch it.
+	atCutoffApp := &creditgrantapplication.CreditGrantApplication{
+		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
+		CreditGrantID:                   creditGrantResp.CreditGrant.ID,
+		SubscriptionID:                  s.testData.subscription.ID,
+		ScheduledFor:                    effectiveDate,
+		PeriodStart:                     effectiveDate,
+		ApplicationStatus:               types.ApplicationStatusPending,
+		ApplicationReason:               types.ApplicationReasonRecurringCreditGrant,
+		SubscriptionStatusAtApplication: s.testData.subscription.SubscriptionStatus,
+		Credits:                         decimal.NewFromInt(100),
+		Metadata:                        types.Metadata{},
+		IdempotencyKey:                  "at_effective_date",
+		EnvironmentID:                   types.GetEnvironmentID(s.GetContext()),
+		BaseModel:                       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CreditGrantApplicationRepo.Create(s.GetContext(), atCutoffApp))
+
+	err = s.creditGrantService.DeleteCreditGrant(s.GetContext(), dto.DeleteCreditGrantRequest{
+		CreditGrantID: creditGrantResp.CreditGrant.ID,
+		EffectiveDate: &effectiveDate,
+	})
+	s.NoError(err)
+
+	gotBefore, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), beforeApp.ID)
+	s.NoError(err)
+	s.Equal(types.ApplicationStatusPending, gotBefore.ApplicationStatus, "application scheduled before the effective date must remain untouched")
+
+	gotAtCutoff, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), atCutoffApp.ID)
+	s.NoError(err)
+	s.Equal(types.ApplicationStatusPending, gotAtCutoff.ApplicationStatus, "application scheduled exactly at the effective date must remain untouched (strictly-after cutoff)")
+
+	gotAfter, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), afterApp.ID)
+	s.NoError(err)
+	s.Equal(types.ApplicationStatusCancelled, gotAfter.ApplicationStatus, "application scheduled after the effective date must be cancelled")
+}
+
 // Test Case 13: Test period start and end dates for weekly credit grant
 func (s *CreditGrantServiceTestSuite) TestWeeklyCreditGrantPeriodDates() {
 	// Create weekly recurring credit grant

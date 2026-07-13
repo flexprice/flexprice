@@ -2081,15 +2081,15 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 7a: Cancel all addons on the subscription (mark associations cancelled, terminate addon line items)
-		if err := s.cancelAddonsForSubscription(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
-			return err
-		}
-
-		// Step 7b: Terminate plan and subscription-scoped line items (set EndDate = effectiveDate).
-		// Addon line items are already terminated by cancelAddonsForSubscription above.
-		if err := s.cancelAllLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
-			return err
+		// Step 7a/7b/8: Terminate addon associations, addon/plan line items, and credit grants.
+		// Only done here for immediate cancellations. For end_of_period/scheduled_date, this is
+		// deferred to the point where the cancellation actually fires (processSubscriptionPeriod's
+		// period-rollover loop) so that reverting a pending schedule never leaves these resources
+		// terminated while the subscription itself is active again.
+		if req.CancellationType == types.CancellationTypeImmediate {
+			if err := s.TerminateSubscriptionResourcesAt(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
+				return err
+			}
 		}
 
 		// Step 7c: Handle scheduling for future cancellations (end_of_period and scheduled_date)
@@ -2104,17 +2104,6 @@ func (s *subscriptionService) CancelSubscription(
 			if err := s.createCancellationSchedule(ctx, subscription, req, effectiveDate, originalState); err != nil {
 				logger.Error(ctx, "failed to create cancellation schedule", "error", err)
 			}
-		}
-
-		// Step 8: Void future credit grants
-		// Step 8: Set credit grant end dates to effective cancellation date, then archive grants
-		creditGrantService := NewCreditGrantService(s.ServiceParams)
-		err = creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
-			SubscriptionID: subscription.ID,
-			EffectiveDate:  &effectiveDate,
-		})
-		if err != nil {
-			return err
 		}
 
 		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
@@ -3237,6 +3226,20 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				"subscription_id", sub.ID,
 				"new_period_end", newPeriod.end,
 				"end_date", *sub.EndDate)
+		}
+
+		// Terminate line items, addon associations, and credit grants now that the previously
+		// scheduled cancellation has actually fired. Gated on CancelAtPeriodEnd+CancelAt, which is
+		// set only by CancelSubscription's end_of_period/scheduled_date path (see
+		// updateSubscriptionForCancellation) — this never fires for a bare EndDate set through some
+		// other path (e.g. the generic subscription-update endpoint), which never had termination
+		// deferred in the first place and must be left alone.
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled &&
+			sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+			reason := sub.Metadata["cancellation_reason"]
+			if err := s.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+				return err
+			}
 		}
 
 		// Update the subscription
@@ -4730,6 +4733,38 @@ func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Conte
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	return nil
+}
+
+// TerminateSubscriptionResourcesAt terminates all line items, addon associations, and credit
+// grants tied to a subscription as of effectiveDate. Called either synchronously (immediate
+// cancellation, from CancelSubscription) or from processSubscriptionPeriod's period-rollover
+// loop when a previously-scheduled cancellation actually fires. Never called at scheduling
+// time for end_of_period/scheduled_date cancellations — that's the whole point: a pending
+// schedule can then be reverted via the Cancel Subscription Schedule API without leaving
+// these resources terminated while the subscription itself goes back to active.
+func (s *subscriptionService) TerminateSubscriptionResourcesAt(
+	ctx context.Context,
+	subscriptionID string,
+	effectiveDate time.Time,
+	reason string,
+) error {
+	if err := s.cancelAddonsForSubscription(ctx, subscriptionID, effectiveDate, reason); err != nil {
+		return err
+	}
+
+	if err := s.cancelAllLineItemsForSubscription(ctx, subscriptionID, effectiveDate); err != nil {
+		return err
+	}
+
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	if err := creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
+		SubscriptionID: subscriptionID,
+		EffectiveDate:  &effectiveDate,
+	}); err != nil {
+		return err
 	}
 
 	return nil

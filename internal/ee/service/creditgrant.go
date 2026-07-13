@@ -464,16 +464,20 @@ func (s *creditGrantService) DeleteCreditGrant(ctx context.Context, req dto.Dele
 
 	// For subscription-scoped grants, cancel future CGAs and set end date (do not delete or archive)
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Cancel all future applications for this specific grant
-		if err := s.cancelFutureGrantApplications(ctx, grant); err != nil {
-			return err
-		}
-
-		// Set end date to effective date or now
+		// Determine the effective date before mutating grant.EndDate, and use it explicitly as
+		// the cutoff for cancelling future applications. Previously cancelFutureGrantApplications
+		// read grant.EndDate directly, but that field wasn't assigned until after the call, so the
+		// cutoff was always nil and every pending/failed application got cancelled regardless of
+		// whether it was scheduled before or after the actual effective date.
 		endDate := time.Now().UTC()
 		if req.EffectiveDate != nil && !req.EffectiveDate.IsZero() {
 			endDate = lo.FromPtr(req.EffectiveDate)
 		}
+
+		if err := s.cancelFutureGrantApplications(ctx, grant, endDate); err != nil {
+			return err
+		}
+
 		grant.EndDate = &endDate
 		_, err = s.CreditGrantRepo.Update(ctx, grant)
 		if err != nil {
@@ -962,7 +966,14 @@ func (s *creditGrantService) processScheduledApplication(
 		if err := s.cancelCreditGrantApplication(ctx, cga); err != nil {
 			return nil, err
 		}
-		err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant)
+		// Cancel every application scheduled after this one — the grant's EndDate isn't
+		// necessarily set at this point (this path runs during scheduled processing, not
+		// deletion), so use the current application's scheduled date as the cutoff instead.
+		// cga.ScheduledFor is a safe cutoff here because at most one Pending/Failed
+		// application is ever open per grant at a time — if that invariant changes (e.g. we
+		// start pre-generating multiple future scheduled applications instead of one at a
+		// time), this cutoff must be revisited.
+		err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant, cga.ScheduledFor)
 		if err != nil {
 			s.Logger.Error(ctx, "Failed to cancel future credit grant applications", "application_id", cga.ID, "error", err)
 			return nil, err
@@ -1236,8 +1247,8 @@ func (s *creditGrantService) cancelCreditGrantApplication(ctx context.Context, c
 	return nil
 }
 
-// cancelFutureGrantApplications cancels all future applications for a specific grant
-func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, grant *creditgrant.CreditGrant) error {
+// cancelFutureGrantApplications cancels all applications scheduled after effectiveDate for a specific grant
+func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, grant *creditgrant.CreditGrant, effectiveDate time.Time) error {
 	if grant.Scope != types.CreditGrantScopeSubscription || grant.SubscriptionID == nil {
 		return nil
 	}
@@ -1250,7 +1261,7 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 			types.ApplicationStatusPending,
 			types.ApplicationStatusFailed,
 		},
-		ScheduledAfter: grant.EndDate,
+		ScheduledAfter: &effectiveDate,
 		QueryFilter:    types.NewNoLimitQueryFilter(),
 	}
 
@@ -1259,11 +1270,12 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 		return err
 	}
 
-	// Cancel each application
+	// Cancel each application. Propagate failures so the caller's transaction rolls back —
+	// letting one fail silently would let grant.EndDate commit while a post-cutoff application
+	// stays pending and later grants credits the cancellation was supposed to prevent.
 	for _, app := range applications {
 		if err := s.cancelCreditGrantApplication(ctx, app); err != nil {
-			// Log error already done in helper, continue processing remaining applications
-			continue
+			return err
 		}
 	}
 

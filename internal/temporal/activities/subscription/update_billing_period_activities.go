@@ -312,6 +312,19 @@ func (s *BillingActivities) CheckCancellationActivity(
 				return err
 			}
 
+			// Terminate line items, addon associations, and credit grants now that the
+			// previously scheduled cancellation has actually fired. Gated on
+			// CancelAtPeriodEnd+CancelAt (set only by CancelSubscription's end_of_period/
+			// scheduled_date path), matching processSubscriptionPeriod's equivalent hook in
+			// internal/ee/service/subscription.go — never fires for a bare EndDate set through
+			// some other path that never had termination deferred in the first place.
+			if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+				reason := sub.Metadata["cancellation_reason"]
+				if err := subscriptionService.TerminateSubscriptionResourcesAt(ctx, sub.ID, *sub.CancelAt, reason); err != nil {
+					return err
+				}
+			}
+
 			// Update the cancellation schedule status to executed
 			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
 				s.logger.Error(ctx, "failed to mark cancellation schedule as executed",
