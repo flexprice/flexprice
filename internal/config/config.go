@@ -471,6 +471,7 @@ type MeterUsageTrackingConfig struct {
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
 	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
+	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`
 
 	// event.rejected webhook (fired when an event produces no meter usage); opt-in.
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`

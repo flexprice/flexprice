@@ -22,7 +22,7 @@ import (
 // runMeterUsagePostInsertSideEffects runs customer resolution/onboarding and wallet
 // balance alert publishing after meter_usage rows are written to ClickHouse.
 // Failures are logged only; the Kafka message is not retried for side-effect errors.
-func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx context.Context, event *events.Event) {
+func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx context.Context, event *events.Event, records []*events.MeterUsage) {
 	if event == nil || event.ExternalCustomerID == "" {
 		return
 	}
@@ -50,8 +50,11 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 
 	if s.Config.MeterUsageTracking.WalletAlertPushEnabled {
 		s.publishWalletBalanceAlert(ctx, event, cust)
-	} else {
-		s.Logger.Debug(ctx, "wallet balance alert push disabled for meter usage tracking", "event_id", event.ID, "customer_id", cust.ID)
+	}
+
+	if s.Config.MeterUsageTracking.SpendAlertWebhookEnabled {
+		meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
+		s.checkSpendBreachForEvent(ctx, event, meterIDs, cust)
 	}
 }
 
@@ -115,11 +118,7 @@ func ResolveCustomerForUsageEvent(
 
 // executeCustomerOnboardingForEvent runs the synchronous CustomerOnboarding workflow
 // when the tenant has customer_onboarding_config with create_customer as the first action.
-func executeCustomerOnboardingForEvent(
-	ctx context.Context,
-	params ServiceParams,
-	event *events.Event,
-) (*customer.Customer, error) {
+func executeCustomerOnboardingForEvent(ctx context.Context, params ServiceParams, event *events.Event) (*customer.Customer, error) {
 	settingsService := &settingsService{ServiceParams: params}
 	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](
 		settingsService,
