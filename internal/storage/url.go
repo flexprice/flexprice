@@ -1,24 +1,18 @@
 package storage
 
 import (
-	"fmt"
 	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 )
 
-func schemeFor(p Provider) string {
-	switch p {
-	case ProviderGCS:
-		return "gs"
-	default:
-		return "s3"
-	}
-}
-
-// FileURL formats a bucket+key pair as a scheme-prefixed URL for the given provider.
+// FileURL formats a bucket+key pair as a scheme-prefixed URL for the given
+// provider. The implementation lives in storagetypes so backend packages
+// (s3backend, gcsbackend) can call it without importing this package — see
+// storagetypes.FileURL doc comment for why.
 func FileURL(provider Provider, bucket, key string) string {
-	return fmt.Sprintf("%s://%s/%s", schemeFor(provider), bucket, key)
+	return storagetypes.FileURL(provider, bucket, key)
 }
 
 // ParseFileURL parses a "s3://bucket/key" or "gs://bucket/key" URL into its parts.

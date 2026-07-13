@@ -18,12 +18,12 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 )
 
 const defaultPresignExpiry = 30 * time.Minute
 
-// Config holds everything needed to construct an S3-backed storage.Storage.
+// Config holds everything needed to construct an S3-backed storagetypes.Storage.
 type Config struct {
 	Bucket             string
 	Region             string
@@ -48,11 +48,11 @@ type client struct {
 	logger *logger.Logger
 }
 
-// New constructs an S3-backed storage.Storage. Credential resolution order:
+// New constructs an S3-backed storagetypes.Storage. Credential resolution order:
 // 1. explicit static keys (AWSAccessKeyID/AWSSecretAccessKey), if set
 // 2. OIDC federation (FederationRoleARN + FederationTokenSource), if set
 // 3. ambient AWS default credential chain
-func New(cfg *Config, log *logger.Logger) (storage.Storage, error) {
+func New(cfg *Config, log *logger.Logger) (storagetypes.Storage, error) {
 	ctx := context.Background()
 	opts := []func(*awsConfig.LoadOptions) error{
 		awsConfig.WithRegion(cfg.Region),
@@ -103,13 +103,13 @@ func New(cfg *Config, log *logger.Logger) (storage.Storage, error) {
 	return &client{s3: s3Client, cfg: cfg, logger: log}, nil
 }
 
-func (c *client) Provider() storage.Provider { return storage.ProviderS3 }
+func (c *client) Provider() storagetypes.Provider { return storagetypes.ProviderS3 }
 
 func (c *client) FileURL(key string) string {
-	return storage.FileURL(storage.ProviderS3, c.cfg.Bucket, key)
+	return storagetypes.FileURL(storagetypes.ProviderS3, c.cfg.Bucket, key)
 }
 
-func (c *client) Upload(ctx context.Context, req *storage.UploadRequest) (*storage.UploadResponse, error) {
+func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*storagetypes.UploadResponse, error) {
 	data := req.Data
 	originalSize := int64(len(data))
 	compressedSize := originalSize
@@ -154,7 +154,7 @@ func (c *client) Upload(ctx context.Context, req *storage.UploadRequest) (*stora
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	return &storage.UploadResponse{
+	return &storagetypes.UploadResponse{
 		FileURL:        c.FileURL(req.Key),
 		Bucket:         c.cfg.Bucket,
 		Key:            req.Key,
@@ -223,16 +223,16 @@ func (c *client) ValidateConnection(ctx context.Context) error {
 	return nil
 }
 
-func contentTypeFor(format storage.UploadFormat, compressed bool) string {
+func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {
 	if compressed {
 		return "application/gzip"
 	}
 	switch format {
-	case storage.UploadFormatCSV:
+	case storagetypes.UploadFormatCSV:
 		return "text/csv"
-	case storage.UploadFormatJSON:
+	case storagetypes.UploadFormatJSON:
 		return "application/json"
-	case storage.UploadFormatPDF:
+	case storagetypes.UploadFormatPDF:
 		return "application/pdf"
 	default:
 		return "application/octet-stream"

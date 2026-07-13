@@ -1,54 +1,37 @@
+// Package storage provides the cloud-agnostic Storage interface and shared
+// helpers (object keys, file URLs, cloud detection). The interface itself
+// lives in storagetypes to break an import cycle: backend implementations
+// (s3backend, gcsbackend) must import the interface type without importing
+// this package, since this package's platform.go imports the backends.
 package storage
 
 import (
-	"context"
-	"time"
+	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 )
 
-type Provider string
+type Provider = storagetypes.Provider
 
 const (
-	ProviderS3  Provider = "s3"
-	ProviderGCS Provider = "gcs"
+	ProviderS3  = storagetypes.ProviderS3
+	ProviderGCS = storagetypes.ProviderGCS
 )
 
-type UploadFormat string
+type UploadFormat = storagetypes.UploadFormat
 
 const (
-	UploadFormatCSV     UploadFormat = "csv"
-	UploadFormatJSON    UploadFormat = "json"
-	UploadFormatPDF     UploadFormat = "pdf"
-	UploadFormatParquet UploadFormat = "parquet"
+	UploadFormatCSV     = storagetypes.UploadFormatCSV
+	UploadFormatJSON    = storagetypes.UploadFormatJSON
+	UploadFormatPDF     = storagetypes.UploadFormatPDF
+	UploadFormatParquet = storagetypes.UploadFormatParquet
 )
 
 // UploadRequest describes an object to store. Key is the full object key
 // (already includes any prefix) — backends do not compute prefixes.
-type UploadRequest struct {
-	Key         string
-	Data        []byte
-	Format      UploadFormat
-	ContentType string // optional, inferred from Format if empty
-	Compress    bool
-}
+type UploadRequest = storagetypes.UploadRequest
 
-type UploadResponse struct {
-	FileURL        string
-	Bucket         string
-	Key            string
-	FileSizeBytes  int64
-	CompressedSize int64
-	UploadedAt     time.Time
-}
+type UploadResponse = storagetypes.UploadResponse
 
 // Storage is the cloud-agnostic interface every caller in the codebase uses
 // to read/write object storage. No caller outside internal/storage/ may
 // hold a concrete backend type or import a cloud SDK package directly.
-type Storage interface {
-	Upload(ctx context.Context, req *UploadRequest) (*UploadResponse, error)
-	Download(ctx context.Context, key string) ([]byte, error)
-	Exists(ctx context.Context, key string) (bool, error)
-	PresignGet(ctx context.Context, key string, duration time.Duration) (string, error)
-	ValidateConnection(ctx context.Context) error
-	FileURL(key string) string
-	Provider() Provider
-}
+type Storage = storagetypes.Storage
