@@ -56,6 +56,7 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Table-driven tests preferred.
 - Integration tests use real DB (testcontainers / docker compose); do not mock Ent client.
 - Test files alongside implementation (`internal/service/foo_test.go`).
+- Full unit-test guidelines + coverage state: `docs/UNIT_TESTING.md`.
 
 ### Schema / migrations
 - Schema changes: `ent/schema/*.go` → `make generate-ent` → `make generate-migration`.

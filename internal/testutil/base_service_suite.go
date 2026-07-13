@@ -102,6 +102,7 @@ type Stores struct {
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
+	GroupRepo                    group.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -201,6 +202,7 @@ func (s *BaseServiceTestSuite) setupContext() {
 	s.ctx = context.WithValue(s.ctx, types.CtxTenantID, types.DefaultTenantID)
 	s.ctx = context.WithValue(s.ctx, types.CtxUserID, types.DefaultUserID)
 	s.ctx = context.WithValue(s.ctx, types.CtxRequestID, types.GenerateUUID())
+	s.ctx = context.WithValue(s.ctx, types.CtxEnvironmentID, TestEnvironmentID)
 }
 
 func (s *BaseServiceTestSuite) setupStores() {
@@ -257,6 +259,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
+		GroupRepo:                    NewInMemoryGroupStore(),
 	}
 
 	// Cache stores
@@ -264,15 +267,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	s.redisCache = NewInMemoryRedis()
 
 	s.db = NewMockPostgresClient(s.logger)
-	s.pdfGenerator = NewMockPDFGenerator(s.logger)
-	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
-	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	// publisher, webhook publisher, and PDF generator are wired in setupDependencies
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -319,6 +314,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
+	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
