@@ -12,7 +12,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	fpstorage "github.com/flexprice/flexprice/internal/storage"
+	fpstorage "github.com/flexprice/flexprice/internal/storage/storagetypes"
 )
 
 const defaultPresignExpiry = 30 * time.Minute
