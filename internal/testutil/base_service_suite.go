@@ -114,6 +114,7 @@ type BaseServiceTestSuite struct {
 	db                  postgres.IClient
 	inMemoryCache       cache.InMemoryCache
 	redisCache          cache.RedisCache
+	locker              cache.Locker
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -262,6 +263,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 	// Cache stores
 	s.inMemoryCache = cache.NewInMemoryCache()
 	s.redisCache = NewInMemoryRedis()
+	// Fresh locker per test — the in-memory locker keeps its own state map, so
+	// rebuilding it here keeps lock state from leaking across tests.
+	s.locker = NewInMemoryRedisLocker(s.redisCache.(*InMemoryRedis))
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
@@ -358,6 +362,11 @@ func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
 // GetRedisCache returns the test Redis cache
 func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
 	return s.redisCache
+}
+
+// GetLocker returns the test distributed locker (in-memory, SetNX + TTL).
+func (s *BaseServiceTestSuite) GetLocker() cache.Locker {
+	return s.locker
 }
 
 // GetDB returns the test database client

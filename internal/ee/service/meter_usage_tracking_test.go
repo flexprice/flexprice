@@ -22,7 +22,7 @@ import (
 )
 
 type MeterUsageTrackingSuite struct {
-	suite.Suite
+	testutil.BaseServiceTestSuite
 	svc *meterUsageTrackingService
 }
 
@@ -31,6 +31,7 @@ func TestMeterUsageTracking(t *testing.T) {
 }
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
 	s.svc = &meterUsageTrackingService{}
 }
 
@@ -45,12 +46,6 @@ func (f *fakeWebhookPublisher) PublishWebhook(_ context.Context, event *types.We
 	return nil
 }
 func (f *fakeWebhookPublisher) Close() error { return nil }
-
-// newInMemoryLocker returns testutil's in-memory Redis locker (SetNX + TTL
-// semantics), so the throttle behaves exactly like production against real Redis.
-func newInMemoryLocker() cache.Locker {
-	return testutil.NewInMemoryRedisLocker(testutil.NewInMemoryRedis().(*testutil.InMemoryRedis))
-}
 
 func newRejectedTestService(enabled bool, window time.Duration, locker cache.Locker) (*meterUsageTrackingService, *fakeWebhookPublisher) {
 	pub := &fakeWebhookPublisher{}
@@ -82,13 +77,13 @@ func rejectedTestEvent(name string) *events.Event {
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_DisabledNoop() {
-	svc, pub := newRejectedTestService(false, 10*time.Minute, newInMemoryLocker())
+	svc, pub := newRejectedTestService(false, 10*time.Minute, s.GetLocker())
 	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 	assert.Empty(s.T(), pub.events)
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() {
-	svc, pub := newRejectedTestService(true, 10*time.Minute, newInMemoryLocker())
+	svc, pub := newRejectedTestService(true, 10*time.Minute, s.GetLocker())
 	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
 
 	assert.Len(s.T(), pub.events, 1)
@@ -99,7 +94,7 @@ func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() 
 }
 
 func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_ThrottledPerEventName() {
-	locker := newInMemoryLocker()
+	locker := s.GetLocker()
 	svc, pub := newRejectedTestService(true, 10*time.Minute, locker)
 
 	// Same event name three times within the window -> only the first fires.
