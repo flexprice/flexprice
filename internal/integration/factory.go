@@ -1327,6 +1327,11 @@ func (f *Factory) buildS3Storage(conn *connection.Connection) (storage.Storage, 
 	if err != nil {
 		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
 	}
+	if accessKey == "" || secretKey == "" {
+		return nil, ierr.NewError("empty S3 credentials on connection").
+			WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
+			Mark(ierr.ErrValidation)
+	}
 	var sessionToken string
 	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
 		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
@@ -1360,6 +1365,11 @@ func (f *Factory) buildGCSStorage(conn *connection.Connection) (storage.Storage,
 	saJSON, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.GCS.ServiceAccountJSON)
 	if err != nil {
 		return nil, ierr.NewError("failed to decrypt GCS service account JSON").Mark(ierr.ErrInternal)
+	}
+	if saJSON == "" {
+		return nil, ierr.NewError("empty GCS credentials on connection").
+			WithHint("GCS service account JSON must be non-empty; refusing to fall back to ambient application default credentials").
+			Mark(ierr.ErrValidation)
 	}
 
 	jobConfig := conn.GetSyncConfig().Storage
