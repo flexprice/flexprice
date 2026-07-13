@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -17,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -106,6 +108,104 @@ func (s *SubscriptionServiceSuite) TestPaymentBehaviorValidation() {
 			}
 		})
 	}
+}
+
+// A recurring credit grant sourced from a ONETIME (time-bounded) addon must be
+// capped at the addon association's end date, not the subscription end date, so
+// the grant stops applying once the addon's single period is over.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeAddonCapsGrantEndDate() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	// Addon carrying a recurring ADDON-scoped credit grant template.
+	addonID := "addon_cg_endcap"
+	a := &addon.Addon{
+		ID:          addonID,
+		LookupKey:   addonID,
+		Name:        "Credit Booster",
+		Description: "Recurring credits addon",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+
+	// Addon needs at least one price so attach can create a line item.
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_addon_cg_endcap",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	// Customer wallet so the eager grant application has a top-up target.
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, &wallet.Wallet{
+		ID:                  "wallet_cg_endcap",
+		CustomerID:          s.testData.customer.ID,
+		Name:                "Test Wallet",
+		Currency:            "usd",
+		WalletStatus:        types.WalletStatusActive,
+		ConversionRate:      decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}))
+
+	cgSvc := NewCreditGrantService(subService.ServiceParams)
+	_, err := cgSvc.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+		Name:           "Addon Monthly Credits",
+		Scope:          types.CreditGrantScopeAddon,
+		AddonID:        &addonID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeBillingCycle,
+		Priority:       lo.ToPtr(1),
+	})
+	s.NoError(err)
+
+	// Subscription is open-ended (EndDate == nil): before the fix, the materialized
+	// grant would inherit a nil end and recur forever.
+	s.Nil(s.testData.subscription.EndDate)
+
+	// Attach as a ONETIME addon -> the addon association gets a bounded EndDate.
+	now := s.testData.now
+	_, err = s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:   addonID,
+		Cadence:   types.AddonCadenceOnetime,
+		StartDate: &now,
+	})
+	s.NoError(err)
+
+	expectedEnd, err := addonPeriodEndForStartDate(s.testData.subscription, now)
+	s.NoError(err)
+
+	// Find the materialized SUBSCRIPTION-scoped grant carrying addon provenance.
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	grants, err := subService.CreditGrantRepo.List(ctx, filter)
+	s.NoError(err)
+
+	var materialized *creditgrant.CreditGrant
+	for _, g := range grants {
+		if g.AddonID != nil && *g.AddonID == addonID && g.Scope == types.CreditGrantScopeSubscription {
+			materialized = g
+			break
+		}
+	}
+	s.NotNil(materialized, "expected a materialized addon-sourced subscription grant")
+	if materialized == nil {
+		return
+	}
+	s.NotNil(materialized.EndDate, "addon-sourced grant must have a bounded end date")
+	s.WithinDuration(expectedEnd, lo.FromPtr(materialized.EndDate), time.Second,
+		"grant end date must equal the addon association end date, not the subscription end")
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
@@ -280,6 +380,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
+		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,

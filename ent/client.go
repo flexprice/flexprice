@@ -743,6 +743,22 @@ func (c *AddonClient) QueryEntitlements(a *Addon) *EntitlementQuery {
 	return query
 }
 
+// QueryCreditGrants queries the credit_grants edge of a Addon.
+func (c *AddonClient) QueryCreditGrants(a *Addon) *CreditGrantQuery {
+	query := (&CreditGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addon.Table, addon.FieldID, id),
+			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, addon.CreditGrantsTable, addon.CreditGrantsColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *AddonClient) Hooks() []Hook {
 	return c.hooks.Addon
@@ -2407,6 +2423,22 @@ func (c *CreditGrantClient) QuerySubscription(cg *CreditGrant) *SubscriptionQuer
 			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.SubscriptionTable, creditgrant.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAddon queries the addon edge of a CreditGrant.
+func (c *CreditGrantClient) QueryAddon(cg *CreditGrant) *AddonQuery {
+	query := (&AddonClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cg.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, id),
+			sqlgraph.To(addon.Table, addon.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.AddonTable, creditgrant.AddonColumn),
 		)
 		fromV = sqlgraph.Neighbors(cg.driver.Dialect(), step)
 		return fromV, nil

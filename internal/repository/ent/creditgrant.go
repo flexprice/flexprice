@@ -59,6 +59,7 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetCadence(cg.Cadence).
 		SetNillablePlanID(cg.PlanID).
 		SetNillableSubscriptionID(cg.SubscriptionID).
+		SetNillableAddonID(cg.AddonID).
 		SetNillablePeriod(cg.Period).
 		SetNillablePeriodCount(cg.PeriodCount).
 		SetExpirationType(cg.ExpirationType).
@@ -146,6 +147,7 @@ func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*
 			SetCadence(cg.Cadence).
 			SetNillablePlanID(cg.PlanID).
 			SetNillableSubscriptionID(cg.SubscriptionID).
+			SetNillableAddonID(cg.AddonID).
 			SetNillablePeriod(cg.Period).
 			SetNillablePeriodCount(cg.PeriodCount).
 			SetExpirationType(cg.ExpirationType).
@@ -506,6 +508,31 @@ func (r *creditGrantRepository) GetBySubscription(ctx context.Context, subscript
 	return r.List(ctx, filter)
 }
 
+// GetByAddon retrieves all ADDON-scoped credit grants for the given addon ID
+func (r *creditGrantRepository) GetByAddon(ctx context.Context, addonID string) ([]*domainCreditGrant.CreditGrant, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrant", "list_by_addon_id", map[string]interface{}{
+		"addon_id":  addonID,
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if addonID == "" {
+		return []*domainCreditGrant.CreditGrant{}, nil
+	}
+
+	r.log.Debug(ctx, "listing credit grants by addon ID", "addon_id", addonID)
+
+	// Create a filter with addon ID
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.AddonIDs = []string{addonID}
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.Scope = lo.ToPtr(types.CreditGrantScopeAddon)
+
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
+
 // CreditGrantQuery type alias for better readability
 type CreditGrantQuery = *ent.CreditGrantQuery
 
@@ -568,6 +595,11 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	// Apply subscription IDs filter if specified
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(creditgrant.SubscriptionIDIn(f.SubscriptionIDs...))
+	}
+
+	// Apply addon IDs filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(creditgrant.AddonIDIn(f.AddonIDs...))
 	}
 
 	// Apply scope filter if specified

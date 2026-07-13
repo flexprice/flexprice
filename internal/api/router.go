@@ -290,6 +290,7 @@ func NewRouter(
 			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
 			addon.PUT("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.UpdateAddon)
 			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
+			addon.GET("/:id/creditgrants", handlers.Addon.GetAddonCreditGrants)
 			addon.DELETE("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.DeleteAddon)
 		}
 

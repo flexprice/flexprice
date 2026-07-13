@@ -38,6 +38,9 @@ type CreditGrantService interface {
 	// GetCreditGrantsBySubscription retrieves credit grants for a specific subscription
 	GetCreditGrantsBySubscription(ctx context.Context, subscriptionID string) (*dto.ListCreditGrantsResponse, error)
 
+	// GetCreditGrantsByAddon retrieves ADDON-scoped credit grants for a specific addon
+	GetCreditGrantsByAddon(ctx context.Context, addonID string) (*dto.ListCreditGrantsResponse, error)
+
 	// NOTE: THIS IS ONLY FOR CRON JOB SHOULD NOT BE USED ELSEWHERE IN OTHER WORKFLOWS
 	// This runs every 15 mins
 	// ProcessScheduledCreditGrantApplications processes scheduled credit grant applications
@@ -101,6 +104,31 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 		}
 	}
 
+	// Validate addon if addon_id is provided (addon_id presence is validated in DTO)
+	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
+		addon, err := s.AddonRepo.GetByID(ctx, lo.FromPtr(req.AddonID))
+		if err != nil {
+			return nil, err
+		}
+		if addon == nil {
+			return nil, ierr.NewError("addon not found").
+				WithHint(fmt.Sprintf("Addon with ID %s does not exist", lo.FromPtr(req.AddonID))).
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": lo.FromPtr(req.AddonID),
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		if addon.Status != types.StatusPublished {
+			return nil, ierr.NewError("addon is not published").
+				WithHint("Addon is not published").
+				WithReportableDetails(map[string]interface{}{
+					"addon_id": lo.FromPtr(req.AddonID),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Validate based on scope
 	switch req.Scope {
 	case types.CreditGrantScopePlan:
@@ -112,6 +140,31 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 		if len(existingGrants.Items) > 0 {
 			validationError := ierr.NewError("all credit grants for a plan must have the same conversion_rate and topup_conversion_rate").
 				WithHint("All credit grants for a plan must have the same conversion rates").
+				Mark(ierr.ErrValidation)
+
+			for _, existingGrant := range existingGrants.Items {
+				// Check if conversion_rate doesn't match
+				if (req.ConversionRate == nil) != (existingGrant.ConversionRate == nil) ||
+					(req.ConversionRate != nil && !req.ConversionRate.Equal(lo.FromPtr(existingGrant.ConversionRate))) {
+					return nil, validationError
+				}
+
+				// Check if topup_conversion_rate doesn't match
+				if (req.TopupConversionRate == nil) != (existingGrant.TopupConversionRate == nil) ||
+					(req.TopupConversionRate != nil && !req.TopupConversionRate.Equal(lo.FromPtr(existingGrant.TopupConversionRate))) {
+					return nil, validationError
+				}
+			}
+		}
+	case types.CreditGrantScopeAddon:
+		existingGrants, err := s.GetCreditGrantsByAddon(ctx, lo.FromPtr(req.AddonID))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(existingGrants.Items) > 0 {
+			validationError := ierr.NewError("all credit grants for an addon must have the same conversion_rate and topup_conversion_rate").
+				WithHint("All credit grants for an addon must have the same conversion rates").
 				Mark(ierr.ErrValidation)
 
 			for _, existingGrant := range existingGrants.Items {
@@ -460,6 +513,17 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 	}
 
 	return resp, nil
+}
+
+func (s *creditGrantService) GetCreditGrantsByAddon(ctx context.Context, addonID string) (*dto.ListCreditGrantsResponse, error) {
+	// Create a filter for the addon's credit grants
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.AddonIDs = []string{addonID}
+	filter.WithStatus(types.StatusPublished)
+	filter.Scope = lo.ToPtr(types.CreditGrantScopeAddon)
+
+	// Use the standard list function to get the credit grants with expansion
+	return s.ListCreditGrants(ctx, filter)
 }
 
 func (s *creditGrantService) ProcessCreditGrantApplication(ctx context.Context, applicationID string) error {
@@ -1212,10 +1276,15 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 		return err
 	}
 
-	// Get all credit grants for this subscription
+	// Get credit grants for this subscription. When AddonID is set, scope the
+	// cancellation to grants materialized from that addon (addon_id provenance),
+	// leaving plan-sourced and other-addon grants untouched.
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
+	if req.AddonID != nil && lo.FromPtr(req.AddonID) != "" {
+		filter.AddonIDs = []string{lo.FromPtr(req.AddonID)}
+	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {

@@ -547,6 +547,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "credit_grant_anchor", Type: field.TypeTime, Nullable: true},
+		{Name: "addon_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "plan_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -557,14 +558,20 @@ var (
 		PrimaryKey: []*schema.Column{CreditGrantsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "credit_grants_plans_credit_grants",
+				Symbol:     "credit_grants_addons_credit_grants",
 				Columns:    []*schema.Column{CreditGrantsColumns[24]},
+				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "credit_grants_plans_credit_grants",
+				Columns:    []*schema.Column{CreditGrantsColumns[25]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "credit_grants_subscriptions_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[25]},
+				Columns:    []*schema.Column{CreditGrantsColumns[26]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -578,7 +585,7 @@ var (
 			{
 				Name:    "idx_plan_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(plan_id IS NOT NULL)",
 				},
@@ -586,9 +593,17 @@ var (
 			{
 				Name:    "idx_subscription_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[26]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(subscription_id IS NOT NULL)",
+				},
+			},
+			{
+				Name:    "idx_addon_id_not_null",
+				Unique:  false,
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "addon_id IS NOT NULL",
 				},
 			},
 		},
@@ -2627,8 +2642,9 @@ func init() {
 	CouponAssociationsTable.ForeignKeys[0].RefTable = CouponsTable
 	CouponAssociationsTable.ForeignKeys[1].RefTable = SubscriptionsTable
 	CouponAssociationsTable.ForeignKeys[2].RefTable = SubscriptionLineItemsTable
-	CreditGrantsTable.ForeignKeys[0].RefTable = PlansTable
-	CreditGrantsTable.ForeignKeys[1].RefTable = SubscriptionsTable
+	CreditGrantsTable.ForeignKeys[0].RefTable = AddonsTable
+	CreditGrantsTable.ForeignKeys[1].RefTable = PlansTable
+	CreditGrantsTable.ForeignKeys[2].RefTable = SubscriptionsTable
 	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
 	EntitlementsTable.ForeignKeys[0].RefTable = AddonsTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
