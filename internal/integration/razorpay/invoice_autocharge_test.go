@@ -147,7 +147,7 @@ func (s *AutoChargePaymentSuite) makePayment(status types.PaymentStatus) *paymen
 }
 
 func (s *AutoChargePaymentSuite) TestNoExistingRecord_CreatesInitiated() {
-	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 
 	s.NoError(err)
 	s.False(skip)
@@ -161,7 +161,7 @@ func (s *AutoChargePaymentSuite) TestExistingInitiated_ReturnsSameNoSkip() {
 	existing := s.makePayment(types.PaymentStatusInitiated)
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, existing))
 
-	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 
 	s.NoError(err)
 	s.False(skip, "INITIATED should not be skipped")
@@ -173,7 +173,7 @@ func (s *AutoChargePaymentSuite) TestExistingPending_ReturnsSameNoSkip() {
 	existing := s.makePayment(types.PaymentStatusPending)
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, existing))
 
-	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 
 	s.NoError(err)
 	s.False(skip, "PENDING should not be skipped")
@@ -183,63 +183,72 @@ func (s *AutoChargePaymentSuite) TestExistingPending_ReturnsSameNoSkip() {
 
 func (s *AutoChargePaymentSuite) TestExistingProcessing_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusProcessing)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "PROCESSING should be skipped")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingSucceeded_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusSucceeded)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "SUCCEEDED should be skipped")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingOverpaid_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusOverpaid)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "OVERPAID should be skipped")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingFailed_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusFailed)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "FAILED should be skipped")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingVoided_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusVoided)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "VOIDED should be skipped via default branch")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingRefunded_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusRefunded)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "REFUNDED should be skipped via default branch")
 }
 
 func (s *AutoChargePaymentSuite) TestExistingPartiallyRefunded_Skip() {
 	s.Require().NoError(s.paymentRepo.Create(s.ctx, s.makePayment(types.PaymentStatusPartiallyRefunded)))
-	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	_, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.NoError(err)
 	s.True(skip, "PARTIALLY_REFUNDED should be skipped via default branch")
 }
 
 func (s *AutoChargePaymentSuite) TestIdempotency_SecondCallReturnsSameRecord() {
-	first, skip1, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	first, skip1, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.Require().NoError(err)
 	s.False(skip1)
 	s.Require().NotNil(first)
 
-	second, skip2, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv)
+	second, skip2, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeUPI)
 	s.Require().NoError(err)
 	s.False(skip2)
 	s.Require().NotNil(second)
 
 	s.Equal(first.ID, second.ID, "retry must return the same payment record")
+}
+
+func (s *AutoChargePaymentSuite) TestNoExistingRecord_UsesGivenPaymentMethodType() {
+	pymnt, skip, err := s.svc.findOrCreateAutoChargePayment(s.ctx, s.inv, types.PaymentMethodTypeCard)
+
+	s.NoError(err)
+	s.False(skip)
+	s.Require().NotNil(pymnt)
+	s.Equal(types.PaymentMethodTypeCard, pymnt.PaymentMethodType)
 }

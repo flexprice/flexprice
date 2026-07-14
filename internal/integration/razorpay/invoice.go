@@ -144,6 +144,7 @@ func (s *InvoiceSyncService) SyncInvoice(
 func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	ctx context.Context,
 	inv *invoice.Invoice,
+	paymentMethodType types.PaymentMethodType,
 ) (pymnt *payment.Payment, skip bool, err error) {
 	key := fmt.Sprintf("autocharge:%s", inv.ID)
 
@@ -179,7 +180,7 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 		IdempotencyKey:    key,
 		DestinationType:   types.PaymentDestinationTypeInvoice,
 		DestinationID:     inv.ID,
-		PaymentMethodType: types.PaymentMethodTypeUPI,
+		PaymentMethodType: paymentMethodType,
 		PaymentGateway:    &gatewayType,
 		Amount:            inv.AmountRemaining,
 		Currency:          inv.Currency,
@@ -294,7 +295,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
-	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv)
+	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, types.PaymentMethodTypeUPI)
 	if err != nil {
 		return err
 	}
