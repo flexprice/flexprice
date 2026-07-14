@@ -12,8 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	razorpay "github.com/razorpay/razorpay-go"
+	"github.com/samber/lo"
 )
 
 // RazorpayClient defines the interface for Razorpay API operations
@@ -36,6 +36,14 @@ type RazorpayClient interface {
 	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
 	// Returns the first matching order or ierr.ErrNotFound if none exist.
 	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
+	// RefundPayment issues a full refund for a captured payment (POST /v1/payments/{id}/refund).
+	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
+	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
+	// FetchPayment retrieves a payment's current state from Razorpay (GET /v1/payments/{id}),
+	// including its refund state ("refund_status" string: null/"partial"/"full", and
+	// "amount_refunded" int in the smallest currency unit). There is no boolean
+	// "refunded" field on this entity.
+	FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -532,4 +540,61 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 	}
 
 	return order, nil
+}
+
+// RefundPayment issues a refund for a captured Razorpay payment. POST
+// /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
+//
+// Sends X-Refund-Idempotency deterministically derived from paymentID (this flow
+// only ever issues one full refund per payment): retrying with the same key
+// returns the original refund instead of creating a duplicate, per
+// https://razorpay.com/docs/api/refunds/normal-refunds-idempotent/. The key must
+// be at least 10 chars of [A-Za-z0-9_-]; "refund_" + paymentID always satisfies
+// that given Razorpay's own payment ID format (e.g. pay_XXXXXXXXXXXXXX).
+func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := map[string]string{"X-Refund-Idempotency": "refund_" + paymentID}
+	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, headers)
+	if err != nil {
+		c.logger.Error(ctx, "failed to refund Razorpay payment",
+			"error", err, "payment_id", paymentID, "amount_paise", amountPaise)
+		return nil, ierr.NewError("failed to refund Razorpay payment").
+			WithHint("Unable to refund the payment in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":   paymentID,
+				"amount_paise": amountPaise,
+				"error":        err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully refunded Razorpay payment",
+		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
+	return result, nil
+}
+
+// FetchPayment retrieves a payment's current state from Razorpay. SDK: Payment.Fetch.
+func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Payment.Fetch(paymentID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay payment", "error", err, "payment_id", paymentID)
+		return nil, ierr.NewError("failed to fetch Razorpay payment").
+			WithHint("Unable to retrieve the payment from Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentID,
+				"error":      err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
 }
