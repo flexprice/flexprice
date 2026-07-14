@@ -105,10 +105,9 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	ctx context.Context,
 	req interfaces.AuthorizationLinkRequest,
 ) (*interfaces.CheckoutProviderResponse, error) {
-	if req.PreferredMethod != "" && req.PreferredMethod != types.PaymentMethodTypeUPI {
-		return nil, ierr.NewErrorf("razorpay authorization link registration does not support method %q", req.PreferredMethod).
-			WithHint("Only UPI is supported for Razorpay mandate registration in v1").
-			Mark(ierr.ErrNotImplemented)
+	method, err := razorpaySubscriptionMethod(req.PreferredMethod)
+	if err != nil {
+		return nil, err
 	}
 
 	customerResp, err := a.CustomerSvc.GetCustomer(ctx, req.CustomerID)
@@ -143,7 +142,7 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		},
 	}
 
-	subReg := map[string]interface{}{"method": "upi"}
+	subReg := map[string]interface{}{"method": method}
 	if req.MaxAmount != nil {
 		subReg["max_amount"] = toPaise(*req.MaxAmount)
 	}
