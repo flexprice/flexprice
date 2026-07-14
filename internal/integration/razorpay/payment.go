@@ -902,11 +902,6 @@ func isOrderAlreadyProcessingError(err error) bool {
 const refundLockTTL = 15 * time.Minute
 
 // Full refund when payment lands after checkout expired or failed.
-//
-// Returns an error on any failure so the caller can escalate it — this is not
-// itself a retry mechanism (there is no automatic reconciliation sweep for a
-// failed refund yet; see the caller in webhook/handler.go for the current,
-// log-only escalation and the follow-up this leaves open).
 func (s *PaymentService) RefundLateCapturedPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
@@ -964,10 +959,6 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		updateReq.Metadata = &metadata
 	}
 	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
-		// Razorpay has already refunded the money at this point — this failure
-		// means FlexPrice's own record is now out of sync with Razorpay until
-		// someone reconciles it manually (see the caller for how this is
-		// currently surfaced).
 		return ierr.WithError(err).
 			WithMessage("refund confirmed at Razorpay but failed to update FlexPrice payment status").
 			WithReportableDetails(map[string]interface{}{

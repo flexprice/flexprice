@@ -156,10 +156,6 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		return nil, err
 	}
 
-	// CreateAuthorizationLink's error return only reflects the HTTP transport/status,
-	// not the decoded response's shape — a 200 OK with an unexpected or incomplete
-	// body (a malformed API response, not something the Go client validates) would
-	// otherwise silently produce a CheckoutProviderResponse pointing at an empty URL.
 	shortURL, _ := result["short_url"].(string)
 	id, _ := result["id"].(string)
 	if shortURL == "" || id == "" {
