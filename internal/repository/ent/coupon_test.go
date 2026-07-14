@@ -195,7 +195,10 @@ func TestIncrementRedemptions_ConcurrentRequestsRespectLimit(t *testing.T) {
 	for _, err := range results {
 		if err == nil {
 			successCount++
+			continue
 		}
+		require.True(t, ierr.IsValidation(err),
+			"expected losing increment to return a validation error (limit reached), got: %v", err)
 	}
 	require.Equal(t, 1, successCount, "exactly one concurrent increment should succeed under max_redemptions=1")
 
