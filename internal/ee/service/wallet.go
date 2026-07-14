@@ -102,6 +102,7 @@ type WalletService interface {
 	// CompletePurchasedCreditTransaction completes a pending wallet transaction when payment succeeds
 	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error
 
+	// TODO: Cleanup this method, moved to `EvaluateAlertsForWallet`
 	CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error
 
 	// PublishWalletBalanceAlertEvent publishes a wallet balance alert event
@@ -2075,20 +2076,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-	// CheckWalletBalanceAlert runs synchronously below for this event, so it is not
-	// published to Kafka — publishing it too would let the async consumer re-run the
-	// same check and double-fire auto top-up.
-	event := &wallet.WalletBalanceAlertEvent{
-		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
-		Timestamp:             time.Now().UTC(),
-		Source:                EventSourceWalletTransaction,
-		CustomerID:            w.CustomerID,
-		ForceCalculateBalance: true,
-		TenantID:              types.GetTenantID(ctx),
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-		WalletID:              req.WalletID,
-	}
-
 	// Log credit balance alert after wallet operation
 	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
 		// Don't fail the transaction if alert logging fails
@@ -2098,8 +2085,10 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		)
 	}
 
-	if err := s.CheckWalletBalanceAlert(ctx, event); err != nil {
-		s.Logger.Error(ctx, "failed to check wallet balance alert after wallet operation",
+	// Only the wallet we just changed can have moved its alert state, so drive
+	// the per-wallet path directly instead of fanning out to every customer wallet.
+	if err := s.EvaluateAlertsForWallet(ctx, w, NewAlertLogsService(s.ServiceParams), ""); err != nil {
+		s.Logger.Error(ctx, "failed to evaluate wallet alerts after wallet operation",
 			"error", err,
 			"wallet_id", req.WalletID,
 			"customer_id", w.CustomerID,
@@ -3216,6 +3205,10 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 		return nil
 	}
 
+	// Note: same cache key is being read & updated by `GetWalletBalanceV2`
+	// so if tenant called get wallet balance v2, then the cached balance will be updated
+	// and if there's no usage in-between, no balance updated webhook will be sent
+	// expecting that tenant already got the updated balance
 	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, w.ID, nil)
 
 	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
@@ -3224,13 +3217,14 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 		return nil
 	}
 	ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
-	eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
 
 	if hasWalletAlert {
+		eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
 		if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, alertSettings, alertLogs, eventID); err != nil {
 			s.Logger.Error(ctx, "failed to process wallet balance alert", "error", err, "wallet_id", w.ID)
 		}
 	}
+
 	if autoTopupEnabled {
 		autoTopupKey := ""
 		if autoTopupIdempotencySeed != "" {
