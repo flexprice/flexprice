@@ -48,6 +48,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -62,6 +63,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
@@ -141,6 +143,8 @@ type Client struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// Refund is the client for interacting with the Refund builders.
+	Refund *RefundClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
 	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
@@ -169,6 +173,8 @@ type Client struct {
 	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
 	Tenant *TenantClient
+	// UsageRecord is the client for interacting with the UsageRecord builders.
+	UsageRecord *UsageRecordClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// Wallet is the client for interacting with the Wallet builders.
@@ -221,6 +227,7 @@ func (c *Client) init() {
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
+	c.Refund = NewRefundClient(c.config)
 	c.ScheduledTask = NewScheduledTaskClient(c.config)
 	c.Secret = NewSecretClient(c.config)
 	c.Settings = NewSettingsClient(c.config)
@@ -235,6 +242,7 @@ func (c *Client) init() {
 	c.TaxAssociation = NewTaxAssociationClient(c.config)
 	c.TaxRate = NewTaxRateClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
+	c.UsageRecord = NewUsageRecordClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
@@ -364,6 +372,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
+		Refund:                   NewRefundClient(cfg),
 		ScheduledTask:            NewScheduledTaskClient(cfg),
 		Secret:                   NewSecretClient(cfg),
 		Settings:                 NewSettingsClient(cfg),
@@ -378,6 +387,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		TaxAssociation:           NewTaxAssociationClient(cfg),
 		TaxRate:                  NewTaxRateClient(cfg),
 		Tenant:                   NewTenantClient(cfg),
+		UsageRecord:              NewUsageRecordClient(cfg),
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
 		WalletTransaction:        NewWalletTransactionClient(cfg),
@@ -434,6 +444,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
+		Refund:                   NewRefundClient(cfg),
 		ScheduledTask:            NewScheduledTaskClient(cfg),
 		Secret:                   NewSecretClient(cfg),
 		Settings:                 NewSettingsClient(cfg),
@@ -448,6 +459,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		TaxAssociation:           NewTaxAssociationClient(cfg),
 		TaxRate:                  NewTaxRateClient(cfg),
 		Tenant:                   NewTenantClient(cfg),
+		UsageRecord:              NewUsageRecordClient(cfg),
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
 		WalletTransaction:        NewWalletTransactionClient(cfg),
@@ -488,10 +500,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
 		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
 		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
 		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
 		c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
@@ -509,10 +521,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
 		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
 		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
 		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
 		c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
@@ -588,6 +600,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *PriceUnitMutation:
 		return c.PriceUnit.mutate(ctx, m)
+	case *RefundMutation:
+		return c.Refund.mutate(ctx, m)
 	case *ScheduledTaskMutation:
 		return c.ScheduledTask.mutate(ctx, m)
 	case *SecretMutation:
@@ -616,6 +630,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TaxRate.mutate(ctx, m)
 	case *TenantMutation:
 		return c.Tenant.mutate(ctx, m)
+	case *UsageRecordMutation:
+		return c.UsageRecord.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	case *WalletMutation:
@@ -5466,6 +5482,139 @@ func (c *PriceUnitClient) mutate(ctx context.Context, m *PriceUnitMutation) (Val
 	}
 }
 
+// RefundClient is a client for the Refund schema.
+type RefundClient struct {
+	config
+}
+
+// NewRefundClient returns a client for the Refund from the given config.
+func NewRefundClient(c config) *RefundClient {
+	return &RefundClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `refund.Hooks(f(g(h())))`.
+func (c *RefundClient) Use(hooks ...Hook) {
+	c.hooks.Refund = append(c.hooks.Refund, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `refund.Intercept(f(g(h())))`.
+func (c *RefundClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Refund = append(c.inters.Refund, interceptors...)
+}
+
+// Create returns a builder for creating a Refund entity.
+func (c *RefundClient) Create() *RefundCreate {
+	mutation := newRefundMutation(c.config, OpCreate)
+	return &RefundCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Refund entities.
+func (c *RefundClient) CreateBulk(builders ...*RefundCreate) *RefundCreateBulk {
+	return &RefundCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RefundClient) MapCreateBulk(slice any, setFunc func(*RefundCreate, int)) *RefundCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RefundCreateBulk{err: fmt.Errorf("calling to RefundClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RefundCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RefundCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Refund.
+func (c *RefundClient) Update() *RefundUpdate {
+	mutation := newRefundMutation(c.config, OpUpdate)
+	return &RefundUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RefundClient) UpdateOne(r *Refund) *RefundUpdateOne {
+	mutation := newRefundMutation(c.config, OpUpdateOne, withRefund(r))
+	return &RefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RefundClient) UpdateOneID(id string) *RefundUpdateOne {
+	mutation := newRefundMutation(c.config, OpUpdateOne, withRefundID(id))
+	return &RefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Refund.
+func (c *RefundClient) Delete() *RefundDelete {
+	mutation := newRefundMutation(c.config, OpDelete)
+	return &RefundDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RefundClient) DeleteOne(r *Refund) *RefundDeleteOne {
+	return c.DeleteOneID(r.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RefundClient) DeleteOneID(id string) *RefundDeleteOne {
+	builder := c.Delete().Where(refund.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RefundDeleteOne{builder}
+}
+
+// Query returns a query builder for Refund.
+func (c *RefundClient) Query() *RefundQuery {
+	return &RefundQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRefund},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Refund entity by its id.
+func (c *RefundClient) Get(ctx context.Context, id string) (*Refund, error) {
+	return c.Query().Where(refund.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RefundClient) GetX(ctx context.Context, id string) *Refund {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RefundClient) Hooks() []Hook {
+	return c.hooks.Refund
+}
+
+// Interceptors returns the client interceptors.
+func (c *RefundClient) Interceptors() []Interceptor {
+	return c.inters.Refund
+}
+
+func (c *RefundClient) mutate(ctx context.Context, m *RefundMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RefundCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RefundUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RefundUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RefundDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Refund mutation op: %q", m.Op())
+	}
+}
+
 // ScheduledTaskClient is a client for the ScheduledTask schema.
 type ScheduledTaskClient struct {
 	config
@@ -7536,6 +7685,139 @@ func (c *TenantClient) mutate(ctx context.Context, m *TenantMutation) (Value, er
 	}
 }
 
+// UsageRecordClient is a client for the UsageRecord schema.
+type UsageRecordClient struct {
+	config
+}
+
+// NewUsageRecordClient returns a client for the UsageRecord from the given config.
+func NewUsageRecordClient(c config) *UsageRecordClient {
+	return &UsageRecordClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usagerecord.Hooks(f(g(h())))`.
+func (c *UsageRecordClient) Use(hooks ...Hook) {
+	c.hooks.UsageRecord = append(c.hooks.UsageRecord, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usagerecord.Intercept(f(g(h())))`.
+func (c *UsageRecordClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UsageRecord = append(c.inters.UsageRecord, interceptors...)
+}
+
+// Create returns a builder for creating a UsageRecord entity.
+func (c *UsageRecordClient) Create() *UsageRecordCreate {
+	mutation := newUsageRecordMutation(c.config, OpCreate)
+	return &UsageRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UsageRecord entities.
+func (c *UsageRecordClient) CreateBulk(builders ...*UsageRecordCreate) *UsageRecordCreateBulk {
+	return &UsageRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UsageRecordClient) MapCreateBulk(slice any, setFunc func(*UsageRecordCreate, int)) *UsageRecordCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UsageRecordCreateBulk{err: fmt.Errorf("calling to UsageRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UsageRecordCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UsageRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UsageRecord.
+func (c *UsageRecordClient) Update() *UsageRecordUpdate {
+	mutation := newUsageRecordMutation(c.config, OpUpdate)
+	return &UsageRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UsageRecordClient) UpdateOne(ur *UsageRecord) *UsageRecordUpdateOne {
+	mutation := newUsageRecordMutation(c.config, OpUpdateOne, withUsageRecord(ur))
+	return &UsageRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UsageRecordClient) UpdateOneID(id string) *UsageRecordUpdateOne {
+	mutation := newUsageRecordMutation(c.config, OpUpdateOne, withUsageRecordID(id))
+	return &UsageRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UsageRecord.
+func (c *UsageRecordClient) Delete() *UsageRecordDelete {
+	mutation := newUsageRecordMutation(c.config, OpDelete)
+	return &UsageRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UsageRecordClient) DeleteOne(ur *UsageRecord) *UsageRecordDeleteOne {
+	return c.DeleteOneID(ur.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UsageRecordClient) DeleteOneID(id string) *UsageRecordDeleteOne {
+	builder := c.Delete().Where(usagerecord.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UsageRecordDeleteOne{builder}
+}
+
+// Query returns a query builder for UsageRecord.
+func (c *UsageRecordClient) Query() *UsageRecordQuery {
+	return &UsageRecordQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUsageRecord},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UsageRecord entity by its id.
+func (c *UsageRecordClient) Get(ctx context.Context, id string) (*UsageRecord, error) {
+	return c.Query().Where(usagerecord.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UsageRecordClient) GetX(ctx context.Context, id string) *UsageRecord {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UsageRecordClient) Hooks() []Hook {
+	return c.hooks.UsageRecord
+}
+
+// Interceptors returns the client interceptors.
+func (c *UsageRecordClient) Interceptors() []Interceptor {
+	return c.inters.UsageRecord
+}
+
+func (c *UsageRecordClient) mutate(ctx context.Context, m *UsageRecordMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UsageRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UsageRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UsageRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UsageRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UsageRecord mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -8077,9 +8359,10 @@ type (
 		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
 		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
 		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		PriceUnit, Refund, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -8089,9 +8372,10 @@ type (
 		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
 		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
 		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		PriceUnit, Refund, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

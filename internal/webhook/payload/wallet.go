@@ -41,10 +41,27 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Create payload
-	walletData, err := b.services.WalletService.GetWalletByID(ctx, parsedPayload.WalletID)
-	if err != nil {
-		return nil, err
+	var walletData *dto.WalletResponse
+
+	switch eventType {
+	case types.WebhookEventWalletOngoingBalanceUpdated:
+		if parsedPayload.Balance == nil {
+			return nil, ierr.NewError("missing balance in ongoing_balance.updated internal payload").
+				WithHint("InternalWalletEvent.Balance is required for wallet.ongoing_balance.updated").
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		walletData = dto.WalletResponseFromBalance(parsedPayload.Balance)
+		if walletData == nil {
+			return nil, ierr.NewError("invalid balance in ongoing_balance.updated internal payload").
+				WithHint("InternalWalletEvent.Balance must include a wallet").
+				Mark(ierr.ErrInvalidOperation)
+		}
+	default:
+		walletData, err = b.services.WalletService.GetWalletByID(ctx, parsedPayload.WalletID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Fetch customer data
@@ -93,7 +110,12 @@ func (b TransactionPayloadBuilder) BuildPayload(
 		return nil, err
 	}
 
-	payload := webhookDto.NewTransactionWebhookPayload(transactionData, walletData, eventType)
+	var payload any
+	if eventType == types.WebhookEventWalletTransactionUpdated {
+		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, walletData, eventType)
+	} else {
+		payload = webhookDto.NewTransactionWebhookPayload(transactionData, walletData, eventType)
+	}
 
 	return json.Marshal(payload)
 

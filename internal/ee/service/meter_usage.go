@@ -40,12 +40,25 @@ type MeterUsageService interface {
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
 	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 
+	// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
+	// request shape used by callers that need to be signal-agnostic (e.g. the
+	// usage-analytics CSV exporter). It resolves tenant/environment from ctx.
+	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
+
 	// GetSubscriptionMeterUsage is the centralized meter-usage query function.
 	// Both analytics and billing paths call this per-subscription to get line-item-bounded usage.
 	GetSubscriptionMeterUsage(ctx context.Context, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
 
 	// ConvertToBillingCharges maps SubscriptionMeterUsage to billing charges.
 	ConvertToBillingCharges(ctx context.Context, usage *SubscriptionMeterUsage) ([]*dto.SubscriptionUsageByMetersResponse, decimal.Decimal, error)
+
+	// DebugEvent powers GET /events/:id — reports processing status and
+	// per-lookup diagnostics for a single event under the meter-usage pipeline.
+	DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error)
+
+	// GetHuggingFaceBillingData resolves per-event cost (nano-USD) for the
+	// requested event IDs. Powers POST /events/huggingface-billing.
+	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
 }
 
 type meterUsageService struct {
@@ -139,6 +152,45 @@ type dateRangeGroup struct {
 type lineItemWithMeter struct {
 	Item    *subscription.SubscriptionLineItem
 	MeterID string
+}
+
+// GetDetailedUsageAnalytics adapts GetDetailedAnalytics to the dto-based
+// request shape used by callers that need to be signal-agnostic (e.g. the
+// usage-analytics CSV exporter).
+func (s *meterUsageService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	return s.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerID:  req.ExternalCustomerID,
+		ExternalCustomerIDs: req.ExternalCustomerIDs,
+		FeatureIDs:          req.FeatureIDs,
+		StartTime:           req.StartTime,
+		EndTime:             req.EndTime,
+		GroupBy:             req.GroupBy,
+		PropertyFilters:     req.PropertyFilters,
+		Sources:             req.Sources,
+		WindowSize:          req.WindowSize,
+		Expand:              req.Expand,
+		IncludeChildren:     req.IncludeChildren,
+	})
+}
+
+// AnalyticsData holds all data required for analytics processing.
+type AnalyticsData struct {
+	Customer              *customer.Customer
+	Subscriptions         []*subscription.Subscription
+	SubscriptionLineItems map[string]*subscription.SubscriptionLineItem
+	SubscriptionsMap      map[string]*subscription.Subscription
+	Analytics             []*events.DetailedUsageAnalytic
+	Features              map[string]*feature.Feature
+	Meters                map[string]*meter.Meter
+	Prices                map[string]*price.Price
+	PriceResponses        map[string]*dto.PriceResponse
+	Plans                 map[string]*plan.Plan
+	Addons                map[string]*addon.Addon
+	Groups                map[string]*group.Group
+	Currency              string
+	Params                *events.UsageAnalyticsParams
 }
 
 // ---------------------------------------------------------------------------
@@ -2635,6 +2687,72 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 	})
 
 	return mergedPoints
+}
+
+// PriceMatch pairs a resolved price with its meter, used by usage-tracking
+// paths that need to match an event to a price+meter tuple.
+type PriceMatch struct {
+	Price *price.Price
+	Meter *meter.Meter
+}
+
+// buildBucketSummaries produces one BucketSummary per CommitmentTimeBucket on
+// the line item. It sums usage per-bucket from the supplied per-point series
+// and rolls up the pre-stamped commitment fields (utilized / overage / true-up).
+func buildBucketSummaries(
+	ctx context.Context,
+	priceService PriceService,
+	points []events.UsageAnalyticPoint,
+	lineItem *subscription.SubscriptionLineItem,
+	data *AnalyticsData,
+) []dto.BucketSummary {
+	buckets := lineItem.CommitmentTimeBuckets
+	summaries := make([]dto.BucketSummary, 0, len(buckets))
+	for _, b := range buckets {
+		r := rollupBucketPoints(ctx, priceService, points, b.ID, data.Prices[b.PriceID])
+		summaries = append(summaries, dto.BucketSummary{
+			BucketID:               b.ID,
+			Start:                  b.Start,
+			End:                    b.End,
+			SubscriptionLineItemID: lineItem.ID,
+			PriceID:                b.PriceID,
+			CommitmentType:         string(b.CommitmentType),
+			CommitmentValue:        b.CommitmentValue,
+			TotalUsage:             r.usage,
+			BaseCharge:             r.base,
+			ComputedUtilized:       r.utilized,
+			ComputedOverage:        r.overage,
+			ComputedTrueUp:         r.trueUp,
+		})
+	}
+	return summaries
+}
+
+type bucketPointRollup struct {
+	usage, base, utilized, overage, trueUp decimal.Decimal
+}
+
+func rollupBucketPoints(
+	ctx context.Context,
+	priceService PriceService,
+	points []events.UsageAnalyticPoint,
+	bucketID string,
+	p *price.Price,
+) bucketPointRollup {
+	var r bucketPointRollup
+	for _, pt := range points {
+		if pt.BucketID != bucketID {
+			continue
+		}
+		r.usage = r.usage.Add(pt.Usage)
+		if p != nil {
+			r.base = r.base.Add(priceService.CalculateCost(ctx, p, pt.Usage))
+		}
+		r.utilized = r.utilized.Add(pt.ComputedCommitmentUtilizedAmount)
+		r.overage = r.overage.Add(pt.ComputedOverageAmount)
+		r.trueUp = r.trueUp.Add(pt.ComputedTrueUpAmount)
+	}
+	return r
 }
 
 // ensure meterUsageService implements MeterUsageService

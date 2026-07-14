@@ -87,6 +87,7 @@ func (s *WalletServiceSuite) setupService() {
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
 		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
@@ -95,7 +96,6 @@ func (s *WalletServiceSuite) setupService() {
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
@@ -109,12 +109,12 @@ func (s *WalletServiceSuite) setupService() {
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
 		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
 		FeatureRepo:              stores.FeatureRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 		CouponRepo:               stores.CouponRepo,
 		CouponAssociationRepo:    stores.CouponAssociationRepo,
 		CouponApplicationRepo:    stores.CouponApplicationRepo,
@@ -2338,6 +2338,7 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
 		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
@@ -2346,7 +2347,6 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
@@ -2479,12 +2479,12 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_GuardPreventsSecondIn
 	balance := decimal.NewFromInt(3) // below threshold of 5
 
 	// First call – should create one invoice.
-	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
 
 	// Second call – guard must detect the pending invoice and skip.
-	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(1, s.countAutoTopupInvoices(), "expected still 1 auto-topup invoice after second trigger (guard blocked it)")
 }
@@ -2498,7 +2498,7 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 	balance := decimal.NewFromInt(3) // below threshold of 5
 
 	// First trigger – creates one pending invoice.
-	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
 
@@ -2515,7 +2515,7 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 
 	// Second trigger – guard no longer blocks because invoice is paid.
 	// Re-read wallet to get fresh state (balance still low since no actual credit was added).
-	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(2, s.countAutoTopupInvoices(), "expected 2 auto-topup invoices after payment cleared the guard")
 }
@@ -2574,6 +2574,7 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
 		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
@@ -2582,7 +2583,6 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},

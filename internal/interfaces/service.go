@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -65,7 +64,6 @@ type PlanService interface {
 	ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error)
 	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
 	SyncPlanPricesV2(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
-	ReprocessEventsForMissingPairs(ctx context.Context, missingPairs []planpricesync.PlanLineItemCreationDelta) error
 }
 
 type EntityIntegrationMappingService interface {
@@ -127,9 +125,6 @@ type SubscriptionService interface {
 	// ProcessAutoInvoiceThresholdBilling checks subscriptions with subscription-level auto_invoice_threshold
 	// set and runs auto invoice threshold billing (mid-period invoices when usage crosses that threshold).
 	ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error)
-
-	// Feature usage tracking
-	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 
 	// Meter usage tracking (reads from meter_usage table)
 	GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)

@@ -30,6 +30,7 @@ const (
 	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
 	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
 	SettingKeyBonusCreditsTopupConfig  SettingKey = "bonus_credits_topup_config"
+	SettingKeyPaymentMandateLimits     SettingKey = "payment_mandate_limits"
 )
 
 func (s *SettingKey) Validate() error {
@@ -46,6 +47,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyCustomerPortalConfig,
 		SettingKeyEventIngestionFilter,
 		SettingKeyBonusCreditsTopupConfig,
+		SettingKeyPaymentMandateLimits,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -395,10 +397,6 @@ type BonusCreditsTopupConfig struct {
 }
 
 // Validate implements SettingConfig interface.
-// Mirrors EventIngestionFilterConfig: enabled=true with no slabs would silently grant zero bonus on
-// every purchase, which is almost certainly a misconfiguration. Also rejects slabs not sorted
-// strictly descending by threshold, since findBonusSlab depends on it, and rejects any operator
-// other than GREATER_THAN_EQUAL (the only one findBonusSlab knows how to evaluate).
 func (c BonusCreditsTopupConfig) Validate() error {
 	if c.Enabled && len(c.Slabs) == 0 {
 		return ierr.NewError("bonus_credits_topup_config: enabled is true but slabs is empty").
@@ -449,6 +447,34 @@ func (c BonusCreditsTopupConfig) Validate() error {
 		}
 	}
 	return validator.ValidateRequest(c)
+}
+
+// PaymentMandateLimits holds per-rail auto-charge ceilings (keyed by PaymentMethodType).
+// This is a safety ceiling, not the auto-charge opt-in — that lives in the checkout request.
+type PaymentMandateLimits struct {
+	MandateLimits map[PaymentMethodType]MandateLimit `json:"mandate_limits"`
+}
+
+type MandateLimit struct {
+	MaxAmount decimal.Decimal `json:"max_amount" swaggertype:"string"`
+	Currency  string          `json:"currency,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c PaymentMandateLimits) Validate() error {
+	for rail, limit := range c.MandateLimits {
+		if limit.MaxAmount.IsNegative() {
+			return ierr.NewErrorf("max_amount for rail %q must not be negative", rail).
+				Mark(ierr.ErrValidation)
+		}
+		if strings.TrimSpace(limit.Currency) != "" && len(strings.TrimSpace(limit.Currency)) != 3 {
+			return ierr.NewErrorf("currency for rail %q must be a 3-letter code", rail).
+				WithHint("Provide a valid 3-letter currency code (e.g. INR)").
+				WithReportableDetails(map[string]any{"rail": rail, "currency": limit.Currency}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 // GetDefaultSettings returns the default settings configuration for all setting keys
@@ -615,6 +641,16 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultPaymentMandateLimits := PaymentMandateLimits{
+		MandateLimits: map[PaymentMethodType]MandateLimit{
+			PaymentMethodTypeUPI: {MaxAmount: decimal.NewFromInt(100000), Currency: "INR"},
+		},
+	}
+	defaultPaymentMandateLimitsMap, err := utils.ToMap(defaultPaymentMandateLimits)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
@@ -672,6 +708,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyBonusCreditsTopupConfig,
 			DefaultValue: defaultBonusCreditsTopupConfigMap,
 			Description:  "Slab-based bonus credit rules applied automatically to purchased wallet top-ups",
+		},
+		SettingKeyPaymentMandateLimits: {
+			Key:          SettingKeyPaymentMandateLimits,
+			DefaultValue: defaultPaymentMandateLimitsMap,
+			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
 		},
 	}, nil
 }
@@ -781,6 +822,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyBonusCreditsTopupConfig:
 		config, err := utils.ToStruct[BonusCreditsTopupConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyPaymentMandateLimits:
+		config, err := utils.ToStruct[PaymentMandateLimits](value)
 		if err != nil {
 			return err
 		}

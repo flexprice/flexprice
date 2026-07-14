@@ -72,7 +72,6 @@ func (s *SubscriptionGroupedInvoicingTestSuite) setupServices() {
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:             s.GetStores().FeatureUsageRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		ProrationCalculator:          s.GetCalculator(),

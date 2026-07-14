@@ -25,6 +25,7 @@ type Handlers struct {
 	PriceUnit                *v1.PriceUnitHandler
 	Customer                 *v1.CustomerHandler
 	Connection               *v1.ConnectionHandler
+	Marketplace              *v1.MarketplaceHandler
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
@@ -176,14 +177,11 @@ func NewRouter(
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
-			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
-			events.POST("/reprocess", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessEvents)
 			events.POST("/raw/bulk", write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
 			events.POST("/raw/reprocess/pending", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessUnprocessedRawEvents)
-			events.POST("/reprocess/internal", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessEventsInternal)
 		}
 
 		// Meter usage query endpoints (reads from meter_usage ClickHouse table)
@@ -388,7 +386,6 @@ func NewRouter(
 			invoices.POST("/:id/void", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.VoidInvoice)
 			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
 			invoices.POST("/internal/preview", handlers.Invoice.GetInternalPreviewInvoice)
-			invoices.POST("/meter-usage-preview", handlers.Invoice.GetMeterUsagePreviewInvoice)
 			invoices.PUT("/:id/payment", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.UpdatePaymentStatus)
 			invoices.POST("/:id/payment/attempt", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
@@ -513,6 +510,11 @@ func NewRouter(
 			connections.PUT("/:id", write(types.EntityConnection, types.ActionWrite), handlers.Connection.UpdateConnection)
 			connections.DELETE("/:id", write(types.EntityConnection, types.ActionWrite), handlers.Connection.DeleteConnection)
 			connections.POST("/search", handlers.Connection.QueryConnections)
+		}
+
+		marketplace := v1Private.Group("/marketplace")
+		{
+			marketplace.POST("/agreements", write(types.EntityIntegration, types.ActionWrite), handlers.Marketplace.RegisterAgreement)
 		}
 
 		// Costsheet routes

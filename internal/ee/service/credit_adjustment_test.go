@@ -58,7 +58,6 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		PriceRepo:                stores.PriceRepo,
 		FeatureRepo:              stores.FeatureRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	})

@@ -51,13 +51,8 @@ type Configuration struct {
 	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
 	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
-	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
-	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
-	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
-	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
-	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -163,6 +158,24 @@ type KafkaConfig struct {
 	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string   `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	// TopicsDefaults/Topics describe the full desired topic set for `migrate kafka`
+	// (partition counts, replication factor, retention). Consumed only by
+	// cmd/migrate (kafka subcommand), not by the server/consumer/worker processes. A deploy's
+	// FLEXPRICE_KAFKA_TOPICS env var (JSON), when set, FULLY REPLACES this block
+	// (no merge) — see internal/kafka/topicspec.
+	TopicsDefaults KafkaTopicsDefaults       `mapstructure:"topics_defaults"`
+	Topics         map[string]KafkaTopicSpec `mapstructure:"topics"`
+}
+
+type KafkaTopicsDefaults struct {
+	ReplicationFactor int16 `mapstructure:"replication_factor"`
+	RetentionMs       int64 `mapstructure:"retention_ms"`
+}
+
+type KafkaTopicSpec struct {
+	Partitions        int    `mapstructure:"partitions"`
+	ReplicationFactor *int16 `mapstructure:"replication_factor"`
+	RetentionMs       *int64 `mapstructure:"retention_ms"`
 }
 
 type ClickHouseConfig struct {
@@ -402,17 +415,6 @@ type EventProcessingConfig struct {
 	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 }
 
-type EventPostProcessingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_post_processing"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_events_post_processing"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_events_post_processing_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_events_post_processing_backfill"`
-}
-
 type EventProcessingLazyConfig struct {
 	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_lazy"`
@@ -430,38 +432,6 @@ type EventProcessingReplayConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
-type FeatureUsageTrackingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled                bool   `mapstructure:"enabled" default:"true"`
-	Topic                  string `mapstructure:"topic" default:"events"`
-	RateLimit              int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup          string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
-	TopicBackfill          string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
-	RateLimitBackfill      int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
-	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
-	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
-	TopicDLQ               string `mapstructure:"topic_dlq" default:""`
-}
-
-type FeatureUsageTrackingLazyConfig struct {
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_lazy"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_realtime"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
-}
-
-type FeatureUsageTrackingReplayConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"v1_feature_tracking_service_replay"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_replay"`
-}
-
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
 	Enabled                   bool   `mapstructure:"enabled" default:"true"`
@@ -477,6 +447,12 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+
+	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
+	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
+	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
+	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
+	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -490,14 +466,6 @@ type MeterUsageTrackingLazyConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
 	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
-}
-
-// UsageBenchmarkConfig configures the usage benchmarking consumer
-type UsageBenchmarkConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"false"`
-	Topic         string `mapstructure:"topic" default:"staging_benchmarking"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_usage_benchmark_service"`
 }
 
 type WalletBalanceAlertConfig struct {
@@ -551,25 +519,14 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics    bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
-	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
-	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
-	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
-	EnableMeterUsageForBilling        bool   `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
-	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
+	EnableMeterUsageForBilling bool `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
 
-	// Per-tenant overrides for the meter-usage rollout. Resolution order:
+	// Per-tenant overrides for the meter-usage-for-billing rollout. Resolution order:
 	//   1. disabled_tenants — tenant force-disabled (highest priority)
 	//   2. enabled_tenants  — tenant force-enabled
 	//   3. global flag above — applies to everyone else
-	MeterUsageForPreviewInvoiceEnabledTenants  []string `mapstructure:"meter_usage_for_preview_invoice_enabled_tenants" validate:"omitempty"`
-	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
-	MeterUsageForBillingEnabledTenants         []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
-	MeterUsageForBillingDisabledTenants        []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
-	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
-	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
@@ -580,43 +537,6 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool 
 		c.EnableMeterUsageForBilling,
 		c.MeterUsageForBillingEnabledTenants,
 		c.MeterUsageForBillingDisabledTenants,
-	)
-}
-
-// IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
-// preview-invoice endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForPreviewInvoice(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForPreviewInvoice,
-		c.MeterUsageForPreviewInvoiceEnabledTenants,
-		c.MeterUsageForPreviewInvoiceDisabledTenants,
-	)
-}
-
-// IsMeterUsageEnabledForAnalytics resolves the meter-usage rollout for the
-// analytics endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForAnalytics,
-		c.MeterUsageForAnalyticsEnabledTenants,
-		c.MeterUsageForAnalyticsDisabledTenants,
-	)
-}
-
-// IsUsageBenchmarkEnabled resolves the usage-benchmark publish gate for a
-// specific tenant. Gates publishBenchmarkEvent in the wallet billing path so
-// the feature-usage / meter-usage comparison runs only for selected tenants.
-// See FeatureFlagConfig for the resolution order.
-func (c *FeatureFlagConfig) IsUsageBenchmarkEnabled(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableUsageBenchmark,
-		c.UsageBenchmarkEnabledTenants,
-		c.UsageBenchmarkDisabledTenants,
 	)
 }
 

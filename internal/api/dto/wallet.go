@@ -253,6 +253,8 @@ func (r *CreateWalletRequest) Validate() error {
 type WalletResponse struct {
 	*wallet.Wallet
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
+	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
+	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -263,6 +265,21 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 
 	return &WalletResponse{
 		Wallet: w,
+	}
+}
+
+
+// WalletResponseFromBalance maps a computed balance into a WalletResponse with real-time fields.
+func WalletResponseFromBalance(b *WalletBalanceResponse) *WalletResponse {
+	if b == nil || b.Wallet == nil {
+		return nil
+	}
+
+	return &WalletResponse{
+		Wallet:                    b.Wallet,
+		CreditsAvailableBreakdown: b.CreditsAvailableBreakdown,
+		RealTimeBalance:           b.RealTimeBalance,
+		RealTimeCreditBalance:     b.RealTimeCreditBalance,
 	}
 }
 

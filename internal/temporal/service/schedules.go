@@ -99,6 +99,20 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.CheckoutSessionExpiryWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDMarketplaceUsageSnapshot,
+			Interval:  6 * time.Hour,
+			Workflow:  cronWorkflows.MarketplaceUsageSnapshotWorkflow,
+			Input:     models.MarketplaceUsageSnapshotWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDMarketplaceUsageReport,
+			Interval:  3 * time.Hour,
+			Workflow:  cronWorkflows.MarketplaceUsageReportWorkflow,
+			Input:     models.MarketplaceUsageReportWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

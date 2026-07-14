@@ -20,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
-	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -46,7 +45,6 @@ type InvoiceService interface {
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
-	GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
@@ -658,8 +656,8 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 		"feature_ids_count", len(featureIDs),
 		"customer_id", customer.ExternalID)
 
-	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
-	analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get bulk usage analytics",
 			"invoice_id", inv.ID,
@@ -988,7 +986,6 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
-
 	return nil
 }
 
@@ -1303,89 +1300,65 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	return nil
 }
 
-// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay if Razorpay connection is enabled.
+// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay unless it's already
+// paid, has zero balance, or Razorpay sync isn't enabled for the tenant.
 func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 
-	// Check if Razorpay connection exists
+	if inv.AmountRemaining.IsZero() {
+		s.Logger.Debug(ctx, "invoice amount remaining is zero, skipping Razorpay sync",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
+		inv.PaymentStatus == types.PaymentStatusOverpaid {
+		s.Logger.Debug(ctx, "invoice already paid, skipping Razorpay sync",
+			"invoice_id", inv.ID, "payment_status", inv.PaymentStatus)
+		return nil
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderRazorpay)
 	if err != nil || conn == nil {
 		s.Logger.Debug(ctx, "Razorpay connection not available, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Not an error, just skip sync
+			"invoice_id", inv.ID, "error", err)
+		return nil
 	}
-
-	// Check if invoice sync is enabled for this connection
 	if !conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"connection_id", conn.ID)
-		return nil // Not an error, just skip sync
+		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping",
+			"invoice_id", inv.ID, "connection_id", conn.ID)
+		return nil
 	}
 
-	// Get Razorpay integration
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get Razorpay integration, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Don't fail the entire process, just skip invoice sync
+			"invoice_id", inv.ID, "error", err)
+		return nil
 	}
 
-	s.Logger.Info(ctx, "syncing invoice to Razorpay",
-		"invoice_id", inv.ID,
-		"customer_id", inv.CustomerID)
-
-	// Create customer service instance
 	customerService := NewCustomerService(s.ServiceParams)
-
-	// Create sync request
-	syncRequest := razorpay.RazorpayInvoiceSyncRequest{
-		InvoiceID: inv.ID,
-	}
-
-	// Perform the sync
-	syncResponse, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoiceToRazorpay(ctx, syncRequest, customerService)
+	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoice(ctx, inv, customerService)
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Info(ctx, "successfully synced invoice to Razorpay",
-		"invoice_id", inv.ID,
-		"razorpay_invoice_id", syncResponse.RazorpayInvoiceID,
-		"status", syncResponse.Status,
-		"payment_url", syncResponse.ShortURL)
-
-	// Save Razorpay URLs in invoice metadata
-	if syncResponse.ShortURL != "" {
+	// Only the send-invoice path needs the URL persisted; auto-charge is reconciled via webhook.
+	if !result.AutoCharged && result.ShortURL != "" {
 		metadata := inv.Metadata
 		if metadata == nil {
 			metadata = types.Metadata{}
 		}
+		metadata["razorpay_invoice_id"] = result.RazorpayInvoiceID
+		metadata["razorpay_payment_url"] = result.ShortURL
 
-		metadata["razorpay_invoice_id"] = syncResponse.RazorpayInvoiceID
-		metadata["razorpay_payment_url"] = syncResponse.ShortURL
-
-		// Update invoice with new metadata
-		updateReq := dto.UpdateInvoiceRequest{
-			Metadata: &metadata,
-		}
-
-		_, err = s.UpdateInvoice(ctx, inv.ID, updateReq)
-		if err != nil {
-			s.Logger.Info(ctx, "failed to update invoice metadata with Razorpay URLs",
-				"error", err,
-				"invoice_id", inv.ID)
-			// Don't fail the sync, just log the warning
-		} else {
-			s.Logger.Info(ctx, "saved Razorpay URLs in invoice metadata",
-				"invoice_id", inv.ID,
-				"razorpay_invoice_id", syncResponse.RazorpayInvoiceID,
-				"payment_url", syncResponse.ShortURL)
+		_, updateErr := s.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{Metadata: &metadata})
+		if updateErr != nil {
+			s.Logger.Error(ctx, "failed to update invoice metadata with Razorpay URLs (non-fatal)",
+				"error", updateErr, "invoice_id", inv.ID)
 		}
 	}
 
@@ -1953,62 +1926,6 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	s.Logger.Info(ctx, "prepared invoice request for internal preview",
-		"invoice_request", invReq)
-
-	if req.HideZeroChargesLineItems {
-		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
-			return !item.Amount.IsZero()
-		})
-	}
-
-	// Create a draft invoice object for preview; ToInvoice applies preview discounts and taxes
-	inv, err := invReq.ToInvoice(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create preview response
-	response := dto.NewInvoiceResponse(inv)
-
-	// Get customer information
-	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-	response.WithCustomer(&dto.CustomerResponse{Customer: customer})
-
-	return response, nil
-}
-
-// GetMeterUsagePreviewInvoice generates a preview invoice using the meter_usage table for usage data.
-func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
-	billingService := NewBillingService(s.ServiceParams)
-
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.PeriodStart == nil {
-		req.PeriodStart = &sub.CurrentPeriodStart
-	}
-
-	if req.PeriodEnd == nil {
-		req.PeriodEnd = &sub.CurrentPeriodEnd
-	}
-
-	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   sub,
-		PeriodStart:    *req.PeriodStart,
-		PeriodEnd:      *req.PeriodEnd,
-		ReferencePoint: types.ReferencePointMeterUsagePreview,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Info(ctx, "prepared invoice request for meter usage preview",
 		"invoice_request", invReq)
 
 	if req.HideZeroChargesLineItems {
@@ -3775,7 +3692,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 
 	// Step 3: Make analytics requests for each period group
 	allAnalyticsItems := make([]dto.UsageAnalyticItem, 0)
-	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
 
 	for periodKey, lineItemsInPeriod := range periodGroups {
 		// Collect feature IDs for this period
@@ -3807,7 +3724,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 			"line_items_count", len(lineItemsInPeriod),
 			"group_by", groupBy)
 
-		analyticsResponse, err := featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+		analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get period-specific usage analytics",
 				"invoice_id", inv.ID,

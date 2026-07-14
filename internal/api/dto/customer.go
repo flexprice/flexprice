@@ -33,6 +33,9 @@ type CreateCustomerRequest struct {
 	// email is the customer's email address and must be a valid email format if provided
 	Email string `json:"email" validate:"omitempty,email"`
 
+	// contact is an optional contact number for the customer (e.g. phone)
+	Contact *string `json:"contact,omitempty" validate:"omitempty,max=20"`
+
 	// address_line1 is the primary address line with maximum 255 characters
 	AddressLine1 string `json:"address_line1" validate:"omitempty,max=255"`
 
@@ -81,6 +84,9 @@ type UpdateCustomerRequest struct {
 
 	// email is the updated email address and must be a valid email format if provided
 	Email *string `json:"email" validate:"omitempty,email"`
+
+	// contact is the updated contact number for the customer (e.g. phone)
+	Contact *string `json:"contact" validate:"omitempty,max=20"`
 
 	// address_line1 is the updated primary address line with maximum 255 characters
 	AddressLine1 *string `json:"address_line1" validate:"omitempty,max=255"`
@@ -170,6 +176,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		ExternalID:        r.ExternalID,
 		Name:              r.Name,
 		Email:             r.Email,
+		Contact:           r.Contact,
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
 		AddressCity:       r.AddressCity,

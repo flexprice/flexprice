@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -65,6 +66,7 @@ type Factory struct {
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
+	locker                       cache.Locker
 
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
@@ -92,6 +94,7 @@ func NewFactory(
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
 	temporalSvc temporalservice.TemporalService,
+	locker cache.Locker,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -109,6 +112,7 @@ func NewFactory(
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
+		locker:                       locker,
 		temporalSvc:                  temporalSvc,
 	}
 }
@@ -269,24 +273,26 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.logger,
 	)
 
-	// Create invoice sync service
-	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
-		razorpayClient,
-		customerSvc.(*razorpay.CustomerService),
-		f.invoiceRepo,
-		f.entityIntegrationMappingRepo,
-		f.logger,
-	)
-
-	// Create payment service
+	// Pre-allocate so PaymentService and InvoiceSyncService share one pointer.
+	invoiceSyncSvc := &razorpay.InvoiceSyncService{}
 	paymentSvc := razorpay.NewPaymentService(
 		razorpayClient,
 		customerSvc,
 		invoiceSyncSvc,
+		f.locker,
 		f.logger,
 	)
+	*invoiceSyncSvc = *razorpay.NewInvoiceSyncService(
+		razorpayClient,
+		customerSvc.(*razorpay.CustomerService),
+		f.invoiceRepo,
+		f.paymentRepo,
+		f.entityIntegrationMappingRepo,
+		f.locker,
+		f.logger,
+		paymentSvc,
+	)
 
-	// Create webhook handler
 	webhookHandler := razorpaywebhook.NewHandler(
 		razorpayClient,
 		paymentSvc,

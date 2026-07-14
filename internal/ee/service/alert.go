@@ -5,22 +5,51 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
-// AlertService owns alert_settings CRUD: the configuration for subscription, subscription
-// line item, and group spend alerts. See ERD subscription-spend-notifications.md.
+// AlertService owns alert_settings CRUD and all usage-driven alert evaluation:
+// subscription / line item / group spend alerts (see ERD subscription-spend-notifications.md)
+// and per-customer wallet balance alerts. Evaluation methods live in
+// alert_evaluation.go and are called both synchronously (from the meter usage
+// post-insert path) and asynchronously (from the UsageAlertWorkflow debouncer).
 //
-// The pre-existing AlertLogsService (wallet / feature-wallet-balance alert logging) is
-// intentionally untouched and separate for now.
+// The pre-existing AlertLogsService (which actually writes alert log rows and
+// dispatches webhooks) is a lower-level dependency and stays separate.
 type AlertService interface {
 	CreateAlertSettings(ctx context.Context, req dto.CreateAlertSettingsRequest) (*dto.AlertSettingsResponse, error)
 	UpdateAlertSettings(ctx context.Context, id string, req dto.UpdateAlertSettingsRequest) (*dto.AlertSettingsResponse, error)
 	DeleteAlertSettings(ctx context.Context, id string) error
 	GetAlertSettings(ctx context.Context, id string) (*dto.AlertSettingsResponse, error)
 	ListAlertSettings(ctx context.Context, filter *types.AlertSettingsFilter) (*dto.ListAlertSettingsResponse, error)
+
+	// EvaluateSpendAlertsForCustomer fetches active subs with alert configs,
+	// pulls per-subscription usage + charges, and logs alerts for every
+	// threshold that fires (subscription / line item / group). Self-contained;
+	// one call drives everything. meterIDs and periodStart are optional filters
+	// used by the sync per-event caller (nil for the Temporal-driven path).
+	EvaluateSpendAlertsForCustomer(ctx context.Context, cust *customer.Customer, meterIDs []string, periodStart *time.Time) error
+
+	// EvaluateWalletAlertsForCustomer resolves the tenant's wallet alert config,
+	// fetches every wallet for the customer, computes real-time balance for each,
+	// and runs wallet-level + feature-level alert checks and auto-topup.
+	// Self-contained; one call drives everything.
+	//
+	// autoTopupIdempotencySeed is propagated to walletService for stable auto-topup
+	// idempotency keys — Temporal-driven callers should pass their workflow run id
+	// so retries do not create duplicate top-ups. Empty seed preserves the legacy
+	// fresh-UUID-per-call behavior.
+	EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer, autoTopupIdempotencySeed string) error
+
+	// EvaluateSpendBreachForEvent is the sync per-event entry used by the meter
+	// usage post-insert side effect when the debouncer is off. Delegates to
+	// EvaluateSpendAlertsForCustomer with meterIDs + event.Timestamp filters so
+	// the exact same code runs on both sync and Temporal-driven paths.
+	EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer, meterIDs []string)
 }
 
 type alertService struct {

@@ -71,7 +71,6 @@ func (s *BillingCouponPeriodSuite) SetupTest() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 	})
 }

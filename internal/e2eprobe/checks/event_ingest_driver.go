@@ -81,7 +81,13 @@ func (d *EventIngestDriver) ensureDeck() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	seeds := d.reg.Seeds()
-	if len(seeds.PersistentCustomerIDs) == 0 || len(seeds.MeterIDs) == 0 {
+	// Use IngestCustomerIDs so the alert-canary customer is never targeted by
+	// random ingest traffic (would corrupt LowBalanceAlertProbe's balance math).
+	customers := seeds.IngestCustomerIDs
+	if len(customers) == 0 {
+		customers = seeds.PersistentCustomerIDs
+	}
+	if len(customers) == 0 || len(seeds.MeterIDs) == 0 {
 		return nil
 	}
 	if d.deck != nil {
@@ -92,7 +98,7 @@ func (d *EventIngestDriver) ensureDeck() error {
 		eventNames = append(eventNames, name)
 	}
 	d.deck = e2eprobe.NewEventDeck(e2eprobe.EventDeckOpts{
-		Customers:       seeds.PersistentCustomerIDs,
+		Customers:       customers,
 		EventNames:      eventNames,
 		OrphanEventName: "e2eprobe_orphan",
 		OrphanFrequency: 50,

@@ -1075,6 +1075,16 @@ func CheckoutPaymentIDContainsFold(v string) predicate.CheckoutSession {
 	return predicate.CheckoutSession(sql.FieldContainsFold(FieldCheckoutPaymentID, v))
 }
 
+// PaymentProviderConfigIsNil applies the IsNil predicate on the "payment_provider_config" field.
+func PaymentProviderConfigIsNil() predicate.CheckoutSession {
+	return predicate.CheckoutSession(sql.FieldIsNull(FieldPaymentProviderConfig))
+}
+
+// PaymentProviderConfigNotNil applies the NotNil predicate on the "payment_provider_config" field.
+func PaymentProviderConfigNotNil() predicate.CheckoutSession {
+	return predicate.CheckoutSession(sql.FieldNotNull(FieldPaymentProviderConfig))
+}
+
 // ResultIsNil applies the IsNil predicate on the "result" field.
 func ResultIsNil() predicate.CheckoutSession {
 	return predicate.CheckoutSession(sql.FieldIsNull(FieldResult))

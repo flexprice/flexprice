@@ -142,6 +142,20 @@ func (cc *CustomerCreate) SetNillableEmail(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetContact sets the "contact" field.
+func (cc *CustomerCreate) SetContact(s string) *CustomerCreate {
+	cc.mutation.SetContact(s)
+	return cc
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableContact(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetContact(*s)
+	}
+	return cc
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (cc *CustomerCreate) SetAddressLine1(s string) *CustomerCreate {
 	cc.mutation.SetAddressLine1(s)
@@ -416,6 +430,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Email(); ok {
 		_spec.SetField(customer.FieldEmail, field.TypeString, value)
 		_node.Email = value
+	}
+	if value, ok := cc.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+		_node.Contact = &value
 	}
 	if value, ok := cc.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)

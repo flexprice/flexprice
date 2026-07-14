@@ -88,9 +88,6 @@ func (s *PaymentService) CreatePaymentLink(
 	if req.CustomerID != "" {
 		metadata["flexprice_customer_id"] = req.CustomerID
 	}
-	if req.EnvironmentID != "" {
-		metadata["flexprice_environment_id"] = req.EnvironmentID
-	}
 
 	// Build description
 	description := req.Description

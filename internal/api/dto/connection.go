@@ -212,6 +212,20 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			Tabs: tabsMetadata,
 		}
 
+	case types.SecretProviderAWSMarketplace:
+		awsMarketplaceSecrets := &types.AWSMarketplaceConnectionSecrets{}
+
+		if roleArn, ok := flatMetadata["role_arn"].(string); ok {
+			awsMarketplaceSecrets.RoleArn = roleArn
+		}
+		if externalID, ok := flatMetadata["external_id"].(string); ok {
+			awsMarketplaceSecrets.ExternalID = externalID
+		}
+
+		return types.ConnectionMetadata{
+			AWSMarketplace: awsMarketplaceSecrets,
+		}
+
 	case types.SecretProviderMoyasar:
 		moyasarMetadata := &types.MoyasarConnectionMetadata{}
 
@@ -336,7 +350,7 @@ type UpdateConnectionRequest struct {
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
 	return cm.Stripe != nil || cm.S3 != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
 		cm.Chargebee != nil || cm.QuickBooks != nil || cm.Nomod != nil || cm.Moyasar != nil ||
-		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Tabs != nil || cm.Generic != nil || cm.Settings != nil
+		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Tabs != nil || cm.AWSMarketplace != nil || cm.Generic != nil || cm.Settings != nil
 }
 
 // UnmarshalJSON accepts either nested encrypted_secret_data (e.g. {"zoho_books":{"webhook_secret":"..."}})
