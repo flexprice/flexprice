@@ -15,9 +15,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -71,8 +71,13 @@ func (s *inlinePaymentStore) Get(_ context.Context, id string) (*payment.Payment
 }
 
 // Stub out the remaining payment.Repository methods (unused by tests here).
-func (s *inlinePaymentStore) Update(_ context.Context, p *payment.Payment) error { s.mu.Lock(); s.byID[p.ID] = p; s.mu.Unlock(); return nil }
-func (s *inlinePaymentStore) Delete(_ context.Context, _ string) error            { return nil }
+func (s *inlinePaymentStore) Update(_ context.Context, p *payment.Payment) error {
+	s.mu.Lock()
+	s.byID[p.ID] = p
+	s.mu.Unlock()
+	return nil
+}
+func (s *inlinePaymentStore) Delete(_ context.Context, _ string) error { return nil }
 func (s *inlinePaymentStore) List(_ context.Context, _ *types.PaymentFilter) ([]*payment.Payment, error) {
 	return nil, nil
 }

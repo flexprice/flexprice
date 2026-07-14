@@ -163,4 +163,3 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: shortURL},
 	}, nil
 }
-
