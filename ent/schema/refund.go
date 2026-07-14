@@ -8,6 +8,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const (
+	Idx_refund_tenant_env_idempotency = "idx_refund_tenant_env_idempotency"
+	Idx_refund_tenant_payment         = "idx_refund_tenant_payment"
+	Idx_refund_tenant_status          = "idx_refund_tenant_status"
+	Idx_refund_gateway_refund_id      = "idx_refund_gateway_refund_id"
+)
+
 // Refund holds the schema definition for the Refund entity.
 // One row per gateway refund attempt, child of Payment.
 type Refund struct {
@@ -129,12 +136,12 @@ func (Refund) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().
-			StorageKey("idx_refund_tenant_env_idempotency"),
+			StorageKey(Idx_refund_tenant_env_idempotency),
 		index.Fields("tenant_id", "environment_id", "payment_id").
-			StorageKey("idx_refund_tenant_payment"),
+			StorageKey(Idx_refund_tenant_payment),
 		index.Fields("tenant_id", "environment_id", "refund_status").
-			StorageKey("idx_refund_tenant_status"),
+			StorageKey(Idx_refund_tenant_status),
 		index.Fields("gateway_refund_id").
-			StorageKey("idx_refund_gateway_refund_id"),
+			StorageKey(Idx_refund_gateway_refund_id),
 	}
 }
