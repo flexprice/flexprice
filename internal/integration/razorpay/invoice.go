@@ -42,12 +42,7 @@ type SyncInvoiceResult struct {
 	ShortURL          string
 }
 
-// InvoiceSyncService handles synchronization of FlexPrice invoices with Razorpay.
-// It owns both the send-invoice path (creates a Razorpay invoice with a payment
-// link) and the auto-charge path (server-initiated UPI Autopay recurring charge).
-//
-// paymentSvc is wired via SetPaymentService after construction because
-// PaymentService and InvoiceSyncService have a mutual dependency.
+// InvoiceSyncService syncs FlexPrice invoices with Razorpay (send-invoice and auto-charge).
 type InvoiceSyncService struct {
 	client                       RazorpayClient
 	customerSvc                  *CustomerService
@@ -55,19 +50,12 @@ type InvoiceSyncService struct {
 	paymentRepo                  payment.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	locker                       cache.Locker
-	paymentSvc                   *PaymentService // set via SetPaymentService
+	paymentSvc                   *PaymentService // nil disables auto-charge
 	logger                       *logger.Logger
 }
 
-// SetPaymentService wires the PaymentService dependency after both services are
-// constructed. Must be called before any auto-charge operations.
-func (s *InvoiceSyncService) SetPaymentService(svc *PaymentService) {
-	s.paymentSvc = svc
-}
-
-// NewInvoiceSyncService creates a new Razorpay invoice sync service.
-// paymentRepo and locker are required for the auto-charge path; pass nil to
-// disable auto-charge (the service will always fall back to send-invoice).
+// NewInvoiceSyncService creates a Razorpay invoice sync service.
+// Pass nil paymentSvc, paymentRepo, or locker to disable auto-charge.
 func NewInvoiceSyncService(
 	client RazorpayClient,
 	customerSvc *CustomerService,
@@ -76,6 +64,7 @@ func NewInvoiceSyncService(
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	locker cache.Locker,
 	logger *logger.Logger,
+	paymentSvc *PaymentService,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
 		client:                       client,
@@ -85,6 +74,7 @@ func NewInvoiceSyncService(
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		locker:                       locker,
 		logger:                       logger,
+		paymentSvc:                   paymentSvc,
 	}
 }
 

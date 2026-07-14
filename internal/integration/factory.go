@@ -273,18 +273,8 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.logger,
 	)
 
-	// Create invoice sync service; paymentSvc is wired in below (mutual dependency).
-	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
-		razorpayClient,
-		customerSvc.(*razorpay.CustomerService),
-		f.invoiceRepo,
-		f.paymentRepo,
-		f.entityIntegrationMappingRepo,
-		f.locker,
-		f.logger,
-	)
-
-	// Create payment service
+	// Pre-allocate so PaymentService and InvoiceSyncService share one pointer.
+	invoiceSyncSvc := &razorpay.InvoiceSyncService{}
 	paymentSvc := razorpay.NewPaymentService(
 		razorpayClient,
 		customerSvc,
@@ -292,11 +282,17 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.locker,
 		f.logger,
 	)
+	*invoiceSyncSvc = *razorpay.NewInvoiceSyncService(
+		razorpayClient,
+		customerSvc.(*razorpay.CustomerService),
+		f.invoiceRepo,
+		f.paymentRepo,
+		f.entityIntegrationMappingRepo,
+		f.locker,
+		f.logger,
+		paymentSvc,
+	)
 
-	// Wire back: InvoiceSyncService needs PaymentService for AutoCharge calls.
-	invoiceSyncSvc.SetPaymentService(paymentSvc)
-
-	// Create webhook handler
 	webhookHandler := razorpaywebhook.NewHandler(
 		razorpayClient,
 		paymentSvc,
