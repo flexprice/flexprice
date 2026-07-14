@@ -159,6 +159,7 @@ func main() {
 			repository.NewEntitlementRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
+			repository.NewRefundRepository,
 			repository.NewTaskRepository,
 			repository.NewTaxAppliedRepository,
 			repository.NewSecretRepository,

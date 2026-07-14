@@ -82,11 +82,12 @@ func (r RefundReason) Validate() error {
 
 // RefundFilter defines query parameters for listing refunds.
 type RefundFilter struct {
-	PaymentID *string
-	Status    *RefundStatus
-	Gateway   *string
 	*QueryFilter
 	*TimeRangeFilter
+
+	PaymentIDs     []string
+	RefundStatuses []RefundStatus
+	Gateway        *string
 }
 
 // Validate validates the refund filter.

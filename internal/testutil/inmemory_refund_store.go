@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/refund"
@@ -114,11 +115,11 @@ func refundFilterFn(ctx context.Context, r *refund.Refund, filter interface{}) b
 		return false
 	}
 
-	if f.PaymentID != nil && r.PaymentID != *f.PaymentID {
+	if f.PaymentIDs != nil && !slices.Contains(f.PaymentIDs, r.PaymentID) {
 		return false
 	}
 
-	if f.Status != nil && r.RefundStatus != *f.Status {
+	if f.RefundStatuses != nil && !slices.Contains(f.RefundStatuses, r.RefundStatus) {
 		return false
 	}
 

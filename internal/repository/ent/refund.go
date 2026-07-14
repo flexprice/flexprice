@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type refundRepository struct {
@@ -377,12 +378,15 @@ func (o RefundQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		return query
 	}
 
-	if f.PaymentID != nil {
-		query = query.Where(refund.PaymentID(*f.PaymentID))
+	if f.PaymentIDs != nil {
+		query = query.Where(refund.PaymentIDIn(f.PaymentIDs...))
 	}
+	if f.RefundStatuses != nil {
 
-	if f.Status != nil {
-		query = query.Where(refund.RefundStatus(string(*f.Status)))
+		refundStatuses := lo.Map(f.RefundStatuses, func(status types.RefundStatus, _ int) string {
+			return string(status)
+		})
+		query = query.Where(refund.RefundStatusIn(refundStatuses...))
 	}
 
 	if f.Gateway != nil {
