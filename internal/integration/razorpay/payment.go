@@ -24,6 +24,8 @@ type AutoChargeRequest struct {
 	Amount             decimal.Decimal // in major units (e.g. rupees)
 	Currency           string          // ISO code, e.g. "INR"
 	FlexPricePaymentID string          // FlexPrice payment.ID — embedded in Razorpay notes for webhook reconciliation
+	Contact            string          // Customer contact number — required by Razorpay for recurring/token-based charges
+	Email              string          // Customer email — sent alongside contact for Razorpay-side validation
 }
 
 // AutoChargeResult is the output of PaymentService.AutoCharge.
@@ -862,6 +864,14 @@ func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoCha
 			"flexprice_invoice_id": req.InvoiceID,
 			"flexprice_payment_id": req.FlexPricePaymentID,
 		},
+	}
+	// Razorpay requires a contact number for recurring/token-based charges, and
+	// validates it (plus email, when present) against the stored customer_id/token.
+	if req.Contact != "" {
+		paymentData["contact"] = req.Contact
+	}
+	if req.Email != "" {
+		paymentData["email"] = req.Email
 	}
 
 	payment, err := s.client.CreateRecurringPayment(ctx, paymentData)

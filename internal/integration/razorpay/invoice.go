@@ -252,7 +252,17 @@ func (s *InvoiceSyncService) tryAutoCharge(
 		"invoice_id", inv.ID, "customer_id", inv.CustomerID,
 		"token_id", token.GatewayMethodID, "method", token.Method)
 
-	if execErr := s.executeAutoCharge(ctx, inv, razorpayCustomerID, token.GatewayMethodID, token.Method); execErr != nil {
+	// Razorpay requires a contact number (and validates against email, when present)
+	// on the recurring-charge request too.
+	var contact, email string
+	if flexpriceCustomer, custErr := s.customerSvc.customerRepo.Get(ctx, inv.CustomerID); custErr == nil {
+		if flexpriceCustomer.Contact != nil {
+			contact = *flexpriceCustomer.Contact
+		}
+		email = flexpriceCustomer.Email
+	}
+
+	if execErr := s.executeAutoCharge(ctx, inv, razorpayCustomerID, token.GatewayMethodID, token.Method, contact, email); execErr != nil {
 		return false, execErr
 	}
 	return true, nil
@@ -267,6 +277,8 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	razorpayCustomerID string,
 	tokenID string,
 	paymentMethodType types.PaymentMethodType,
+	contact string,
+	email string,
 ) error {
 	if s.paymentSvc == nil {
 		s.logger.Error(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
@@ -332,6 +344,8 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		Amount:             freshInv.AmountRemaining,
 		Currency:           freshInv.Currency,
 		FlexPricePaymentID: pymnt.ID,
+		Contact:            contact,
+		Email:              email,
 	})
 	if err != nil {
 		s.logger.Error(ctx, "Razorpay auto-charge submission failed",
