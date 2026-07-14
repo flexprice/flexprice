@@ -430,6 +430,11 @@ func (csc *CheckoutSessionCreate) check() error {
 	if _, ok := csc.mutation.Configuration(); !ok {
 		return &ValidationError{Name: "configuration", err: errors.New(`ent: missing required field "CheckoutSession.configuration"`)}
 	}
+	if v, ok := csc.mutation.PaymentProviderConfig(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_provider_config", err: fmt.Errorf(`ent: validator failed for field "CheckoutSession.payment_provider_config": %w`, err)}
+		}
+	}
 	return nil
 }
 
