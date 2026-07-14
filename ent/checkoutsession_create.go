@@ -177,6 +177,12 @@ func (csc *CheckoutSessionCreate) SetConfiguration(tc types.CheckoutConfiguratio
 	return csc
 }
 
+// SetPaymentProviderConfig sets the "payment_provider_config" field.
+func (csc *CheckoutSessionCreate) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionCreate {
+	csc.mutation.SetPaymentProviderConfig(tppc)
+	return csc
+}
+
 // SetResult sets the "result" field.
 func (csc *CheckoutSessionCreate) SetResult(tr *types.CheckoutResult) *CheckoutSessionCreate {
 	csc.mutation.SetResult(tr)
@@ -424,6 +430,11 @@ func (csc *CheckoutSessionCreate) check() error {
 	if _, ok := csc.mutation.Configuration(); !ok {
 		return &ValidationError{Name: "configuration", err: errors.New(`ent: missing required field "CheckoutSession.configuration"`)}
 	}
+	if v, ok := csc.mutation.PaymentProviderConfig(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_provider_config", err: fmt.Errorf(`ent: validator failed for field "CheckoutSession.payment_provider_config": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -514,6 +525,10 @@ func (csc *CheckoutSessionCreate) createSpec() (*CheckoutSession, *sqlgraph.Crea
 	if value, ok := csc.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
 		_node.Configuration = value
+	}
+	if value, ok := csc.mutation.PaymentProviderConfig(); ok {
+		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
+		_node.PaymentProviderConfig = value
 	}
 	if value, ok := csc.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)

@@ -33,6 +33,34 @@ kafka:
   sasl_password: ""
   client_id: "flexprice-client-local"
   route_tenants_on_lazy_mode: []
+  # topics_defaults/topics below describe the full desired topic set for
+  # `migrate kafka` (cmd/migrate) only (server/consumer/worker ignore them). Base/dev
+  # names, unprefixed — mirrors the 9 staging GMK topics. A shared prod
+  # cluster MUST set FLEXPRICE_KAFKA_TOPICS (JSON, same shape) which FULLY
+  # REPLACES this block (no merge) with prod_* prefixed names + tuned sizing.
+  # See internal/kafka/topicspec and topics.example.json.
+  topics_defaults:
+    replication_factor: 3
+    retention_ms: 604800000 # 7d
+  topics:
+    events:
+      partitions: 6
+    events_lazy:
+      partitions: 6
+    events_dlq:
+      partitions: 3
+    events_backfill:
+      partitions: 6
+    events_post_processing:
+      partitions: 6
+    events_post_processing_backfill:
+      partitions: 6
+    system_events:
+      partitions: 3
+    wallet_alert:
+      partitions: 3
+    onboarding_events:
+      partitions: 3
 
 # Optional SECOND Kafka cluster for the AWS→GCP migration (GCP-CUTOVER-STEPWISE.md).
 # `kafka` above = this deployment's own/local cluster (consumed AND always written).
@@ -330,6 +358,8 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
+  alert_debounce_enabled: false
+  alert_debounce_window: "5m30s"
 
 meter_usage_tracking_lazy:
   enabled: true

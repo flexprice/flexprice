@@ -277,10 +277,17 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 		out.PreFundedCustomerIDs = append(out.PreFundedCustomerIDs, persistentExternalCustomerID(i))
 	}
 
+	// Snapshot IngestCustomerIDs BEFORE the canary is appended. Ingest driver
+	// and read-side aggregation checks target this list so the canary never
+	// receives random events — otherwise its real_time_balance drifts and
+	// LowBalanceAlertProbe can't drive a known drop across critical.
+	out.IngestCustomerIDs = append(out.IngestCustomerIDs, out.PersistentCustomerIDs...)
+
 	// Alert-canary customer: separate persistent customer used only for
 	// low-balance webhook pipeline verification. Added to PersistentCustomerIDs
 	// so ensureSubscriptions gives it a plan sub (required for ongoing-balance
-	// projection), but deliberately kept out of PreFundedCustomerIDs.
+	// projection), but deliberately kept out of PreFundedCustomerIDs and
+	// IngestCustomerIDs.
 	if err := s.ensureAlertCanaryCustomer(ctx); err != nil {
 		return err
 	}

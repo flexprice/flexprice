@@ -25,7 +25,7 @@ func validAlertPayload() map[string]any {
 }
 
 func TestLowWalletAlertListener_ValidPayload(t *testing.T) {
-	l := NewLowWalletAlertListener("run-1")
+	l := NewLowWalletAlertListener("run-1", nil)
 	ev := e2eprobe.ListenerEvent{Payload: validAlertPayload()}
 	ctx := e2eprobe.ContextWithEvent(context.Background(), ev)
 	if err := l.Run(ctx); err != nil {
@@ -38,7 +38,7 @@ func TestLowWalletAlertListener_ValidPayload(t *testing.T) {
 }
 
 func TestLowWalletAlertListener_MissingFields(t *testing.T) {
-	l := NewLowWalletAlertListener("run-1")
+	l := NewLowWalletAlertListener("run-1", nil)
 	// alert.alert_type / wallet.id / customer.id all missing.
 	ev := e2eprobe.ListenerEvent{Payload: map[string]any{
 		"event_type": "wallet.credit_balance.dropped",
@@ -50,14 +50,14 @@ func TestLowWalletAlertListener_MissingFields(t *testing.T) {
 }
 
 func TestLowWalletAlertListener_NoEventInContextIsNoOp(t *testing.T) {
-	l := NewLowWalletAlertListener("run-1")
+	l := NewLowWalletAlertListener("run-1", nil)
 	if err := l.Run(context.Background()); err != nil {
 		t.Errorf("Run with no event in context should be no-op, got %v", err)
 	}
 }
 
 func TestLowWalletAlertListener_IgnoresUnrelatedEventTypes(t *testing.T) {
-	l := NewLowWalletAlertListener("run-1")
+	l := NewLowWalletAlertListener("run-1", nil)
 	ev := e2eprobe.ListenerEvent{Payload: map[string]any{
 		"event_type": "invoice.created",
 	}}
@@ -68,7 +68,7 @@ func TestLowWalletAlertListener_IgnoresUnrelatedEventTypes(t *testing.T) {
 }
 
 func TestLowWalletAlertListener_StaleEventRejected(t *testing.T) {
-	l := NewLowWalletAlertListener("run-1")
+	l := NewLowWalletAlertListener("run-1", nil)
 	ev := e2eprobe.ListenerEvent{
 		ReceivedAt: time.Now().Add(-2 * time.Hour),
 		Payload:    validAlertPayload(),

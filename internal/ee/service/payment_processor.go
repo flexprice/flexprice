@@ -302,9 +302,8 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			}
 			return false
 		}(),
-		Metadata:      linkMetadata,
-		PaymentID:     paymentObj.ID,
-		EnvironmentID: types.GetEnvironmentID(ctx),
+		Metadata:  linkMetadata,
+		PaymentID: paymentObj.ID,
 	}
 
 	// Get Stripe integration for creating payment link
@@ -396,9 +395,8 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 		Currency:      paymentObj.Currency,
 		SuccessURL:    successURL,
 		CancelURL:     cancelURL,
-		Metadata:      linkMetadata,
-		PaymentID:     paymentObj.ID,
-		EnvironmentID: types.GetEnvironmentID(ctx),
+		Metadata:  linkMetadata,
+		PaymentID: paymentObj.ID,
 	}
 
 	// Get Razorpay integration for creating payment link
@@ -489,9 +487,8 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 		Currency:      paymentObj.Currency,
 		SuccessURL:    successURL,
 		FailureURL:    cancelURL,
-		Metadata:      linkMetadata,
-		PaymentID:     paymentObj.ID,
-		EnvironmentID: types.GetEnvironmentID(ctx),
+		Metadata:  linkMetadata,
+		PaymentID: paymentObj.ID,
 	}
 
 	// Get Nomod integration for creating payment link

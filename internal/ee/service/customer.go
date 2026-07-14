@@ -236,6 +236,9 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if req.Email != nil {
 		cust.Email = *req.Email
 	}
+	if req.Contact != nil {
+		cust.Contact = req.Contact
+	}
 
 	// Update address fields
 	if req.AddressLine1 != nil {

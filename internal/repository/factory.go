@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -43,6 +44,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -172,6 +174,10 @@ func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
 	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
+func NewRefundRepository(p RepositoryParams) refund.Repository {
+	return entRepo.NewRefundRepository(p.EntClient, p.Logger)
+}
+
 func NewTaskRepository(p RepositoryParams) task.Repository {
 	return entRepo.NewTaskRepository(p.EntClient, p.Logger)
 }
@@ -218,6 +224,10 @@ func NewConnectionRepository(p RepositoryParams) connection.Repository {
 
 func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegrationmapping.Repository {
 	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.RedisCache)
+}
+
+func NewUsageRecordRepository(p RepositoryParams) usagerecord.Repository {
+	return entRepo.NewUsageRecordRepository(p.EntClient, p.Logger)
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {

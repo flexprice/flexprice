@@ -61,6 +61,7 @@ const (
 	WebhookEventWalletUpdated            WebhookEventName = "wallet.updated"
 	WebhookEventWalletTerminated         WebhookEventName = "wallet.terminated"
 	WebhookEventWalletTransactionCreated WebhookEventName = "wallet.transaction.created"
+	WebhookEventWalletTransactionUpdated WebhookEventName = "wallet.transaction.updated"
 )
 
 // payment event names
@@ -95,6 +96,7 @@ const (
 
 	WebhookEventWalletOngoingBalanceDropped   WebhookEventName = "wallet.ongoing_balance.dropped"
 	WebhookEventWalletOngoingBalanceRecovered WebhookEventName = "wallet.ongoing_balance.recovered"
+	WebhookEventWalletOngoingBalanceUpdated   WebhookEventName = "wallet.ongoing_balance.updated"
 
 	// subscription/line-item/group spend alert events (alert_settings table, Parts A/B/C).
 	WebhookEventSubscriptionSpendThresholdReached           WebhookEventName = "subscription.spend.threshold_reached"

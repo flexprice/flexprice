@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,7 +15,44 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/spf13/cobra"
 )
+
+func newClickHouseCmd() *cobra.Command {
+	var timeout int
+	var chDir string
+
+	cmd := &cobra.Command{
+		Use:   "clickhouse",
+		Short: "Run ClickHouse migrations (migrations/clickhouse/*.sql)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.NewConfig()
+			if err != nil {
+				log.Fatalf("Failed to load config: %v", err)
+			}
+
+			l, err := logger.NewLogger(cfg)
+			if err != nil {
+				log.Fatalf("Failed to create logger: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+			defer cancel()
+			l.Info(ctx, "Running ClickHouse migrations...", "address", cfg.ClickHouse.Address, "database", cfg.ClickHouse.Database, "tls", cfg.ClickHouse.TLS)
+			if err := runClickHouseMigrations(ctx, cfg, chDir, l); err != nil {
+				l.Fatal(ctx, "ClickHouse migration failed", "error", err)
+			}
+			l.Info(ctx, "ClickHouse migrations completed successfully")
+			fmt.Println("Migration process completed")
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&timeout, "timeout", 300, "Timeout in seconds for the migration")
+	cmd.Flags().StringVar(&chDir, "clickhouse-dir", "migrations/clickhouse", "Directory of ClickHouse .sql migration files")
+
+	return cmd
+}
 
 // validCHIdent guards database identifiers interpolated into DDL. ClickHouse
 // does not support parameterized identifiers, so an allowlist is the only way

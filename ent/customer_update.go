@@ -128,6 +128,26 @@ func (cu *CustomerUpdate) ClearEmail() *CustomerUpdate {
 	return cu
 }
 
+// SetContact sets the "contact" field.
+func (cu *CustomerUpdate) SetContact(s string) *CustomerUpdate {
+	cu.mutation.SetContact(s)
+	return cu
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableContact(s *string) *CustomerUpdate {
+	if s != nil {
+		cu.SetContact(*s)
+	}
+	return cu
+}
+
+// ClearContact clears the value of the "contact" field.
+func (cu *CustomerUpdate) ClearContact() *CustomerUpdate {
+	cu.mutation.ClearContact()
+	return cu
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (cu *CustomerUpdate) SetAddressLine1(s string) *CustomerUpdate {
 	cu.mutation.SetAddressLine1(s)
@@ -372,6 +392,12 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cu.mutation.EmailCleared() {
 		_spec.ClearField(customer.FieldEmail, field.TypeString)
 	}
+	if value, ok := cu.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+	}
+	if cu.mutation.ContactCleared() {
+		_spec.ClearField(customer.FieldContact, field.TypeString)
+	}
 	if value, ok := cu.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
 	}
@@ -531,6 +557,26 @@ func (cuo *CustomerUpdateOne) SetNillableEmail(s *string) *CustomerUpdateOne {
 // ClearEmail clears the value of the "email" field.
 func (cuo *CustomerUpdateOne) ClearEmail() *CustomerUpdateOne {
 	cuo.mutation.ClearEmail()
+	return cuo
+}
+
+// SetContact sets the "contact" field.
+func (cuo *CustomerUpdateOne) SetContact(s string) *CustomerUpdateOne {
+	cuo.mutation.SetContact(s)
+	return cuo
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableContact(s *string) *CustomerUpdateOne {
+	if s != nil {
+		cuo.SetContact(*s)
+	}
+	return cuo
+}
+
+// ClearContact clears the value of the "contact" field.
+func (cuo *CustomerUpdateOne) ClearContact() *CustomerUpdateOne {
+	cuo.mutation.ClearContact()
 	return cuo
 }
 
@@ -807,6 +853,12 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.EmailCleared() {
 		_spec.ClearField(customer.FieldEmail, field.TypeString)
+	}
+	if value, ok := cuo.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+	}
+	if cuo.mutation.ContactCleared() {
+		_spec.ClearField(customer.FieldContact, field.TypeString)
 	}
 	if value, ok := cuo.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)

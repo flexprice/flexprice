@@ -368,6 +368,26 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			APIKey: encryptedAPIKey,
 		}
 
+	case types.SecretProviderAWSMarketplace:
+		if encryptedSecretData.AWSMarketplace == nil {
+			s.Logger.Info(context.Background(), "AWS Marketplace metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("AWS Marketplace metadata is required").
+				WithHint("AWS Marketplace connection requires encrypted_secret_data with role_arn and external_id").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedRoleArn, err := s.encryptionService.Encrypt(encryptedSecretData.AWSMarketplace.RoleArn)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedExternalID, err := s.encryptionService.Encrypt(encryptedSecretData.AWSMarketplace.ExternalID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.AWSMarketplace = &types.AWSMarketplaceConnectionSecrets{
+			RoleArn:    encryptedRoleArn,
+			ExternalID: encryptedExternalID,
+		}
+
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
 			s.Logger.Info(context.Background(), "Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)

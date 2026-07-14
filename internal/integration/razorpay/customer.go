@@ -170,6 +170,11 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		customerData["email"] = flexpriceCustomer.Email
 	}
 
+	// Add contact if available (required by Razorpay for recurring/mandate registration)
+	if flexpriceCustomer.Contact != nil && *flexpriceCustomer.Contact != "" {
+		customerData["contact"] = *flexpriceCustomer.Contact
+	}
+
 	// Add notes with FlexPrice customer ID
 	customerData["notes"] = map[string]interface{}{
 		"flexprice_customer_id": flexpriceCustomer.ID,

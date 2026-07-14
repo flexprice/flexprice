@@ -13,6 +13,18 @@ type Seeds struct {
 	FeatureIDs            []string
 	MeterIDs              map[string]string // event_name -> meter ID
 
+	// IngestCustomerIDs is the subset of PersistentCustomerIDs that random
+	// event-ingest traffic (event-ingest-driver) AND read-side aggregation
+	// checks (analytics-probe, meter-aggregation-probe, entitlement probe)
+	// use. It deliberately excludes AlertCanaryExternalCustomerID: the
+	// alert canary wallet must not accumulate random pending_charges,
+	// otherwise its real_time_balance drifts unpredictably and
+	// LowBalanceAlertProbe can no longer drive a known drop across the
+	// critical threshold. Subscription creation still uses
+	// PersistentCustomerIDs so the canary still gets a plan sub (required
+	// for ongoing-balance projection).
+	IngestCustomerIDs []string
+
 	// AlertCanaryExternalCustomerID is the persistent ext customer id that
 	// owns the low-balance alert-webhook canary wallet. Kept out of
 	// PreFundedCustomerIDs so wallet_debit_verification / wallet_balance_probe
@@ -49,6 +61,7 @@ func (r *registry) LoadSeeds(s Seeds) {
 	defer r.mu.Unlock()
 	r.seeds = Seeds{
 		PersistentCustomerIDs:         append([]string(nil), s.PersistentCustomerIDs...),
+		IngestCustomerIDs:             append([]string(nil), s.IngestCustomerIDs...),
 		PreFundedCustomerIDs:          append([]string(nil), s.PreFundedCustomerIDs...),
 		PersistentSubIDs:              append([]string(nil), s.PersistentSubIDs...),
 		PlanIDs:                       append([]string(nil), s.PlanIDs...),
@@ -63,6 +76,7 @@ func (r *registry) Seeds() Seeds {
 	defer r.mu.RUnlock()
 	return Seeds{
 		PersistentCustomerIDs:         append([]string(nil), r.seeds.PersistentCustomerIDs...),
+		IngestCustomerIDs:             append([]string(nil), r.seeds.IngestCustomerIDs...),
 		PreFundedCustomerIDs:          append([]string(nil), r.seeds.PreFundedCustomerIDs...),
 		PersistentSubIDs:              append([]string(nil), r.seeds.PersistentSubIDs...),
 		PlanIDs:                       append([]string(nil), r.seeds.PlanIDs...),

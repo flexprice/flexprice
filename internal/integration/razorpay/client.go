@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	razorpay "github.com/razorpay/razorpay-go"
+	"github.com/samber/lo"
 )
 
 // RazorpayClient defines the interface for Razorpay API operations
@@ -28,6 +29,21 @@ type RazorpayClient interface {
 	CreateInvoice(ctx context.Context, invoiceData map[string]interface{}) (map[string]interface{}, error)
 	GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error
+	GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error)
+	CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error)
+	CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error)
+	CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error)
+	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
+	// Returns the first matching order or ierr.ErrNotFound if none exist.
+	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
+	// RefundPayment issues a full refund for a captured payment (POST /v1/payments/{id}/refund).
+	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
+	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
+	// FetchPayment retrieves a payment's current state from Razorpay (GET /v1/payments/{id}),
+	// including its refund state ("refund_status" string: null/"partial"/"full", and
+	// "amount_refunded" int in the smallest currency unit). There is no boolean
+	// "refunded" field on this entity.
+	FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -385,4 +401,198 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 		"invoice_id", invoiceID,
 		"status", razorpayInvoice["status"])
 	return razorpayInvoice, nil
+}
+
+// sdkClient initializes the Razorpay SDK client, wrapping errors uniformly.
+func (c *Client) sdkClient(ctx context.Context) (*razorpay.Client, error) {
+	rc, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithMessage("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+	return rc, nil
+}
+
+// GetCustomerTokens fetches all tokens registered against a Razorpay customer.
+// GET /v1/customers/{id}/tokens — SDK: Token.All.
+func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID string) ([]map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Token.All(razorpayCustomerID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to list Razorpay customer tokens", "error", err, "customer_id", razorpayCustomerID)
+		return nil, ierr.NewError("failed to list Razorpay customer tokens").
+			WithHint("Unable to list tokens from Razorpay").
+			WithReportableDetails(map[string]interface{}{"customer_id": razorpayCustomerID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, _ := result["items"].([]interface{})
+	return lo.FilterMap(items, func(item interface{}, _ int) (map[string]interface{}, bool) {
+		m, ok := item.(map[string]interface{})
+		return m, ok
+	}), nil
+}
+
+// CreateAuthorizationLink registers a UPI Autopay mandate combined with the
+// first invoice payment. POST /v1/subscription_registration/auth_links — no
+// SDK helper exists for this endpoint, so this goes through the raw request client.
+func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Post("/v1/subscription_registration/auth_links", data, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay authorization link", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay authorization link").
+			WithHint("Unable to create authorization link in Razorpay").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay authorization link", "id", result["id"])
+	return result, nil
+}
+
+// CreateOrder creates a Razorpay Order for a subsequent recurring charge. POST /v1/orders.
+func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface{}) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Order.Create(orderData, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay order", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay order").
+			WithHint("Unable to create order in Razorpay").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully created Razorpay order", "order_id", result["id"])
+	return result, nil
+}
+
+// CreateRecurringPayment charges a stored token against an Order.
+// POST /v1/payments/create/recurring — SDK: Payment.CreateRecurringPayment.
+func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Payment.CreateRecurringPayment(paymentData, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to create Razorpay recurring payment", "error", err)
+		return nil, ierr.NewError("failed to create Razorpay recurring payment").
+			WithHint("Unable to charge the stored token in Razorpay").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
+}
+
+// FetchOrdersByReceipt fetches the first Razorpay order whose receipt matches the given string.
+func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryParams := map[string]interface{}{
+		"receipt": receipt,
+		"count":   1,
+	}
+	result, err := rc.Order.All(queryParams, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay orders by receipt",
+			"error", err,
+			"receipt", receipt)
+		return nil, ierr.NewError("failed to fetch orders by receipt").
+			WithHint("Unable to query Razorpay orders").
+			WithReportableDetails(map[string]interface{}{"receipt": receipt, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, _ := result["items"].([]interface{})
+	if len(items) == 0 {
+		return nil, ierr.NewError("no order found with receipt").
+			WithHint("No Razorpay order matches this receipt").
+			WithReportableDetails(map[string]interface{}{"receipt": receipt}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	order, ok := items[0].(map[string]interface{})
+	if !ok {
+		return nil, ierr.NewError("invalid order response from Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+
+	return order, nil
+}
+
+// RefundPayment issues a refund for a captured Razorpay payment. POST
+// /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
+//
+// Sends X-Refund-Idempotency deterministically derived from paymentID (this flow
+// only ever issues one full refund per payment): retrying with the same key
+// returns the original refund instead of creating a duplicate, per
+// https://razorpay.com/docs/api/refunds/normal-refunds-idempotent/. The key must
+// be at least 10 chars of [A-Za-z0-9_-]; "refund_" + paymentID always satisfies
+// that given Razorpay's own payment ID format (e.g. pay_XXXXXXXXXXXXXX).
+func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := map[string]string{"X-Refund-Idempotency": "refund_" + paymentID}
+	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, headers)
+	if err != nil {
+		c.logger.Error(ctx, "failed to refund Razorpay payment",
+			"error", err, "payment_id", paymentID, "amount_paise", amountPaise)
+		return nil, ierr.NewError("failed to refund Razorpay payment").
+			WithHint("Unable to refund the payment in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":   paymentID,
+				"amount_paise": amountPaise,
+				"error":        err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Info(ctx, "successfully refunded Razorpay payment",
+		"payment_id", paymentID, "refund_id", result["id"], "amount_paise", amountPaise)
+	return result, nil
+}
+
+// FetchPayment retrieves a payment's current state from Razorpay. SDK: Payment.Fetch.
+func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Payment.Fetch(paymentID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay payment", "error", err, "payment_id", paymentID)
+		return nil, ierr.NewError("failed to fetch Razorpay payment").
+			WithHint("Unable to retrieve the payment from Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentID,
+				"error":      err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
 }

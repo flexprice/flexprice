@@ -101,6 +101,38 @@ func (j *JSONBCheckoutProviderResult) ToProviderResult() *types.CheckoutProvider
 	return (*types.CheckoutProviderResult)(j)
 }
 
+// JSONBCheckoutPaymentProviderConfig wraps CheckoutPaymentProviderConfig for JSONB storage.
+// Pointer-based so an unset config persists as SQL NULL rather than an empty '{}' object.
+type JSONBCheckoutPaymentProviderConfig types.CheckoutPaymentProviderConfig
+
+func (j *JSONBCheckoutPaymentProviderConfig) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return ierr.NewError("invalid type for jsonb checkout payment provider config").
+			WithHint("Invalid type for JSONB checkout payment provider config").
+			Mark(ierr.ErrValidation)
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+func (j *JSONBCheckoutPaymentProviderConfig) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
+}
+
+func ToJSONBCheckoutPaymentProviderConfig(c *types.CheckoutPaymentProviderConfig) *JSONBCheckoutPaymentProviderConfig {
+	return (*JSONBCheckoutPaymentProviderConfig)(c)
+}
+
+func (j *JSONBCheckoutPaymentProviderConfig) ToCheckoutPaymentProviderConfig() *types.CheckoutPaymentProviderConfig {
+	return (*types.CheckoutPaymentProviderConfig)(j)
+}
+
 // CheckoutSession is a single-use session that drives a B2C payment flow.
 // It captures the caller's intent (action + configuration) at creation and
 // tracks the session through its lifecycle: initiated → pending → completed
@@ -136,6 +168,11 @@ type CheckoutSession struct {
 	// Configuration holds the immutable caller inputs set at creation time.
 	// Only the sub-struct matching Action is populated; the others are nil.
 	Configuration JSONBCheckoutConfiguration `db:"configuration,jsonb" json:"configuration,omitempty"`
+
+	// PaymentProviderConfig holds provider-specific payment configuration
+	// (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
+	// Nil if not set on the request.
+	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
