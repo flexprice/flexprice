@@ -88,5 +88,9 @@ func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models
 		return nil
 	}
 
-	return service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust)
+	// Anchor the auto-topup idempotency key to the Temporal workflow run id so
+	// activity retries within the same debounce firing collapse into a single
+	// top-up per wallet (fresh UUIDs on each retry would double-topup).
+	autoTopupSeed := activity.GetInfo(ctx).WorkflowExecution.RunID
+	return service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust, autoTopupSeed)
 }
