@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -36,12 +35,12 @@ func newPostgresCmd() *cobra.Command {
 func runPostgresMigration(dryRun bool, timeout int) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	l, err := logger.NewLogger(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create logger: %v", err)
+		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
 	dsn := cfg.Postgres.GetDSN()
@@ -49,7 +48,7 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 
 	client, err := ent.Open("postgres", dsn)
 	if err != nil {
-		l.Fatal(context.Background(), "Failed to connect to postgres", "error", err)
+		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 	defer client.Close()
 
@@ -77,11 +76,11 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 	if dryRun {
 		l.Info(ctx, "Dry run mode - printing migration SQL without executing")
 		if err := client.Schema.WriteTo(ctx, os.Stdout, migrateOpts...); err != nil {
-			l.Fatal(ctx, "Failed to generate migration SQL", "error", err)
+			return fmt.Errorf("failed to generate migration SQL: %w", err)
 		}
 	} else {
 		if err := client.Schema.Create(ctx, migrateOpts...); err != nil {
-			l.Fatal(ctx, "Failed to create schema resources", "error", err)
+			return fmt.Errorf("failed to create schema resources: %w", err)
 		}
 		l.Info(ctx, "Migration completed successfully")
 	}
