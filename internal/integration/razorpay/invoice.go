@@ -205,13 +205,10 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	return newPayment, false, nil
 }
 
-// autoChargeMethodPriority is the order in which payment methods are tried when
-// resolving a usable token for auto-charge. A customer registers at most one
-// mandate today (checkout-only setup, one method per registration), so this
-// ordering only affects logging/tie-breaking, not correctness.
+// autoChargeMethodPriority is the order tokens are tried for auto-charge.
 var autoChargeMethodPriority = []types.PaymentMethodType{
-	types.PaymentMethodTypeUPI,
 	types.PaymentMethodTypeCard,
+	types.PaymentMethodTypeUPI,
 }
 
 // selectAutoChargeToken finds the first usable token across autoChargeMethodPriority.
@@ -228,10 +225,10 @@ func selectAutoChargeToken(
 }
 
 // tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
-// exists (UPI tried first, then Card — see autoChargeMethodPriority) it calls
-// executeAutoCharge and returns (true, nil). If token probing fails for any
-// reason it logs and returns (false, nil) so the caller falls through to
-// SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are propagated.
+// exists it calls executeAutoCharge and returns (true, nil). If token probing
+// fails for any reason it logs and returns (false, nil) so the caller falls
+// through to SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are
+// propagated.
 func (s *InvoiceSyncService) tryAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,

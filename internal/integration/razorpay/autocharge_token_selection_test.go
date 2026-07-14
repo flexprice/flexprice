@@ -23,7 +23,7 @@ func TestSelectAutoChargeToken(t *testing.T) {
 	}{
 		{name: "UPI only", tokens: []*interfaces.ProviderPaymentMethod{upiToken}, wantID: "tok_upi", wantFound: true},
 		{name: "Card only", tokens: []*interfaces.ProviderPaymentMethod{cardToken}, wantID: "tok_card", wantFound: true},
-		{name: "both present, UPI wins", tokens: []*interfaces.ProviderPaymentMethod{cardToken, upiToken}, wantID: "tok_upi", wantFound: true},
+		{name: "both present, Card wins", tokens: []*interfaces.ProviderPaymentMethod{upiToken, cardToken}, wantID: "tok_card", wantFound: true},
 		{name: "neither present", tokens: nil, wantID: "", wantFound: false},
 	}
 
