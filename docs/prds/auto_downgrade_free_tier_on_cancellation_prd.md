@@ -55,11 +55,21 @@ already succeeded) and **idempotent** (the "no other active sub" check also guar
 
 ## Decisions
 
-- **Free plan selection:** use the heuristic — first plan with a fixed, recurring, $0 price.
-  No per-tenant config for now.
 - **Events:** the existing cancellation + subscription-created events are sufficient; no new
   "downgraded to free tier" webhook.
 - **Deferred timing:** for end-of-period / scheduled cancels, the free sub is started by the
   `POST /v1/cron/subscriptions/update-periods` job (via `UpdateBillingPeriods` →
   `processSubscriptionPeriod`) when it finalizes the cancellation. It starts at the job's run
   time, so a customer can be without an active sub for up to one cron interval. Acceptable v1.
+
+## Open questions
+
+**Which plan is the downgrade target?** Options:
+
+1. **Tenant's default configured plan** — the `plan_id` from the `customer_onboarding`
+   setting (`/settings/customer_onboarding`). Explicit and tenant-controlled, but that plan
+   can be any plan (e.g. a paid trial), so it may not be the free tier.
+2. **Any $0 plan** (current impl) — first plan with a fixed, recurring, $0 price. Always a
+   free plan, but implicit and ambiguous if several exist.
+3. **Default plan, else $0 plan** — prefer the configured onboarding plan; fall back to the
+   $0 heuristic when onboarding isn't configured.

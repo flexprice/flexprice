@@ -2119,6 +2119,15 @@ func (s *subscriptionService) CancelSubscription(
 		s.publishCancellationEvents(ctx, subscription, req.CancellationType)
 	}
 
+	// Auto-downgrade to free tier (FLE-973). Immediate cancels only; deferred ones downgrade
+	// from processSubscriptionPeriod. Best-effort — cancellation is already committed.
+	if req.CancellationType == types.CancellationTypeImmediate {
+		if err := s.ensureFreePlanSubscriptionOnCancellation(ctx, subscription, effectiveDate); err != nil {
+			logger.Error(ctx, "failed to create free-tier subscription on cancellation",
+				"subscription_id", subscription.ID, "error", err)
+		}
+	}
+
 	// Step 11: Build response
 	response := &dto.CancelSubscriptionResponse{
 		SubscriptionID:    subscription.ID,
@@ -3271,6 +3280,13 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 	if isSubscriptionCancelled {
 		s.PublishCancellationEvents(ctx, sub)
+
+		// Auto-downgrade to free tier (FLE-973): the deferred cancel takes effect here, so
+		// start the free sub at `now`. Best-effort — never fails period processing.
+		if err := s.ensureFreePlanSubscriptionOnCancellation(ctx, sub, now); err != nil {
+			s.Logger.Error(ctx, "failed to create free-tier subscription on scheduled cancellation",
+				"subscription_id", sub.ID, "error", err)
+		}
 	}
 
 	return nil
