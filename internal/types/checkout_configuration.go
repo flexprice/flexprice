@@ -123,7 +123,7 @@ func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 // stored in CheckoutSession.payment_provider_config.
 type CheckoutPaymentProviderConfig struct {
 	CollectionMethod CollectionMethod  `json:"collection_method,omitempty"`
-	PreferredMethod  PaymentMethodType `json:"preferred_method,omitempty"`
+	PaymentMethod    PaymentMethodType `json:"payment_method,omitempty"`
 	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
 }
 
@@ -131,8 +131,8 @@ func (c *CheckoutPaymentProviderConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if c.PreferredMethod != "" {
-		if err := c.PreferredMethod.Validate(); err != nil {
+	if c.PaymentMethod != "" {
+		if err := c.PaymentMethod.Validate(); err != nil {
 			return err
 		}
 	}

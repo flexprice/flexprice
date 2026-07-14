@@ -103,7 +103,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			Amount:          req.Amount,
 			Currency:        req.Currency,
 			MaxAmount:       maxAmount,
-			PreferredMethod: cfg.PreferredMethod,
+			PreferredMethod: cfg.PaymentMethod,
 			SuccessURL:      req.SuccessURL,
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
@@ -161,7 +161,7 @@ func (s *checkoutSessionService) resolveMaxMandateLimit(
 		return nil, err
 	}
 
-	return capMandateLimit(cfg.PreferredMethod, cfg.MaxMandateLimit, currency, limits), nil
+	return capMandateLimit(cfg.PaymentMethod, cfg.MaxMandateLimit, currency, limits), nil
 }
 
 func capMandateLimit(
