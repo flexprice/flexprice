@@ -73,7 +73,6 @@ func (s *SubscriptionTrialPaymentMatrixSuite) SetupTest() {
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	}
 	s.proc = NewSubscriptionPaymentProcessor(params)
@@ -343,7 +342,6 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestFullPayAfterBehavior_Activates
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	})
 

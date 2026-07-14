@@ -31,8 +31,8 @@ type meterUsageBaseChargeInfo struct {
 }
 
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
-// Unlike CalculateFeatureUsageCharges, all queries (bucketed meters, windowed entitlements,
-// windowed commitments) read from MeterUsageRepo — never from raw events or feature_usage.
+// All queries (bucketed meters, windowed entitlements, windowed commitments) read from
+// MeterUsageRepo — never from raw events.
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,

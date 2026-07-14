@@ -116,7 +116,6 @@ func (s *EntitlementQuantityTestSuite) setupServices() {
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		SettingsRepo:                 stores.SettingsRepo,
 		AlertLogsRepo:                stores.AlertLogsRepo,
-		FeatureUsageRepo:             stores.FeatureUsageRepo,
 		TaskRepo:                     stores.TaskRepo,
 		SecretRepo:                   stores.SecretRepo,
 		EventPublisher:               s.GetPublisher(),
@@ -279,32 +278,35 @@ func (s *EntitlementQuantityTestSuite) fireEvents(n int) {
 	}
 }
 
-// fireFeatureUsage inserts a single FeatureUsage record into FeatureUsageRepo with QtyTotal=qty.
-// The cancel billing path (ReferencePointCancel) reads from FeatureUsageRepo, not EventRepo,
-// so this must be called alongside fireEvents when testing the cancellation flow.
-func (s *EntitlementQuantityTestSuite) fireFeatureUsage(qty int64) {
+// fireMeterUsage seeds MeterUsageRepo with `qty` rows of QtyTotal=1 for the test
+// meter, mirroring the meter-usage pipeline that emits one row per raw event
+// (extractQuantity returns 1 for COUNT aggregation). The cancel billing path
+// (ReferencePointCancel) reads meter_usage via GetMeterUsageBySubscription, so
+// this must be called alongside fireEvents when testing the cancellation flow.
+func (s *EntitlementQuantityTestSuite) fireMeterUsage(qty int64) {
 	ctx := s.GetContext()
-	fu := &events.FeatureUsage{
-		Event: events.Event{
-			ID:                 types.GenerateUUIDWithPrefix("fu"),
-			TenantID:           types.GetTenantID(ctx),
-			EnvironmentID:      types.GetEnvironmentID(ctx),
-			EventName:          s.testData.meter.EventName,
-			CustomerID:         s.testData.customer.ID,
-			ExternalCustomerID: s.testData.customer.ExternalID,
-			Timestamp:          s.testData.periodStart.Add(time.Hour),
-			Properties:         map[string]interface{}{},
-		},
-		SubscriptionID: s.testData.subscription.ID,
-		SubLineItemID:  s.testData.usageSubLineItem.ID,
-		PriceID:        s.testData.usagePrice.ID,
-		FeatureID:      s.testData.feature.ID,
-		MeterID:        s.testData.meter.ID,
-		QtyTotal:       decimal.NewFromInt(qty),
-		Sign:           1,
-		UniqueHash:     fmt.Sprintf("fu_%d", qty),
+	ts := s.testData.periodStart.Add(time.Hour)
+	records := make([]*events.MeterUsage, 0, qty)
+	for i := int64(0); i < qty; i++ {
+		id := types.GenerateUUIDWithPrefix("mu")
+		records = append(records, &events.MeterUsage{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				EventName:          s.testData.meter.EventName,
+				CustomerID:         s.testData.customer.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+				Properties:         map[string]interface{}{},
+			},
+			MeterID:    s.testData.meter.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: fmt.Sprintf("%s:%s", s.testData.meter.EventName, id),
+		})
 	}
-	s.NoError(s.GetStores().FeatureUsageRepo.InsertProcessedEvent(ctx, fu))
+	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
 }
 
 // findUsageLineItem returns the first line item in inv whose MeterID matches the test meter,
@@ -355,7 +357,7 @@ func (s *EntitlementQuantityTestSuite) assertEntitlementAdjustment(
 func (s *EntitlementQuantityTestSuite) TestCancelImmediate_GenerateInvoice_SetsAdjustedEntitlementQuantity() {
 	s.setupEntitlement(100)
 	s.fireEvents(500)
-	s.fireFeatureUsage(500) // cancel path reads FeatureUsageRepo, not EventRepo
+	s.fireMeterUsage(500) // cancel path reads meter_usage via GetMeterUsageBySubscription
 
 	_, err := s.subService.CancelSubscription(s.GetContext(), s.testData.subscription.ID, &dto.CancelSubscriptionRequest{
 		CancellationType:               types.CancellationTypeImmediate,
