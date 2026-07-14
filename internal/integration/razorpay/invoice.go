@@ -204,6 +204,28 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	return newPayment, false, nil
 }
 
+// autoChargeMethodPriority is the order in which payment methods are tried when
+// resolving a usable token for auto-charge. A customer registers at most one
+// mandate today (checkout-only setup, one method per registration), so this
+// ordering only affects logging/tie-breaking, not correctness.
+var autoChargeMethodPriority = []types.PaymentMethodType{
+	types.PaymentMethodTypeUPI,
+	types.PaymentMethodTypeCard,
+}
+
+// selectAutoChargeToken finds the first usable token across autoChargeMethodPriority.
+func selectAutoChargeToken(
+	tokens []*interfaces.ProviderPaymentMethod,
+	invoiceTotal decimal.Decimal,
+) (*interfaces.ProviderPaymentMethod, bool) {
+	for _, method := range autoChargeMethodPriority {
+		if token, ok := SelectUsableToken(tokens, method, invoiceTotal); ok {
+			return token, true
+		}
+	}
+	return nil, false
+}
+
 // tryAutoCharge resolves the customer's Razorpay tokens; if a usable UPI token
 // exists it calls executeAutoCharge and returns (true, nil). If token probing
 // fails for any reason it logs and returns (false, nil) so the caller falls
