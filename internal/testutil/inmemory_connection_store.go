@@ -72,6 +72,22 @@ func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider ty
 	return copyConnection(connections[0]), nil
 }
 
+func (s *InMemoryConnectionStore) ListPublishedByProvider(ctx context.Context, provider types.SecretProvider) ([]*connection.Connection, error) {
+	// Match by provider + published status across all tenants/environments.
+	filterFn := func(_ context.Context, c *connection.Connection, _ interface{}) bool {
+		return c.ProviderType == provider && c.Status == types.StatusPublished
+	}
+	connections, err := s.store.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list connections").
+			Mark(ierr.ErrDatabase)
+	}
+	return lo.Map(connections, func(c *connection.Connection, _ int) *connection.Connection {
+		return copyConnection(c)
+	}), nil
+}
+
 func (s *InMemoryConnectionStore) List(ctx context.Context, filter *types.ConnectionFilter) ([]*connection.Connection, error) {
 	items, err := s.store.List(ctx, filter, connectionFilterFn, connectionSortFn)
 	if err != nil {

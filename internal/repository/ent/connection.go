@@ -183,6 +183,38 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	return connections[0], nil
 }
 
+// ListPublishedByProvider returns every published connection for a provider across all tenants and
+// environments. It intentionally skips the tenant and environment filters that List applies, so a
+// scheduled job running without a tenant context can discover the connections to process; the
+// caller sets tenant/environment context from each returned connection before using it.
+func (r *connectionRepository) ListPublishedByProvider(ctx context.Context, provider types.SecretProvider) ([]*domainConnection.Connection, error) {
+	span := StartRepositorySpan(ctx, "connection", "list_published_by_provider", map[string]interface{}{
+		"provider_type": provider,
+	})
+	defer FinishSpan(span)
+
+	connections, err := r.client.Reader(ctx).Connection.Query().
+		Where(
+			connection.ProviderType(string(provider)),
+			connection.Status(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list connections by provider").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+
+	result := make([]*domainConnection.Connection, 0, len(connections))
+	for _, c := range connections {
+		result = append(result, domainConnection.FromEnt(c))
+	}
+	return result, nil
+}
+
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
 	client := r.client.Reader(ctx)
 
@@ -361,6 +393,13 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 		if encryptedSecretData.Tabs != nil {
 			return map[string]interface{}{
 				"api_key": encryptedSecretData.Tabs.APIKey,
+			}
+		}
+	case types.SecretProviderAWSMarketplace:
+		if encryptedSecretData.AWSMarketplace != nil {
+			return map[string]interface{}{
+				"role_arn":    encryptedSecretData.AWSMarketplace.RoleArn,
+				"external_id": encryptedSecretData.AWSMarketplace.ExternalID,
 			}
 		}
 	case types.SecretProviderZohoBooks:
