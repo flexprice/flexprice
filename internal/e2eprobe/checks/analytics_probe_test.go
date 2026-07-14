@@ -12,7 +12,7 @@ func TestAnalyticsProbe_Happy(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
 	reg.LoadSeeds(e2eprobe.Seeds{PersistentCustomerIDs: []string{"c0"}})
-	p := NewAnalyticsProbe(fc, reg, "run-1")
+	p := NewAnalyticsProbe(fc, reg, "run-1", nil)
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestAnalyticsProbe_PropagatesError(t *testing.T) {
 	fc.events.anaErr = errors.New("503")
 	reg := e2eprobe.NewRegistry()
 	reg.LoadSeeds(e2eprobe.Seeds{PersistentCustomerIDs: []string{"c"}})
-	p := NewAnalyticsProbe(fc, reg, "run-1")
+	p := NewAnalyticsProbe(fc, reg, "run-1", nil)
 	if err := p.Run(context.Background()); err == nil {
 		t.Fatal("expected error")
 	}
@@ -34,7 +34,7 @@ func TestAnalyticsProbe_PropagatesError(t *testing.T) {
 
 func TestAnalyticsProbe_NoSeedsIsNoOp(t *testing.T) {
 	fc := newFakeClient()
-	p := NewAnalyticsProbe(fc, e2eprobe.NewRegistry(), "run-1")
+	p := NewAnalyticsProbe(fc, e2eprobe.NewRegistry(), "run-1", nil)
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}

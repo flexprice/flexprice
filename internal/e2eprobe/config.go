@@ -31,6 +31,12 @@ type Config struct {
 	// deletes it. Also controls the Flexprice-wide orphan scan sweep.
 	JanitorMaxAge time.Duration // E2EPROBE_JANITOR_MAX_AGE, default 1h
 
+	// LogLevel controls the zerolog level: "debug", "info", "warn", "error".
+	// Default "info". Flip to "debug" to surface the per-tick checkpoints
+	// each probe emits (analytics fetched, drop event ingested, webhook
+	// received, aggregation observed, startup grace hits, etc.).
+	LogLevel string // E2EPROBE_LOG_LEVEL, default "info"
+
 	Slack SlackConfig
 	OTEL  OTELConfig
 
@@ -107,6 +113,7 @@ func LoadConfig() (*Config, error) {
 		EnvironmentID:     os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
 		HeartbeatInterval: getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 1*time.Hour),
 		JanitorMaxAge:     getDuration(&warnings, "E2EPROBE_JANITOR_MAX_AGE", 1*time.Hour),
+		LogLevel:          getLogLevel(&warnings, "E2EPROBE_LOG_LEVEL", "info"),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),
@@ -164,6 +171,19 @@ func getInt64(warnings *[]string, key string, def int64) int64 {
 		return def
 	}
 	return n
+}
+
+func getLogLevel(warnings *[]string, key, def string) string {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if v == "" {
+		return def
+	}
+	switch v {
+	case "debug", "info", "warn", "error":
+		return v
+	}
+	*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid log level (debug|info|warn|error); using default %q", key, v, def))
+	return def
 }
 
 func getDuration(warnings *[]string, key string, def time.Duration) time.Duration {

@@ -109,6 +109,16 @@ type WalletService interface {
 
 	// GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type (purchased, free, other)
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
+
+	// EvaluateAlertsForWallet runs the full per-wallet alert dance for a
+	// single wallet: resolve alert settings, short-circuit if nothing is
+	// configured (no wallet alert, no feature alerts, no auto-topup), fetch
+	// real-time balance, then run wallet / feature / auto-topup handlers in
+	// that order. features is the shared result of FetchFeaturesWithAlertSettings
+	// (nil / empty is fine). Per-step failures are logged and skipped so a
+	// single bad wallet handler doesn't block the next; only fatal setup
+	// errors return.
+	EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService) error
 }
 
 // walletBalanceComputeTimeout bounds the realtime-balance computation in
@@ -2970,23 +2980,23 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 			}
 
-			// Calculate usage charges for feature/meter usage data
-			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-				Subscription: sub,
-				Usage:        usage,
-				PeriodStart:  periodStart,
-				PeriodEnd:    periodEnd,
-			})
+			// Calculate must match the Get branch. The two Calculate impls
+			// diverge in the source they read for bucketed meters, windowed
+			// entitlements, and windowed commitments
+			usageCharges, usageTotal, err := billingService.CalculateMeterUsageCharges(
+				ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet,
+			)
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", featureUsageResult.TotalAmount,
-				"num_usage_charges", len(featureUsageResult.LineItems))
+				"usage_total", usageTotal,
+				"num_usage_charges", usageCharges,
+				"use_meter_usage", useMeterUsage)
 
-			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
+			totalPendingCharges = totalPendingCharges.Add(usageTotal)
 		}
 	}
 
@@ -3173,6 +3183,63 @@ func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string,
 	}
 
 	return s.GetWalletByID(ctx, walletID)
+}
+
+// EvaluateAlertsForWallet is the exported per-wallet driver used by the
+// alert-evaluation coordinator (alert_evaluation.go). Bundles the three
+// steps (wallet-level, feature-level, auto-topup) with the balance fetch
+// and short-circuit so callers don't need access to the private helpers.
+func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService) error {
+	if w == nil {
+		return nil
+	}
+	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
+	alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
+	hasWalletAlert := false
+	if err != nil {
+		s.Logger.Error(ctx, "wallet alerts: failed to resolve wallet alert settings", "error", err, "wallet_id", w.ID)
+	} else {
+		hasWalletAlert = alertSettings.IsAlertEnabled()
+	}
+
+	autoTopupEnabled := w.AutoTopup != nil && lo.FromPtr(w.AutoTopup.Enabled)
+
+	// Skip balance fetch entirely if nothing is configured — the caller has
+	// already gated on the tenant-level wallet-alert setting; this is the
+	// per-wallet short-circuit.
+	if !hasWalletAlert && !autoTopupEnabled {
+		return nil
+	}
+
+	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, w.ID, nil)
+
+	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "wallet alerts: failed to get wallet balance", "error", err, "wallet_id", w.ID)
+		return nil
+	}
+	ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
+	eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
+
+	if hasWalletAlert {
+		if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, alertSettings, alertLogs, eventID); err != nil {
+			s.Logger.Error(ctx, "failed to process wallet balance alert", "error", err, "wallet_id", w.ID)
+		}
+	}
+	if autoTopupEnabled {
+		if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
+			s.Logger.Error(ctx, "failed to trigger auto top-up", "error", err, "wallet_id", w.ID)
+		}
+	}
+
+	// processFeatureWalletBalanceAlert is not being supported anymore
+
+	// send balance updated webhook if there's no cached balance OR the cached balance is different from the ongoing balance
+	if cachedBalance == nil || ongoingBalance.Cmp(*cachedBalance) != 0 {
+		s.publishOngoingBalanceUpdatedWebhookEvent(ctx, w.ID, balance)
+	}
+
+	return nil
 }
 
 func (s *walletService) fetchFeaturesWithAlertSettings(ctx context.Context) ([]*dto.FeatureResponse, error) {

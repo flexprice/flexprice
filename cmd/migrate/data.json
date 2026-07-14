@@ -125,6 +125,22 @@
             "description": "Fired when a new subscription is created"
         },
         {
+            "name": "subscription.group_spend.threshold_reached",
+            "description": "Fired when a feature group's total metered spend on a subscription crosses an alert threshold (critical, warning, or info) for the current billing period"
+        },
+        {
+            "name": "subscription.group_spend.threshold_recovered",
+            "description": "Fired when a feature group's total metered spend on a subscription falls back below all configured alert thresholds for the current billing period"
+        },
+        {
+            "name": "subscription.line_item_spend.threshold_reached",
+            "description": "Fired when a subscription line item's metered spend crosses an alert threshold (critical, warning, or info) for the current billing period"
+        },
+        {
+            "name": "subscription.line_item_spend.threshold_recovered",
+            "description": "Fired when a subscription line item's metered spend falls back below all configured alert thresholds for the current billing period"
+        },
+        {
             "name": "subscription.paused",
             "description": "Fired when a subscription is paused"
         },
@@ -135,6 +151,14 @@
         {
             "name": "subscription.resumed",
             "description": "Fired when a paused subscription is resumed"
+        },
+        {
+            "name": "subscription.spend.threshold_reached",
+            "description": "Fired when a subscription's total metered spend crosses an alert threshold (critical, warning, or info) for the current billing period"
+        },
+        {
+            "name": "subscription.spend.threshold_recovered",
+            "description": "Fired when a subscription's total metered spend falls back below all configured alert thresholds for the current billing period"
         },
         {
             "name": "subscription.updated",
