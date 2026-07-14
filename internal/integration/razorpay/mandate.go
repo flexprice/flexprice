@@ -83,8 +83,24 @@ func SelectUsableToken(
 	}), true
 }
 
-// CreateAuthorizationLink registers a UPI Autopay mandate combined with the
-// first invoice payment.
+// razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay
+// subscription_registration "method" value. Empty input defaults to "upi" to
+// preserve every existing caller that omits PreferredMethod.
+func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
+	switch pm {
+	case "", types.PaymentMethodTypeUPI:
+		return "upi", nil
+	case types.PaymentMethodTypeCard:
+		return "card", nil
+	default:
+		return "", ierr.NewErrorf("razorpay authorization link registration does not support method %q", pm).
+			WithHint("Only UPI and Card are supported for Razorpay mandate registration").
+			Mark(ierr.ErrNotImplemented)
+	}
+}
+
+// CreateAuthorizationLink registers a UPI Autopay or card recurring-payment
+// mandate combined with the first invoice payment.
 func (a *CheckoutAdapter) CreateAuthorizationLink(
 	ctx context.Context,
 	req interfaces.AuthorizationLinkRequest,
