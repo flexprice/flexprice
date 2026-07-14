@@ -163,6 +163,24 @@ type KafkaConfig struct {
 	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string   `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	// TopicsDefaults/Topics describe the full desired topic set for kafka-migrate
+	// (partition counts, replication factor, retention). Consumed only by
+	// cmd/kafka-migrate, not by the server/consumer/worker processes. A deploy's
+	// FLEXPRICE_KAFKA_TOPICS env var (JSON), when set, FULLY REPLACES this block
+	// (no merge) — see internal/kafka/topicspec.
+	TopicsDefaults KafkaTopicsDefaults       `mapstructure:"topics_defaults"`
+	Topics         map[string]KafkaTopicSpec `mapstructure:"topics"`
+}
+
+type KafkaTopicsDefaults struct {
+	ReplicationFactor int16 `mapstructure:"replication_factor"`
+	RetentionMs       int64 `mapstructure:"retention_ms"`
+}
+
+type KafkaTopicSpec struct {
+	Partitions        int    `mapstructure:"partitions"`
+	ReplicationFactor *int16 `mapstructure:"replication_factor"`
+	RetentionMs       *int64 `mapstructure:"retention_ms"`
 }
 
 type ClickHouseConfig struct {
