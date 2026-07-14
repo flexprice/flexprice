@@ -3185,12 +3185,6 @@ func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string,
 	return s.GetWalletByID(ctx, walletID)
 }
 
-// FetchFeaturesWithAlertSettings is the exported entry point around the
-// same-package fetchFeaturesWithAlertSettings helper. See the interface doc.
-func (s *walletService) FetchFeaturesWithAlertSettings(ctx context.Context) ([]*dto.FeatureResponse, error) {
-	return s.fetchFeaturesWithAlertSettings(ctx)
-}
-
 // EvaluateAlertsForWallet is the exported per-wallet driver used by the
 // alert-evaluation coordinator (alert_evaluation.go). Bundles the three
 // steps (wallet-level, feature-level, auto-topup) with the balance fetch
@@ -3217,6 +3211,8 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 		return nil
 	}
 
+	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, w.ID, nil)
+
 	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
 	if err != nil {
 		s.Logger.Error(ctx, "wallet alerts: failed to get wallet balance", "error", err, "wallet_id", w.ID)
@@ -3237,6 +3233,11 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 	}
 
 	// processFeatureWalletBalanceAlert is not being supported anymore
+
+	// send balance updated webhook if there's no cached balance OR the cached balance is different from the ongoing balance
+	if cachedBalance == nil || ongoingBalance.Cmp(*cachedBalance) != 0 {
+		s.publishOngoingBalanceUpdatedWebhookEvent(ctx, w.ID, balance)
+	}
 
 	return nil
 }
