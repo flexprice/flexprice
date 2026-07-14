@@ -511,7 +511,7 @@ func buildWorkerConfig(
 			workflows.CustomerOnboardingWorkflow,
 			workflows.PrepareProcessedEventsWorkflow,
 			workflows.EnvironmentCloneWorkflow,
-			workflows.MeterUsageAlertWorkflow,
+			workflows.UsageAlertWorkflow,
 		)
 		// Customer activities
 		activitiesList = append(activitiesList,
@@ -523,8 +523,8 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
-			alertActs.CheckSpendBreachActivity,
-			alertActs.CheckWalletBalanceActivity,
+			alertActs.SpendAlertsActivity,
+			alertActs.WalletAlertsActivity,
 		)
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,

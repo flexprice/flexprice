@@ -71,7 +71,7 @@ const (
 	TemporalHubSpotDealSyncWorkflow                    TemporalWorkflowType = "HubSpotDealSyncWorkflow"
 	TemporalHubSpotInvoiceSyncWorkflow                 TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
 	TemporalHubSpotQuoteSyncWorkflow                   TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
-	TemporalMeterUsageAlertWorkflow                    TemporalWorkflowType = "MeterUsageAlertWorkflow"
+	TemporalUsageAlertWorkflow                         TemporalWorkflowType = "UsageAlertWorkflow"
 	TemporalMoyasarInvoiceSyncWorkflow                 TemporalWorkflowType = "MoyasarInvoiceSyncWorkflow"
 	TemporalNomodCustomerSyncWorkflow                  TemporalWorkflowType = "NomodCustomerSyncWorkflow"
 	TemporalNomodInvoiceSyncWorkflow                   TemporalWorkflowType = "NomodInvoiceSyncWorkflow"
@@ -124,10 +124,10 @@ var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 	TemporalScheduleDraftFinalizationWorkflow,
-	// ponytail: high-frequency (up to 1 run per customer per 5 min), excluded from tracking
-	// to avoid ballooning workflow_execution rows. Bring back into tracking if observability
-	// beyond Temporal UI is needed.
-	TemporalMeterUsageAlertWorkflow,
+	// ponytail: high-frequency (up to 1 run per customer per debounce window), excluded
+	// from tracking to avoid ballooning workflow_execution rows. Bring back into tracking
+	// if observability beyond Temporal UI is needed.
+	TemporalUsageAlertWorkflow,
 }
 
 // WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
@@ -163,7 +163,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalHubSpotDealSyncWorkflow,
 		TemporalHubSpotInvoiceSyncWorkflow,
 		TemporalHubSpotQuoteSyncWorkflow,
-		TemporalMeterUsageAlertWorkflow,
+		TemporalUsageAlertWorkflow,
 		TemporalMoyasarInvoiceSyncWorkflow,
 		TemporalNomodCustomerSyncWorkflow,
 		TemporalNomodInvoiceSyncWorkflow,
@@ -227,7 +227,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalMeterUsageAlertWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow:
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
 		return TemporalTaskQueueReprocessEvents
@@ -307,7 +307,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalCustomerOnboardingWorkflow,
 			TemporalPrepareProcessedEventsWorkflow,
 			TemporalEnvironmentCloneWorkflow,
-			TemporalMeterUsageAlertWorkflow,
+			TemporalUsageAlertWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{

@@ -3,6 +3,7 @@ package alerts
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -12,11 +13,10 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
-// AlertActivities hosts the meter-usage-driven alert-check activities.
-// They are thin adapters over service.CheckSpendBreachForCustomer and
-// service.CheckWalletBalanceForCustomer; all real work lives in the service
-// layer so the activities stay trivial and the service functions can be reused
-// outside Temporal if needed.
+// AlertActivities hosts the usage-driven alert evaluation activities. They are
+// thin adapters over the AlertService methods; all real work lives in the service
+// layer so the activities stay trivial and the service methods can be called
+// directly (e.g. from a REST test endpoint) without Temporal.
 type AlertActivities struct {
 	serviceParams service.ServiceParams
 	logger        *logger.Logger
@@ -29,65 +29,64 @@ func NewAlertActivities(serviceParams service.ServiceParams, logger *logger.Logg
 	}
 }
 
-// setTenantContext injects tenant and environment IDs into the activity context so
-// downstream repository queries scope correctly. Activities run outside HTTP
-// middleware so the framework never populates this for us.
-func setTenantContext(ctx context.Context, tenantID, environmentID string) context.Context {
+// prepare loads the customer and injects tenant/environment IDs into the
+// activity context. Returns (nil, nil) when the customer no longer exists — a
+// no-op is the right response since the whole workflow is customer-scoped.
+func (a *AlertActivities) prepare(ctx context.Context, tenantID, environmentID, customerID string) (context.Context, *customer.Customer, error) {
 	ctx = types.SetTenantID(ctx, tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
-	return ctx
+
+	cust, err := a.serviceParams.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return ctx, nil, nil
+		}
+		return ctx, nil, err
+	}
+	return ctx, cust, nil
 }
 
-// CheckSpendBreachActivity evaluates every subscription-level, line-item-level,
-// and group-level spend threshold configured for the customer. Runs once per
-// debounce window per customer; errors during a single subscription evaluation
-// are logged and skipped by the underlying service so one bad subscription can't
-// block the rest.
-func (a *AlertActivities) CheckSpendBreachActivity(ctx context.Context, input models.MeterUsageAlertActivityInput) error {
-	logger := activity.GetLogger(ctx)
-	logger.Info("CheckSpendBreachActivity started",
+// SpendAlertsActivity evaluates subscription / line-item / group spend
+// alerts for the customer end to end (fetch subs + configs + usage + charges,
+// compare thresholds, log alerts). Self-contained.
+func (a *AlertActivities) SpendAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
+	log := activity.GetLogger(ctx)
+	log.Info("SpendAlertsActivity started",
 		"tenant_id", input.TenantID,
 		"customer_id", input.CustomerID,
 	)
 
-	ctx = setTenantContext(ctx, input.TenantID, input.EnvironmentID)
-
-	cust, err := a.serviceParams.CustomerRepo.Get(ctx, input.CustomerID)
+	ctx, cust, err := a.prepare(ctx, input.TenantID, input.EnvironmentID, input.CustomerID)
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			logger.Info("customer not found, skipping spend-breach check", "customer_id", input.CustomerID)
-			return nil
-		}
 		return err
 	}
+	if cust == nil {
+		log.Info("customer not found, spend alerts activity is a no-op", "customer_id", input.CustomerID)
+		return nil
+	}
 
-	service.CheckSpendBreachForCustomer(ctx, a.serviceParams, cust)
-	return nil
+	return service.NewAlertService(a.serviceParams).EvaluateSpendAlertsForCustomer(ctx, cust, nil, nil)
 }
 
-// CheckWalletBalanceActivity re-runs the wallet balance alert check for the
-// customer, force-calculating the balance to bypass the in-memory throttle in
-// walletService.CheckWalletBalanceAlert — Temporal already guarantees at-most-one
-// invocation per debounce window per customer via the workflow-ID dedupe, so an
-// extra layer of throttling would just re-introduce the "trailing event ignored"
-// bug the debouncer exists to fix.
-func (a *AlertActivities) CheckWalletBalanceActivity(ctx context.Context, input models.MeterUsageAlertActivityInput) error {
-	logger := activity.GetLogger(ctx)
-	logger.Info("CheckWalletBalanceActivity started",
+// WalletAlertsActivity evaluates wallet-balance / feature-wallet-balance
+// alerts and auto-topup for the customer end to end (fetch wallets +
+// alert config + real-time balance, compare thresholds, log alerts, trigger
+// topups). Self-contained.
+func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
+	log := activity.GetLogger(ctx)
+	log.Info("WalletAlertsActivity started",
 		"tenant_id", input.TenantID,
 		"customer_id", input.CustomerID,
 	)
 
-	ctx = setTenantContext(ctx, input.TenantID, input.EnvironmentID)
-
-	cust, err := a.serviceParams.CustomerRepo.Get(ctx, input.CustomerID)
+	ctx, cust, err := a.prepare(ctx, input.TenantID, input.EnvironmentID, input.CustomerID)
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			logger.Info("customer not found, skipping wallet-balance check", "customer_id", input.CustomerID)
-			return nil
-		}
 		return err
 	}
+	if cust == nil {
+		log.Info("customer not found, wallet alerts activity is a no-op", "customer_id", input.CustomerID)
+		return nil
+	}
 
-	return service.CheckWalletBalanceForCustomer(ctx, a.serviceParams, cust)
+	return service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust)
 }

@@ -358,6 +358,8 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
+  alert_debounce_enabled: false
+  alert_debounce_window: "5m30s"
 
 meter_usage_tracking_lazy:
   enabled: true

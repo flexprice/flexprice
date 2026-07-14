@@ -497,13 +497,9 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
 
 	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
-	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path
-	// and inline spend-breach check. First event schedules the workflow at now + window;
-	// subsequent events for the same customer are absorbed by Temporal workflow-ID dedup.
-	// When true, WalletAlertPushEnabled and SpendAlertWebhookEnabled are ignored.
+	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
 	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
-	// AlertDebounceWindow is the delay between the first event and the alert-check workflow
-	// firing. Includes a buffer to ensure ClickHouse has caught up with recent inserts.
+	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
 	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
 }
 
