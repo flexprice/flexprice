@@ -585,7 +585,11 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		case strings.HasPrefix(groupBy, "properties."):
 			// Extract property name from "properties.field_name"
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
+			// propertyName is user-controlled (request group_by) and is interpolated
+			// both as a SQL string literal and as part of a column alias identifier —
+			// neither can be parameterized with `?`, so validate against a strict
+			// allow-list before use (mirrors the analogous guard in feature_usage.go).
+			if propertyName != "" && validateGroupByProperty(propertyName) == nil {
 				// Create alias like "prop_org_id" for "properties.org_id"
 				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
 				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
