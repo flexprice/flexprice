@@ -1343,7 +1343,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		// For current period arrear charges (feature_usage or meter_usage path for cumulative commitment support)
+		// For current period arrear charges (meter_usage path when enabled for
+		// cumulative commitment support; falls back to raw-events CalculateCharges otherwise)
 		var arrearResult *dto.BillingCalculationResult
 		if isMeterUsageEnabledForBilling {
 			arrearResult, err = s.calculateMeterUsageCharges(
@@ -1406,33 +1407,36 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// but don't filter out already invoiced items. Usage is sourced from the
 		// meter_usage table.
 
+		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			classification.CurrentPeriodArrear,
 			periodStart,
 			periodEnd,
-			classification.HasUsageCharges,
+			classification.HasUsageCharges, // Include usage for arrear
 		)
 		if err != nil {
 			return nil, err
 		}
 
+		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			classification.NextPeriodAdvance,
 			nextPeriodStart,
 			nextPeriodEnd,
-			false,
+			false, // No usage for advance
 		)
 		if err != nil {
 			return nil, err
 		}
 
+		// Combine results
 		calculationResult = &dto.BillingCalculationResult{
 			FixedCharges: append(arrearResult.FixedCharges, advanceResult.FixedCharges...),
-			UsageCharges: arrearResult.UsageCharges,
+			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount.Add(advanceResult.TotalAmount),
 			Currency:     sub.Currency,
 		}
@@ -1492,13 +1496,14 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return nil, err
 		}
 
+		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
 			periodStart,
 			periodEnd,
-			true,
+			true, // Include usage for arrear
 		)
 		if err != nil {
 			return nil, err

@@ -1511,6 +1511,103 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionSubscriberRejectedWhenC
 	s.Equal(child.ID, resp.CustomerID)
 }
 
+func (s *SubscriptionServiceSuite) TestGetMeterUsageBySubscription_ParentAggregatesChildCustomerMeterUsage() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_meter_usage_agg"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org Usage",
+		Email:      "child-usage@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		EndDate:              parentSub.EndDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{parentSub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	var apiLI *subscription.SubscriptionLineItem
+	for _, li := range lineItems {
+		if li.MeterID == s.testData.meters.apiCalls.ID {
+			apiLI = li
+			break
+		}
+	}
+	s.Require().NotNil(apiLI, "expected API calls subscription line item in repo for subscription %s", parentSub.ID)
+
+	// Seed 99 meter_usage rows under the CHILD's external_customer_id to verify
+	// GetMeterUsageBySubscription aggregates across inherited children. COUNT-style
+	// meters emit qty=1 per event; 99 rows → total qty = 99.
+	ts := parentSub.CurrentPeriodStart.Add(time.Hour)
+	records := make([]*events.MeterUsage, 0, 99)
+	for i := 0; i < 99; i++ {
+		id := s.GetUUID()
+		records = append(records, &events.MeterUsage{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           parentSub.TenantID,
+				EnvironmentID:      parentSub.EnvironmentID,
+				EventName:          s.testData.meters.apiCalls.EventName,
+				CustomerID:         child.ID,
+				ExternalCustomerID: childExternal,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+			},
+			MeterID:    s.testData.meters.apiCalls.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: fmt.Sprintf("%s:%s", s.testData.meters.apiCalls.EventName, id),
+		})
+	}
+	// apiLI is retained only to prove the parent's usage line item exists for this meter.
+	_ = apiLI
+	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
+
+	out, err := s.service.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: parentSub.ID,
+		Source:         string(types.UsageSourceAnalytics),
+		StartTime:      parentSub.CurrentPeriodStart,
+		EndTime:        parentSub.CurrentPeriodEnd,
+	})
+	s.NoError(err)
+
+	var apiQty float64
+	for _, c := range out.Charges {
+		if c.MeterID == s.testData.meters.apiCalls.ID {
+			apiQty = c.Quantity
+			break
+		}
+	}
+	s.Equal(99.0, apiQty)
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildEqualsSubscriber() {
 	ctx := s.GetContext()
 	req := dto.CreateSubscriptionRequest{

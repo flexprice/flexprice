@@ -451,6 +451,63 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 	return startTime, endTime, nil
 }
 
+// @Summary Get event
+// @ID getEvent
+// @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Reads the meter-usage pipeline; includes processing status and step-by-step debug tracker when unprocessed.
+// @Tags Events
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Event ID"
+// @Success 200 {object} dto.GetEventByIDResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/{id} [get]
+func (h *EventsHandler) GetEventByID(c *gin.Context) {
+	ctx := c.Request.Context()
+	eventID := c.Param("id")
+	if eventID == "" {
+		c.Error(ierr.NewError("event ID is required").
+			WithHint("Please provide a valid event ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.meterUsageService.DebugEvent(ctx, eventID)
+	if err != nil {
+		h.log.Error(ctx, "Failed to debug event", "error", err, "event_id", eventID)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get Hugging Face inference data
+// @ID getHuggingfaceInferenceData
+// @Description Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation). Reads the meter-usage pipeline.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.GetHuggingFaceBillingDataRequest true "Request body"
+// @Success 200 {object} dto.GetHuggingFaceBillingDataResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/huggingface-inference [post]
+func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.GetHuggingFaceBillingDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.meterUsageService.GetHuggingFaceBillingData(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 	ctx := c.Request.Context()
 
