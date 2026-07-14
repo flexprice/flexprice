@@ -3130,6 +3130,7 @@ func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string,
 		ReferenceType:     types.WalletTxReferenceTypeRequest,
 		IdempotencyKey:    *req.IdempotencyKey,
 		ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		Metadata:          req.Metadata,
 	}
 
 	err = s.DebitWallet(ctx, debitReq)

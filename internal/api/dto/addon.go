@@ -62,6 +62,7 @@ type AddonResponse struct {
 	// Optional expanded fields
 	Prices       []*PriceResponse       `json:"prices,omitempty"`
 	Entitlements []*EntitlementResponse `json:"entitlements,omitempty"`
+	CreditGrants []*CreditGrantResponse `json:"credit_grants,omitempty"`
 }
 
 // CreateAddonResponse represents the response after creating an addon

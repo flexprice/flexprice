@@ -99,7 +99,11 @@ func (r *subscriptionScheduleRepository) Get(ctx context.Context, id string) (*d
 
 	entity, err := client.SubscriptionSchedule.
 		Query().
-		Where(subscriptionschedule.IDEQ(id)).
+		Where(
+			subscriptionschedule.IDEQ(id),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		Only(ctx)
 
 	if err != nil {
@@ -133,7 +137,12 @@ func (r *subscriptionScheduleRepository) Update(ctx context.Context, schedule *d
 	}
 
 	builder := client.SubscriptionSchedule.
-		UpdateOneID(schedule.ID).
+		Update().
+		Where(
+			subscriptionschedule.IDEQ(schedule.ID),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetScheduleType(schedule.ScheduleType).
 		SetScheduledAt(schedule.ScheduledAt).
 		SetStatus(string(schedule.Status)).
@@ -172,13 +181,14 @@ func (r *subscriptionScheduleRepository) Update(ctx context.Context, schedule *d
 		builder.SetMetadata(schedule.Metadata)
 	}
 
-	_, err := builder.Save(ctx)
+	affected, err := builder.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return fmt.Errorf("subscription schedule not found: %w", err)
-		}
 		return fmt.Errorf("failed to update subscription schedule: %w", err)
+	}
+	if affected == 0 {
+		SetSpanError(span, fmt.Errorf("not found"))
+		return fmt.Errorf("subscription schedule not found")
 	}
 
 	SetSpanSuccess(span)
@@ -196,17 +206,23 @@ func (r *subscriptionScheduleRepository) Delete(ctx context.Context, id string) 
 	defer FinishSpan(span)
 
 	// Soft delete by updating status to cancelled
-	err := client.SubscriptionSchedule.
-		UpdateOneID(id).
+	affected, err := client.SubscriptionSchedule.
+		Update().
+		Where(
+			subscriptionschedule.IDEQ(id),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetStatus(string(types.ScheduleStatusCancelled)).
-		Exec(ctx)
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return fmt.Errorf("subscription schedule not found: %w", err)
-		}
 		return fmt.Errorf("failed to delete subscription schedule: %w", err)
+	}
+	if affected == 0 {
+		SetSpanError(span, fmt.Errorf("not found"))
+		return fmt.Errorf("subscription schedule not found")
 	}
 
 	SetSpanSuccess(span)
@@ -225,7 +241,11 @@ func (r *subscriptionScheduleRepository) GetBySubscriptionID(ctx context.Context
 
 	entities, err := client.SubscriptionSchedule.
 		Query().
-		Where(subscriptionschedule.SubscriptionIDEQ(subscriptionID)).
+		Where(
+			subscriptionschedule.SubscriptionIDEQ(subscriptionID),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		Order(ent.Desc(subscriptionschedule.FieldCreatedAt)).
 		All(ctx)
 
@@ -259,6 +279,8 @@ func (r *subscriptionScheduleRepository) GetPendingBySubscriptionAndType(
 			subscriptionschedule.SubscriptionIDEQ(subscriptionID),
 			subscriptionschedule.ScheduleTypeEQ(scheduleType),
 			subscriptionschedule.StatusEQ(string(types.ScheduleStatusPending)),
+			subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+			subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 
@@ -288,7 +310,7 @@ func (r *subscriptionScheduleRepository) List(ctx context.Context, filter *types
 	query := client.SubscriptionSchedule.Query()
 
 	// Apply filters
-	query = r.applyFilters(query, filter)
+	query = r.applyFilters(ctx, query, filter)
 
 	// Apply pagination
 	if filter.QueryFilter != nil {
@@ -323,7 +345,7 @@ func (r *subscriptionScheduleRepository) Count(ctx context.Context, filter *type
 	query := client.SubscriptionSchedule.Query()
 
 	// Apply filters
-	query = r.applyFilters(query, filter)
+	query = r.applyFilters(ctx, query, filter)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -337,9 +359,15 @@ func (r *subscriptionScheduleRepository) Count(ctx context.Context, filter *type
 
 // applyFilters applies filter conditions to the query
 func (r *subscriptionScheduleRepository) applyFilters(
+	ctx context.Context,
 	query *ent.SubscriptionScheduleQuery,
 	filter *types.SubscriptionScheduleFilter,
 ) *ent.SubscriptionScheduleQuery {
+	query = query.Where(
+		subscriptionschedule.TenantID(types.GetTenantID(ctx)),
+		subscriptionschedule.EnvironmentID(types.GetEnvironmentID(ctx)),
+	)
+
 	if filter == nil {
 		return query
 	}

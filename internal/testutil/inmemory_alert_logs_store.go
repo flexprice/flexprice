@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	domainAlertLogs "github.com/flexprice/flexprice/internal/domain/alertlogs"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -57,8 +58,9 @@ func (s *InMemoryAlertLogsStore) Count(ctx context.Context, filter *types.AlertL
 }
 
 // GetLatestAlert retrieves the latest alert log based on provided filters
-// All parameters except entityType and entityID are optional
-func (s *InMemoryAlertLogsStore) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*domainAlertLogs.AlertLog, error) {
+// All parameters except entityType and entityID are optional. When alertSettingID is set, the
+// match is restricted to that alert_settings row and to logs created at or after periodStart.
+func (s *InMemoryAlertLogsStore) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string, alertSettingID *string, periodStart *time.Time) (*domainAlertLogs.AlertLog, error) {
 	filter := &types.AlertLogFilter{
 		QueryFilter: types.NewNoLimitAlertLogFilter().QueryFilter,
 		EntityType:  entityType,
@@ -75,7 +77,7 @@ func (s *InMemoryAlertLogsStore) GetLatestAlert(ctx context.Context, entityType 
 		return nil, err
 	}
 
-	// Further filter by parent entity fields if provided
+	// Further filter by parent entity / alert setting / period fields if provided
 	for _, log := range alertLogs {
 		// Check parent entity type match
 		if parentEntityType != nil {
@@ -89,6 +91,18 @@ func (s *InMemoryAlertLogsStore) GetLatestAlert(ctx context.Context, entityType 
 			if log.ParentEntityID == nil || *log.ParentEntityID != *parentEntityID {
 				continue
 			}
+		}
+
+		// Check alert setting ID match
+		if alertSettingID != nil {
+			if log.AlertSettingID == nil || *log.AlertSettingID != *alertSettingID {
+				continue
+			}
+		}
+
+		// Check period restriction
+		if periodStart != nil && log.CreatedAt.Before(*periodStart) {
+			continue
 		}
 
 		// Found a matching log

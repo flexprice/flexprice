@@ -41,6 +41,13 @@ func NewTenantHandler(
 func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 	id := c.Param("id")
 
+	if id != types.GetTenantID(c.Request.Context()) {
+		c.Error(ierr.NewError("cannot access another tenant's details").
+			WithHint("You can only access your own tenant's details").
+			Mark(ierr.ErrPermissionDenied))
+		return
+	}
+
 	resp, err := h.service.GetTenantByID(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)

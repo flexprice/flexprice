@@ -21,6 +21,9 @@ type AddonService interface {
 	UpdateAddon(ctx context.Context, id string, req dto.UpdateAddonRequest) (*dto.AddonResponse, error)
 	DeleteAddon(ctx context.Context, id string) error
 
+	// GetAddonCreditGrants lists the ADDON-scoped credit grants defined on an addon
+	GetAddonCreditGrants(ctx context.Context, id string) (*dto.ListCreditGrantsResponse, error)
+
 	// Addon Association operations
 	ListAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
 	GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) (*dto.ListAddonAssociationsResponse, error)
@@ -100,6 +103,17 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 		copy(response.Entitlements, entitlements.Items)
 	}
 
+	// Get credit grants for this addon
+	creditGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByAddon(ctx, id)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to fetch credit grants for addon", "addon_id", id, "error", err)
+		return nil, err
+	}
+
+	if len(creditGrants.Items) > 0 {
+		response.CreditGrants = creditGrants.Items
+	}
+
 	return response, nil
 }
 
@@ -131,10 +145,17 @@ func (s *addonService) GetAddonByLookupKey(ctx context.Context, lookupKey string
 		return nil, err
 	}
 
+	creditGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByAddon(ctx, domainAddon.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to fetch credit grants for addon", "addon_id", domainAddon.ID, "error", err)
+		return nil, err
+	}
+
 	return &dto.AddonResponse{
 		Addon:        domainAddon,
 		Prices:       pricesResponse.Items,
 		Entitlements: entitlements.Items,
+		CreditGrants: creditGrants.Items,
 	}, nil
 }
 
@@ -185,6 +206,7 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 	// Create maps for storing expanded data
 	pricesByAddonID := make(map[string][]*dto.PriceResponse)
 	entitlementsByAddonID := make(map[string][]*dto.EntitlementResponse)
+	creditGrantsByAddonID := make(map[string][]*dto.CreditGrantResponse)
 
 	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
@@ -233,6 +255,19 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		}
 	}
 
+	// If credit grants expansion is requested, fetch them per addon
+	if filter.GetExpand().Has(types.ExpandCreditGrant) {
+		for _, addonID := range addonIDs {
+			creditGrants, err := s.CreditGrantRepo.GetByAddon(ctx, addonID)
+			if err != nil {
+				return nil, err
+			}
+			for _, cg := range creditGrants {
+				creditGrantsByAddonID[addonID] = append(creditGrantsByAddonID[addonID], &dto.CreditGrantResponse{CreditGrant: cg})
+			}
+		}
+	}
+
 	// Attach expanded data to responses
 	for i, addon := range result {
 		if prices, ok := pricesByAddonID[addon.ID]; ok {
@@ -240,6 +275,9 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		}
 		if entitlements, ok := entitlementsByAddonID[addon.ID]; ok {
 			response.Items[i].Entitlements = entitlements
+		}
+		if creditGrants, ok := creditGrantsByAddonID[addon.ID]; ok {
+			response.Items[i].CreditGrants = creditGrants
 		}
 	}
 
@@ -286,6 +324,23 @@ func (s *addonService) UpdateAddon(ctx context.Context, id string, req dto.Updat
 }
 
 // DeleteAddon soft deletes an addon
+// GetAddonCreditGrants lists the ADDON-scoped credit grants defined on an addon.
+func (s *addonService) GetAddonCreditGrants(ctx context.Context, id string) (*dto.ListCreditGrantsResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("addon ID is required").
+			WithHint("Please provide a valid addon ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Ensure the addon exists (returns 404 otherwise)
+	if _, err := s.AddonRepo.GetByID(ctx, id); err != nil {
+		return nil, err
+	}
+
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	return creditGrantService.GetCreditGrantsByAddon(ctx, id)
+}
+
 func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("addon ID is required").

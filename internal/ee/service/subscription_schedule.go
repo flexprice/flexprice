@@ -486,6 +486,12 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	sub.CancelAtPeriodEnd = config.OriginalCancelAtPeriodEnd
 	sub.CancelAt = config.OriginalCancelAt
 	sub.EndDate = config.OriginalEndDate
+	// A subscription can't already have a pending cancellation when a new one is scheduled
+	// (cancelAllPendingSchedules/CancelSubscription's own validation prevent that), so nil is
+	// always the correct prior value here. Without this, CancelledAt (set unconditionally by
+	// updateSubscriptionForCancellation at scheduling time) stays permanently non-nil after a
+	// revert, which later spuriously blocks executePlanChange's cancellation guard.
+	sub.CancelledAt = nil
 	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
 	// Nil-safe: old schedule records without this field are handled gracefully.
 	if config.OriginalCurrentPeriodEnd != nil {
@@ -502,6 +508,17 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 		"subscription_id", sub.ID,
 		"restored_cancel_at_period_end", sub.CancelAtPeriodEnd,
 	)
+
+	// Cascade the reverted state to any inherited (child) subscriptions. CancelSubscription
+	// unconditionally cascades cancellation fields to children at scheduling time
+	// (CascadeCancelToInheritedSubscriptions), so a revert must undo that too — otherwise
+	// children stay stuck with stale CancelAtPeriodEnd/CancelAt/CancelledAt/EndDate and get
+	// wrongly cancelled on their own later. Reuses the same cascade function, called with the
+	// now-reverted parent struct; it's a no-op for non-parent subscriptions.
+	subService := NewSubscriptionService(s.ServiceParams).(*subscriptionService)
+	if err := subService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
+		return fmt.Errorf("failed to cascade reverted state to inherited subscriptions: %w", err)
+	}
 
 	return nil
 }

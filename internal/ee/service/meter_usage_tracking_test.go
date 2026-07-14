@@ -5,10 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -19,7 +22,7 @@ import (
 )
 
 type MeterUsageTrackingSuite struct {
-	suite.Suite
+	testutil.BaseServiceTestSuite
 	svc *meterUsageTrackingService
 }
 
@@ -28,7 +31,78 @@ func TestMeterUsageTracking(t *testing.T) {
 }
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
 	s.svc = &meterUsageTrackingService{}
+}
+
+// newRejectedService builds a meter-usage service wired to the suite's in-memory
+// webhook publisher and the given locker. Assert on published events via
+// s.GetPublishedWebhooks().
+func (s *MeterUsageTrackingSuite) newRejectedService(enabled bool, window time.Duration, locker cache.Locker) *meterUsageTrackingService {
+	return &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger: logger.NewNoopLogger(),
+			Config: &config.Configuration{
+				MeterUsageTracking: config.MeterUsageTrackingConfig{
+					RejectedEventWebhookEnabled: enabled,
+					RejectedEventWebhookWindow:  window,
+				},
+			},
+			WebhookPublisher: s.GetWebhookPublisher(),
+			Locker:           locker,
+		},
+	}
+}
+
+func rejectedTestEvent(name string) *events.Event {
+	return &events.Event{
+		ID:                 "evt_" + name,
+		TenantID:           types.DefaultTenantID,
+		EnvironmentID:      "env_1",
+		EventName:          name,
+		ExternalCustomerID: "cust_ext_1",
+		Timestamp:          time.Now().UTC(),
+	}
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_DisabledNoop() {
+	svc := s.newRejectedService(false, 10*time.Minute, s.GetLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	assert.Empty(s.T(), s.GetPublishedWebhooks())
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() {
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+
+	published := s.GetPublishedWebhooks()
+	assert.Len(s.T(), published, 1)
+	got := published[0]
+	assert.Equal(s.T(), types.WebhookEventEventRejected, got.EventName)
+	assert.Equal(s.T(), types.SystemEntityTypeEvent, got.EntityType)
+	assert.Equal(s.T(), "evt_api_call", got.EntityID)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_ThrottledPerEventName() {
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
+
+	// Same event name three times within the window -> only the first fires.
+	for i := 0; i < 3; i++ {
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 1)
+
+	// A different event name is throttled independently -> fires once more.
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("other_event"), types.RejectedEventReasonNoMatchingMeter)
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 2)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_NoLockerFiresEveryTime() {
+	svc := s.newRejectedService(true, 10*time.Minute, nil) // no Locker -> fail-open
+	for i := 0; i < 3; i++ {
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 3)
 }
 
 // --- checkMeterFilters tests ---
@@ -420,6 +494,135 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 		ExternalCustomerID: "ext_1",
 	}
 
-	svc.runMeterUsagePostInsertSideEffects(ctx, event)
+	svc.runMeterUsagePostInsertSideEffects(ctx, event, []*events.MeterUsage{})
 	assert.Equal(t, existing.ID, event.CustomerID)
+}
+
+// --- checkSpendBreachForEvent tests ---
+
+// MeterUsageTrackingEvaluationSuite covers checkSpendBreachForEvent's short-circuit gates — unknown
+// customer, no affected line items, nothing configured — which all return before any billing
+// calculation runs. It uses real in-memory repos (unlike MeterUsageTrackingSuite above) because
+// checkSpendBreachForEvent reads through CustomerRepo/SubscriptionLineItemRepo/AlertRepo.
+//
+// It does not cover an actual threshold-crossing → LogAlert → webhook run: that needs a full
+// GetMeterUsageBySubscription/CalculateMeterUsageCharges fixture (customer, subscription, usage
+// price, meter, and meter_usage rows), which no existing test in this codebase builds with
+// in-memory stores yet. That's better proven via a live-DB integration test than invented here.
+type MeterUsageTrackingEvaluationSuite struct {
+	testutil.BaseServiceTestSuite
+	svc      *meterUsageTrackingService
+	customer *customer.Customer
+}
+
+func TestMeterUsageTrackingEvaluation(t *testing.T) {
+	suite.Run(t, new(MeterUsageTrackingEvaluationSuite))
+}
+
+func (s *MeterUsageTrackingEvaluationSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+
+	s.svc = &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger:                   s.GetLogger(),
+			Config:                   s.GetConfig(),
+			DB:                       s.GetDB(),
+			SubRepo:                  s.GetStores().SubscriptionRepo,
+			SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
+			FeatureRepo:              s.GetStores().FeatureRepo,
+			GroupRepo:                s.GetStores().GroupRepo,
+			AlertRepo:                s.GetStores().AlertRepo,
+			AlertLogsRepo:            s.GetStores().AlertLogsRepo,
+			CustomerRepo:             s.GetStores().CustomerRepo,
+			WalletRepo:               s.GetStores().WalletRepo,
+			WebhookPublisher:         s.GetWebhookPublisher(),
+		},
+		meterUsageRepo:      s.GetStores().MeterUsageRepo,
+		expressionEvaluator: expression.NewCELEvaluator(),
+	}
+
+	s.customer = &customer.Customer{
+		ID:         "cust_eval_test",
+		ExternalID: "ext_cust_eval_test",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), s.customer))
+}
+
+func (s *MeterUsageTrackingEvaluationSuite) countAlertLogs() int {
+	logs, err := s.GetStores().AlertLogsRepo.List(s.GetContext(), types.NewNoLimitAlertLogFilter())
+	s.Require().NoError(err)
+	return len(logs)
+}
+
+func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_UnknownCustomer_NoOp() {
+	event := &events.Event{
+		ID:                 "event_unknown_customer",
+		ExternalCustomerID: "does_not_exist",
+	}
+
+	s.NotPanics(func() {
+		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_eval_test"}, s.customer)
+	})
+	s.Equal(0, s.countAlertLogs())
+}
+
+func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAffectedLineItems_NoOp() {
+	event := &events.Event{
+		ID:                 "event_no_line_items",
+		ExternalCustomerID: s.customer.ExternalID,
+	}
+
+	s.NotPanics(func() {
+		s.svc.checkSpendBreachForEvent(s.GetContext(), event, []string{"meter_does_not_exist"}, s.customer)
+	})
+	s.Equal(0, s.countAlertLogs())
+}
+
+func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAlertSettingsConfigured_NoOp() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_eval_test",
+		CustomerID:         s.customer.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		Currency:           "usd",
+		BillingAnchor:      now,
+		StartDate:          now,
+		CurrentPeriodStart: now,
+		CurrentPeriodEnd:   now.AddDate(0, 1, 0),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:             "subs_line_eval_test",
+		SubscriptionID: sub.ID,
+		CustomerID:     s.customer.ID,
+		EntityType:     types.SubscriptionLineItemEntityTypePlan,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        "meter_eval_test",
+		DisplayName:    "API Calls",
+		Quantity:       decimal.Zero,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      sub.StartDate,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{lineItem}))
+
+	event := &events.Event{
+		ID:                 "event_no_alert_settings",
+		ExternalCustomerID: s.customer.ExternalID,
+	}
+
+	// No alert_settings row exists for this subscription, so this must return before ever
+	// attempting a billing calculation — which would otherwise fail/panic on this bare fixture
+	// (no price/meter usage data behind it).
+	s.NotPanics(func() {
+		s.svc.checkSpendBreachForEvent(ctx, event, []string{"meter_eval_test"}, s.customer)
+	})
+	s.Equal(0, s.countAlertLogs())
 }

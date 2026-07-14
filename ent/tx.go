@@ -20,6 +20,8 @@ type Tx struct {
 	AddonAssociation *AddonAssociationClient
 	// AlertLogs is the client for interacting with the AlertLogs builders.
 	AlertLogs *AlertLogsClient
+	// AlertSettings is the client for interacting with the AlertSettings builders.
+	AlertSettings *AlertSettingsClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -250,6 +252,7 @@ func (tx *Tx) init() {
 	tx.Addon = NewAddonClient(tx.config)
 	tx.AddonAssociation = NewAddonAssociationClient(tx.config)
 	tx.AlertLogs = NewAlertLogsClient(tx.config)
+	tx.AlertSettings = NewAlertSettingsClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)

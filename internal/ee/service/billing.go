@@ -80,6 +80,9 @@ type BillingService interface {
 	// CalculateFeatureUsageCharges calculates usage charges for a subscription.
 	// Set params.Source to types.UsageSourceInvoiceCreation to use FINAL on feature_usage in ClickHouse.
 	CalculateFeatureUsageCharges(ctx context.Context, params *dto.CalculateFeatureUsageChargesParams) (*dto.CalculateFeatureUsageChargesResult, error)
+
+	// CalculateMeterUsageCharges calculates usage charges for a subscription.
+	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 }
 
 type billingService struct {
@@ -3509,7 +3512,12 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			Source:         string(types.UsageSourceAnalytics),
 		}
 
-		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+		var usage *dto.GetUsageBySubscriptionResponse
+		if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
+			usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+		} else {
+			usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+		}
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get usage for subscription", "subscription_id", subscriptionID, "error", err)
 			continue

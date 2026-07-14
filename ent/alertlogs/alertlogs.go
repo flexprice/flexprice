@@ -43,6 +43,8 @@ const (
 	FieldAlertStatus = "alert_status"
 	// FieldAlertInfo holds the string denoting the alert_info field in the database.
 	FieldAlertInfo = "alert_info"
+	// FieldAlertSettingID holds the string denoting the alert_setting_id field in the database.
+	FieldAlertSettingID = "alert_setting_id"
 	// Table holds the table name of the alertlogs in the database.
 	Table = "alert_logs"
 )
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldAlertType,
 	FieldAlertStatus,
 	FieldAlertInfo,
+	FieldAlertSettingID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -176,4 +179,9 @@ func ByAlertType(opts ...sql.OrderTermOption) OrderOption {
 // ByAlertStatus orders the results by the alert_status field.
 func ByAlertStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAlertStatus, opts...).ToFunc()
+}
+
+// ByAlertSettingID orders the results by the alert_setting_id field.
+func ByAlertSettingID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAlertSettingID, opts...).ToFunc()
 }

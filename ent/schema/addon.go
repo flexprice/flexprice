@@ -64,6 +64,7 @@ func (Addon) Fields() []ent.Field {
 func (Addon) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("entitlements", Entitlement.Type),
+		edge.To("credit_grants", CreditGrant.Type),
 	}
 }
 
