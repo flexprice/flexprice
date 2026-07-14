@@ -32,6 +32,17 @@
 //
 // This ensures that events are correctly grouped into the appropriate billing periods
 // using day-level granularity for better predictability and user understanding.
+//
+// Query Parameterization
+// =======================
+//
+// All queries built in this file use `?` positional placeholders for any value that
+// originates from user/API input (filter property names/values, customer IDs, event
+// name, timezone, group-by property, timestamps). Each query-building function returns
+// (query string, []interface{} args) — the args slice must be passed to the ClickHouse
+// driver's Query(ctx, query, args...) call in the same order the placeholders appear in
+// the concatenated query string, since ClickHouse binds positionally. This mirrors the
+// pattern already used in meter_usage_query_builder.go.
 
 package clickhouse
 
@@ -73,11 +84,14 @@ func getDeduplicationKey() string {
 	return "id"
 }
 
-// buildUsageEventCustomerFilters returns PREWHERE fragments for external_customer_id and FlexPrice customer_id.
-// Params may be nil. External merges ExternalCustomerID and ExternalCustomerIDs (deduped); internal uses CustomerID only.
-func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustomerFilter string, customerFilter string) {
+// buildUsageEventCustomerFilters returns PREWHERE fragments (with `?` placeholders) for
+// external_customer_id and FlexPrice customer_id, plus the args to bind against them, in
+// the order the two returned fragments are concatenated into the final query. Params may
+// be nil. External merges ExternalCustomerID and ExternalCustomerIDs (deduped); internal
+// uses CustomerID only.
+func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustomerFilter string, customerFilter string, args []interface{}) {
 	if params == nil {
-		return "", ""
+		return "", "", nil
 	}
 
 	extIDs := make([]string, 0)
@@ -92,19 +106,24 @@ func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustome
 	case 0:
 		externalCustomerFilter = ""
 	case 1:
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", extUnique[0])
+		externalCustomerFilter = "AND external_customer_id = ?"
+		args = append(args, extUnique[0])
 	default:
-		quoted := make([]string, len(extUnique))
-		for i, id := range extUnique {
-			quoted[i] = fmt.Sprintf("'%s'", id)
+		placeholders := make([]string, len(extUnique))
+		for i := range extUnique {
+			placeholders[i] = "?"
 		}
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id IN (%s)", strings.Join(quoted, ", "))
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id IN (%s)", strings.Join(placeholders, ", "))
+		for _, id := range extUnique {
+			args = append(args, id)
+		}
 	}
 
 	if params.CustomerID != "" {
-		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+		customerFilter = "AND customer_id = ?"
+		args = append(args, params.CustomerID)
 	}
-	return externalCustomerFilter, customerFilter
+	return externalCustomerFilter, customerFilter, args
 }
 
 func formatClickHouseDateTime(t time.Time) string {
@@ -114,7 +133,8 @@ func formatClickHouseDateTime(t time.Time) string {
 // normalizeCHTimezone returns a valid IANA timezone name for ClickHouse
 // toStartOf* functions, defaulting to UTC for empty, "UTC", or unresolvable
 // values. Passing an invalid name straight to ClickHouse would error the query,
-// so this is the single guard shared by both window formatters.
+// so this is the single guard shared by both window formatters. Since the return
+// value is validated against time.LoadLocation, it is safe to interpolate directly.
 func normalizeCHTimezone(tz string) string {
 	if tz == "" || tz == types.DefaultTimezone {
 		return types.DefaultTimezone
@@ -128,7 +148,11 @@ func normalizeCHTimezone(tz string) string {
 // formatWindowSize returns the ClickHouse expression that buckets `timestamp`
 // into the given window in the given timezone. "UTC" is a valid ClickHouse
 // timezone argument and yields identical results to omitting it, so the tz is
-// always passed — there is no UTC special-casing.
+// always passed — there is no UTC special-casing. The tz value has already been
+// validated by normalizeCHTimezone (constrained to resolvable IANA names via
+// time.LoadLocation), so it is safe to interpolate directly here rather than bind
+// as a query arg — these window expressions are used inside larger fmt.Sprintf
+// templates that are themselves fully parameterized for user-controlled values.
 func formatWindowSize(windowSize types.WindowSize, tz string) string {
 	if windowSize == "" {
 		return ""
@@ -200,68 +224,77 @@ func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAncho
 	return formatWindowSize(windowSize, tz)
 }
 
-func buildFilterConditions(filters map[string][]string) string {
+// buildFilterConditions builds JSONExtractString filter fragments using positional `?`
+// placeholders for both the property name and its value(s) — both are user-controlled
+// (request body `filters` map) and must never be interpolated into the query string.
+// Returns the WHERE-fragment (e.g. "AND JSONExtractString(properties, ?) IN (?,?) AND ...")
+// and the args to bind, in the exact order the placeholders appear.
+func buildFilterConditions(filters map[string][]string) (string, []interface{}) {
 	if len(filters) == 0 {
-		return ""
+		return "", nil
 	}
 
 	var conditions []string
+	var args []interface{}
 	for key, values := range filters {
 		if len(values) == 0 {
 			continue
 		}
 
-		quotedValues := make([]string, len(values))
-		for i, v := range values {
-			quotedValues[i] = fmt.Sprintf("'%s'", v)
+		placeholders := make([]string, len(values))
+		for i := range values {
+			placeholders[i] = "?"
 		}
 
 		conditions = append(conditions, fmt.Sprintf(
-			"JSONExtractString(properties, '%s') IN (%s)",
-			key,
-			strings.Join(quotedValues, ","),
+			"JSONExtractString(properties, ?) IN (%s)",
+			strings.Join(placeholders, ","),
 		))
+		args = append(args, key)
+		for _, v := range values {
+			args = append(args, v)
+		}
 	}
 
 	if len(conditions) == 0 {
-		return ""
+		return "", nil
 	}
 
-	return "AND " + strings.Join(conditions, " AND ")
+	return "AND " + strings.Join(conditions, " AND "), args
 }
 
-func buildTimeConditions(params *events.UsageParams) string {
-	conditions := parseTimeConditions(params)
+// buildTimeConditions builds the time-range WHERE fragment using `?` placeholders.
+func buildTimeConditions(params *events.UsageParams) (string, []interface{}) {
+	conditions, args := parseTimeConditions(params)
 
 	if len(conditions) == 0 {
-		return ""
+		return "", nil
 	}
 
-	return "AND " + strings.Join(conditions, " AND ")
+	return "AND " + strings.Join(conditions, " AND "), args
 }
 
-func parseTimeConditions(params *events.UsageParams) []string {
+func parseTimeConditions(params *events.UsageParams) ([]string, []interface{}) {
 	var conditions []string
+	var args []interface{}
 
 	if !params.StartTime.IsZero() {
-		conditions = append(conditions,
-			fmt.Sprintf("timestamp >= toDateTime64('%s', 3)",
-				formatClickHouseDateTime(params.StartTime)))
+		conditions = append(conditions, "timestamp >= toDateTime64(?, 3)")
+		args = append(args, formatClickHouseDateTime(params.StartTime))
 	}
 
 	if !params.EndTime.IsZero() {
-		conditions = append(conditions,
-			fmt.Sprintf("timestamp < toDateTime64('%s', 3)",
-				formatClickHouseDateTime(params.EndTime)))
+		conditions = append(conditions, "timestamp < toDateTime64(?, 3)")
+		args = append(args, formatClickHouseDateTime(params.EndTime))
 	}
 
-	return conditions
+	return conditions, args
 }
 
 // SumAggregator implements sum aggregation
 type SumAggregator struct{}
 
-func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -270,7 +303,7 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 	return a.getNonWindowedQuery(ctx, params)
 }
 
-func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -284,21 +317,21 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-        SELECT 
+	query := fmt.Sprintf(`
+        SELECT
             %s sum(value) as total
         FROM (
             SELECT
-                %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
+                %s anyLast(JSONExtractFloat(assumeNotNull(properties), ?)) as value
             FROM events
-            PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+            PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
                 %s
@@ -309,10 +342,6 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
     `,
 		selectClause,
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -320,26 +349,33 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		getDeduplicationKey(),
 		windowGroupBy,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
-func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
 	// Get sum values per bucket, return each bucket's sum separately
-	return fmt.Sprintf(`
+	query := fmt.Sprintf(`
 		WITH bucket_sums AS (
 			SELECT
 				%s as bucket_start,
-				sum(JSONExtractFloat(assumeNotNull(properties), '%s')) as bucket_sum
+				sum(JSONExtractFloat(assumeNotNull(properties), ?)) as bucket_sum
 			FROM events FINAL
-			PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+			PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
 				%s
@@ -355,14 +391,17 @@ func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		ORDER BY bucket_start
 	`,
 		bucketWindow,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *SumAggregator) GetType() types.AggregationType {
@@ -372,7 +411,7 @@ func (a *SumAggregator) GetType() types.AggregationType {
 // CountAggregator implements count aggregation
 type CountAggregator struct{}
 
-func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	groupByClause := ""
@@ -382,18 +421,18 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-        SELECT 
+	query := fmt.Sprintf(`
+        SELECT
             %s count(DISTINCT %s) as total
         FROM events
-        PREWHERE tenant_id = '%s'
-			AND environment_id = '%s'
-			AND event_name = '%s'
+        PREWHERE tenant_id = ?
+			AND environment_id = ?
+			AND event_name = ?
 			%s
 			%s
             %s
@@ -402,14 +441,18 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
     `,
 		selectClause,
 		getDeduplicationKey(),
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
 		groupByClause)
+
+	args := []interface{}{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *CountAggregator) GetType() types.AggregationType {
@@ -419,7 +462,7 @@ func (a *CountAggregator) GetType() types.AggregationType {
 // CountUniqueAggregator implements count unique aggregation
 type CountUniqueAggregator struct{}
 
-func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -433,21 +476,21 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-        SELECT 
+	query := fmt.Sprintf(`
+        SELECT
             %s count(DISTINCT property_value) as total
         FROM (
             SELECT
-                %s JSONExtractString(assumeNotNull(properties), '%s') as property_value
+                %s JSONExtractString(assumeNotNull(properties), ?) as property_value
             FROM events
-            PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+            PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
                 %s
@@ -458,10 +501,6 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
     `,
 		selectClause,
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -469,6 +508,13 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 		getDeduplicationKey(),
 		windowGroupBy,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *CountUniqueAggregator) GetType() types.AggregationType {
@@ -478,7 +524,7 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 // AvgAggregator implements avg aggregation
 type AvgAggregator struct{}
 
-func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -492,21 +538,21 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-        SELECT 
+	query := fmt.Sprintf(`
+        SELECT
             %s avg(value) as total
         FROM (
             SELECT
-                %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
+                %s anyLast(JSONExtractFloat(assumeNotNull(properties), ?)) as value
             FROM events
-            PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s' 
+            PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
 				%s
@@ -517,10 +563,6 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
     `,
 		selectClause,
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -528,6 +570,13 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		getDeduplicationKey(),
 		windowGroupBy,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *AvgAggregator) GetType() types.AggregationType {
@@ -537,7 +586,7 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 // LatestAggregator implements latest value aggregation
 type LatestAggregator struct{}
 
-func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	windowClause := ""
 	groupByClause := ""
@@ -547,19 +596,19 @@ func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsagePar
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-        SELECT 
-            %s argMax(JSONExtractFloat(assumeNotNull(properties), '%s'), timestamp) as total
-        FROM 
+	query := fmt.Sprintf(`
+        SELECT
+            %s argMax(JSONExtractFloat(assumeNotNull(properties), ?), timestamp) as total
+        FROM
 			events
-			PREWHERE tenant_id = '%s'
-                AND environment_id = '%s'
-                AND event_name = '%s'
+			PREWHERE tenant_id = ?
+                AND environment_id = ?
+                AND event_name = ?
                 %s
                 %s
                 %s
@@ -567,15 +616,18 @@ func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsagePar
         %s
     `,
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *LatestAggregator) GetType() types.AggregationType {
@@ -585,7 +637,7 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 // SumWithMultiAggregator implements sum with multiplier aggregation
 type SumWithMultiAggregator struct{}
 
-func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -599,26 +651,28 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
+	// Multiplier is a decimal.Decimal value computed server-side (not raw user string
+	// input) — safe to interpolate as a numeric literal via .String(), same as before.
 	multiplier := decimal.NewFromInt(1)
 	if params.Multiplier != nil {
 		multiplier = *params.Multiplier
 	}
 
-	return fmt.Sprintf(`
-        SELECT 
+	query := fmt.Sprintf(`
+        SELECT
             %s (sum(value) * %s) as total
         FROM (
             SELECT
-                %s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
+                %s anyLast(JSONExtractFloat(assumeNotNull(properties), ?)) as value
             FROM events
-            PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+            PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
                 %s
@@ -630,10 +684,6 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 		selectClause,
 		multiplier.String(),
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -641,6 +691,13 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 		getDeduplicationKey(),
 		windowGroupBy,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *SumWithMultiAggregator) GetType() types.AggregationType {
@@ -650,7 +707,7 @@ func (a *SumWithMultiAggregator) GetType() types.AggregationType {
 // MaxAggregator implements max aggregation
 type MaxAggregator struct{}
 
-func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -659,7 +716,7 @@ func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 	return a.getNonWindowedQuery(ctx, params)
 }
 
-func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -673,21 +730,21 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
-		SELECT 
+	query := fmt.Sprintf(`
+		SELECT
 			%s max(value) as total
 		FROM (
 			SELECT
-				%s anyLast(JSONExtractFloat(assumeNotNull(properties), '%s')) as value
+				%s anyLast(JSONExtractFloat(assumeNotNull(properties), ?)) as value
 			FROM events
-			PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+			PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
 				%s
@@ -698,10 +755,6 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 	`,
 		selectClause,
 		windowClause,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
@@ -709,15 +762,22 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		getDeduplicationKey(),
 		windowGroupBy,
 		groupByClause)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
-func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.Timezone)
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
 	// When GroupBy has a "properties.X" entry, return per-group rows so tiered pricing
 	// can be applied per group (e.g. per KRN). The events-table SQL only supports
@@ -725,18 +785,21 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
 	if groupByProperty := events.FirstGroupByProperty(params.GroupBy); groupByProperty != "" && validateGroupByProperty(groupByProperty) == nil {
+		// groupByProperty has already been validated by validateGroupByProperty
+		// (alphanumeric/underscore/dot only), so it is safe to interpolate directly
+		// into the JSONExtractString key argument here — it cannot carry SQL metacharacters.
 		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", groupByProperty)
 
-		return fmt.Sprintf(`
+		query := fmt.Sprintf(`
 			WITH per_group AS (
 				SELECT
 					%s as bucket_start,
 					%s as group_key,
-					max(JSONExtractFloat(assumeNotNull(properties), '%s')) as group_value
+					max(JSONExtractFloat(assumeNotNull(properties), ?)) as group_value
 				FROM events FINAL
-				PREWHERE tenant_id = '%s'
-					AND environment_id = '%s'
-					AND event_name = '%s'
+				PREWHERE tenant_id = ?
+					AND environment_id = ?
+					AND event_name = ?
 					%s
 					%s
 					%s
@@ -753,26 +816,29 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		`,
 			bucketWindow,
 			groupByExpr,
-			params.PropertyName,
-			types.GetTenantID(ctx),
-			types.GetEnvironmentID(ctx),
-			params.EventName,
 			externalCustomerFilter,
 			customerFilter,
 			filterConditions,
 			timeConditions)
+
+		args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+		args = append(args, customerArgs...)
+		args = append(args, filterArgs...)
+		args = append(args, timeArgs...)
+
+		return query, args
 	}
 
 	// First get max values per bucket, then sum across all buckets
-	return fmt.Sprintf(`
+	query := fmt.Sprintf(`
 		WITH bucket_maxes AS (
 			SELECT
 				%s as bucket_start,
-				max(JSONExtractFloat(assumeNotNull(properties), '%s')) as bucket_max
+				max(JSONExtractFloat(assumeNotNull(properties), ?)) as bucket_max
 			FROM events FINAL
-			PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+			PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
 				%s
@@ -788,14 +854,17 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		ORDER BY bucket_start
 	`,
 		bucketWindow,
-		params.PropertyName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions)
+
+	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *MaxAggregator) GetType() types.AggregationType {
@@ -805,7 +874,7 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 // WeightedSumAggregator implements weighted sum aggregation
 type WeightedSumAggregator struct{}
 
-func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) (string, []interface{}) {
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
 	selectClause := ""
 	windowClause := ""
@@ -817,19 +886,19 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
+	externalCustomerFilter, customerFilter, customerArgs := buildUsageEventCustomerFilters(params)
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params)
 
-	return fmt.Sprintf(`
+	query := fmt.Sprintf(`
         WITH
-            toDateTime64('%s', 3) AS period_start,
-            toDateTime64('%s', 3) AS period_end,
+            toDateTime64(?, 3) AS period_start,
+            toDateTime64(?, 3) AS period_end,
             dateDiff('second', period_start, period_end) AS total_seconds
-        SELECT 
+        SELECT
             %s sum(
-                (JSONExtractFloat(assumeNotNull(properties), '%s') / nullIf(total_seconds, 0)) *
+                (JSONExtractFloat(assumeNotNull(properties), ?) / nullIf(total_seconds, 0)) *
                 dateDiff('second', timestamp, period_end)
             ) AS total
         FROM (
@@ -837,9 +906,9 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
                 %s timestamp,
                 properties
             FROM events
-            PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				AND event_name = '%s'
+            PREWHERE tenant_id = ?
+				AND environment_id = ?
+				AND event_name = ?
 				%s
 				%s
                 %s
@@ -847,204 +916,30 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
         )
         %s
     `,
-		formatClickHouseDateTime(params.StartTime),
-		formatClickHouseDateTime(params.EndTime),
 		selectClause,
-		params.PropertyName,
 		windowClause,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		params.EventName,
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
 		timeConditions,
 		groupByClause,
 	)
+
+	args := []interface{}{
+		formatClickHouseDateTime(params.StartTime),
+		formatClickHouseDateTime(params.EndTime),
+		params.PropertyName,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.EventName,
+	}
+	args = append(args, customerArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+
+	return query, args
 }
 
 func (a *WeightedSumAggregator) GetType() types.AggregationType {
 	return types.AggregationWeightedSum
 }
-
-// weighted sum final query without window size
-// WITH
-//             toDateTime64('2025-07-31 18:30:00.000', 3) AS period_start,
-//             toDateTime64('2025-08-31 18:30:00.000', 3) AS period_end,
-//             dateDiff('second', period_start, period_end) AS total_seconds
-//         SELECT
-//              sum(
-//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
-//                 dateDiff('second', timestamp, period_end)
-//             ) AS total
-//         FROM (
-//             SELECT
-//                  timestamp,
-//                 properties
-//             FROM events
-//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
-//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
-//                                 AND event_name = 'weighted_sum_event'
-//                                 AND external_customer_id = 'cust-wc-5'
-
-//                 AND timestamp >= toDateTime64('2025-07-31 18:30:00.000', 3) AND timestamp < toDateTime64('2025-08-31 18:30:00.000', 3)
-//         )
-
-// weighted sum final query with window size
-// WITH
-//             toDateTime64('2025-09-12 11:08:50.630', 3) AS period_start,
-//             toDateTime64('2025-09-19 11:08:50.630', 3) AS period_end,
-//             dateDiff('second', period_start, period_end) AS total_seconds
-//         SELECT
-//             window_size, sum(
-//                 (JSONExtractFloat(assumeNotNull(properties), 'value') / nullIf(total_seconds, 0)) *
-//                 dateDiff('second', timestamp, period_end)
-//             ) AS total
-//         FROM (
-//             SELECT
-//                 toStartOfInterval(timestamp, INTERVAL 15 MINUTE) AS window_size, timestamp,
-//                 properties
-//             FROM events
-//             PREWHERE tenant_id = '00000000-0000-0000-0000-000000000000'
-//                                 AND environment_id = 'env_01K3G204ZZS7F1CAPE32TS0X9W'
-//                                 AND event_name = 'weighted_sum_event'
-//                                 AND external_customer_id = 'cust-wc-5'
-//                                 AND customer_id = 'cust_01K5GHAV4R787PVZTYW5G9BMGD'
-
-//                 AND timestamp >= toDateTime64('2025-09-12 11:08:50.630', 3) AND timestamp < toDateTime64('2025-09-19 11:08:50.630', 3)
-//         )
-//         GROUP BY window_size ORDER BY window_size
-
-// // buildFilterGroupsQuery builds a query that matches events to the most specific filter group
-// func buildFilterGroupsQuery(params *events.UsageWithFiltersParams) string {
-//     var queryBuilder strings.Builder
-
-//     // Base query with CTE for filter matches
-//     queryBuilder.WriteString(fmt.Sprintf(`
-//         WITH
-//         base_events AS (
-//             SELECT
-//                 %s,
-//                 timestamp,
-//                 properties
-//             FROM events
-//             WHERE event_name = $1
-//             %s
-//         ),
-//         filter_matches AS (
-//             SELECT
-//                 *,
-//                 -- Calculate matches for each filter group
-//                 ARRAY[
-//     `, getDeduplicationKey(), buildTimeAndCustomerConditions(params.UsageParams)))
-
-//     // Generate array of filter group matches
-//     for i, group := range params.FilterGroups {
-//         if i > 0 {
-//             queryBuilder.WriteString(",")
-//         }
-
-//         // Default group case (no filters)
-//         if len(group.Filters) == 0 {
-//             queryBuilder.WriteString(fmt.Sprintf(`
-//                 (%d, %d, 1)  -- group_id, priority, always matches
-//             `, group.ID, group.Priority))
-//             continue
-//         }
-
-//         // Build filter conditions
-//         var conditions []string
-//         for property, values := range group.Filters {
-//             quotedValues := make([]string, len(values))
-//             for i, v := range values {
-//                 quotedValues[i] = fmt.Sprintf("'%s'", v)
-//             }
-//             conditions = append(conditions, fmt.Sprintf(
-//                 "JSONExtractString(properties, '%s') IN (%s)",
-//                 property,
-//                 strings.Join(quotedValues, ","),
-//             ))
-//         }
-
-//         queryBuilder.WriteString(fmt.Sprintf(`
-//             (%d, %d, %s)  -- group_id, priority, filter conditions
-//         `, group.ID, group.Priority, strings.Join(conditions, " AND ")))
-//     }
-
-//     // Complete filter_matches CTE and add matched_events CTE
-//     queryBuilder.WriteString(`
-//         ] as group_matches
-//         ),
-//         matched_events AS (
-//             SELECT
-//                 *,
-//                 -- Select group with highest priority that matches
-//                 (
-//                     SELECT group_id
-//                     FROM arrayJoin(group_matches) AS g
-//                     WHERE g.3 = 1  -- where matches = true
-//                     ORDER BY g.2 DESC, group_id  -- order by priority desc, then group_id
-//                     LIMIT 1
-//                 ) as best_match_group
-//             FROM base_events
-//         )
-//     `)
-
-//     // Add final aggregation based on params
-//     queryBuilder.WriteString(`
-//         SELECT
-//             best_match_group as filter_group_id,
-//     `)
-
-//     // Add aggregation function
-//     switch params.AggregationType {
-//     case types.AggregationCount:
-//         queryBuilder.WriteString(`
-//             COUNT(*) as value
-//         `)
-//     case types.AggregationSum:
-//         queryBuilder.WriteString(fmt.Sprintf(`
-//             SUM(CAST(JSONExtractString(properties, '%s') AS Float64)) as value
-//         `, params.PropertyName))
-//     case types.AggregationAvg:
-//         queryBuilder.WriteString(fmt.Sprintf(`
-//             AVG(CAST(JSONExtractString(properties, '%s') AS Float64)) as value
-//         `, params.PropertyName))
-//     }
-
-//     // Add grouping and ordering
-//     queryBuilder.WriteString(`
-//         FROM matched_events
-//         GROUP BY best_match_group
-//         ORDER BY best_match_group
-//     `)
-
-//     return queryBuilder.String()
-// }
-
-// // buildTimeAndCustomerConditions builds the WHERE clause for time and customer filters
-// func buildTimeAndCustomerConditions(params *events.UsageParams) string {
-//     var conditions []string
-
-//     // Add time range conditions
-//     if !params.StartTime.IsZero() {
-//         conditions = append(conditions,
-//             fmt.Sprintf("AND timestamp >= '%s'", params.StartTime.Format(time.RFC3339)))
-//     }
-//     if !params.EndTime.IsZero() {
-//         conditions = append(conditions,
-//             fmt.Sprintf("AND timestamp < '%s'", params.EndTime.Format(time.RFC3339)))
-//     }
-
-//     // Add customer conditions
-//     if params.ExternalCustomerID != "" {
-//         conditions = append(conditions,
-//             fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID))
-//     }
-//     if params.CustomerID != "" {
-//         conditions = append(conditions,
-//             fmt.Sprintf("AND customer_id = '%s'", params.CustomerID))
-//     }
-
-//     return strings.Join(conditions, " ")
-// }

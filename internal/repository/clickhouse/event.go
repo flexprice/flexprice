@@ -263,9 +263,9 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 		return nil, err
 	}
 
-	query := aggregator.GetQuery(ctx, params)
+	query, queryArgs := aggregator.GetQuery(ctx, params)
 
-	rows, err := r.store.GetConn().Query(ctx, query)
+	rows, err := r.store.GetConn().Query(ctx, query, queryArgs...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
