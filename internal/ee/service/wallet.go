@@ -1171,7 +1171,6 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 	}
 
 	// Publish webhook event after transaction commits
-	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionUpdated, tx.ID)
 
 	// Log credit balance alert after transaction completes
