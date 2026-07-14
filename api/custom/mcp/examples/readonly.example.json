@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "flexprice": {
+    "flexprice-readonly": {
       "command": "npx",
       "args": [
         "-y",
@@ -11,11 +11,7 @@
         "--api-key-auth",
         "YOUR_API_KEY",
         "--scope",
-        "read",
-        "--scope",
-        "write",
-        "--mode",
-        "dynamic"
+        "read"
       ]
     }
   }
