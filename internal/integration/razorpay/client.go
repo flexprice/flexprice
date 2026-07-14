@@ -408,7 +408,8 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 func (c *Client) sdkClient(ctx context.Context) (*razorpay.Client, error) {
 	rc, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
-		return nil, ierr.NewError("failed to initialize Razorpay client").
+		return nil, ierr.WithError(err).
+			WithMessage("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
 	}
