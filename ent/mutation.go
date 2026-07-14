@@ -22076,6 +22076,7 @@ type CustomerMutation struct {
 	external_id         *string
 	name                *string
 	email               *string
+	contact             *string
 	address_line1       *string
 	address_line2       *string
 	address_city        *string
@@ -22654,6 +22655,55 @@ func (m *CustomerMutation) ResetEmail() {
 	delete(m.clearedFields, customer.FieldEmail)
 }
 
+// SetContact sets the "contact" field.
+func (m *CustomerMutation) SetContact(s string) {
+	m.contact = &s
+}
+
+// Contact returns the value of the "contact" field in the mutation.
+func (m *CustomerMutation) Contact() (r string, exists bool) {
+	v := m.contact
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContact returns the old "contact" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldContact(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContact is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContact requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContact: %w", err)
+	}
+	return oldValue.Contact, nil
+}
+
+// ClearContact clears the value of the "contact" field.
+func (m *CustomerMutation) ClearContact() {
+	m.contact = nil
+	m.clearedFields[customer.FieldContact] = struct{}{}
+}
+
+// ContactCleared returns if the "contact" field was cleared in this mutation.
+func (m *CustomerMutation) ContactCleared() bool {
+	_, ok := m.clearedFields[customer.FieldContact]
+	return ok
+}
+
+// ResetContact resets all changes to the "contact" field.
+func (m *CustomerMutation) ResetContact() {
+	m.contact = nil
+	delete(m.clearedFields, customer.FieldContact)
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (m *CustomerMutation) SetAddressLine1(s string) {
 	m.address_line1 = &s
@@ -23031,7 +23081,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -23064,6 +23114,9 @@ func (m *CustomerMutation) Fields() []string {
 	}
 	if m.email != nil {
 		fields = append(fields, customer.FieldEmail)
+	}
+	if m.contact != nil {
+		fields = append(fields, customer.FieldContact)
 	}
 	if m.address_line1 != nil {
 		fields = append(fields, customer.FieldAddressLine1)
@@ -23116,6 +23169,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case customer.FieldEmail:
 		return m.Email()
+	case customer.FieldContact:
+		return m.Contact()
 	case customer.FieldAddressLine1:
 		return m.AddressLine1()
 	case customer.FieldAddressLine2:
@@ -23161,6 +23216,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldName(ctx)
 	case customer.FieldEmail:
 		return m.OldEmail(ctx)
+	case customer.FieldContact:
+		return m.OldContact(ctx)
 	case customer.FieldAddressLine1:
 		return m.OldAddressLine1(ctx)
 	case customer.FieldAddressLine2:
@@ -23261,6 +23318,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEmail(v)
 		return nil
+	case customer.FieldContact:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContact(v)
+		return nil
 	case customer.FieldAddressLine1:
 		v, ok := value.(string)
 		if !ok {
@@ -23355,6 +23419,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldEmail) {
 		fields = append(fields, customer.FieldEmail)
 	}
+	if m.FieldCleared(customer.FieldContact) {
+		fields = append(fields, customer.FieldContact)
+	}
 	if m.FieldCleared(customer.FieldAddressLine1) {
 		fields = append(fields, customer.FieldAddressLine1)
 	}
@@ -23404,6 +23471,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldEmail:
 		m.ClearEmail()
+		return nil
+	case customer.FieldContact:
+		m.ClearContact()
 		return nil
 	case customer.FieldAddressLine1:
 		m.ClearAddressLine1()
@@ -23466,6 +23536,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldEmail:
 		m.ResetEmail()
+		return nil
+	case customer.FieldContact:
+		m.ResetContact()
 		return nil
 	case customer.FieldAddressLine1:
 		m.ResetAddressLine1()

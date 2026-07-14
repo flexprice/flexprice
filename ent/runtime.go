@@ -792,7 +792,7 @@ func init() {
 	// customer.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customer.NameValidator = customerDescName.Validators[0].(func(string) error)
 	// customerDescTimezone is the schema descriptor for timezone field.
-	customerDescTimezone := customerFields[10].Descriptor()
+	customerDescTimezone := customerFields[11].Descriptor()
 	// customer.DefaultTimezone holds the default value on creation for the timezone field.
 	customer.DefaultTimezone = customerDescTimezone.Default.(string)
 	entitlementMixin := schema.Entitlement{}.Mixin()

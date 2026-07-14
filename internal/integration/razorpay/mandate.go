@@ -2,6 +2,7 @@ package razorpay
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -106,12 +107,16 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	if c.Email != "" {
 		customerInfo["email"] = c.Email
 	}
+	// Razorpay requires a contact number for recurring/subscription-registration links.
+	if c.Contact != nil && *c.Contact != "" {
+		customerInfo["contact"] = *c.Contact
+	}
 
 	data := map[string]interface{}{
 		"customer":     customerInfo,
 		"type":         "link",
 		"amount":       toPaise(req.Amount),
-		"currency":     req.Currency,
+		"currency":     strings.ToUpper(req.Currency),
 		"description":  "Subscription authorization",
 		"receipt":      req.InvoiceID,
 		"email_notify": true,

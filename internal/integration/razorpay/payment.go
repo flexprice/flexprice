@@ -274,7 +274,9 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	if flexpriceCustomer.Email != "" {
 		customerInfo["email"] = flexpriceCustomer.Email
 	}
-	// Note: contact/phone not available in FlexPrice customer model
+	if flexpriceCustomer.Contact != nil && *flexpriceCustomer.Contact != "" {
+		customerInfo["contact"] = *flexpriceCustomer.Contact
+	}
 
 	// Prepare payment link data according to Razorpay API format
 	// Following the exact format from Razorpay documentation

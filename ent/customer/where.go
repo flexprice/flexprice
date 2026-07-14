@@ -114,6 +114,11 @@ func Email(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldEmail, v))
 }
 
+// Contact applies equality check predicate on the "contact" field. It's identical to ContactEQ.
+func Contact(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldContact, v))
+}
+
 // AddressLine1 applies equality check predicate on the "address_line1" field. It's identical to AddressLine1EQ.
 func AddressLine1(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldAddressLine1, v))
@@ -797,6 +802,81 @@ func EmailEqualFold(v string) predicate.Customer {
 // EmailContainsFold applies the ContainsFold predicate on the "email" field.
 func EmailContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldEmail, v))
+}
+
+// ContactEQ applies the EQ predicate on the "contact" field.
+func ContactEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldContact, v))
+}
+
+// ContactNEQ applies the NEQ predicate on the "contact" field.
+func ContactNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldContact, v))
+}
+
+// ContactIn applies the In predicate on the "contact" field.
+func ContactIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldContact, vs...))
+}
+
+// ContactNotIn applies the NotIn predicate on the "contact" field.
+func ContactNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldContact, vs...))
+}
+
+// ContactGT applies the GT predicate on the "contact" field.
+func ContactGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldContact, v))
+}
+
+// ContactGTE applies the GTE predicate on the "contact" field.
+func ContactGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldContact, v))
+}
+
+// ContactLT applies the LT predicate on the "contact" field.
+func ContactLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldContact, v))
+}
+
+// ContactLTE applies the LTE predicate on the "contact" field.
+func ContactLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldContact, v))
+}
+
+// ContactContains applies the Contains predicate on the "contact" field.
+func ContactContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldContact, v))
+}
+
+// ContactHasPrefix applies the HasPrefix predicate on the "contact" field.
+func ContactHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldContact, v))
+}
+
+// ContactHasSuffix applies the HasSuffix predicate on the "contact" field.
+func ContactHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldContact, v))
+}
+
+// ContactIsNil applies the IsNil predicate on the "contact" field.
+func ContactIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldContact))
+}
+
+// ContactNotNil applies the NotNil predicate on the "contact" field.
+func ContactNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldContact))
+}
+
+// ContactEqualFold applies the EqualFold predicate on the "contact" field.
+func ContactEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldContact, v))
+}
+
+// ContactContainsFold applies the ContainsFold predicate on the "contact" field.
+func ContactContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldContact, v))
 }
 
 // AddressLine1EQ applies the EQ predicate on the "address_line1" field.

@@ -20,6 +20,11 @@ type Customer struct {
 	// Email is the email of the customer
 	Email string `db:"email" json:"email"`
 
+	// Contact is an optional contact number for the customer (e.g. phone),
+	// used by payment providers that require one for recurring/mandate
+	// registration (e.g. Razorpay UPI Autopay).
+	Contact *string `db:"contact" json:"contact,omitempty"`
+
 	// AddressLine1 is the first line of the customer's address
 	AddressLine1 string `db:"address_line1" json:"address_line1"`
 
@@ -61,6 +66,7 @@ func FromEnt(c *ent.Customer) *Customer {
 		ExternalID:        c.ExternalID,
 		Name:              c.Name,
 		Email:             c.Email,
+		Contact:           c.Contact,
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,

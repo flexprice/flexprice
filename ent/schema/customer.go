@@ -49,6 +49,14 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
+		// Contact number (e.g. phone), used by payment providers that require a
+		// contact for recurring/mandate registration (e.g. Razorpay UPI Autopay).
+		field.String("contact").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
 		// Address fields
 		field.String("address_line1").
 			SchemaType(map[string]string{
