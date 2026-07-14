@@ -245,6 +245,17 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Tabs: tabsMetadata,
 		}
+	case types.SecretProviderAWSMarketplace:
+		awsMarketplaceSecrets := &types.AWSMarketplaceConnectionSecrets{}
+		if roleArn, ok := metadata["role_arn"].(string); ok {
+			awsMarketplaceSecrets.RoleArn = roleArn
+		}
+		if externalID, ok := metadata["external_id"].(string); ok {
+			awsMarketplaceSecrets.ExternalID = externalID
+		}
+		return types.ConnectionMetadata{
+			AWSMarketplace: awsMarketplaceSecrets,
+		}
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
 		if clientID, ok := metadata["client_id"].(string); ok {
