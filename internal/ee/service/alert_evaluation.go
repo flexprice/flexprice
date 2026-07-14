@@ -292,7 +292,7 @@ func (s *alertService) evaluateSpendForSubscription(
 // walletService.EvaluateAlertsForWallet. Per-wallet resolve / balance /
 // short-circuit / three-step handler dance lives entirely on walletService —
 // this coordinator only owns the tenant + customer scope.
-func (s *alertService) EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer) error {
+func (s *alertService) EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer, autoTopupIdempotencySeed string) error {
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 	tenantCfg, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 	if err != nil {
@@ -319,7 +319,7 @@ func (s *alertService) EvaluateWalletAlertsForCustomer(ctx context.Context, cust
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
 
 	for _, w := range wallets {
-		if err := walletSvc.EvaluateAlertsForWallet(ctx, w, alertLogsSvc); err != nil {
+		if err := walletSvc.EvaluateAlertsForWallet(ctx, w, alertLogsSvc, autoTopupIdempotencySeed); err != nil {
 			s.Logger.Error(ctx, "wallet alerts: EvaluateAlertsForWallet returned error", "error", err, "wallet_id", w.ID)
 		}
 	}

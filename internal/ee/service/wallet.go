@@ -102,6 +102,7 @@ type WalletService interface {
 	// CompletePurchasedCreditTransaction completes a pending wallet transaction when payment succeeds
 	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error
 
+	// TODO: Cleanup this method, moved to `EvaluateAlertsForWallet`
 	CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error
 
 	// PublishWalletBalanceAlertEvent publishes a wallet balance alert event
@@ -118,7 +119,13 @@ type WalletService interface {
 	// (nil / empty is fine). Per-step failures are logged and skipped so a
 	// single bad wallet handler doesn't block the next; only fatal setup
 	// errors return.
-	EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService) error
+	//
+	// autoTopupIdempotencySeed, when non-empty, is combined with the wallet ID
+	// to form a stable idempotency key for the auto-topup call. Callers driving
+	// this from a retryable context (Temporal activity) must pass a seed that
+	// is constant across retries of the same logical evaluation. Empty seed
+	// preserves the legacy fresh-UUID-per-call behavior.
+	EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService, autoTopupIdempotencySeed string) error
 }
 
 // walletBalanceComputeTimeout bounds the realtime-balance computation in
@@ -2069,20 +2076,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-	// CheckWalletBalanceAlert runs synchronously below for this event, so it is not
-	// published to Kafka — publishing it too would let the async consumer re-run the
-	// same check and double-fire auto top-up.
-	event := &wallet.WalletBalanceAlertEvent{
-		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
-		Timestamp:             time.Now().UTC(),
-		Source:                EventSourceWalletTransaction,
-		CustomerID:            w.CustomerID,
-		ForceCalculateBalance: true,
-		TenantID:              types.GetTenantID(ctx),
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-		WalletID:              req.WalletID,
-	}
-
 	// Log credit balance alert after wallet operation
 	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
 		// Don't fail the transaction if alert logging fails
@@ -2092,8 +2085,10 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		)
 	}
 
-	if err := s.CheckWalletBalanceAlert(ctx, event); err != nil {
-		s.Logger.Error(ctx, "failed to check wallet balance alert after wallet operation",
+	// Only the wallet we just changed can have moved its alert state, so drive
+	// the per-wallet path directly instead of fanning out to every customer wallet.
+	if err := s.EvaluateAlertsForWallet(ctx, w, NewAlertLogsService(s.ServiceParams), ""); err != nil {
+		s.Logger.Error(ctx, "failed to evaluate wallet alerts after wallet operation",
 			"error", err,
 			"wallet_id", req.WalletID,
 			"customer_id", w.CustomerID,
@@ -3188,7 +3183,7 @@ func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string,
 // alert-evaluation coordinator (alert_evaluation.go). Bundles the three
 // steps (wallet-level, feature-level, auto-topup) with the balance fetch
 // and short-circuit so callers don't need access to the private helpers.
-func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService) error {
+func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.Wallet, alertLogs AlertLogsService, autoTopupIdempotencySeed string) error {
 	if w == nil {
 		return nil
 	}
@@ -3210,6 +3205,10 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 		return nil
 	}
 
+	// Note: same cache key is being read & updated by `GetWalletBalanceV2`
+	// so if tenant called get wallet balance v2, then the cached balance will be updated
+	// and if there's no usage in-between, no balance updated webhook will be sent
+	// expecting that tenant already got the updated balance
 	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, w.ID, nil)
 
 	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
@@ -3218,15 +3217,20 @@ func (s *walletService) EvaluateAlertsForWallet(ctx context.Context, w *wallet.W
 		return nil
 	}
 	ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
-	eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
 
 	if hasWalletAlert {
+		eventID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
 		if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, alertSettings, alertLogs, eventID); err != nil {
 			s.Logger.Error(ctx, "failed to process wallet balance alert", "error", err, "wallet_id", w.ID)
 		}
 	}
+
 	if autoTopupEnabled {
-		if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
+		autoTopupKey := ""
+		if autoTopupIdempotencySeed != "" {
+			autoTopupKey = autoTopupIdempotencySeed + "-topup-" + w.ID
+		}
+		if err := s.triggerAutoTopup(ctx, w, ongoingBalance, autoTopupKey); err != nil {
 			s.Logger.Error(ctx, "failed to trigger auto top-up", "error", err, "wallet_id", w.ID)
 		}
 	}
@@ -3592,7 +3596,10 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// CheckWalletBalanceAlert that fires inside processWalletOperation during
 		// the top-up credit will record the recovered (ok) state automatically.
 		if autoTopupEnabled {
-			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
+			// Legacy Kafka path — retries are governed by Kafka delivery and
+			// each delivery has its own message identity, so keep the fresh-UUID
+			// behavior here rather than plumbing a Kafka-scoped stable key.
+			if err := s.triggerAutoTopup(ctx, w, ongoingBalance, ""); err != nil {
 				s.Logger.Error(ctx, "failed to trigger auto top-up",
 					"error", err,
 					"wallet_id", w.ID,
@@ -3661,8 +3668,15 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	return len(invoices) > 0, nil
 }
 
-// triggerAutoTopup checks if auto top-up is enabled and triggers it if needed
-func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
+// triggerAutoTopup checks if auto top-up is enabled and triggers it if needed.
+//
+// autoTopupIdempotencyKey, when non-empty, is used verbatim as the TopUpWallet
+// idempotency key so retries of the same logical evaluation collapse into a
+// single top-up. Callers that own a stable per-evaluation identity (e.g. a
+// Temporal workflow run id) should pass it here. Empty string preserves the
+// legacy behavior of minting a fresh UUID per call — appropriate for callers
+// that already have their own retry/dedup barrier (Kafka consumers, tests).
+func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal, autoTopupIdempotencyKey string) error {
 
 	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
 		s.Logger.Debug(ctx, "auto top-up not enabled, skipping",
@@ -3707,12 +3721,16 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			types.InvoiceBillingReason(""),
 		)
 
+		idempotencyKey := autoTopupIdempotencyKey
+		if idempotencyKey == "" {
+			idempotencyKey = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)
+		}
 		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
 			CreditsToAdd:      *w.AutoTopup.Amount,
 			Amount:            *w.AutoTopup.Amount,
 			TransactionReason: transactionReason,
 			BillingReason:     billingReason,
-			IdempotencyKey:    lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)),
+			IdempotencyKey:    lo.ToPtr(idempotencyKey),
 			Description:       "Auto top-up triggered for low ongoing balance",
 			Metadata:          types.Metadata{"auto_topup": "true"},
 		})

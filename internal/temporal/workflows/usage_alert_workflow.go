@@ -12,9 +12,9 @@ import (
 const (
 	// Workflow and activity names — must match the registered function names in
 	// registration.go so the SDK can dispatch by string.
-	WorkflowUsageAlert     = "UsageAlertWorkflow"
-	ActivitySpendAlerts    = "SpendAlertsActivity"
-	ActivityWalletAlerts   = "WalletAlertsActivity"
+	WorkflowUsageAlert   = "UsageAlertWorkflow"
+	ActivitySpendAlerts  = "SpendAlertsActivity"
+	ActivityWalletAlerts = "WalletAlertsActivity"
 
 	usageAlertActivityBudget = 5 * time.Minute
 )
@@ -55,10 +55,10 @@ func UsageAlertWorkflow(ctx workflow.Context, input models.UsageAlertWorkflowInp
 	})
 
 	if err := workflow.ExecuteActivity(actCtx, ActivitySpendAlerts, activityInput).Get(actCtx, nil); err != nil {
-		logger.Warn("SpendAlertsActivity returned error", "error", err)
+		logger.Error("SpendAlertsActivity returned error", "error", err)
 	}
 	if err := workflow.ExecuteActivity(actCtx, ActivityWalletAlerts, activityInput).Get(actCtx, nil); err != nil {
-		logger.Warn("WalletAlertsActivity returned error", "error", err)
+		logger.Error("WalletAlertsActivity returned error", "error", err)
 	}
 
 	return nil

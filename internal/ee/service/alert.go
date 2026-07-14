@@ -38,7 +38,12 @@ type AlertService interface {
 	// fetches every wallet for the customer, computes real-time balance for each,
 	// and runs wallet-level + feature-level alert checks and auto-topup.
 	// Self-contained; one call drives everything.
-	EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer) error
+	//
+	// autoTopupIdempotencySeed is propagated to walletService for stable auto-topup
+	// idempotency keys — Temporal-driven callers should pass their workflow run id
+	// so retries do not create duplicate top-ups. Empty seed preserves the legacy
+	// fresh-UUID-per-call behavior.
+	EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer, autoTopupIdempotencySeed string) error
 
 	// EvaluateSpendBreachForEvent is the sync per-event entry used by the meter
 	// usage post-insert side effect when the debouncer is off. Delegates to
