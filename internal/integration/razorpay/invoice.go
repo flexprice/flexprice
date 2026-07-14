@@ -227,11 +227,11 @@ func selectAutoChargeToken(
 	return nil, false
 }
 
-// tryAutoCharge resolves the customer's Razorpay tokens; if a usable UPI token
-// exists it calls executeAutoCharge and returns (true, nil). If token probing
-// fails for any reason it logs and returns (false, nil) so the caller falls
-// through to SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are
-// propagated.
+// tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
+// exists (UPI tried first, then Card — see autoChargeMethodPriority) it calls
+// executeAutoCharge and returns (true, nil). If token probing fails for any
+// reason it logs and returns (false, nil) so the caller falls through to
+// SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are propagated.
 func (s *InvoiceSyncService) tryAutoCharge(
 	ctx context.Context,
 	inv *invoice.Invoice,
@@ -261,19 +261,19 @@ func (s *InvoiceSyncService) tryAutoCharge(
 		return pm, normErr == nil && pm != nil
 	})
 
-	token, ok := SelectUsableToken(tokens, types.PaymentMethodTypeUPI, inv.AmountRemaining)
+	token, ok := selectAutoChargeToken(tokens, inv.AmountRemaining)
 	if !ok {
-		s.logger.Debug(ctx, "no usable UPI token found, falling through to send invoice",
+		s.logger.Debug(ctx, "no usable token found for any supported method, falling through to send invoice",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID,
 			"tokens_inspected", len(tokens))
 		return false, nil
 	}
 
-	s.logger.Info(ctx, "usable UPI token found, attempting auto-charge",
+	s.logger.Info(ctx, "usable token found, attempting auto-charge",
 		"invoice_id", inv.ID, "customer_id", inv.CustomerID,
-		"token_id", token.GatewayMethodID)
+		"token_id", token.GatewayMethodID, "method", token.Method)
 
-	if execErr := s.executeAutoCharge(ctx, inv, razorpayCustomerID, token.GatewayMethodID); execErr != nil {
+	if execErr := s.executeAutoCharge(ctx, inv, razorpayCustomerID, token.GatewayMethodID, token.Method); execErr != nil {
 		return false, execErr
 	}
 	return true, nil
@@ -287,6 +287,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	inv *invoice.Invoice,
 	razorpayCustomerID string,
 	tokenID string,
+	paymentMethodType types.PaymentMethodType,
 ) error {
 	if s.paymentSvc == nil {
 		s.logger.Error(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
@@ -295,7 +296,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
-	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, types.PaymentMethodTypeUPI)
+	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, paymentMethodType)
 	if err != nil {
 		return err
 	}
