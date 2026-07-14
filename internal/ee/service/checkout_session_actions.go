@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -10,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
@@ -84,16 +86,23 @@ func (s *checkoutSessionService) callCheckoutProvider(
 
 	var resp *interfaces.CheckoutProviderResponse
 
+	var maxAmount *decimal.Decimal
+
 	switch cfg.CollectionMethod {
 
 	case types.CollectionMethodChargeAutomatically:
+		maxAmount, err = s.resolveMaxMandateLimit(ctx, cfg, req.Currency)
+		if err != nil {
+			return nil, err
+		}
+
 		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
 			InvoiceID:       req.InvoiceID,
 			CustomerID:      req.CustomerID,
 			PaymentID:       req.PaymentID,
 			Amount:          req.Amount,
 			Currency:        req.Currency,
-			MaxAmount:       cfg.MaxMandateLimit, // nil = no ceiling
+			MaxAmount:       maxAmount,
 			PreferredMethod: cfg.PreferredMethod,
 			SuccessURL:      req.SuccessURL,
 			CancelURL:       req.CancelURL,
@@ -137,6 +146,50 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		ExpiresAt:               resp.ExpiresAt,
 		ProviderMetadata:        resp.ProviderMetadata,
 	}, nil
+}
+
+// resolveMaxMandateLimit caps the caller-supplied MaxMandateLimit against the
+// tenant's configured PaymentMandateLimits ceiling for the requested payment
+// method (falling back to the platform default when the tenant has no
+// override — see types.GetDefaultSettings). Without this, a caller could
+// either omit MaxMandateLimit entirely (which previously meant "no ceiling",
+// i.e. an unbounded recurring-charge authority) or simply request a higher
+// value than the tenant's own configured safety limit allows.
+//
+// The tenant ceiling only applies when its configured currency matches the
+// invoice currency (or is unset) — a rail's ceiling configured in one
+// currency isn't a meaningful cap on a charge in a different currency, and
+// rejecting the mismatch outright would be a product policy decision beyond
+// the scope of this safety fix.
+func (s *checkoutSessionService) resolveMaxMandateLimit(
+	ctx context.Context,
+	cfg types.CheckoutPaymentProviderConfig,
+	currency string,
+) (*decimal.Decimal, error) {
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	limits, err := GetSetting[types.PaymentMandateLimits](settingsSvc, ctx, types.SettingKeyPaymentMandateLimits)
+	if err != nil {
+		return nil, err
+	}
+
+	method := cfg.PreferredMethod
+	if method == "" {
+		method = types.PaymentMethodTypeUPI
+	}
+
+	limit, ok := limits.MandateLimits[method]
+	if !ok || (limit.Currency != "" && !strings.EqualFold(limit.Currency, currency)) {
+		// No ceiling configured for this method (or currency), or the
+		// configured ceiling is denominated in a different currency than this
+		// invoice — fall back to whatever the caller supplied, unchanged from
+		// prior behavior.
+		return cfg.MaxMandateLimit, nil
+	}
+
+	if cfg.MaxMandateLimit == nil || cfg.MaxMandateLimit.GreaterThan(limit.MaxAmount) {
+		return &limit.MaxAmount, nil
+	}
+	return cfg.MaxMandateLimit, nil
 }
 
 func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
