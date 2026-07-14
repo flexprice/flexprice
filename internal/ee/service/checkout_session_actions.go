@@ -172,7 +172,20 @@ func (s *checkoutSessionService) resolveMaxMandateLimit(
 		return nil, err
 	}
 
-	method := cfg.PreferredMethod
+	return capMandateLimit(cfg.PreferredMethod, cfg.MaxMandateLimit, currency, limits), nil
+}
+
+// capMandateLimit is the pure decision logic behind resolveMaxMandateLimit,
+// factored out so it's directly unit-testable without standing up a settings
+// service: given the caller-requested method/limit/currency and the tenant's
+// configured PaymentMandateLimits, returns the effective ceiling to send to
+// the gateway.
+func capMandateLimit(
+	method types.PaymentMethodType,
+	callerLimit *decimal.Decimal,
+	currency string,
+	limits types.PaymentMandateLimits,
+) *decimal.Decimal {
 	if method == "" {
 		method = types.PaymentMethodTypeUPI
 	}
@@ -183,13 +196,13 @@ func (s *checkoutSessionService) resolveMaxMandateLimit(
 		// configured ceiling is denominated in a different currency than this
 		// invoice — fall back to whatever the caller supplied, unchanged from
 		// prior behavior.
-		return cfg.MaxMandateLimit, nil
+		return callerLimit
 	}
 
-	if cfg.MaxMandateLimit == nil || cfg.MaxMandateLimit.GreaterThan(limit.MaxAmount) {
-		return &limit.MaxAmount, nil
+	if callerLimit == nil || callerLimit.GreaterThan(limit.MaxAmount) {
+		return &limit.MaxAmount
 	}
-	return cfg.MaxMandateLimit, nil
+	return callerLimit
 }
 
 func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
