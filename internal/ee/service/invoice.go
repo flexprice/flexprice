@@ -1301,11 +1301,8 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	return nil
 }
 
-// SyncInvoiceToRazorpayIfEnabled is the Temporal-activity entry point for
-// Razorpay invoice syncing. It gates on tenant eligibility (connection enabled,
-// invoice not already paid) and then delegates all sync logic — auto-charge
-// path and send-invoice fallback — to InvoiceSyncService.SyncInvoice which
-// owns the Razorpay-specific orchestration.
+// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay unless it's already
+// paid, has zero balance, or Razorpay sync isn't enabled for the tenant.
 func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -1350,8 +1347,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return err
 	}
 
-	// Auto-charge path: payment submitted to Razorpay; webhook will reconcile.
-	// Send-invoice path: persist the payment-link URLs to invoice metadata.
+	// Only the send-invoice path needs the URL persisted; auto-charge is reconciled via webhook.
 	if !result.AutoCharged && result.ShortURL != "" {
 		metadata := inv.Metadata
 		if metadata == nil {

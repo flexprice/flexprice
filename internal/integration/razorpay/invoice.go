@@ -25,15 +25,13 @@ import (
 const razorpayMinExpireByBuffer = 15 * time.Minute
 
 // autoChargeLockTTL is the Redis distributed lock TTL for auto-charge operations.
-// 15 minutes covers the full charge-submission-to-webhook window for UPI Autopay;
-// it is intentionally longer than a typical HTTP timeout because all gateway errors
-// are treated as ambiguous (we cannot reliably classify network timeouts vs. definitive
-// failures from the Razorpay client).
+// Set longer than a typical HTTP timeout since gateway errors are treated as
+// ambiguous (network timeout vs. definitive failure can't be reliably told apart).
 const autoChargeLockTTL = 15 * time.Minute
 
-// SyncInvoiceResult is returned by SyncInvoice to let the service layer apply
-// side-effects (e.g. persisting payment-link URLs) that require calling back
-// into the service layer (which would create a circular import if done here).
+// SyncInvoiceResult carries data the caller must persist (e.g. payment-link
+// URLs) back to invoice metadata; done by the caller to avoid a circular
+// import between InvoiceSyncService and the service layer.
 type SyncInvoiceResult struct {
 	// AutoCharged is true when the invoice was successfully submitted for
 	// auto-charge via UPI Autopay. No further action is needed by the caller.
@@ -49,9 +47,7 @@ type SyncInvoiceResult struct {
 // link) and the auto-charge path (server-initiated UPI Autopay recurring charge).
 //
 // paymentSvc is wired via SetPaymentService after construction because
-// PaymentService and InvoiceSyncService have a mutual dependency (InvoiceSyncService
-// provides invoice mapping lookups to PaymentService; PaymentService provides
-// AutoCharge to InvoiceSyncService).
+// PaymentService and InvoiceSyncService have a mutual dependency.
 type InvoiceSyncService struct {
 	client                       RazorpayClient
 	customerSvc                  *CustomerService
@@ -100,10 +96,6 @@ func NewInvoiceSyncService(
 // The function is fail-open for token probing: any error during customer/token
 // resolution causes a silent fallback to the send-invoice path rather than a
 // hard failure. Only definitive errors from the charge submission propagate.
-//
-// The caller is responsible for persisting SyncInvoiceResult.ShortURL and
-// SyncInvoiceResult.RazorpayInvoiceID to invoice metadata (they require calling
-// back into the service layer which would create a circular import from here).
 func (s *InvoiceSyncService) SyncInvoice(
 	ctx context.Context,
 	inv *invoice.Invoice,

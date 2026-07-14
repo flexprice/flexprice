@@ -1,9 +1,7 @@
 package webhook
 
 // Tests for the checkout-session status branching shared by handlePaymentLinkPaid
-// and handlePaymentCaptured: Pending → complete, Expired/Failed → refund, other →
-// no-op, not-found → existing standalone fallback (only exercised for
-// handlePaymentCaptured, since only that path has a standalone fallback).
+// and handlePaymentCaptured: Pending → complete, Expired/Failed → refund, other → no-op.
 
 import (
 	"context"
@@ -96,8 +94,7 @@ func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, r
 	return s.payment, nil
 }
 
-// ── fake interfaces.InvoiceService — only touched by handlePaymentCaptured's
-// standalone (no-checkout-session) reconciliation fallback ──────────────────
+// ── fake interfaces.InvoiceService — used only by handlePaymentCaptured's standalone fallback ──
 
 type webhookTestInvoiceService struct {
 	interfaces.InvoiceService
@@ -118,7 +115,7 @@ func (webhookTestInvoiceService) ReconcilePaymentStatus(_ context.Context, _ str
 type webhookTestCheckoutSessionService struct {
 	interfaces.CheckoutSessionService
 	session       *dto.CheckoutSessionResponse // returned by List, matched by session.ID (see note on suite below)
-	completeCalls []string                     // sessionIDs passed to CompleteCheckoutSession
+	completeCalls []string
 }
 
 func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
@@ -155,9 +152,8 @@ func (s *webhookTestMappingService) GetEntityIntegrationMappings(_ context.Conte
 
 // ── test suite ───────────────────────────────────────────────────────────────
 //
-// NOTE: session.ID is reused as the "checkout payment ID" the fake session store
-// keys on, purely to keep the fakes above simple (real code correlates via
-// CheckoutPaymentIDs, not session.ID — the fakes just don't need that extra field).
+// NOTE: the fakes key on session.ID as the "checkout payment ID" for simplicity;
+// real code correlates via CheckoutPaymentIDs, not session.ID.
 
 type WebhookCheckoutBranchingSuite struct {
 	suite.Suite
@@ -196,10 +192,8 @@ func (s *WebhookCheckoutBranchingSuite) SetupTest() {
 		PaymentService:                  s.paymentSvc,
 		CheckoutSessionService:          s.checkoutSvc,
 		EntityIntegrationMappingService: s.mappingSvc,
-		// handlePaymentCaptured's standalone (no-checkout-session) fallback always
-		// reconciles the invoice after marking the payment Succeeded — needed so
-		// TestPaymentCaptured_NoSessionFound_FallsThroughToStandalone doesn't panic
-		// on a nil InvoiceService.
+		// Needed by handlePaymentCaptured's standalone fallback, which reconciles
+		// the invoice; a nil InvoiceService would panic here.
 		InvoiceService: webhookTestInvoiceService{},
 	}
 }
@@ -238,9 +232,8 @@ func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
-	// A payment_link.cancelled/expired webhook marks the session Failed (not
-	// Expired — that status is only set by the internal cleanup cron). A late
-	// payment.captured for the same payment must still be refunded, not dropped.
+	// payment_link.cancelled/expired marks the session Failed, not Expired
+	// (Expired is set only by the cleanup cron).
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		CheckoutSession: &domainCheckout.CheckoutSession{ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed},
 	}
@@ -267,8 +260,6 @@ func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
-	// No mapping registered for this payment link — GetEntityIntegrationMappings
-	// returns empty, so handlePaymentLinkPaid returns before any session lookup.
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_unknown", "pay_rzp_001"), s.services)
 
 	s.NoError(err)
@@ -307,8 +298,6 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refund
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_NoSessionFound_FallsThroughToStandalone() {
-	// No session at all for this payment — must fall back to the pre-existing
-	// standalone reconciliation path (marks the payment Succeeded directly).
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
 	event.Payload.Payment.Entity.Amount = 50000

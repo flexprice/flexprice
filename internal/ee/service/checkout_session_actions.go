@@ -164,8 +164,6 @@ func (s *checkoutSessionService) resolveMaxMandateLimit(
 	return capMandateLimit(cfg.PreferredMethod, cfg.MaxMandateLimit, currency, limits), nil
 }
 
-// capMandateLimit is resolveMaxMandateLimit's decision logic, factored out for
-// direct unit testing.
 func capMandateLimit(
 	method types.PaymentMethodType,
 	callerLimit *decimal.Decimal,

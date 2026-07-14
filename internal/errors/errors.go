@@ -174,7 +174,7 @@ func IsTooManyRequests(err error) bool {
 	return errors.Is(err, ErrTooManyRequests)
 }
 
-// IsNotImplemented checks if an error marks an optional capability as unsupported
+// IsNotImplemented checks if an error is a not-implemented error
 func IsNotImplemented(err error) bool {
 	return errors.Is(err, ErrNotImplemented)
 }

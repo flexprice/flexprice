@@ -20,9 +20,7 @@ type Customer struct {
 	// Email is the email of the customer
 	Email string `db:"email" json:"email"`
 
-	// Contact is an optional contact number for the customer (e.g. phone),
-	// used by payment providers that require one for recurring/mandate
-	// registration (e.g. Razorpay UPI Autopay).
+	// Contact is an optional contact number for the customer (e.g. phone)
 	Contact *string `db:"contact" json:"contact,omitempty"`
 
 	// AddressLine1 is the first line of the customer's address

@@ -273,8 +273,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.logger,
 	)
 
-	// Create invoice sync service (paymentSvc wired below via SetPaymentService
-	// because InvoiceSyncService and PaymentService have a mutual dependency).
+	// Create invoice sync service; paymentSvc is wired in below (mutual dependency).
 	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
 		razorpayClient,
 		customerSvc.(*razorpay.CustomerService),

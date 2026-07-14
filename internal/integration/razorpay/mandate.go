@@ -26,7 +26,6 @@ func fromPaise(paise float64) decimal.Decimal {
 // Client.GetCustomerTokens) into the generic interfaces.ProviderPaymentMethod shape.
 // Returns nil, nil for non-confirmed tokens so callers skip them cleanly.
 func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPaymentMethod, error) {
-	// Only confirmed tokens are usable; skip anything else.
 	details, _ := raw["recurring_details"].(map[string]interface{})
 	if status, _ := details["status"].(string); status != "confirmed" {
 		return nil, nil
@@ -84,8 +83,7 @@ func SelectUsableToken(
 }
 
 // razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay
-// subscription_registration "method" value. Empty input defaults to "upi" to
-// preserve every existing caller that omits PreferredMethod.
+// subscription_registration "method" value. Empty input defaults to "upi".
 func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
 	switch pm {
 	case "", types.PaymentMethodTypeUPI:

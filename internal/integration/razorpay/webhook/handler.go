@@ -407,10 +407,9 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	return nil
 }
 
-// Finds the checkout session for this payment. Pending → complete. Expired or
-// Failed (link cancelled/expired at Razorpay, or fulfillment failed after capture)
-// → refund, since either way the session ended without delivering the product.
-// Otherwise ignore. True if a session exists; false = standalone payment.
+// handleCheckoutSessionForPayment completes pending checkout sessions and refunds
+// expired/failed ones (the session ended without delivering the product). Returns
+// false if this payment has no checkout session (i.e. it's a standalone payment).
 func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
 	flexpricePaymentID string,

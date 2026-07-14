@@ -403,8 +403,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 	return razorpayInvoice, nil
 }
 
-// sdkClient is a convenience wrapper that initialises the Razorpay SDK client
-// and returns a ready-to-use *razorpay.Client or a pre-formatted error.
+// sdkClient initializes the Razorpay SDK client, wrapping errors uniformly.
 func (c *Client) sdkClient(ctx context.Context) (*razorpay.Client, error) {
 	rc, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
@@ -442,8 +441,7 @@ func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID strin
 
 // CreateAuthorizationLink registers a UPI Autopay mandate combined with the
 // first invoice payment. POST /v1/subscription_registration/auth_links — no
-// dedicated SDK helper exists for this endpoint (confirmed against
-// razorpay-go@v1.4.0 source), so this goes through the embedded raw request client.
+// SDK helper exists for this endpoint, so this goes through the raw request client.
 func (c *Client) CreateAuthorizationLink(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {
@@ -483,9 +481,8 @@ func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface
 	return result, nil
 }
 
-// CreateRecurringPayment charges a stored token against an Order. POST
-// /v1/payments/create/recurring — SDK: Payment.CreateRecurringPayment (confirmed
-// present in razorpay-go@v1.4.0's resources/payment.go).
+// CreateRecurringPayment charges a stored token against an Order.
+// POST /v1/payments/create/recurring — SDK: Payment.CreateRecurringPayment.
 func (c *Client) CreateRecurringPayment(ctx context.Context, paymentData map[string]interface{}) (map[string]interface{}, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {

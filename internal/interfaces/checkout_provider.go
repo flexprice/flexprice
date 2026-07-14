@@ -12,10 +12,10 @@ import (
 type CheckoutProvider interface {
 	CreatePaymentLink(ctx context.Context, req CheckoutProviderRequest) (*CheckoutProviderResponse, error)
 
-	// CreateAuthorizationLink registers a payment instrument for future
-	// off-session charges (a UPI/e-mandate, a saved card, etc.), optionally
-	// charging the first invoice as part of the same authorization. Providers
-	// that don't support this return an error marked ierr.ErrNotImplemented.
+	// CreateAuthorizationLink registers a payment instrument for future off-session
+	// charges (a UPI/e-mandate, a saved card, etc.), optionally charging the first
+	// invoice as part of the same authorization. Unsupported providers return an
+	// error marked ierr.ErrNotImplemented.
 	CreateAuthorizationLink(ctx context.Context, req AuthorizationLinkRequest) (*CheckoutProviderResponse, error)
 }
 
@@ -57,9 +57,8 @@ type AuthorizationLinkRequest struct {
 	Metadata        map[string]string
 }
 
-// ProviderPaymentMethod is a normalized view of one confirmed, usable token as it
-// exists at the gateway right now. Only active tokens are returned — callers never
-// need to filter by status. Never persisted — read fresh on every call.
+// ProviderPaymentMethod is a normalized view of one active, usable token at the
+// gateway. Never persisted — read fresh on every call.
 type ProviderPaymentMethod struct {
 	GatewayMethodID  string                  // opaque id at the gateway
 	Method           types.PaymentMethodType // e.g. PaymentMethodTypeUPI
