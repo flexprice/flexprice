@@ -1218,6 +1218,21 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 
+	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
+		return
+	}
+
+	signature := c.GetHeader("X-Whop-Signature")
+	if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
+		h.logger.Error(context.Background(), "Whop webhook signature verification failed",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
 	var event whopwebhook.WhopWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
@@ -1228,12 +1243,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		"type", event.Type,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
-
-	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
-	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
-		return
-	}
 
 	serviceDeps := &whopwebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,
