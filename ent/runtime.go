@@ -54,6 +54,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
@@ -2416,6 +2417,59 @@ func init() {
 	tenantDescBillingDetails := tenantFields[6].Descriptor()
 	// tenant.DefaultBillingDetails holds the default value on creation for the billing_details field.
 	tenant.DefaultBillingDetails = tenantDescBillingDetails.Default.(schema.TenantBillingDetails)
+	usagerecordMixin := schema.UsageRecord{}.Mixin()
+	usagerecordMixinFields0 := usagerecordMixin[0].Fields()
+	_ = usagerecordMixinFields0
+	usagerecordMixinFields1 := usagerecordMixin[1].Fields()
+	_ = usagerecordMixinFields1
+	usagerecordFields := schema.UsageRecord{}.Fields()
+	_ = usagerecordFields
+	// usagerecordDescTenantID is the schema descriptor for tenant_id field.
+	usagerecordDescTenantID := usagerecordMixinFields0[0].Descriptor()
+	// usagerecord.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	usagerecord.TenantIDValidator = usagerecordDescTenantID.Validators[0].(func(string) error)
+	// usagerecordDescStatus is the schema descriptor for status field.
+	usagerecordDescStatus := usagerecordMixinFields0[1].Descriptor()
+	// usagerecord.DefaultStatus holds the default value on creation for the status field.
+	usagerecord.DefaultStatus = usagerecordDescStatus.Default.(string)
+	// usagerecordDescCreatedAt is the schema descriptor for created_at field.
+	usagerecordDescCreatedAt := usagerecordMixinFields0[2].Descriptor()
+	// usagerecord.DefaultCreatedAt holds the default value on creation for the created_at field.
+	usagerecord.DefaultCreatedAt = usagerecordDescCreatedAt.Default.(func() time.Time)
+	// usagerecordDescUpdatedAt is the schema descriptor for updated_at field.
+	usagerecordDescUpdatedAt := usagerecordMixinFields0[3].Descriptor()
+	// usagerecord.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	usagerecord.DefaultUpdatedAt = usagerecordDescUpdatedAt.Default.(func() time.Time)
+	// usagerecord.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	usagerecord.UpdateDefaultUpdatedAt = usagerecordDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// usagerecordDescEnvironmentID is the schema descriptor for environment_id field.
+	usagerecordDescEnvironmentID := usagerecordMixinFields1[0].Descriptor()
+	// usagerecord.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	usagerecord.DefaultEnvironmentID = usagerecordDescEnvironmentID.Default.(string)
+	// usagerecordDescCustomerID is the schema descriptor for customer_id field.
+	usagerecordDescCustomerID := usagerecordFields[1].Descriptor()
+	// usagerecord.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	usagerecord.CustomerIDValidator = usagerecordDescCustomerID.Validators[0].(func(string) error)
+	// usagerecordDescSubscriptionID is the schema descriptor for subscription_id field.
+	usagerecordDescSubscriptionID := usagerecordFields[3].Descriptor()
+	// usagerecord.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	usagerecord.SubscriptionIDValidator = usagerecordDescSubscriptionID.Validators[0].(func(string) error)
+	// usagerecordDescPlanID is the schema descriptor for plan_id field.
+	usagerecordDescPlanID := usagerecordFields[4].Descriptor()
+	// usagerecord.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	usagerecord.PlanIDValidator = usagerecordDescPlanID.Validators[0].(func(string) error)
+	// usagerecordDescQuantity is the schema descriptor for quantity field.
+	usagerecordDescQuantity := usagerecordFields[5].Descriptor()
+	// usagerecord.DefaultQuantity holds the default value on creation for the quantity field.
+	usagerecord.DefaultQuantity = usagerecordDescQuantity.Default.(decimal.Decimal)
+	// usagerecordDescAmount is the schema descriptor for amount field.
+	usagerecordDescAmount := usagerecordFields[6].Descriptor()
+	// usagerecord.DefaultAmount holds the default value on creation for the amount field.
+	usagerecord.DefaultAmount = usagerecordDescAmount.Default.(decimal.Decimal)
+	// usagerecordDescAllProvidersSynced is the schema descriptor for all_providers_synced field.
+	usagerecordDescAllProvidersSynced := usagerecordFields[10].Descriptor()
+	// usagerecord.DefaultAllProvidersSynced holds the default value on creation for the all_providers_synced field.
+	usagerecord.DefaultAllProvidersSynced = usagerecordDescAllProvidersSynced.Default.(bool)
 	userMixin := schema.User{}.Mixin()
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0

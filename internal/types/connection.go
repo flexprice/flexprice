@@ -9,17 +9,18 @@ import (
 type ConnectionMetadataType string
 
 const (
-	ConnectionMetadataTypeStripe    ConnectionMetadataType = "stripe"
-	ConnectionMetadataTypeGeneric   ConnectionMetadataType = "generic"
-	ConnectionMetadataTypeS3        ConnectionMetadataType = "s3"
-	ConnectionMetadataTypeHubSpot   ConnectionMetadataType = "hubspot"
-	ConnectionMetadataTypeRazorpay  ConnectionMetadataType = "razorpay"
-	ConnectionMetadataTypeChargebee ConnectionMetadataType = "chargebee"
-	ConnectionMetadataTypeNomod     ConnectionMetadataType = "nomod"
-	ConnectionMetadataTypeMoyasar   ConnectionMetadataType = "moyasar"
-	ConnectionMetadataTypePaddle    ConnectionMetadataType = "paddle"
-	ConnectionMetadataTypeZohoBooks ConnectionMetadataType = "zoho_books"
-	ConnectionMetadataTypeWhop      ConnectionMetadataType = "whop"
+	ConnectionMetadataTypeStripe         ConnectionMetadataType = "stripe"
+	ConnectionMetadataTypeGeneric        ConnectionMetadataType = "generic"
+	ConnectionMetadataTypeS3             ConnectionMetadataType = "s3"
+	ConnectionMetadataTypeHubSpot        ConnectionMetadataType = "hubspot"
+	ConnectionMetadataTypeRazorpay       ConnectionMetadataType = "razorpay"
+	ConnectionMetadataTypeChargebee      ConnectionMetadataType = "chargebee"
+	ConnectionMetadataTypeNomod          ConnectionMetadataType = "nomod"
+	ConnectionMetadataTypeMoyasar        ConnectionMetadataType = "moyasar"
+	ConnectionMetadataTypePaddle         ConnectionMetadataType = "paddle"
+	ConnectionMetadataTypeZohoBooks      ConnectionMetadataType = "zoho_books"
+	ConnectionMetadataTypeWhop           ConnectionMetadataType = "whop"
+	ConnectionMetadataTypeAWSMarketplace ConnectionMetadataType = "aws_marketplace"
 )
 
 func (t ConnectionMetadataType) Validate() error {
@@ -35,10 +36,11 @@ func (t ConnectionMetadataType) Validate() error {
 		ConnectionMetadataTypePaddle,
 		ConnectionMetadataTypeZohoBooks,
 		ConnectionMetadataTypeWhop,
+		ConnectionMetadataTypeAWSMarketplace,
 	}
 	if !lo.Contains(allowedTypes, t) {
 		return ierr.NewError("invalid connection metadata type").
-			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay, chargebee, nomod, moyasar, paddle, zoho_books, whop").
+			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay, chargebee, nomod, moyasar, paddle, zoho_books, whop, aws_marketplace").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -360,6 +362,31 @@ func (t *TabsConnectionMetadata) Validate() error {
 	return nil
 }
 
+// AWSMarketplaceConnectionSecrets represents AWS Marketplace connection secrets. Both fields are
+// tenant-provided (the frontend derives ExternalID deterministically from tenant_id and displays it
+// inline with the static IAM/trust policy templates the tenant pastes into their own AWS account) and
+// stored encrypted, so a single decrypt at cron time yields everything AssumeRole needs (design doc
+// FLE-981 §7.1).
+type AWSMarketplaceConnectionSecrets struct {
+	RoleArn    string `json:"role_arn"`
+	ExternalID string `json:"external_id"`
+}
+
+// Validate validates the AWS Marketplace connection secrets
+func (a *AWSMarketplaceConnectionSecrets) Validate() error {
+	if a.RoleArn == "" {
+		return ierr.NewError("role_arn is required").
+			WithHint("AWS Marketplace role_arn is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.ExternalID == "" {
+		return ierr.NewError("external_id is required").
+			WithHint("AWS Marketplace external_id is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // GenericConnectionMetadata represents generic connection metadata
 type GenericConnectionMetadata struct {
 	Data map[string]interface{} `json:"data"`
@@ -377,20 +404,21 @@ func (g *GenericConnectionMetadata) Validate() error {
 
 // ConnectionMetadata represents structured connection metadata
 type ConnectionMetadata struct {
-	Stripe     *StripeConnectionMetadata     `json:"stripe,omitempty"`
-	S3         *S3ConnectionMetadata         `json:"s3,omitempty"`
-	HubSpot    *HubSpotConnectionMetadata    `json:"hubspot,omitempty"`
-	Razorpay   *RazorpayConnectionMetadata   `json:"razorpay,omitempty"`
-	Chargebee  *ChargebeeConnectionMetadata  `json:"chargebee,omitempty"`
-	QuickBooks *QuickBooksConnectionMetadata `json:"quickbooks,omitempty"`
-	Nomod      *NomodConnectionMetadata      `json:"nomod,omitempty"`
-	Moyasar    *MoyasarConnectionMetadata    `json:"moyasar,omitempty"`
-	Paddle     *PaddleConnectionMetadata     `json:"paddle,omitempty"`
-	ZohoBooks  *ZohoBooksConnectionMetadata  `json:"zoho_books,omitempty"`
-	Whop       *WhopConnectionMetadata       `json:"whop,omitempty"`
-	Tabs       *TabsConnectionMetadata       `json:"tabs,omitempty"`
-	Generic    *GenericConnectionMetadata    `json:"generic,omitempty"`
-	Settings   *ConnectionSettings           `json:"settings,omitempty"`
+	Stripe         *StripeConnectionMetadata        `json:"stripe,omitempty"`
+	S3             *S3ConnectionMetadata            `json:"s3,omitempty"`
+	HubSpot        *HubSpotConnectionMetadata       `json:"hubspot,omitempty"`
+	Razorpay       *RazorpayConnectionMetadata      `json:"razorpay,omitempty"`
+	Chargebee      *ChargebeeConnectionMetadata     `json:"chargebee,omitempty"`
+	QuickBooks     *QuickBooksConnectionMetadata    `json:"quickbooks,omitempty"`
+	Nomod          *NomodConnectionMetadata         `json:"nomod,omitempty"`
+	Moyasar        *MoyasarConnectionMetadata       `json:"moyasar,omitempty"`
+	Paddle         *PaddleConnectionMetadata        `json:"paddle,omitempty"`
+	ZohoBooks      *ZohoBooksConnectionMetadata     `json:"zoho_books,omitempty"`
+	Whop           *WhopConnectionMetadata          `json:"whop,omitempty"`
+	Tabs           *TabsConnectionMetadata          `json:"tabs,omitempty"`
+	AWSMarketplace *AWSMarketplaceConnectionSecrets `json:"aws_marketplace,omitempty"`
+	Generic        *GenericConnectionMetadata       `json:"generic,omitempty"`
+	Settings       *ConnectionSettings              `json:"settings,omitempty"`
 }
 
 // Validate validates the connection metadata based on provider type
@@ -480,6 +508,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.Tabs.Validate()
+	case SecretProviderAWSMarketplace:
+		if c.AWSMarketplace == nil {
+			return ierr.NewError("aws_marketplace metadata is required").
+				WithHint("AWS Marketplace metadata is required for aws_marketplace provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.AWSMarketplace.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {

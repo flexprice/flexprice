@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -12,6 +13,7 @@ import (
 	exportActivities "github.com/flexprice/flexprice/internal/temporal/activities/export"
 	hubspotActivities "github.com/flexprice/flexprice/internal/temporal/activities/hubspot"
 	invoiceActivities "github.com/flexprice/flexprice/internal/temporal/activities/invoice"
+	marketplaceActivities "github.com/flexprice/flexprice/internal/temporal/activities/marketplace"
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
 	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
@@ -53,10 +55,16 @@ type cronActivityBundle struct {
 	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
 	moyasarAuthPaymentSettlement *cronActivities.MoyasarAuthPaymentSettlementActivities
 	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
+	marketplaceSnapshot          *marketplaceActivities.SnapshotActivities
+	marketplaceReport            *marketplaceActivities.ReportActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
-func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams, webhookService *webhook.WebhookService) error {
+func RegisterWorkflowsAndActivities(
+	temporalService temporalService.TemporalService,
+	params service.ServiceParams,
+	webhookService *webhook.WebhookService,
+) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
 		params,
@@ -270,6 +278,28 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	envAccessService := service.NewEnvAccessService(params.Config)
 	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
+	// Marketplace activities
+	billingService := service.NewBillingService(params)
+	awsMarketplaceClient := awsmarketplace.NewClient(params.Logger)
+	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(
+		subscriptionService,
+		billingService,
+		params.ConnectionRepo,
+		params.EntityIntegrationMappingRepo,
+		params.SubRepo,
+		params.CustomerRepo,
+		params.UsageRecordRepo,
+		params.Logger,
+	)
+	marketplaceReportActivities := marketplaceActivities.NewReportActivities(
+		params.ConnectionRepo,
+		params.EntityIntegrationMappingRepo,
+		params.UsageRecordRepo,
+		params.EncryptionService,
+		awsMarketplaceClient,
+		params.Logger,
+	)
+
 	cronBundle := &cronActivityBundle{
 		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService),
 		subscription:                 cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
@@ -278,6 +308,8 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
+		marketplaceSnapshot:          marketplaceSnapshotActivities,
+		marketplaceReport:            marketplaceReportActivities,
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -509,6 +541,8 @@ func buildWorkerConfig(
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
 			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
 			cronWorkflows.CheckoutSessionExpiryWorkflow,
+			cronWorkflows.MarketplaceUsageSnapshotWorkflow,
+			cronWorkflows.MarketplaceUsageReportWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -523,6 +557,8 @@ func buildWorkerConfig(
 			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
 			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
 			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
+			cron.marketplaceSnapshot.MarketplaceUsageSnapshotActivity,
+			cron.marketplaceReport.MarketplaceUsageReportActivity,
 		)
 	}
 	return WorkerConfig{

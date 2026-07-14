@@ -150,6 +150,9 @@ type TaxRate func(*sql.Selector)
 // Tenant is the predicate function for tenant builders.
 type Tenant func(*sql.Selector)
 
+// UsageRecord is the predicate function for usagerecord builders.
+type UsageRecord func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
 

@@ -30,19 +30,20 @@ type SecretProvider string
 
 // Provider types
 const (
-	SecretProviderFlexPrice  SecretProvider = "flexprice"
-	SecretProviderStripe     SecretProvider = "stripe"
-	SecretProviderS3         SecretProvider = "s3" // supports multiple connections per environment
-	SecretProviderHubSpot    SecretProvider = "hubspot"
-	SecretProviderRazorpay   SecretProvider = "razorpay"
-	SecretProviderChargebee  SecretProvider = "chargebee"
-	SecretProviderQuickBooks SecretProvider = "quickbooks"
-	SecretProviderZohoBooks  SecretProvider = "zoho_books"
-	SecretProviderNomod      SecretProvider = "nomod"
-	SecretProviderMoyasar    SecretProvider = "moyasar"
-	SecretProviderPaddle     SecretProvider = "paddle"
-	SecretProviderWhop       SecretProvider = "whop"
-	SecretProviderTabs       SecretProvider = "tabs"
+	SecretProviderFlexPrice      SecretProvider = "flexprice"
+	SecretProviderStripe         SecretProvider = "stripe"
+	SecretProviderS3             SecretProvider = "s3" // supports multiple connections per environment
+	SecretProviderHubSpot        SecretProvider = "hubspot"
+	SecretProviderRazorpay       SecretProvider = "razorpay"
+	SecretProviderChargebee      SecretProvider = "chargebee"
+	SecretProviderQuickBooks     SecretProvider = "quickbooks"
+	SecretProviderZohoBooks      SecretProvider = "zoho_books"
+	SecretProviderNomod          SecretProvider = "nomod"
+	SecretProviderMoyasar        SecretProvider = "moyasar"
+	SecretProviderPaddle         SecretProvider = "paddle"
+	SecretProviderWhop           SecretProvider = "whop"
+	SecretProviderTabs           SecretProvider = "tabs"
+	SecretProviderAWSMarketplace SecretProvider = "aws_marketplace"
 )
 
 func (p SecretProvider) Validate() error {
@@ -60,6 +61,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderPaddle,
 		SecretProviderWhop,
 		SecretProviderTabs,
+		SecretProviderAWSMarketplace,
 	}
 	if !lo.Contains(allowedSecretProviders, p) {
 		return ierr.NewError("invalid secret provider").

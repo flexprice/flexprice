@@ -60,6 +60,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
@@ -172,6 +173,7 @@ func checkColumn(table, column string) error {
 			taxassociation.Table:           taxassociation.ValidColumn,
 			taxrate.Table:                  taxrate.ValidColumn,
 			tenant.Table:                   tenant.ValidColumn,
+			usagerecord.Table:              usagerecord.ValidColumn,
 			user.Table:                     user.ValidColumn,
 			wallet.Table:                   wallet.ValidColumn,
 			wallettransaction.Table:        wallettransaction.ValidColumn,

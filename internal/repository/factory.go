@@ -44,6 +44,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -223,6 +224,10 @@ func NewConnectionRepository(p RepositoryParams) connection.Repository {
 
 func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegrationmapping.Repository {
 	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.RedisCache)
+}
+
+func NewUsageRecordRepository(p RepositoryParams) usagerecord.Repository {
+	return entRepo.NewUsageRecordRepository(p.EntClient, p.Logger)
 }
 
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
