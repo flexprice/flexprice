@@ -435,7 +435,18 @@ func (h *Handler) handleCheckoutSessionForPayment(
 			)
 		}
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
-		h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService)
+		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
+			// Razorpay may have already captured (and now needs refunding)
+			// while FlexPrice's local state disagrees — there is no automatic
+			// retry/reconciliation sweep for this yet, so this failure needs a
+			// human to reconcile the payment manually against Razorpay's
+			// dashboard for this payment/refund ID.
+			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", razorpayPaymentID,
+			)
+		}
 	default:
 		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
 			"session_id", session.ID,

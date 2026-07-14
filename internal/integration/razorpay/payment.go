@@ -902,21 +902,28 @@ func isOrderAlreadyProcessingError(err error) bool {
 const refundLockTTL = 15 * time.Minute
 
 // Full refund when payment lands after checkout expired or failed.
+//
+// Returns an error on any failure so the caller can escalate it — this is not
+// itself a retry mechanism (there is no automatic reconciliation sweep for a
+// failed refund yet; see the caller in webhook/handler.go for the current,
+// log-only escalation and the follow-up this leaves open).
 func (s *PaymentService) RefundLateCapturedPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
 	razorpayPaymentID string,
 	paymentService interfaces.PaymentService,
-) {
+) error {
 	lockKey := cache.GenerateKey(ctx, cache.PrefixRazorpayWebhookRefundLock, flexpricePaymentID)
 	lock, err := s.locker.AcquireLock(ctx, lockKey, refundLockTTL)
 	if err != nil {
-		s.logger.Error(ctx, "failed to acquire refund lock", "payment_id", flexpricePaymentID, "error", err)
-		return
+		return ierr.WithError(err).
+			WithMessage("failed to acquire refund lock").
+			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
+			Mark(ierr.ErrInternal)
 	}
 	if !lock.AcquiredSuccessfully() {
 		s.logger.Info(ctx, "refund already in progress for this payment, skipping", "payment_id", flexpricePaymentID)
-		return
+		return nil
 	}
 	defer func() {
 		if releaseErr := lock.Release(ctx); releaseErr != nil {
@@ -926,19 +933,25 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get payment record for refund", "payment_id", flexpricePaymentID, "error", err)
-		return
+		return ierr.WithError(err).
+			WithMessage("failed to get payment record for refund").
+			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
+			Mark(ierr.ErrInternal)
 	}
 	if existingPayment.PaymentStatus == types.PaymentStatusRefunded || existingPayment.PaymentStatus == types.PaymentStatusPartiallyRefunded {
 		s.logger.Info(ctx, "payment already refunded, skipping", "payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
-		return
+		return nil
 	}
 
 	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
 	if err != nil {
-		s.logger.Error(ctx, "failed to refund late-captured payment at Razorpay",
-			"payment_id", flexpricePaymentID, "razorpay_payment_id", razorpayPaymentID, "error", err)
-		return
+		return ierr.WithError(err).
+			WithMessage("failed to refund late-captured payment at Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":          flexpricePaymentID,
+				"razorpay_payment_id": razorpayPaymentID,
+			}).
+			Mark(ierr.ErrInternal)
 	}
 
 	updateReq := dto.UpdatePaymentRequest{
@@ -951,11 +964,20 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		updateReq.Metadata = &metadata
 	}
 	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
-		s.logger.Error(ctx, "refund confirmed at Razorpay but failed to update FlexPrice payment status",
-			"payment_id", flexpricePaymentID, "razorpay_refund_id", refundID, "error", err)
-		return
+		// Razorpay has already refunded the money at this point — this failure
+		// means FlexPrice's own record is now out of sync with Razorpay until
+		// someone reconciles it manually (see the caller for how this is
+		// currently surfaced).
+		return ierr.WithError(err).
+			WithMessage("refund confirmed at Razorpay but failed to update FlexPrice payment status").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":         flexpricePaymentID,
+				"razorpay_refund_id": refundID,
+			}).
+			Mark(ierr.ErrInternal)
 	}
 
+	return nil
 }
 
 // Skip if Razorpay already shows this payment as fully refunded. Razorpay's Payment
