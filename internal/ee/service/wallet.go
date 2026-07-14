@@ -1162,6 +1162,7 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
+	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionUpdated, tx.ID)
 
 	// Log credit balance alert after transaction completes
 	if err := s.logCreditBalanceAlert(ctx, w, w.CreditBalance.Add(tx.CreditAmount)); err != nil {
@@ -2261,6 +2262,39 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+	}
+}
+
+func (s *walletService) publishOngoingBalanceUpdatedWebhookEvent(ctx context.Context, walletID string, balance *dto.WalletBalanceResponse) {
+	if s.WebhookPublisher == nil || balance == nil || balance.RealTimeCreditBalance == nil {
+		return
+	}
+
+	webhookPayload, err := json.Marshal(webhookDto.InternalWalletEvent{
+		WalletID:  walletID,
+		Balance:   balance,
+		TenantID:  types.GetTenantID(ctx),
+		EventType: types.WebhookEventWalletOngoingBalanceUpdated,
+	})
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal ongoing balance webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     types.WebhookEventWalletOngoingBalanceUpdated,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      walletID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.Error(ctx, "failed to publish ongoing balance webhook event", "error", err)
+		return
 	}
 }
 
@@ -3499,6 +3533,8 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				)
 			}
 		}
+
+		s.publishOngoingBalanceUpdatedWebhookEvent(ctx, w.ID, balance)
 	}
 
 	s.Logger.Debug(ctx, "completed wallet balance alert check for customer",
@@ -3689,15 +3725,10 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWallet, walletID)
-	// TODO: Cleanup old cache key after 30 min of going live (30 min TTL in old cache key)
-	oldCacheKey := cache.GenerateKey(nil, cache.PrefixWallet, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {
 		cachedValue, remainingTTL, found := s.RedisCache.ForceCacheGetWithTTL(spanCtx, cacheKey)
-		if !found {
-			cachedValue, remainingTTL, found = s.RedisCache.ForceCacheGetWithTTL(spanCtx, oldCacheKey)
-		}
 		if !found {
 			return nil
 		}
@@ -3725,9 +3756,6 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 	// Default path: no max-live check
 	cachedValue, found := s.RedisCache.ForceCacheGet(spanCtx, cacheKey)
-	if !found {
-		cachedValue, found = s.RedisCache.ForceCacheGet(spanCtx, oldCacheKey)
-	}
 	if !found {
 		return nil
 	}

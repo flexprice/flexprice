@@ -153,7 +153,7 @@ wt-ports:
 .PHONY: migrate-local
 migrate-local:
 	@set -a && [ -f .env.local ] && . ./.env.local; set +a; \
-	go run ./cmd/migrate postgres
+	go run ./cmd/migrate
 
 .PHONY: test test-verbose test-coverage
 

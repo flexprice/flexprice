@@ -169,6 +169,14 @@
             "description": "Fired when a new wallet transaction is created"
         },
         {
+            "name": "wallet.transaction.updated",
+            "description": "Fired when an existing wallet transaction is updated"
+        },
+        {
+            "name": "wallet.ongoing_balance.updated",
+            "description": "Fired when a wallet's ongoing (real-time) balance changes"
+        },
+        {
             "name": "wallet.updated",
             "description": "Fired when wallet details are updated"
         }
