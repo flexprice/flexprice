@@ -467,6 +467,12 @@ func (c PaymentMandateLimits) Validate() error {
 			return ierr.NewErrorf("max_amount for rail %q must not be negative", rail).
 				Mark(ierr.ErrValidation)
 		}
+		if strings.TrimSpace(limit.Currency) != "" && len(strings.TrimSpace(limit.Currency)) != 3 {
+			return ierr.NewErrorf("currency for rail %q must be a 3-letter code", rail).
+				WithHint("Provide a valid 3-letter currency code (e.g. INR)").
+				WithReportableDetails(map[string]any{"rail": rail, "currency": limit.Currency}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
