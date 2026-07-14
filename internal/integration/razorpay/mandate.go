@@ -108,11 +108,10 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		return nil, err
 	}
 
-	customerResp, err := a.CustomerSvc.GetCustomer(ctx, req.CustomerID)
+	c, err := a.Svc.customerSvc.EnsureCustomerSyncedToRazorpay(ctx, req.CustomerID, a.CustomerSvc)
 	if err != nil {
 		return nil, err
 	}
-	c := customerResp.Customer
 
 	customerInfo := map[string]interface{}{
 		"name": c.Name,
