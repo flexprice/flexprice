@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -91,46 +92,20 @@ var (
 	EntityIDValidator func(string) error
 )
 
-// EntityType defines the type for the "entity_type" enum field.
-type EntityType string
-
-// EntityType values.
-const (
-	EntityTypeSubscription         EntityType = "subscription"
-	EntityTypeSubscriptionLineItem EntityType = "subscription_line_item"
-	EntityTypeGroup                EntityType = "group"
-)
-
-func (et EntityType) String() string {
-	return string(et)
-}
-
 // EntityTypeValidator is a validator for the "entity_type" field enum values. It is called by the builders before save.
-func EntityTypeValidator(et EntityType) error {
+func EntityTypeValidator(et types.AlertEntityType) error {
 	switch et {
-	case EntityTypeSubscription, EntityTypeSubscriptionLineItem, EntityTypeGroup:
+	case "wallet", "feature", "subscription", "subscription_line_item", "group":
 		return nil
 	default:
 		return fmt.Errorf("alertsettings: invalid enum value for entity_type field: %q", et)
 	}
 }
 
-// ParentEntityType defines the type for the "parent_entity_type" enum field.
-type ParentEntityType string
-
-// ParentEntityType values.
-const (
-	ParentEntityTypeSubscription ParentEntityType = "subscription"
-)
-
-func (pet ParentEntityType) String() string {
-	return string(pet)
-}
-
 // ParentEntityTypeValidator is a validator for the "parent_entity_type" field enum values. It is called by the builders before save.
-func ParentEntityTypeValidator(pet ParentEntityType) error {
+func ParentEntityTypeValidator(pet types.AlertEntityType) error {
 	switch pet {
-	case ParentEntityTypeSubscription:
+	case "wallet", "feature", "subscription", "subscription_line_item", "group":
 		return nil
 	default:
 		return fmt.Errorf("alertsettings: invalid enum value for parent_entity_type field: %q", pet)

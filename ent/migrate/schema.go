@@ -142,9 +142,9 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"subscription", "subscription_line_item", "group"}},
+		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"subscription"}},
+		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
 		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}

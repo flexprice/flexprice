@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -560,23 +561,33 @@ func EnabledNEQ(v bool) predicate.AlertSettings {
 }
 
 // EntityTypeEQ applies the EQ predicate on the "entity_type" field.
-func EntityTypeEQ(v EntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldEQ(FieldEntityType, v))
+func EntityTypeEQ(v types.AlertEntityType) predicate.AlertSettings {
+	vc := v
+	return predicate.AlertSettings(sql.FieldEQ(FieldEntityType, vc))
 }
 
 // EntityTypeNEQ applies the NEQ predicate on the "entity_type" field.
-func EntityTypeNEQ(v EntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldNEQ(FieldEntityType, v))
+func EntityTypeNEQ(v types.AlertEntityType) predicate.AlertSettings {
+	vc := v
+	return predicate.AlertSettings(sql.FieldNEQ(FieldEntityType, vc))
 }
 
 // EntityTypeIn applies the In predicate on the "entity_type" field.
-func EntityTypeIn(vs ...EntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldIn(FieldEntityType, vs...))
+func EntityTypeIn(vs ...types.AlertEntityType) predicate.AlertSettings {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = vs[i]
+	}
+	return predicate.AlertSettings(sql.FieldIn(FieldEntityType, v...))
 }
 
 // EntityTypeNotIn applies the NotIn predicate on the "entity_type" field.
-func EntityTypeNotIn(vs ...EntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldNotIn(FieldEntityType, vs...))
+func EntityTypeNotIn(vs ...types.AlertEntityType) predicate.AlertSettings {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = vs[i]
+	}
+	return predicate.AlertSettings(sql.FieldNotIn(FieldEntityType, v...))
 }
 
 // EntityIDEQ applies the EQ predicate on the "entity_id" field.
@@ -645,23 +656,33 @@ func EntityIDContainsFold(v string) predicate.AlertSettings {
 }
 
 // ParentEntityTypeEQ applies the EQ predicate on the "parent_entity_type" field.
-func ParentEntityTypeEQ(v ParentEntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldEQ(FieldParentEntityType, v))
+func ParentEntityTypeEQ(v types.AlertEntityType) predicate.AlertSettings {
+	vc := v
+	return predicate.AlertSettings(sql.FieldEQ(FieldParentEntityType, vc))
 }
 
 // ParentEntityTypeNEQ applies the NEQ predicate on the "parent_entity_type" field.
-func ParentEntityTypeNEQ(v ParentEntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldNEQ(FieldParentEntityType, v))
+func ParentEntityTypeNEQ(v types.AlertEntityType) predicate.AlertSettings {
+	vc := v
+	return predicate.AlertSettings(sql.FieldNEQ(FieldParentEntityType, vc))
 }
 
 // ParentEntityTypeIn applies the In predicate on the "parent_entity_type" field.
-func ParentEntityTypeIn(vs ...ParentEntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldIn(FieldParentEntityType, vs...))
+func ParentEntityTypeIn(vs ...types.AlertEntityType) predicate.AlertSettings {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = vs[i]
+	}
+	return predicate.AlertSettings(sql.FieldIn(FieldParentEntityType, v...))
 }
 
 // ParentEntityTypeNotIn applies the NotIn predicate on the "parent_entity_type" field.
-func ParentEntityTypeNotIn(vs ...ParentEntityType) predicate.AlertSettings {
-	return predicate.AlertSettings(sql.FieldNotIn(FieldParentEntityType, vs...))
+func ParentEntityTypeNotIn(vs ...types.AlertEntityType) predicate.AlertSettings {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = vs[i]
+	}
+	return predicate.AlertSettings(sql.FieldNotIn(FieldParentEntityType, v...))
 }
 
 // ParentEntityTypeIsNil applies the IsNil predicate on the "parent_entity_type" field.

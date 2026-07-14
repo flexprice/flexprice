@@ -60,7 +60,7 @@ func (r *alertSettingsRepository) Create(ctx context.Context, a *domainAlert.Ale
 		SetID(a.ID).
 		SetTenantID(a.TenantID).
 		SetEnabled(a.Enabled).
-		SetEntityType(alertsettings.EntityType(a.EntityType)).
+		SetEntityType(types.AlertEntityType(a.EntityType)).
 		SetEntityID(a.EntityID).
 		SetConfig(config).
 		SetStatus(string(a.Status)).
@@ -71,7 +71,7 @@ func (r *alertSettingsRepository) Create(ctx context.Context, a *domainAlert.Ale
 		SetEnvironmentID(a.EnvironmentID)
 
 	if a.ParentEntityType != nil {
-		createQuery = createQuery.SetParentEntityType(alertsettings.ParentEntityType(*a.ParentEntityType))
+		createQuery = createQuery.SetParentEntityType(types.AlertEntityType(*a.ParentEntityType))
 	}
 	if a.ParentEntityID != nil {
 		createQuery = createQuery.SetParentEntityID(*a.ParentEntityID)
@@ -360,7 +360,7 @@ func (o AlertSettingsQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	}
 
 	if f.EntityType != "" {
-		query = query.Where(alertsettings.EntityTypeEQ(alertsettings.EntityType(f.EntityType)))
+		query = query.Where(alertsettings.EntityTypeEQ(types.AlertEntityType(f.EntityType)))
 	}
 
 	if f.EntityID != "" {
@@ -372,7 +372,7 @@ func (o AlertSettingsQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	}
 
 	if f.ParentEntityType != "" {
-		query = query.Where(alertsettings.ParentEntityTypeEQ(alertsettings.ParentEntityType(f.ParentEntityType)))
+		query = query.Where(alertsettings.ParentEntityTypeEQ(types.AlertEntityType(f.ParentEntityType)))
 	}
 
 	if f.ParentEntityID != "" {

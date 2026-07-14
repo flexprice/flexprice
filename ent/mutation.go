@@ -3869,9 +3869,9 @@ type AlertSettingsMutation struct {
 	updated_by         *string
 	environment_id     *string
 	enabled            *bool
-	entity_type        *alertsettings.EntityType
+	entity_type        *types.AlertEntityType
 	entity_id          *string
-	parent_entity_type *alertsettings.ParentEntityType
+	parent_entity_type *types.AlertEntityType
 	parent_entity_id   *string
 	_config            *types.AlertSettings
 	clearedFields      map[string]struct{}
@@ -4312,12 +4312,12 @@ func (m *AlertSettingsMutation) ResetEnabled() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *AlertSettingsMutation) SetEntityType(at alertsettings.EntityType) {
-	m.entity_type = &at
+func (m *AlertSettingsMutation) SetEntityType(tet types.AlertEntityType) {
+	m.entity_type = &tet
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *AlertSettingsMutation) EntityType() (r alertsettings.EntityType, exists bool) {
+func (m *AlertSettingsMutation) EntityType() (r types.AlertEntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -4328,7 +4328,7 @@ func (m *AlertSettingsMutation) EntityType() (r alertsettings.EntityType, exists
 // OldEntityType returns the old "entity_type" field's value of the AlertSettings entity.
 // If the AlertSettings object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertSettingsMutation) OldEntityType(ctx context.Context) (v alertsettings.EntityType, err error) {
+func (m *AlertSettingsMutation) OldEntityType(ctx context.Context) (v types.AlertEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -4384,12 +4384,12 @@ func (m *AlertSettingsMutation) ResetEntityID() {
 }
 
 // SetParentEntityType sets the "parent_entity_type" field.
-func (m *AlertSettingsMutation) SetParentEntityType(aet alertsettings.ParentEntityType) {
-	m.parent_entity_type = &aet
+func (m *AlertSettingsMutation) SetParentEntityType(tet types.AlertEntityType) {
+	m.parent_entity_type = &tet
 }
 
 // ParentEntityType returns the value of the "parent_entity_type" field in the mutation.
-func (m *AlertSettingsMutation) ParentEntityType() (r alertsettings.ParentEntityType, exists bool) {
+func (m *AlertSettingsMutation) ParentEntityType() (r types.AlertEntityType, exists bool) {
 	v := m.parent_entity_type
 	if v == nil {
 		return
@@ -4400,7 +4400,7 @@ func (m *AlertSettingsMutation) ParentEntityType() (r alertsettings.ParentEntity
 // OldParentEntityType returns the old "parent_entity_type" field's value of the AlertSettings entity.
 // If the AlertSettings object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertSettingsMutation) OldParentEntityType(ctx context.Context) (v *alertsettings.ParentEntityType, err error) {
+func (m *AlertSettingsMutation) OldParentEntityType(ctx context.Context) (v *types.AlertEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldParentEntityType is only allowed on UpdateOne operations")
 	}
@@ -4726,7 +4726,7 @@ func (m *AlertSettingsMutation) SetField(name string, value ent.Value) error {
 		m.SetEnabled(v)
 		return nil
 	case alertsettings.FieldEntityType:
-		v, ok := value.(alertsettings.EntityType)
+		v, ok := value.(types.AlertEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4740,7 +4740,7 @@ func (m *AlertSettingsMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case alertsettings.FieldParentEntityType:
-		v, ok := value.(alertsettings.ParentEntityType)
+		v, ok := value.(types.AlertEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
