@@ -193,6 +193,8 @@ func copyConnection(c *connection.Connection) *connection.Connection {
 		Name:                c.Name,
 		ProviderType:        c.ProviderType,
 		EncryptedSecretData: c.EncryptedSecretData,
+		Metadata:            c.Metadata,
+		SyncConfig:          c.SyncConfig,
 		EnvironmentID:       c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
