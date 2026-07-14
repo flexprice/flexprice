@@ -44,7 +44,7 @@ type Event struct {
 	// ExternalCustomerID is the identifier of the customer in the external system ex Customer DB or Stripe
 	ExternalCustomerID string `json:"external_customer_id" ch:"external_customer_id"`
 
-	ForceReprocess bool `json:"force_reprocess" ch:"-"` // if true, the event will be reprocessed even if it has already been processed
+	ForceReprocess bool `json:"-" ch:"-"` // if true, the event will be reprocessed even if it has already been processed
 }
 
 // ProcessedEvent represents an event that has been processed for billing
