@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log"
 
 	"github.com/Shopify/sarama"
@@ -9,15 +9,29 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/kafka/reconcile"
 	"github.com/flexprice/flexprice/internal/kafka/topicspec"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
-	flag.Parse()
+func newKafkaCmd() *cobra.Command {
+	var dryRun bool
 
+	cmd := &cobra.Command{
+		Use:   "kafka",
+		Short: "Reconcile Kafka topics against the desired topic spec",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runKafkaMigration(dryRun)
+		},
+	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "log intended actions without applying")
+
+	return cmd
+}
+
+func runKafkaMigration(dryRun bool) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces config.yaml's
@@ -32,10 +46,10 @@ func main() {
 	}
 	desired, source, err := topicspec.LoadDesired(defaults, topics)
 	if err != nil {
-		log.Fatalf("load desired topics: %v", err)
+		return fmt.Errorf("load desired topics: %w", err)
 	}
 	env := cfg.Logging.Environment
-	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, *dryRun)
+	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, dryRun)
 	if source == "config" {
 		// config.yaml carries the base/dev topic names (unprefixed), which are
 		// WRONG for a shared prod cluster. Every real deploy must set
@@ -50,7 +64,7 @@ func main() {
 
 	admin, err := sarama.NewClusterAdmin(cfg.Kafka.Brokers, saramaCfg)
 	if err != nil {
-		log.Fatalf("connect cluster admin: %v", err)
+		return fmt.Errorf("connect cluster admin: %w", err)
 	}
 	defer admin.Close()
 
@@ -58,28 +72,29 @@ func main() {
 
 	plan, err := reconcile.Plan(saramaAdmin, desired)
 	if err != nil {
-		log.Fatalf("plan reconcile: %v", err)
+		return fmt.Errorf("plan reconcile: %w", err)
 	}
 
-	if *dryRun {
+	if dryRun {
 		for _, act := range plan {
-			logAction(act)
+			logKafkaAction(act)
 		}
-		return
+		return nil
 	}
 
 	res, err := reconcile.Apply(saramaAdmin, plan)
 	if err != nil {
-		log.Fatalf("reconcile failed: %v", err)
+		return fmt.Errorf("reconcile failed: %w", err)
 	}
 	if res.SkippedShrink > 0 || res.RFMismatch > 0 || res.RetentionMismatch > 0 {
 		log.Printf("WARN reconcile completed with warnings: skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d", res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
 	}
 	log.Printf("kafka-migrate done: created=%d grown=%d unchanged=%d skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d",
 		res.Created, res.Grown, res.Unchanged, res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
+	return nil
 }
 
-func logAction(act reconcile.Action) {
+func logKafkaAction(act reconcile.Action) {
 	switch act.Kind {
 	case reconcile.ActionCreate:
 		log.Printf("WOULD CREATE %s partitions=%d rf=%d retention_ms=%d", act.Topic.Name, act.Topic.Partitions, act.Topic.ReplicationFactor, act.Topic.RetentionMs)

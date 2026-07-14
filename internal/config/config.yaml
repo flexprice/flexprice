@@ -34,7 +34,7 @@ kafka:
   client_id: "flexprice-client-local"
   route_tenants_on_lazy_mode: []
   # topics_defaults/topics below describe the full desired topic set for
-  # cmd/kafka-migrate only (server/consumer/worker ignore them). Base/dev
+  # `migrate kafka` (cmd/migrate) only (server/consumer/worker ignore them). Base/dev
   # names, unprefixed — mirrors the 9 staging GMK topics. A shared prod
   # cluster MUST set FLEXPRICE_KAFKA_TOPICS (JSON, same shape) which FULLY
   # REPLACES this block (no merge) with prod_* prefixed names + tuned sizing.

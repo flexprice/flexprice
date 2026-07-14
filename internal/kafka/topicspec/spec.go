@@ -73,7 +73,7 @@ func (s *Spec) Resolve() ([]ResolvedTopic, error) {
 // ConfigDefaults/ConfigTopics mirror config.KafkaTopicsDefaults/KafkaTopicSpec
 // structurally (same fields) without importing internal/config, so the
 // config package doesn't need to depend back on topicspec. The caller
-// (cmd/kafka-migrate) converts cfg.Kafka.TopicsDefaults/Topics into these.
+// (cmd/migrate's kafka subcommand) converts cfg.Kafka.TopicsDefaults/Topics into these.
 type ConfigDefaults struct {
 	ReplicationFactor int16
 	RetentionMs       int64
