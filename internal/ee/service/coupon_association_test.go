@@ -4,12 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	coupon_domain "github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -252,4 +254,46 @@ func (s *CouponAssociationServiceSuite) TestListCouponAssociations_ExpandSubscri
 	}
 	s.True(subLevelItem)
 	s.True(lineItemLevelItem)
+}
+
+// TestCreateCouponAssociation_RedemptionLimitReached is the service-layer
+// regression test for the coupon redemption race-condition fix: it confirms
+// that when IncrementRedemptions rejects a redemption because the coupon has
+// already hit max_redemptions, CreateCouponAssociation surfaces that as a
+// validation-class error (4xx) rather than re-wrapping it as ErrInternal
+// (which would incorrectly surface as a 500).
+func (s *CouponAssociationServiceSuite) TestCreateCouponAssociation_RedemptionLimitReached() {
+	ctx := s.GetContext()
+
+	maxRedemptions := 1
+	pct := decimal.NewFromInt(15)
+	limitedCoupon := &coupon_domain.Coupon{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON),
+		Name:           "Limited Coupon",
+		Type:           types.CouponTypePercentage,
+		Cadence:        types.CouponCadenceOnce,
+		PercentageOff:  &pct,
+		MaxRedemptions: &maxRedemptions,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	limitedCoupon.Status = types.StatusPublished
+	s.NoError(s.GetStores().CouponRepo.Create(ctx, limitedCoupon))
+
+	firstReq := dto.CreateCouponAssociationRequest{
+		CouponID:       limitedCoupon.ID,
+		SubscriptionID: s.testData.subscription.ID,
+		StartDate:      time.Now().UTC(),
+	}
+	_, err := s.service.CreateCouponAssociation(ctx, firstReq)
+	s.NoError(err, "first redemption should succeed under max_redemptions=1")
+
+	secondReq := dto.CreateCouponAssociationRequest{
+		CouponID:       limitedCoupon.ID,
+		SubscriptionID: s.testData.subscription.ID,
+		StartDate:      time.Now().UTC(),
+	}
+	_, err = s.service.CreateCouponAssociation(ctx, secondReq)
+	s.Require().Error(err, "second redemption must be rejected — coupon already at max_redemptions")
+	s.True(ierr.IsValidation(err), "expected a validation-class error, not ErrInternal, got: %v", err)
 }

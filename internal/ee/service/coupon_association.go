@@ -66,9 +66,10 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 		}
 
 		if err := s.CouponRepo.IncrementRedemptions(txCtx, req.CouponID); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to increment coupon redemptions").
-				Mark(ierr.ErrInternal)
+			// IncrementRedemptions already returns a properly-marked error
+			// (ErrValidation for limit-reached, ErrNotFound, ErrDatabase) —
+			// don't re-wrap and downgrade it to ErrInternal.
+			return err
 		}
 
 		response = s.toCouponAssociationResponse(ca)

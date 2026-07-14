@@ -324,12 +324,47 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Coupon.Update().
+	// Fetch the current coupon to determine whether a redemption-limit guard
+	// applies. MaxRedemptions == nil means unlimited — no guard, plain increment.
+	existing, err := client.Coupon.Query().
 		Where(
 			coupon.ID(id),
 			coupon.TenantID(types.GetTenantID(ctx)),
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Coupon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"coupon_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to load coupon for redemption increment").
+			Mark(ierr.ErrDatabase)
+	}
+
+	updateQuery := client.Coupon.Update().
+		Where(
+			coupon.ID(id),
+			coupon.TenantID(types.GetTenantID(ctx)),
+			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+		)
+
+	if existing.MaxRedemptions != nil {
+		// Atomic compare-and-swap: only increment if still under the limit at
+		// the moment of the UPDATE, not at the moment of the earlier read above.
+		// This is what closes the race — concurrent requests each re-check
+		// total_redemptions in the same statement that performs the increment,
+		// so only one of N concurrent callers can win when at the limit.
+		updateQuery = updateQuery.Where(coupon.TotalRedemptionsLT(*existing.MaxRedemptions))
+	}
+
+	affected, err := updateQuery.
 		AddTotalRedemptions(1).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -349,6 +384,19 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 		return ierr.WithError(err).
 			WithHint("Failed to increment coupon redemptions").
 			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		// The WHERE clause excluded the row: another concurrent request won
+		// the race and already pushed total_redemptions to the limit.
+		err := ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]any{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
+		SetSpanError(span, err)
+		return err
 	}
 
 	SetSpanSuccess(span)

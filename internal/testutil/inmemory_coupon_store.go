@@ -151,10 +151,25 @@ func (s *InMemoryCouponStore) Count(ctx context.Context, filter *types.CouponFil
 	return s.InMemoryStore.Count(ctx, filter, couponFilterFn)
 }
 
+// IncrementRedemptions mirrors the atomic-guard semantics of the real Ent
+// repository (internal/repository/ent/coupon.go): when MaxRedemptions is set
+// and TotalRedemptions has already reached it, the increment is rejected with
+// a validation-class error instead of silently succeeding. This keeps the
+// in-memory harness used by service-layer tests consistent with production
+// behavior for the coupon-redemption race-condition fix.
 func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string) error {
 	c, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if c.MaxRedemptions != nil && c.TotalRedemptions >= *c.MaxRedemptions {
+		return ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	c.TotalRedemptions++
