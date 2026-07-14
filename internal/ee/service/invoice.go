@@ -132,7 +132,24 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	req.PreparedTaxRates = finalTaxRates
 
 	// Delegate to CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-	return s.CreateInvoice(ctx, req)
+	resp, err := s.CreateInvoice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ForceSyncInvoice {
+		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID); err != nil {
+			s.Logger.Error(ctx, "force sync to Moyasar failed",
+				"error", err, "invoice_id", resp.ID)
+		}
+		inv, err := s.InvoiceRepo.Get(ctx, resp.ID)
+		if err != nil {
+			return nil, err
+		}
+		resp = dto.NewInvoiceResponse(inv)
+	}
+
+	return resp, nil
 }
 
 // CreateEmptyDraftInvoice creates a zero-dollar draft invoice without line items or invoice number.
