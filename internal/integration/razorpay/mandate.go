@@ -156,8 +156,22 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		return nil, err
 	}
 
+	// CreateAuthorizationLink's error return only reflects the HTTP transport/status,
+	// not the decoded response's shape — a 200 OK with an unexpected or incomplete
+	// body (a malformed API response, not something the Go client validates) would
+	// otherwise silently produce a CheckoutProviderResponse pointing at an empty URL.
 	shortURL, _ := result["short_url"].(string)
 	id, _ := result["id"].(string)
+	if shortURL == "" || id == "" {
+		return nil, ierr.NewError("razorpay authorization link response missing short_url or id").
+			WithHint("Razorpay returned an unexpected response for the mandate registration link").
+			WithReportableDetails(map[string]interface{}{
+				"has_short_url": shortURL != "",
+				"has_id":        id != "",
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID: id,
 		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: shortURL},
