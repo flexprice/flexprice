@@ -289,6 +289,7 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) (err error) {
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
+		!event.ForceReprocess &&
 		s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID
