@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +18,6 @@ func main() {
 	root.AddCommand(newSvixCmd())
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 		log.Fatal(err)
 	}
 }

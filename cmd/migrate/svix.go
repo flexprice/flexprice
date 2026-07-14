@@ -46,22 +46,22 @@ func newSvixCmd() *cobra.Command {
 func runSvixMigration(dryRun bool) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	baseURL := strings.TrimRight(cfg.Webhook.Svix.BaseURL, "/")
 	token := cfg.Webhook.Svix.AuthToken
 	if baseURL == "" || token == "" {
-		log.Fatalf("svix-migrate: webhook.svix_config.base_url and auth_token must be set (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN)")
+		return fmt.Errorf("svix-migrate: webhook.svix_config.base_url and auth_token must be set (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN)")
 	}
 
 	raw, err := svixDataFS.ReadFile("data.json")
 	if err != nil {
-		log.Fatalf("read embedded data.json: %v", err)
+		return fmt.Errorf("read embedded data.json: %w", err)
 	}
 	var file svixEventTypeFile
 	if err := json.Unmarshal(raw, &file); err != nil {
-		log.Fatalf("parse data.json: %v", err)
+		return fmt.Errorf("parse data.json: %w", err)
 	}
 
 	log.Printf("svix-migrate: url=%s event-types=%d dry-run=%v", baseURL, len(file.Data), dryRun)
@@ -87,7 +87,7 @@ func runSvixMigration(dryRun bool) error {
 	}
 	log.Printf("svix-migrate done: created=%d failed=%d", created, failed)
 	if failed > 0 {
-		log.Fatalf("svix-migrate: %d event-type(s) failed", failed)
+		return fmt.Errorf("svix-migrate: %d event-type(s) failed", failed)
 	}
 	return nil
 }

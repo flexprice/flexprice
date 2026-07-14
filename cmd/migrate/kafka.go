@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/Shopify/sarama"
@@ -18,8 +19,7 @@ func newKafkaCmd() *cobra.Command {
 		Use:   "kafka",
 		Short: "Reconcile Kafka topics against the desired topic spec",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runKafkaMigration(dryRun)
-			return nil
+			return runKafkaMigration(dryRun)
 		},
 	}
 
@@ -28,10 +28,10 @@ func newKafkaCmd() *cobra.Command {
 	return cmd
 }
 
-func runKafkaMigration(dryRun bool) {
+func runKafkaMigration(dryRun bool) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces config.yaml's
@@ -46,7 +46,7 @@ func runKafkaMigration(dryRun bool) {
 	}
 	desired, source, err := topicspec.LoadDesired(defaults, topics)
 	if err != nil {
-		log.Fatalf("load desired topics: %v", err)
+		return fmt.Errorf("load desired topics: %w", err)
 	}
 	env := cfg.Logging.Environment
 	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, dryRun)
@@ -64,7 +64,7 @@ func runKafkaMigration(dryRun bool) {
 
 	admin, err := sarama.NewClusterAdmin(cfg.Kafka.Brokers, saramaCfg)
 	if err != nil {
-		log.Fatalf("connect cluster admin: %v", err)
+		return fmt.Errorf("connect cluster admin: %w", err)
 	}
 	defer admin.Close()
 
@@ -72,25 +72,26 @@ func runKafkaMigration(dryRun bool) {
 
 	plan, err := reconcile.Plan(saramaAdmin, desired)
 	if err != nil {
-		log.Fatalf("plan reconcile: %v", err)
+		return fmt.Errorf("plan reconcile: %w", err)
 	}
 
 	if dryRun {
 		for _, act := range plan {
 			logKafkaAction(act)
 		}
-		return
+		return nil
 	}
 
 	res, err := reconcile.Apply(saramaAdmin, plan)
 	if err != nil {
-		log.Fatalf("reconcile failed: %v", err)
+		return fmt.Errorf("reconcile failed: %w", err)
 	}
 	if res.SkippedShrink > 0 || res.RFMismatch > 0 || res.RetentionMismatch > 0 {
 		log.Printf("WARN reconcile completed with warnings: skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d", res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
 	}
 	log.Printf("kafka-migrate done: created=%d grown=%d unchanged=%d skipped-shrink=%d rf-mismatch=%d retention-mismatch=%d",
 		res.Created, res.Grown, res.Unchanged, res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
+	return nil
 }
 
 func logKafkaAction(act reconcile.Action) {

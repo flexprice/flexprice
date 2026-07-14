@@ -39,24 +39,24 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	logger, err := logger.NewLogger(cfg)
+	l, err := logger.NewLogger(cfg)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
 	}
 
 	dsn := cfg.Postgres.GetDSN()
-	logger.Info(context.Background(), "Connecting to database", "host", cfg.Postgres.Host)
+	l.Info(context.Background(), "Connecting to database", "host", cfg.Postgres.Host)
 
 	client, err := ent.Open("postgres", dsn)
 	if err != nil {
-		logger.Fatal(context.Background(), "Failed to connect to postgres", "error", err)
+		l.Fatal(context.Background(), "Failed to connect to postgres", "error", err)
 	}
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	logger.Info(ctx, "Running database migrations...")
+	l.Info(ctx, "Running database migrations...")
 
 	// Safety guard: never let auto-migration drop or recreate (modify) an index.
 	// Ent/Atlas's partial-index predicate comparison is lossy (it false-detects
@@ -75,15 +75,15 @@ func runPostgresMigration(dryRun bool, timeout int) error {
 	}
 
 	if dryRun {
-		logger.Info(ctx, "Dry run mode - printing migration SQL without executing")
+		l.Info(ctx, "Dry run mode - printing migration SQL without executing")
 		if err := client.Schema.WriteTo(ctx, os.Stdout, migrateOpts...); err != nil {
-			logger.Fatal(ctx, "Failed to generate migration SQL", "error", err)
+			l.Fatal(ctx, "Failed to generate migration SQL", "error", err)
 		}
 	} else {
 		if err := client.Schema.Create(ctx, migrateOpts...); err != nil {
-			logger.Fatal(ctx, "Failed to create schema resources", "error", err)
+			l.Fatal(ctx, "Failed to create schema resources", "error", err)
 		}
-		logger.Info(ctx, "Migration completed successfully")
+		l.Info(ctx, "Migration completed successfully")
 	}
 
 	fmt.Println("Migration process completed")

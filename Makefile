@@ -153,7 +153,7 @@ wt-ports:
 .PHONY: migrate-local
 migrate-local:
 	@set -a && [ -f .env.local ] && . ./.env.local; set +a; \
-	go run cmd/migrate/main.go postgres
+	go run ./cmd/migrate postgres
 
 .PHONY: test test-verbose test-coverage
 
@@ -185,20 +185,20 @@ generate-ent: install-ent
 .PHONY: migrate-ent
 migrate-ent:
 	@echo "Running Ent migrations..."
-	@go run cmd/migrate/main.go postgres --timeout 300
+	@go run ./cmd/migrate postgres --timeout 300
 	@echo "Ent migrations complete"
 
 .PHONY: migrate-ent-dry-run
 migrate-ent-dry-run:
 	@echo "Generating SQL migration statements (dry run)..."
-	@go run cmd/migrate/main.go postgres --dry-run --timeout 300
+	@go run ./cmd/migrate postgres --dry-run --timeout 300
 	@echo "SQL migration statements generated"
 
 .PHONY: generate-migration
 generate-migration:
 	@echo "Generating SQL migration file..."
 	@mkdir -p migrations/ent
-	@go run cmd/migrate/main.go postgres --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
+	@go run ./cmd/migrate postgres --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
 	@echo "SQL migration file generated in migrations/ent/"
 
 # Initialize databases and required topics
