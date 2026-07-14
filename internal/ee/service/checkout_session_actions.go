@@ -148,19 +148,8 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	}, nil
 }
 
-// resolveMaxMandateLimit caps the caller-supplied MaxMandateLimit against the
-// tenant's configured PaymentMandateLimits ceiling for the requested payment
-// method (falling back to the platform default when the tenant has no
-// override — see types.GetDefaultSettings). Without this, a caller could
-// either omit MaxMandateLimit entirely (which previously meant "no ceiling",
-// i.e. an unbounded recurring-charge authority) or simply request a higher
-// value than the tenant's own configured safety limit allows.
-//
-// The tenant ceiling only applies when its configured currency matches the
-// invoice currency (or is unset) — a rail's ceiling configured in one
-// currency isn't a meaningful cap on a charge in a different currency, and
-// rejecting the mismatch outright would be a product policy decision beyond
-// the scope of this safety fix.
+// resolveMaxMandateLimit caps MaxMandateLimit against the tenant's
+// PaymentMandateLimits ceiling. UPI only — Card has no ceiling.
 func (s *checkoutSessionService) resolveMaxMandateLimit(
 	ctx context.Context,
 	cfg types.CheckoutPaymentProviderConfig,
@@ -175,11 +164,8 @@ func (s *checkoutSessionService) resolveMaxMandateLimit(
 	return capMandateLimit(cfg.PreferredMethod, cfg.MaxMandateLimit, currency, limits), nil
 }
 
-// capMandateLimit is the pure decision logic behind resolveMaxMandateLimit,
-// factored out so it's directly unit-testable without standing up a settings
-// service: given the caller-requested method/limit/currency and the tenant's
-// configured PaymentMandateLimits, returns the effective ceiling to send to
-// the gateway.
+// capMandateLimit is resolveMaxMandateLimit's decision logic, factored out for
+// direct unit testing.
 func capMandateLimit(
 	method types.PaymentMethodType,
 	callerLimit *decimal.Decimal,
@@ -189,13 +175,12 @@ func capMandateLimit(
 	if method == "" {
 		method = types.PaymentMethodTypeUPI
 	}
+	if method != types.PaymentMethodTypeUPI {
+		return callerLimit
+	}
 
 	limit, ok := limits.MandateLimits[method]
 	if !ok || (limit.Currency != "" && !strings.EqualFold(limit.Currency, currency)) {
-		// No ceiling configured for this method (or currency), or the
-		// configured ceiling is denominated in a different currency than this
-		// invoice — fall back to whatever the caller supplied, unchanged from
-		// prior behavior.
 		return callerLimit
 	}
 
