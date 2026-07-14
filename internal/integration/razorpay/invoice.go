@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -22,29 +24,411 @@ import (
 // hard minimum requirement.
 const razorpayMinExpireByBuffer = 15 * time.Minute
 
-// InvoiceSyncService handles synchronization of FlexPrice invoices with Razorpay
+// autoChargeLockTTL is the Redis distributed lock TTL for auto-charge operations.
+// Set longer than a typical HTTP timeout since gateway errors are treated as
+// ambiguous (network timeout vs. definitive failure can't be reliably told apart).
+const autoChargeLockTTL = 15 * time.Minute
+
+// SyncInvoiceResult carries data the caller must persist (e.g. payment-link
+// URLs) back to invoice metadata; done by the caller to avoid a circular
+// import between InvoiceSyncService and the service layer.
+type SyncInvoiceResult struct {
+	// AutoCharged is true when the invoice was successfully submitted for
+	// auto-charge via UPI Autopay. No further action is needed by the caller.
+	AutoCharged bool
+	// RazorpayInvoiceID and ShortURL are populated on the send-invoice path.
+	// The caller should persist them to invoice metadata.
+	RazorpayInvoiceID string
+	ShortURL          string
+}
+
+// InvoiceSyncService syncs FlexPrice invoices with Razorpay (send-invoice and auto-charge).
 type InvoiceSyncService struct {
 	client                       RazorpayClient
 	customerSvc                  *CustomerService
 	invoiceRepo                  invoice.Repository
+	paymentRepo                  payment.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	locker                       cache.Locker
+	paymentSvc                   *PaymentService // nil disables auto-charge
 	logger                       *logger.Logger
 }
 
-// NewInvoiceSyncService creates a new Razorpay invoice sync service
+// NewInvoiceSyncService creates a Razorpay invoice sync service.
+// Pass nil paymentSvc, paymentRepo, or locker to disable auto-charge.
 func NewInvoiceSyncService(
 	client RazorpayClient,
 	customerSvc *CustomerService,
 	invoiceRepo invoice.Repository,
+	paymentRepo payment.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
+	locker cache.Locker,
 	logger *logger.Logger,
+	paymentSvc *PaymentService,
 ) *InvoiceSyncService {
 	return &InvoiceSyncService{
 		client:                       client,
 		customerSvc:                  customerSvc,
 		invoiceRepo:                  invoiceRepo,
+		paymentRepo:                  paymentRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		locker:                       locker,
 		logger:                       logger,
+		paymentSvc:                   paymentSvc,
+	}
+}
+
+// SyncInvoice is the unified entry point for Razorpay invoice syncing.
+// It first attempts a server-initiated UPI Autopay charge (auto-charge path);
+// if no usable token is available it falls back to creating a Razorpay invoice
+// with a hosted payment link (send-invoice path).
+//
+// The function is fail-open for token probing: any error during customer/token
+// resolution causes a silent fallback to the send-invoice path rather than a
+// hard failure. Only definitive errors from the charge submission propagate.
+func (s *InvoiceSyncService) SyncInvoice(
+	ctx context.Context,
+	inv *invoice.Invoice,
+	customerService interfaces.CustomerService,
+) (*SyncInvoiceResult, error) {
+	charged, err := s.tryAutoCharge(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
+	if charged {
+		return &SyncInvoiceResult{AutoCharged: true}, nil
+	}
+
+	s.logger.Info(ctx, "no usable token found, sending Razorpay invoice",
+		"invoice_id", inv.ID, "customer_id", inv.CustomerID)
+
+	syncResponse, err := s.SyncInvoiceToRazorpay(ctx, RazorpayInvoiceSyncRequest{InvoiceID: inv.ID}, customerService)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Info(ctx, "successfully synced invoice to Razorpay",
+		"invoice_id", inv.ID,
+		"razorpay_invoice_id", syncResponse.RazorpayInvoiceID,
+		"payment_url", syncResponse.ShortURL)
+
+	return &SyncInvoiceResult{
+		AutoCharged:       false,
+		RazorpayInvoiceID: syncResponse.RazorpayInvoiceID,
+		ShortURL:          syncResponse.ShortURL,
+	}, nil
+}
+
+// findOrCreateAutoChargePayment returns the existing idempotent payment record for
+// this auto-charge attempt, or creates a new one. The second return value (skip) is
+// true when the payment is already in a terminal or in-flight state and no further
+// action is needed.
+func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
+	ctx context.Context,
+	inv *invoice.Invoice,
+	paymentMethodType types.PaymentMethodType,
+) (pymnt *payment.Payment, skip bool, err error) {
+	key := fmt.Sprintf("autocharge:%s", inv.ID)
+
+	existing, err := s.paymentRepo.GetByIdempotencyKey(ctx, key)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, false, err
+	}
+
+	if existing != nil {
+		switch existing.PaymentStatus {
+		case types.PaymentStatusInitiated, types.PaymentStatusPending:
+			return existing, false, nil
+		case types.PaymentStatusProcessing, types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
+			return nil, true, nil
+		case types.PaymentStatusFailed:
+			s.logger.Info(ctx, "auto-charge payment previously failed, skipping",
+				"invoice_id", inv.ID, "payment_id", existing.ID)
+			return nil, true, nil
+		default:
+			// REFUNDED, PARTIALLY_REFUNDED, VOIDED, or any future status — skip to
+			// avoid reusing a terminal record as the charge idempotency anchor.
+			s.logger.Error(ctx, "auto-charge payment in unexpected state, skipping",
+				"error", err,
+				"invoice_id", inv.ID, "payment_id", existing.ID,
+				"payment_status", existing.PaymentStatus)
+			return nil, true, nil
+		}
+	}
+
+	gatewayType := string(types.PaymentGatewayTypeRazorpay)
+	newPayment := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		IdempotencyKey:    key,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     inv.ID,
+		PaymentMethodType: paymentMethodType,
+		PaymentGateway:    &gatewayType,
+		Amount:            inv.AmountRemaining,
+		Currency:          inv.Currency,
+		PaymentStatus:     types.PaymentStatusInitiated,
+		TrackAttempts:     true,
+		EnvironmentID:     inv.EnvironmentID,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+
+	if createErr := s.paymentRepo.Create(ctx, newPayment); createErr != nil {
+		// Log the original error before the idempotency re-fetch so the cause is
+		// preserved in observability if the re-fetch itself fails.
+		s.logger.Error(ctx, "auto-charge payment create failed, attempting idempotency re-fetch",
+			"invoice_id", inv.ID, "error", createErr)
+		retrieved, fetchErr := s.paymentRepo.GetByIdempotencyKey(ctx, key)
+		if fetchErr != nil {
+			return nil, false, fetchErr
+		}
+		return retrieved, false, nil
+	}
+
+	return newPayment, false, nil
+}
+
+// autoChargeMethodPriority is the order tokens are tried for auto-charge.
+var autoChargeMethodPriority = []types.PaymentMethodType{
+	types.PaymentMethodTypeCard,
+	types.PaymentMethodTypeUPI,
+}
+
+// selectAutoChargeToken finds the first usable token across autoChargeMethodPriority.
+func selectAutoChargeToken(
+	tokens []*interfaces.ProviderPaymentMethod,
+	invoiceTotal decimal.Decimal,
+) (*interfaces.ProviderPaymentMethod, bool) {
+	for _, method := range autoChargeMethodPriority {
+		if token, ok := SelectUsableToken(tokens, method, invoiceTotal); ok {
+			return token, true
+		}
+	}
+	return nil, false
+}
+
+// tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
+// exists it calls executeAutoCharge and returns (true, nil). If token probing
+// fails for any reason it logs and returns (false, nil) so the caller falls
+// through to SyncInvoiceToRazorpay. Only hard errors from executeAutoCharge are
+// propagated.
+func (s *InvoiceSyncService) tryAutoCharge(
+	ctx context.Context,
+	inv *invoice.Invoice,
+) (charged bool, err error) {
+	if s.paymentRepo == nil || s.locker == nil {
+		s.logger.Debug(ctx, "auto-charge disabled (paymentRepo or locker not configured)",
+			"invoice_id", inv.ID)
+		return false, nil
+	}
+
+	razorpayCustomerID, err := s.customerSvc.GetRazorpayCustomerID(ctx, inv.CustomerID)
+	if err != nil {
+		s.logger.Info(ctx, "failed to resolve Razorpay customer ID, falling through to send invoice",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+		return false, nil
+	}
+
+	rawTokens, err := s.client.GetCustomerTokens(ctx, razorpayCustomerID)
+	if err != nil {
+		s.logger.Info(ctx, "failed to list customer tokens, falling through to send invoice",
+			"invoice_id", inv.ID, "error", err)
+		return false, nil
+	}
+
+	tokens := lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
+		pm, normErr := NormalizeRazorpayToken(raw)
+		return pm, normErr == nil && pm != nil
+	})
+
+	token, ok := selectAutoChargeToken(tokens, inv.AmountRemaining)
+	if !ok {
+		s.logger.Debug(ctx, "no usable token found for any supported method, falling through to send invoice",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID,
+			"tokens_inspected", len(tokens))
+		return false, nil
+	}
+
+	s.logger.Info(ctx, "usable token found, attempting auto-charge",
+		"invoice_id", inv.ID, "customer_id", inv.CustomerID,
+		"token_id", token.GatewayMethodID, "method", token.Method)
+
+	if execErr := s.executeAutoCharge(ctx, inv, razorpayCustomerID, token.GatewayMethodID, token.Method); execErr != nil {
+		return false, execErr
+	}
+	return true, nil
+}
+
+// executeAutoCharge acquires a distributed lock, re-validates invoice/payment state,
+// submits the charge to Razorpay via PaymentSvc.AutoCharge, and marks the payment
+// as PROCESSING. Called only after tryAutoCharge has confirmed a usable token.
+func (s *InvoiceSyncService) executeAutoCharge(
+	ctx context.Context,
+	inv *invoice.Invoice,
+	razorpayCustomerID string,
+	tokenID string,
+	paymentMethodType types.PaymentMethodType,
+) error {
+	if s.paymentSvc == nil {
+		s.logger.Error(ctx, "paymentSvc not set on InvoiceSyncService, skipping auto-charge",
+			"error", "paymentSvc not set on InvoiceSyncService",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, paymentMethodType)
+	if err != nil {
+		return err
+	}
+	if skip {
+		s.logger.Info(ctx, "auto-charge payment already in terminal/processing state, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
+	lock, err := s.locker.AcquireLock(ctx, lockKey, autoChargeLockTTL)
+	if err != nil {
+		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
+		return err
+	}
+	if !lock.AcquiredSuccessfully() {
+		s.logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
+		}
+	}()
+
+	freshInv, err := s.invoiceRepo.Get(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+	if freshInv.PaymentStatus == types.PaymentStatusSucceeded ||
+		freshInv.PaymentStatus == types.PaymentStatusOverpaid {
+		s.logger.Info(ctx, "invoice paid between token probe and lock acquisition, skipping auto-charge",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	freshPayment, err := s.paymentRepo.Get(ctx, pymnt.ID)
+	if err != nil {
+		return err
+	}
+	if freshPayment.PaymentStatus == types.PaymentStatusProcessing ||
+		freshPayment.PaymentStatus == types.PaymentStatusSucceeded ||
+		freshPayment.PaymentStatus == types.PaymentStatusOverpaid {
+		s.logger.Info(ctx, "payment already progressed, skipping auto-charge",
+			"invoice_id", inv.ID, "payment_status", freshPayment.PaymentStatus)
+		return nil
+	}
+
+	result, err := s.paymentSvc.AutoCharge(ctx, AutoChargeRequest{
+		InvoiceID:          inv.ID,
+		RazorpayCustomerID: razorpayCustomerID,
+		TokenID:            tokenID,
+		Amount:             freshInv.AmountRemaining,
+		Currency:           freshInv.Currency,
+		FlexPricePaymentID: pymnt.ID,
+	})
+	if err != nil {
+		s.logger.Error(ctx, "Razorpay auto-charge submission failed",
+			"invoice_id", inv.ID, "payment_id", pymnt.ID, "error", err)
+		return err
+	}
+
+	freshPayment.PaymentStatus = types.PaymentStatusProcessing
+	// Reconcile the amount to the freshInv snapshot — the payment record may have
+	// been created against a stale AmountRemaining if a concurrent partial payment
+	// landed between the outer read and the lock.
+	freshPayment.Amount = freshInv.AmountRemaining
+	if result.RazorpayPaymentID != "" {
+		freshPayment.GatewayPaymentID = &result.RazorpayPaymentID
+	}
+	if updateErr := s.paymentRepo.Update(ctx, freshPayment); updateErr != nil {
+		s.logger.Error(ctx, "failed to mark payment as PROCESSING (charge already submitted)",
+			"invoice_id", inv.ID,
+			"payment_id", pymnt.ID,
+			"razorpay_payment_id", result.RazorpayPaymentID,
+			"error", updateErr)
+		// Do not return — charge is submitted; webhook reconciles via flexprice_payment_id.
+	}
+
+	// Persist audit mappings (non-fatal — charge is already submitted).
+	s.createAutoChargeMappings(ctx, inv.ID, pymnt.ID, result)
+
+	s.logger.Info(ctx, "auto-charge submitted successfully",
+		"invoice_id", inv.ID,
+		"payment_id", pymnt.ID,
+		"razorpay_payment_id", result.RazorpayPaymentID,
+		"already_submitted", result.AlreadySubmitted)
+
+	return nil
+}
+
+// createAutoChargeMappings persists two EntityIntegrationMapping records after a
+// successful auto-charge submission:
+//
+//   - invoice → Razorpay order  (provider_entity_type=order in metadata to distinguish
+//     from the invoice→razorpay_invoice mapping created on the send-invoice path)
+//   - payment → Razorpay payment (pay_xxx, omitted when AlreadySubmitted and no ID)
+//
+// Both writes are best-effort: failures are logged but do not abort the charge.
+// The primary reconciliation path (notes.flexprice_payment_id on the webhook) is
+// independent of these mappings.
+func (s *InvoiceSyncService) createAutoChargeMappings(
+	ctx context.Context,
+	invoiceID string,
+	paymentID string,
+	result *AutoChargeResult,
+) {
+	if s.entityIntegrationMappingRepo == nil {
+		return
+	}
+
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// 1. Invoice → Razorpay order
+	if result.RazorpayOrderID != "" {
+		orderMapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityType:       types.IntegrationEntityTypeInvoice,
+			EntityID:         invoiceID,
+			ProviderType:     string(types.SecretProviderRazorpay),
+			ProviderEntityID: result.RazorpayOrderID,
+			Metadata: map[string]interface{}{
+				"provider_entity_type": "order",
+			},
+			EnvironmentID: environmentID,
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, orderMapping); err != nil {
+			s.logger.Info(ctx, "failed to create invoice→order mapping (non-fatal)",
+				"invoice_id", invoiceID,
+				"razorpay_order_id", result.RazorpayOrderID,
+				"error", err)
+		}
+	}
+
+	// 2. Payment → Razorpay payment
+	if result.RazorpayPaymentID != "" {
+		paymentMapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityType:       types.IntegrationEntityTypePayment,
+			EntityID:         paymentID,
+			ProviderType:     string(types.SecretProviderRazorpay),
+			ProviderEntityID: result.RazorpayPaymentID,
+			EnvironmentID:    environmentID,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, paymentMapping); err != nil {
+			s.logger.Info(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",
+				"payment_id", paymentID,
+				"razorpay_payment_id", result.RazorpayPaymentID,
+				"error", err)
+		}
 	}
 }
 

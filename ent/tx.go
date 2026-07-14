@@ -80,6 +80,8 @@ type Tx struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// Refund is the client for interacting with the Refund builders.
+	Refund *RefundClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
 	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
@@ -282,6 +284,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.Refund = NewRefundClient(tx.config)
 	tx.ScheduledTask = NewScheduledTaskClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Settings = NewSettingsClient(tx.config)

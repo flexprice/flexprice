@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -171,6 +172,10 @@ func NewPaymentRepository(p RepositoryParams) payment.Repository {
 
 func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
 	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.RedisCache)
+}
+
+func NewRefundRepository(p RepositoryParams) refund.Repository {
+	return entRepo.NewRefundRepository(p.EntClient, p.Logger)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {

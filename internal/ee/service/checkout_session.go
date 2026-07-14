@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 )
 
 type CheckoutSessionService = interfaces.CheckoutSessionService
@@ -28,6 +29,21 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
+
+	cfg := &types.CheckoutPaymentProviderConfig{}
+	if req.PaymentProviderConfig != nil {
+		cfg = req.PaymentProviderConfig
+	}
+	if cfg.CollectionMethod == "" {
+		cfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Write the normalized config back so ToCheckoutSession persists the resolved defaults.
+	req.PaymentProviderConfig = cfg
 
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.CustomerExternalID)
 	if err != nil {
@@ -319,6 +335,10 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		BillingPeriod:      params.BillingPeriod,
 		Metadata:           params.Metadata,
 		SubscriptionStatus: types.SubscriptionStatusDraft,
+	}
+
+	if session.PaymentProviderConfig != nil && session.PaymentProviderConfig.CollectionMethod != "" {
+		subReq.CollectionMethod = lo.ToPtr(session.PaymentProviderConfig.CollectionMethod)
 	}
 
 	subSvc := NewSubscriptionService(s.ServiceParams)

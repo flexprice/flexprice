@@ -49,6 +49,13 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
+
+		field.String("contact").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
 		// Address fields
 		field.String("address_line1").
 			SchemaType(map[string]string{

@@ -23,6 +23,7 @@ const (
 	ErrCodeDatabase           ErrorCode = "database_error"
 	ErrCodeServiceUnavailable ErrorCode = "service_unavailable"
 	ErrCodeTooManyRequests    ErrorCode = "too_many_requests"
+	ErrCodeNotImplemented     ErrorCode = "not_implemented"
 )
 
 // errorMapping holds both the HTTP status and machine-readable code for a
@@ -46,6 +47,7 @@ var (
 	ErrInternal           = new(ErrCodeInternalError, "internal error")
 	ErrServiceUnavailable = new(ErrCodeServiceUnavailable, "service unavailable")
 	ErrTooManyRequests    = new(ErrCodeTooManyRequests, "too many requests")
+	ErrNotImplemented     = new(ErrCodeNotImplemented, "not implemented")
 
 	// errMappings is the single map that ties sentinel → (HTTP status, error code).
 	// ResolveError iterates this once to get both values.
@@ -62,6 +64,7 @@ var (
 		ErrInternal:           {http.StatusInternalServerError, ErrCodeInternalError},
 		ErrServiceUnavailable: {http.StatusServiceUnavailable, ErrCodeServiceUnavailable},
 		ErrTooManyRequests:    {http.StatusTooManyRequests, ErrCodeTooManyRequests},
+		ErrNotImplemented:     {http.StatusNotImplemented, ErrCodeNotImplemented},
 	}
 )
 
@@ -169,6 +172,11 @@ func IsServiceUnavailable(err error) bool {
 // IsTooManyRequests checks if an error is a rate-limit / 429 style error
 func IsTooManyRequests(err error) bool {
 	return errors.Is(err, ErrTooManyRequests)
+}
+
+// IsNotImplemented checks if an error is a not-implemented error
+func IsNotImplemented(err error) bool {
+	return errors.Is(err, ErrNotImplemented)
 }
 
 // ResolveError returns both the HTTP status code and machine-readable error

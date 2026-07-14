@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -15,25 +16,45 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AutoChargeRequest is the input for PaymentService.AutoCharge.
+type AutoChargeRequest struct {
+	InvoiceID          string
+	RazorpayCustomerID string
+	TokenID            string          // Razorpay token ID (from GetCustomerTokens)
+	Amount             decimal.Decimal // in major units (e.g. rupees)
+	Currency           string          // ISO code, e.g. "INR"
+	FlexPricePaymentID string          // FlexPrice payment.ID — embedded in Razorpay notes for webhook reconciliation
+}
+
+// AutoChargeResult is the output of PaymentService.AutoCharge.
+type AutoChargeResult struct {
+	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
+	RazorpayOrderID   string // Razorpay order_xxx — always populated when a new or existing order was resolved
+	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
+}
+
 // PaymentService handles Razorpay payment operations
 type PaymentService struct {
 	client         RazorpayClient
 	customerSvc    RazorpayCustomerService
 	invoiceSyncSvc *InvoiceSyncService
+	locker         cache.Locker
 	logger         *logger.Logger
 }
 
-// NewPaymentService creates a new Razorpay payment service
+// NewPaymentService creates a Razorpay payment service. locker is required.
 func NewPaymentService(
 	client RazorpayClient,
 	customerSvc RazorpayCustomerService,
 	invoiceSyncSvc *InvoiceSyncService,
+	locker cache.Locker,
 	logger *logger.Logger,
 ) *PaymentService {
 	return &PaymentService{
 		client:         client,
 		customerSvc:    customerSvc,
 		invoiceSyncSvc: invoiceSyncSvc,
+		locker:         locker,
 		logger:         logger,
 	}
 }
@@ -45,7 +66,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
 		"currency", req.Currency,
-		"environment_id", req.EnvironmentID,
 	)
 
 	// Validate invoice and check payment eligibility
@@ -169,11 +189,10 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 
 	// Build notes with metadata and line items
 	notes := map[string]interface{}{
-		"flexprice_invoice_id":     req.InvoiceID,
-		"flexprice_customer_id":    req.CustomerID,
-		"flexprice_payment_id":     req.PaymentID,
-		"flexprice_environment_id": req.EnvironmentID,
-		"payment_source":           "flexprice",
+		"flexprice_invoice_id":  req.InvoiceID,
+		"flexprice_customer_id": req.CustomerID,
+		"flexprice_payment_id":  req.PaymentID,
+		"payment_source":        "flexprice",
 	}
 
 	// Add all line items to notes with name as key and amount as value
@@ -255,7 +274,9 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	if flexpriceCustomer.Email != "" {
 		customerInfo["email"] = flexpriceCustomer.Email
 	}
-	// Note: contact/phone not available in FlexPrice customer model
+	if flexpriceCustomer.Contact != nil && *flexpriceCustomer.Contact != "" {
+		customerInfo["contact"] = *flexpriceCustomer.Contact
+	}
 
 	// Prepare payment link data according to Razorpay API format
 	// Following the exact format from Razorpay documentation
@@ -732,4 +753,241 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 		}
 	}
 	return ""
+}
+
+// AutoCharge submits a server-initiated (off-session) recurring charge against an
+// existing Razorpay UPI mandate token. It uses receipt=invoiceID as a Razorpay-native
+// idempotency key so retries are safe.
+//
+// Returns AlreadySubmitted=true when a prior attempt already reached Razorpay — in
+// that case the webhook (payment.captured / payment.failed) will reconcile state.
+func (s *PaymentService) AutoCharge(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
+	s.logger.Info(ctx, "initiating Razorpay auto-charge",
+		"invoice_id", req.InvoiceID,
+		"razorpay_customer_id", req.RazorpayCustomerID,
+		"amount", req.Amount.String(),
+		"currency", req.Currency)
+
+	amountPaise := toPaise(req.Amount)
+
+	orderData := map[string]interface{}{
+		"amount":          amountPaise,
+		"currency":        strings.ToUpper(req.Currency),
+		"payment_capture": true,
+		"receipt":         req.InvoiceID, // Razorpay-native idempotency key
+		"notes": map[string]interface{}{
+			"flexprice_invoice_id": req.InvoiceID,
+			"flexprice_payment_id": req.FlexPricePaymentID,
+		},
+	}
+
+	order, err := s.client.CreateOrder(ctx, orderData)
+	if err != nil {
+		// Razorpay returns BAD_REQUEST_ERROR when an order with the same receipt already exists.
+		if isReceiptDuplicateError(err) {
+			return s.handleExistingOrder(ctx, req)
+		}
+		return nil, err
+	}
+
+	orderID, ok := order["id"].(string)
+	if !ok || orderID == "" {
+		s.logger.Error(ctx, "Razorpay CreateOrder response missing order ID",
+			"error", err,
+			"invoice_id", req.InvoiceID)
+		return nil, ierr.NewError("razorpay order ID missing in response").Mark(ierr.ErrInternal)
+	}
+	return s.submitRecurringPayment(ctx, req, orderID)
+}
+
+// isReceiptDuplicateError reports whether err is Razorpay's "duplicate receipt" error
+// ("An order with the same receipt value has already been created").
+// We match a narrow phrase to avoid false-positives on other receipt-related messages.
+func isReceiptDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "same receipt") || strings.Contains(msg, "receipt already")
+}
+
+// handleExistingOrder fetches the existing Razorpay order (matched by receipt) and
+// decides how to proceed based on its status.
+func (s *PaymentService) handleExistingOrder(ctx context.Context, req AutoChargeRequest) (*AutoChargeResult, error) {
+	order, err := s.client.FetchOrdersByReceipt(ctx, req.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	status, _ := order["status"].(string)
+	orderID, ok := order["id"].(string)
+	if !ok || orderID == "" {
+		return nil, ierr.NewError("Razorpay order missing ID in FetchOrdersByReceipt response").Mark(ierr.ErrInternal)
+	}
+
+	switch status {
+	case "created":
+		// Order exists but payment was never submitted — submit now using the same order.
+		return s.submitRecurringPayment(ctx, req, orderID)
+	case "attempted", "paid":
+		// Payment was already submitted or fully captured. Return AlreadySubmitted so the
+		// caller marks the FlexPrice payment as PROCESSING and lets the webhook reconcile.
+		s.logger.Info(ctx, "razorpay order already attempted/paid, returning AlreadySubmitted",
+			"invoice_id", req.InvoiceID,
+			"order_id", orderID,
+			"status", status)
+		return &AutoChargeResult{
+			AlreadySubmitted: true,
+			RazorpayOrderID:  orderID,
+		}, nil
+	default:
+		return nil, ierr.NewErrorf("unexpected Razorpay order status %q for receipt %s", status, req.InvoiceID).
+			Mark(ierr.ErrInternal)
+	}
+}
+
+// submitRecurringPayment calls Razorpay's recurring payment API against orderID.
+func (s *PaymentService) submitRecurringPayment(ctx context.Context, req AutoChargeRequest, orderID string) (*AutoChargeResult, error) {
+	amountPaise := toPaise(req.Amount)
+
+	paymentData := map[string]interface{}{
+		"amount":      amountPaise,
+		"currency":    strings.ToUpper(req.Currency),
+		"order_id":    orderID,
+		"customer_id": req.RazorpayCustomerID,
+		"token":       req.TokenID,
+		"recurring":   true,
+		"description": "Auto-charge for invoice " + req.InvoiceID,
+		"notes": map[string]interface{}{
+			"flexprice_invoice_id": req.InvoiceID,
+			"flexprice_payment_id": req.FlexPricePaymentID,
+		},
+	}
+
+	payment, err := s.client.CreateRecurringPayment(ctx, paymentData)
+	if err != nil {
+		// If Razorpay rejects because the order is already being processed, treat as AlreadySubmitted.
+		if isOrderAlreadyProcessingError(err) {
+			s.logger.Info(ctx, "razorpay order already being processed, returning AlreadySubmitted",
+				"invoice_id", req.InvoiceID,
+				"order_id", orderID)
+			return &AutoChargeResult{AlreadySubmitted: true}, nil
+		}
+		return nil, err
+	}
+
+	razorpayPaymentID, _ := payment["id"].(string)
+	s.logger.Info(ctx, "recurring payment submitted to Razorpay",
+		"invoice_id", req.InvoiceID,
+		"order_id", orderID,
+		"razorpay_payment_id", razorpayPaymentID)
+	return &AutoChargeResult{
+		RazorpayPaymentID: razorpayPaymentID,
+		RazorpayOrderID:   orderID,
+	}, nil
+}
+
+// isOrderAlreadyProcessingError reports whether the Razorpay error indicates the order
+// already has a payment in progress ("Order already has a payment").
+// We match the specific Razorpay phrase to avoid false-positives on generic
+// "order ... payment" text (e.g. "payment failed for the order").
+func isOrderAlreadyProcessingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "order already")
+}
+
+const refundLockTTL = 15 * time.Minute
+
+// Full refund when payment lands after checkout expired or failed.
+func (s *PaymentService) RefundLateCapturedPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	razorpayPaymentID string,
+	paymentService interfaces.PaymentService,
+) error {
+	lockKey := cache.GenerateKey(ctx, cache.PrefixRazorpayWebhookRefundLock, flexpricePaymentID)
+	lock, err := s.locker.AcquireLock(ctx, lockKey, refundLockTTL)
+	if err != nil {
+		return ierr.WithError(err).
+			WithMessage("failed to acquire refund lock").
+			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
+			Mark(ierr.ErrInternal)
+	}
+	if !lock.AcquiredSuccessfully() {
+		s.logger.Info(ctx, "refund already in progress for this payment, skipping", "payment_id", flexpricePaymentID)
+		return nil
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release refund lock", "payment_id", flexpricePaymentID, "error", releaseErr)
+		}
+	}()
+
+	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithMessage("failed to get payment record for refund").
+			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
+			Mark(ierr.ErrInternal)
+	}
+	if existingPayment.PaymentStatus == types.PaymentStatusRefunded || existingPayment.PaymentStatus == types.PaymentStatusPartiallyRefunded {
+		s.logger.Info(ctx, "payment already refunded, skipping", "payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
+		return nil
+	}
+
+	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
+	if err != nil {
+		return ierr.WithError(err).
+			WithMessage("failed to refund late-captured payment at Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":          flexpricePaymentID,
+				"razorpay_payment_id": razorpayPaymentID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
+		RefundedAt:       lo.ToPtr(time.Now()),
+		GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
+	}
+	if refundID != "" {
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"razorpay_refund_id": refundID})
+		updateReq.Metadata = &metadata
+	}
+	if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq); err != nil {
+		return ierr.WithError(err).
+			WithMessage("refund confirmed at Razorpay but failed to update FlexPrice payment status").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":         flexpricePaymentID,
+				"razorpay_refund_id": refundID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return nil
+}
+
+// Skip if Razorpay already shows this payment as fully refunded. Razorpay's Payment
+// entity has no boolean "refunded" field — refund state is reported via
+// "refund_status" (null/"partial"/"full").
+func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID string, amountPaise int64) (string, error) {
+	if current, err := s.client.FetchPayment(ctx, razorpayPaymentID); err != nil {
+		s.logger.Info(ctx, "failed to check current Razorpay refund status before submitting, proceeding anyway",
+			"razorpay_payment_id", razorpayPaymentID, "error", err)
+	} else if refundStatus, _ := current["refund_status"].(string); refundStatus == "full" {
+		s.logger.Info(ctx, "payment already fully refunded at Razorpay, skipping duplicate submission",
+			"razorpay_payment_id", razorpayPaymentID)
+		return "", nil
+	}
+
+	refundResp, err := s.client.RefundPayment(ctx, razorpayPaymentID, amountPaise)
+	if err != nil {
+		return "", err
+	}
+	refundID, _ := refundResp["id"].(string)
+	return refundID, nil
 }

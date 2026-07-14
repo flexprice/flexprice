@@ -195,6 +195,7 @@ func SetupDummyBillingCustomer() error {
 		featureRepo,
 		encService,
 		nil, // TemporalService — not available in script context
+		nil, // Locker — not needed in script context
 	)
 
 	typstCompiler := typst.DefaultCompiler(appLogger)

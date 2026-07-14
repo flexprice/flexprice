@@ -4,6 +4,7 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/shopspring/decimal"
 )
 
 type CheckoutConfiguration struct {
@@ -111,11 +112,37 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
-// PaymentAction extracts the safe-to-expose action from a provider result.
-// All other fields in CheckoutProviderResult are sensitive gateway data.
 func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	if r == nil {
 		return nil
 	}
 	return r.NextAction
+}
+
+// CheckoutPaymentProviderConfig is the per-checkout payment behavior config,
+// stored in CheckoutSession.payment_provider_config.
+type CheckoutPaymentProviderConfig struct {
+	CollectionMethod CollectionMethod  `json:"collection_method,omitempty"`
+	PaymentMethod    PaymentMethodType `json:"payment_method,omitempty"`
+	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
+}
+
+func (c *CheckoutPaymentProviderConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.PaymentMethod != "" {
+		if err := c.PaymentMethod.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if err := c.CollectionMethod.Validate(); err != nil {
+		return err
+	}
+
+	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
+	}
+	return nil
 }

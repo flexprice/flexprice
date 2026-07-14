@@ -42,6 +42,8 @@ const (
 	FieldCheckoutPaymentID = "checkout_payment_id"
 	// FieldConfiguration holds the string denoting the configuration field in the database.
 	FieldConfiguration = "configuration"
+	// FieldPaymentProviderConfig holds the string denoting the payment_provider_config field in the database.
+	FieldPaymentProviderConfig = "payment_provider_config"
 	// FieldResult holds the string denoting the result field in the database.
 	FieldResult = "result"
 	// FieldProviderResult holds the string denoting the provider_result field in the database.
@@ -85,6 +87,7 @@ var Columns = []string{
 	FieldCheckoutInvoiceID,
 	FieldCheckoutPaymentID,
 	FieldConfiguration,
+	FieldPaymentProviderConfig,
 	FieldResult,
 	FieldProviderResult,
 	FieldIdempotencyKey,

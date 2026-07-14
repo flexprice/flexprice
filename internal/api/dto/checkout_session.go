@@ -13,15 +13,16 @@ import (
 
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
 type CreateCheckoutSessionRequest struct {
-	CustomerExternalID string                        `json:"customer_external_id" binding:"required"`
-	Action             types.CheckoutAction          `json:"action" binding:"required"`
-	PaymentProvider    types.CheckoutPaymentProvider `json:"payment_provider" binding:"required"`
-	Configuration      types.CheckoutConfiguration   `json:"configuration"`
-	IdempotencyKey     *string                       `json:"idempotency_key,omitempty"`
-	SuccessURL         *string                       `json:"success_url,omitempty"`
-	FailureURL         *string                       `json:"failure_url,omitempty"`
-	CancelURL          *string                       `json:"cancel_url,omitempty"`
-	Metadata           map[string]string             `json:"metadata,omitempty"`
+	CustomerExternalID    string                               `json:"customer_external_id" binding:"required"`
+	Action                types.CheckoutAction                 `json:"action" binding:"required"`
+	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required"`
+	Configuration         types.CheckoutConfiguration          `json:"configuration"`
+	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
+	IdempotencyKey        *string                              `json:"idempotency_key,omitempty"`
+	SuccessURL            *string                              `json:"success_url,omitempty"`
+	FailureURL            *string                              `json:"failure_url,omitempty"`
+	CancelURL             *string                              `json:"cancel_url,omitempty"`
+	Metadata              map[string]string                    `json:"metadata,omitempty"`
 }
 
 func (r *CreateCheckoutSessionRequest) Validate() error {
@@ -41,6 +42,10 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
+	if err := r.PaymentProviderConfig.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -51,20 +56,21 @@ func (r *CreateCheckoutSessionRequest) ResolveExpiresAt(now time.Time) time.Time
 
 func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, customerID string) *domainCheckout.CheckoutSession {
 	return &domainCheckout.CheckoutSession{
-		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
-		EnvironmentID:   types.GetEnvironmentID(ctx),
-		CustomerID:      customerID,
-		Action:          r.Action,
-		CheckoutStatus:  types.CheckoutStatusInitiated,
-		PaymentProvider: r.PaymentProvider,
-		Configuration:   domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
-		IdempotencyKey:  r.IdempotencyKey,
-		SuccessURL:      r.SuccessURL,
-		FailureURL:      r.FailureURL,
-		CancelURL:       r.CancelURL,
-		ExpiresAt:       r.ResolveExpiresAt(time.Now()),
-		Metadata:        r.Metadata,
-		BaseModel:       types.GetDefaultBaseModel(ctx),
+		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:         types.GetEnvironmentID(ctx),
+		CustomerID:            customerID,
+		Action:                r.Action,
+		CheckoutStatus:        types.CheckoutStatusInitiated,
+		PaymentProvider:       r.PaymentProvider,
+		Configuration:         domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
+		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(r.PaymentProviderConfig),
+		IdempotencyKey:        r.IdempotencyKey,
+		SuccessURL:            r.SuccessURL,
+		FailureURL:            r.FailureURL,
+		CancelURL:             r.CancelURL,
+		ExpiresAt:             r.ResolveExpiresAt(time.Now()),
+		Metadata:              r.Metadata,
+		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}
 }
 
@@ -108,6 +114,7 @@ func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessi
 	session.ProviderResult = nil
 	session.Result = nil
 	session.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
+	session.PaymentProviderConfig = nil
 	return &CheckoutSessionResponse{
 		CheckoutSession: lo.ToPtr(session),
 		PaymentAction:   paymentAction,
