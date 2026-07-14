@@ -126,7 +126,7 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 	if w.WebhookSecret != "" {
 		webhookSecret, err = c.encryptionService.Decrypt(w.WebhookSecret)
 		if err != nil {
-			c.logger.Info(context.Background(), "failed to decrypt Whop webhook secret", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt Whop webhook secret", "connection_id", conn.ID, "error", err)
 			// Don't fail - webhook secret is optional for non-webhook flows
 			webhookSecret = ""
 		}
