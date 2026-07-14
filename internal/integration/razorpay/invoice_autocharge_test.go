@@ -74,6 +74,7 @@ func (s *inlinePaymentStore) Get(_ context.Context, id string) (*payment.Payment
 func (s *inlinePaymentStore) Update(_ context.Context, p *payment.Payment) error {
 	s.mu.Lock()
 	s.byID[p.ID] = p
+	s.byIdemp[p.IdempotencyKey] = p
 	s.mu.Unlock()
 	return nil
 }
