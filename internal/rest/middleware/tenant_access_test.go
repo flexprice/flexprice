@@ -286,11 +286,12 @@ func TestRequirePermission_ServiceAccountRBAC(t *testing.T) {
 			wantCode:     http.StatusOK,
 		},
 		{
-			name:         "service account without required role is logged but allowed",
+			name:         "service account without required role is denied",
 			userType:     string(types.UserTypeServiceAccount),
 			roles:        []string{"some_other_role"},
 			tenantStatus: types.TenantInternalStatusActive,
-			wantCode:     http.StatusOK,
+			wantCode:     http.StatusForbidden,
+			wantErrMsg:   "insufficient permissions",
 		},
 		{
 			name:         "JWT user (empty userType) bypasses RBAC",
