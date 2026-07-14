@@ -153,7 +153,7 @@ wt-ports:
 .PHONY: migrate-local
 migrate-local:
 	@set -a && [ -f .env.local ] && . ./.env.local; set +a; \
-	go run cmd/migrate/main.go
+	go run cmd/migrate/main.go postgres
 
 .PHONY: test test-verbose test-coverage
 
@@ -185,20 +185,20 @@ generate-ent: install-ent
 .PHONY: migrate-ent
 migrate-ent:
 	@echo "Running Ent migrations..."
-	@go run cmd/migrate/main.go --timeout 300
+	@go run cmd/migrate/main.go postgres --timeout 300
 	@echo "Ent migrations complete"
 
 .PHONY: migrate-ent-dry-run
 migrate-ent-dry-run:
 	@echo "Generating SQL migration statements (dry run)..."
-	@go run cmd/migrate/main.go --dry-run --timeout 300
+	@go run cmd/migrate/main.go postgres --dry-run --timeout 300
 	@echo "SQL migration statements generated"
 
 .PHONY: generate-migration
 generate-migration:
 	@echo "Generating SQL migration file..."
 	@mkdir -p migrations/ent
-	@go run cmd/migrate/main.go --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
+	@go run cmd/migrate/main.go postgres --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
 	@echo "SQL migration file generated in migrations/ent/"
 
 # Initialize databases and required topics
@@ -210,14 +210,14 @@ init-db: up migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 # Usage: make seed-svix
 .PHONY: seed-svix
 seed-svix:
-	@go run ./cmd/svix-migrate
+	@go run ./cmd/migrate svix
 
 # Same, run inside the flexprice image (no local Go toolchain needed).
 # Usage: make seed-svix-docker [IMAGE=flexprice-app:local]
 IMAGE ?= flexprice-app:local
 .PHONY: seed-svix-docker
 seed-svix-docker:
-	@docker run --rm --env-file .env --entrypoint ./svix-migrate $(IMAGE)
+	@docker run --rm --env-file .env --entrypoint ./migrate $(IMAGE) svix
 
 # Run postgres migrations
 migrate-postgres:

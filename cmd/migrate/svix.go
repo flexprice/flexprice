@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -13,24 +12,38 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/spf13/cobra"
 )
 
 //go:embed data.json
-var dataFS embed.FS
+var svixDataFS embed.FS
 
-type eventType struct {
+type svixEventType struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
 
-type eventTypeFile struct {
-	Data []eventType `json:"data"`
+type svixEventTypeFile struct {
+	Data []svixEventType `json:"data"`
 }
 
-func main() {
-	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
-	flag.Parse()
+func newSvixCmd() *cobra.Command {
+	var dryRun bool
 
+	cmd := &cobra.Command{
+		Use:   "svix",
+		Short: "Create Svix event types from the embedded event-type catalog",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSvixMigration(dryRun)
+		},
+	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "log intended actions without applying")
+
+	return cmd
+}
+
+func runSvixMigration(dryRun bool) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
@@ -42,25 +55,25 @@ func main() {
 		log.Fatalf("svix-migrate: webhook.svix_config.base_url and auth_token must be set (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN)")
 	}
 
-	raw, err := dataFS.ReadFile("data.json")
+	raw, err := svixDataFS.ReadFile("data.json")
 	if err != nil {
 		log.Fatalf("read embedded data.json: %v", err)
 	}
-	var file eventTypeFile
+	var file svixEventTypeFile
 	if err := json.Unmarshal(raw, &file); err != nil {
 		log.Fatalf("parse data.json: %v", err)
 	}
 
-	log.Printf("svix-migrate: url=%s event-types=%d dry-run=%v", baseURL, len(file.Data), *dryRun)
+	log.Printf("svix-migrate: url=%s event-types=%d dry-run=%v", baseURL, len(file.Data), dryRun)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	created, failed := 0, 0
 	for _, et := range file.Data {
-		if *dryRun {
+		if dryRun {
 			log.Printf("WOULD CREATE %s", et.Name)
 			continue
 		}
-		if err := createEventType(client, baseURL, token, et); err != nil {
+		if err := createSvixEventType(client, baseURL, token, et); err != nil {
 			log.Printf("  FAILED %s: %v", et.Name, err)
 			failed++
 			continue
@@ -69,16 +82,17 @@ func main() {
 		created++
 	}
 
-	if *dryRun {
-		return
+	if dryRun {
+		return nil
 	}
 	log.Printf("svix-migrate done: created=%d failed=%d", created, failed)
 	if failed > 0 {
 		log.Fatalf("svix-migrate: %d event-type(s) failed", failed)
 	}
+	return nil
 }
 
-func createEventType(client *http.Client, baseURL, token string, et eventType) error {
+func createSvixEventType(client *http.Client, baseURL, token string, et svixEventType) error {
 	payload, err := json.Marshal(et)
 	if err != nil {
 		return err

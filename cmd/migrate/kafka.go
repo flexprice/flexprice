@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 
 	"github.com/Shopify/sarama"
@@ -9,12 +8,27 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/kafka/reconcile"
 	"github.com/flexprice/flexprice/internal/kafka/topicspec"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
-	flag.Parse()
+func newKafkaCmd() *cobra.Command {
+	var dryRun bool
 
+	cmd := &cobra.Command{
+		Use:   "kafka",
+		Short: "Reconcile Kafka topics against the desired topic spec",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			runKafkaMigration(dryRun)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "log intended actions without applying")
+
+	return cmd
+}
+
+func runKafkaMigration(dryRun bool) {
 	cfg, err := config.NewConfig()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
@@ -35,7 +49,7 @@ func main() {
 		log.Fatalf("load desired topics: %v", err)
 	}
 	env := cfg.Logging.Environment
-	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, *dryRun)
+	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, dryRun)
 	if source == "config" {
 		// config.yaml carries the base/dev topic names (unprefixed), which are
 		// WRONG for a shared prod cluster. Every real deploy must set
@@ -61,9 +75,9 @@ func main() {
 		log.Fatalf("plan reconcile: %v", err)
 	}
 
-	if *dryRun {
+	if dryRun {
 		for _, act := range plan {
-			logAction(act)
+			logKafkaAction(act)
 		}
 		return
 	}
@@ -79,7 +93,7 @@ func main() {
 		res.Created, res.Grown, res.Unchanged, res.SkippedShrink, res.RFMismatch, res.RetentionMismatch)
 }
 
-func logAction(act reconcile.Action) {
+func logKafkaAction(act reconcile.Action) {
 	switch act.Kind {
 	case reconcile.ActionCreate:
 		log.Printf("WOULD CREATE %s partitions=%d rf=%d retention_ms=%d", act.Topic.Name, act.Topic.Partitions, act.Topic.ReplicationFactor, act.Topic.RetentionMs)

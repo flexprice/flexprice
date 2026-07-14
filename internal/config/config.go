@@ -163,9 +163,9 @@ type KafkaConfig struct {
 	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string   `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
-	// TopicsDefaults/Topics describe the full desired topic set for kafka-migrate
+	// TopicsDefaults/Topics describe the full desired topic set for `migrate kafka`
 	// (partition counts, replication factor, retention). Consumed only by
-	// cmd/kafka-migrate, not by the server/consumer/worker processes. A deploy's
+	// cmd/migrate (kafka subcommand), not by the server/consumer/worker processes. A deploy's
 	// FLEXPRICE_KAFKA_TOPICS env var (JSON), when set, FULLY REPLACES this block
 	// (no merge) — see internal/kafka/topicspec.
 	TopicsDefaults KafkaTopicsDefaults       `mapstructure:"topics_defaults"`
