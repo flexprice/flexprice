@@ -192,6 +192,64 @@ func (c CollectionMethod) Validate() error {
 	return nil
 }
 
+// ValidateCollectionMethodAndPaymentBehavior validates that payment_behavior is compatible with
+// collection_method. Mirrors the same compatibility matrix enforced at subscription creation
+// (dto.CreateSubscriptionRequest.validatePaymentBehaviorForCollectionMethod) so Invoice can reuse it.
+func ValidateCollectionMethodAndPaymentBehavior(collectionMethod CollectionMethod, paymentBehavior PaymentBehavior) error {
+	switch collectionMethod {
+	case CollectionMethodChargeAutomatically:
+		if paymentBehavior != PaymentBehaviorAllowIncomplete &&
+			paymentBehavior != PaymentBehaviorErrorIfIncomplete &&
+			paymentBehavior != PaymentBehaviorDefaultActive {
+			return ierr.NewError("invalid payment behavior for charge_automatically collection method").
+				WithHint("Only allow_incomplete, error_if_incomplete, and default_active are supported for charge_automatically collection method").
+				WithReportableDetails(map[string]interface{}{
+				"collection_method": collectionMethod,
+				"payment_behavior":  paymentBehavior,
+				"allowed_behaviors": []PaymentBehavior{
+					PaymentBehaviorAllowIncomplete,
+					PaymentBehaviorErrorIfIncomplete,
+					PaymentBehaviorDefaultActive,
+				},
+			}).
+				Mark(ierr.ErrValidation)
+		}
+	case CollectionMethodSendInvoice:
+		if paymentBehavior != PaymentBehaviorDefaultActive && paymentBehavior != PaymentBehaviorDefaultIncomplete {
+			return ierr.NewError("invalid payment behavior for send_invoice collection method").
+				WithHint("Only default_active and default_incomplete are supported for send_invoice collection method").
+				WithReportableDetails(map[string]interface{}{
+				"collection_method": collectionMethod,
+				"payment_behavior":  paymentBehavior,
+				"allowed_behaviors": []PaymentBehavior{
+					PaymentBehaviorDefaultActive,
+					PaymentBehaviorDefaultIncomplete,
+				},
+			}).
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unsupported collection method").
+			WithHint("Only charge_automatically and send_invoice collection methods are supported").
+			WithReportableDetails(map[string]interface{}{
+			"collection_method": collectionMethod,
+		}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// NormalizeCollectionMethodAndPaymentBehavior handles legacy subscriptions/requests where
+// collection_method was stored as the old "default_incomplete" value (pre-dating today's
+// CollectionMethod/PaymentBehavior split). Converts it to charge_automatically + allow_incomplete;
+// otherwise returns the inputs unchanged, cast to their enum types.
+func NormalizeCollectionMethodAndPaymentBehavior(collectionMethod, paymentBehavior string) (CollectionMethod, PaymentBehavior) {
+	if collectionMethod == "default_incomplete" {
+		return CollectionMethodChargeAutomatically, PaymentBehaviorAllowIncomplete
+	}
+	return CollectionMethod(collectionMethod), PaymentBehavior(paymentBehavior)
+}
+
 // PaymentTerms represents net payment terms (e.g. "30 NET" = payment due in 30 days).
 // Used to compute invoice due date from period end.
 type PaymentTerms string

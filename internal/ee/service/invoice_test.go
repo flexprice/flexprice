@@ -2025,17 +2025,118 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCusto
 	}
 }
 
-// createLineItem is a helper function to create a line item with specified amount
-func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem {
-	return &invoice.InvoiceLineItem{
-		ID:                    id,
-		InvoiceID:             "inv_test",
-		CustomerID:            "cust_test",
-		Amount:                amount,
-		Quantity:              decimal.NewFromInt(1),
-		Currency:              "usd",
-		EnvironmentID:         "env_test",
-		PrepaidCreditsApplied: decimal.Zero,
-		LineItemDiscount:      decimal.Zero,
+func (s *InvoiceServiceSuite) TestInvoice_CollectionMethodAndPaymentBehaviorRoundTrip() {
+	ctx := s.GetContext()
+
+	inv := &invoice.Invoice{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:       s.testData.customer.ID,
+		InvoiceType:      types.InvoiceTypeOneOff,
+		InvoiceStatus:    types.InvoiceStatusDraft,
+		PaymentStatus:    types.PaymentStatusPending,
+		Currency:         "usd",
+		AmountDue:        decimal.NewFromInt(10),
+		Total:            decimal.NewFromInt(10),
+		Subtotal:         decimal.NewFromInt(10),
+		AmountRemaining:  decimal.NewFromInt(10),
+		CollectionMethod: types.CollectionMethodSendInvoice,
+		PaymentBehavior:  types.PaymentBehaviorDefaultIncomplete,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv))
+
+	got, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CollectionMethodSendInvoice, got.CollectionMethod)
+	s.Equal(types.PaymentBehaviorDefaultIncomplete, got.PaymentBehavior)
+}
+
+func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice_CopiesCollectionMethodAndPaymentBehavior() {
+	ctx := s.GetContext()
+	s.invoiceRepo.Clear()
+	s.eventRepo.Clear()
+
+	s.testData.subscription.CollectionMethod = string(types.CollectionMethodSendInvoice)
+	s.testData.subscription.PaymentBehavior = string(types.PaymentBehaviorDefaultIncomplete)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
+
+	req := &dto.CreateSubscriptionInvoiceRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		PeriodStart:    s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:      s.testData.subscription.CurrentPeriodEnd,
+		ReferencePoint: types.ReferencePointPeriodStart,
+	}
+	_, _, err := s.service.CreateSubscriptionInvoice(ctx, req, nil, types.InvoiceFlowManual, false)
+	s.Require().NoError(err)
+
+	persisted, err := s.invoiceRepo.GetForPeriod(
+		ctx,
+		s.testData.subscription.ID,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+		string(types.InvoiceBillingReasonSubscriptionCycle),
+	)
+	s.Require().NoError(err)
+	s.Require().NotNil(persisted, "draft/skipped invoice should still be persisted even when zero-dollar")
+	s.Equal(types.CollectionMethodSendInvoice, persisted.CollectionMethod)
+	s.Equal(types.PaymentBehaviorDefaultIncomplete, persisted.PaymentBehavior)
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ExplicitCollectionMethodAndPaymentBehavior() {
+	ctx := s.GetContext()
+	cm := types.CollectionMethodSendInvoice
+	pb := types.PaymentBehaviorDefaultIncomplete
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:       s.testData.customer.ID,
+		InvoiceType:      types.InvoiceTypeOneOff,
+		Currency:         "usd",
+		AmountDue:        decimal.NewFromFloat(100),
+		Total:            decimal.NewFromFloat(100),
+		Subtotal:         decimal.NewFromFloat(100),
+		BillingReason:    types.InvoiceBillingReasonManual,
+		CollectionMethod: &cm,
+		PaymentBehavior:  &pb,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.CollectionMethodSendInvoice, resp.CollectionMethod)
+	s.Equal(types.PaymentBehaviorDefaultIncomplete, resp.PaymentBehavior)
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_DefaultsCollectionMethodAndPaymentBehavior() {
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.CollectionMethodChargeAutomatically, resp.CollectionMethod)
+	s.Equal(types.PaymentBehaviorDefaultActive, resp.PaymentBehavior)
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_RejectsInvalidCollectionMethodPaymentBehaviorCombo() {
+	ctx := s.GetContext()
+	cm := types.CollectionMethodSendInvoice
+	pb := types.PaymentBehaviorAllowIncomplete // invalid for send_invoice
+
+	_, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:       s.testData.customer.ID,
+		InvoiceType:      types.InvoiceTypeOneOff,
+		Currency:         "usd",
+		AmountDue:        decimal.NewFromFloat(100),
+		Total:            decimal.NewFromFloat(100),
+		Subtotal:         decimal.NewFromFloat(100),
+		BillingReason:    types.InvoiceBillingReasonManual,
+		CollectionMethod: &cm,
+		PaymentBehavior:  &pb,
+	})
+	s.Require().Error(err)
 }

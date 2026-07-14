@@ -36,11 +36,11 @@ type AlertSettings struct {
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
 	// EntityType holds the value of the "entity_type" field.
-	EntityType types.AlertEntityType `json:"entity_type,omitempty"`
+	EntityType alertsettings.EntityType `json:"entity_type,omitempty"`
 	// EntityID holds the value of the "entity_id" field.
 	EntityID string `json:"entity_id,omitempty"`
 	// ParentEntityType holds the value of the "parent_entity_type" field.
-	ParentEntityType *types.AlertEntityType `json:"parent_entity_type,omitempty"`
+	ParentEntityType *alertsettings.ParentEntityType `json:"parent_entity_type,omitempty"`
 	// ParentEntityID holds the value of the "parent_entity_id" field.
 	ParentEntityID *string `json:"parent_entity_id,omitempty"`
 	// Config holds the value of the "config" field.
@@ -134,7 +134,7 @@ func (as *AlertSettings) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				as.EntityType = types.AlertEntityType(value.String)
+				as.EntityType = alertsettings.EntityType(value.String)
 			}
 		case alertsettings.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -146,8 +146,8 @@ func (as *AlertSettings) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_entity_type", values[i])
 			} else if value.Valid {
-				as.ParentEntityType = new(types.AlertEntityType)
-				*as.ParentEntityType = types.AlertEntityType(value.String)
+				as.ParentEntityType = new(alertsettings.ParentEntityType)
+				*as.ParentEntityType = alertsettings.ParentEntityType(value.String)
 			}
 		case alertsettings.FieldParentEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {

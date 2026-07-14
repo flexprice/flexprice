@@ -6,10 +6,9 @@ import (
 
 // StripeInvoiceSyncWorkflowInput contains the input for the Stripe invoice sync workflow
 type StripeInvoiceSyncWorkflowInput struct {
-	InvoiceID        string `json:"invoice_id"`
-	CustomerID       string `json:"customer_id"`
-	CollectionMethod string `json:"collection_method,omitempty"`
-	TenantID         string `json:"tenant_id"`
+	InvoiceID     string `json:"invoice_id"`
+	CustomerID    string `json:"customer_id"`
+	TenantID      string `json:"tenant_id"`
 	EnvironmentID    string `json:"environment_id"`
 }
 

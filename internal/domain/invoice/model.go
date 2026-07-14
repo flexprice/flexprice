@@ -35,6 +35,12 @@ type Invoice struct {
 	// payment_status indicates whether the invoice has been paid, is pending, or failed
 	PaymentStatus types.PaymentStatus `json:"payment_status"`
 
+	// collection_method determines how this invoice is collected (charge_automatically or send_invoice)
+	CollectionMethod types.CollectionMethod `json:"collection_method"`
+
+	// payment_behavior determines how payment for this invoice is handled
+	PaymentBehavior types.PaymentBehavior `json:"payment_behavior"`
+
 	// currency is the three-letter ISO currency code (e.g., USD, EUR, GBP) that applies to all monetary amounts on this invoice
 	Currency string `json:"currency"`
 
@@ -165,6 +171,8 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		InvoiceType:            types.InvoiceType(e.InvoiceType),
 		InvoiceStatus:          types.InvoiceStatus(e.InvoiceStatus),
 		PaymentStatus:          types.PaymentStatus(e.PaymentStatus),
+		CollectionMethod:       e.CollectionMethod,
+		PaymentBehavior:        e.PaymentBehavior,
 		Currency:               e.Currency,
 		AmountDue:              e.AmountDue,
 		AmountPaid:             e.AmountPaid,

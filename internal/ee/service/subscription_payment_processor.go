@@ -59,7 +59,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 		"amount_due", inv.AmountDue,
-		"collection_method", sub.CollectionMethod,
+		"collection_method", inv.CollectionMethod,
 		"payment_behavior", behavior,
 	)
 
@@ -98,7 +98,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 	}
 
 	// Handle different collection methods
-	switch types.CollectionMethod(sub.CollectionMethod) {
+	switch inv.CollectionMethod {
 	case types.CollectionMethodSendInvoice:
 		return s.handleSendInvoiceMethod(ctx, sub, inv, behavior)
 	case types.CollectionMethodChargeAutomatically:
@@ -106,8 +106,8 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 	default:
 		return ierr.NewError("unsupported collection method").
 			WithHint("Collection method not supported").
-			WithReportableDetails(map[string]interface{}{
-				"collection_method": sub.CollectionMethod,
+			WithReportableDetails(map[string]any{
+				"collection_method": inv.CollectionMethod,
 			}).
 			Mark(ierr.ErrInvalidOperation)
 	}

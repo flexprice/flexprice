@@ -65,7 +65,7 @@ type InvoiceService interface {
 
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
-	SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error
+	SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToChargebeeIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error
@@ -347,6 +347,13 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 		req.BillingReason = types.InvoiceBillingReasonProration
 	}
 	req.SubscriptionCustomerID = &sub.CustomerID
+	if sub.CollectionMethod != "" {
+		cm, pb := types.NormalizeCollectionMethodAndPaymentBehavior(sub.CollectionMethod, sub.PaymentBehavior)
+		req.CollectionMethod = &cm
+		if pb != "" {
+			req.PaymentBehavior = &pb
+		}
+	}
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
@@ -1209,28 +1216,10 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 }
 
 // SyncInvoiceToStripeIfEnabled syncs the invoice to Stripe if Stripe connection is enabled.
-func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error {
+func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
-	}
-
-	// Keep Stripe sync working for both subscription and non-subscription invoices.
-	// For invoices without subscription context, default to send_invoice.
-	sub := &subscription.Subscription{
-		CollectionMethod: collectionMethod,
-	}
-	if inv.SubscriptionID != nil {
-		sub.ID = *inv.SubscriptionID
-		if sub.CollectionMethod == "" {
-			storedSub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
-			if err != nil {
-				return err
-			}
-			sub = storedSub
-		}
-	} else if sub.CollectionMethod == "" {
-		sub.CollectionMethod = string(types.CollectionMethodSendInvoice)
 	}
 
 	// Check if Stripe connection exists
@@ -1277,16 +1266,12 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 
 	s.Logger.Info(ctx, "syncing invoice to Stripe",
 		"invoice_id", inv.ID,
-		"subscription_id", sub.ID,
-		"collection_method", sub.CollectionMethod)
-
-	// Determine collection method from subscription
-	stripeCollectionMethod := types.CollectionMethod(sub.CollectionMethod)
+		"collection_method", inv.CollectionMethod)
 
 	// Create sync request using the integration package's DTO
 	syncRequest := stripe.StripeInvoiceSyncRequest{
 		InvoiceID:        inv.ID,
-		CollectionMethod: string(stripeCollectionMethod),
+		CollectionMethod: string(inv.CollectionMethod),
 	}
 
 	// Perform the sync
@@ -1839,6 +1824,13 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
+	if subscription.CollectionMethod != "" {
+		cm, pb := types.NormalizeCollectionMethodAndPaymentBehavior(subscription.CollectionMethod, subscription.PaymentBehavior)
+		draftReq.CollectionMethod = &cm
+		if pb != "" {
+			draftReq.PaymentBehavior = &pb
+		}
+	}
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
 		return nil, nil, err
@@ -2353,7 +2345,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 	// (Stripe, Paddle, etc.) and triggers their card-capture checkout flow.
 	// Subscription stays TRIALING in both cases.
 	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialStart) {
-		if sub != nil && types.CollectionMethod(sub.CollectionMethod) == types.CollectionMethodChargeAutomatically {
+		if inv.CollectionMethod == types.CollectionMethodChargeAutomatically {
 			zero := decimal.Zero
 			return s.UpdatePaymentStatus(ctx, inv.ID, types.PaymentStatusSucceeded, &zero)
 		}
@@ -2382,16 +2374,10 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
-	// Use parameters if provided, otherwise get from subscription
-	var finalPaymentBehavior types.PaymentBehavior
-
-	if paymentParams != nil && paymentParams.PaymentBehavior != nil {
-		finalPaymentBehavior = *paymentParams.PaymentBehavior
-	} else if sub != nil {
-		finalPaymentBehavior = types.PaymentBehavior(sub.PaymentBehavior)
-	} else {
-		finalPaymentBehavior = types.PaymentBehaviorDefaultActive // default
-	}
+	// The invoice's own persisted payment_behavior is now the single source of truth —
+	// it was copied from the subscription at invoice-creation time (or from the request,
+	// for one-off invoices), so no fallback chain is needed here any more.
+	finalPaymentBehavior := inv.PaymentBehavior
 
 	// Handle payment based on collection method and payment behavior
 	if sub != nil {
@@ -2414,15 +2400,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 			// For subscription creation flow, apply full payment behavior logic
 			if flowType == types.InvoiceFlowSubscriptionCreation {
 				// For error_if_incomplete behavior, payment failure should block invoice processing
-				shouldReturnError := false
-				if paymentParams != nil && paymentParams.PaymentBehavior != nil &&
-					*paymentParams.PaymentBehavior == types.PaymentBehaviorErrorIfIncomplete {
-					shouldReturnError = true
-				} else if sub.PaymentBehavior == string(types.PaymentBehaviorErrorIfIncomplete) {
-					shouldReturnError = true
-				}
-
-				if shouldReturnError {
+				if inv.PaymentBehavior == types.PaymentBehaviorErrorIfIncomplete {
 					return err
 				}
 			}
@@ -3326,11 +3304,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 	// - ExistsForPeriod excludes VOIDED, so period-uniqueness check allows the new invoice.
 	// - DB partial unique index on (subscription_id, period_start, period_end) has WHERE invoice_status != 'VOIDED', so the new row is valid.
 	// - Voiding calls InvoiceRepo.Update which DeleteCache(inv.ID) and clears idempotency-key cache, so cache won't return the voided invoice.
-	paymentParams := dto.NewPaymentParametersFromSubscription(
-		sub.CollectionMethod,
-		sub.PaymentBehavior,
-		sub.GatewayPaymentMethodID,
-	).NormalizePaymentParameters()
+	paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 
 	newInv, _, err := s.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 		SubscriptionID: *inv.SubscriptionID,

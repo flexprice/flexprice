@@ -433,7 +433,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
 		if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
-			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
+			paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 
 			createReq := &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
@@ -469,7 +469,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			// syncTrialingStateFromCreateRequest has already aligned:
 			//   CurrentPeriodStart = TrialStart
 			//   CurrentPeriodEnd   = TrialEnd
-			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
+			paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 
 			invoice, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
@@ -646,9 +646,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		}
 
 		// Create invoice for the subscription
-		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
-		// Apply backward compatibility normalization
-		paymentParams = paymentParams.NormalizePaymentParameters()
+		paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 		invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    sub.CurrentPeriodStart,
@@ -2039,8 +2037,7 @@ func (s *subscriptionService) CancelSubscription(
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
 		if shouldCreateInvoice {
 			invoiceService := NewInvoiceService(s.ServiceParams)
-			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
-			paymentParams = paymentParams.NormalizePaymentParameters()
+			paymentParams := dto.NewPaymentParameters(subscription.GatewayPaymentMethodID)
 			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: subscription.ID,
 				PeriodStart:    subscription.CurrentPeriodStart,
@@ -3140,9 +3137,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			period := periods[i]
 
 			// Create a single invoice for both arrear and advance charges at period end
-			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
-			// Apply backward compatibility normalization
-			paymentParams = paymentParams.NormalizePaymentParameters()
+			paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 			inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    period.start,
@@ -7982,8 +7977,7 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
-	paymentParams = paymentParams.NormalizePaymentParameters()
+	paymentParams := dto.NewPaymentParameters(sub.GatewayPaymentMethodID)
 
 	var inv *dto.InvoiceResponse
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {

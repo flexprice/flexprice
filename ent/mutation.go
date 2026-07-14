@@ -3867,9 +3867,9 @@ type AlertSettingsMutation struct {
 	updated_by         *string
 	environment_id     *string
 	enabled            *bool
-	entity_type        *types.AlertEntityType
+	entity_type        *alertsettings.EntityType
 	entity_id          *string
-	parent_entity_type *types.AlertEntityType
+	parent_entity_type *alertsettings.ParentEntityType
 	parent_entity_id   *string
 	_config            *types.AlertSettings
 	clearedFields      map[string]struct{}
@@ -4310,12 +4310,12 @@ func (m *AlertSettingsMutation) ResetEnabled() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *AlertSettingsMutation) SetEntityType(tet types.AlertEntityType) {
-	m.entity_type = &tet
+func (m *AlertSettingsMutation) SetEntityType(at alertsettings.EntityType) {
+	m.entity_type = &at
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *AlertSettingsMutation) EntityType() (r types.AlertEntityType, exists bool) {
+func (m *AlertSettingsMutation) EntityType() (r alertsettings.EntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -4326,7 +4326,7 @@ func (m *AlertSettingsMutation) EntityType() (r types.AlertEntityType, exists bo
 // OldEntityType returns the old "entity_type" field's value of the AlertSettings entity.
 // If the AlertSettings object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertSettingsMutation) OldEntityType(ctx context.Context) (v types.AlertEntityType, err error) {
+func (m *AlertSettingsMutation) OldEntityType(ctx context.Context) (v alertsettings.EntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -4382,12 +4382,12 @@ func (m *AlertSettingsMutation) ResetEntityID() {
 }
 
 // SetParentEntityType sets the "parent_entity_type" field.
-func (m *AlertSettingsMutation) SetParentEntityType(tet types.AlertEntityType) {
-	m.parent_entity_type = &tet
+func (m *AlertSettingsMutation) SetParentEntityType(aet alertsettings.ParentEntityType) {
+	m.parent_entity_type = &aet
 }
 
 // ParentEntityType returns the value of the "parent_entity_type" field in the mutation.
-func (m *AlertSettingsMutation) ParentEntityType() (r types.AlertEntityType, exists bool) {
+func (m *AlertSettingsMutation) ParentEntityType() (r alertsettings.ParentEntityType, exists bool) {
 	v := m.parent_entity_type
 	if v == nil {
 		return
@@ -4398,7 +4398,7 @@ func (m *AlertSettingsMutation) ParentEntityType() (r types.AlertEntityType, exi
 // OldParentEntityType returns the old "parent_entity_type" field's value of the AlertSettings entity.
 // If the AlertSettings object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *AlertSettingsMutation) OldParentEntityType(ctx context.Context) (v *types.AlertEntityType, err error) {
+func (m *AlertSettingsMutation) OldParentEntityType(ctx context.Context) (v *alertsettings.ParentEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldParentEntityType is only allowed on UpdateOne operations")
 	}
@@ -4724,7 +4724,7 @@ func (m *AlertSettingsMutation) SetField(name string, value ent.Value) error {
 		m.SetEnabled(v)
 		return nil
 	case alertsettings.FieldEntityType:
-		v, ok := value.(types.AlertEntityType)
+		v, ok := value.(alertsettings.EntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4738,7 +4738,7 @@ func (m *AlertSettingsMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case alertsettings.FieldParentEntityType:
-		v, ok := value.(types.AlertEntityType)
+		v, ok := value.(alertsettings.ParentEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -30630,6 +30630,8 @@ type InvoiceMutation struct {
 	invoice_type                  *types.InvoiceType
 	invoice_status                *types.InvoiceStatus
 	payment_status                *types.PaymentStatus
+	collection_method             *types.CollectionMethod
+	payment_behavior              *types.PaymentBehavior
 	currency                      *string
 	amount_due                    *decimal.Decimal
 	amount_paid                   *decimal.Decimal
@@ -31308,6 +31310,78 @@ func (m *InvoiceMutation) OldPaymentStatus(ctx context.Context) (v types.Payment
 // ResetPaymentStatus resets all changes to the "payment_status" field.
 func (m *InvoiceMutation) ResetPaymentStatus() {
 	m.payment_status = nil
+}
+
+// SetCollectionMethod sets the "collection_method" field.
+func (m *InvoiceMutation) SetCollectionMethod(tm types.CollectionMethod) {
+	m.collection_method = &tm
+}
+
+// CollectionMethod returns the value of the "collection_method" field in the mutation.
+func (m *InvoiceMutation) CollectionMethod() (r types.CollectionMethod, exists bool) {
+	v := m.collection_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCollectionMethod returns the old "collection_method" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldCollectionMethod(ctx context.Context) (v types.CollectionMethod, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCollectionMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCollectionMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCollectionMethod: %w", err)
+	}
+	return oldValue.CollectionMethod, nil
+}
+
+// ResetCollectionMethod resets all changes to the "collection_method" field.
+func (m *InvoiceMutation) ResetCollectionMethod() {
+	m.collection_method = nil
+}
+
+// SetPaymentBehavior sets the "payment_behavior" field.
+func (m *InvoiceMutation) SetPaymentBehavior(tb types.PaymentBehavior) {
+	m.payment_behavior = &tb
+}
+
+// PaymentBehavior returns the value of the "payment_behavior" field in the mutation.
+func (m *InvoiceMutation) PaymentBehavior() (r types.PaymentBehavior, exists bool) {
+	v := m.payment_behavior
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentBehavior returns the old "payment_behavior" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldPaymentBehavior(ctx context.Context) (v types.PaymentBehavior, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentBehavior is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentBehavior requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentBehavior: %w", err)
+	}
+	return oldValue.PaymentBehavior, nil
+}
+
+// ResetPaymentBehavior resets all changes to the "payment_behavior" field.
+func (m *InvoiceMutation) ResetPaymentBehavior() {
+	m.payment_behavior = nil
 }
 
 // SetCurrency sets the "currency" field.
@@ -32849,7 +32923,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 42)
+	fields := make([]string, 0, 44)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -32888,6 +32962,12 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.payment_status != nil {
 		fields = append(fields, invoice.FieldPaymentStatus)
+	}
+	if m.collection_method != nil {
+		fields = append(fields, invoice.FieldCollectionMethod)
+	}
+	if m.payment_behavior != nil {
+		fields = append(fields, invoice.FieldPaymentBehavior)
 	}
 	if m.currency != nil {
 		fields = append(fields, invoice.FieldCurrency)
@@ -33010,6 +33090,10 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceStatus()
 	case invoice.FieldPaymentStatus:
 		return m.PaymentStatus()
+	case invoice.FieldCollectionMethod:
+		return m.CollectionMethod()
+	case invoice.FieldPaymentBehavior:
+		return m.PaymentBehavior()
 	case invoice.FieldCurrency:
 		return m.Currency()
 	case invoice.FieldAmountDue:
@@ -33103,6 +33187,10 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldInvoiceStatus(ctx)
 	case invoice.FieldPaymentStatus:
 		return m.OldPaymentStatus(ctx)
+	case invoice.FieldCollectionMethod:
+		return m.OldCollectionMethod(ctx)
+	case invoice.FieldPaymentBehavior:
+		return m.OldPaymentBehavior(ctx)
 	case invoice.FieldCurrency:
 		return m.OldCurrency(ctx)
 	case invoice.FieldAmountDue:
@@ -33260,6 +33348,20 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPaymentStatus(v)
+		return nil
+	case invoice.FieldCollectionMethod:
+		v, ok := value.(types.CollectionMethod)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCollectionMethod(v)
+		return nil
+	case invoice.FieldPaymentBehavior:
+		v, ok := value.(types.PaymentBehavior)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentBehavior(v)
 		return nil
 	case invoice.FieldCurrency:
 		v, ok := value.(string)
@@ -33755,6 +33857,12 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldPaymentStatus:
 		m.ResetPaymentStatus()
+		return nil
+	case invoice.FieldCollectionMethod:
+		m.ResetCollectionMethod()
+		return nil
+	case invoice.FieldPaymentBehavior:
+		m.ResetPaymentBehavior()
 		return nil
 	case invoice.FieldCurrency:
 		m.ResetCurrency()

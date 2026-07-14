@@ -126,8 +126,8 @@ func (asc *AlertSettingsCreate) SetNillableEnabled(b *bool) *AlertSettingsCreate
 }
 
 // SetEntityType sets the "entity_type" field.
-func (asc *AlertSettingsCreate) SetEntityType(tet types.AlertEntityType) *AlertSettingsCreate {
-	asc.mutation.SetEntityType(tet)
+func (asc *AlertSettingsCreate) SetEntityType(at alertsettings.EntityType) *AlertSettingsCreate {
+	asc.mutation.SetEntityType(at)
 	return asc
 }
 
@@ -138,15 +138,15 @@ func (asc *AlertSettingsCreate) SetEntityID(s string) *AlertSettingsCreate {
 }
 
 // SetParentEntityType sets the "parent_entity_type" field.
-func (asc *AlertSettingsCreate) SetParentEntityType(tet types.AlertEntityType) *AlertSettingsCreate {
-	asc.mutation.SetParentEntityType(tet)
+func (asc *AlertSettingsCreate) SetParentEntityType(aet alertsettings.ParentEntityType) *AlertSettingsCreate {
+	asc.mutation.SetParentEntityType(aet)
 	return asc
 }
 
 // SetNillableParentEntityType sets the "parent_entity_type" field if the given value is not nil.
-func (asc *AlertSettingsCreate) SetNillableParentEntityType(tet *types.AlertEntityType) *AlertSettingsCreate {
-	if tet != nil {
-		asc.SetParentEntityType(*tet)
+func (asc *AlertSettingsCreate) SetNillableParentEntityType(aet *alertsettings.ParentEntityType) *AlertSettingsCreate {
+	if aet != nil {
+		asc.SetParentEntityType(*aet)
 	}
 	return asc
 }

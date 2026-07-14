@@ -196,21 +196,23 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 			amtDue := tt.amountDue
 			amtRem := tt.amountDue
 			inv := &invoice.Invoice{
-				ID:              invID,
-				CustomerID:      cust.ID,
-				SubscriptionID:  &sub.ID,
-				InvoiceType:     types.InvoiceTypeSubscription,
-				InvoiceStatus:   types.InvoiceStatusFinalized,
-				PaymentStatus:   types.PaymentStatusPending,
-				Currency:        "usd",
-				AmountDue:       amtDue,
-				AmountRemaining: amtRem,
-				AmountPaid:      decimal.Zero,
-				Total:           amtDue,
-				Subtotal:        amtDue,
-				BillingReason:   string(types.InvoiceBillingReasonSubscriptionTrialEnd),
-				BaseModel:       types.GetDefaultBaseModel(ctx),
-				LineItems:       []*invoice.InvoiceLineItem{},
+				ID:               invID,
+				CustomerID:       cust.ID,
+				SubscriptionID:   &sub.ID,
+				InvoiceType:      types.InvoiceTypeSubscription,
+				InvoiceStatus:    types.InvoiceStatusFinalized,
+				PaymentStatus:    types.PaymentStatusPending,
+				Currency:         "usd",
+				AmountDue:        amtDue,
+				AmountRemaining:  amtRem,
+				AmountPaid:       decimal.Zero,
+				Total:            amtDue,
+				Subtotal:         amtDue,
+				BillingReason:    string(types.InvoiceBillingReasonSubscriptionTrialEnd),
+				CollectionMethod: tt.collectionMethod,
+				PaymentBehavior:  tt.paymentBehavior,
+				BaseModel:        types.GetDefaultBaseModel(ctx),
+				LineItems:        []*invoice.InvoiceLineItem{},
 			}
 			s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
 

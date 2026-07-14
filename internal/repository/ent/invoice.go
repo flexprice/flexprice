@@ -65,6 +65,8 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetInvoiceType(inv.InvoiceType).
 		SetInvoiceStatus(inv.InvoiceStatus).
 		SetPaymentStatus(inv.PaymentStatus).
+		SetCollectionMethod(inv.CollectionMethod).
+		SetPaymentBehavior(inv.PaymentBehavior).
 		SetCurrency(inv.Currency).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
@@ -171,6 +173,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetInvoiceType(inv.InvoiceType).
 			SetInvoiceStatus(inv.InvoiceStatus).
 			SetPaymentStatus(inv.PaymentStatus).
+			SetCollectionMethod(inv.CollectionMethod).
+			SetPaymentBehavior(inv.PaymentBehavior).
 			SetCurrency(inv.Currency).
 			SetAmountDue(inv.AmountDue).
 			SetAmountPaid(inv.AmountPaid).

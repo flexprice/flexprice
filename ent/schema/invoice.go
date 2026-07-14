@@ -78,6 +78,20 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Default(string(types.PaymentStatusPending)).
 			GoType(types.PaymentStatus("")),
+		field.String("collection_method").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.CollectionMethodChargeAutomatically)).
+			GoType(types.CollectionMethod("")).
+			Comment("Determines how this invoice is collected"),
+		field.String("payment_behavior").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.PaymentBehaviorDefaultActive)).
+			GoType(types.PaymentBehavior("")).
+			Comment("Determines how payment for this invoice is handled"),
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",

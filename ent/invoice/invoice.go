@@ -42,6 +42,10 @@ const (
 	FieldInvoiceStatus = "invoice_status"
 	// FieldPaymentStatus holds the string denoting the payment_status field in the database.
 	FieldPaymentStatus = "payment_status"
+	// FieldCollectionMethod holds the string denoting the collection_method field in the database.
+	FieldCollectionMethod = "collection_method"
+	// FieldPaymentBehavior holds the string denoting the payment_behavior field in the database.
+	FieldPaymentBehavior = "payment_behavior"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldAmountDue holds the string denoting the amount_due field in the database.
@@ -138,6 +142,8 @@ var Columns = []string{
 	FieldInvoiceType,
 	FieldInvoiceStatus,
 	FieldPaymentStatus,
+	FieldCollectionMethod,
+	FieldPaymentBehavior,
 	FieldCurrency,
 	FieldAmountDue,
 	FieldAmountPaid,
@@ -200,6 +206,10 @@ var (
 	DefaultInvoiceStatus types.InvoiceStatus
 	// DefaultPaymentStatus holds the default value on creation for the "payment_status" field.
 	DefaultPaymentStatus types.PaymentStatus
+	// DefaultCollectionMethod holds the default value on creation for the "collection_method" field.
+	DefaultCollectionMethod types.CollectionMethod
+	// DefaultPaymentBehavior holds the default value on creation for the "payment_behavior" field.
+	DefaultPaymentBehavior types.PaymentBehavior
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// DefaultAmountDue holds the default value on creation for the "amount_due" field.
@@ -297,6 +307,16 @@ func ByInvoiceStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByPaymentStatus orders the results by the payment_status field.
 func ByPaymentStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPaymentStatus, opts...).ToFunc()
+}
+
+// ByCollectionMethod orders the results by the collection_method field.
+func ByCollectionMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCollectionMethod, opts...).ToFunc()
+}
+
+// ByPaymentBehavior orders the results by the payment_behavior field.
+func ByPaymentBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPaymentBehavior, opts...).ToFunc()
 }
 
 // ByCurrency orders the results by the currency field.
