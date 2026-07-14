@@ -53,9 +53,13 @@ already succeeded) and **idempotent** (the "no other active sub" check also guar
 - Trialing counts as "active" when checking whether it's the last subscription.
 - Verify a $0 plan produces no spurious invoice/webhook on subscription creation.
 
-## Open questions
+## Decisions
 
-1. Ship the heuristic ("first $0 plan") as-is, or add a per-tenant `downgrade_target_plan_id`
-   setting to make the fallback explicit and opt-in?
-2. Do we need a distinct "downgraded to free tier" webhook, or are the existing
-   cancellation + subscription-created events enough?
+- **Free plan selection:** use the heuristic — first plan with a fixed, recurring, $0 price.
+  No per-tenant config for now.
+- **Events:** the existing cancellation + subscription-created events are sufficient; no new
+  "downgraded to free tier" webhook.
+- **Deferred timing:** for end-of-period / scheduled cancels, the free sub is started by the
+  `POST /v1/cron/subscriptions/update-periods` job (via `UpdateBillingPeriods` →
+  `processSubscriptionPeriod`) when it finalizes the cancellation. It starts at the job's run
+  time, so a customer can be without an active sub for up to one cron interval. Acceptable v1.
