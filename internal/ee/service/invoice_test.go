@@ -39,6 +39,18 @@ func (r *recordingWebhookPublisher) Close() error {
 	return r.inner.Close()
 }
 
+// recordingConnectionRepo wraps a connection.Repository and records every provider
+// looked up via GetByProvider, so tests can assert whether a sync path was attempted.
+type recordingConnectionRepo struct {
+	connection.Repository
+	getByProviderCalls []types.SecretProvider
+}
+
+func (r *recordingConnectionRepo) GetByProvider(ctx context.Context, provider types.SecretProvider) (*connection.Connection, error) {
+	r.getByProviderCalls = append(r.getByProviderCalls, provider)
+	return r.Repository.GetByProvider(ctx, provider)
+}
+
 type InvoiceServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	service     InvoiceService
@@ -792,6 +804,9 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoice_SyncFailu
 		},
 	}))
 
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
 	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
 		CustomerID:       s.testData.customer.ID,
 		InvoiceType:      types.InvoiceTypeOneOff,
@@ -806,6 +821,8 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoice_SyncFailu
 	s.Require().NoError(err, "invoice creation must succeed even when the synchronous Moyasar sync fails")
 	s.Require().NotNil(resp)
 	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+	s.Contains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=true must attempt a Moyasar sync")
 }
 
 func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoiceFalse_NoSyncAttempted() {
@@ -831,6 +848,9 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoiceFalse_NoSy
 		},
 	}))
 
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
 	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
 		CustomerID:    s.testData.customer.ID,
 		InvoiceType:   types.InvoiceTypeOneOff,
@@ -845,6 +865,8 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoiceFalse_NoSy
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
 	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+	s.NotContains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=false must never attempt a Moyasar sync")
 }
 
 func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForOneOffDraft() {

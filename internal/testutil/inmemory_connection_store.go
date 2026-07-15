@@ -193,8 +193,8 @@ func copyConnection(c *connection.Connection) *connection.Connection {
 		Name:                c.Name,
 		ProviderType:        c.ProviderType,
 		EncryptedSecretData: c.EncryptedSecretData,
-		Metadata:            c.Metadata,
-		SyncConfig:          c.SyncConfig,
+		Metadata:            cloneConnectionMetadataMap(c.Metadata),
+		SyncConfig:          cloneSyncConfig(c.SyncConfig),
 		EnvironmentID:       c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
@@ -205,4 +205,54 @@ func copyConnection(c *connection.Connection) *connection.Connection {
 			UpdatedBy: c.UpdatedBy,
 		},
 	}
+}
+
+// cloneConnectionMetadataMap returns a shallow copy of the metadata map so that
+// mutating the returned connection's map (adding/removing keys) cannot affect
+// the stored fixture, or vice versa.
+func cloneConnectionMetadataMap(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return nil
+	}
+	clone := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		clone[k] = v
+	}
+	return clone
+}
+
+// cloneSyncConfig deep-copies a SyncConfig, including its nested EntitySyncConfig
+// pointers, so the returned connection and the stored fixture don't alias mutable state.
+func cloneSyncConfig(sc *types.SyncConfig) *types.SyncConfig {
+	if sc == nil {
+		return nil
+	}
+
+	clone := *sc
+	clone.Plan = cloneEntitySyncConfig(sc.Plan)
+	clone.Subscription = cloneEntitySyncConfig(sc.Subscription)
+	clone.Invoice = cloneEntitySyncConfig(sc.Invoice)
+	clone.Customer = cloneEntitySyncConfig(sc.Customer)
+	clone.Payment = cloneEntitySyncConfig(sc.Payment)
+	clone.Deal = cloneEntitySyncConfig(sc.Deal)
+	clone.Quote = cloneEntitySyncConfig(sc.Quote)
+
+	if sc.S3 != nil {
+		s3Clone := *sc.S3
+		clone.S3 = &s3Clone
+	}
+	if sc.InvoiceSyncSettings != nil {
+		settingsClone := *sc.InvoiceSyncSettings
+		clone.InvoiceSyncSettings = &settingsClone
+	}
+
+	return &clone
+}
+
+func cloneEntitySyncConfig(c *types.EntitySyncConfig) *types.EntitySyncConfig {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	return &clone
 }

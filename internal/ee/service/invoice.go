@@ -141,10 +141,13 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID); err != nil {
 			s.Logger.Error(ctx, "force sync to Moyasar failed",
 				"error", err, "invoice_id", resp.ID)
+			return resp, nil
 		}
 		inv, err := s.InvoiceRepo.Get(ctx, resp.ID)
 		if err != nil {
-			return nil, err
+			s.Logger.Error(ctx, "failed to reload invoice after Moyasar sync",
+				"error", err, "invoice_id", resp.ID)
+			return resp, nil
 		}
 		resp = dto.NewInvoiceResponse(inv)
 	}
@@ -1559,9 +1562,17 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, invo
 	}
 
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
-	if err != nil || conn == nil {
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
+				"invoice_id", inv.ID)
+			return nil // Not an error, just skip sync
+		}
+		return err // Genuine failure (DB error, etc.) — let the caller retry
+	}
+	if conn == nil {
 		s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
-			"invoice_id", inv.ID, "error", err)
+			"invoice_id", inv.ID)
 		return nil // Not an error, just skip sync
 	}
 	if !conn.IsInvoiceOutboundEnabled() {
@@ -1572,9 +1583,7 @@ func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, invo
 
 	moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to get Moyasar integration, skipping invoice sync",
-			"invoice_id", inv.ID, "error", err)
-		return nil // Don't fail the entire process, just skip invoice sync
+		return err // Genuine failure — let the caller retry
 	}
 
 	customerService := NewCustomerService(s.ServiceParams)
