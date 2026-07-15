@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -28,7 +29,7 @@ func TestNewPlatformStorage_S3Provider_ExplicitOverride(t *testing.T) {
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, storage.ProviderS3, s.Provider())
@@ -55,7 +56,7 @@ func TestNewPlatformStorage_GCSProvider(t *testing.T) {
 		Storage: config.StorageConfig{Provider: "gcs"},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "flexprice-invoices", "", logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, storage.ProviderGCS, s.Provider())
@@ -66,7 +67,7 @@ func TestNewPlatformStorage_UnsupportedProvider_ReturnsError(t *testing.T) {
 		Storage: config.StorageConfig{Provider: "azure"},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "bucket", "region", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "bucket", "region", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 }
@@ -95,7 +96,7 @@ func TestNewPlatformStorage_S3Provider_InvalidFlexpriceS3ExportsCreds(t *testing
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "no credential source configured")
@@ -123,7 +124,7 @@ func TestNewPlatformStorage_S3Provider_FederationEnabledWithoutRoleARN(t *testin
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "federation_enabled is true but federation_role_arn is not set")
@@ -158,7 +159,7 @@ func TestNewPlatformStorage_S3Provider_FederationEnabledWithRoleARN_FailsLoud(t 
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "OIDC federation is enabled but not yet fully wired")

@@ -18,10 +18,10 @@ import (
 // Backend selection: explicit cfg.Storage.Provider wins; otherwise CloudDetector
 // picks a default. Platform storage stays on S3 in this rollout — GCS backend
 // is available here but not yet the default for any platform bucket.
-func NewPlatformStorage(cfg *config.Configuration, bucket, region string, log *logger.Logger) (Storage, error) {
+func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, bucket, region string, log *logger.Logger) (Storage, error) {
 	provider := Provider(cfg.Storage.Provider)
 	if provider == "" {
-		provider = NewDefaultCloudDetector().Detect(context.Background())
+		provider = NewDefaultCloudDetector().Detect(ctx)
 		if provider == "" {
 			provider = ProviderS3 // default when detection is inconclusive (local dev, bare metal)
 		}
@@ -29,7 +29,7 @@ func NewPlatformStorage(cfg *config.Configuration, bucket, region string, log *l
 
 	switch provider {
 	case ProviderGCS:
-		return gcsbackend.New(&gcsbackend.Config{
+		return gcsbackend.New(ctx, &gcsbackend.Config{
 			Bucket: bucket,
 		}, log)
 	case ProviderS3:
@@ -67,7 +67,7 @@ func NewPlatformStorage(cfg *config.Configuration, bucket, region string, log *l
 				WithHint("FederationEnabled requires a companion Terraform+Go token-source implementation that has not landed yet; either set static AWS credentials, or wait for federation support to complete").
 				Mark(ierr.ErrValidation)
 		}
-		return s3backend.New(s3Cfg, log)
+		return s3backend.New(ctx, s3Cfg, log)
 	default:
 		return nil, ierr.NewErrorf("unsupported storage provider: %s", provider).
 			WithHint("storage.provider must be 's3' or 'gcs'").

@@ -57,8 +57,7 @@ type client struct {
 // 1. explicit static keys (AWSAccessKeyID/AWSSecretAccessKey), if set
 // 2. OIDC federation (FederationRoleARN + FederationTokenSource), if set
 // 3. ambient AWS default credential chain
-func New(cfg *Config, log *logger.Logger) (storagetypes.Storage, error) {
-	ctx := context.Background()
+func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Storage, error) {
 	opts := []func(*awsConfig.LoadOptions) error{
 		awsConfig.WithRegion(cfg.Region),
 	}

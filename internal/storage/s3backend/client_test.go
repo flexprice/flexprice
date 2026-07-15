@@ -21,7 +21,7 @@ func TestNew_WithStaticCredentials_ReturnsStorage(t *testing.T) {
 		AWSSecretAccessKey: "secretexample",
 	}
 
-	s, err := s3backend.New(cfg, logger.NewNoopLogger())
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -38,7 +38,7 @@ func TestNew_NoCredentialsConfigured_FallsBackToAmbientChain(t *testing.T) {
 	// Ambient chain resolution is lazy (SDK resolves creds on first call, not
 	// at construction), so New() must still succeed here — no credentials
 	// error until an actual API call is made.
-	s, err := s3backend.New(cfg, logger.NewNoopLogger())
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 }
@@ -114,7 +114,7 @@ func TestClient_Upload_SetsContentTypeAndKey(t *testing.T) {
 			})
 			defer closeSrv()
 
-			s, err := s3backend.New(cfg, logger.NewNoopLogger())
+			s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 			require.NoError(t, err)
 
 			resp, err := s.Upload(context.Background(), tt.req)
@@ -136,7 +136,7 @@ func TestClient_Exists_ReturnsFalseForMissingKey(t *testing.T) {
 	})
 	defer closeSrv()
 
-	s, err := s3backend.New(cfg, logger.NewNoopLogger())
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	exists, err := s.Exists(context.Background(), "missing/key.csv")
@@ -150,7 +150,7 @@ func TestClient_Exists_ReturnsTrueForFoundKey(t *testing.T) {
 	})
 	defer closeSrv()
 
-	s, err := s3backend.New(cfg, logger.NewNoopLogger())
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	exists, err := s.Exists(context.Background(), "found/key.csv")
@@ -165,7 +165,7 @@ func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
 		AWSAccessKeyID:     "AKIAEXAMPLE",
 		AWSSecretAccessKey: "secretexample",
 	}
-	s, err := s3backend.New(cfg, logger.NewNoopLogger())
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	got := s.FileURL("exports/report.csv")

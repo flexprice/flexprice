@@ -1302,9 +1302,9 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 
 	switch conn.ProviderType {
 	case types.SecretProviderS3:
-		return f.buildS3Storage(conn)
+		return f.buildS3Storage(ctx, conn)
 	case types.SecretProviderGCS:
-		return f.buildGCSStorage(conn)
+		return f.buildGCSStorage(ctx, conn)
 	default:
 		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
 			WithHint("Supported storage provider types: s3, gcs").
@@ -1312,7 +1312,7 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 	}
 }
 
-func (f *Factory) buildS3Storage(conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn.EncryptedSecretData.S3 == nil {
 		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
 	}
@@ -1343,7 +1343,7 @@ func (f *Factory) buildS3Storage(conn *connection.Connection) (storage.Storage, 
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	return s3backend.New(&s3backend.Config{
+	return s3backend.New(ctx, &s3backend.Config{
 		Bucket:             jobConfig.Bucket,
 		Region:             jobConfig.Region,
 		KeyPrefix:          jobConfig.KeyPrefix,
@@ -1355,7 +1355,7 @@ func (f *Factory) buildS3Storage(conn *connection.Connection) (storage.Storage, 
 	}, f.logger)
 }
 
-func (f *Factory) buildGCSStorage(conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn.EncryptedSecretData.GCS == nil {
 		return nil, ierr.NewError("no GCS credentials found on connection").Mark(ierr.ErrValidation)
 	}
@@ -1375,7 +1375,7 @@ func (f *Factory) buildGCSStorage(conn *connection.Connection) (storage.Storage,
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
-	return gcsbackend.New(&gcsbackend.Config{
+	return gcsbackend.New(ctx, &gcsbackend.Config{
 		Bucket:             jobConfig.Bucket,
 		KeyPrefix:          jobConfig.KeyPrefix,
 		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
