@@ -3,15 +3,25 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"sync"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+const temporalDialTimeout = 2 * time.Minute
+
+type temporalDialFunc func(context.Context, client.Options) (client.Client, error)
 
 // APIKeyProvider provides headers for API key authentication
 type APIKeyProvider struct {
@@ -59,8 +69,15 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 		}
 	}
 
-	// Create the temporal client
-	c, err := client.Dial(sdkOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), temporalDialTimeout)
+	defer cancel()
+
+	retry := backoff.NewExponentialBackOff()
+	retry.InitialInterval = time.Second
+	retry.MaxInterval = 5 * time.Second
+	retry.MaxElapsedTime = temporalDialTimeout
+
+	c, err := dialTemporalClient(ctx, sdkOptions, client.DialContext, retry)
 	if err != nil {
 		logger.Error(context.Background(), "Failed to create temporal client", "error", err)
 		return nil, err
@@ -70,6 +87,28 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 		client: c,
 		logger: logger,
 	}, nil
+}
+
+func dialTemporalClient(ctx context.Context, options client.Options, dial temporalDialFunc, retry backoff.BackOff) (client.Client, error) {
+	var temporalClient client.Client
+	err := backoff.Retry(func() error {
+		var err error
+		temporalClient, err = dial(ctx, options)
+		if err != nil && !isRetryableTemporalDialError(err) {
+			return backoff.Permanent(err)
+		}
+		return err
+	}, backoff.WithContext(retry, ctx))
+	return temporalClient, err
+}
+
+func isRetryableTemporalDialError(err error) bool {
+	var unavailable *serviceerror.Unavailable
+	var deadlineExceeded *serviceerror.DeadlineExceeded
+	return errors.As(err, &unavailable) ||
+		errors.As(err, &deadlineExceeded) ||
+		status.Code(err) == codes.Unavailable ||
+		status.Code(err) == codes.DeadlineExceeded
 }
 
 // Start implements TemporalClient
