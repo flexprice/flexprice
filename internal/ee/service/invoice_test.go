@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -36,6 +37,18 @@ func (r *recordingWebhookPublisher) PublishWebhook(ctx context.Context, event *t
 
 func (r *recordingWebhookPublisher) Close() error {
 	return r.inner.Close()
+}
+
+// recordingConnectionRepo wraps a connection.Repository and records every provider
+// looked up via GetByProvider, so tests can assert whether a sync path was attempted.
+type recordingConnectionRepo struct {
+	connection.Repository
+	getByProviderCalls []types.SecretProvider
+}
+
+func (r *recordingConnectionRepo) GetByProvider(ctx context.Context, provider types.SecretProvider) (*connection.Connection, error) {
+	r.getByProviderCalls = append(r.getByProviderCalls, provider)
+	return r.Repository.GetByProvider(ctx, provider)
 }
 
 type InvoiceServiceSuite struct {
@@ -662,6 +675,197 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEv
 	}
 	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
 	s.Equal(resp.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_NoConnection_NoOp() {
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	s.Require().NoError(err, "no Moyasar connection configured should be a silent no-op")
+}
+
+func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_ConnectionDisabled_NoOp() {
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+
+	// Connection exists but has no sync config, so IsInvoiceOutboundEnabled() is false.
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_disabled",
+		Name:          "moyasar disabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	s.Require().NoError(err, "disabled outbound sync should be a silent no-op")
+}
+
+func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_EnabledButUnconfigured_ReturnsError() {
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+
+	// Connection exists, outbound sync enabled, but no encrypted secret data —
+	// this fails fast during config decryption, with no network call.
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_enabled",
+		Name:          "moyasar enabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		SyncConfig: &types.SyncConfig{
+			Invoice: &types.EntitySyncConfig{Outbound: true},
+		},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	s.Require().Error(err, "missing Moyasar credentials should surface as an error to the caller")
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoice_NoConnectionStillSucceeds() {
+	ctx := s.GetContext()
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:       s.testData.customer.ID,
+		InvoiceType:      types.InvoiceTypeOneOff,
+		Currency:         "usd",
+		AmountDue:        decimal.NewFromFloat(100),
+		Total:            decimal.NewFromFloat(100),
+		Subtotal:         decimal.NewFromFloat(100),
+		BillingReason:    types.InvoiceBillingReasonManual,
+		ForceSyncInvoice: true,
+	})
+
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoice_SyncFailureStillSucceeds() {
+	ctx := s.GetContext()
+
+	// Connection enabled but unconfigured — SyncInvoiceToMoyasarIfEnabled will
+	// return an error (see TestSyncInvoiceToMoyasarIfEnabled_EnabledButUnconfigured_ReturnsError).
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_enabled_2",
+		Name:          "moyasar enabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		SyncConfig: &types.SyncConfig{
+			Invoice: &types.EntitySyncConfig{Outbound: true},
+		},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:       s.testData.customer.ID,
+		InvoiceType:      types.InvoiceTypeOneOff,
+		Currency:         "usd",
+		AmountDue:        decimal.NewFromFloat(100),
+		Total:            decimal.NewFromFloat(100),
+		Subtotal:         decimal.NewFromFloat(100),
+		BillingReason:    types.InvoiceBillingReasonManual,
+		ForceSyncInvoice: true,
+	})
+
+	s.Require().NoError(err, "invoice creation must succeed even when the synchronous Moyasar sync fails")
+	s.Require().NotNil(resp)
+	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+	s.Contains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=true must attempt a Moyasar sync")
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_ForceSyncInvoiceFalse_NoSyncAttempted() {
+	ctx := s.GetContext()
+
+	// Connection enabled but unconfigured — if ForceSyncInvoice were honored here,
+	// this would behave like the failure case above. Since it's false, sync must
+	// never be attempted, so creation succeeds unconditionally either way; this
+	// test documents the default (false) behavior explicitly.
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_default_false",
+		Name:          "moyasar enabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		SyncConfig: &types.SyncConfig{
+			Invoice: &types.EntitySyncConfig{Outbound: true},
+		},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+		// ForceSyncInvoice omitted, defaults to false
+	})
+
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+	s.NotContains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=false must never attempt a Moyasar sync")
 }
 
 func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForOneOffDraft() {
