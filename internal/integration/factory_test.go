@@ -132,6 +132,7 @@ func TestFactory_GetStorageProvider_UnknownConnection_ReturnsNotFoundError(t *te
 	got, err := factory.GetStorageProvider(ctx, "conn_does_not_exist")
 	require.Error(t, err)
 	require.Nil(t, got)
+	require.True(t, ierr.IsNotFound(err), "expected not-found error, got: %v", err)
 }
 
 // seedS3ConnectionWithEmptyCredentials mirrors seedS3Connection but leaves the encrypted
