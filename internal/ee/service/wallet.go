@@ -944,11 +944,11 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", req.CreditsToAdd.String())),
 				},
 			},
-			PaymentStatus: lo.ToPtr(paymentStatus),
-			Metadata:      invoiceMetadata,
-			BillingReason: req.BillingReason,
+			PaymentStatus:    lo.ToPtr(paymentStatus),
+			Metadata:         invoiceMetadata,
+			BillingReason:    req.BillingReason,
+			ForceSyncInvoice: req.ForceSyncInvoice,
 		}
-		// ForceSyncInvoice is omitted
 		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
@@ -982,16 +982,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 	if err != nil {
 		return "", "", err
-	}
-
-	// Synchronous Moyasar sync (if requested) runs here, outside the DB transaction above,
-	// since it involves real network calls (invoice creation + optional token charge).
-	// Best-effort: never fails the top-up.
-	if req.ForceSyncInvoice {
-		if err := invoiceService.SyncInvoiceToMoyasarIfEnabled(ctx, invoiceID); err != nil {
-			s.Logger.Error(ctx, "force sync to Moyasar failed",
-				"error", err, "invoice_id", invoiceID, "wallet_id", walletID)
-		}
 	}
 
 	// If auto-completed, publish webhook event immediately
