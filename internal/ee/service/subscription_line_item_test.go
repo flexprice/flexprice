@@ -272,7 +272,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              price2.ID,
-		Quantity:             decimal.NewFromInt(2),
+		Quantity:             lo.ToPtr(decimal.NewFromInt(2)),
 		SkipEntitlementCheck: true,
 	}
 
@@ -363,7 +363,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithCreat
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              secondPrice.ID,
-		Quantity:             decimal.NewFromInt(1),
+		Quantity:             lo.ToPtr(decimal.NewFromInt(1)),
 		SkipEntitlementCheck: true,
 		ProrationBehavior:    types.ProrationBehaviorCreateProrations,
 	}
@@ -414,7 +414,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_NoneProra
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              thirdPrice.ID,
-		Quantity:             decimal.NewFromInt(1),
+		Quantity:             lo.ToPtr(decimal.NewFromInt(1)),
 		SkipEntitlementCheck: true,
 		ProrationBehavior:    types.ProrationBehaviorNone,
 	}
@@ -718,10 +718,10 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			subID: s.testData.subscription.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				PriceID:              s.testData.price.ID,
-				Quantity:             decimal.NewFromInt(-1),
+				Quantity:             lo.ToPtr(decimal.NewFromInt(-1)),
 				SkipEntitlementCheck: true,
 			},
-			wantErrCont: "quantity must be positive",
+			wantErrCont: "quantity must be non-negative",
 		},
 	}
 
