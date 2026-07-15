@@ -268,7 +268,6 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 	}
 }
 
-
 // WalletResponseFromBalance maps a computed balance into a WalletResponse with real-time fields.
 func WalletResponseFromBalance(b *WalletBalanceResponse) *WalletResponse {
 	if b == nil || b.Wallet == nil {
@@ -345,6 +344,8 @@ type TopUpWalletRequest struct {
 	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
 	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
 	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -77,28 +78,31 @@ func (s *WalletServiceSuite) setupService() {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
 	s.service = NewWalletService(ServiceParams{
-		Logger:                   s.GetLogger(),
-		Config:                   s.GetConfig(),
-		DB:                       s.GetDB(),
-		RedisCache:               testutil.NewInMemoryRedis(),
-		WalletRepo:               stores.WalletRepo,
-		SubRepo:                  stores.SubscriptionRepo,
-		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
-		PlanRepo:                 stores.PlanRepo,
-		PriceRepo:                stores.PriceRepo,
-		EventRepo:                stores.EventRepo,
-		MeterUsageRepo:           stores.MeterUsageRepo,
-		MeterRepo:                stores.MeterRepo,
-		CustomerRepo:             stores.CustomerRepo,
-		InvoiceRepo:              stores.InvoiceRepo,
-		EntitlementRepo:          stores.EntitlementRepo,
-		FeatureRepo:              stores.FeatureRepo,
-		AddonAssociationRepo:     stores.AddonAssociationRepo,
-		SettingsRepo:             stores.SettingsRepo,
-		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
-		EventPublisher:           s.GetPublisher(),
-		WebhookPublisher:         s.GetWebhookPublisher(),
-		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		Logger:                       s.GetLogger(),
+		Config:                       s.GetConfig(),
+		DB:                           s.GetDB(),
+		RedisCache:                   testutil.NewInMemoryRedis(),
+		WalletRepo:                   stores.WalletRepo,
+		SubRepo:                      stores.SubscriptionRepo,
+		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,
+		PlanRepo:                     stores.PlanRepo,
+		PriceRepo:                    stores.PriceRepo,
+		EventRepo:                    stores.EventRepo,
+		MeterUsageRepo:               stores.MeterUsageRepo,
+		MeterRepo:                    stores.MeterRepo,
+		CustomerRepo:                 stores.CustomerRepo,
+		InvoiceRepo:                  stores.InvoiceRepo,
+		EntitlementRepo:              stores.EntitlementRepo,
+		FeatureRepo:                  stores.FeatureRepo,
+		AddonAssociationRepo:         stores.AddonAssociationRepo,
+		SettingsRepo:                 stores.SettingsRepo,
+		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		EventPublisher:               s.GetPublisher(),
+		WebhookPublisher:             s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		IntegrationFactory:           s.GetIntegrationFactory(),
+		ConnectionRepo:               stores.ConnectionRepo,
+		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
@@ -716,6 +720,78 @@ func (s *WalletServiceSuite) TestTopUpWallet() {
 	s.NotNil(foundTx, "Transaction with matching idempotency key not found")
 	s.NotNil(foundTx.Priority, "Transaction priority should not be nil")
 	s.Equal(2, *foundTx.Priority, "Transaction priority mismatch")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_ForceSyncInvoice_AttemptsMoyasarSyncAfterCommit() {
+	ctx := s.GetContext()
+
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_wallet_enabled",
+		Name:          "moyasar enabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		SyncConfig: &types.SyncConfig{
+			Invoice: &types.EntitySyncConfig{Outbound: true},
+		},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*walletService).ConnectionRepo = rec
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("force_sync_wallet_topup_1"),
+		ForceSyncInvoice:  true,
+	}
+
+	resp, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, req)
+	s.Require().NoError(err, "top-up must succeed even though the Moyasar sync will fail (unconfigured credentials)")
+	s.Require().NotNil(resp)
+	s.Contains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=true must attempt a Moyasar sync after the transaction commits")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_ForceSyncInvoiceFalse_NoSyncAttempted() {
+	ctx := s.GetContext()
+
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_moyasar_wallet_default_false",
+		Name:          "moyasar enabled",
+		ProviderType:  types.SecretProviderMoyasar,
+		EnvironmentID: "env_test",
+		SyncConfig: &types.SyncConfig{
+			Invoice: &types.EntitySyncConfig{Outbound: true},
+		},
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	}))
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*walletService).ConnectionRepo = rec
+
+	req := &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:    lo.ToPtr("force_sync_wallet_topup_2"),
+		// ForceSyncInvoice omitted, defaults to false
+	}
+
+	resp, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.NotContains(rec.getByProviderCalls, types.SecretProviderMoyasar,
+		"ForceSyncInvoice=false must never attempt a Moyasar sync")
 }
 
 func (s *WalletServiceSuite) TestTerminateWallet() {

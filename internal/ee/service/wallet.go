@@ -944,12 +944,12 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", req.CreditsToAdd.String())),
 				},
 			},
-			PaymentStatus: lo.ToPtr(paymentStatus),
-			Metadata:      invoiceMetadata,
-			BillingReason: req.BillingReason,
+			PaymentStatus:    lo.ToPtr(paymentStatus),
+			Metadata:         invoiceMetadata,
+			BillingReason:    req.BillingReason,
+			ForceSyncInvoice: req.ForceSyncInvoice,
 		}
-		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-		inv, err := invoiceService.CreateInvoice(ctx, invReq)
+		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to create invoice for purchased credits").
