@@ -295,3 +295,28 @@ func (s *CouponAssociationServiceSuite) TestApplyCouponsToSubscription_Redemptio
 	s.Require().Error(err, "second redemption must be rejected — coupon already at max_redemptions")
 	s.True(ierr.IsValidation(err), "expected a validation-class error, not ErrInternal, got: %v", err)
 }
+
+// TestCreateCouponAssociation_NilCoupon is a defense-in-depth unit test for
+// the unexported createCouponAssociation: its only current caller
+// (ApplyCouponsToSubscription) already checks the error from its own
+// coupon Get() before reaching this method, so c can't be nil on that path
+// today — but createCouponAssociation dereferences c.MaxRedemptions
+// internally and should fail with a clear validation error instead of
+// panicking if a future caller (or an unexpected nil,nil from a repository)
+// ever passes a nil coupon.
+func (s *CouponAssociationServiceSuite) TestCreateCouponAssociation_NilCoupon() {
+	ctx := s.GetContext()
+
+	impl, ok := s.service.(*couponAssociationService)
+	s.Require().True(ok, "expected service to be *couponAssociationService")
+
+	req := dto.CreateCouponAssociationRequest{
+		CouponID:       "coupon_does_not_matter",
+		SubscriptionID: s.testData.subscription.ID,
+		StartDate:      time.Now().UTC(),
+	}
+
+	_, err := impl.createCouponAssociation(ctx, req, nil)
+	s.Require().Error(err, "nil coupon must be rejected, not panic")
+	s.True(ierr.IsValidation(err), "expected a validation-class error for nil coupon, got: %v", err)
+}

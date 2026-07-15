@@ -44,6 +44,15 @@ func (s *couponAssociationService) createCouponAssociation(ctx context.Context, 
 		return nil, err
 	}
 
+	if c == nil {
+		return nil, ierr.NewError("coupon is required").
+			WithHint("A valid coupon must be provided to create a coupon association").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id": req.CouponID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	var response *dto.CouponAssociationResponse
 
 	// Use transaction for atomic operations
