@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -173,12 +174,13 @@ func (s *SubscriptionModificationServiceSuite) createParentSubWithChild(parentEx
 func (s *SubscriptionModificationServiceSuite) createFixedLineItem(subID, customerID string, qty decimal.Decimal, cadence types.InvoiceCadence) *subscription.SubscriptionLineItem {
 	ctx := s.GetContext()
 	now := s.GetNow()
+	p := s.createFixedPrice(decimal.NewFromInt(10), cadence)
 	li := &subscription.SubscriptionLineItem{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 		SubscriptionID: subID,
 		CustomerID:     customerID,
-		PriceID:        types.GenerateUUID(),
+		PriceID:        p.ID,
 		PriceType:      types.PRICE_TYPE_FIXED,
 		Quantity:       qty,
 		Currency:       "USD",
@@ -338,7 +340,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Advance
 				Type: dto.SubscriptionModifyTypeQuantityChange,
 				QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 					LineItems: []dto.LineItemQuantityChange{
-						{ID: li.ID, Quantity: tc.newQty, EffectiveDate: &effectiveDate},
+						{ID: li.ID, Quantity: lo.ToPtr(tc.newQty), EffectiveDate: &effectiveDate},
 					},
 				},
 			}
@@ -444,7 +446,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Arrear(
 				Type: dto.SubscriptionModifyTypeQuantityChange,
 				QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 					LineItems: []dto.LineItemQuantityChange{
-						{ID: li.ID, Quantity: tc.newQty, EffectiveDate: &effectiveDate},
+						{ID: li.ID, Quantity: lo.ToPtr(tc.newQty), EffectiveDate: &effectiveDate},
 					},
 				},
 			}
@@ -544,7 +546,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Effecti
 				Type: dto.SubscriptionModifyTypeQuantityChange,
 				QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 					LineItems: []dto.LineItemQuantityChange{
-						{ID: li.ID, Quantity: newQty, EffectiveDate: &effectiveDate},
+						{ID: li.ID, Quantity: lo.ToPtr(newQty), EffectiveDate: &effectiveDate},
 					},
 				},
 			}
@@ -954,7 +956,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Version
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: newQty},
+				{ID: li.ID, Quantity: lo.ToPtr(newQty)},
 			},
 		},
 	}
@@ -1008,7 +1010,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_WrongSu
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(7)},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(7))},
 			},
 		},
 	}
@@ -1030,7 +1032,7 @@ func (s *SubscriptionModificationServiceSuite) TestPreviewQuantityChange_DoesNot
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(10)},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(10))},
 			},
 		},
 	}
@@ -1045,8 +1047,8 @@ func (s *SubscriptionModificationServiceSuite) TestPreviewQuantityChange_DoesNot
 	s.True(origLI.EndDate.IsZero(), "Preview must not persist changes; EndDate should still be zero")
 }
 
-// TestExecuteQuantityChange_InvalidRequestRejected verifies that empty LineItems or zero
-// quantity are rejected with validation errors.
+// TestExecuteQuantityChange_InvalidRequestRejected verifies that empty LineItems or a
+// negative quantity are rejected with validation errors.
 func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_InvalidRequestRejected() {
 	ctx := s.GetContext()
 
@@ -1063,16 +1065,73 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Invalid
 	})
 	s.Require().Error(err, "empty LineItems should be rejected")
 
-	// Zero quantity
+	// Missing quantity
 	_, err = s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.Zero},
+				{ID: li.ID},
 			},
 		},
 	})
-	s.Require().Error(err, "zero quantity should be rejected")
+	s.Require().Error(err, "missing quantity should be rejected")
+	s.Contains(err.Error(), "quantity is required")
+
+	// Negative quantity
+	_, err = s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(-1))},
+			},
+		},
+	})
+	s.Require().Error(err, "negative quantity should be rejected")
+	s.Contains(err.Error(), "quantity must be non-negative")
+}
+
+// TestExecuteQuantityChange_ZeroQuantityAllowed verifies that quantity=0 is accepted when
+// the line item's price has no min_quantity floor.
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_ZeroQuantityAllowed() {
+	ctx := s.GetContext()
+
+	cust := s.createCustomer("ext-qty-005")
+	sub := s.createActiveSub(cust.ID)
+	li := s.createFixedLineItem(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceArrear)
+
+	_, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.Zero)},
+			},
+		},
+	})
+	s.Require().NoError(err, "zero quantity should be allowed when there is no min_quantity floor")
+}
+
+// TestExecuteQuantityChange_ZeroQuantityBelowMinQuantityRejected verifies that quantity=0 is
+// rejected when the line item's price has a positive min_quantity floor.
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_ZeroQuantityBelowMinQuantityRejected() {
+	ctx := s.GetContext()
+
+	cust := s.createCustomer("ext-qty-006")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(10), types.InvoiceCadenceArrear)
+	p.MinQuantity = lo.ToPtr(decimal.NewFromInt(3))
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceArrear, p.ID)
+
+	_, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.Zero)},
+			},
+		},
+	})
+	s.Require().Error(err, "zero quantity should be rejected below a positive min_quantity floor")
+	s.Contains(err.Error(), "quantity must be greater than or equal to min_quantity")
 }
 
 // TestExecuteQuantityChange_EffectiveDateOutsideLineItemWindowRejected verifies that
@@ -1099,7 +1158,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Effecti
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(8), EffectiveDate: &effectiveBeforeLine},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(8)), EffectiveDate: &effectiveBeforeLine},
 			},
 		},
 	})
@@ -1116,7 +1175,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Effecti
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(9), EffectiveDate: &effectiveAfterLineEnd},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(9)), EffectiveDate: &effectiveAfterLineEnd},
 			},
 		},
 	})
@@ -1146,7 +1205,7 @@ func (s *SubscriptionModificationServiceSuite) TestPreviewQuantityChange_Effecti
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(8), EffectiveDate: &effectiveBeforeLine},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(8)), EffectiveDate: &effectiveBeforeLine},
 			},
 		},
 	})
@@ -1163,7 +1222,7 @@ func (s *SubscriptionModificationServiceSuite) TestPreviewQuantityChange_Effecti
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(9), EffectiveDate: &effectiveAfterLineEnd},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(9)), EffectiveDate: &effectiveAfterLineEnd},
 			},
 		},
 	})
@@ -1194,8 +1253,8 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_MultiLi
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: advLI.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
-				{ID: arrLI.ID, Quantity: decimal.NewFromInt(5), EffectiveDate: &effectiveDate},
+				{ID: advLI.ID, Quantity: lo.ToPtr(decimal.NewFromInt(3)), EffectiveDate: &effectiveDate},
+				{ID: arrLI.ID, Quantity: lo.ToPtr(decimal.NewFromInt(5)), EffectiveDate: &effectiveDate},
 			},
 		},
 	}
@@ -1230,8 +1289,8 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_MultiLi
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: "nonexistent-id-xyz", Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
-				{ID: li.ID, Quantity: decimal.NewFromInt(5), EffectiveDate: &effectiveDate},
+				{ID: "nonexistent-id-xyz", Quantity: lo.ToPtr(decimal.NewFromInt(3)), EffectiveDate: &effectiveDate},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(5)), EffectiveDate: &effectiveDate},
 			},
 		},
 	}
@@ -1316,7 +1375,7 @@ func (s *SubscriptionModificationServiceSuite) TestPreviewQuantityChange() {
 				Type: dto.SubscriptionModifyTypeQuantityChange,
 				QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 					LineItems: []dto.LineItemQuantityChange{
-						{ID: li.ID, Quantity: tc.newQty, EffectiveDate: &effectiveDate},
+						{ID: li.ID, Quantity: lo.ToPtr(tc.newQty), EffectiveDate: &effectiveDate},
 					},
 				},
 			}
@@ -1438,7 +1497,7 @@ func (s *SubscriptionModificationServiceSuite) TestProrationMath_Upgrade() {
 				Type: dto.SubscriptionModifyTypeQuantityChange,
 				QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 					LineItems: []dto.LineItemQuantityChange{
-						{ID: li.ID, Quantity: tc.newQty, EffectiveDate: &tc.effectiveDate},
+						{ID: li.ID, Quantity: lo.ToPtr(tc.newQty), EffectiveDate: &tc.effectiveDate},
 					},
 				},
 			}
@@ -1497,7 +1556,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_NonFixe
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(3)), EffectiveDate: &effectiveDate},
 			},
 		},
 	}
@@ -1538,7 +1597,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Inactiv
 		Type: dto.SubscriptionModifyTypeQuantityChange,
 		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
 			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: decimal.NewFromInt(5), EffectiveDate: &effectiveDate},
+				{ID: li.ID, Quantity: lo.ToPtr(decimal.NewFromInt(5)), EffectiveDate: &effectiveDate},
 			},
 		},
 	}
