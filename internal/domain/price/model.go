@@ -601,6 +601,16 @@ func (p *Price) ValidateEntityType() error {
 	return p.EntityType.Validate()
 }
 
+// ValidateMinQuantity checks that min_quantity, when set, is non-negative
+func (p *Price) ValidateMinQuantity() error {
+	if p.MinQuantity != nil && p.MinQuantity.IsNegative() {
+		return ierr.NewError("min_quantity must be non-negative").
+			WithHint("min_quantity cannot be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // Validate performs all validations on the price
 func (p *Price) Validate() error {
 	if err := p.ValidateAmount(); err != nil {
@@ -619,6 +629,10 @@ func (p *Price) Validate() error {
 		return err
 	}
 
+	if err := p.ValidateMinQuantity(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -630,6 +644,34 @@ func (p *Price) GetDefaultQuantity() decimal.Decimal {
 		return decimal.Zero
 	}
 	return decimal.NewFromInt(1)
+}
+
+// ValidateQuantityNonNegative rejects a negative quantity. nil (omitted) is allowed.
+func ValidateQuantityNonNegative(qty *decimal.Decimal) error {
+	if qty == nil || !qty.IsNegative() {
+		return nil
+	}
+	return ierr.NewError("quantity must be non-negative").
+		WithHint("Quantity cannot be negative").
+		Mark(ierr.ErrValidation)
+}
+
+// ValidateQuantityFloor rejects an explicit quantity below minQuantity.
+// No-op if either qty or minQuantity is nil.
+func ValidateQuantityFloor(qty *decimal.Decimal, minQuantity *decimal.Decimal) error {
+	if qty == nil || minQuantity == nil {
+		return nil
+	}
+	if qty.LessThan(*minQuantity) {
+		return ierr.NewError("quantity must be greater than or equal to min_quantity").
+			WithHint("Quantity must be at least the minimum quantity specified for this price").
+			WithReportableDetails(map[string]interface{}{
+				"quantity":     qty.String(),
+				"min_quantity": minQuantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // GetDisplayName returns the display name for a price
