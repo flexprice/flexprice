@@ -231,6 +231,20 @@ func (s *InvoiceSyncService) buildInvoiceRequest(
 		Metadata:    metadata,
 	}
 
+	// Carry the tenant-configured redirect URLs (set on the connection, not per-invoice)
+	// through to Moyasar's hosted invoice page. Mirrors how
+	// PaddleSyncService.appendCheckoutToken reads ConnKeyRedirectURL off the connection.
+	// Errors/missing metadata are non-fatal — the customer simply isn't redirected
+	// anywhere after paying.
+	if conn, connErr := s.client.GetConnection(ctx); connErr == nil && conn != nil && conn.Metadata != nil {
+		if successURL, ok := conn.Metadata[ConnKeySuccessURL].(string); ok && successURL != "" {
+			req.SuccessURL = successURL
+		}
+		if cancelURL, ok := conn.Metadata[ConnKeyCancelURL].(string); ok && cancelURL != "" {
+			req.BackURL = cancelURL
+		}
+	}
+
 	s.logger.Info(ctx, "built invoice request for Moyasar",
 		"invoice_id", flexInvoice.ID,
 		"amount", flexInvoice.Total.String(),
