@@ -650,11 +650,6 @@ func triggerZohoBooksIfEnabled(
 	return executeWorkflow(ctx, temporalSvc, log, types.TemporalZohoBooksInvoiceSyncWorkflow, input, types.SecretProviderZohoBooks, in.InvoiceID)
 }
 
-// triggerTabsIfEnabled starts the Tabs sync workflow whenever Tabs is enabled, on both
-// invoice.update and invoice.update.finalized. Unlike every other provider's trigger function,
-// this doesn't short-circuit on eimRepo/invoiceAlreadySynced — Tabs needs to run repeatedly across
-// an invoice's draft lifecycle, and the sync activity itself (SyncInvoiceToTabs) decides whether
-// anything actually changed since the last sync before touching the Tabs API.
 func triggerTabsIfEnabled(
 	ctx context.Context,
 	connRepo connection.Repository,

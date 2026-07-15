@@ -66,9 +66,6 @@ func NewHandler(deps Deps) Handler {
 				msg.UUID,
 			)
 		},
-		// invoice.update fires on draft-stage changes (ComputeInvoice, RecalculateInvoiceV2,
-		// UpdateInvoice). DispatchInvoiceVendorSync branches on event.EventName so only Tabs runs
-		// here — every other provider stays finalize-only, unaffected by this registration.
 		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
 			return DispatchInvoiceVendorSync(
 				ctx,

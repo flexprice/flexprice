@@ -22,9 +22,6 @@ import (
 
 const tabsDateLayout = "2006-01-02"
 
-// tabsInvoiceSyncLockTTL bounds how long a per-invoice sync lock is held if the holder crashes without
-// releasing it. Aligned to the sync activity's StartToCloseTimeout (5m) so a run can't outlive its
-// lock; on normal completion or error the lock is released immediately via defer.
 const tabsInvoiceSyncLockTTL = 2 * time.Minute
 
 type TabsInvoiceService interface {
@@ -89,10 +86,6 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	// If the invoice was already synced, re-sync it rather than short-circuiting: the previously
-	// synced obligations are deleted from Tabs (and their mappings dropped) below so syncObligations
-	// recreates them from the invoice's current line items, and a fresh Tabs invoice is fetched. The
-	// existing invoice mapping is updated in place with the new Tabs invoice id.
 	existingMapping, alreadySynced, err := s.existingInvoiceMapping(ctx, req.InvoiceID)
 	if err != nil {
 		return nil, err
@@ -188,10 +181,6 @@ func (s *InvoiceService) existingInvoiceMapping(ctx context.Context, invoiceID s
 	return existing[0], true, nil
 }
 
-// persistInvoiceMapping records the flexprice-invoice -> tabs mapping, storing the Tabs customer,
-// contract and invoice ids in the metadata. On a first sync it creates the mapping; on a re-sync
-// it updates the existing mapping in place with the freshly-fetched Tabs invoice id. This keeps the
-// invoice-level sync idempotent.
 func (s *InvoiceService) persistInvoiceMapping(ctx context.Context, existing *entityintegrationmapping.EntityIntegrationMapping, inv *invoice.Invoice, contractID, tabsCustomerID, tabsInvoiceID string, obligationIDs []string) error {
 	if existing != nil {
 		existing.ProviderEntityID = tabsInvoiceID
@@ -225,12 +214,6 @@ func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, oblig
 	}
 }
 
-// deletePreviousObligations removes the obligations recorded on the invoice's existing Tabs mapping
-// from Tabs and drops their line-item -> obligation mappings, so a re-sync recreates obligations from
-// the invoice's current line items. Because the obligation ids are read from the invoice mapping (not
-// the current line items), obligations whose line items were removed — or recreated with new ids —
-// since the last sync are still cleaned up. Obligation deletion is idempotent (see DeleteObligation),
-// so the enclosing Temporal activity is safe to retry.
 func (s *InvoiceService) deletePreviousObligations(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping, inv *invoice.Invoice, contractID string) error {
 	obligationIDs := metadataStrings(mapping.Metadata, "obligation_ids")
 
