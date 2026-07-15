@@ -49,8 +49,7 @@ type client struct {
 // New constructs a GCS-backed storage.Storage. Credential resolution order:
 // 1. explicit service account JSON (ServiceAccountJSON), if set
 // 2. ambient Application Default Credentials (Workload Identity, etc.)
-func New(cfg *Config, log *logger.Logger) (fpstorage.Storage, error) {
-	ctx := context.Background()
+func New(ctx context.Context, cfg *Config, log *logger.Logger) (fpstorage.Storage, error) {
 	var opts []gcsoption.ClientOption
 	if len(cfg.ServiceAccountJSON) > 0 {
 		opts = append(opts, gcsoption.WithCredentialsJSON(cfg.ServiceAccountJSON))

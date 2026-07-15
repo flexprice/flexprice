@@ -41,7 +41,7 @@ func TestNew_ReturnsStorage(t *testing.T) {
 		EndpointURL: srv.URL,
 	}
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -59,7 +59,7 @@ func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &gcsbackend.Config{Bucket: "test-bucket", EndpointURL: srv.URL}
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	got := s.FileURL("exports/report.csv")
@@ -95,7 +95,7 @@ func TestClient_Upload_RoundTrip(t *testing.T) {
 	})
 	defer srv.Close()
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	resp, err := s.Upload(context.Background(), &storage.UploadRequest{
@@ -149,7 +149,7 @@ func TestClient_Upload_CompressesWhenRequestedAndConfigured(t *testing.T) {
 	defer srv.Close()
 	cfg.CompressionGzip = true
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	resp, err := s.Upload(context.Background(), &storage.UploadRequest{
@@ -191,7 +191,7 @@ func TestClient_Upload_DoesNotCompressWhenGzipNotConfigured(t *testing.T) {
 	// explicitly enabled per-connection, so Compress:true alone must not
 	// trigger gzip.
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	resp, err := s.Upload(context.Background(), &storage.UploadRequest{
@@ -217,7 +217,7 @@ func TestClient_Exists_ReturnsFalseForMissingKey(t *testing.T) {
 	})
 	defer srv.Close()
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	exists, err := s.Exists(context.Background(), "missing/key.csv")
@@ -233,7 +233,7 @@ func TestClient_Exists_ReturnsTrueForFoundKey(t *testing.T) {
 	})
 	defer srv.Close()
 
-	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
 	exists, err := s.Exists(context.Background(), "found/key.csv")
