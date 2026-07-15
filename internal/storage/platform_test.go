@@ -34,7 +34,23 @@ func TestNewPlatformStorage_S3Provider_ExplicitOverride(t *testing.T) {
 	require.Equal(t, storage.ProviderS3, s.Provider())
 }
 
+// TestNewPlatformStorage_GCSProvider proves the GCS branch constructs
+// successfully without explicit credentials, matching a real GKE pod that
+// relies on ambient Workload Identity / Application Default Credentials.
+// NewPlatformStorage's GCS branch has no config knob to inject a fake
+// EndpointURL (unlike gcsbackend.Config directly), so gcsbackend.New's
+// underlying cloud.google.com/go storage.NewClient would otherwise try to
+// resolve REAL Application Default Credentials at construction time — which
+// only "works" on a machine that happens to have `gcloud auth
+// application-default login` already run, and fails on CI / a real GKE pod
+// without ADC configured. Setting STORAGE_EMULATOR_HOST makes the GCS client
+// library skip ADC resolution entirely (it switches to
+// option.WithoutAuthentication() internally — see cloud.google.com/go/storage
+// NewClient), so this test's result never depends on ambient real-world GCP
+// credentials.
 func TestNewPlatformStorage_GCSProvider(t *testing.T) {
+	t.Setenv("STORAGE_EMULATOR_HOST", "127.0.0.1:1")
+
 	cfg := &config.Configuration{
 		Storage: config.StorageConfig{Provider: "gcs"},
 	}
