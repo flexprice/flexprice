@@ -12,12 +12,9 @@ type CreateConnectionRequest struct {
 	Name                string                   `json:"name" validate:"required,max=255"`
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
-	// Metadata holds provider-specific non-secret settings.
-	// For Paddle: use {"redirect_url": "https://..."} as the success URL where customers
-	// are redirected after payment. Backend appends &_success=<redirect_url> to Paddle
-	// checkout URLs before storing/sending them.
-	// For Moyasar: use {"success_url": "...", "cancel_url": "..."} to control where
-	// customers land after paying or cancelling on Moyasar's hosted invoice page.
+	// Metadata holds provider-specific non-secret settings. For Paddle: use {"redirect_url": "https://..."}
+	// as the success URL where customers are redirected after payment. Backend appends &_success=<redirect_url>
+	// to Paddle checkout URLs before storing/sending them.
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }

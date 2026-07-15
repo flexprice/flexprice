@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -2944,6 +2945,7 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
+		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
 
 		// Calculate total pending charges (usage)
 		for _, sub := range filteredSubscriptions {
@@ -2958,12 +2960,24 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				Source:         string(types.UsageSourceWallet),
 			}
 
-			usage, err := subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+			var usage *dto.GetUsageBySubscriptionResponse
+			var err error
+			if useMeterUsage {
+				usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+			} else {
+				usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+			}
 			if err != nil {
 				return nil, err
 			}
+			if s.Config != nil && s.Config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
+				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			}
 
-			lineItems, totalAmount, err := billingService.CalculateMeterUsageCharges(
+			// Calculate must match the Get branch. The two Calculate impls
+			// diverge in the source they read for bucketed meters, windowed
+			// entitlements, and windowed commitments
+			usageCharges, usageTotal, err := billingService.CalculateMeterUsageCharges(
 				ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet,
 			)
 			if err != nil {
@@ -2972,10 +2986,11 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 
 			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", totalAmount,
-				"num_usage_charges", len(lineItems))
+				"usage_total", usageTotal,
+				"num_usage_charges", usageCharges,
+				"use_meter_usage", useMeterUsage)
 
-			totalPendingCharges = totalPendingCharges.Add(totalAmount)
+			totalPendingCharges = totalPendingCharges.Add(usageTotal)
 		}
 	}
 
@@ -3837,3 +3852,21 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	return balance
 }
 
+// publishBenchmarkEvent publishes a usage benchmark event to Kafka.
+// Fire-and-forget: errors are logged but never returned to the caller.
+func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionID string, startTime, endTime time.Time) {
+	benchSvc := NewUsageBenchmarkService(s.ServiceParams, nil, nil, nil, nil)
+	evt := &events.UsageBenchmarkEvent{
+		SubscriptionID: subscriptionID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+	}
+	if err := benchSvc.PublishEvent(ctx, evt); err != nil {
+		s.Logger.Info(ctx, "usage benchmark: failed to publish event",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+	}
+}
