@@ -5,11 +5,13 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -147,8 +149,9 @@ func TestClient_Upload_SetsContentTypeByFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotContentType string
+			var extractErr error
 			cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
-				gotContentType = extractUploadedContentType(t, r)
+				gotContentType, extractErr = extractUploadedContentType(r)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte(`{"name":"` + tt.req.Key + `","bucket":"test-bucket"}`))
@@ -162,6 +165,7 @@ func TestClient_Upload_SetsContentTypeByFormat(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, resp)
 
+			require.NoError(t, extractErr, "failed to extract uploaded content type from request")
 			assert.Equal(t, tt.wantContentType, gotContentType)
 		})
 	}
@@ -170,56 +174,87 @@ func TestClient_Upload_SetsContentTypeByFormat(t *testing.T) {
 // extractUploadedContentType parses the multipart/related body the GCS JSON
 // API client sends and returns the "contentType" field of the JSON metadata
 // part (the first part).
-func extractUploadedContentType(t *testing.T, r *http.Request) string {
-	t.Helper()
+//
+// This runs inside the httptest.Server's request-handling goroutine, not the
+// test goroutine, so it returns an error instead of calling require.*
+// directly — t.FailNow() (which require.* calls internally) must be invoked
+// from the goroutine running the test, per the testing package's docs.
+// Calling it from the server goroutine would stop only that goroutine while
+// the test function continued as if nothing had failed, silently passing.
+// Callers must check the returned error with require.NoError in the actual
+// test goroutine.
+func extractUploadedContentType(r *http.Request) (string, error) {
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	require.NoError(t, err)
-	require.Contains(t, mediaType, "multipart/")
+	if err != nil {
+		return "", fmt.Errorf("parsing Content-Type header: %w", err)
+	}
+	if !strings.Contains(mediaType, "multipart/") {
+		return "", fmt.Errorf("expected multipart/* content type, got %q", mediaType)
+	}
 
 	mr := multipart.NewReader(r.Body, params["boundary"])
 
 	metadataPart, err := mr.NextPart()
-	require.NoError(t, err)
+	if err != nil {
+		return "", fmt.Errorf("reading metadata part: %w", err)
+	}
 	metadataBytes, err := io.ReadAll(metadataPart)
-	require.NoError(t, err)
+	if err != nil {
+		return "", fmt.Errorf("reading metadata part body: %w", err)
+	}
 
 	var metadata struct {
 		ContentType string `json:"contentType"`
 	}
-	require.NoError(t, json.Unmarshal(metadataBytes, &metadata))
-	return metadata.ContentType
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return "", fmt.Errorf("unmarshaling metadata JSON: %w", err)
+	}
+	return metadata.ContentType, nil
 }
 
 // extractUploadedObjectBytes parses the multipart/related body the GCS JSON
 // API client sends for a "simple"/multipart upload (as used by small
 // payloads in these tests) and returns the raw bytes of the object's data
 // part (the second part, after the JSON metadata part).
-func extractUploadedObjectBytes(t *testing.T, r *http.Request) []byte {
-	t.Helper()
+//
+// See extractUploadedContentType's doc comment for why this returns an error
+// instead of calling require.* directly: it runs inside the httptest.Server's
+// request-handling goroutine, not the test goroutine.
+func extractUploadedObjectBytes(r *http.Request) ([]byte, error) {
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	require.NoError(t, err)
-	require.Contains(t, mediaType, "multipart/")
+	if err != nil {
+		return nil, fmt.Errorf("parsing Content-Type header: %w", err)
+	}
+	if !strings.Contains(mediaType, "multipart/") {
+		return nil, fmt.Errorf("expected multipart/* content type, got %q", mediaType)
+	}
 
 	mr := multipart.NewReader(r.Body, params["boundary"])
 
 	// First part: JSON metadata (bucket/name/contentType/etc).
-	_, err = mr.NextPart()
-	require.NoError(t, err)
+	if _, err = mr.NextPart(); err != nil {
+		return nil, fmt.Errorf("reading metadata part: %w", err)
+	}
 
 	// Second part: the actual object data.
 	dataPart, err := mr.NextPart()
-	require.NoError(t, err)
+	if err != nil {
+		return nil, fmt.Errorf("reading data part: %w", err)
+	}
 	data, err := io.ReadAll(dataPart)
-	require.NoError(t, err)
-	return data
+	if err != nil {
+		return nil, fmt.Errorf("reading data part body: %w", err)
+	}
+	return data, nil
 }
 
 func TestClient_Upload_CompressesWhenRequestedAndConfigured(t *testing.T) {
 	original := []byte("a,b,c\n1,2,3\n4,5,6\n")
 	var gotBody []byte
+	var extractErr error
 
 	cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
-		gotBody = extractUploadedObjectBytes(t, r)
+		gotBody, extractErr = extractUploadedObjectBytes(r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"name":"exports/report.csv.gz","bucket":"test-bucket"}`))
@@ -239,6 +274,7 @@ func TestClient_Upload_CompressesWhenRequestedAndConfigured(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
+	require.NoError(t, extractErr, "failed to extract uploaded object bytes from request")
 	require.NotEmpty(t, gotBody, "expected the fake GCS server to receive object bytes")
 
 	// The bytes actually sent over the wire must be genuinely gzip-compressed
@@ -257,9 +293,10 @@ func TestClient_Upload_CompressesWhenRequestedAndConfigured(t *testing.T) {
 func TestClient_Upload_DoesNotCompressWhenGzipNotConfigured(t *testing.T) {
 	original := []byte("a,b,c\n1,2,3\n4,5,6\n")
 	var gotBody []byte
+	var extractErr error
 
 	cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
-		gotBody = extractUploadedObjectBytes(t, r)
+		gotBody, extractErr = extractUploadedObjectBytes(r)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"name":"exports/report.csv","bucket":"test-bucket"}`))
@@ -281,6 +318,7 @@ func TestClient_Upload_DoesNotCompressWhenGzipNotConfigured(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
+	require.NoError(t, extractErr, "failed to extract uploaded object bytes from request")
 	require.NotEmpty(t, gotBody)
 	assert.Equal(t, original, gotBody, "bytes should be uploaded uncompressed when CompressionGzip is not configured")
 
