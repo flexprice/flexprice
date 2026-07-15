@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'helm/flexprice/**'
+      - 'internal/ee/infrastructure/helm/flexprice/**'
       - '.github/workflows/publish-helm-chart.yml'
     tags:
       - 'chart-v*'
@@ -52,7 +52,7 @@ jobs:
         id: chart-version
         run: |
           set -euo pipefail
-          CHART_VERSION=$(grep -E '^version:' helm/flexprice/Chart.yaml | awk '{print $2}' | tr -d '"')
+          CHART_VERSION=$(grep -E '^version:' internal/ee/infrastructure/helm/flexprice/Chart.yaml | awk '{print $2}' | tr -d '"')
           if [[ "${GITHUB_REF:-}" == refs/tags/chart-v* ]]; then
             TAG_VERSION="${GITHUB_REF#refs/tags/chart-v}"
             if [[ "$TAG_VERSION" != "$CHART_VERSION" ]]; then
@@ -75,7 +75,7 @@ jobs:
       - name: Extract Chart Name
         id: chart-name
         run: |
-          CHART_NAME=$(helm show chart helm/flexprice | grep '^name:' | awk '{print $2}' | tr -d '"' || echo "flexprice")
+          CHART_NAME=$(helm show chart internal/ee/infrastructure/helm/flexprice | grep '^name:' | awk '{print $2}' | tr -d '"' || echo "flexprice")
           echo "name=$CHART_NAME" >> $GITHUB_OUTPUT
           echo "Chart name: $CHART_NAME"
 
@@ -91,7 +91,7 @@ jobs:
             exit 0
           fi
           if git rev-parse HEAD^ >/dev/null 2>&1; then
-            PREV=$(git show HEAD^:helm/flexprice/Chart.yaml 2>/dev/null | grep -E '^version:' | awk '{print $2}' | tr -d '"' || echo "")
+            PREV=$(git show HEAD^:internal/ee/infrastructure/helm/flexprice/Chart.yaml 2>/dev/null | grep -E '^version:' | awk '{print $2}' | tr -d '"' || echo "")
           else
             PREV=""
           fi
@@ -112,17 +112,17 @@ jobs:
 
       - name: Build Helm Dependencies
         run: |
-          helm dependency build helm/flexprice
+          helm dependency build internal/ee/infrastructure/helm/flexprice
 
       - name: Lint Helm Chart
         run: |
-          helm lint helm/flexprice --set secrets.existingSecret=test
-          helm template flexprice-test helm/flexprice --set secrets.existingSecret=test --debug
+          helm lint internal/ee/infrastructure/helm/flexprice --set secrets.existingSecret=test
+          helm template flexprice-test internal/ee/infrastructure/helm/flexprice --set secrets.existingSecret=test --debug
 
       - name: Package Helm Chart
         if: ${{ steps.changed.outputs.publish == 'true' }}
         run: |
-          helm package helm/flexprice --version ${{ steps.chart-version.outputs.version }}
+          helm package internal/ee/infrastructure/helm/flexprice --version ${{ steps.chart-version.outputs.version }}
 
       - name: Check if version already exists
         id: version-check
