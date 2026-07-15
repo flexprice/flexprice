@@ -137,7 +137,8 @@ func (a *SnapshotActivities) snapshotSubscription(
 	input temporalModels.MarketplaceUsageSnapshotActivityInput,
 	result *temporalModels.MarketplaceUsageSnapshotWorkflowResult,
 ) {
-	sub, err := a.subscriptionRepo.Get(envCtx, subscriptionID)
+	// CalculateMeterUsageCharges iterates sub.LineItems to drive its per-line-item recalculation
+	sub, _, err := a.subscriptionRepo.GetWithLineItems(envCtx, subscriptionID)
 	if err != nil {
 		a.logger.Error(envCtx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", subscriptionID,
