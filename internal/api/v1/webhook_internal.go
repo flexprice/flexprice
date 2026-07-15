@@ -24,6 +24,7 @@ var _ = []any{
 	(*webhookDto.WalletWebhookPayload)(nil),
 	(*webhookDto.TransactionWebhookPayload)(nil),
 	(*webhookDto.CreditNoteWebhookPayload)(nil),
+	(*webhookDto.RejectedEventWebhookPayload)(nil),
 }
 
 // WebhookEventInvoiceUpdateFinalized godoc
@@ -386,6 +387,16 @@ func WebhookEventWalletTerminated() {}
 // @Router /webhook-events/wallet.transaction.created [post]
 func WebhookEventWalletTransactionCreated() {}
 
+// WebhookEventWalletTransactionUpdated godoc
+// @Summary wallet.transaction.updated
+// @Description Fired when an existing wallet transaction is updated (e.g. pending to completed). Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.TransactionUpdatedWebhookPayload "Webhook payload"
+// @Router /webhook-events/wallet.transaction.updated [post]
+func WebhookEventWalletTransactionUpdated() {}
+
 // WebhookEventWalletCreditBalanceDropped godoc
 // @Summary wallet.credit_balance.dropped
 // @Description Fired when a wallet's credit balance drops below an alert threshold. Doc-only for parsing.
@@ -426,6 +437,16 @@ func WebhookEventWalletOngoingBalanceDropped() {}
 // @Router /webhook-events/wallet.ongoing_balance.recovered [post]
 func WebhookEventWalletOngoingBalanceRecovered() {}
 
+// WebhookEventWalletOngoingBalanceUpdated godoc
+// @Summary wallet.ongoing_balance.updated
+// @Description Fired when a wallet's ongoing (real-time) balance changes. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Router /webhook-events/wallet.ongoing_balance.updated [post]
+func WebhookEventWalletOngoingBalanceUpdated() {}
+
 // WebhookEventCreditNoteCreated godoc
 // @Summary credit_note.created
 // @Description Fired when a new credit note is created. Doc-only for parsing.
@@ -445,3 +466,13 @@ func WebhookEventCreditNoteCreated() {}
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.updated [post]
 func WebhookEventCreditNoteUpdated() {}
+
+// WebhookEventEventRejected godoc
+// @Summary event.rejected
+// @Description Fired when an ingested usage event produces no meter usage — either no meter is registered for its event name, or meters exist for the name but the event matched none of their filters. Throttled to at most once per configured window per event name. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.RejectedEventWebhookPayload "Webhook payload"
+// @Router /webhook-events/event.rejected [post]
+func WebhookEventEventRejected() {}

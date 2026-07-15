@@ -14,6 +14,7 @@ type CreditGrantScope string
 const (
 	CreditGrantScopePlan         CreditGrantScope = "PLAN"
 	CreditGrantScopeSubscription CreditGrantScope = "SUBSCRIPTION"
+	CreditGrantScopeAddon        CreditGrantScope = "ADDON"
 )
 
 // Validate validates the credit grant scope
@@ -21,6 +22,7 @@ func (s CreditGrantScope) Validate() error {
 	allowedValues := []CreditGrantScope{
 		CreditGrantScopePlan,
 		CreditGrantScopeSubscription,
+		CreditGrantScopeAddon,
 	}
 
 	if !lo.Contains(allowedValues, s) {
@@ -175,6 +177,7 @@ type CreditGrantFilter struct {
 	// Specific filters for credit grants
 	PlanIDs         []string          `form:"plan_ids" json:"plan_ids,omitempty"`
 	SubscriptionIDs []string          `form:"subscription_ids" json:"subscription_ids,omitempty"`
+	AddonIDs        []string          `form:"addon_ids" json:"addon_ids,omitempty"`
 	Scope           *CreditGrantScope `form:"scope" json:"scope,omitempty"`
 	CreditGrantIDs  []string          `form:"credit_grant_ids" json:"credit_grant_ids,omitempty"`
 }

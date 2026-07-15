@@ -73,13 +73,13 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 
 	switch eventType {
 	case EventPaymentCaptured:
-		return h.handlePaymentCaptured(ctx, event, environmentID, services)
+		return h.handlePaymentCaptured(ctx, event, services)
 	case EventPaymentFailed:
-		return h.handlePaymentFailed(ctx, event, environmentID, services)
+		return h.handlePaymentFailed(ctx, event, services)
 	case EventPaymentLinkPaid:
-		return h.handlePaymentLinkPaid(ctx, event, environmentID, services)
+		return h.handlePaymentLinkPaid(ctx, event, services)
 	case EventPaymentLinkCancelled, EventPaymentLinkExpired:
-		return h.handlePaymentLinkFailed(ctx, event, environmentID, services)
+		return h.handlePaymentLinkFailed(ctx, event, services)
 	default:
 		h.logger.Info(ctx, "unhandled Razorpay webhook event type", "type", event.Event)
 		return nil // Not an error, just unhandled
@@ -87,7 +87,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 }
 
 // handlePaymentCaptured handles payment.captured webhook
-func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	payment := event.Payload.Payment.Entity
 
 	h.logger.Info(ctx, "received payment.captured webhook",
@@ -95,7 +95,6 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"amount", payment.Amount,
 		"currency", payment.Currency,
 		"status", payment.Status,
-		"environment_id", environmentID,
 	)
 
 	// Get FlexPrice payment ID from notes
@@ -150,7 +149,12 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	// Update payment status to succeeded
+	// Mandate checkouts only send payment.captured — handle like payment_link.paid below.
+	if h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, payment.ID, services) {
+		return nil
+	}
+
+	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
 	now := time.Now()
 
@@ -218,7 +222,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 }
 
 // handlePaymentFailed handles payment.failed webhook
-func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	payment := event.Payload.Payment.Entity
 
 	h.logger.Info(ctx, "received payment.failed webhook",
@@ -228,7 +232,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"status", payment.Status,
 		"error_code", payment.ErrorCode,
 		"error_description", payment.ErrorDescription,
-		"environment_id", environmentID,
 	)
 
 	// Get FlexPrice payment ID from notes
@@ -321,7 +324,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 // handlePaymentLinkPaid processes Razorpay payment_link.paid webhook events for
 // FlexPrice-initiated checkout sessions.
-func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
 		h.logger.Info(ctx, "payment_link.paid webhook missing payment_link ID", "event_type", event.Event, "payment_link_id", paymentLinkID)
@@ -347,34 +350,13 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	filter := types.NewDefaultCheckoutSessionFilter()
-	filter.CheckoutPaymentIDs = []string{mappings.Items[0].EntityID}
-	filter.CheckoutStatuses = []types.CheckoutStatus{types.CheckoutStatusPending}
-	filter.Limit = lo.ToPtr(1)
-	filter.Status = lo.ToPtr(types.StatusPublished)
-
-	sessions, err := services.CheckoutSessionService.List(ctx, filter)
-
-	if err != nil || sessions == nil || len(sessions.Items) == 0 {
-		return nil
-	}
-
-	sessionID := sessions.Items[0].ID
-	req := &types.CheckoutProviderResult{
-		ProviderPaymentIntentID: event.Payload.Payment.Entity.ID,
-	}
-	err = services.CheckoutSessionService.CompleteCheckoutSession(ctx, sessionID, req)
-
-	if err != nil {
-		h.logger.Error(ctx, "failed to complete checkout session", "error", err, "session_id", sessionID)
-		return err
-	}
+	h.handleCheckoutSessionForPayment(ctx, mappings.Items[0].EntityID, event.Payload.Payment.Entity.ID, services)
 	return nil
 }
 
 // handlePaymentLinkFailed processes payment_link.cancelled and payment_link.expired webhook events.
 // If a pending checkout session is associated with the payment link, it is cleaned up as failed.
-func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
 		h.logger.Info(ctx, "payment link webhook missing payment_link ID", "event_type", event.Event)
@@ -423,6 +405,69 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	}
 
 	return nil
+}
+
+// handleCheckoutSessionForPayment completes pending checkout sessions and refunds
+// expired/failed ones (the session ended without delivering the product). Returns
+// false if this payment has no checkout session (i.e. it's a standalone payment).
+func (h *Handler) handleCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	razorpayPaymentID string,
+	services *ServiceDependencies,
+) bool {
+	session := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
+	if session == nil {
+		return false
+	}
+
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusPending:
+		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: razorpayPaymentID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", razorpayPaymentID,
+			)
+		}
+	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
+		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
+			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"razorpay_payment_id", razorpayPaymentID,
+			)
+		}
+	default:
+		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
+			"session_id", session.ID,
+			"session_status", session.CheckoutStatus,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID,
+		)
+	}
+	return true
+}
+
+// Checkout session for this payment ID, any status. Nil if not a checkout.
+func (h *Handler) findCheckoutSessionForPayment(
+	ctx context.Context,
+	flexpricePaymentID string,
+	services *ServiceDependencies,
+) *dto.CheckoutSessionResponse {
+	filter := types.NewDefaultCheckoutSessionFilter()
+	filter.CheckoutPaymentIDs = []string{flexpricePaymentID}
+	filter.Limit = lo.ToPtr(1)
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	sessions, err := services.CheckoutSessionService.List(ctx, filter)
+	if err != nil || sessions == nil || len(sessions.Items) == 0 {
+		return nil
+	}
+	return sessions.Items[0]
 }
 
 // convertPaymentToMap converts a Payment struct to a map using JSON marshaling

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -26,6 +27,7 @@ type CreditGrantQuery struct {
 	predicates       []predicate.CreditGrant
 	withPlan         *PlanQuery
 	withSubscription *SubscriptionQuery
+	withAddon        *AddonQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -99,6 +101,28 @@ func (cgq *CreditGrantQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, selector),
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.SubscriptionTable, creditgrant.SubscriptionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(cgq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAddon chains the current query on the "addon" edge.
+func (cgq *CreditGrantQuery) QueryAddon() *AddonQuery {
+	query := (&AddonClient{config: cgq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := cgq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := cgq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(creditgrant.Table, creditgrant.FieldID, selector),
+			sqlgraph.To(addon.Table, addon.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, creditgrant.AddonTable, creditgrant.AddonColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(cgq.driver.Dialect(), step)
 		return fromU, nil
@@ -300,6 +324,7 @@ func (cgq *CreditGrantQuery) Clone() *CreditGrantQuery {
 		predicates:       append([]predicate.CreditGrant{}, cgq.predicates...),
 		withPlan:         cgq.withPlan.Clone(),
 		withSubscription: cgq.withSubscription.Clone(),
+		withAddon:        cgq.withAddon.Clone(),
 		// clone intermediate query.
 		sql:  cgq.sql.Clone(),
 		path: cgq.path,
@@ -325,6 +350,17 @@ func (cgq *CreditGrantQuery) WithSubscription(opts ...func(*SubscriptionQuery)) 
 		opt(query)
 	}
 	cgq.withSubscription = query
+	return cgq
+}
+
+// WithAddon tells the query-builder to eager-load the nodes that are connected to
+// the "addon" edge. The optional arguments are used to configure the query builder of the edge.
+func (cgq *CreditGrantQuery) WithAddon(opts ...func(*AddonQuery)) *CreditGrantQuery {
+	query := (&AddonClient{config: cgq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	cgq.withAddon = query
 	return cgq
 }
 
@@ -406,9 +442,10 @@ func (cgq *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	var (
 		nodes       = []*CreditGrant{}
 		_spec       = cgq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			cgq.withPlan != nil,
 			cgq.withSubscription != nil,
+			cgq.withAddon != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -438,6 +475,12 @@ func (cgq *CreditGrantQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	if query := cgq.withSubscription; query != nil {
 		if err := cgq.loadSubscription(ctx, query, nodes, nil,
 			func(n *CreditGrant, e *Subscription) { n.Edges.Subscription = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := cgq.withAddon; query != nil {
+		if err := cgq.loadAddon(ctx, query, nodes, nil,
+			func(n *CreditGrant, e *Addon) { n.Edges.Addon = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -508,6 +551,38 @@ func (cgq *CreditGrantQuery) loadSubscription(ctx context.Context, query *Subscr
 	}
 	return nil
 }
+func (cgq *CreditGrantQuery) loadAddon(ctx context.Context, query *AddonQuery, nodes []*CreditGrant, init func(*CreditGrant), assign func(*CreditGrant, *Addon)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*CreditGrant)
+	for i := range nodes {
+		if nodes[i].AddonID == nil {
+			continue
+		}
+		fk := *nodes[i].AddonID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(addon.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "addon_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (cgq *CreditGrantQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := cgq.querySpec()
@@ -539,6 +614,9 @@ func (cgq *CreditGrantQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if cgq.withSubscription != nil {
 			_spec.Node.AddColumnOnce(creditgrant.FieldSubscriptionID)
+		}
+		if cgq.withAddon != nil {
+			_spec.Node.AddColumnOnce(creditgrant.FieldAddonID)
 		}
 	}
 	if ps := cgq.predicates; len(ps) > 0 {

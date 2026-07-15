@@ -15,6 +15,9 @@ type AddonAssociation func(*sql.Selector)
 // AlertLogs is the predicate function for alertlogs builders.
 type AlertLogs func(*sql.Selector)
 
+// AlertSettings is the predicate function for alertsettings builders.
+type AlertSettings func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
@@ -102,6 +105,9 @@ type Price func(*sql.Selector)
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
 
+// Refund is the predicate function for refund builders.
+type Refund func(*sql.Selector)
+
 // ScheduledTask is the predicate function for scheduledtask builders.
 type ScheduledTask func(*sql.Selector)
 
@@ -143,6 +149,9 @@ type TaxRate func(*sql.Selector)
 
 // Tenant is the predicate function for tenant builders.
 type Tenant func(*sql.Selector)
+
+// UsageRecord is the predicate function for usagerecord builders.
+type UsageRecord func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

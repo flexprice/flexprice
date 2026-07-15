@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -11,12 +13,14 @@ import (
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"go.temporal.io/api/serviceerror"
 )
 
-// runMeterUsagePostInsertSideEffects runs customer resolution/onboarding and wallet
-// balance alert publishing after meter_usage rows are written to ClickHouse.
-// Failures are logged only; the Kafka message is not retried for side-effect errors.
-func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx context.Context, event *events.Event) {
+// runMeterUsagePostInsertSideEffects runs customer resolution/onboarding and
+// alert dispatch after meter_usage rows are written to ClickHouse. Failures are
+// logged only; the Kafka message is not retried for side-effect errors.
+func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx context.Context, event *events.Event, records []*events.MeterUsage) {
 	if event == nil || event.ExternalCustomerID == "" {
 		return
 	}
@@ -31,7 +35,7 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		return
 	}
 	if cust == nil {
-		s.Logger.Debug(ctx, "no customer resolved after meter usage insert, skipping wallet alert",
+		s.Logger.Debug(ctx, "no customer resolved after meter usage insert, skipping alerts",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 		)
@@ -42,14 +46,88 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		event.CustomerID = cust.ID
 	}
 
-	if !s.Config.MeterUsageTracking.WalletAlertPushEnabled {
-		s.Logger.Debug(ctx, "wallet balance alert push disabled for meter usage tracking",
-			"event_id", event.ID,
+	// When the debouncer is on it supersedes the Kafka wallet-alert path and the
+	// inline spend-breach check — a single Temporal workflow (deduped per customer)
+	// runs both checks once per debounce window. When off, the legacy paths stay
+	// available behind their existing flags so rollout can be flipped without a
+	// code change.
+	if s.Config.MeterUsageTracking.AlertDebounceEnabled {
+		s.scheduleUsageAlertWorkflow(ctx, cust)
+		return
+	}
+
+	if s.Config.MeterUsageTracking.WalletAlertPushEnabled {
+		s.publishWalletBalanceAlert(ctx, event, cust)
+	}
+
+	if s.Config.MeterUsageTracking.SpendAlertWebhookEnabled {
+		meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
+		NewAlertService(s.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, cust, meterIDs)
+	}
+}
+
+// scheduleUsageAlertWorkflow starts a debounced Temporal workflow that runs
+// the alert evaluation (spend + wallet balance) for the customer after
+// Config.AlertDebounceWindow. The workflow ID is stable per (tenant, environment,
+// customer); when a workflow with that ID is already running (armed but not yet
+// fired) Temporal rejects the start with WorkflowExecutionAlreadyStarted — that
+// error IS the dedupe signal and is swallowed.
+func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Context, cust *customer.Customer) {
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Debug(ctx, "temporal service not available, skipping usage alert workflow",
 			"customer_id", cust.ID,
 		)
 		return
 	}
 
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	workflowID := fmt.Sprintf("%s_%s_%s_%s_%s",
+		types.UUID_PREFIX_WORKFLOW,
+		types.TemporalUsageAlertWorkflow,
+		tenantID,
+		envID,
+		cust.ID,
+	)
+
+	options := workflowModels.StartWorkflowOptions{
+		ID:         workflowID,
+		TaskQueue:  types.TemporalUsageAlertWorkflow.TaskQueueName(),
+		StartDelay: s.Config.MeterUsageTracking.AlertDebounceWindow,
+	}
+	input := workflowModels.UsageAlertWorkflowInput{
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+		CustomerID:    cust.ID,
+	}
+
+	if _, err := temporalSvc.StartWorkflow(ctx, options, types.TemporalUsageAlertWorkflow, input); err != nil {
+		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+		if errors.As(err, &alreadyStarted) {
+			s.Logger.Debug(ctx, "usage alert workflow already scheduled for customer, absorbed",
+				"customer_id", cust.ID,
+				"workflow_id", workflowID,
+			)
+			return
+		}
+		s.Logger.Error(ctx, "failed to schedule usage alert workflow",
+			"error", err,
+			"customer_id", cust.ID,
+			"workflow_id", workflowID,
+		)
+		return
+	}
+
+	s.Logger.Debug(ctx, "usage alert workflow scheduled",
+		"customer_id", cust.ID,
+		"workflow_id", workflowID,
+		"fires_in", s.Config.MeterUsageTracking.AlertDebounceWindow.String(),
+	)
+}
+
+// publishWalletBalanceAlert publishes a wallet balance alert for the given event and customer.
+func (s *meterUsageTrackingService) publishWalletBalanceAlert(ctx context.Context, event *events.Event, cust *customer.Customer) {
 	alertEvent := &wallet.WalletBalanceAlertEvent{
 		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
 		Timestamp:             time.Now().UTC(),
@@ -108,11 +186,7 @@ func ResolveCustomerForUsageEvent(
 
 // executeCustomerOnboardingForEvent runs the synchronous CustomerOnboarding workflow
 // when the tenant has customer_onboarding_config with create_customer as the first action.
-func executeCustomerOnboardingForEvent(
-	ctx context.Context,
-	params ServiceParams,
-	event *events.Event,
-) (*customer.Customer, error) {
+func executeCustomerOnboardingForEvent(ctx context.Context, params ServiceParams, event *events.Event) (*customer.Customer, error) {
 	settingsService := &settingsService{ServiceParams: params}
 	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](
 		settingsService,

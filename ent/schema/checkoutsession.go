@@ -67,6 +67,10 @@ func (CheckoutSession) Fields() []ent.Field {
 		field.JSON("configuration", types.CheckoutConfiguration{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}),
 
+		field.JSON("payment_provider_config", &types.CheckoutPaymentProviderConfig{}).
+			SchemaType(map[string]string{"postgres": "jsonb"}).
+			Optional(),
+
 		field.JSON("result", &types.CheckoutResult{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional(),
@@ -107,7 +111,7 @@ func (CheckoutSession) Fields() []ent.Field {
 		field.Text("failure_reason").
 			Optional().
 			Nillable(),
-			
+
 		field.JSON("metadata", map[string]string{}).
 			SchemaType(map[string]string{"postgres": "jsonb"}).
 			Optional(),

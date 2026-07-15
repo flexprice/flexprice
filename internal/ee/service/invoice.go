@@ -19,8 +19,8 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
+	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
-	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -70,6 +70,7 @@ type InvoiceService interface {
 	SyncInvoiceToChargebeeIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, invoiceID string) error
+	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
 
@@ -131,7 +132,27 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	req.PreparedTaxRates = finalTaxRates
 
 	// Delegate to CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-	return s.CreateInvoice(ctx, req)
+	resp, err := s.CreateInvoice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ForceSyncInvoice {
+		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice); err != nil {
+			s.Logger.Error(ctx, "force sync to Moyasar failed",
+				"error", err, "invoice_id", resp.ID)
+			return resp, nil
+		}
+		inv, err := s.InvoiceRepo.Get(ctx, resp.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to reload invoice after Moyasar sync",
+				"error", err, "invoice_id", resp.ID)
+			return resp, nil
+		}
+		resp = dto.NewInvoiceResponse(inv)
+	}
+
+	return resp, nil
 }
 
 // CreateEmptyDraftInvoice creates a zero-dollar draft invoice without line items or invoice number.
@@ -988,7 +1009,6 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
-
 	return nil
 }
 
@@ -1303,89 +1323,65 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	return nil
 }
 
-// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay if Razorpay connection is enabled.
+// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay unless it's already
+// paid, has zero balance, or Razorpay sync isn't enabled for the tenant.
 func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 
-	// Check if Razorpay connection exists
+	if inv.AmountRemaining.IsZero() {
+		s.Logger.Debug(ctx, "invoice amount remaining is zero, skipping Razorpay sync",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
+		inv.PaymentStatus == types.PaymentStatusOverpaid {
+		s.Logger.Debug(ctx, "invoice already paid, skipping Razorpay sync",
+			"invoice_id", inv.ID, "payment_status", inv.PaymentStatus)
+		return nil
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderRazorpay)
 	if err != nil || conn == nil {
 		s.Logger.Debug(ctx, "Razorpay connection not available, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Not an error, just skip sync
+			"invoice_id", inv.ID, "error", err)
+		return nil
 	}
-
-	// Check if invoice sync is enabled for this connection
 	if !conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"connection_id", conn.ID)
-		return nil // Not an error, just skip sync
+		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping",
+			"invoice_id", inv.ID, "connection_id", conn.ID)
+		return nil
 	}
 
-	// Get Razorpay integration
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get Razorpay integration, skipping invoice sync",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Don't fail the entire process, just skip invoice sync
+			"invoice_id", inv.ID, "error", err)
+		return nil
 	}
 
-	s.Logger.Info(ctx, "syncing invoice to Razorpay",
-		"invoice_id", inv.ID,
-		"customer_id", inv.CustomerID)
-
-	// Create customer service instance
 	customerService := NewCustomerService(s.ServiceParams)
-
-	// Create sync request
-	syncRequest := razorpay.RazorpayInvoiceSyncRequest{
-		InvoiceID: inv.ID,
-	}
-
-	// Perform the sync
-	syncResponse, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoiceToRazorpay(ctx, syncRequest, customerService)
+	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoice(ctx, inv, customerService)
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Info(ctx, "successfully synced invoice to Razorpay",
-		"invoice_id", inv.ID,
-		"razorpay_invoice_id", syncResponse.RazorpayInvoiceID,
-		"status", syncResponse.Status,
-		"payment_url", syncResponse.ShortURL)
-
-	// Save Razorpay URLs in invoice metadata
-	if syncResponse.ShortURL != "" {
+	// Only the send-invoice path needs the URL persisted; auto-charge is reconciled via webhook.
+	if !result.AutoCharged && result.ShortURL != "" {
 		metadata := inv.Metadata
 		if metadata == nil {
 			metadata = types.Metadata{}
 		}
+		metadata["razorpay_invoice_id"] = result.RazorpayInvoiceID
+		metadata["razorpay_payment_url"] = result.ShortURL
 
-		metadata["razorpay_invoice_id"] = syncResponse.RazorpayInvoiceID
-		metadata["razorpay_payment_url"] = syncResponse.ShortURL
-
-		// Update invoice with new metadata
-		updateReq := dto.UpdateInvoiceRequest{
-			Metadata: &metadata,
-		}
-
-		_, err = s.UpdateInvoice(ctx, inv.ID, updateReq)
-		if err != nil {
-			s.Logger.Info(ctx, "failed to update invoice metadata with Razorpay URLs",
-				"error", err,
-				"invoice_id", inv.ID)
-			// Don't fail the sync, just log the warning
-		} else {
-			s.Logger.Info(ctx, "saved Razorpay URLs in invoice metadata",
-				"invoice_id", inv.ID,
-				"razorpay_invoice_id", syncResponse.RazorpayInvoiceID,
-				"payment_url", syncResponse.ShortURL)
+		_, updateErr := s.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{Metadata: &metadata})
+		if updateErr != nil {
+			s.Logger.Error(ctx, "failed to update invoice metadata with Razorpay URLs (non-fatal)",
+				"error", updateErr, "invoice_id", inv.ID)
 		}
 	}
 
@@ -1552,6 +1548,70 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 		"invoice_id", inv.ID,
 		"zoho_invoice_id", resp.ZohoInvoiceID,
 		"zoho_status", resp.Status)
+	return nil
+}
+
+// SyncInvoiceToMoyasarIfEnabled syncs the invoice to Moyasar if a Moyasar connection
+// is configured with outbound invoice sync enabled. If the customer has an active
+// saved payment method (token), the invoice is also charged automatically; otherwise
+// the invoice is synced as a Moyasar invoice link so the customer can pay manually.
+func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
+				"invoice_id", inv.ID)
+			return nil // Not an error, just skip sync
+		}
+		return err // Genuine failure (DB error, etc.) — let the caller retry
+	}
+	if conn == nil {
+		s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
+			"invoice_id", inv.ID)
+		return nil // Not an error, just skip sync
+	}
+	if !conn.IsInvoiceOutboundEnabled() {
+		s.Logger.Debug(ctx, "invoice sync disabled for Moyasar connection, skipping invoice sync",
+			"invoice_id", inv.ID, "connection_id", conn.ID)
+		return nil // Not an error, just skip sync
+	}
+
+	moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
+	if err != nil {
+		return err // Genuine failure — let the caller retry
+	}
+
+	customerService := NewCustomerService(s.ServiceParams)
+	syncResp, err := moyasarIntegration.InvoiceSyncSvc.SyncInvoiceToMoyasar(
+		ctx,
+		moyasar.MoyasarInvoiceSyncRequest{InvoiceID: inv.ID},
+		customerService,
+	)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "successfully synced invoice to Moyasar",
+		"invoice_id", inv.ID,
+		"moyasar_invoice_id", syncResp.MoyasarInvoiceID)
+
+	if inv.AmountDue.IsZero() {
+		s.Logger.Debug(ctx, "invoice amount is zero, skipping Moyasar autopay",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	charged, err := moyasarIntegration.ChargeInvoiceWithToken(
+		ctx, inv.ID, inv.CustomerID, inv.AmountDue, inv.Currency, syncResp.MoyasarInvoiceID,
+	)
+	if err != nil {
+		return err
+	}
+	if charged {
+		s.Logger.Info(ctx, "invoice charged via saved Moyasar token, webhook will confirm",
+			"invoice_id", inv.ID, "moyasar_invoice_id", syncResp.MoyasarInvoiceID)
+	}
+
 	return nil
 }
 

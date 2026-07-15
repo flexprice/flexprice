@@ -307,7 +307,7 @@ spec:
                 exit 1
               fi
               echo "Using: ${MIGRATE_BINARY}"
-              ${MIGRATE_BINARY} --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
+              ${MIGRATE_BINARY} postgres --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
               echo "✅ Ent migrations complete"
           env:
             {{- include "flexprice.env" . | nindent 12 }}

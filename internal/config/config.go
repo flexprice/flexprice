@@ -163,6 +163,24 @@ type KafkaConfig struct {
 	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string   `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	// TopicsDefaults/Topics describe the full desired topic set for `migrate kafka`
+	// (partition counts, replication factor, retention). Consumed only by
+	// cmd/migrate (kafka subcommand), not by the server/consumer/worker processes. A deploy's
+	// FLEXPRICE_KAFKA_TOPICS env var (JSON), when set, FULLY REPLACES this block
+	// (no merge) — see internal/kafka/topicspec.
+	TopicsDefaults KafkaTopicsDefaults       `mapstructure:"topics_defaults"`
+	Topics         map[string]KafkaTopicSpec `mapstructure:"topics"`
+}
+
+type KafkaTopicsDefaults struct {
+	ReplicationFactor int16 `mapstructure:"replication_factor"`
+	RetentionMs       int64 `mapstructure:"retention_ms"`
+}
+
+type KafkaTopicSpec struct {
+	Partitions        int    `mapstructure:"partitions"`
+	ReplicationFactor *int16 `mapstructure:"replication_factor"`
+	RetentionMs       *int64 `mapstructure:"retention_ms"`
 }
 
 type ClickHouseConfig struct {
@@ -471,6 +489,18 @@ type MeterUsageTrackingConfig struct {
 	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
 	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
+	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`
+
+	// event.rejected webhook (fired when an event produces no meter usage); opt-in.
+	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
+	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
+	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+
+	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
+	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
+	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
+	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
+	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

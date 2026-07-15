@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -17,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -106,6 +108,104 @@ func (s *SubscriptionServiceSuite) TestPaymentBehaviorValidation() {
 			}
 		})
 	}
+}
+
+// A recurring credit grant sourced from a ONETIME (time-bounded) addon must be
+// capped at the addon association's end date, not the subscription end date, so
+// the grant stops applying once the addon's single period is over.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeAddonCapsGrantEndDate() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	// Addon carrying a recurring ADDON-scoped credit grant template.
+	addonID := "addon_cg_endcap"
+	a := &addon.Addon{
+		ID:          addonID,
+		LookupKey:   addonID,
+		Name:        "Credit Booster",
+		Description: "Recurring credits addon",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+
+	// Addon needs at least one price so attach can create a line item.
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_addon_cg_endcap",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	// Customer wallet so the eager grant application has a top-up target.
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, &wallet.Wallet{
+		ID:                  "wallet_cg_endcap",
+		CustomerID:          s.testData.customer.ID,
+		Name:                "Test Wallet",
+		Currency:            "usd",
+		WalletStatus:        types.WalletStatusActive,
+		ConversionRate:      decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}))
+
+	cgSvc := NewCreditGrantService(subService.ServiceParams)
+	_, err := cgSvc.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+		Name:           "Addon Monthly Credits",
+		Scope:          types.CreditGrantScopeAddon,
+		AddonID:        &addonID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeBillingCycle,
+		Priority:       lo.ToPtr(1),
+	})
+	s.NoError(err)
+
+	// Subscription is open-ended (EndDate == nil): before the fix, the materialized
+	// grant would inherit a nil end and recur forever.
+	s.Nil(s.testData.subscription.EndDate)
+
+	// Attach as a ONETIME addon -> the addon association gets a bounded EndDate.
+	now := s.testData.now
+	_, err = s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:   addonID,
+		Cadence:   types.AddonCadenceOnetime,
+		StartDate: &now,
+	})
+	s.NoError(err)
+
+	expectedEnd, err := addonPeriodEndForStartDate(s.testData.subscription, now)
+	s.NoError(err)
+
+	// Find the materialized SUBSCRIPTION-scoped grant carrying addon provenance.
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	grants, err := subService.CreditGrantRepo.List(ctx, filter)
+	s.NoError(err)
+
+	var materialized *creditgrant.CreditGrant
+	for _, g := range grants {
+		if g.AddonID != nil && *g.AddonID == addonID && g.Scope == types.CreditGrantScopeSubscription {
+			materialized = g
+			break
+		}
+	}
+	s.NotNil(materialized, "expected a materialized addon-sourced subscription grant")
+	if materialized == nil {
+		return
+	}
+	s.NotNil(materialized.EndDate, "addon-sourced grant must have a bounded end date")
+	s.WithinDuration(expectedEnd, lo.FromPtr(materialized.EndDate), time.Second,
+		"grant end date must equal the addon association end date, not the subscription end")
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
@@ -280,6 +380,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
+		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
@@ -4318,6 +4420,205 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 	})
 }
 
+func (s *SubscriptionServiceSuite) TestCancelSubscription_ScheduledDoesNotEagerlyTerminateResources() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_scheduled_defer_termination",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	// Attach an addon so we can verify its association/line item survive scheduling.
+	addonID := "addon_defer_termination"
+	priceID := "price_addon_defer_termination"
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Addon for defer test",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:   addonID,
+		StartDate: &addAddonNow,
+	})
+	s.NoError(err)
+
+	// Attach a subscription-scoped credit grant so we can verify it survives scheduling too.
+	creditGrantService := NewCreditGrantService(subService.ServiceParams)
+	creditGrantResp, err := creditGrantService.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+		Name:           "Defer Termination Grant",
+		Scope:          types.CreditGrantScopeSubscription,
+		SubscriptionID: &sub.ID,
+		Credits:        decimal.NewFromInt(50),
+		Cadence:        types.CreditGrantCadenceOneTime,
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		StartDate:      &s.testData.now,
+	})
+	s.NoError(err)
+
+	// Schedule an end-of-period cancellation.
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_defer_termination",
+	})
+	s.NoError(err)
+
+	// Plan/subscription-scoped line items must remain untouched.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	s.NotEmpty(lineItems)
+	for _, li := range lineItems {
+		s.True(li.EndDate.IsZero(), "line item %s should not be terminated while cancellation is only scheduled", li.ID)
+	}
+
+	// Addon association must remain active.
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaFilter.EntityIDs = []string{sub.ID}
+	aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.NotEmpty(associations)
+	for _, aa := range associations {
+		s.Equal(types.AddonStatusActive, aa.AddonStatus, "addon association should remain active while cancellation is only scheduled")
+		s.Nil(aa.EndDate)
+	}
+
+	// Credit grant must remain un-terminated.
+	gotGrant, err := creditGrantService.GetCreditGrant(ctx, creditGrantResp.CreditGrant.ID)
+	s.NoError(err)
+	s.Nil(gotGrant.EndDate, "credit grant should not be terminated while cancellation is only scheduled")
+}
+
+func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_IdempotentOnRetry() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_terminate_idempotent",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	addonID := "addon_terminate_idempotent"
+	priceID := "price_addon_terminate_idempotent"
+	a := &addon.Addon{ID: addonID, LookupKey: addonID, Name: "Addon", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: &addAddonNow})
+	s.NoError(err)
+
+	creditGrantService := NewCreditGrantService(subService.ServiceParams)
+	creditGrantResp, err := creditGrantService.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+		Name:           "Idempotency Test Grant",
+		Scope:          types.CreditGrantScopeSubscription,
+		SubscriptionID: &sub.ID,
+		Credits:        decimal.NewFromInt(25),
+		Cadence:        types.CreditGrantCadenceOneTime,
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+		Priority:       lo.ToPtr(1),
+		PlanID:         &s.testData.plan.ID,
+		StartDate:      &s.testData.now,
+	})
+	s.NoError(err)
+
+	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
+
+	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID:     sub.ID,
+		EffectiveDate:      effectiveDate,
+		CancellationReason: "idempotency_test",
+	}))
+	// Calling it again with the same effectiveDate must not error, even though every
+	// resource is already terminated (repo-level guards make this a no-op the second time).
+	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID:     sub.ID,
+		EffectiveDate:      effectiveDate,
+		CancellationReason: "idempotency_test",
+	}))
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	for _, li := range lineItems {
+		s.False(li.EndDate.IsZero())
+		s.True(li.EndDate.Equal(effectiveDate))
+	}
+
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaFilter.EntityIDs = []string{sub.ID}
+	aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associations)
+	s.Require().NotNil(associations[0].EndDate)
+	s.True(associations[0].EndDate.Equal(effectiveDate), "addon association EndDate must equal the exact effective date, not just be non-nil")
+
+	gotGrant, err := creditGrantService.GetCreditGrant(ctx, creditGrantResp.CreditGrant.ID)
+	s.NoError(err)
+	s.Require().NotNil(gotGrant.EndDate)
+	s.True(gotGrant.EndDate.Equal(effectiveDate), "credit grant EndDate must equal the exact effective date, not just be non-nil")
+}
+
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 	ctx := s.GetContext()
 	futureDate := s.testData.now.Add(15 * 24 * time.Hour)
@@ -7613,4 +7914,249 @@ func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_OnetimeAddon_En
 	s.Require().Len(associations, 1)
 	s.Require().NotNil(associations[0].EndDate)
 	s.True(associations[0].EndDate.Equal(expectedEnd), "one-time addon association EndDate should be recomputed from activation start date")
+}
+
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledCancellationTermination() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_fire_scheduled_cancellation",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(24 * time.Hour),
+		BillingAnchor:      s.testData.now.Add(-24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	// Attach an addon so we can verify it gets terminated at fire time, not before.
+	addonID := "addon_fire_scheduled_cancellation"
+	priceID := "price_addon_fire_scheduled_cancellation"
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:   addonID,
+		StartDate: &addAddonNow,
+	})
+	s.NoError(err)
+
+	// Schedule an end-of-period cancellation effective at CurrentPeriodEnd.
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_fire_scheduled_cancellation",
+	})
+	s.NoError(err)
+
+	scheduledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.True(scheduledSub.CancelAtPeriodEnd)
+	s.Require().NotNil(scheduledSub.CancelAt)
+
+	// Sanity check: still untouched immediately after scheduling.
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaFilter.EntityIDs = []string{sub.ID}
+	aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	associationsBefore, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associationsBefore)
+	s.Equal(types.AddonStatusActive, associationsBefore[0].AddonStatus)
+
+	// Drive period processing past the effective cancellation date.
+	processAt := scheduledSub.CancelAt.Add(time.Hour)
+	err = subService.processSubscriptionPeriod(ctx, scheduledSub, processAt)
+	s.NoError(err)
+
+	firedSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, firedSub.SubscriptionStatus)
+
+	// Line items must now be terminated, at the exact effective date.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	s.NotEmpty(lineItems)
+	for _, li := range lineItems {
+		s.False(li.EndDate.IsZero(), "line item %s should be terminated once the cancellation has fired", li.ID)
+		s.True(li.EndDate.Equal(*scheduledSub.CancelAt), "line item %s EndDate should equal the exact effective date", li.ID)
+	}
+
+	// Addon association must now be cancelled, at the exact effective date.
+	associationsAfter, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.NoError(err)
+	s.Require().NotEmpty(associationsAfter)
+	s.Equal(types.AddonStatusCancelled, associationsAfter[0].AddonStatus)
+	s.Require().NotNil(associationsAfter[0].EndDate)
+	s.True(associationsAfter[0].EndDate.Equal(*scheduledSub.CancelAt), "addon association EndDate should equal the exact effective date")
+
+	// The cancellation schedule must be marked executed.
+	schedules, err := s.GetStores().SubscriptionScheduleRepo.GetBySubscriptionID(ctx, sub.ID)
+	s.NoError(err)
+	s.Require().Len(schedules, 1)
+	s.Equal(types.ScheduleStatusExecuted, schedules[0].Status)
+}
+
+func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertRestoresCancelledAtAndLeavesResourcesUntouched() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_revert_cancelled_at",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeEndOfPeriod,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_revert",
+	})
+	s.NoError(err)
+
+	scheduledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.True(scheduledSub.CancelAtPeriodEnd)
+	s.NotNil(scheduledSub.CancelAt)
+	s.NotNil(scheduledSub.CancelledAt)
+
+	changeService := NewSubscriptionChangeService(subService.ServiceParams)
+	scheduleService := NewSubscriptionScheduleService(subService.ServiceParams, changeService)
+	err = scheduleService.CancelBySubscriptionAndType(ctx, sub.ID, types.SubscriptionScheduleChangeTypeCancellation)
+	s.NoError(err)
+
+	revertedSub, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusActive, revertedSub.SubscriptionStatus)
+	s.False(revertedSub.CancelAtPeriodEnd)
+	s.Nil(revertedSub.CancelAt)
+	s.Nil(revertedSub.EndDate)
+	s.Nil(revertedSub.CancelledAt, "cancelled_at must be cleared on revert, otherwise it permanently blocks future plan-change schedules")
+
+	// Line items were never touched to begin with (fixed in Task 1), so there's
+	// nothing left to restore here — this just confirms they're still fine post-revert.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	for _, li := range lineItems {
+		s.True(li.EndDate.IsZero())
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertCascadesToInheritedSubscriptions() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_revert_cascade",
+		Name:       "Child Revert Cascade",
+		Email:      "child-revert-cascade@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	// Schedule a scheduled_date cancellation on the parent — this type sets EndDate
+	// immediately too, giving us a non-nil field to assert cascaded and reverted on the child.
+	effectiveDate := parentSub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	_, err := s.service.CancelSubscription(ctx, parentSub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeScheduledDate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_revert_cascade",
+		CancelAt:          &effectiveDate,
+	})
+	s.NoError(err)
+
+	// The cascade must have already propagated to the child at scheduling time.
+	scheduledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, inherited.ID)
+	s.NoError(err)
+	s.True(scheduledChild.CancelAtPeriodEnd)
+	s.NotNil(scheduledChild.CancelAt)
+	s.NotNil(scheduledChild.CancelledAt)
+	s.NotNil(scheduledChild.EndDate)
+
+	// Revert the parent's schedule.
+	changeService := NewSubscriptionChangeService(subService.ServiceParams)
+	scheduleService := NewSubscriptionScheduleService(subService.ServiceParams, changeService)
+	err = scheduleService.CancelBySubscriptionAndType(ctx, parentSub.ID, types.SubscriptionScheduleChangeTypeCancellation)
+	s.NoError(err)
+
+	// The child must be reverted too, not just the parent.
+	revertedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, inherited.ID)
+	s.NoError(err)
+	s.False(revertedChild.CancelAtPeriodEnd, "inherited subscription's CancelAtPeriodEnd should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.CancelAt, "inherited subscription's CancelAt should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.CancelledAt, "inherited subscription's CancelledAt should be cleared when the parent's schedule is reverted")
+	s.Nil(revertedChild.EndDate, "inherited subscription's EndDate should be cleared when the parent's schedule is reverted")
+
+	revertedParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parentSub.ID)
+	s.NoError(err)
+	s.False(revertedParent.CancelAtPeriodEnd)
+	s.Nil(revertedParent.CancelAt)
+	s.Nil(revertedParent.CancelledAt)
 }

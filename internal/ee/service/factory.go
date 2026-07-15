@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -40,6 +41,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -51,6 +53,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -112,8 +115,10 @@ type ServiceParams struct {
 	AddonAssociationRepo         addonassociation.Repository
 	ConnectionRepo               connection.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
+	UsageRecordRepo              usagerecord.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
+	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
@@ -132,6 +137,9 @@ type ServiceParams struct {
 
 	// Integration Factory
 	IntegrationFactory *integration.Factory
+
+	// Security
+	EncryptionService security.EncryptionService
 
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
@@ -197,6 +205,7 @@ func NewServiceParams(
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	settingsRepo settings.Repository,
 	alertLogsRepo alertlogs.Repository,
+	alertRepo alert.Repository,
 	groupRepo group.Repository,
 	scheduledTaskRepo scheduledtask.Repository,
 	prorationCalculator proration.Calculator,
@@ -207,6 +216,8 @@ func NewServiceParams(
 	planPriceSyncRepo planpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
 	checkoutSessionRepo domainCheckout.Repository,
+	usageRecordRepo usagerecord.Repository,
+	encryptionService security.EncryptionService,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -263,12 +274,15 @@ func NewServiceParams(
 		AddonAssociationRepo:         addonAssociationRepo,
 		ConnectionRepo:               connectionRepo,
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		UsageRecordRepo:              usageRecordRepo,
 		SettingsRepo:                 settingsRepo,
 		AlertLogsRepo:                alertLogsRepo,
+		AlertRepo:                    alertRepo,
 		GroupRepo:                    groupRepo,
 		ScheduledTaskRepo:            scheduledTaskRepo,
 		ProrationCalculator:          prorationCalculator,
 		IntegrationFactory:           integrationFactory,
+		EncryptionService:            encryptionService,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		UsageBenchmarkPubSub:         usageBenchmarkPubSub,
 		WebhookPubSub:                webhookPubSub,

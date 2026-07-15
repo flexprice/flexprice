@@ -1125,6 +1125,28 @@ type AnalyticsData struct {
 
 // GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
 func (s *featureUsageTrackingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	// feature_usage consumer has been retired for tenants on the meter_usage
+	// rollout; route them to meter_usage so callers that never gated (S3
+	// usage_analytics export, invoice usage-breakdown) don't read stale rows.
+	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
+		meterUsageService := NewMeterUsageService(s.ServiceParams)
+		return meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerID:  req.ExternalCustomerID,
+			ExternalCustomerIDs: req.ExternalCustomerIDs,
+			FeatureIDs:          req.FeatureIDs,
+			StartTime:           req.StartTime,
+			EndTime:             req.EndTime,
+			GroupBy:             req.GroupBy,
+			PropertyFilters:     req.PropertyFilters,
+			Sources:             req.Sources,
+			WindowSize:          req.WindowSize,
+			Expand:              req.Expand,
+			IncludeChildren:     req.IncludeChildren,
+		})
+	}
+
 	// Delegate to V2 for multi-customer aggregation (children and/or explicit external_customer_ids).
 	if req.IncludeChildren || len(req.ExternalCustomerIDs) > 0 {
 		return s.GetDetailedUsageAnalyticsV2(ctx, req)

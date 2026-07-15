@@ -269,6 +269,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			AdjustedEntitlementQuantity: entitlementAdjustedQty,
 			PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
 			PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+			SubscriptionLineItemID:      lo.ToPtr(item.ID),
 			Metadata:                    metadata,
 			CommitmentInfo:              commitmentInfo,
 		})
@@ -642,6 +643,7 @@ func (s *billingService) buildCumulativeCommitmentCharges(
 			AdjustedEntitlementQuantity: bc.adjustedEntitlementQuantity,
 			PeriodStart:                 lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
 			PeriodEnd:                   lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
+			SubscriptionLineItemID:      lo.ToPtr(bc.item.ID),
 			Metadata:                    bc.metadata,
 		})
 		totalCost = totalCost.Add(rounded)

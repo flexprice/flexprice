@@ -253,6 +253,8 @@ func (r *CreateWalletRequest) Validate() error {
 type WalletResponse struct {
 	*wallet.Wallet
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
+	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
+	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -263,6 +265,20 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 
 	return &WalletResponse{
 		Wallet: w,
+	}
+}
+
+// WalletResponseFromBalance maps a computed balance into a WalletResponse with real-time fields.
+func WalletResponseFromBalance(b *WalletBalanceResponse) *WalletResponse {
+	if b == nil || b.Wallet == nil {
+		return nil
+	}
+
+	return &WalletResponse{
+		Wallet:                    b.Wallet,
+		CreditsAvailableBreakdown: b.CreditsAvailableBreakdown,
+		RealTimeBalance:           b.RealTimeBalance,
+		RealTimeCreditBalance:     b.RealTimeCreditBalance,
 	}
 }
 
@@ -328,6 +344,8 @@ type TopUpWalletRequest struct {
 	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
 	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
 	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {

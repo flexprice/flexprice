@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -19,7 +20,7 @@ import (
 )
 
 type MeterUsageTrackingSuite struct {
-	suite.Suite
+	testutil.BaseServiceTestSuite
 	svc *meterUsageTrackingService
 }
 
@@ -28,7 +29,78 @@ func TestMeterUsageTracking(t *testing.T) {
 }
 
 func (s *MeterUsageTrackingSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
 	s.svc = &meterUsageTrackingService{}
+}
+
+// newRejectedService builds a meter-usage service wired to the suite's in-memory
+// webhook publisher and the given locker. Assert on published events via
+// s.GetPublishedWebhooks().
+func (s *MeterUsageTrackingSuite) newRejectedService(enabled bool, window time.Duration, locker cache.Locker) *meterUsageTrackingService {
+	return &meterUsageTrackingService{
+		ServiceParams: ServiceParams{
+			Logger: logger.NewNoopLogger(),
+			Config: &config.Configuration{
+				MeterUsageTracking: config.MeterUsageTrackingConfig{
+					RejectedEventWebhookEnabled: enabled,
+					RejectedEventWebhookWindow:  window,
+				},
+			},
+			WebhookPublisher: s.GetWebhookPublisher(),
+			Locker:           locker,
+		},
+	}
+}
+
+func rejectedTestEvent(name string) *events.Event {
+	return &events.Event{
+		ID:                 "evt_" + name,
+		TenantID:           types.DefaultTenantID,
+		EnvironmentID:      "env_1",
+		EventName:          name,
+		ExternalCustomerID: "cust_ext_1",
+		Timestamp:          time.Now().UTC(),
+	}
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_DisabledNoop() {
+	svc := s.newRejectedService(false, 10*time.Minute, s.GetLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	assert.Empty(s.T(), s.GetPublishedWebhooks())
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_EnabledPublishes() {
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+
+	published := s.GetPublishedWebhooks()
+	assert.Len(s.T(), published, 1)
+	got := published[0]
+	assert.Equal(s.T(), types.WebhookEventEventRejected, got.EventName)
+	assert.Equal(s.T(), types.SystemEntityTypeEvent, got.EntityType)
+	assert.Equal(s.T(), "evt_api_call", got.EntityID)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_ThrottledPerEventName() {
+	svc := s.newRejectedService(true, 10*time.Minute, s.GetLocker())
+
+	// Same event name three times within the window -> only the first fires.
+	for i := 0; i < 3; i++ {
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 1)
+
+	// A different event name is throttled independently -> fires once more.
+	svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("other_event"), types.RejectedEventReasonNoMatchingMeter)
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 2)
+}
+
+func (s *MeterUsageTrackingSuite) TestPublishRejectedWebhook_NoLockerFiresEveryTime() {
+	svc := s.newRejectedService(true, 10*time.Minute, nil) // no Locker -> fail-open
+	for i := 0; i < 3; i++ {
+		svc.publishRejectedEventWebhook(context.Background(), rejectedTestEvent("api_call"), types.RejectedEventReasonNoMatchingMeter)
+	}
+	assert.Len(s.T(), s.GetPublishedWebhooks(), 3)
 }
 
 // --- checkMeterFilters tests ---
@@ -420,6 +492,7 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 		ExternalCustomerID: "ext_1",
 	}
 
-	svc.runMeterUsagePostInsertSideEffects(ctx, event)
+	svc.runMeterUsagePostInsertSideEffects(ctx, event, []*events.MeterUsage{})
 	assert.Equal(t, existing.ID, event.CustomerID)
 }
+

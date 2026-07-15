@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
@@ -32,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -42,6 +44,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -171,6 +174,10 @@ func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
 	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
+func NewRefundRepository(p RepositoryParams) refund.Repository {
+	return entRepo.NewRefundRepository(p.EntClient, p.Logger)
+}
+
 func NewTaskRepository(p RepositoryParams) task.Repository {
 	return entRepo.NewTaskRepository(p.EntClient, p.Logger)
 }
@@ -219,6 +226,10 @@ func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegration
 	return entRepo.NewEntityIntegrationMappingRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
+func NewUsageRecordRepository(p RepositoryParams) usagerecord.Repository {
+	return entRepo.NewUsageRecordRepository(p.EntClient, p.Logger)
+}
+
 func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.RedisCache)
 }
@@ -249,6 +260,10 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger)
+}
+
+func NewAlertSettingsRepository(p RepositoryParams) alert.Repository {
+	return entRepo.NewAlertSettingsRepository(p.EntClient, p.Logger)
 }
 
 func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {

@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
+	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
@@ -44,6 +45,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -58,6 +60,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
@@ -125,6 +128,7 @@ func checkColumn(table, column string) error {
 			addon.Table:                    addon.ValidColumn,
 			addonassociation.Table:         addonassociation.ValidColumn,
 			alertlogs.Table:                alertlogs.ValidColumn,
+			alertsettings.Table:            alertsettings.ValidColumn,
 			auth.Table:                     auth.ValidColumn,
 			billingsequence.Table:          billingsequence.ValidColumn,
 			checkoutsession.Table:          checkoutsession.ValidColumn,
@@ -154,6 +158,7 @@ func checkColumn(table, column string) error {
 			plan.Table:                     plan.ValidColumn,
 			price.Table:                    price.ValidColumn,
 			priceunit.Table:                priceunit.ValidColumn,
+			refund.Table:                   refund.ValidColumn,
 			scheduledtask.Table:            scheduledtask.ValidColumn,
 			secret.Table:                   secret.ValidColumn,
 			settings.Table:                 settings.ValidColumn,
@@ -168,6 +173,7 @@ func checkColumn(table, column string) error {
 			taxassociation.Table:           taxassociation.ValidColumn,
 			taxrate.Table:                  taxrate.ValidColumn,
 			tenant.Table:                   tenant.ValidColumn,
+			usagerecord.Table:              usagerecord.ValidColumn,
 			user.Table:                     user.ValidColumn,
 			wallet.Table:                   wallet.ValidColumn,
 			wallettransaction.Table:        wallettransaction.ValidColumn,

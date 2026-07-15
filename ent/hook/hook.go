@@ -45,6 +45,18 @@ func (f AlertLogsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AlertLogsMutation", m)
 }
 
+// The AlertSettingsFunc type is an adapter to allow the use of ordinary
+// function as AlertSettings mutator.
+type AlertSettingsFunc func(context.Context, *ent.AlertSettingsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AlertSettingsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AlertSettingsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AlertSettingsMutation", m)
+}
+
 // The AuthFunc type is an adapter to allow the use of ordinary
 // function as Auth mutator.
 type AuthFunc func(context.Context, *ent.AuthMutation) (ent.Value, error)
@@ -393,6 +405,18 @@ func (f PriceUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PriceUnitMutation", m)
 }
 
+// The RefundFunc type is an adapter to allow the use of ordinary
+// function as Refund mutator.
+type RefundFunc func(context.Context, *ent.RefundMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RefundFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RefundMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RefundMutation", m)
+}
+
 // The ScheduledTaskFunc type is an adapter to allow the use of ordinary
 // function as ScheduledTask mutator.
 type ScheduledTaskFunc func(context.Context, *ent.ScheduledTaskMutation) (ent.Value, error)
@@ -559,6 +583,18 @@ func (f TenantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TenantMutation", m)
+}
+
+// The UsageRecordFunc type is an adapter to allow the use of ordinary
+// function as UsageRecord mutator.
+type UsageRecordFunc func(context.Context, *ent.UsageRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UsageRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UsageRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UsageRecordMutation", m)
 }
 
 // The UserFunc type is an adapter to allow the use of ordinary

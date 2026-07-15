@@ -25,6 +25,7 @@ type Handlers struct {
 	PriceUnit                *v1.PriceUnitHandler
 	Customer                 *v1.CustomerHandler
 	Connection               *v1.ConnectionHandler
+	Marketplace              *v1.MarketplaceHandler
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
@@ -53,6 +54,7 @@ type Handlers struct {
 	Group                    *v1.GroupHandler
 	ScheduledTask            *v1.ScheduledTaskHandler
 	AlertLogsHandler         *v1.AlertLogsHandler
+	AlertSettingsHandler     *v1.AlertSettingsHandler
 	RBAC                     *v1.RBACHandler
 	OAuth                    *v1.OAuthHandler
 	Dashboard                *v1.DashboardHandler
@@ -290,6 +292,7 @@ func NewRouter(
 			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
 			addon.PUT("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.UpdateAddon)
 			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
+			addon.GET("/:id/creditgrants", handlers.Addon.GetAddonCreditGrants)
 			addon.DELETE("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.DeleteAddon)
 		}
 
@@ -517,6 +520,11 @@ func NewRouter(
 			connections.POST("/search", handlers.Connection.QueryConnections)
 		}
 
+		marketplace := v1Private.Group("/marketplace")
+		{
+			marketplace.POST("/agreements", write(types.EntityIntegration, types.ActionWrite), handlers.Marketplace.RegisterAgreement)
+		}
+
 		// Costsheet routes
 		costsheets := v1Private.Group("/costs")
 		{
@@ -706,6 +714,16 @@ func NewRouter(
 	{
 		// list alert logs by filter
 		alert.POST("/search", handlers.AlertLogsHandler.QueryAlertLogs)
+	}
+
+	// Alert settings routes (subscription / subscription line item / group spend alerts)
+	alertSetting := alert.Group("/setting")
+	{
+		alertSetting.POST("", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.CreateAlertSettings)
+		alertSetting.POST("/search", handlers.AlertSettingsHandler.QueryAlertSettings)
+		alertSetting.GET("/:id", handlers.AlertSettingsHandler.GetAlertSettings)
+		alertSetting.PUT("/:id", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.UpdateAlertSettings)
+		alertSetting.DELETE("/:id", write(types.EntityAlertSettings, types.ActionWrite), handlers.AlertSettingsHandler.DeleteAlertSettings)
 	}
 
 	// RBAC routes

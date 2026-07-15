@@ -114,16 +114,15 @@ type CreatePaymentResponse struct {
 
 // CreatePaymentLinkRequest represents FlexPrice request to create a Moyasar payment
 type CreatePaymentLinkRequest struct {
-	InvoiceID     string
-	CustomerID    string
-	Amount        decimal.Decimal
-	Currency      string
-	SuccessURL    string // Callback URL - customer redirected here after payment
-	CancelURL     string // Cancel URL (used as success URL if success not provided)
-	Metadata      map[string]string
-	PaymentID     string // FlexPrice payment ID
-	EnvironmentID string
-	Description   string
+	InvoiceID   string
+	CustomerID  string
+	Amount      decimal.Decimal
+	Currency    string
+	SuccessURL  string // Callback URL - customer redirected here after payment
+	CancelURL   string // Cancel URL (used as success URL if success not provided)
+	Metadata    map[string]string
+	PaymentID   string // FlexPrice payment ID
+	Description string
 }
 
 // CreatePaymentLinkResponse represents the response after creating a payment link
@@ -221,7 +220,6 @@ type PaymentStatusResponse struct {
 	CreatedAt          string            // Creation timestamp
 	UpdatedAt          string            // Update timestamp
 }
-
 
 // ============================================================================
 // Tokenization Types

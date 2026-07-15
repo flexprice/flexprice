@@ -1001,6 +1001,9 @@ func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context
 }
 func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
 }
+func (m *mockSubscriptionService) TerminateSubscriptionResources(ctx context.Context, req apidto.TerminateSubscriptionResourcesRequest) error {
+	return nil
+}
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
 

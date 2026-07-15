@@ -20,6 +20,8 @@ type Tx struct {
 	AddonAssociation *AddonAssociationClient
 	// AlertLogs is the client for interacting with the AlertLogs builders.
 	AlertLogs *AlertLogsClient
+	// AlertSettings is the client for interacting with the AlertSettings builders.
+	AlertSettings *AlertSettingsClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
@@ -78,6 +80,8 @@ type Tx struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// Refund is the client for interacting with the Refund builders.
+	Refund *RefundClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
 	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
@@ -106,6 +110,8 @@ type Tx struct {
 	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
 	Tenant *TenantClient
+	// UsageRecord is the client for interacting with the UsageRecord builders.
+	UsageRecord *UsageRecordClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 	// Wallet is the client for interacting with the Wallet builders.
@@ -248,6 +254,7 @@ func (tx *Tx) init() {
 	tx.Addon = NewAddonClient(tx.config)
 	tx.AddonAssociation = NewAddonAssociationClient(tx.config)
 	tx.AlertLogs = NewAlertLogsClient(tx.config)
+	tx.AlertSettings = NewAlertSettingsClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
@@ -277,6 +284,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.Refund = NewRefundClient(tx.config)
 	tx.ScheduledTask = NewScheduledTaskClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Settings = NewSettingsClient(tx.config)
@@ -291,6 +299,7 @@ func (tx *Tx) init() {
 	tx.TaxAssociation = NewTaxAssociationClient(tx.config)
 	tx.TaxRate = NewTaxRateClient(tx.config)
 	tx.Tenant = NewTenantClient(tx.config)
+	tx.UsageRecord = NewUsageRecordClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)

@@ -35,6 +35,8 @@ const (
 	FieldName = "name"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldContact holds the string denoting the contact field in the database.
+	FieldContact = "contact"
 	// FieldAddressLine1 holds the string denoting the address_line1 field in the database.
 	FieldAddressLine1 = "address_line1"
 	// FieldAddressLine2 holds the string denoting the address_line2 field in the database.
@@ -67,6 +69,7 @@ var Columns = []string{
 	FieldExternalID,
 	FieldName,
 	FieldEmail,
+	FieldContact,
 	FieldAddressLine1,
 	FieldAddressLine2,
 	FieldAddressCity,
@@ -163,6 +166,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByContact orders the results by the contact field.
+func ByContact(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContact, opts...).ToFunc()
 }
 
 // ByAddressLine1 orders the results by the address_line1 field.
