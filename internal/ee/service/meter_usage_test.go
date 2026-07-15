@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -4523,4 +4524,175 @@ func (s *MeterUsageServiceSuite) TestStandardMeter_ExpandSource_StillWorks() {
 		"Sources must include 'api'; got %v", item.Sources)
 	s.True(slices.Contains(item.Sources, "sdk"),
 		"Sources must include 'sdk'; got %v", item.Sources)
+}
+
+// parentChildScopeFixture wires up a hierarchical parent/child customer +
+// parent/inherited subscription pair with usage on both external IDs. Used by
+// the parent/child scope tests below.
+type parentChildScopeFixture struct {
+	parentCust *customer.Customer
+	childCust  *customer.Customer
+	parentSub  *subscription.Subscription
+	childSub   *subscription.Subscription
+}
+
+func (s *MeterUsageServiceSuite) newParentChildScopeFixture(id string) *parentChildScopeFixture {
+	ctx := s.GetContext()
+
+	parentCust := &customer.Customer{
+		ID:         "cust_parent_" + id,
+		ExternalID: "ext_parent_" + id,
+		Name:       "Parent Co",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, parentCust))
+
+	childCust := &customer.Customer{
+		ID:         "cust_child_" + id,
+		ExternalID: "ext_child_" + id,
+		Name:       "Child Co",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCust))
+
+	parentSub := &subscription.Subscription{
+		ID:                 "sub_parent_" + id,
+		CustomerID:         parentCust.ID,
+		PlanID:             "plan_1",
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		SubscriptionType:   types.SubscriptionTypeParent,
+		CurrentPeriodStart: s.periodStart,
+		CurrentPeriodEnd:   s.periodEnd,
+		BillingAnchor:      s.periodStart,
+		StartDate:          s.periodStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, parentSub))
+
+	childSub := &subscription.Subscription{
+		ID:                   "sub_child_" + id,
+		CustomerID:           childCust.ID,
+		PlanID:               "plan_1",
+		Currency:             "usd",
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+		CurrentPeriodStart:   s.periodStart,
+		CurrentPeriodEnd:     s.periodEnd,
+		BillingAnchor:        s.periodStart,
+		StartDate:            s.periodStart,
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, childSub))
+
+	// Line item lives on the parent sub (matches how inherited subs work).
+	parentLI := &subscription.SubscriptionLineItem{
+		ID:             "li_parent_" + id,
+		SubscriptionID: parentSub.ID,
+		CustomerID:     parentCust.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		EndDate:        s.periodEnd,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, parentLI))
+
+	// 100 units on the parent customer, 25 on the child.
+	s.insertMeterUsage(ctx, s.meterAPI.ID, parentCust.ExternalID,
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100)
+	s.insertMeterUsage(ctx, s.meterAPI.ID, childCust.ExternalID,
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 25)
+
+	return &parentChildScopeFixture{
+		parentCust: parentCust,
+		childCust:  childCust,
+		parentSub:  parentSub,
+		childSub:   childSub,
+	}
+}
+
+// totalUsageForMeter sums TotalUsage across all analytic items matching the given meter.
+func (s *MeterUsageServiceSuite) totalUsageForMeter(resp *dto.GetUsageAnalyticsResponse, meterID string) decimal.Decimal {
+	total := decimal.Zero
+	for _, item := range resp.Items {
+		if item.MeterID == meterID {
+			total = total.Add(item.TotalUsage)
+		}
+	}
+	return total
+}
+
+// TestGetDetailedAnalytics_ChildCustomer_ExcludesParentUsage: a child customer's
+// analytics response must never contain the parent customer's raw meter_usage
+// events, even though the child's inherited sub borrows the parent sub's line
+// items. Regression guard for the leak where the appended parent sub in
+// resolveCustomerAndSubscriptions was queried with parent-scoped external_id.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ChildCustomer_ExcludesParentUsage() {
+	ctx := s.GetContext()
+	fx := s.newParentChildScopeFixture("child_excludes")
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: fx.childCust.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.True(s.totalUsageForMeter(resp, s.meterAPI.ID).Equal(decimal.NewFromInt(25)),
+		"child analytics must return only child's own usage (25); got %s",
+		s.totalUsageForMeter(resp, s.meterAPI.ID))
+}
+
+// TestGetDetailedAnalytics_ParentCustomer_ExcludesChildrenByDefault: a parent
+// customer's analytics defaults to its own usage; children only roll up when
+// the caller explicitly asks via IncludeChildren.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ParentCustomer_ExcludesChildrenByDefault() {
+	ctx := s.GetContext()
+	fx := s.newParentChildScopeFixture("parent_solo")
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: fx.parentCust.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.True(s.totalUsageForMeter(resp, s.meterAPI.ID).Equal(decimal.NewFromInt(100)),
+		"parent analytics without include_children must return only parent's own usage (100); got %s",
+		s.totalUsageForMeter(resp, s.meterAPI.ID))
+}
+
+// TestGetDetailedAnalytics_ParentCustomer_IncludeChildrenRollsUp: with
+// IncludeChildren=true, the parent's analytics aggregates its own usage plus
+// every inherited child customer's usage (mirrors the previous feature-usage
+// consolidated-view behaviour).
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ParentCustomer_IncludeChildrenRollsUp() {
+	ctx := s.GetContext()
+	fx := s.newParentChildScopeFixture("parent_rollup")
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: fx.parentCust.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		IncludeChildren:    true,
+	})
+	s.NoError(err)
+	s.True(s.totalUsageForMeter(resp, s.meterAPI.ID).Equal(decimal.NewFromInt(125)),
+		"parent analytics with include_children must roll up parent+child (125); got %s",
+		s.totalUsageForMeter(resp, s.meterAPI.ID))
 }

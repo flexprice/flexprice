@@ -5983,6 +5983,9 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 		LifetimeUsage:   req.LifetimeUsage,
 		UseFinal:        useFinal,
 		IncludeFeatures: false,
+		// Billing for a Parent subscription must roll up every inherited
+		// child's usage — that is the consolidated-invoice contract.
+		IncludeChildren: true,
 	})
 	if err != nil {
 		return nil, err

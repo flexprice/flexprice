@@ -138,6 +138,11 @@ type GetSubscriptionMeterUsageRequest struct {
 	// CollectSources when true fetches distinct source values for bucketed meters
 	// via a secondary query (used when expand:"source" is requested by analytics callers).
 	CollectSources bool
+
+	// IncludeChildren, when true on a Parent subscription, extends the query
+	// scope to every inherited child customer's external_id. False (default)
+	// restricts the query to the subscription owner's external_id only.
+	IncludeChildren bool
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -303,8 +308,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		return nil, err
 	}
 
-	// 2. Resolve external customer IDs for meter_usage queries
-	externalCustomerIDs, err := s.resolveExternalCustomerIDs(ctx, sub)
+	// 2. Resolve external customer IDs for meter_usage queries.
+	// Parent subscriptions fan out to inherited children only when the caller
+	// asks for it via req.IncludeChildren (billing path passes true; analytics
+	// passes params.IncludeChildren).
+	externalCustomerIDs, err := s.resolveExternalCustomerIDs(ctx, sub, req.IncludeChildren)
 	if err != nil {
 		return nil, err
 	}
@@ -1121,6 +1129,19 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Call GetSubscriptionMeterUsage per subscription
 	var allUsages []*SubscriptionMeterUsage
 	for _, sub := range subscriptions {
+		// Skip parent subs that resolveCustomerAndSubscriptions appended for a
+		// child caller. Only those subs have sub.CustomerID != cust.ID —
+		// every caller-owned sub (including the caller's inherited child sub)
+		// was fetched via filter.CustomerID = cust.ID and therefore matches.
+		// The appended parent sub is present only so enrichment can see its
+		// line items; the caller's inherited sub has already queried those
+		// same line items scoped to the caller's external_id, so running the
+		// parent sub through GetSubscriptionMeterUsage here would leak the
+		// parent customer's raw usage into the child's response.
+		if sub.CustomerID != cust.ID {
+			continue
+		}
+
 		billingAnchor := params.BillingAnchor
 		if billingAnchor == nil {
 			billingAnchor = &sub.BillingAnchor
@@ -1152,6 +1173,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			PropertyFilters: params.PropertyFilters,
 			Sources:         params.Sources,
 			CollectSources:  lo.Contains(params.Expand, "source"),
+			IncludeChildren: params.IncludeChildren,
 		})
 		if err != nil {
 			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
@@ -2126,10 +2148,12 @@ func (s *meterUsageService) ConvertToBillingCharges(
 }
 
 // resolveExternalCustomerIDs returns the external customer IDs whose meter_usage
-// rows belong to a subscription (owner + inherited children for parent subscriptions).
-func (s *meterUsageService) resolveExternalCustomerIDs(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+// rows belong to a subscription. For Parent subscriptions the inherited-child
+// customers are folded in only when includeChildren is true; otherwise the
+// query stays scoped to the owning customer.
+func (s *meterUsageService) resolveExternalCustomerIDs(ctx context.Context, sub *subscription.Subscription, includeChildren bool) ([]string, error) {
 	internalIDs := []string{sub.CustomerID}
-	if sub.SubscriptionType == types.SubscriptionTypeParent {
+	if includeChildren && sub.SubscriptionType == types.SubscriptionTypeParent {
 		childFilter := types.NewNoLimitSubscriptionFilter()
 		childFilter.ParentSubscriptionIDs = []string{sub.ID}
 		childFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
