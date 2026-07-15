@@ -948,8 +948,11 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			Metadata:      invoiceMetadata,
 			BillingReason: req.BillingReason,
 		}
-		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-		inv, err := invoiceService.CreateInvoice(ctx, invReq)
+		// Use CreateOneOffInvoice which handles draft-first flow: create draft, compute,
+		// finalize, webhook. ForceSyncInvoice is intentionally NOT set here — this call runs
+		// inside the enclosing DB transaction, and the Moyasar sync involves real network
+		// calls; it's triggered separately below, after the transaction commits.
+		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to create invoice for purchased credits").
@@ -982,6 +985,16 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 	if err != nil {
 		return "", "", err
+	}
+
+	// Synchronous Moyasar sync (if requested) runs here, outside the DB transaction above,
+	// since it involves real network calls (invoice creation + optional token charge).
+	// Best-effort: never fails the top-up.
+	if req.ForceSyncInvoice {
+		if err := invoiceService.SyncInvoiceToMoyasarIfEnabled(ctx, invoiceID); err != nil {
+			s.Logger.Error(ctx, "force sync to Moyasar failed",
+				"error", err, "invoice_id", invoiceID, "wallet_id", walletID)
+		}
 	}
 
 	// If auto-completed, publish webhook event immediately
