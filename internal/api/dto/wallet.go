@@ -345,6 +345,12 @@ type TopUpWalletRequest struct {
 	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
 	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
 	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+	// force_sync_invoice, when true and transaction_reason is PURCHASED_CREDIT_INVOICED,
+	// attempts to synchronously sync the purchased-credit invoice to Moyasar (if enabled)
+	// after this call's wallet transaction commits, instead of relying solely on the async
+	// Kafka + Temporal vendor-sync pipeline. Best-effort: sync failures are logged but never
+	// fail the top-up.
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
