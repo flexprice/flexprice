@@ -29,6 +29,31 @@ func TestCloudDetector_DetectsGCP(t *testing.T) {
 	assert.Equal(t, storage.ProviderGCS, provider)
 }
 
+// TestCloudDetector_DetectsAWS verifies probeAWS's IMDSv2 contract: a PUT to
+// the token endpoint with the required X-aws-ec2-metadata-token-ttl-seconds
+// header, treating a 200 response as AWS detected. A PUT to
+// /latest/meta-data/ (the old, wrong target) returns 403 on real AWS
+// infrastructure and would never satisfy this contract.
+func TestCloudDetector_DetectsAWS(t *testing.T) {
+	var gotMethod, gotTTLHeader string
+	awsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotTTLHeader = r.Header.Get("X-aws-ec2-metadata-token-ttl-seconds")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("fake-imdsv2-token"))
+	}))
+	defer awsServer.Close()
+
+	unreachableGCP := "http://127.0.0.1:1" // deliberately unreachable, simulates no GCP metadata
+
+	d := storage.NewCloudDetector(unreachableGCP, awsServer.URL, 200*time.Millisecond)
+	provider := d.Detect(context.Background())
+
+	assert.Equal(t, storage.ProviderS3, provider)
+	assert.Equal(t, http.MethodPut, gotMethod, "IMDSv2 token endpoint must be called with PUT")
+	assert.Equal(t, "21600", gotTTLHeader, "IMDSv2 token request must set the TTL header")
+}
+
 func TestCloudDetector_NeitherReachable_ReturnsUnknown(t *testing.T) {
 	d := storage.NewCloudDetector("http://127.0.0.1:1", "http://127.0.0.1:2", 200*time.Millisecond)
 	provider := d.Detect(context.Background())
