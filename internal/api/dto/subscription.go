@@ -1526,16 +1526,8 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil {
-		if r.Quantity.IsNegative() {
-			return ierr.NewError("quantity must be non-negative").
-				WithHint("Override quantity cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"quantity": r.Quantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Get original price - it must be available for validation
@@ -1556,6 +1548,14 @@ func (r *OverrideLineItemRequest) Validate(
 				"price_id": r.PriceID,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Explicit override quantity (including 0) must respect the original price's min_quantity floor.
+	// Not meaningful for usage-based prices, which don't accept a quantity override at all (checked below).
+	if originalPrice.Type == types.PRICE_TYPE_FIXED {
+		if err := price.ValidateQuantityFloor(r.Quantity, originalPrice.MinQuantity); err != nil {
+			return err
+		}
 	}
 
 	// Quantity can only be set for fixed prices, not usage-based prices

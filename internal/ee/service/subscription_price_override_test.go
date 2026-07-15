@@ -97,6 +97,48 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 		assert.Contains(t, err.Error(), "at least one override field")
 	})
 
+	t.Run("should reject override quantity below min_quantity", func(t *testing.T) {
+		qty := decimal.NewFromInt(2)
+		priceMap := map[string]*dto.PriceResponse{
+			"test_price_min_qty": {
+				Price: &price.Price{
+					ID:            "test_price_min_qty",
+					Type:          types.PRICE_TYPE_FIXED,
+					BillingModel:  types.BILLING_MODEL_FLAT_FEE,
+					PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+					MinQuantity:   lo.ToPtr(decimal.NewFromInt(5)),
+				},
+			},
+		}
+		override := dto.OverrideLineItemRequest{
+			PriceID:  "test_price_min_qty",
+			Quantity: &qty,
+		}
+		err := override.Validate(priceMap, nil, "test_plan_456")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "quantity must be greater than or equal to min_quantity")
+	})
+
+	t.Run("should allow zero override quantity when no min_quantity floor", func(t *testing.T) {
+		qty := decimal.Zero
+		priceMap := map[string]*dto.PriceResponse{
+			"test_price_no_floor": {
+				Price: &price.Price{
+					ID:            "test_price_no_floor",
+					Type:          types.PRICE_TYPE_FIXED,
+					BillingModel:  types.BILLING_MODEL_FLAT_FEE,
+					PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+				},
+			},
+		}
+		override := dto.OverrideLineItemRequest{
+			PriceID:  "test_price_no_floor",
+			Quantity: &qty,
+		}
+		err := override.Validate(priceMap, nil, "test_plan_456")
+		assert.NoError(t, err)
+	})
+
 	t.Run("should reject duplicate price IDs in overrides", func(t *testing.T) {
 		amount1 := decimal.NewFromFloat(10.00)
 		amount2 := decimal.NewFromFloat(20.00)
