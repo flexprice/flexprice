@@ -162,12 +162,14 @@ func (s *InMemoryCouponStore) Count(ctx context.Context, filter *types.CouponFil
 }
 
 // IncrementRedemptions mirrors the atomic-guard semantics of the real Ent
-// repository (internal/repository/ent/coupon.go): when MaxRedemptions is set
-// and TotalRedemptions has already reached it, the increment is rejected with
-// a validation-class error instead of silently succeeding. This keeps the
-// in-memory harness used by service-layer tests consistent with production
-// behavior for the coupon-redemption race-condition fix.
-func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string) error {
+// repository (internal/repository/ent/coupon.go): when maxRedemptions is
+// non-nil and TotalRedemptions has already reached it, the increment is
+// rejected with a validation-class error instead of silently succeeding.
+// The caller supplies maxRedemptions (from an earlier Get/GetByCode) rather
+// than this store re-reading it, matching the real repository's contract.
+// This keeps the in-memory harness used by service-layer tests consistent
+// with production behavior for the coupon-redemption race-condition fix.
+func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error {
 	s.redemptionMu.Lock()
 	defer s.redemptionMu.Unlock()
 
@@ -176,7 +178,7 @@ func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id strin
 		return err
 	}
 
-	if c.MaxRedemptions != nil && c.TotalRedemptions >= *c.MaxRedemptions {
+	if maxRedemptions != nil && c.TotalRedemptions >= *maxRedemptions {
 		return ierr.NewError("coupon has reached maximum redemptions").
 			WithHint("This coupon cannot be redeemed again").
 			WithReportableDetails(map[string]interface{}{

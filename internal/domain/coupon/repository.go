@@ -15,5 +15,10 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.CouponFilter) ([]*Coupon, error)
 	Count(ctx context.Context, filter *types.CouponFilter) (int, error)
-	IncrementRedemptions(ctx context.Context, id string) error
+	// IncrementRedemptions atomically increments total_redemptions, enforcing
+	// maxRedemptions as a DB-level guard when non-nil (nil = unlimited). The
+	// caller is expected to pass the coupon's own MaxRedemptions value (from
+	// an earlier Get/GetByCode) — it's immutable coupon config, safe to reuse,
+	// unlike total_redemptions which the guard re-checks fresh in the database.
+	IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error
 }

@@ -158,11 +158,11 @@ func TestIncrementRedemptions_RespectsMaxRedemptions(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, c))
 
 	// First increment should succeed (0 < 1)
-	err1 := repo.IncrementRedemptions(ctx, c.ID)
+	err1 := repo.IncrementRedemptions(ctx, c.ID, &maxRedemptions)
 	require.NoError(t, err1)
 
 	// Second increment should fail — already at max
-	err2 := repo.IncrementRedemptions(ctx, c.ID)
+	err2 := repo.IncrementRedemptions(ctx, c.ID, &maxRedemptions)
 	require.Error(t, err2)
 	require.True(t, ierr.IsValidation(err2), "expected a validation-class error when limit reached, got: %v", err2)
 
@@ -186,7 +186,7 @@ func TestIncrementRedemptions_ConcurrentRequestsRespectLimit(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			results[idx] = repo.IncrementRedemptions(ctx, c.ID)
+			results[idx] = repo.IncrementRedemptions(ctx, c.ID, &maxRedemptions)
 		}(i)
 	}
 	wg.Wait()
@@ -215,7 +215,7 @@ func TestIncrementRedemptions_UnlimitedCouponAlwaysSucceeds(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, c))
 
 	for i := 0; i < 3; i++ {
-		require.NoError(t, repo.IncrementRedemptions(ctx, c.ID))
+		require.NoError(t, repo.IncrementRedemptions(ctx, c.ID, nil))
 	}
 
 	got, err := repo.Get(ctx, c.ID)

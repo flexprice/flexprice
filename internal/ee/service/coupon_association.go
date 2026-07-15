@@ -65,7 +65,16 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 				Mark(ierr.ErrInternal)
 		}
 
-		if err := s.CouponRepo.IncrementRedemptions(txCtx, req.CouponID); err != nil {
+		// MaxRedemptions is immutable coupon config (set at creation, never
+		// changes), so this read is safe to hand to IncrementRedemptions's
+		// atomic guard — only total_redemptions changes, and that's re-checked
+		// fresh in the database, not against this read.
+		couponForLimit, err := s.CouponRepo.Get(txCtx, req.CouponID)
+		if err != nil {
+			return err
+		}
+
+		if err := s.CouponRepo.IncrementRedemptions(txCtx, req.CouponID, couponForLimit.MaxRedemptions); err != nil {
 			// IncrementRedemptions already returns a properly-marked error
 			// (ErrValidation for limit-reached, ErrNotFound, ErrDatabase) —
 			// don't re-wrap and downgrade it to ErrInternal.
