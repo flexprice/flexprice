@@ -948,10 +948,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			Metadata:      invoiceMetadata,
 			BillingReason: req.BillingReason,
 		}
-		// Use CreateOneOffInvoice which handles draft-first flow: create draft, compute,
-		// finalize, webhook. ForceSyncInvoice is intentionally NOT set here — this call runs
-		// inside the enclosing DB transaction, and the Moyasar sync involves real network
-		// calls; it's triggered separately below, after the transaction commits.
+		// ForceSyncInvoice is omitted
 		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
