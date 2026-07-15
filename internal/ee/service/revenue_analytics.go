@@ -53,6 +53,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		FeatureIDs:         req.FeatureIDs,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
+		IncludeChildren:    req.IncludeChildren,
 	}
 	meterUsageService := NewMeterUsageService(s.ServiceParams)
 	revenueAnalytics, err = meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
