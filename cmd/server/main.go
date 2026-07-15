@@ -74,7 +74,12 @@ func init() {
 // Flexprice-owned invoice PDFs, wrapping storage.NewPlatformStorage with the
 // invoice-specific bucket/region from config so fx can provide it directly.
 func provideInvoiceStorage(cfg *config.Configuration, log *logger.Logger) (storage.Storage, error) {
-	return storage.NewPlatformStorage(cfg, cfg.S3.InvoiceBucketConfig.Bucket, cfg.S3.Region, log)
+	// context.Background() is appropriate here: this runs once at fx DI-graph
+	// construction / application bootstrap time, not on a per-request path,
+	// so there is no caller-supplied context (cancellation/deadline/trace) to
+	// propagate — this call site is the root of the chain, not an
+	// intermediate hop dropping a context it was given.
+	return storage.NewPlatformStorage(context.Background(), cfg, cfg.S3.InvoiceBucketConfig.Bucket, cfg.S3.Region, log)
 }
 
 func main() {
