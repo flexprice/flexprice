@@ -1,9 +1,12 @@
 package dto
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -256,6 +259,80 @@ func TestCreateSubscriptionLineItemRequest_Validate_Quantity(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_QuantityDefaulting(t *testing.T) {
+	ctx := context.Background()
+
+	sub := &SubscriptionResponse{
+		Subscription: &subscription.Subscription{
+			ID:         "sub_test",
+			CustomerID: "cust_test",
+			Currency:   "usd",
+			StartDate:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	basePrice := func(minQuantity *decimal.Decimal) *PriceResponse {
+		return &PriceResponse{
+			Price: &price.Price{
+				Type:           types.PRICE_TYPE_FIXED,
+				BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence: types.InvoiceCadenceAdvance,
+				MinQuantity:    minQuantity,
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		quantity    *decimal.Decimal
+		minQuantity *decimal.Decimal
+		wantQty     decimal.Decimal
+	}{
+		{
+			name:        "omitted quantity, min quantity set: defaults to min quantity",
+			quantity:    nil,
+			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
+			wantQty:     decimal.NewFromInt(5),
+		},
+		{
+			name:        "omitted quantity, no min quantity: defaults to price default quantity",
+			quantity:    nil,
+			minQuantity: nil,
+			wantQty:     decimal.NewFromInt(1), // fixed price default quantity
+		},
+		{
+			name:        "explicit zero quantity, min quantity set: honored as-is, not substituted",
+			quantity:    lo.ToPtr(decimal.Zero),
+			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
+			wantQty:     decimal.Zero,
+		},
+		{
+			name:        "explicit quantity, min quantity set: passes through as-is",
+			quantity:    lo.ToPtr(decimal.NewFromInt(3)),
+			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
+			wantQty:     decimal.NewFromInt(3),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &CreateSubscriptionLineItemRequest{
+				PriceID:  "price_test",
+				Quantity: tt.quantity,
+			}
+			params := LineItemParams{
+				Subscription: sub,
+				Price:        basePrice(tt.minQuantity),
+				EntityType:   types.SubscriptionLineItemEntityTypeSubscription,
+			}
+
+			lineItem := req.ToSubscriptionLineItem(ctx, params)
+
+			assert.True(t, tt.wantQty.Equal(lineItem.Quantity), "expected quantity %s, got %s", tt.wantQty.String(), lineItem.Quantity.String())
 		})
 	}
 }
