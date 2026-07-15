@@ -128,3 +128,38 @@ func TestNewPlatformStorage_S3Provider_FederationEnabledWithoutRoleARN(t *testin
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "federation_enabled is true but federation_role_arn is not set")
 }
+
+// TestNewPlatformStorage_S3Provider_FederationEnabledWithRoleARN_FailsLoud verifies
+// the fix for the "silent fallback to ambient AWS credentials" finding: when
+// FederationEnabled is true AND FederationRoleARN is set (passing
+// FlexpriceS3ExportsConfig.Validate()), NewPlatformStorage must NOT proceed to
+// construct an s3backend client with FederationTokenSource left nil — doing so
+// would let s3backend.New() warn-and-fall-through to the ambient AWS credential
+// chain, which resolves nothing on non-AWS compute (e.g. GKE) and looks
+// indistinguishable from "just broken". Federation isn't fully wired until the
+// companion Terraform+Go token-source implementation lands, so this must fail
+// bootstrap loudly instead.
+func TestNewPlatformStorage_S3Provider_FederationEnabledWithRoleARN_FailsLoud(t *testing.T) {
+	cfg := &config.Configuration{
+		Storage: config.StorageConfig{Provider: "s3"},
+		S3: config.S3Config{
+			Enabled: true,
+			Region:  "ap-south-1",
+			InvoiceBucketConfig: config.BucketConfig{
+				Bucket:                "flexprice-invoices",
+				PresignExpiryDuration: "1h",
+			},
+		},
+		FlexpriceS3Exports: config.FlexpriceS3ExportsConfig{
+			Bucket:            "flexprice-exports",
+			Region:            "ap-south-1",
+			FederationEnabled: true,
+			FederationRoleARN: "arn:aws:iam::123456789012:role/flexprice-gke-federation",
+		},
+	}
+
+	s, err := storage.NewPlatformStorage(cfg, "flexprice-invoices", "ap-south-1", logger.NewNoopLogger())
+	require.Error(t, err)
+	require.Nil(t, s)
+	require.Contains(t, err.Error(), "OIDC federation is enabled but not yet fully wired")
+}

@@ -53,12 +53,19 @@ func NewPlatformStorage(cfg *config.Configuration, bucket, region string, log *l
 			s3Cfg.AWSSessionToken = cfg.FlexpriceS3Exports.AWSSessionToken
 		}
 		if cfg.FlexpriceS3Exports.FederationEnabled {
-			s3Cfg.FederationRoleARN = cfg.FlexpriceS3Exports.FederationRoleARN
-			// FederationTokenSource is wired in Plan 2 once the GCP identity
-			// token minting implementation exists; nil here means New() falls
-			// through to the ambient chain if federation role ARN alone is set
-			// without a token source — acceptable for this plan since federation
-			// isn't actually exercised until Plan 2 lands.
+			// FederationTokenSource is wired in Plan 2 once the companion
+			// Terraform+Go GCP-identity-token-minting implementation exists.
+			// Until then there is no way to actually federate, and letting
+			// s3backend.New() warn-and-fall-through to the ambient AWS
+			// credential chain is a worse failure mode here than failing
+			// loud: on non-AWS compute (e.g. GKE, which is exactly why
+			// federation is being built) the ambient chain resolves nothing,
+			// so the operator would see no actionable error until every S3
+			// call starts failing deep inside the SDK. Fail bootstrap now
+			// with a clear, actionable message instead.
+			return nil, ierr.NewError("OIDC federation is enabled but not yet fully wired").
+				WithHint("FederationEnabled requires a companion Terraform+Go token-source implementation that has not landed yet; either set static AWS credentials, or wait for federation support to complete").
+				Mark(ierr.ErrValidation)
 		}
 		return s3backend.New(s3Cfg, log)
 	default:
