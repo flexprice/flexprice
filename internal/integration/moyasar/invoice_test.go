@@ -37,72 +37,57 @@ func (s *stubMoyasarClient) GetConnection(ctx context.Context) (*connection.Conn
 	return s.conn, s.err
 }
 
-func TestBuildInvoiceRequest_SetsSuccessAndBackURLFromConnectionMetadata(t *testing.T) {
-	svc := &InvoiceSyncService{
-		client: &stubMoyasarClient{
+func TestBuildInvoiceRequest(t *testing.T) {
+	tests := []struct {
+		name               string
+		conn               *connection.Connection
+		connErr            error
+		expectedSuccessURL string
+		expectedBackURL    string
+	}{
+		{
+			name: "SetsSuccessAndBackURLFromConnectionMetadata",
 			conn: &connection.Connection{
 				Metadata: map[string]interface{}{
 					ConnKeySuccessURL: "https://example.com/success",
 					ConnKeyCancelURL:  "https://example.com/cancel",
 				},
 			},
+			expectedSuccessURL: "https://example.com/success",
+			expectedBackURL:    "https://example.com/cancel",
 		},
-		logger: mustTestLogger(t),
-	}
-
-	inv := &invoice.Invoice{
-		ID:         "inv_test_1",
-		CustomerID: "cust_test_1",
-		Total:      decimal.NewFromInt(100),
-		Currency:   "usd",
-	}
-
-	req, err := svc.buildInvoiceRequest(context.Background(), inv)
-	require.NoError(t, err)
-	assert.Equal(t, "https://example.com/success", req.SuccessURL)
-	assert.Equal(t, "https://example.com/cancel", req.BackURL)
-	assert.Empty(t, req.CallbackURL)
-}
-
-func TestBuildInvoiceRequest_NoConnectionMetadata_URLsEmpty(t *testing.T) {
-	svc := &InvoiceSyncService{
-		client: &stubMoyasarClient{
+		{
+			name: "NoConnectionMetadata_URLsEmpty",
 			conn: &connection.Connection{}, // Metadata is nil
 		},
-		logger: mustTestLogger(t),
-	}
-
-	inv := &invoice.Invoice{
-		ID:         "inv_test_2",
-		CustomerID: "cust_test_2",
-		Total:      decimal.NewFromInt(50),
-		Currency:   "usd",
-	}
-
-	req, err := svc.buildInvoiceRequest(context.Background(), inv)
-	require.NoError(t, err)
-	assert.Empty(t, req.SuccessURL)
-	assert.Empty(t, req.BackURL)
-	assert.Empty(t, req.CallbackURL)
-}
-
-func TestBuildInvoiceRequest_GetConnectionErrors_URLsEmpty(t *testing.T) {
-	svc := &InvoiceSyncService{
-		client: &stubMoyasarClient{
-			err: errors.New("connection lookup failed"),
+		{
+			name:    "GetConnectionErrors_URLsEmpty",
+			connErr: errors.New("connection lookup failed"),
 		},
-		logger: mustTestLogger(t),
 	}
 
-	inv := &invoice.Invoice{
-		ID:         "inv_test_3",
-		CustomerID: "cust_test_3",
-		Total:      decimal.NewFromInt(75),
-		Currency:   "usd",
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &InvoiceSyncService{
+				client: &stubMoyasarClient{
+					conn: tt.conn,
+					err:  tt.connErr,
+				},
+				logger: mustTestLogger(t),
+			}
 
-	req, err := svc.buildInvoiceRequest(context.Background(), inv)
-	require.NoError(t, err, "a connection lookup failure must not fail the whole invoice-request build")
-	assert.Empty(t, req.SuccessURL)
-	assert.Empty(t, req.BackURL)
+			inv := &invoice.Invoice{
+				ID:         "inv_test_1",
+				CustomerID: "cust_test_1",
+				Total:      decimal.NewFromInt(100),
+				Currency:   "usd",
+			}
+
+			req, err := svc.buildInvoiceRequest(context.Background(), inv)
+			require.NoError(t, err, "a connection lookup failure must not fail the whole invoice-request build")
+			assert.Equal(t, tt.expectedSuccessURL, req.SuccessURL)
+			assert.Equal(t, tt.expectedBackURL, req.BackURL)
+			assert.Empty(t, req.CallbackURL)
+		})
+	}
 }

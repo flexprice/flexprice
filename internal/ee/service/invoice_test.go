@@ -691,7 +691,7 @@ func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_NoConnection_NoO
 	})
 	s.Require().NoError(err)
 
-	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice)
 	s.Require().NoError(err, "no Moyasar connection configured should be a silent no-op")
 }
 
@@ -723,7 +723,7 @@ func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_ConnectionDisabl
 		},
 	}))
 
-	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice)
 	s.Require().NoError(err, "disabled outbound sync should be a silent no-op")
 }
 
@@ -759,7 +759,7 @@ func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_EnabledButUnconf
 		},
 	}))
 
-	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID)
+	err = s.service.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice)
 	s.Require().Error(err, "missing Moyasar credentials should surface as an error to the caller")
 }
 

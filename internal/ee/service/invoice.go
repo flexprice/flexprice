@@ -69,7 +69,7 @@ type InvoiceService interface {
 	SyncInvoiceToChargebeeIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, invoiceID string) error
-	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, invoiceID string) error
+	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
 
@@ -137,7 +137,7 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	}
 
 	if req.ForceSyncInvoice {
-		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, resp.ID); err != nil {
+		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice); err != nil {
 			s.Logger.Error(ctx, "force sync to Moyasar failed",
 				"error", err, "invoice_id", resp.ID)
 			return resp, nil
@@ -1554,12 +1554,7 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 // is configured with outbound invoice sync enabled. If the customer has an active
 // saved payment method (token), the invoice is also charged automatically; otherwise
 // the invoice is synced as a Moyasar invoice link so the customer can pay manually.
-func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, invoiceID string) error {
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return err
-	}
-
+func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
 	if err != nil {
 		if ierr.IsNotFound(err) {
