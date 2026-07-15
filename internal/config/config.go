@@ -261,8 +261,9 @@ type OtelConfig struct {
 	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
 	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
 
-	Traces OtelTracesConfig `mapstructure:"traces"`
-	Logs   OtelLogsConfig   `mapstructure:"logs"`
+	Traces  OtelTracesConfig  `mapstructure:"traces"`
+	Logs    OtelLogsConfig    `mapstructure:"logs"`
+	Metrics OtelMetricsConfig `mapstructure:"metrics"`
 }
 
 // OtelTracesConfig configures OTLP span export.
@@ -280,6 +281,10 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
+	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
+	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
+	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
@@ -306,6 +311,25 @@ func (c OtelTracesConfig) MergedHeaders() map[string]string {
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
 func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// OtelMetricsConfig configures OTLP metric export (app-level DB/cache metrics).
+// Independent of Traces: metrics are always-on aggregate signal, cheap and
+// unsampled, so they carry steady-state monitoring while spans stay for debug.
+type OtelMetricsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
+	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelMetricsConfig) MergedHeaders() map[string]string {
 	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
 }
 

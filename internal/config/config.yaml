@@ -151,6 +151,11 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
     auth_value: ""
     sample_rate: 1.0
+    # Per-query DB/cache/ClickHouse child spans. Off by default; when on, throttled
+    # per-trace by storage_spans_sample_rate (independent of sample_rate, so server
+    # spans stay 100%). 0.2 caps the fan-out; set 1.0 for full debug fidelity.
+    storage_spans_enabled: false
+    storage_spans_sample_rate: 0.2
     # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
     # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
     capture_exceptions: true
@@ -161,6 +166,16 @@ otel:
     protocol: "" # Empty = inherit top-level grpc.
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
     auth_value: ""
+
+  # App-level DB/cache metrics (always-on aggregate signal, unsampled). Service-level
+  # resource only (no per-pod host attrs) to keep metric cardinality — and cost — flat.
+  metrics:
+    enabled: false
+    endpoint: "" # Set via FLEXPRICE_OTEL_METRICS_ENDPOINT
+    protocol: "" # Empty = inherit top-level grpc.
+    auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_METRICS_AUTH_VALUE
+    auth_value: ""
+    interval_seconds: 60
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
