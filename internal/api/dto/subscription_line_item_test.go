@@ -3,6 +3,7 @@ package dto
 import (
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -155,6 +156,100 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate(0)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSub)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionLineItemRequest_Validate_Quantity(t *testing.T) {
+	fixedPriceNoMin := &price.Price{
+		Type:        types.PRICE_TYPE_FIXED,
+		MinQuantity: nil,
+	}
+	fixedPriceMin5 := &price.Price{
+		Type:        types.PRICE_TYPE_FIXED,
+		MinQuantity: lo.ToPtr(decimal.NewFromInt(5)),
+	}
+
+	tests := []struct {
+		name      string
+		quantity  *decimal.Decimal
+		linePrice *price.Price
+		wantErr   bool
+		errSub    string
+	}{
+		{
+			name:      "nil quantity, no min quantity set: no error",
+			quantity:  nil,
+			linePrice: fixedPriceNoMin,
+		},
+		{
+			name:      "nil quantity, min quantity set: no error (nil is never checked against floor)",
+			quantity:  nil,
+			linePrice: fixedPriceMin5,
+		},
+		{
+			name:      "explicit zero quantity, no min quantity: no error",
+			quantity:  lo.ToPtr(decimal.Zero),
+			linePrice: fixedPriceNoMin,
+		},
+		{
+			name:      "explicit zero quantity, min quantity set: error below floor",
+			quantity:  lo.ToPtr(decimal.Zero),
+			linePrice: fixedPriceMin5,
+			wantErr:   true,
+			errSub:    "quantity must be greater than or equal to min_quantity",
+		},
+		{
+			name:      "explicit quantity below min quantity: error",
+			quantity:  lo.ToPtr(decimal.NewFromInt(2)),
+			linePrice: fixedPriceMin5,
+			wantErr:   true,
+			errSub:    "quantity must be greater than or equal to min_quantity",
+		},
+		{
+			name:      "explicit quantity at min quantity: no error",
+			quantity:  lo.ToPtr(decimal.NewFromInt(5)),
+			linePrice: fixedPriceMin5,
+		},
+		{
+			name:      "explicit quantity above min quantity: no error",
+			quantity:  lo.ToPtr(decimal.NewFromInt(10)),
+			linePrice: fixedPriceMin5,
+		},
+		{
+			name:      "negative quantity: error regardless of min quantity",
+			quantity:  lo.ToPtr(decimal.NewFromInt(-1)),
+			linePrice: fixedPriceMin5,
+			wantErr:   true,
+			errSub:    "quantity must be non-negative",
+		},
+		{
+			name:      "nil linePrice, negative quantity: error not dependent on linePrice",
+			quantity:  lo.ToPtr(decimal.NewFromInt(-1)),
+			linePrice: nil,
+			wantErr:   true,
+			errSub:    "quantity must be non-negative",
+		},
+		{
+			name:      "nil linePrice, explicit quantity (including 0): no floor check applies",
+			quantity:  lo.ToPtr(decimal.Zero),
+			linePrice: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &CreateSubscriptionLineItemRequest{
+				PriceID:  "price_test",
+				Quantity: tt.quantity,
+			}
+			err := req.Validate(tt.linePrice, nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errSub)
