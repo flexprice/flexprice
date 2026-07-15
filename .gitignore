@@ -132,3 +132,4 @@ postman/
 # graphify
 graphify-out/
 graphify-out/server
+.context/
