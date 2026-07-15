@@ -46,33 +46,47 @@ func assertNoRawInjection(t *testing.T, query string, args []interface{}) {
 	assert.Contains(t, args, maliciousValue, "filter value must be bound as an arg")
 }
 
-func TestBuildFilterConditions_Parameterized(t *testing.T) {
-	filters := map[string][]string{
-		maliciousProperty: {"a"},
+func TestBuildFilterConditions(t *testing.T) {
+	cases := []struct {
+		name     string
+		filters  map[string][]string
+		validate func(*testing.T, string, []interface{})
+	}{
+		{
+			name:    "Parameterized",
+			filters: map[string][]string{maliciousProperty: {"a"}},
+			validate: func(t *testing.T, clause string, args []interface{}) {
+				assert.NotContains(t, clause, "OR 1=1", "raw filter value leaked into SQL string")
+				assert.NotContains(t, clause, "x')", "raw property name leaked into SQL string")
+				assert.Contains(t, clause, "JSONExtractString(properties, ?)")
+				assert.Contains(t, args, maliciousProperty)
+				assert.Contains(t, args, "a")
+			},
+		},
+		{
+			name:    "MultiValue",
+			filters: map[string][]string{"region": {"us", "eu"}},
+			validate: func(t *testing.T, clause string, args []interface{}) {
+				assert.Contains(t, clause, "JSONExtractString(properties, ?) IN (?,?)")
+				assert.Equal(t, []interface{}{"region", "us", "eu"}, args)
+			},
+		},
+		{
+			name:    "Empty",
+			filters: nil,
+			validate: func(t *testing.T, clause string, args []interface{}) {
+				assert.Equal(t, "", clause)
+				assert.Nil(t, args)
+			},
+		},
 	}
-	clause, args := buildFilterConditions(filters)
 
-	assert.NotContains(t, clause, "OR 1=1", "raw filter value leaked into SQL string")
-	assert.NotContains(t, clause, "x')", "raw property name leaked into SQL string")
-	assert.Contains(t, clause, "JSONExtractString(properties, ?)")
-	assert.Contains(t, args, maliciousProperty)
-	assert.Contains(t, args, "a")
-}
-
-func TestBuildFilterConditions_MultiValue(t *testing.T) {
-	filters := map[string][]string{
-		"region": {"us", "eu"},
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clause, args := buildFilterConditions(tc.filters)
+			tc.validate(t, clause, args)
+		})
 	}
-	clause, args := buildFilterConditions(filters)
-
-	assert.Contains(t, clause, "JSONExtractString(properties, ?) IN (?,?)")
-	assert.Equal(t, []interface{}{"region", "us", "eu"}, args)
-}
-
-func TestBuildFilterConditions_Empty(t *testing.T) {
-	clause, args := buildFilterConditions(nil)
-	assert.Equal(t, "", clause)
-	assert.Nil(t, args)
 }
 
 func TestBuildUsageEventCustomerFilters_Parameterized(t *testing.T) {
@@ -121,50 +135,27 @@ func TestAggregatorGetQuery_NoInjection(t *testing.T) {
 	}
 
 	for _, agg := range aggregators {
-		t.Run(string(agg.GetType()), func(t *testing.T) {
-			params := baseUsageParams()
-			params.ExternalCustomerID = maliciousProperty
-			params.Filters = map[string][]string{maliciousProperty: {maliciousValue}}
-			if agg.GetType() == types.AggregationSumWithMultiplier {
-				m := decimal.NewFromInt(1)
-				params.Multiplier = &m
+		for _, bucketSize := range []types.WindowSize{"", types.WindowSizeHour} {
+			name := string(agg.GetType())
+			if bucketSize != "" {
+				name += "_windowed"
 			}
+			t.Run(name, func(t *testing.T) {
+				params := baseUsageParams()
+				params.BucketSize = bucketSize
+				params.ExternalCustomerID = maliciousProperty
+				params.Filters = map[string][]string{maliciousProperty: {maliciousValue}}
+				if agg.GetType() == types.AggregationSumWithMultiplier {
+					m := decimal.NewFromInt(1)
+					params.Multiplier = &m
+				}
 
-			query, args := agg.GetQuery(ctx, params)
+				query, args := agg.GetQuery(ctx, params)
 
-			assert.NotContains(t, query, "OR 1=1", "malicious payload leaked into SQL string")
-			assert.NotContains(t, query, maliciousProperty, "raw external_customer_id/filter property leaked into SQL string")
-			assert.NotContains(t, query, maliciousValue, "raw filter value leaked into SQL string")
-			assert.Contains(t, args, maliciousProperty)
-			assert.Contains(t, args, maliciousValue)
-		})
+				assertNoRawInjection(t, query, args)
+			})
+		}
 	}
-}
-
-func TestMaxAggregator_WindowedQuery_NoInjection(t *testing.T) {
-	ctx := testCtx()
-	params := baseUsageParams()
-	params.BucketSize = types.WindowSizeHour
-	params.ExternalCustomerID = maliciousProperty
-	params.Filters = map[string][]string{maliciousProperty: {maliciousValue}}
-
-	agg := &MaxAggregator{}
-	query, args := agg.GetQuery(ctx, params)
-
-	assertNoRawInjection(t, query, args)
-}
-
-func TestSumAggregator_WindowedQuery_NoInjection(t *testing.T) {
-	ctx := testCtx()
-	params := baseUsageParams()
-	params.BucketSize = types.WindowSizeHour
-	params.ExternalCustomerID = maliciousProperty
-	params.Filters = map[string][]string{maliciousProperty: {maliciousValue}}
-
-	agg := &SumAggregator{}
-	query, args := agg.GetQuery(ctx, params)
-
-	assertNoRawInjection(t, query, args)
 }
 
 func TestCountAggregator_GetQuery_TenantEnvironmentEventNameBound(t *testing.T) {
