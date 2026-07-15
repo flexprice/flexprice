@@ -64,16 +64,13 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	// Idempotency: if the invoice is already mapped to Tabs, return the existing mapping.
-	if existing, ok, err := s.existingInvoiceMapping(ctx, req.InvoiceID); err != nil {
+	// If the invoice was already synced, re-sync it rather than short-circuiting: the previously
+	// synced obligations are deleted from Tabs (and their mappings dropped) below so syncObligations
+	// recreates them from the invoice's current line items, and a fresh Tabs invoice is fetched. The
+	// existing invoice mapping is updated in place with the new Tabs invoice id.
+	existingMapping, alreadySynced, err := s.existingInvoiceMapping(ctx, req.InvoiceID)
+	if err != nil {
 		return nil, err
-	} else if ok {
-		return &TabsInvoiceSyncResponse{
-			ContractID:     existing.ProviderEntityID,
-			TabsCustomerID: metadataString(existing.Metadata, "tabs_customer_id"),
-			TabsInvoiceID:  metadataString(existing.Metadata, "tabs_invoice_id"),
-			Currency:       inv.Currency,
-		}, nil
 	}
 
 	cust, err := s.customerRepo.Get(ctx, inv.CustomerID)
@@ -98,14 +95,23 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	err = s.syncObligations(ctx, inv, tabsContractID)
-	issueDate := inv.IssueDate
-	if err != nil {
+	// On a re-sync, drop the previously-synced obligations (from Tabs and locally) so they are
+	// recreated from the invoice's current line items below. Deletion is driven by the obligation
+	// ids recorded on the invoice mapping, so obligations whose line items were removed (or recreated
+	// with new ids) since the last sync are still cleaned up.
+	if alreadySynced {
+		if err = s.deletePreviousObligations(ctx, existingMapping, inv, tabsContractID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err = s.syncObligations(ctx, inv, tabsContractID); err != nil {
 		return nil, err
 	}
 
 	// Look up the Tabs invoice(s) generated for the obligations (by contract + issue date). The
 	// invoice is mapped to its Tabs contract; the Tabs invoice id is recorded in the metadata.
+	issueDate := lo.FromPtr(inv.IssueDate)
 	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, issueDate.Format(tabsDateLayout))
 	if err != nil {
 		return nil, err
@@ -115,7 +121,14 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, fmt.Errorf("unable to create invoice in tabs")
 	}
 
-	if err := s.mapInvoice(ctx, inv, tabsContractID, tabsCustomerID, tabsInvoiceID); err != nil {
+	// Record the obligations synced for this invoice so a later re-sync can delete them even if the
+	// invoice's line items change (or are recreated with new ids) in the meantime.
+	obligationIDs, err := s.syncedObligationIDs(ctx, inv.LineItems)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.persistInvoiceMapping(ctx, existingMapping, inv, tabsContractID, tabsCustomerID, tabsInvoiceID, obligationIDs); err != nil {
 		return nil, err
 	}
 
@@ -150,9 +163,17 @@ func (s *InvoiceService) existingInvoiceMapping(ctx context.Context, invoiceID s
 	return existing[0], true, nil
 }
 
-// mapInvoice persists the flexprice-invoice -> tabs-contract mapping, recording the Tabs customer
-// and invoice ids in the metadata. It makes the sync idempotent at the invoice level.
-func (s *InvoiceService) mapInvoice(ctx context.Context, inv *invoice.Invoice, contractID, tabsCustomerID, tabsInvoiceID string) error {
+// persistInvoiceMapping records the flexprice-invoice -> tabs mapping, storing the Tabs customer,
+// contract and invoice ids in the metadata. On a first sync it creates the mapping; on a re-sync
+// it updates the existing mapping in place with the freshly-fetched Tabs invoice id. This keeps the
+// invoice-level sync idempotent.
+func (s *InvoiceService) persistInvoiceMapping(ctx context.Context, existing *entityintegrationmapping.EntityIntegrationMapping, inv *invoice.Invoice, contractID, tabsCustomerID, tabsInvoiceID string, obligationIDs []string) error {
+	if existing != nil {
+		existing.ProviderEntityID = tabsInvoiceID
+		existing.Metadata = tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID, obligationIDs)
+		return s.mappingRepo.Update(ctx, existing)
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         inv.ID,
@@ -161,14 +182,127 @@ func (s *InvoiceService) mapInvoice(ctx context.Context, inv *invoice.Invoice, c
 		ProviderEntityID: tabsInvoiceID,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
-		Metadata: map[string]interface{}{
-			"contract_id":      contractID,
-			"tabs_customer_id": tabsCustomerID,
-			"tabs_invoice_id":  tabsInvoiceID,
-			"synced_at":        time.Now().UTC().Format(time.RFC3339),
-		},
+		Metadata:         tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID, obligationIDs),
 	}
 	return s.mappingRepo.Create(ctx, mapping)
+}
+
+// tabsInvoiceMetadata builds the metadata recorded on an invoice mapping. obligation_ids records the
+// Tabs obligations synced for the invoice so a re-sync can delete them independently of the current
+// line items.
+func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, obligationIDs []string) map[string]interface{} {
+	return map[string]interface{}{
+		"contract_id":      contractID,
+		"tabs_customer_id": tabsCustomerID,
+		"tabs_invoice_id":  tabsInvoiceID,
+		"obligation_ids":   obligationIDs,
+		"synced_at":        time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// deletePreviousObligations removes the obligations recorded on the invoice's existing Tabs mapping
+// from Tabs and drops their line-item -> obligation mappings, so a re-sync recreates obligations from
+// the invoice's current line items. Because the obligation ids are read from the invoice mapping (not
+// the current line items), obligations whose line items were removed — or recreated with new ids —
+// since the last sync are still cleaned up. Obligation deletion is idempotent (see DeleteObligation),
+// so the enclosing Temporal activity is safe to retry.
+func (s *InvoiceService) deletePreviousObligations(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping, inv *invoice.Invoice, contractID string) error {
+	obligationIDs := metadataStrings(mapping.Metadata, "obligation_ids")
+
+	// Match the line-item mappings to drop by obligation id, so mappings for removed/recreated line
+	// items are found too. Fall back to the current line items for invoices mapped before obligation
+	// ids were recorded.
+	var lineItemMappings []*entityintegrationmapping.EntityIntegrationMapping
+	var err error
+	if len(obligationIDs) > 0 {
+		lineItemMappings, err = s.mappingsByObligationIDs(ctx, obligationIDs)
+	} else {
+		lineItemMappings, err = s.lineItemObligationMappings(ctx, inv.LineItems)
+		obligationIDs = distinctObligationIDs(lineItemMappings)
+	}
+	if err != nil {
+		return err
+	}
+
+	if len(obligationIDs) == 0 {
+		return nil
+	}
+
+	for _, obligationID := range obligationIDs {
+		if err = s.client.DeleteObligation(ctx, contractID, obligationID); err != nil {
+			return err
+		}
+	}
+	for _, m := range lineItemMappings {
+		if err = s.mappingRepo.Delete(ctx, m); err != nil {
+			return err
+		}
+	}
+
+	s.logger.Info(ctx, "tabs: previous obligations deleted for re-sync",
+		"invoice_id", inv.ID, "tabs_contract_id", contractID, "obligation_count", len(obligationIDs))
+	return nil
+}
+
+// syncedObligationIDs returns the distinct Tabs obligation ids currently mapped to the invoice's line
+// items, i.e. the obligations just synced.
+func (s *InvoiceService) syncedObligationIDs(ctx context.Context, lineItems []*invoice.InvoiceLineItem) ([]string, error) {
+	mappings, err := s.lineItemObligationMappings(ctx, lineItems)
+	if err != nil {
+		return nil, err
+	}
+	return distinctObligationIDs(mappings), nil
+}
+
+// mappingsByObligationIDs returns the published line-item -> Tabs-obligation mappings whose obligation
+// (provider entity) id is in the given set. Obligation ids are unique per Tabs obligation, so this
+// scopes to a single invoice's obligations.
+func (s *InvoiceService) mappingsByObligationIDs(ctx context.Context, obligationIDs []string) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	if len(obligationIDs) == 0 {
+		return nil, nil
+	}
+
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityType = types.IntegrationEntityTypeInvoiceLineItem
+	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.ProviderEntityIDs = obligationIDs
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	return s.mappingRepo.List(ctx, filter)
+}
+
+// distinctObligationIDs returns the distinct non-empty obligation (provider entity) ids from the
+// given line-item mappings.
+func distinctObligationIDs(mappings []*entityintegrationmapping.EntityIntegrationMapping) []string {
+	ids := make([]string, 0, len(mappings))
+	for _, m := range mappings {
+		if m.ProviderEntityID != "" {
+			ids = append(ids, m.ProviderEntityID)
+		}
+	}
+	return lo.Uniq(ids)
+}
+
+// metadataStrings reads a string slice from a mapping's metadata, tolerating the []interface{} form
+// produced by a JSON round-trip through the datastore.
+func metadataStrings(m map[string]interface{}, key string) []string {
+	if m == nil {
+		return nil
+	}
+	switch v := m[key].(type) {
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if str, ok := e.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 // ensureCustomer guarantees a flexprice-customer -> tabs-customer mapping exists, creating the
@@ -365,10 +499,23 @@ func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoi
 // syncedLineItemIDs returns the set of the invoice's line item ids that already carry a Tabs
 // obligation mapping, i.e. were synced on a previous attempt.
 func (s *InvoiceService) syncedLineItemIDs(ctx context.Context, lineItems []*invoice.InvoiceLineItem) (map[string]struct{}, error) {
+	mappings, err := s.lineItemObligationMappings(ctx, lineItems)
+	if err != nil {
+		return nil, err
+	}
+	synced := make(map[string]struct{}, len(mappings))
+	for _, m := range mappings {
+		synced[m.EntityID] = struct{}{}
+	}
+	return synced, nil
+}
+
+// lineItemObligationMappings returns the published line-item -> Tabs-obligation mappings for the
+// invoice's line items (empty when the invoice has no line items).
+func (s *InvoiceService) lineItemObligationMappings(ctx context.Context, lineItems []*invoice.InvoiceLineItem) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	ids := lineItemIDs(lineItems)
-	synced := make(map[string]struct{}, len(ids))
 	if len(ids) == 0 {
-		return synced, nil
+		return nil, nil
 	}
 
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
@@ -377,14 +524,7 @@ func (s *InvoiceService) syncedLineItemIDs(ctx context.Context, lineItems []*inv
 	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
 	filter.Status = lo.ToPtr(types.StatusPublished)
 
-	existing, err := s.mappingRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range existing {
-		synced[m.EntityID] = struct{}{}
-	}
-	return synced, nil
+	return s.mappingRepo.List(ctx, filter)
 }
 
 // groupAlreadySynced reports whether a product group was already synced to Tabs. A group's
@@ -622,13 +762,4 @@ func productNameDescription(priceID string, p *price.Price) (name, description s
 		description = name
 	}
 	return name, description
-}
-
-// metadataString safely reads a string value from a mapping's metadata.
-func metadataString(m map[string]interface{}, key string) string {
-	if m == nil {
-		return ""
-	}
-	v, _ := m[key].(string)
-	return v
 }

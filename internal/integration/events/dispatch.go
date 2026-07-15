@@ -97,6 +97,14 @@ type customerVendorSyncInput struct {
 // the invoice is fetched inside the Temporal activity after a short sleep, avoiding
 // the race condition where the event arrives before the DB transaction commits.
 // eimRepo is used for idempotency: if a mapping already exists the provider trigger is skipped.
+//
+// Registered for two event types (see handler.go): invoice.update.finalized runs the full
+// fan-out below, unchanged. invoice.update (draft-stage compute/edits) only triggers Tabs — every
+// other provider stays finalize-only, so their trigger functions are skipped entirely for that
+// event. Tabs' own idempotency check is different from the rest: triggerTabsIfEnabled doesn't
+// short-circuit on eimRepo like the others do, because Tabs needs to run on both event types and
+// decide via a content diff (inside the sync activity) whether anything actually changed — not
+// just whether a mapping already exists.
 func DispatchInvoiceVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
@@ -140,20 +148,26 @@ func DispatchInvoiceVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+	triggers := []func() error{
 		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
+	}
+	if event.EventName == types.WebhookEventInvoiceUpdateFinalized {
+		triggers = append(triggers,
+			func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+			func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		)
+	}
+
+	var dispatchErrs []error
+	for _, trigger := range triggers {
 		if err := trigger(); err != nil {
 			dispatchErrs = append(dispatchErrs, err)
 		}
@@ -644,6 +658,11 @@ func triggerZohoBooksIfEnabled(
 	return executeWorkflow(ctx, temporalSvc, log, types.TemporalZohoBooksInvoiceSyncWorkflow, input, types.SecretProviderZohoBooks, in.InvoiceID)
 }
 
+// triggerTabsIfEnabled starts the Tabs sync workflow whenever Tabs is enabled, on both
+// invoice.update and invoice.update.finalized. Unlike every other provider's trigger function,
+// this doesn't short-circuit on eimRepo/invoiceAlreadySynced — Tabs needs to run repeatedly across
+// an invoice's draft lifecycle, and the sync activity itself (SyncInvoiceToTabs) decides whether
+// anything actually changed since the last sync before touching the Tabs API.
 func triggerTabsIfEnabled(
 	ctx context.Context,
 	connRepo connection.Repository,
@@ -657,10 +676,6 @@ func triggerTabsIfEnabled(
 		return err
 	}
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
-		return nil
-	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderTabs) {
-		log.Info(ctx, "integration_events: invoice already synced to Tabs, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 	input := &temporalmodels.TabsInvoiceSyncWorkflowInput{
