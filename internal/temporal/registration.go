@@ -187,7 +187,13 @@ func RegisterWorkflowsAndActivities(
 	)
 
 	// Moyasar activities
-	moyasarInvoiceSyncActivities := moyasarActivities.NewInvoiceSyncActivities(params, params.Logger)
+	moyasarInvoiceService := service.NewInvoiceService(params)
+	moyasarInvoiceSyncActivities := moyasarActivities.NewInvoiceSyncActivities(
+		params.IntegrationFactory,
+		customerService,
+		moyasarInvoiceService,
+		params.Logger,
+	)
 
 	// Paddle activities
 	paddleInvoiceSyncActivities := paddleActivities.NewInvoiceSyncActivities(
