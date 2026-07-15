@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -100,6 +101,53 @@ func (s *SubscriptionServiceSuite) activeSubsOnPlan(customerID, planID string) [
 	return matched
 }
 
+// createPaidPlan creates a plan with a fixed, recurring, non-zero price.
+func (s *SubscriptionServiceSuite) createPaidPlan(planID, priceID string, amount decimal.Decimal) *plan.Plan {
+	ctx := s.GetContext()
+
+	p := &plan.Plan{
+		ID:          planID,
+		Name:        "Paid Plan " + planID,
+		Description: "Paid tier",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, p))
+
+	pr := &price.Price{
+		ID:                 priceID,
+		Amount:             amount,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           p.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, pr))
+
+	return p
+}
+
+// createSubViaService creates a real subscription (with line items) through the service.
+func (s *SubscriptionServiceSuite) createSubViaService(customerID, planID string) string {
+	resp, err := s.service.CreateSubscription(s.GetContext(), dto.CreateSubscriptionRequest{
+		CustomerID:         customerID,
+		PlanID:             planID,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		StartDate:          lo.ToPtr(s.testData.now),
+	})
+	s.NoError(err)
+	return resp.Subscription.ID
+}
+
 func (s *SubscriptionServiceSuite) cancelImmediately(subID string) {
 	_, err := s.service.CancelSubscription(s.GetContext(), subID, &dto.CancelSubscriptionRequest{
 		CancellationType:  types.CancellationTypeImmediate,
@@ -173,4 +221,54 @@ func (s *SubscriptionServiceSuite) TestAutoDowngradeNoOpWhenNoFreePlan() {
 	})
 	s.NoError(err)
 	s.Len(active, 0, "with no free plan, cancellation leaves no active subscription")
+}
+
+// SkipAutoDowngrade must suppress the downgrade even when a free plan exists and this is the
+// customer's last subscription (the caller is responsible for the replacement).
+func (s *SubscriptionServiceSuite) TestAutoDowngradeSkippedWhenReplacementFollows() {
+	freePlan := s.createFreePlan("plan_free_skip", "price_free_skip")
+	cust := s.makeCustomer("cust_skip_downgrade")
+	paidSub := s.makeActiveSub("sub_skip", cust.ID, s.testData.plan.ID)
+
+	_, err := s.service.CancelSubscription(s.GetContext(), paidSub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "downgrade_test",
+		SkipAutoDowngrade: true,
+	})
+	s.NoError(err)
+
+	freeSubs := s.activeSubsOnPlan(cust.ID, freePlan.ID)
+	s.Len(freeSubs, 0, "SkipAutoDowngrade must suppress the free-tier downgrade")
+}
+
+// A plan change internally cancels the old subscription, which must NOT trigger the
+// auto-downgrade — otherwise the customer ends up with a stray free sub next to the target.
+func (s *SubscriptionServiceSuite) TestPlanChangeDoesNotCreateJunkFreeSubscription() {
+	freePlan := s.createFreePlan("plan_free_pc", "price_free_pc")
+	sourcePlan := s.createPaidPlan("plan_src_pc", "price_src_pc", decimal.NewFromInt(50))
+	targetPlan := s.createPaidPlan("plan_tgt_pc", "price_tgt_pc", decimal.NewFromInt(100))
+
+	cust := s.makeCustomer("cust_plan_change")
+	subID := s.createSubViaService(cust.ID, sourcePlan.ID)
+
+	// Change source -> target (internally: cancel source, create target).
+	// The SubscriptionServiceSuite doesn't wire EntityIntegrationMappingRepo, which the change
+	// service touches for Paddle mapping carryover — provide it on the local params copy.
+	params := s.service.(*subscriptionService).ServiceParams
+	params.EntityIntegrationMappingRepo = s.GetStores().EntityIntegrationMappingRepo
+	_, err := NewSubscriptionChangeService(params).ExecuteSubscriptionChange(
+		s.GetContext(), subID, dto.SubscriptionChangeRequest{
+			TargetPlanID:       targetPlan.ID,
+			ProrationBehavior:  types.ProrationBehaviorNone,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCycle:       types.BillingCycleAnniversary,
+		})
+	s.NoError(err)
+
+	// No stray free subscription, and the customer is on the target plan.
+	s.Len(s.activeSubsOnPlan(cust.ID, freePlan.ID), 0, "plan change must not create a free subscription")
+	s.Len(s.activeSubsOnPlan(cust.ID, targetPlan.ID), 1, "customer should be on the target plan")
 }

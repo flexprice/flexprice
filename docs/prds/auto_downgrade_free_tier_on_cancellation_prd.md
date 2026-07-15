@@ -47,6 +47,22 @@ The free plan is found via `PlanService.FindFreePlan(ctx)` (shared with tenant o
 Both hooks run **post-commit** and are **best-effort** (log on failure; the cancellation has
 already succeeded) and **idempotent** (the "no other active sub" check also guards retries).
 
+## Plan changes (upgrade/downgrade)
+
+A plan change (`SubscriptionChangeService`) internally **cancels the old subscription and
+creates the replacement** in one transaction. That internal cancel must NOT trigger the
+auto-downgrade — otherwise the customer ends up with a stray free subscription next to the
+plan they changed to.
+
+Handled via a `SkipAutoDowngrade` flag on the cancel request: the change flow always sets it
+(a plan change always creates a replacement — target plan is required and creation is atomic),
+so the downgrade is suppressed there. Every other cancel is a real cancel (no replacement) and
+the downgrade fires normally.
+
+Note: starting a new subscription via plain `CreateSubscription` does **not** supersede an
+existing free one — the platform allows multiple concurrent subscriptions. Only plan changes
+replace the running subscription.
+
 ## Edge cases
 
 - Inherited subscriptions never trigger a downgrade (already rejected by `CancelSubscription`).

@@ -2120,8 +2120,9 @@ func (s *subscriptionService) CancelSubscription(
 	}
 
 	// Auto-downgrade to free tier (FLE-973). Immediate cancels only; deferred ones downgrade
-	// from processSubscriptionPeriod. Best-effort — cancellation is already committed.
-	if req.CancellationType == types.CancellationTypeImmediate {
+	// from processSubscriptionPeriod. Skipped when the caller creates its own replacement
+	// (e.g. plan change). Best-effort — cancellation is already committed.
+	if req.CancellationType == types.CancellationTypeImmediate && !req.SkipAutoDowngrade {
 		if err := s.ensureFreePlanSubscriptionOnCancellation(ctx, subscription, effectiveDate); err != nil {
 			logger.Error(ctx, "failed to create free-tier subscription on cancellation",
 				"subscription_id", subscription.ID, "error", err)
