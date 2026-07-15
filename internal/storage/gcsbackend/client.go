@@ -189,6 +189,8 @@ func contentTypeFor(format fpstorage.UploadFormat, compressed bool) string {
 		return "application/json"
 	case fpstorage.UploadFormatPDF:
 		return "application/pdf"
+	case fpstorage.UploadFormatParquet:
+		return "application/vnd.apache.parquet"
 	default:
 		return "application/octet-stream"
 	}
