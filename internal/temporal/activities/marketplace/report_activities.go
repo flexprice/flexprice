@@ -254,7 +254,8 @@ func (a *ReportActivities) reportRecord(
 		// expected to keep retrying until then rather than needing manual action.
 		a.logger.Error(envCtx, "marketplace usage report rejected by aws: customer not subscribed, will retry next run",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
-			"customer_id", rec.CustomerID, "license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount)
+			"customer_id", rec.CustomerID, "license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount,
+			"error", "customer_not_subscribed")
 		result.Failed++
 		return
 	case awsmarketplace.StatusDuplicateRecord:
@@ -265,13 +266,14 @@ func (a *ReportActivities) reportRecord(
 		a.logger.Error(envCtx, "marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
 			"customer_id", rec.CustomerID, "license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount,
-			"period_end", rec.PeriodEnd)
+			"period_end", rec.PeriodEnd, "error", "duplicate_record")
 		result.Failed++
 		return
 	default:
 		a.logger.Error(envCtx, "marketplace usage report rejected by aws: unrecognized status, will retry next run",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
-			"license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount, "aws_status", res.Status)
+			"license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount,
+			"aws_status", res.Status, "error", "unrecognized_aws_status")
 		result.Failed++
 		return
 	}

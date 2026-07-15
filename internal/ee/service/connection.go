@@ -570,7 +570,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		)
 		cancel()
 		if err != nil {
-			s.Logger.Error(ctx, "aws marketplace connection verification failed", "tenant_id", tenantID, "environment_id", environmentID)
+			// Deliberately not logger.Err(err): AssumeRole's underlying AWS error can embed the
+			// role ARN. See internal/integration/awsmarketplace/client.go's AssumeRole.
+			s.Logger.Error(ctx, "aws marketplace connection verification failed",
+				"tenant_id", tenantID, "environment_id", environmentID,
+				"error", "redacted: aws error message may embed the role arn")
 			return nil, ierr.WithError(err).
 				WithHint("Could not assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID before creating this connection.").
 				Mark(ierr.ErrValidation)
