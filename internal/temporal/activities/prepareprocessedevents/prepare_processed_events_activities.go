@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // PrepareProcessedEventsActivities contains Temporal activities used by PrepareProcessedEventsWorkflow.
@@ -192,7 +191,6 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 		createReq := dto.CreateSubscriptionLineItemRequest{
 			PriceID:              input.PriceID,
 			StartDate:            &input.EventTimestamp, // Use event timestamp as StartDate
-			Quantity:             decimal.Zero,          // Usage prices have zero quantity
 			SkipEntitlementCheck: true,                  // Skip entitlement check for workflow-created line items
 			Metadata: map[string]string{
 				"added_by":      "prepare_processed_events_workflow",

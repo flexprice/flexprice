@@ -16,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PlanService = interfaces.PlanService
@@ -772,7 +771,6 @@ func createPlanLineItem(
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:     price.ID,
-		Quantity:    decimal.Zero,
 		Metadata:    metadata,
 		DisplayName: price.DisplayName,
 		StartDate:   price.StartDate,
