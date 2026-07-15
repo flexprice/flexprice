@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -59,8 +60,8 @@ func (r *SubModifyInheritanceRequest) Validate() error {
 
 // LineItemQuantityChange describes a quantity change for a single line item.
 type LineItemQuantityChange struct {
-	ID       string          `json:"id" binding:"required"`
-	Quantity decimal.Decimal `json:"quantity" swaggertype:"string" binding:"required"`
+	ID       string           `json:"id" binding:"required"`
+	Quantity *decimal.Decimal `json:"quantity" swaggertype:"string"`
 	// EffectiveDate is when the quantity change takes effect.
 	// If omitted, the change is effective immediately (now).
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
@@ -83,10 +84,13 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 				WithHint("Each line_item entry must have a non-empty id").
 				Mark(ierr.ErrValidation)
 		}
-		if li.Quantity.LessThanOrEqual(decimal.Zero) {
-			return ierr.NewError("quantity must be positive").
-				WithHint("Each line_item quantity must be greater than zero").
+		if li.Quantity == nil {
+			return ierr.NewError("quantity is required").
+				WithHint("Each line_item entry must specify a quantity").
 				Mark(ierr.ErrValidation)
+		}
+		if err := price.ValidateQuantityNonNegative(li.Quantity); err != nil {
+			return err
 		}
 	}
 	return nil
