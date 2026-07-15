@@ -274,6 +274,16 @@ func buildTimeConditions(params *events.UsageParams) (string, []interface{}) {
 	return "AND " + strings.Join(conditions, " AND "), args
 }
 
+// appendArgs concatenates arg groups onto base in order — a small helper to
+// collapse the repeated `args = append(args, xArgs...)` chain that follows
+// every query-building function's args slice construction in this file.
+func appendArgs(base []interface{}, groups ...[]interface{}) []interface{} {
+	for _, g := range groups {
+		base = append(base, g...)
+	}
+	return base
+}
+
 func parseTimeConditions(params *events.UsageParams) ([]string, []interface{}) {
 	var conditions []string
 	var args []interface{}
@@ -350,10 +360,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -396,10 +403,7 @@ func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		filterConditions,
 		timeConditions)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -447,10 +451,7 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 		timeConditions,
 		groupByClause)
 
-	args := []interface{}{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -509,10 +510,7 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 		windowGroupBy,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -571,10 +569,7 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		windowGroupBy,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -622,10 +617,7 @@ func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsagePar
 		timeConditions,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -692,10 +684,7 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 		windowGroupBy,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -763,10 +752,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy,
 		groupByClause)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -821,10 +807,7 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 			filterConditions,
 			timeConditions)
 
-		args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-		args = append(args, customerArgs...)
-		args = append(args, filterArgs...)
-		args = append(args, timeArgs...)
+		args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 		return query, args
 	}
@@ -859,10 +842,7 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		filterConditions,
 		timeConditions)
 
-	args := []interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	args := appendArgs([]interface{}{params.PropertyName, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), params.EventName}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
@@ -925,17 +905,14 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
 		groupByClause,
 	)
 
-	args := []interface{}{
+	args := appendArgs([]interface{}{
 		formatClickHouseDateTime(params.StartTime),
 		formatClickHouseDateTime(params.EndTime),
 		params.PropertyName,
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),
 		params.EventName,
-	}
-	args = append(args, customerArgs...)
-	args = append(args, filterArgs...)
-	args = append(args, timeArgs...)
+	}, customerArgs, filterArgs, timeArgs)
 
 	return query, args
 }
