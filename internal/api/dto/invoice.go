@@ -118,6 +118,12 @@ type CreateInvoiceRequest struct {
 	// issue_date overrides the user-facing date of the invoice.
 	// Defaults to created_at if not provided.
 	IssueDate *time.Time `json:"issue_date,omitempty"`
+
+	// force_sync_invoice, when true, attempts to synchronously sync this invoice to
+	// Moyasar (if enabled) before returning, instead of relying solely on the async
+	// Kafka + Temporal vendor-sync pipeline. Only honored by CreateOneOffInvoice.
+	// Best-effort: sync failures do not fail invoice creation.
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
