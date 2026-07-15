@@ -180,3 +180,15 @@ func TestNoMetricsWhenDisabled(t *testing.T) {
 		t.Errorf("expected no data points when metrics disabled; got %v", got)
 	}
 }
+
+// A nil *Service must be a safe no-op — StartRepositorySpan is called on a nil
+// tracing service when tracing isn't wired (regression: the metrics change
+// added a direct s.metricsEnabled deref that panicked on nil, FLE-1003 CI).
+func TestNilServiceStorageSpanNoPanic(t *testing.T) {
+	var s *Service // nil
+	span, _ := s.StartRepositorySpan(context.Background(), "postgresql", "price", "list", nil)
+	span.Finish() // must also be nil-safe
+	if span != nil {
+		t.Errorf("expected nil span from nil service, got %v", span)
+	}
+}

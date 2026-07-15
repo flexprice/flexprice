@@ -451,6 +451,9 @@ func (s *Service) IsStorageSpansEnabled() bool {
 // kept trace retains its whole DB waterfall and, at equal rates, the kept set is
 // a subset of the head sampler's. Spans with no trace context are always emitted.
 func (s *Service) storageSpanSampled(ctx context.Context) bool {
+	if s == nil {
+		return false
+	}
 	rate := s.cfg.Otel.Traces.StorageSpansSampleRate
 	if rate >= 1.0 {
 		return true
@@ -702,6 +705,9 @@ func (s *Service) startSpan(ctx context.Context, name, op string, params map[str
 // storage_spans_sample_rate (per-trace), so every storage span — DB, ClickHouse,
 // repository — obeys both regardless of call path.
 func (s *Service) startStorageSpan(ctx context.Context, name, op, dbSystem string, params map[string]interface{}) (*Span, context.Context) {
+	if s == nil { // a nil tracing service is a valid no-op (tracing not wired)
+		return nil, ctx
+	}
 	spanOn := s.IsStorageSpansEnabled() && s.storageSpanSampled(ctx)
 	if !spanOn && !s.metricsEnabled {
 		return nil, ctx
