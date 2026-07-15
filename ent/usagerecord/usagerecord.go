@@ -40,6 +40,8 @@ const (
 	FieldQuantity = "quantity"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
+	// FieldCurrency holds the string denoting the currency field in the database.
+	FieldCurrency = "currency"
 	// FieldPeriodStart holds the string denoting the period_start field in the database.
 	FieldPeriodStart = "period_start"
 	// FieldPeriodEnd holds the string denoting the period_end field in the database.
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldPlanID,
 	FieldQuantity,
 	FieldAmount,
+	FieldCurrency,
 	FieldPeriodStart,
 	FieldPeriodEnd,
 	FieldSyncs,
@@ -107,6 +110,8 @@ var (
 	DefaultQuantity decimal.Decimal
 	// DefaultAmount holds the default value on creation for the "amount" field.
 	DefaultAmount decimal.Decimal
+	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	CurrencyValidator func(string) error
 	// DefaultAllProvidersSynced holds the default value on creation for the "all_providers_synced" field.
 	DefaultAllProvidersSynced bool
 )
@@ -182,6 +187,11 @@ func ByQuantity(opts ...sql.OrderTermOption) OrderOption {
 // ByAmount orders the results by the amount field.
 func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
+}
+
+// ByCurrency orders the results by the currency field.
+func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
 }
 
 // ByPeriodStart orders the results by the period_start field.

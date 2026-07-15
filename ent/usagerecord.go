@@ -45,6 +45,8 @@ type UsageRecord struct {
 	Quantity decimal.Decimal `json:"quantity,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount decimal.Decimal `json:"amount,omitempty"`
+	// Currency holds the value of the "currency" field.
+	Currency string `json:"currency,omitempty"`
 	// PeriodStart holds the value of the "period_start" field.
 	PeriodStart time.Time `json:"period_start,omitempty"`
 	// PeriodEnd holds the value of the "period_end" field.
@@ -67,7 +69,7 @@ func (*UsageRecord) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case usagerecord.FieldAllProvidersSynced:
 			values[i] = new(sql.NullBool)
-		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID:
+		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID, usagerecord.FieldCurrency:
 			values[i] = new(sql.NullString)
 		case usagerecord.FieldCreatedAt, usagerecord.FieldUpdatedAt, usagerecord.FieldPeriodStart, usagerecord.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -170,6 +172,12 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				ur.Amount = *value
 			}
+		case usagerecord.FieldCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field currency", values[i])
+			} else if value.Valid {
+				ur.Currency = value.String
+			}
 		case usagerecord.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
@@ -270,6 +278,9 @@ func (ur *UsageRecord) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", ur.Amount))
+	builder.WriteString(", ")
+	builder.WriteString("currency=")
+	builder.WriteString(ur.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("period_start=")
 	builder.WriteString(ur.PeriodStart.Format(time.ANSIC))

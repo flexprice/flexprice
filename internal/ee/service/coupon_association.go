@@ -14,7 +14,6 @@ import (
 )
 
 type CouponAssociationService interface {
-	CreateCouponAssociation(ctx context.Context, req dto.CreateCouponAssociationRequest) (*dto.CouponAssociationResponse, error)
 	GetCouponAssociation(ctx context.Context, id string) (*dto.CouponAssociationResponse, error)
 	DeleteCouponAssociation(ctx context.Context, id string) error
 	ListCouponAssociations(ctx context.Context, filter *types.CouponAssociationFilter) (*dto.ListCouponAssociationsResponse, error)
@@ -33,9 +32,25 @@ func NewCouponAssociationService(
 	}
 }
 
-func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, req dto.CreateCouponAssociationRequest) (*dto.CouponAssociationResponse, error) {
+// createCouponAssociation creates a coupon association and increments the
+// coupon's redemption count atomically. c is the coupon this association is
+// for — the caller (ApplyCouponsToSubscription, the sole caller) has already
+// fetched it for validation, so it's passed in here instead of re-fetched.
+// Unexported: no route exposes coupon-association creation directly (only
+// GET/list), so this has exactly one caller and doesn't need to be on the
+// public CouponAssociationService interface.
+func (s *couponAssociationService) createCouponAssociation(ctx context.Context, req dto.CreateCouponAssociationRequest, c *coupon.Coupon) (*dto.CouponAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	if c == nil {
+		return nil, ierr.NewError("coupon is required").
+			WithHint("A valid coupon must be provided to create a coupon association").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id": req.CouponID,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	var response *dto.CouponAssociationResponse
@@ -65,10 +80,15 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 				Mark(ierr.ErrInternal)
 		}
 
-		if err := s.CouponRepo.IncrementRedemptions(txCtx, req.CouponID); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to increment coupon redemptions").
-				Mark(ierr.ErrInternal)
+		// c.MaxRedemptions is immutable coupon config (set at creation, never
+		// changes), so it's safe to reuse from the caller's earlier read here —
+		// only total_redemptions changes, and that's re-checked fresh in the
+		// database by IncrementRedemptions's atomic guard, not against this read.
+		if err := s.CouponRepo.IncrementRedemptions(txCtx, req.CouponID, c.MaxRedemptions); err != nil {
+			// IncrementRedemptions already returns a properly-marked error
+			// (ErrValidation for limit-reached, ErrNotFound, ErrDatabase) —
+			// don't re-wrap and downgrade it to ErrInternal.
+			return err
 		}
 
 		response = s.toCouponAssociationResponse(ca)
@@ -289,8 +309,9 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 			Metadata:               map[string]string{},
 		}
 
-		// Create the coupon association
-		_, err = s.CreateCouponAssociation(ctx, createReq)
+		// Create the coupon association, reusing the coupon fetched above for
+		// validation instead of making createCouponAssociation re-fetch it.
+		_, err = s.createCouponAssociation(ctx, createReq, coupon)
 		if err != nil {
 			return err
 		}

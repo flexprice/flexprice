@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
@@ -19,7 +20,9 @@ import (
 // SnapshotActivities creates the usage records that will later be reported to a marketplace. For
 // every published aws_marketplace connection it computes each mapped subscription's usage for the
 // reporting window, using the same commitment- and overage-aware computation as real invoicing,
-// and writes one usage record per subscription.
+// and writes one usage record per subscription in the subscription's own billing currency —
+// marketplace-mandated currency conversion (e.g. AWS requires USD) happens per-marketplace at
+// report time, not here, since this table is shared across marketplaces.
 type SnapshotActivities struct {
 	subscriptionService          service.SubscriptionService
 	billingService               service.BillingService
@@ -150,6 +153,23 @@ func (a *SnapshotActivities) snapshotSubscription(
 
 	result.Total++
 
+	// The reporting window is deterministic per scheduled run, so a matching row means an earlier
+	// Temporal attempt for this exact activity call already wrote it (activity retries re-run the
+	// whole loop, including subscriptions a prior attempt already finished). Skip re-computing and
+	// re-inserting it — this is what makes the activity safe to retry.
+	alreadyExists, err := a.usageRecordRepo.ExistsForPeriod(envCtx, sub.ID, input.PeriodStart, input.PeriodEnd)
+	if err != nil {
+		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
+			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "check_existing")
+		result.Failed++
+		return
+	}
+	if alreadyExists {
+		result.Succeeded++
+		return
+	}
+
 	usageResp, err := a.subscriptionService.GetMeterUsageBySubscription(envCtx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      input.PeriodStart,
@@ -175,6 +195,9 @@ func (a *SnapshotActivities) snapshotSubscription(
 		return
 	}
 
+	// UsageRecord stores the subscription's native currency as the source of truth — this table is
+	// shared across marketplaces (AWS/Azure/GCP), so any marketplace-mandated currency conversion
+	// (AWS requires USD; Azure/GCP may not) happens per-marketplace at report time, not here.
 	customerExternalID := ""
 	if cust, custErr := a.customerRepo.Get(envCtx, sub.CustomerID); custErr == nil && cust != nil {
 		customerExternalID = cust.ExternalID
@@ -187,6 +210,7 @@ func (a *SnapshotActivities) snapshotSubscription(
 		SubscriptionID:     sub.ID,
 		PlanID:             sub.PlanID,
 		Amount:             totalAmount,
+		Currency:           usageResp.Currency,
 		PeriodStart:        input.PeriodStart,
 		PeriodEnd:          input.PeriodEnd,
 		Syncs:              map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry{},
@@ -196,6 +220,14 @@ func (a *SnapshotActivities) snapshotSubscription(
 	}
 
 	if err := a.usageRecordRepo.Create(envCtx, rec); err != nil {
+		// The ExistsForPeriod check above is a fast pre-check, not the source of truth — the unique
+		// index on (subscription_id, period_start, period_end) is. A concurrent execution can still
+		// win the race between the check and this insert; that shows up here as ErrAlreadyExists,
+		// and means the record is already written, so it's a success, not a failure.
+		if ierr.IsAlreadyExists(err) {
+			result.Succeeded++
+			return
+		}
 		a.logger.Error(envCtx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "create_usage_record")

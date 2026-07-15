@@ -42,6 +42,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -98,10 +99,10 @@ type Stores struct {
 	AlertLogsRepo                alertlogs.Repository
 	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
-	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
+	UsageRecordRepo              usagerecord.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -250,10 +251,10 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),
-		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
+		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 	}
 
 	// Cache stores
@@ -310,10 +311,10 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
-	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
+	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

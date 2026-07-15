@@ -693,16 +693,14 @@ func createEventIteratorKey(timestamp time.Time, id string) string {
 	return fmt.Sprintf("%d::%s", timestamp.UnixNano(), id)
 }
 
-// MonitorKafkaLag monitors Kafka consumer lag for event consumption and post-processing pipelines.
+// MonitorKafkaLag monitors Kafka consumer lag for the event consumption pipeline.
 // It creates OTel monitoring spans to track lag metrics for alerting and observability.
 func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 	sentrySvc := s.tracingSvc
 	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
 
-	// Get Kafka configuration for the current tenant
-	eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup := s.getKafkaConsumerConfig(ctx)
+	eventConsumptionTopic, eventConsumptionConsumerGroup := s.getKafkaConsumerConfig(ctx)
 
-	// Monitor event consumption pipeline lag
 	if err := s.monitorConsumerLag(
 		ctx,
 		sentrySvc,
@@ -715,21 +713,6 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
-	}
-
-	// Monitor event post-processing pipeline lag
-	if err := s.monitorConsumerLag(
-		ctx,
-		sentrySvc,
-		kafkaMonitoring,
-		eventPostProcessingTopic,
-		eventPostProcessingConsumerGroup,
-		"kafka.lag.event_post_processing",
-	); err != nil {
-		s.logger.Info(ctx, "failed to monitor event post-processing lag",
-			"error", err,
-			"topic", eventPostProcessingTopic,
-			"consumer_group", eventPostProcessingConsumerGroup)
 	}
 
 	return nil
@@ -804,13 +787,10 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 	s.logger.Info(ctx, "fetching monitoring data",
 		"tenant_id", tenantID,
 		"environment_id", envID,
-		"event_consumption_group", s.config.EventProcessing.ConsumerGroup,
-		"event_post_processing_group", s.config.EventPostProcessing.ConsumerGroup)
+		"event_consumption_group", s.config.EventProcessing.ConsumerGroup)
 
-	// Get the appropriate consumer groups and topics based on tenant configuration
-	eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup := s.getKafkaConsumerConfig(ctx)
+	eventConsumptionTopic, eventConsumptionConsumerGroup := s.getKafkaConsumerConfig(ctx)
 
-	// Calculate Kafka consumer lag for event consumption
 	eventConsumptionLag, err := kafkaMonitoring.GetConsumerLag(ctx,
 		eventConsumptionTopic,
 		eventConsumptionConsumerGroup)
@@ -819,24 +799,9 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
-		// Continue with zero lag on error
 		eventConsumptionLag = &kafka.ConsumerLag{TotalLag: 0}
 	}
 
-	// Calculate Kafka consumer lag for event post processing
-	eventPostProcessingLag, err := kafkaMonitoring.GetConsumerLag(ctx,
-		eventPostProcessingTopic,
-		eventPostProcessingConsumerGroup)
-	if err != nil {
-		s.logger.Info(ctx, "failed to get event post processing consumer lag",
-			"error", err,
-			"topic", eventPostProcessingTopic,
-			"consumer_group", eventPostProcessingConsumerGroup)
-		// Continue with zero lag on error
-		eventPostProcessingLag = &kafka.ConsumerLag{TotalLag: 0}
-	}
-
-	// Convert domain event count points to DTO points
 	var dtoPoints []dto.EventCountPoint
 	for _, point := range eventCountResult.Points {
 		dtoPoints = append(dtoPoints, dto.EventCountPoint{
@@ -845,54 +810,24 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 		})
 	}
 
-	// Build response
 	response := &dto.GetMonitoringDataResponse{
-		TotalCount:        eventCountResult.TotalCount,
-		ConsumptionLag:    eventConsumptionLag.TotalLag,
-		PostProcessingLag: eventPostProcessingLag.TotalLag,
-		Points:            dtoPoints,
+		TotalCount:     eventCountResult.TotalCount,
+		ConsumptionLag: eventConsumptionLag.TotalLag,
+		Points:         dtoPoints,
 	}
 
 	return response, nil
 }
 
-// getKafkaConsumerConfig determines the appropriate Kafka consumer groups and topics
-// based on whether the tenant is in the lazy tenants list
-func (s *eventService) getKafkaConsumerConfig(ctx context.Context) (
-	eventConsumptionTopic string,
-	eventConsumptionConsumerGroup string,
-	eventPostProcessingTopic string,
-	eventPostProcessingConsumerGroup string,
-) {
-	// Get tenant ID from context
+// getKafkaConsumerConfig returns the event consumption Kafka topic + consumer
+// group for the tenant, honoring the lazy-tenant routing overrides.
+func (s *eventService) getKafkaConsumerConfig(ctx context.Context) (topic, consumerGroup string) {
 	tenantID := types.GetTenantID(ctx)
 
-	// Check if tenant is in the lazy tenants list
-	isLazyTenant := false
 	for _, lazyTenantID := range s.config.Kafka.RouteTenantsOnLazyMode {
 		if lazyTenantID == tenantID {
-			isLazyTenant = true
-			break
+			return s.config.EventProcessingLazy.Topic, s.config.EventProcessingLazy.ConsumerGroup
 		}
 	}
-
-	// Set event consumption topic and consumer group
-	if isLazyTenant {
-		eventConsumptionTopic = s.config.EventProcessingLazy.Topic
-		eventConsumptionConsumerGroup = s.config.EventProcessingLazy.ConsumerGroup
-	} else {
-		eventConsumptionTopic = s.config.EventProcessing.Topic
-		eventConsumptionConsumerGroup = s.config.EventProcessing.ConsumerGroup
-	}
-
-	// Set event post processing topic and consumer group
-	if isLazyTenant {
-		eventPostProcessingTopic = s.config.FeatureUsageTrackingLazy.Topic
-		eventPostProcessingConsumerGroup = s.config.FeatureUsageTrackingLazy.ConsumerGroup
-	} else {
-		eventPostProcessingTopic = s.config.FeatureUsageTracking.Topic
-		eventPostProcessingConsumerGroup = s.config.FeatureUsageTracking.ConsumerGroup
-	}
-
-	return eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup
+	return s.config.EventProcessing.Topic, s.config.EventProcessing.ConsumerGroup
 }

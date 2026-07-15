@@ -82,7 +82,6 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	})
 }

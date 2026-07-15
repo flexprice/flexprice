@@ -154,7 +154,6 @@ func SetupDummyBillingCustomer() error {
 
 	eventRepo := chRepo.NewEventRepository(chStore, appLogger)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, appLogger)
-	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, appLogger)
 	rawEventRepo := chRepo.NewRawEventRepository(chStore, appLogger)
 	costSheetUsageRepo := chRepo.NewCostSheetUsageRepository(chStore, appLogger)
 
@@ -211,7 +210,6 @@ func SetupDummyBillingCustomer() error {
 		EventRepo:                    eventRepo,
 		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
-		FeatureUsageRepo:             featureUsageRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,

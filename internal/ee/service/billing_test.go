@@ -103,7 +103,6 @@ func (s *BillingServiceSuite) setupService() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 	})
 }
@@ -351,27 +350,30 @@ func (s *BillingServiceSuite) setupTestData() {
 	// Update the subscription object to include the line items
 	s.testData.subscription.LineItems = lineItems
 
-	// Populate feature_usage for tests that use GetFeatureUsageBySubscription (final invoice, preview).
-	// This mirrors what the feature_usage pipeline would produce from the raw events.
-	featureUsageStore := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
-	apiCallsLineItem := lineItems[1] // Usage-based arrear line item
-	s.NoError(featureUsageStore.InsertProcessedEvent(s.GetContext(), &events.FeatureUsage{
-		Event: events.Event{
-			ID:                 s.GetUUID(),
-			TenantID:           s.testData.subscription.TenantID,
-			EnvironmentID:      s.testData.subscription.EnvironmentID,
-			EventName:          s.testData.meters.apiCalls.EventName,
-			ExternalCustomerID: s.testData.customer.ExternalID,
-			CustomerID:         s.testData.subscription.CustomerID,
-			Timestamp:          s.testData.now.Add(-1 * time.Hour),
-		},
-		SubscriptionID: s.testData.subscription.ID,
-		SubLineItemID:  apiCallsLineItem.ID,
-		PriceID:        s.testData.prices.apiCalls.ID,
-		FeatureID:      "feat_api_calls",
-		MeterID:        s.testData.meters.apiCalls.ID,
-		QtyTotal:       decimal.NewFromInt(500), // 500 API calls to produce $10 (500 * $0.02 tier)
-	}))
+	// Populate meter_usage for tests that use GetMeterUsageBySubscription (final invoice, preview).
+	// Mirrors what the meter-usage pipeline would produce from the raw events: one row per
+	// (event × matched meter), qty=1 for COUNT aggregation.
+	ts := s.testData.now.Add(-1 * time.Hour)
+	apiCallsMURecords := make([]*events.MeterUsage, 0, 500)
+	for i := 0; i < 500; i++ {
+		id := s.GetUUID()
+		apiCallsMURecords = append(apiCallsMURecords, &events.MeterUsage{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           s.testData.subscription.TenantID,
+				EnvironmentID:      s.testData.subscription.EnvironmentID,
+				EventName:          s.testData.meters.apiCalls.EventName,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				CustomerID:         s.testData.subscription.CustomerID,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+			},
+			MeterID:    s.testData.meters.apiCalls.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: fmt.Sprintf("%s:%s", s.testData.meters.apiCalls.EventName, id),
+		})
+	}
+	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(s.GetContext(), apiCallsMURecords))
 
 	// Create test events
 	for i := 0; i < 500; i++ {
@@ -2133,7 +2135,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 		AddonAssociationRepo:     s.GetStores().AddonAssociationRepo,
 		EventPublisher:           s.GetPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
+		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 	})
 
 	tests := []struct {
@@ -2826,9 +2828,9 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 	}
 }
 
-func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_SkipsInactiveLineItemWithSamePriceID() {
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_SkipsInactiveLineItemWithSamePriceID() {
 	// When two subscription line items share the same price_id (one active, one inactive),
-	// feature_usage may have data for the inactive line item. CalculateFeatureUsageCharges
+	// usage.Charges may include a row for the inactive line item. CalculateMeterUsageCharges
 	// must match by SubscriptionLineItemID and skip charges for inactive line items.
 	ctx := s.GetContext()
 	s.setupTestData()
@@ -2856,20 +2858,18 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_SkipsInactiveLine
 		},
 	}
 
-	result, err := s.service.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-		Subscription: s.testData.subscription,
-		Usage:        usage,
-		PeriodStart:  s.testData.subscription.CurrentPeriodStart,
-		PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
-	})
-	lineItems, totalAmount := result.LineItems, result.TotalAmount
+	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+		types.UsageSourceInvoiceCreation,
+	)
 
 	s.NoError(err)
 	s.Empty(lineItems, "Should have no invoice line items: charge was for inactive line item, not in invoiced set")
 	s.True(totalAmount.IsZero(), "Total should be zero: no charges should be attributed to active line items")
 }
 
-func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_MatchesActiveLineItemBySubscriptionLineItemID() {
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MatchesActiveLineItemBySubscriptionLineItemID() {
 	// When SubscriptionLineItemID is set and matches an active line item, the charge should be processed.
 	ctx := s.GetContext()
 	s.setupTestData()
@@ -2891,13 +2891,11 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_MatchesActiveLine
 		},
 	}
 
-	result, err := s.service.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-		Subscription: s.testData.subscription,
-		Usage:        usage,
-		PeriodStart:  s.testData.subscription.CurrentPeriodStart,
-		PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
-	})
-	lineItems, totalAmount := result.LineItems, result.TotalAmount
+	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+		types.UsageSourceInvoiceCreation,
+	)
 
 	s.NoError(err)
 	s.Len(lineItems, 1, "Should have one invoice line item for active line item")
@@ -2905,7 +2903,7 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_MatchesActiveLine
 	s.True(totalAmount.GreaterThan(decimal.Zero), "Total should be positive")
 }
 
-func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_WindowedTrueUp_UsesElapsedTimeOnly() {
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_WindowedTrueUp_UsesElapsedTimeOnly() {
 	ctx := s.GetContext()
 	s.setupTestData()
 
@@ -2973,13 +2971,9 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_WindowedTrueUp_Us
 		},
 	}
 
-	result, err := s.service.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-		Subscription: &subCopy,
-		Usage:        usage,
-		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
-	})
-	lineItems, totalAmount := result.LineItems, result.TotalAmount
+	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
+		periodStart, periodEnd, types.UsageSourceInvoiceCreation,
+	)
 	s.NoError(err)
 	s.Len(lineItems, 1)
 
@@ -3007,7 +3001,7 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_WindowedTrueUp_Us
 	s.True(totalAmount.LessThan(fullPeriodTotal), "amount should not project full-period commitment")
 }
 
-func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_CumulativeCommitment() {
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitment() {
 	// Monthly subscription with annual commitment ($60), overage factor 2x
 	ctx := s.GetContext()
 	s.setupTestData()
@@ -3304,13 +3298,10 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_CumulativeCommitm
 				subToUse = &subCopy
 			}
 
-			result, err := s.service.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
-				Subscription: subToUse,
-				Usage:        usage,
-				PeriodStart:  sub.CurrentPeriodStart,
-				PeriodEnd:    sub.CurrentPeriodEnd,
-			})
-			lineItems, totalAmount := result.LineItems, result.TotalAmount
+			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, subToUse, usage,
+				sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
+				types.UsageSourceInvoiceCreation,
+			)
 
 			s.NoError(err)
 			s.True(totalAmount.Equal(tt.expectedTotal), "expected total %s, got %s", tt.expectedTotal.String(), totalAmount.String())

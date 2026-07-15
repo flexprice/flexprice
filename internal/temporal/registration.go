@@ -110,17 +110,13 @@ func RegisterWorkflowsAndActivities(
 		scheduledTaskService,
 	)
 
-	// Feature usage tracking (export needs GetDetailedUsageAnalytics for usage_analytics entity type)
-	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
-		params,
-		params.EventRepo,
-		params.FeatureUsageRepo,
-	)
+	// Meter usage service satisfies UsageAnalyticsGetter for the usage_analytics
+	// entity type export path.
+	meterUsageService := service.NewMeterUsageService(params)
 
 	// Create wallet service for credit usage export
 	walletService := service.NewWalletService(params)
 	exportActivity := exportActivities.NewExportActivity(
-		params.FeatureUsageRepo,
 		params.MeterUsageRepo,
 		params.PriceRepo,
 		params.InvoiceRepo,
@@ -131,7 +127,7 @@ func RegisterWorkflowsAndActivities(
 		params.IntegrationFactory,
 		params.Config,
 		params.Logger,
-		featureUsageTrackingService,
+		meterUsageService,
 		params.EventRepo,
 		params.SubscriptionLineItemRepo,
 	)
@@ -271,9 +267,6 @@ func RegisterWorkflowsAndActivities(
 	// Environment clone activities
 	envActivities := environmentActivities.NewEnvironmentActivities(params)
 
-	// Reprocess events activities
-	reprocessEventsActivities := eventsActivities.NewReprocessEventsActivities(featureUsageTrackingService)
-
 	// Reprocess raw events activities
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
 	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService)
@@ -286,7 +279,7 @@ func RegisterWorkflowsAndActivities(
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	// Marketplace activities
 	billingService := service.NewBillingService(params)
-	awsMarketplaceClient := awsmarketplace.NewClient(params.Logger)
+	awsMarketplaceClient := awsmarketplace.NewClient(params.Config, params.Logger)
 	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(
 		subscriptionService,
 		billingService,
@@ -320,7 +313,7 @@ func RegisterWorkflowsAndActivities(
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle, alertActs)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, envActivities, cronBundle, alertActs)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -364,7 +357,6 @@ func buildWorkerConfig(
 	scheduleBillingActivities *subscriptionActivities.SubscriptionActivities,
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
-	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
 	cron *cronActivityBundle,
@@ -528,14 +520,10 @@ func buildWorkerConfig(
 		)
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,
-			eventsWorkflows.ReprocessEventsWorkflow,
 			eventsWorkflows.ReprocessRawEventsWorkflow,
-			eventsWorkflows.ReprocessEventsForPlanWorkflow,
 		)
 		activitiesList = append(activitiesList,
-			reprocessEventsActivities.ReprocessEvents,
 			reprocessRawEventsActivities.ReprocessRawEvents,
-			planActivities.ReprocessEventsForPlan,
 		)
 
 	case types.TemporalTaskQueueCron:

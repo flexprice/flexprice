@@ -62,7 +62,10 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Login to GitHub Container Registry
-        continue-on-error: true
+        # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
+        # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
+        # failure on main must fail the build, not slip through silently.
+        continue-on-error: ${{ github.ref_name != 'main' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -94,8 +97,11 @@ jobs:
               echo "${GHCR_IMAGE}:latest"
             elif [ "$IS_DEVELOP" = "true" ]; then
               echo "${GHCR_IMAGE}:develop"
-            elif [ "$IS_MAIN" = "true" ]; then
-              echo "${GHCR_IMAGE}:main"
+            # NOTE: on main we intentionally do NOT push :main here. The build job
+            # publishes only the immutable :<sha> tag. The :main tag — which the GCP
+            # ArgoCD image-updater watches — is promoted in the 'promote-main-ghcr'
+            # job AFTER the prod-approval gate, so GCP prod deploys only post-approval
+            # (matching the AWS ECS rollout). See that job below.
             fi
             echo "TAGS_EOF"
           } >> $GITHUB_OUTPUT
@@ -123,7 +129,10 @@ jobs:
 
       - name: Push image to GHCR
         uses: docker/build-push-action@v7
-        continue-on-error: true
+        # Best-effort on non-main branches; REQUIRED on main — GCP prod deploys off
+        # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
+        # failure on main must fail the build, not slip through silently.
+        continue-on-error: ${{ github.ref_name != 'main' }}
         with:
           context: .
           file: Dockerfile
@@ -302,6 +311,53 @@ jobs:
         run: |
           echo "Preprod canary validated and production rollout approved."
           echo "Proceeding to deploy api, consumer and worker services to all production targets."
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Promote the GHCR :main tag — THIS is what unblocks GCP. It has its OWN
+  # approval gate (GitHub Environment `gcp-prod-approval`), SEPARATE from the AWS
+  # `prod-approval` gate — so AWS and GCP are approved independently (two prompts).
+  # GCP prod (ArgoCD image-updater) watches ghcr.io/<repo>:main. The build job
+  # published only the immutable :<sha>; after a reviewer approves the GCP gate we
+  # retag :<sha> -> :main (manifest-only, no rebuild), so GCP deploys only
+  # post-approval. Runs after the preprod canary (like the AWS gate); production +
+  # non-dry-run only. Staging (develop) is unaffected.
+  #
+  # SETUP (required): create the `gcp-prod-approval` Environment in repo Settings →
+  # Environments with required reviewers (mirror `prod-approval`) — otherwise the
+  # gate does not pause. See docs/deployment/preprod-approval-gate.md.
+  # ──────────────────────────────────────────────────────────────────────────
+  promote-main-ghcr:
+    name: Approve & promote :main to GHCR (GCP prod)
+    needs: [build, resolve-config, deploy-preprod]
+    if: >-
+      ${{ always() &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.environment == 'production' &&
+          needs.resolve-config.outputs.dry_run != 'true' &&
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+    runs-on: self-hosted
+    environment: gcp-prod-approval
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Retag :<sha> -> :main (daemonless, no rebuild)
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          # The build job pushed ${GHCR_IMAGE}:${GITHUB_SHA} to GHCR (required on main).
+          # `crane tag` copies the multi-arch manifest to :main — no Docker daemon,
+          # no rebuild. Auth comes from the docker config the login step wrote.
+          crane tag "${GHCR_IMAGE}:${GITHUB_SHA}" main
 
   # ──────────────────────────────────────────────────────────────────────────
   # Jobs 5a–5c: Deploy API, Consumer, Worker — one job per service type,

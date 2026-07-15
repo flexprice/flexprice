@@ -33,7 +33,8 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		return nil, err
 	}
 
-	providerType := string(types.SecretProviderAWSMarketplace)
+	// req.Provider is already validated against allowedMarketplaceProviders in Validate() above.
+	providerType := string(req.Provider)
 
 	// The subscription must already exist and be active; this endpoint never creates subscriptions.
 	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)

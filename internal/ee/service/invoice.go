@@ -46,7 +46,6 @@ type InvoiceService interface {
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
-	GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
@@ -679,8 +678,8 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 		"feature_ids_count", len(featureIDs),
 		"customer_id", customer.ExternalID)
 
-	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
-	analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get bulk usage analytics",
 			"invoice_id", inv.ID,
@@ -2013,62 +2012,6 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	s.Logger.Info(ctx, "prepared invoice request for internal preview",
-		"invoice_request", invReq)
-
-	if req.HideZeroChargesLineItems {
-		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
-			return !item.Amount.IsZero()
-		})
-	}
-
-	// Create a draft invoice object for preview; ToInvoice applies preview discounts and taxes
-	inv, err := invReq.ToInvoice(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create preview response
-	response := dto.NewInvoiceResponse(inv)
-
-	// Get customer information
-	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-	response.WithCustomer(&dto.CustomerResponse{Customer: customer})
-
-	return response, nil
-}
-
-// GetMeterUsagePreviewInvoice generates a preview invoice using the meter_usage table for usage data.
-func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
-	billingService := NewBillingService(s.ServiceParams)
-
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.PeriodStart == nil {
-		req.PeriodStart = &sub.CurrentPeriodStart
-	}
-
-	if req.PeriodEnd == nil {
-		req.PeriodEnd = &sub.CurrentPeriodEnd
-	}
-
-	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   sub,
-		PeriodStart:    *req.PeriodStart,
-		PeriodEnd:      *req.PeriodEnd,
-		ReferencePoint: types.ReferencePointMeterUsagePreview,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Info(ctx, "prepared invoice request for meter usage preview",
 		"invoice_request", invReq)
 
 	if req.HideZeroChargesLineItems {
@@ -3835,7 +3778,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 
 	// Step 3: Make analytics requests for each period group
 	allAnalyticsItems := make([]dto.UsageAnalyticItem, 0)
-	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
 
 	for periodKey, lineItemsInPeriod := range periodGroups {
 		// Collect feature IDs for this period
@@ -3867,7 +3810,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 			"line_items_count", len(lineItemsInPeriod),
 			"group_by", groupBy)
 
-		analyticsResponse, err := featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+		analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get period-specific usage analytics",
 				"invoice_id", inv.ID,
