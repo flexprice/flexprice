@@ -93,6 +93,38 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 	return nil
 }
 
+func (r *usageRecordRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	client := r.client.Reader(ctx)
+
+	span := StartRepositorySpan(ctx, "usage_record", "exists_for_period", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"period_start":    periodStart,
+		"period_end":      periodEnd,
+	})
+	defer FinishSpan(span)
+
+	exists, err := client.UsageRecord.Query().
+		Where(
+			usagerecord.TenantID(types.GetTenantID(ctx)),
+			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
+			usagerecord.SubscriptionID(subscriptionID),
+			usagerecord.PeriodStart(periodStart),
+			usagerecord.PeriodEnd(periodEnd),
+			usagerecord.StatusEQ(string(types.StatusPublished)),
+		).
+		Exist(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).
+			WithHint("Failed to check for an existing usage record").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return exists, nil
+}
+
 func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*domainUsageRecord.UsageRecord, error) {
 	client := r.client.Reader(ctx)
 
@@ -122,6 +154,17 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 	return domainUsageRecord.FromEntList(records), nil
 }
 
+// maxSyncResultRetries bounds the optimistic-locking retry loop in UpdateSyncResult. Syncs holds
+// one entry per marketplace and today only AWS reports, so real contention on a single row is rare;
+// this only guards against genuinely concurrent writers (e.g. an overlapping manual run) rather than
+// expected load.
+const maxSyncResultRetries = 5
+
+// UpdateSyncResult merges a marketplace's sync outcome into the record's Syncs map. This is a
+// read-modify-write on a JSON column, so it uses optimistic locking (UpdatedAtEQ as the version
+// check) with a bounded retry: if another writer updated the row between the read and the write,
+// the row count comes back 0, and the read+merge+write is retried against the new row instead of
+// silently overwriting the other writer's change and losing it.
 func (r *usageRecordRepository) UpdateSyncResult(
 	ctx context.Context,
 	id string,
@@ -137,53 +180,60 @@ func (r *usageRecordRepository) UpdateSyncResult(
 	})
 	defer FinishSpan(span)
 
-	existing, err := client.UsageRecord.Query().
-		Where(
-			usagerecord.ID(id),
-			usagerecord.TenantID(types.GetTenantID(ctx)),
-			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		Only(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
+	for attempt := 0; attempt < maxSyncResultRetries; attempt++ {
+		existing, err := client.UsageRecord.Query().
+			Where(
+				usagerecord.ID(id),
+				usagerecord.TenantID(types.GetTenantID(ctx)),
+				usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).
+			Only(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			if ent.IsNotFound(err) {
+				return ierr.WithError(err).
+					WithHintf("Usage record with ID %s was not found", id).
+					Mark(ierr.ErrNotFound)
+			}
 			return ierr.WithError(err).
-				WithHintf("Usage record with ID %s was not found", id).
-				Mark(ierr.ErrNotFound)
+				WithHint("Failed to get usage record for sync update").
+				Mark(ierr.ErrDatabase)
 		}
-		return ierr.WithError(err).
-			WithHint("Failed to get usage record for sync update").
-			Mark(ierr.ErrDatabase)
-	}
 
-	syncs := domainUsageRecord.FromEnt(existing).Syncs
-	if syncs == nil {
-		syncs = make(map[domainUsageRecord.Marketplace]domainUsageRecord.MarketplaceSyncEntry)
-	}
-	syncs[marketplace] = entry
+		syncs := domainUsageRecord.FromEnt(existing).Syncs
+		if syncs == nil {
+			syncs = make(map[domainUsageRecord.Marketplace]domainUsageRecord.MarketplaceSyncEntry)
+		}
+		syncs[marketplace] = entry
 
-	_, err = client.UsageRecord.UpdateOneID(id).
-		Where(
-			usagerecord.TenantID(types.GetTenantID(ctx)),
-			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetSyncs(domainUsageRecord.SyncsToMap(syncs)).
-		SetAllProvidersSynced(allProvidersSynced).
-		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		affected, err := client.UsageRecord.Update().
+			Where(
+				usagerecord.ID(id),
+				usagerecord.TenantID(types.GetTenantID(ctx)),
+				usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
+				usagerecord.UpdatedAtEQ(existing.UpdatedAt),
+			).
+			SetSyncs(domainUsageRecord.SyncsToMap(syncs)).
+			SetAllProvidersSynced(allProvidersSynced).
+			SetUpdatedAt(time.Now().UTC()).
+			Save(ctx)
 
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
+		if err != nil {
+			SetSpanError(span, err)
 			return ierr.WithError(err).
-				WithHintf("Usage record with ID %s was not found", id).
-				Mark(ierr.ErrNotFound)
+				WithHint("Failed to update usage record sync result").
+				Mark(ierr.ErrDatabase)
 		}
-		return ierr.WithError(err).
-			WithHint("Failed to update usage record sync result").
-			Mark(ierr.ErrDatabase)
+		if affected == 0 {
+			// The row changed between the read and the write; retry against the new version.
+			continue
+		}
+
+		SetSpanSuccess(span)
+		return nil
 	}
 
-	SetSpanSuccess(span)
-	return nil
+	return ierr.NewErrorf("usage record %s was concurrently modified too many times", id).
+		WithHint("Another process kept updating this usage record's sync status. It will be retried on the next run.").
+		Mark(ierr.ErrVersionConflict)
 }

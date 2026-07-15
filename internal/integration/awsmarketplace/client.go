@@ -31,7 +31,24 @@ type UsageRecordInput struct {
 	Timestamp            time.Time
 }
 
-// BatchMeterUsageResult is the outcome AWS reports for an accepted usage record.
+// AWS's three possible per-record outcomes (marketplacemetering/types.UsageRecordResultStatus).
+// A present entry in Results is NOT the same as the record being honored — Status must be checked.
+// Only StatusSuccess means AWS actually billed the record:
+//   - StatusCustomerNotSubscribed: the buyer has no active agreement (or was suspended); not
+//     honored.
+//   - StatusDuplicateRecord: AWS already has a DIFFERENT usage record for the same customer,
+//     dimension, and timestamp — the existing one, not this one, is what's on file. Also not
+//     honored. (This is not "AWS already recorded this exact record, safe to skip" — that case is
+//     just a second StatusSuccess, since AWS's own idempotency is on customer+dimension+time+
+//     quantity together.)
+const (
+	StatusSuccess               = string(mmtypes.UsageRecordResultStatusSuccess)
+	StatusCustomerNotSubscribed = string(mmtypes.UsageRecordResultStatusCustomerNotSubscribed)
+	StatusDuplicateRecord       = string(mmtypes.UsageRecordResultStatusDuplicateRecord)
+)
+
+// BatchMeterUsageResult is AWS's outcome for a record present in Results. Status must be checked —
+// only StatusSuccess means the record is recorded (billed) on AWS's side.
 type BatchMeterUsageResult struct {
 	MeteringRecordID string
 	Status           string
@@ -40,11 +57,16 @@ type BatchMeterUsageResult struct {
 // Client is the set of AWS Marketplace operations the integration uses.
 type Client interface {
 	// AssumeRole exchanges the tenant's role ARN and external ID for short-lived credentials.
-	AssumeRole(ctx context.Context, roleArn, externalID string) (aws.Credentials, error)
+	// duration controls how long the assumed session is valid for; pass 0 to use the SDK default
+	// (15 minutes, see stscreds.DefaultDuration) for normal reporting use, or a short explicit
+	// value (e.g. 5 minutes) when the call is only to verify the role/trust policy at connection
+	// setup time and the credentials are discarded immediately after.
+	AssumeRole(ctx context.Context, roleArn, externalID string, duration time.Duration) (aws.Credentials, error)
 
-	// BatchMeterUsage reports a single usage record. It returns the result when AWS accepts the
-	// record, nil when AWS returns it as unprocessed (the caller should retry it later), or an
-	// error when the call itself fails.
+	// BatchMeterUsage reports a single usage record. It returns the result for any record present
+	// in Results — whose Status the caller must check, since presence alone does not mean AWS
+	// accepted it — nil when AWS returns it as unprocessed (the caller should retry it later), or
+	// an error when the call itself fails.
 	BatchMeterUsage(ctx context.Context, creds aws.Credentials, region string, record UsageRecordInput) (*BatchMeterUsageResult, error)
 }
 
@@ -60,9 +82,10 @@ func NewClient(log *logger.Logger) Client {
 // AssumeRole obtains short-lived credentials for the tenant's IAM role. It uses the process's
 // ambient AWS credentials (Flexprice's own account) as the caller identity, and the tenant's role
 // ARN + external ID as the assume target. The role session name identifies this session in the
-// tenant's AWS CloudTrail. Errors are returned verbatim so the caller can surface AWS's message;
-// the role ARN and external ID are never logged.
-func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string) (aws.Credentials, error) {
+// tenant's AWS CloudTrail. On failure, the AWS SDK error is not logged or returned — a bad trust
+// policy's AccessDenied message embeds the role ARN in its text, so nothing derived from it is
+// surfaced anywhere. The role ARN and external ID are never logged.
+func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, duration time.Duration) (aws.Credentials, error) {
 	if roleArn == "" || externalID == "" {
 		return aws.Credentials{}, ierr.NewError("role_arn and external_id are required").
 			WithHint("AWS Marketplace connection requires both role_arn and external_id").
@@ -80,12 +103,13 @@ func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string) (aw
 	provider := stscreds.NewAssumeRoleProvider(stsClient, roleArn, func(o *stscreds.AssumeRoleOptions) {
 		o.ExternalID = &externalID
 		o.RoleSessionName = "flexprice-marketplace-metering"
+		o.Duration = duration // 0 falls through to the SDK's own default (stscreds.DefaultDuration)
 	})
 
 	creds, err := provider.Retrieve(ctx)
 	if err != nil {
-		c.logger.Error(ctx, "aws marketplace assume role failed", "error", err)
-		return aws.Credentials{}, ierr.WithError(err).
+		c.logger.Error(ctx, "aws marketplace assume role failed")
+		return aws.Credentials{}, ierr.NewError("failed to assume aws iam role").
 			WithHint("Failed to assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID.").
 			Mark(ierr.ErrValidation)
 	}
@@ -97,9 +121,9 @@ func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string) (aw
 // built directly from the assumed-role credentials and the connection's region so no ambient
 // environment or instance-profile configuration is picked up.
 //
-// AWS returns an accepted record in Results (with a metering record id) or, if it could not be
-// processed, in UnprocessedRecords. An accepted record returns a result; an unprocessed record
-// returns nil so the caller retries it on the next run.
+// AWS returns a processed record in Results (with a Status the caller must check — a present
+// result is not the same as an accepted one) or, if it could not be processed at all, in
+// UnprocessedRecords, for which this returns nil so the caller retries it on the next run.
 func (c *client) BatchMeterUsage(ctx context.Context, creds aws.Credentials, region string, record UsageRecordInput) (*BatchMeterUsageResult, error) {
 	cfg := aws.Config{
 		Region:      region,

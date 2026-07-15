@@ -142,8 +142,12 @@ func (a *ReportActivities) reportConnectionUsage(envCtx context.Context, conn *c
 		return
 	}
 
-	// Assume the tenant's role once; the short-lived credentials cover one run's records.
-	creds, err := a.awsClient.AssumeRole(envCtx, roleArn, externalID)
+	// Assume the tenant's role once; the same static credentials are reused for every record in
+	// this connection's loop below (they are a one-time snapshot, not a live auto-refreshing
+	// provider). A busy connection's loop can run close to the activity's 30-minute
+	// StartToCloseTimeout, so the session must outlive that — 1 hour is requested because every IAM
+	// role supports it without the tenant needing to raise MaxSessionDuration on their side.
+	creds, err := a.awsClient.AssumeRole(envCtx, roleArn, externalID, time.Hour)
 	if err != nil {
 		a.logger.Error(envCtx, "marketplace usage report failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "error", err, "stage", "assume_role")
@@ -232,6 +236,42 @@ func (a *ReportActivities) reportRecord(
 		a.logger.Warn(envCtx, "marketplace usage record not processed by aws, will retry next run",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
 			"license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount)
+		result.Failed++
+		return
+	}
+
+	// A present result is not the same as an accepted record — AWS's Status must be checked. Per
+	// AWS's docs, only StatusSuccess means the record was honored; the other two statuses are
+	// distinct failure modes with different causes, so each gets its own log line rather than one
+	// generic "rejected" message.
+	switch res.Status {
+	case awsmarketplace.StatusSuccess:
+		// falls through to the sync below
+	case awsmarketplace.StatusCustomerNotSubscribed:
+		// The buyer (identified by customer_aws_account_id + license_arn — we don't use AWS's
+		// separate CustomerIdentifier field) has no active agreement for this product, or their AWS
+		// account was suspended. This resolves itself once the buyer (re)subscribes, so it's
+		// expected to keep retrying until then rather than needing manual action.
+		a.logger.Error(envCtx, "marketplace usage report rejected by aws: customer not subscribed, will retry next run",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
+			"customer_id", rec.CustomerID, "license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount)
+		result.Failed++
+		return
+	case awsmarketplace.StatusDuplicateRecord:
+		// NOT "AWS already has this exact record, safe to skip" — AWS has a DIFFERENT record for
+		// the same customer+dimension+timestamp already on file, and rejected this one. Retrying
+		// with the same (unchanged) amount will hit the same rejection every time; this does not
+		// self-heal and needs a human to find and fix the source of the mismatch.
+		a.logger.Error(envCtx, "marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
+			"customer_id", rec.CustomerID, "license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount,
+			"period_end", rec.PeriodEnd)
+		result.Failed++
+		return
+	default:
+		a.logger.Error(envCtx, "marketplace usage report rejected by aws: unrecognized status, will retry next run",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
+			"license_arn", licenseArn, "dimension", plan.dimension, "amount", rec.Amount, "aws_status", res.Status)
 		result.Failed++
 		return
 	}

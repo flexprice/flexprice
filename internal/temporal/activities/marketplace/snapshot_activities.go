@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
@@ -152,6 +153,23 @@ func (a *SnapshotActivities) snapshotSubscription(
 
 	result.Total++
 
+	// The reporting window is deterministic per scheduled run, so a matching row means an earlier
+	// Temporal attempt for this exact activity call already wrote it (activity retries re-run the
+	// whole loop, including subscriptions a prior attempt already finished). Skip re-computing and
+	// re-inserting it — this is what makes the activity safe to retry.
+	alreadyExists, err := a.usageRecordRepo.ExistsForPeriod(envCtx, sub.ID, input.PeriodStart, input.PeriodEnd)
+	if err != nil {
+		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
+			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "check_existing")
+		result.Failed++
+		return
+	}
+	if alreadyExists {
+		result.Succeeded++
+		return
+	}
+
 	usageResp, err := a.subscriptionService.GetMeterUsageBySubscription(envCtx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      input.PeriodStart,
@@ -202,6 +220,14 @@ func (a *SnapshotActivities) snapshotSubscription(
 	}
 
 	if err := a.usageRecordRepo.Create(envCtx, rec); err != nil {
+		// The ExistsForPeriod check above is a fast pre-check, not the source of truth — the unique
+		// index on (subscription_id, period_start, period_end) is. A concurrent execution can still
+		// win the race between the check and this insert; that shows up here as ErrAlreadyExists,
+		// and means the record is already written, so it's a success, not a failure.
+		if ierr.IsAlreadyExists(err) {
+			result.Succeeded++
+			return
+		}
 		a.logger.Error(envCtx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "create_usage_record")

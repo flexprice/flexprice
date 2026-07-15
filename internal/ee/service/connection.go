@@ -7,10 +7,17 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
+// connection-creation time is valid for. It's short because these credentials are used once
+// (AssumeRole succeeding is itself the check) and immediately discarded — unlike the credentials
+// Cron B assumes to actually report usage, which need to live for the length of a reporting run.
+const awsMarketplaceRoleVerificationDuration = 5 * time.Minute
 
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
@@ -23,14 +30,16 @@ type ConnectionService interface {
 
 type connectionService struct {
 	ServiceParams
-	encryptionService security.EncryptionService
+	encryptionService    security.EncryptionService
+	awsMarketplaceClient awsmarketplace.Client
 }
 
 // NewConnectionService creates a new connection service
-func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService) ConnectionService {
+func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService, awsMarketplaceClient awsmarketplace.Client) ConnectionService {
 	return &connectionService{
-		ServiceParams:     params,
-		encryptionService: encryptionService,
+		ServiceParams:        params,
+		encryptionService:    encryptionService,
+		awsMarketplaceClient: awsMarketplaceClient,
 	}
 }
 
@@ -533,6 +542,33 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.UpdatedAt = time.Now()
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
+
+	// AWS Marketplace: verify the tenant's role_arn/external_id actually work before the
+	// connection is ever persisted. AssumeRole succeeding is the whole check — the credentials
+	// themselves are discarded immediately after, using a short verification-only session
+	// (awsMarketplaceRoleVerificationDuration) rather than the longer duration Cron B uses to
+	// actually report usage.
+	if conn.ProviderType == types.SecretProviderAWSMarketplace {
+		if conn.EncryptedSecretData.AWSMarketplace == nil {
+			return nil, ierr.NewError("aws_marketplace connection requires role_arn and external_id").
+				WithHint("encrypted_secret_data.aws_marketplace with role_arn and external_id is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.AWSMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		if _, err := s.awsMarketplaceClient.AssumeRole(
+			ctx,
+			conn.EncryptedSecretData.AWSMarketplace.RoleArn,
+			conn.EncryptedSecretData.AWSMarketplace.ExternalID,
+			awsMarketplaceRoleVerificationDuration,
+		); err != nil {
+			s.Logger.Error(ctx, "aws marketplace connection verification failed", "tenant_id", tenantID, "environment_id", environmentID)
+			return nil, ierr.WithError(err).
+				WithHint("Could not assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID before creating this connection.").
+				Mark(ierr.ErrValidation)
+		}
+	}
 
 	// Check if this is a Flexprice-managed S3 connection
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
