@@ -97,14 +97,6 @@ type customerVendorSyncInput struct {
 // the invoice is fetched inside the Temporal activity after a short sleep, avoiding
 // the race condition where the event arrives before the DB transaction commits.
 // eimRepo is used for idempotency: if a mapping already exists the provider trigger is skipped.
-//
-// Registered for two event types (see handler.go): invoice.update.finalized runs the full
-// fan-out below, unchanged. invoice.update (draft-stage compute/edits) only triggers Tabs — every
-// other provider stays finalize-only, so their trigger functions are skipped entirely for that
-// event. Tabs' own idempotency check is different from the rest: triggerTabsIfEnabled doesn't
-// short-circuit on eimRepo like the others do, because Tabs needs to run on both event types and
-// decide via a content diff (inside the sync activity) whether anything actually changed — not
-// just whether a mapping already exists.
 func DispatchInvoiceVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,

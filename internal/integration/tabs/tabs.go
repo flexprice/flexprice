@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -21,6 +22,11 @@ import (
 
 const tabsDateLayout = "2006-01-02"
 
+// tabsInvoiceSyncLockTTL bounds how long a per-invoice sync lock is held if the holder crashes without
+// releasing it. Aligned to the sync activity's StartToCloseTimeout (5m) so a run can't outlive its
+// lock; on normal completion or error the lock is released immediately via defer.
+const tabsInvoiceSyncLockTTL = 2 * time.Minute
+
 type TabsInvoiceService interface {
 	SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceSyncRequest) (*TabsInvoiceSyncResponse, error)
 }
@@ -33,6 +39,7 @@ type InvoiceService struct {
 	priceRepo    price.Repository
 	invoiceRepo  invoice.Repository
 	mappingRepo  entityintegrationmapping.Repository
+	locker       cache.Locker
 	logger       *logger.Logger
 }
 
@@ -44,6 +51,7 @@ func NewInvoiceService(
 	priceRepo price.Repository,
 	invoiceRepo invoice.Repository,
 	mappingRepo entityintegrationmapping.Repository,
+	locker cache.Locker,
 	logger *logger.Logger,
 ) TabsInvoiceService {
 	return &InvoiceService{
@@ -54,11 +62,28 @@ func NewInvoiceService(
 		priceRepo:    priceRepo,
 		invoiceRepo:  invoiceRepo,
 		mappingRepo:  mappingRepo,
+		locker:       locker,
 		logger:       logger,
 	}
 }
 
 func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceSyncRequest) (*TabsInvoiceSyncResponse, error) {
+	if s.locker != nil {
+		lockKey := cache.GenerateKey(ctx, cache.PrefixTabsInvoiceSyncLock, req.InvoiceID)
+		lock, err := s.locker.AcquireLock(ctx, lockKey, tabsInvoiceSyncLockTTL)
+		if err != nil {
+			return nil, err
+		}
+		if !lock.AcquiredSuccessfully() {
+			s.logger.Info(ctx, "tabs: invoice sync already in progress, skipping", "invoice_id", req.InvoiceID)
+			return nil, nil
+		}
+		defer func() {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.logger.Error(ctx, "tabs: failed to release invoice sync lock", "invoice_id", req.InvoiceID, "error", releaseErr)
+			}
+		}()
+	}
 	inv, err := s.invoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
 		return nil, err
