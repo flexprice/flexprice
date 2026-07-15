@@ -61,6 +61,7 @@ type UserResponse struct {
 	Roles    []string          `json:"roles,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 	Tenant   *TenantResponse   `json:"tenant"`
+	APIKeys  []*SecretResponse `json:"api_keys,omitempty"`
 }
 
 // CreateUserResponse is the response for POST /users: same shape for both types; password only when type=user.

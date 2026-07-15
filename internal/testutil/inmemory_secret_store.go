@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemorySecretStore implements secret.Repository
@@ -120,12 +121,21 @@ func (s *InMemorySecretStore) Count(ctx context.Context, filter *types.SecretFil
 }
 
 func (s *InMemorySecretStore) ListAll(ctx context.Context, filter *types.SecretFilter) ([]*secret.Secret, error) {
-	// Create an unlimited filter
+	if filter == nil {
+		filter = types.NewNoLimitSecretFilter()
+	}
+
 	unlimitedFilter := &types.SecretFilter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 		TimeRangeFilter: filter.TimeRangeFilter,
 		Type:            filter.Type,
 		Provider:        filter.Provider,
+		Prefix:          filter.Prefix,
+		UserID:          filter.UserID,
+		NotExpiredAt:    filter.NotExpiredAt,
+	}
+	if filter.QueryFilter != nil && filter.QueryFilter.Status != nil {
+		unlimitedFilter.QueryFilter.Status = filter.QueryFilter.Status
 	}
 
 	return s.List(ctx, unlimitedFilter)
@@ -133,6 +143,33 @@ func (s *InMemorySecretStore) ListAll(ctx context.Context, filter *types.SecretF
 
 func (s *InMemorySecretStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
+}
+
+func (s *InMemorySecretStore) DeletePublishedByUserID(ctx context.Context, userID string) (int, error) {
+	if userID == "" {
+		return 0, ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	filter := &types.SecretFilter{
+		QueryFilter: &types.QueryFilter{
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		UserID: &userID,
+	}
+	secrets, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, sec := range secrets {
+		sec.Status = types.StatusDeleted
+		if err := s.InMemoryStore.Update(ctx, sec.ID, sec); err != nil {
+			return 0, err
+		}
+	}
+	return len(secrets), nil
 }
 
 func (s *InMemorySecretStore) GetAPIKeyByValue(ctx context.Context, value string) (*secret.Secret, error) {
