@@ -18,9 +18,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestNew_ReturnsStorage proves construction succeeds without explicit
+// ServiceAccountJSON, mirroring the production path where a real GKE pod
+// relies on ambient Workload Identity / Application Default Credentials.
+// It must NOT actually reach real ADC resolution — real cloud.google.com/go
+// storage.NewClient() resolves ADC eagerly at construction time (unlike the
+// AWS SDK, which resolves credentials lazily on first API call), so on a
+// machine/CI runner with no ADC configured this would fail with "could not
+// find default credentials". Pointing at a fake endpoint via EndpointURL
+// (same technique newFakeGCSServer/TestClient_Upload_RoundTrip use) makes
+// gcsbackend.New use option.WithoutAuthentication() instead, so this test's
+// result never depends on whatever credentials happen to be ambient on the
+// machine running it.
 func TestNew_ReturnsStorage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
 	cfg := &gcsbackend.Config{
-		Bucket: "test-bucket",
+		Bucket:      "test-bucket",
+		EndpointURL: srv.URL,
 	}
 
 	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
@@ -32,8 +50,15 @@ func TestNew_ReturnsStorage(t *testing.T) {
 	assert.Equal(t, "gs://test-bucket/a/b.pdf", s.FileURL("a/b.pdf"))
 }
 
+// TestClient_FileURL_MatchesProviderScheme: see TestNew_ReturnsStorage doc
+// comment for why EndpointURL is required here to avoid real ADC resolution.
 func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
-	cfg := &gcsbackend.Config{Bucket: "test-bucket"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := &gcsbackend.Config{Bucket: "test-bucket", EndpointURL: srv.URL}
 	s, err := gcsbackend.New(cfg, logger.NewNoopLogger())
 	require.NoError(t, err)
 
