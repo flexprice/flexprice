@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -110,6 +111,83 @@ func TestClient_Upload_RoundTrip(t *testing.T) {
 	assert.Contains(t, gotPath, "test-bucket")
 	assert.Equal(t, "exports/report.csv", resp.Key)
 	assert.Equal(t, "test-bucket", resp.Bucket)
+}
+
+// TestClient_Upload_SetsContentTypeByFormat proves contentTypeFor's
+// format-to-content-type mapping (including the Parquet case) actually
+// reaches the wire: it inspects the JSON metadata part of the multipart
+// upload body the GCS client sends, which carries contentType for GCS
+// (unlike S3, which sends it as a Content-Type HTTP header).
+func TestClient_Upload_SetsContentTypeByFormat(t *testing.T) {
+	tests := []struct {
+		name            string
+		req             *storage.UploadRequest
+		wantContentType string
+	}{
+		{
+			name: "csv format infers text/csv content type",
+			req: &storage.UploadRequest{
+				Key:    "exports/report.csv",
+				Data:   []byte("a,b,c\n1,2,3"),
+				Format: storage.UploadFormatCSV,
+			},
+			wantContentType: "text/csv",
+		},
+		{
+			name: "parquet format infers application/vnd.apache.parquet content type",
+			req: &storage.UploadRequest{
+				Key:    "exports/report.parquet",
+				Data:   []byte("fake-parquet-bytes"),
+				Format: storage.UploadFormatParquet,
+			},
+			wantContentType: "application/vnd.apache.parquet",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotContentType string
+			cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
+				gotContentType = extractUploadedContentType(t, r)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"name":"` + tt.req.Key + `","bucket":"test-bucket"}`))
+			})
+			defer srv.Close()
+
+			s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
+			require.NoError(t, err)
+
+			resp, err := s.Upload(context.Background(), tt.req)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+
+			assert.Equal(t, tt.wantContentType, gotContentType)
+		})
+	}
+}
+
+// extractUploadedContentType parses the multipart/related body the GCS JSON
+// API client sends and returns the "contentType" field of the JSON metadata
+// part (the first part).
+func extractUploadedContentType(t *testing.T, r *http.Request) string {
+	t.Helper()
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	require.NoError(t, err)
+	require.Contains(t, mediaType, "multipart/")
+
+	mr := multipart.NewReader(r.Body, params["boundary"])
+
+	metadataPart, err := mr.NextPart()
+	require.NoError(t, err)
+	metadataBytes, err := io.ReadAll(metadataPart)
+	require.NoError(t, err)
+
+	var metadata struct {
+		ContentType string `json:"contentType"`
+	}
+	require.NoError(t, json.Unmarshal(metadataBytes, &metadata))
+	return metadata.ContentType
 }
 
 // extractUploadedObjectBytes parses the multipart/related body the GCS JSON

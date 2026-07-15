@@ -238,6 +238,8 @@ func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {
 		return "application/json"
 	case storagetypes.UploadFormatPDF:
 		return "application/pdf"
+	case storagetypes.UploadFormatParquet:
+		return "application/vnd.apache.parquet"
 	default:
 		return "application/octet-stream"
 	}
