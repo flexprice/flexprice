@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/marketplacemetering"
 	mmtypes "github.com/aws/aws-sdk-go-v2/service/marketplacemetering/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 )
@@ -57,10 +57,10 @@ type BatchMeterUsageResult struct {
 // Client is the set of AWS Marketplace operations the integration uses.
 type Client interface {
 	// AssumeRole exchanges the tenant's role ARN and external ID for short-lived credentials.
-	// duration controls how long the assumed session is valid for; pass 0 to use the SDK default
-	// (15 minutes, see stscreds.DefaultDuration) for normal reporting use, or a short explicit
-	// value (e.g. 5 minutes) when the call is only to verify the role/trust policy at connection
-	// setup time and the credentials are discarded immediately after.
+	// duration controls how long the assumed session is valid for. AWS rejects anything below 15
+	// minutes (STS: durationSeconds must be >= 900) and anything above the role's own
+	// MaxSessionDuration, so valid values are 15m up to that ceiling. Pass 0 to use the SDK default
+	// (15 minutes, see stscreds.DefaultDuration).
 	AssumeRole(ctx context.Context, roleArn, externalID string, duration time.Duration) (aws.Credentials, error)
 
 	// BatchMeterUsage reports a single usage record. It returns the result for any record present
@@ -71,35 +71,47 @@ type Client interface {
 }
 
 type client struct {
+	cfg    config.AWSMarketplaceConfig
 	logger *logger.Logger
 }
 
-// NewClient builds a stateless AWS Marketplace client. Credentials are passed per call, never held.
-func NewClient(log *logger.Logger) Client {
-	return &client{logger: log}
+// NewClient builds a stateless AWS Marketplace client. cfg carries Flexprice's own AWS identity —
+// the principal that assumes each tenant's role. Tenant credentials are passed per call, never held.
+func NewClient(conf *config.Configuration, log *logger.Logger) Client {
+	return &client{cfg: conf.Marketplace.AWS, logger: log}
 }
 
-// AssumeRole obtains short-lived credentials for the tenant's IAM role. It uses the process's
-// ambient AWS credentials (Flexprice's own account) as the caller identity, and the tenant's role
-// ARN + external ID as the assume target. The role session name identifies this session in the
-// tenant's AWS CloudTrail. On failure, the AWS SDK error is not logged or returned — a bad trust
-// policy's AccessDenied message embeds the role ARN in its text, so nothing derived from it is
-// surfaced anywhere. The role ARN and external ID are never logged.
+// AssumeRole obtains short-lived credentials for the tenant's IAM role. Flexprice's own configured
+// credentials (config: aws_marketplace.*) are the caller identity — sts:AssumeRole is an
+// authenticated API and the tenant's trust policy names this principal — and the tenant's role ARN
+// + external ID are the assume target. The role session name identifies this session in the
+// tenant's AWS CloudTrail.
+//
+// Everything is built explicitly: no LoadDefaultConfig, no ambient credential chain. The chain's
+// last step probes the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for
+// seconds before failing — that must never be in the path of a user-facing connection request.
+//
+// On failure, the AWS SDK error is not logged or returned — a bad trust policy's AccessDenied
+// message embeds the role ARN in its text, so nothing derived from it is surfaced anywhere. The
+// role ARN and external ID are never logged.
 func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, duration time.Duration) (aws.Credentials, error) {
 	if roleArn == "" || externalID == "" {
 		return aws.Credentials{}, ierr.NewError("role_arn and external_id are required").
 			WithHint("AWS Marketplace connection requires both role_arn and external_id").
 			Mark(ierr.ErrValidation)
 	}
-
-	cfg, err := awsconfig.LoadDefaultConfig(ctx)
-	if err != nil {
-		return aws.Credentials{}, ierr.WithError(err).
-			WithHint("Failed to load AWS SDK configuration").
+	if c.cfg.AccessKeyID == "" || c.cfg.SecretAccessKey == "" || c.cfg.Region == "" {
+		return aws.Credentials{}, ierr.NewError("aws marketplace credentials are not configured").
+			WithHint("Flexprice's own AWS credentials are missing. Set marketplace.aws.region, marketplace.aws.access_key_id and marketplace.aws.secret_access_key.").
 			Mark(ierr.ErrSystem)
 	}
 
-	stsClient := sts.NewFromConfig(cfg)
+	stsClient := sts.NewFromConfig(aws.Config{
+		Region: c.cfg.Region,
+		Credentials: credentials.NewStaticCredentialsProvider(
+			c.cfg.AccessKeyID, c.cfg.SecretAccessKey, c.cfg.SessionToken,
+		),
+	})
 	provider := stscreds.NewAssumeRoleProvider(stsClient, roleArn, func(o *stscreds.AssumeRoleOptions) {
 		o.ExternalID = &externalID
 		o.RoleSessionName = "flexprice-marketplace-metering"
@@ -109,7 +121,7 @@ func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, dur
 	creds, err := provider.Retrieve(ctx)
 	if err != nil {
 		c.logger.Error(ctx, "aws marketplace assume role failed")
-		return aws.Credentials{}, ierr.NewError("failed to assume aws iam role").
+		return aws.Credentials{}, ierr.WithError(err).
 			WithHint("Failed to assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID.").
 			Mark(ierr.ErrValidation)
 	}

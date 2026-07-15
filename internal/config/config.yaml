@@ -283,6 +283,17 @@ flexprice_s3_exports:
   aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SECRET_ACCESS_KEY env var
   aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SESSION_TOKEN env var
 
+# Flexprice's own AWS identity — the principal that assumes each tenant's marketplace IAM role.
+# This is the caller named in the tenant's trust policy, NOT the tenant's role (that lives per
+# connection). Required for the AWS Marketplace integration; leave unset to disable it.
+marketplace:
+  aws:
+    region: "" # Set via FLEXPRICE_MARKETPLACE_AWS_REGION env var
+    access_key_id: "" # Set via FLEXPRICE_MARKETPLACE_AWS_ACCESS_KEY_ID env var
+    secret_access_key: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SECRET_ACCESS_KEY env var
+    # session_token only for temporary (ASIA...) keys; leave unset for a long-lived AKIA... key.
+    session_token: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SESSION_TOKEN env var
+
 cache:
   enabled: false
   inmemory:

@@ -14,10 +14,10 @@ import (
 )
 
 // awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
-// connection-creation time is valid for. It's short because these credentials are used once
-// (AssumeRole succeeding is itself the check) and immediately discarded — unlike the credentials
-// Cron B assumes to actually report usage, which need to live for the length of a reporting run.
-const awsMarketplaceRoleVerificationDuration = 5 * time.Minute
+// connection-creation time is valid for. These credentials are used once (AssumeRole succeeding is
+// itself the check) and discarded immediately, so this is the shortest session AWS permits: STS
+// rejects any durationSeconds below 900 with a ValidationError, so 15m is the floor, not a choice.
+const awsMarketplaceRoleVerificationDuration = 15 * time.Minute
 
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
@@ -557,12 +557,19 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if err := conn.EncryptedSecretData.AWSMarketplace.Validate(); err != nil {
 			return nil, err
 		}
-		if _, err := s.awsMarketplaceClient.AssumeRole(
-			ctx,
+		// Bounded so a slow/unreachable AWS credential chain (e.g. the SDK falling through to an
+		// unreachable EC2 instance-metadata endpoint when Flexprice's own AWS credentials aren't
+		// configured via env vars) can't hang this request indefinitely — there's no other timeout
+		// anywhere in this path otherwise.
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err := s.awsMarketplaceClient.AssumeRole(
+			verifyCtx,
 			conn.EncryptedSecretData.AWSMarketplace.RoleArn,
 			conn.EncryptedSecretData.AWSMarketplace.ExternalID,
 			awsMarketplaceRoleVerificationDuration,
-		); err != nil {
+		)
+		cancel()
+		if err != nil {
 			s.Logger.Error(ctx, "aws marketplace connection verification failed", "tenant_id", tenantID, "environment_id", environmentID)
 			return nil, ierr.WithError(err).
 				WithHint("Could not assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID before creating this connection.").
