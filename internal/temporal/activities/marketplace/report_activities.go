@@ -2,6 +2,7 @@ package marketplace
 
 import (
 	"context"
+	"math"
 	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -17,11 +18,18 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
+// awsReportingCurrency is the currency AWS Marketplace bills in. AWS Marketplace dimension rates
+// are always denominated in USD — there is no seller-facing currency selection — so every usage
+// record reported here must already be in USD. This is an AWS-specific fact; usage_records itself
+// stores each record's native subscription currency, since the table is shared across marketplaces
+// and Azure/GCP may not require USD.
+const awsReportingCurrency = "usd"
+
 // ReportActivities reports usage records that have not yet been synced to their marketplace. For
 // every published aws_marketplace connection it reads the connection's unsynced usage records,
-// reports them to AWS in batches, and records the returned metering id on each record AWS accepts.
-// Records AWS does not accept are left unsynced so the next run retries them; there is no terminal
-// failure state.
+// skips any not already in USD (currency conversion isn't supported yet), reports the rest to AWS
+// in batches, and records the returned metering id on each record AWS accepts. Records AWS does not
+// accept are left unsynced so the next run retries them; there is no terminal failure state.
 type ReportActivities struct {
 	connectionRepo               connection.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
@@ -143,6 +151,14 @@ func (a *ReportActivities) reportConnectionUsage(envCtx context.Context, conn *c
 	}
 
 	for _, rec := range records {
+		// AWS Marketplace only accepts USD; a non-USD record stays unsynced (not failed) until
+		// currency conversion is supported, so it's retried automatically once that lands.
+		if !types.IsMatchingCurrency(rec.Currency, awsReportingCurrency) {
+			a.logger.Debug(envCtx, "skipping marketplace usage record, currency not usd",
+				"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
+				"usage_record_id", rec.ID, "currency", rec.Currency)
+			continue
+		}
 		result.Total++
 		a.reportRecord(envCtx, conn.ID, rec, mappings, creds, region, result)
 	}
@@ -180,15 +196,28 @@ func (a *ReportActivities) reportRecord(
 		productCode = ""
 	}
 
+	// Only called for records already filtered to currency == usd (see reportConnectionUsage), so
+	// rec.Amount is used as-is. AWS only accepts a whole number, so it's sent in USD cents rather
+	// than dollars — the tenant prices their dimension per cent (see setup docs), which keeps
+	// sub-dollar amounts from rounding away. Turning cents into a charge is AWS's job: it bills
+	// quantity x the dimension's rate.
+	quantity := types.ToSmallestUnit(rec.Amount, awsReportingCurrency)
+	if quantity > math.MaxInt32 {
+		a.logger.Error(envCtx, "marketplace usage report failed",
+			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
+			"amount", rec.Amount, "currency", rec.Currency, "quantity", quantity,
+			"error", "quantity exceeds the maximum aws accepts", "stage", "convert_quantity")
+		result.Failed++
+		return
+	}
+
 	res, err := a.awsClient.BatchMeterUsage(envCtx, creds, region, awsmarketplace.UsageRecordInput{
 		CustomerAWSAccountID: customerAWSAccountID,
 		LicenseArn:           licenseArn,
 		ProductCode:          productCode,
 		Dimension:            plan.dimension,
-		// AWS Quantity is an integer, so the dollar amount is reported as whole units (rate is one
-		// unit per dollar). PeriodEnd is the timestamp so a retry sends an identical record and AWS
-		// de-duplicates it.
-		Quantity:  int32(rec.Amount.Round(0).IntPart()),
+		Quantity:             int32(quantity),
+		// PeriodEnd is the timestamp so a retry sends an identical record and AWS de-duplicates it.
 		Timestamp: rec.PeriodEnd,
 	})
 	if err != nil {

@@ -64,13 +64,17 @@ func (UsageRecord) Fields() []ent.Field {
 			}).
 			Default(decimal.Zero),
 
-		// Amount is the dollar total for [PeriodStart, PeriodEnd), from CalculateMeterUsageCharges —
-		// this is what's sent to AWS as BatchMeterUsage's "Quantity" field.
 		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
 			Default(decimal.Zero),
+
+		field.String("currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
+			NotEmpty(),
 
 		field.Time("period_start"),
 

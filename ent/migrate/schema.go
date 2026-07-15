@@ -2436,6 +2436,7 @@ var (
 		{Name: "plan_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "quantity", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "period_start", Type: field.TypeTime},
 		{Name: "period_end", Type: field.TypeTime},
 		{Name: "syncs", Type: field.TypeJSON, Nullable: true},
@@ -2450,7 +2451,7 @@ var (
 			{
 				Name:    "usagerecord_tenant_id_environment_id_all_providers_synced",
 				Unique:  false,
-				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[17]},
+				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[18]},
 			},
 		},
 	}

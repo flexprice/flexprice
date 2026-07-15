@@ -19,7 +19,9 @@ import (
 // SnapshotActivities creates the usage records that will later be reported to a marketplace. For
 // every published aws_marketplace connection it computes each mapped subscription's usage for the
 // reporting window, using the same commitment- and overage-aware computation as real invoicing,
-// and writes one usage record per subscription.
+// and writes one usage record per subscription in the subscription's own billing currency —
+// marketplace-mandated currency conversion (e.g. AWS requires USD) happens per-marketplace at
+// report time, not here, since this table is shared across marketplaces.
 type SnapshotActivities struct {
 	subscriptionService          service.SubscriptionService
 	billingService               service.BillingService
@@ -175,6 +177,9 @@ func (a *SnapshotActivities) snapshotSubscription(
 		return
 	}
 
+	// UsageRecord stores the subscription's native currency as the source of truth — this table is
+	// shared across marketplaces (AWS/Azure/GCP), so any marketplace-mandated currency conversion
+	// (AWS requires USD; Azure/GCP may not) happens per-marketplace at report time, not here.
 	customerExternalID := ""
 	if cust, custErr := a.customerRepo.Get(envCtx, sub.CustomerID); custErr == nil && cust != nil {
 		customerExternalID = cust.ExternalID
@@ -187,6 +192,7 @@ func (a *SnapshotActivities) snapshotSubscription(
 		SubscriptionID:     sub.ID,
 		PlanID:             sub.PlanID,
 		Amount:             totalAmount,
+		Currency:           usageResp.Currency,
 		PeriodStart:        input.PeriodStart,
 		PeriodEnd:          input.PeriodEnd,
 		Syncs:              map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry{},

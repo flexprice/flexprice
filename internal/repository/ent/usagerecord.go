@@ -59,6 +59,7 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 		SetPlanID(rec.PlanID).
 		SetQuantity(rec.Quantity).
 		SetAmount(rec.Amount).
+		SetCurrency(rec.Currency).
 		SetPeriodStart(rec.PeriodStart).
 		SetPeriodEnd(rec.PeriodEnd).
 		SetSyncs(domainUsageRecord.SyncsToMap(rec.Syncs)).
