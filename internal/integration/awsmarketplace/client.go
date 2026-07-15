@@ -120,11 +120,12 @@ func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, dur
 
 	creds, err := provider.Retrieve(ctx)
 	if err != nil {
-		// Deliberately not logger.Err(err): AWS's AccessDenied message for a bad trust policy
-		// embeds the role ARN in its text. The redacted placeholder still satisfies loglint's
-		// "every Error() log carries an error field" invariant without leaking it into logs.
+		// Deliberately not logger.Err(err) and not ierr.WithError(err): AWS's AccessDenied
+		// message for a bad trust policy embeds the role ARN in its text. The redacted
+		// placeholder still satisfies loglint's "every Error() log carries an error field"
+		// invariant without leaking it into logs or API responses.
 		c.logger.Error(ctx, "aws marketplace assume role failed", "error", "redacted: aws error message may embed the role arn")
-		return aws.Credentials{}, ierr.WithError(err).
+		return aws.Credentials{}, ierr.NewError("aws marketplace assume role failed").
 			WithHint("Failed to assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID.").
 			Mark(ierr.ErrValidation)
 	}
