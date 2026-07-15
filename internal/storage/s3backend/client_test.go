@@ -91,6 +91,16 @@ func TestClient_Upload_SetsContentTypeAndKey(t *testing.T) {
 			wantKeyInPath:   "/test-bucket/exports/data.json",
 		},
 		{
+			name: "parquet format infers application/vnd.apache.parquet content type",
+			req: &storage.UploadRequest{
+				Key:    "exports/report.parquet",
+				Data:   []byte("fake-parquet-bytes"),
+				Format: storage.UploadFormatParquet,
+			},
+			wantContentType: "application/vnd.apache.parquet",
+			wantKeyInPath:   "/test-bucket/exports/report.parquet",
+		},
+		{
 			name: "explicit content type overrides format inference",
 			req: &storage.UploadRequest{
 				Key:         "exports/custom.bin",
