@@ -8,8 +8,14 @@ import (
 
 const (
 	defaultGCPMetadataURL = "http://metadata.google.internal/computeMetadata/v1/"
-	defaultAWSMetadataURL = "http://169.254.169.254/latest/meta-data/"
-	defaultProbeTimeout   = 500 * time.Millisecond
+	// defaultAWSMetadataURL points at the IMDSv2 token endpoint. IMDSv2 only
+	// accepts a PUT here (to obtain a session token) — a PUT to
+	// /latest/meta-data/ returns 403 Forbidden, not 200/405, so probing that
+	// path never actually detects a real AWS instance.
+	defaultAWSMetadataURL     = "http://169.254.169.254/latest/api/token"
+	awsMetadataTokenTTLHeader = "X-aws-ec2-metadata-token-ttl-seconds"
+	awsMetadataTokenTTL       = "21600"
+	defaultProbeTimeout       = 500 * time.Millisecond
 )
 
 // CloudDetector probes cloud metadata endpoints once to determine which
@@ -67,10 +73,11 @@ func (d *CloudDetector) probeAWS(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
+	req.Header.Set(awsMetadataTokenTTLHeader, awsMetadataTokenTTL)
 	resp, err := d.client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusMethodNotAllowed
+	return resp.StatusCode == http.StatusOK
 }
