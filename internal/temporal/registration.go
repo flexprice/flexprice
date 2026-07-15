@@ -279,7 +279,7 @@ func RegisterWorkflowsAndActivities(
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	// Marketplace activities
 	billingService := service.NewBillingService(params)
-	awsMarketplaceClient := awsmarketplace.NewClient(params.Logger)
+	awsMarketplaceClient := awsmarketplace.NewClient(params.Config, params.Logger)
 	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(
 		subscriptionService,
 		billingService,

@@ -42,6 +42,7 @@ type UsageRecord struct {
 	PlanID             string                               `db:"plan_id" json:"plan_id"`
 	Quantity           decimal.Decimal                      `db:"quantity" json:"quantity"`
 	Amount             decimal.Decimal                      `db:"amount" json:"amount"`
+	Currency           string                               `db:"currency" json:"currency"`
 	PeriodStart        time.Time                            `db:"period_start" json:"period_start"`
 	PeriodEnd          time.Time                            `db:"period_end" json:"period_end"`
 	Syncs              map[Marketplace]MarketplaceSyncEntry `db:"syncs" json:"syncs"`
@@ -63,6 +64,7 @@ func FromEnt(e *ent.UsageRecord) *UsageRecord {
 		PlanID:             e.PlanID,
 		Quantity:           e.Quantity,
 		Amount:             e.Amount,
+		Currency:           e.Currency,
 		PeriodStart:        e.PeriodStart,
 		PeriodEnd:          e.PeriodEnd,
 		Syncs:              syncsFromMap(e.Syncs),

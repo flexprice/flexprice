@@ -45,6 +45,7 @@ type Configuration struct {
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
 	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
@@ -116,6 +117,31 @@ type FlexpriceS3ExportsConfig struct {
 	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
 	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
+}
+
+// MarketplaceConfig groups Flexprice's own credentials for each marketplace it reports usage to.
+// AWS is the only one implemented today; Azure and GCP would be added as sibling fields.
+type MarketplaceConfig struct {
+	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+}
+
+// AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
+// role. sts:AssumeRole is an authenticated API: the tenant's trust policy names this principal, so
+// these credentials are what signs the AssumeRole request. They are unrelated to the tenant's
+// role_arn/external_id, which are the assume *target*, stored per-connection.
+//
+// These are set explicitly rather than resolved from the ambient AWS credential chain: the chain
+// ends at the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for seconds
+// before failing — turning connection creation into a hang on any non-EC2 host.
+//
+// SessionToken is only set when the credentials are temporary (an ASIA... key from STS/SSO). A
+// long-lived AKIA... IAM user key has no session token, and sending a non-empty one with it makes
+// AWS reject the request.
+type AWSMarketplaceConfig struct {
+	Region          string `mapstructure:"region" validate:"omitempty"`
+	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
+	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
+	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {
@@ -456,6 +482,7 @@ type EventProcessingReplayConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
+
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
 	Enabled                   bool   `mapstructure:"enabled" default:"true"`
