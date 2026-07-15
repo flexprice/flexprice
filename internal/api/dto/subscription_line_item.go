@@ -85,7 +85,7 @@ type CreateSubscriptionLineItemRequest struct {
 	PriceID string `json:"price_id,omitempty"`
 	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
 	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
-	Quantity             decimal.Decimal                 `json:"quantity,omitempty"`
+	Quantity             *decimal.Decimal                `json:"quantity,omitempty" swaggertype:"string"`
 	StartDate            *time.Time                      `json:"start_date,omitempty"`
 	EndDate              *time.Time                      `json:"end_date,omitempty"`
 	Metadata             map[string]string               `json:"metadata,omitempty"`
@@ -172,9 +172,9 @@ func (r *UpdateSubscriptionLineItemRequest) HasCommitment() bool {
 }
 
 // Validate validates the create subscription line item request.
-// price is optional and can be provided for MinQuantity validation when using price_id.
+// linePrice is optional and can be provided for MinQuantity validation when using price_id.
 // sub is optional; when provided, line item and inline price start/end dates are validated to fall within subscription bounds.
-func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *subscription.Subscription) error {
+func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub *subscription.Subscription) error {
 	// Exactly one of price_id or price must be set
 	hasPriceID := r.PriceID != ""
 	hasPrice := r.Price != nil
@@ -189,7 +189,7 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 			Mark(ierr.ErrValidation)
 	}
 
-	onetimeIgnoresRequestEndDate := (price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
+	onetimeIgnoresRequestEndDate := (linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
 		(r.Price != nil && r.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME)
 
 	// Validate start date is not after end date if both are provided
@@ -261,19 +261,17 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 	// Note: inline price path (r.Price) is nil here; ONETIME billing period is validated
 	// downstream in CreatePriceRequest.Validate() for that path.
 	// ONETIME charges must use ADVANCE invoice cadence
-	if price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-		if price.InvoiceCadence != "" && price.InvoiceCadence != types.InvoiceCadenceAdvance {
+	if linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		if linePrice.InvoiceCadence != "" && linePrice.InvoiceCadence != types.InvoiceCadenceAdvance {
 			return ierr.NewError("ONETIME charges must have invoice_cadence ADVANCE").
 				WithHint("One-time charges are always billed in advance").
 				Mark(ierr.ErrValidation)
 		}
 	}
 
-	// Validate quantity is positive if provided
-	if !r.Quantity.IsZero() && r.Quantity.IsNegative() {
-		return ierr.NewError("quantity must be positive").
-			WithHint("Quantity must be positive").
-			Mark(ierr.ErrValidation)
+	// Validate quantity is non-negative if provided (nil/omitted is allowed and defaults downstream)
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Validate commitment fields if provided
@@ -289,21 +287,12 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 		}
 	}
 
-	// price_id path: validate against price when provided (e.g. MinQuantity)
-	if price != nil && price.Type == types.PRICE_TYPE_FIXED && price.MinQuantity != nil {
-		finalQuantity := r.Quantity
-		if finalQuantity.IsZero() {
-			// Will be set to MinQuantity in ToSubscriptionLineItem, so validation passes
-			finalQuantity = *price.MinQuantity
-		}
-		if finalQuantity.LessThan(lo.FromPtr(price.MinQuantity)) {
-			return ierr.NewError("quantity must be greater than or equal to min_quantity").
-				WithHint("Quantity must be at least the minimum quantity specified for this price").
-				WithReportableDetails(map[string]interface{}{
-					"quantity":     finalQuantity.String(),
-					"min_quantity": price.MinQuantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
+	// price_id path: validate against price when provided (e.g. MinQuantity).
+	// Explicit quantity (including 0) is checked as-is; omitted quantity (nil) defaults
+	// downstream in ToSubscriptionLineItem and is not checked here.
+	if linePrice != nil && linePrice.Type == types.PRICE_TYPE_FIXED {
+		if err := price.ValidateQuantityFloor(r.Quantity, linePrice.MinQuantity); err != nil {
+			return err
 		}
 	}
 
@@ -503,9 +492,10 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 			}
 			lineItem.Quantity = decimal.Zero
 		} else {
-			// For fixed prices, use MinQuantity if quantity not provided and MinQuantity exists
-			if !r.Quantity.IsZero() {
-				lineItem.Quantity = r.Quantity
+			// For fixed prices: an explicit quantity (already floor-checked in Validate) is used
+			// as-is; an omitted quantity defaults to MinQuantity, else the price's default.
+			if r.Quantity != nil {
+				lineItem.Quantity = *r.Quantity
 			} else if params.Price.MinQuantity != nil {
 				lineItem.Quantity = lo.FromPtr(params.Price.MinQuantity)
 			} else {
