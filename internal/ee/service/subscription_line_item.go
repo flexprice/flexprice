@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	pricevalidation "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -51,6 +52,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			createdPrice, createErr := NewPriceService(s.ServiceParams).CreatePrice(txCtx, *inlineCreatePriceReq)
 			if createErr != nil {
 				return createErr
+			}
+			if err := pricevalidation.ValidateQuantityFloor(resolvedReq.Quantity, createdPrice.MinQuantity); err != nil {
+				return err
 			}
 			price = createdPrice
 			params.Price = createdPrice

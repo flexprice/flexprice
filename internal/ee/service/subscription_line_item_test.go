@@ -288,6 +288,32 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 	s.NoError(err)
 }
 
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceMinQuantityFloor() {
+	ctx := s.GetContext()
+
+	inlinePrice := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+		LookupKey:          "inline_min_quantity_floor",
+		MinQuantity:        lo.ToPtr(int64(5)),
+	}
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		Price:                inlinePrice,
+		Quantity:             lo.ToPtr(decimal.NewFromInt(2)), // below the inline price's min_quantity of 5
+		SkipEntitlementCheck: true,
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Error(err, "quantity below the inline price's min_quantity should be rejected")
+	s.Contains(err.Error(), "quantity must be greater than or equal to min_quantity")
+}
+
 // TestAddSubscriptionLineItem_DateBoundsValidation asserts that when sub is passed, date-bounds validation runs:
 // line item start_date cannot be before subscription start date; line item end_date cannot be after subscription end date.
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_DateBoundsValidation() {
