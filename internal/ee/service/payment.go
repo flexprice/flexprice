@@ -339,7 +339,7 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
 	p, err = s.syncPaymentStatusFromGateway(ctx, p)
 	if err != nil {
-		s.Logger.Error(ctx, err.Error())
+		s.Logger.Error(ctx, "failed to sync payment status from gateway", "payment_id", p.ID, "error", err)
 	}
 
 	response := dto.NewPaymentResponse(p)
