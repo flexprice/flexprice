@@ -143,6 +143,15 @@ type GetSubscriptionMeterUsageRequest struct {
 	// scope to every inherited child customer's external_id. False (default)
 	// restricts the query to the subscription owner's external_id only.
 	IncludeChildren bool
+
+	// ForceApplyCommitment, when true, keeps commitment / true-up cost active
+	// even on fanned-out analytics AND routes commitment line items through
+	// the source-fanning query path so the CSV export can produce per-source
+	// rows for them. Internal-only — the export pipeline flips this on and
+	// accepts that per-source rows will each fire the line item's commitment
+	// (multi-counts the true-up amount across rows). Default (false) is what
+	// every user-facing caller uses.
+	ForceApplyCommitment bool
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -517,7 +526,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if hasExtraGroupBy {
 				for _, liw := range lineItemsInGroup {
-					if liw.Item != nil && liw.Item.HasAnyCommitment() {
+					// ForceApplyCommitment (export path) folds commitment LIs
+					// into the fan-out path so the CSV gets per-source rows for
+					// them too. Trade-off: commitment fires per fanned row and
+					// multi-counts the true-up across sources — accepted at the
+					// flag's call site.
+					if !req.ForceApplyCommitment && liw.Item != nil && liw.Item.HasAnyCommitment() {
 						commitmentLIs = append(commitmentLIs, liw)
 					} else {
 						nonCommitmentLIs = append(nonCommitmentLIs, liw)
@@ -1162,19 +1176,20 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 
 		usage, err := s.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
-			SubscriptionID:  sub.ID,
-			StartTime:       params.StartTime,
-			EndTime:         subEndTime,
-			WindowSize:      params.WindowSize,
-			BillingAnchor:   billingAnchor,
-			UseFinal:        params.UseFinal,
-			IncludeFeatures: true,
-			MeterIDs:        params.MeterIDs,
-			GroupBy:         params.GroupBy,
-			PropertyFilters: params.PropertyFilters,
-			Sources:         params.Sources,
-			CollectSources:  lo.Contains(params.Expand, "source"),
-			IncludeChildren: params.IncludeChildren,
+			SubscriptionID:       sub.ID,
+			StartTime:            params.StartTime,
+			EndTime:              subEndTime,
+			WindowSize:           params.WindowSize,
+			BillingAnchor:        billingAnchor,
+			UseFinal:             params.UseFinal,
+			IncludeFeatures:      true,
+			MeterIDs:             params.MeterIDs,
+			GroupBy:              params.GroupBy,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			CollectSources:       lo.Contains(params.Expand, "source"),
+			IncludeChildren:      params.IncludeChildren,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		})
 		if err != nil {
 			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
