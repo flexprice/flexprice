@@ -1411,18 +1411,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		lineItem.PriceID = overriddenPriceResp.ID
 		lineItem.DisplayName = overriddenPriceResp.DisplayName
 
-		s.Logger.Info(ctx, "created subscription-scoped price override",
-			"subscription_id", sub.ID,
-			"original_price_id", override.PriceID,
-			"override_price_id", overriddenPriceResp.ID,
-			"amount_override", override.Amount != nil,
-			"quantity_override", override.Quantity != nil,
-			"billing_model_override", override.BillingModel != "",
-			"tier_mode_override", override.TierMode != "",
-			"tiers_override", len(override.Tiers) > 0,
-			"transform_quantity_override", override.TransformQuantity != nil,
-			"price_unit_amount_override", override.PriceUnitAmount != nil,
-			"price_unit_tiers_override", len(override.PriceUnitTiers) > 0)
 	}
 
 	return nil
@@ -5096,7 +5084,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		lineItem.Quantity = decimal.Zero
 	} else {
 		if price.MinQuantity != nil && !price.MinQuantity.IsZero() {
-			lineItem.Quantity = *price.MinQuantity
+			lineItem.Quantity = lo.FromPtr(price.MinQuantity)
 		} else {
 			lineItem.Quantity = decimal.NewFromInt(1)
 		}
