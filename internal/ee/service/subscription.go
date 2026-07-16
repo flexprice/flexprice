@@ -2163,8 +2163,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	// Validate expand fields
-	if err := filter.GetExpand().Validate(types.SubscriptionExpandConfig); err != nil {
+	expand := filter.GetExpand()
+	if err := expand.Validate(types.SubscriptionExpandConfig); err != nil {
 		return nil, err
+	}
+
+	// Back-fill deprecated WithLineItems from expand so both request styles
+	// eager-load line items in the repository query.
+	if expand.Has(types.ExpandSubscriptionLineItems) {
+		filter.WithLineItems = true
 	}
 
 	// Resolve external customer ID to internal customer ID if provided
@@ -2331,6 +2338,39 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
+
+	if expand.Has(types.ExpandEntitlements) && len(response.Items) > 0 {
+		// TODO(perf): serial per-customer fetch is fine for the typical
+		// external_customer_id search (1 unique customer). For wide pages with
+		// many unique customers, consider either a bulk BillingService method
+		// or a bounded errgroup here.
+		billingService := NewBillingService(s.ServiceParams)
+		entitlementsByCustomer := make(map[string][]*dto.AggregatedFeature)
+		for _, item := range response.Items {
+			cid := item.CustomerID
+			if cid == "" {
+				continue
+			}
+			if _, ok := entitlementsByCustomer[cid]; ok {
+				continue
+			}
+
+			ents, err := billingService.GetCustomerEntitlements(ctx, cid, &dto.GetCustomerEntitlementsRequest{})
+			if err != nil {
+				// ponytail: don't fail the search if entitlement lookup fails for one customer; log and skip.
+				s.Logger.Error(ctx, "failed to load entitlements for customer", "error", err, "customer_id", cid)
+				entitlementsByCustomer[cid] = nil
+				continue
+			}
+			entitlementsByCustomer[cid] = ents.Features
+		}
+
+		for _, item := range response.Items {
+			if features, ok := entitlementsByCustomer[item.CustomerID]; ok {
+				item.Entitlements = features
+			}
+		}
+	}
 
 	s.Logger.Debug(ctx, "completed ListSubscriptions successfully",
 		"total_items", len(response.Items),
