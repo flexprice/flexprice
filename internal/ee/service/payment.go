@@ -598,13 +598,13 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	case types.PaymentGatewayTypeStripe:
 		stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get Stripe integration for payment sync",
+			s.Logger.Error(ctx, "failed to get Stripe integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		resp, err := stripeIntegration.PaymentSvc.GetPaymentStatusByPaymentIntent(ctx, gatewayPaymentID, "")
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch payment status from Stripe",
+			s.Logger.Error(ctx, "failed to fetch payment status from Stripe",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
@@ -613,13 +613,13 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	case types.PaymentGatewayTypeRazorpay:
 		razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get Razorpay integration for payment sync",
+			s.Logger.Error(ctx, "failed to get Razorpay integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		status, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch payment status from Razorpay",
+			s.Logger.Error(ctx, "failed to fetch payment status from Razorpay",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
@@ -628,13 +628,13 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	case types.PaymentGatewayTypeMoyasar:
 		moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get Moyasar integration for payment sync",
+			s.Logger.Error(ctx, "failed to get Moyasar integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		resp, err := moyasarIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch payment status from Moyasar",
+			s.Logger.Error(ctx, "failed to fetch payment status from Moyasar",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
