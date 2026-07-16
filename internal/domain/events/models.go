@@ -43,6 +43,10 @@ type UsageAnalyticsParams struct {
 	// - Subscription billing periods (e.g., customer signed up on 15th)
 	// - Custom business cycles (e.g., fiscal months starting on 5th)
 	BillingAnchor *time.Time
+	// ForceApplyCommitment mirrors MeterUsageDetailedAnalyticsParams.ForceApplyCommitment.
+	// Internal-only. Set by the CSV export pipeline to override the per-item
+	// commitment-skip that calculateCosts applies to fanned-out analytics.
+	ForceApplyCommitment bool
 }
 
 // DetailedUsageAnalytic represents detailed usage and cost data for analytics

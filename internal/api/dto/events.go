@@ -362,6 +362,11 @@ type GetUsageAnalyticsRequest struct {
 	// and the item to be linked to a subscription line item that has CommitmentTimeBuckets.
 	// Default: false (opt-in, backward compatible).
 	BreakdownBucket bool `json:"breakdown_bucket,omitempty" form:"breakdown_bucket"`
+	// ForceApplyCommitment is an INTERNAL toggle set by the CSV export pipeline
+	// to keep commitment / true-up cost on fanned-out (group_by=source) rows.
+	// json:"-" so it can never be set from an HTTP body — user-facing callers
+	// must not read or write this field.
+	ForceApplyCommitment bool `json:"-" form:"-"`
 }
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API

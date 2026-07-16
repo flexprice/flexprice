@@ -164,19 +164,20 @@ type lineItemWithMeter struct {
 // usage-analytics CSV exporter).
 func (s *meterUsageService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	return s.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerID:  req.ExternalCustomerID,
-		ExternalCustomerIDs: req.ExternalCustomerIDs,
-		FeatureIDs:          req.FeatureIDs,
-		StartTime:           req.StartTime,
-		EndTime:             req.EndTime,
-		GroupBy:             req.GroupBy,
-		PropertyFilters:     req.PropertyFilters,
-		Sources:             req.Sources,
-		WindowSize:          req.WindowSize,
-		Expand:              req.Expand,
-		IncludeChildren:     req.IncludeChildren,
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   req.ExternalCustomerID,
+		ExternalCustomerIDs:  req.ExternalCustomerIDs,
+		FeatureIDs:           req.FeatureIDs,
+		StartTime:            req.StartTime,
+		EndTime:              req.EndTime,
+		GroupBy:              req.GroupBy,
+		PropertyFilters:      req.PropertyFilters,
+		Sources:              req.Sources,
+		WindowSize:           req.WindowSize,
+		Expand:               req.Expand,
+		IncludeChildren:      req.IncludeChildren,
+		ForceApplyCommitment: req.ForceApplyCommitment,
 	})
 }
 
@@ -507,7 +508,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			// with the full group_by (per-group breakdown in the response).
 			hasExtraGroupBy := false
 			for _, g := range req.GroupBy {
-				if g != "" && g != "meter_id" {
+				if g != "" && g != "meter_id" && g != "feature_id" {
 					hasExtraGroupBy = true
 					break
 				}
@@ -769,7 +770,7 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 	groupBy := []string{"meter_id"}
 	if useUserGroupBy {
 		for _, g := range req.GroupBy {
-			if g != "" && g != "meter_id" {
+			if g != "" && g != "meter_id" && g != "feature_id" {
 				groupBy = append(groupBy, g)
 			}
 		}
@@ -1188,13 +1189,10 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Merge into AnalyticsData
 	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params)
 
-	// Calculate costs inline (no dependency on featureUsageTrackingService)
-	if len(data.Analytics) > 0 {
-		if err := s.calculateCosts(ctx, data); err != nil {
-			s.logger.Info(ctx, "failed to calculate costs for meter usage analytics, costs will be zero",
-				"error", err,
-			)
-		}
+	// Calculate costs inline
+	err = s.calculateCosts(ctx, data)
+	if err != nil {
+		s.logger.Error(ctx, "failed to calculate costs for meter usage analytics, costs will be zero", "error", err)
 	}
 
 	// Set currency on all analytics items
@@ -1235,17 +1233,18 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:           params.TenantID,
-			EnvironmentID:      params.EnvironmentID,
-			ExternalCustomerID: params.ExternalCustomerID,
-			StartTime:          params.StartTime,
-			EndTime:            params.EndTime,
-			GroupBy:            params.GroupBy,
-			WindowSize:         params.WindowSize,
-			PropertyFilters:    params.PropertyFilters,
-			Sources:            params.Sources,
-			AggregationTypes:   params.AggregationTypes,
-			BillingAnchor:      params.BillingAnchor,
+			TenantID:             params.TenantID,
+			EnvironmentID:        params.EnvironmentID,
+			ExternalCustomerID:   params.ExternalCustomerID,
+			StartTime:            params.StartTime,
+			EndTime:              params.EndTime,
+			GroupBy:              params.GroupBy,
+			WindowSize:           params.WindowSize,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			AggregationTypes:     params.AggregationTypes,
+			BillingAnchor:        params.BillingAnchor,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
 	}
 
@@ -1572,17 +1571,18 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(allResults)),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:           params.TenantID,
-			EnvironmentID:      params.EnvironmentID,
-			ExternalCustomerID: params.ExternalCustomerID,
-			StartTime:          params.StartTime,
-			EndTime:            params.EndTime,
-			GroupBy:            params.GroupBy,
-			WindowSize:         params.WindowSize,
-			PropertyFilters:    params.PropertyFilters,
-			Sources:            params.Sources,
-			AggregationTypes:   params.AggregationTypes,
-			BillingAnchor:      params.BillingAnchor,
+			TenantID:             params.TenantID,
+			EnvironmentID:        params.EnvironmentID,
+			ExternalCustomerID:   params.ExternalCustomerID,
+			StartTime:            params.StartTime,
+			EndTime:              params.EndTime,
+			GroupBy:              params.GroupBy,
+			WindowSize:           params.WindowSize,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			AggregationTypes:     params.AggregationTypes,
+			BillingAnchor:        params.BillingAnchor,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
 	}
 
@@ -2255,6 +2255,10 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 
 // calculateCosts calculates costs for all analytics items in the data.
 func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
+	if len(data.Analytics) == 0 {
+		return nil
+	}
+
 	priceService := NewPriceService(s.ServiceParams)
 
 	// Analytics filters (property_filters, sources) restrict the SQL result set
@@ -2264,8 +2268,20 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 	// zero matching events would otherwise show the full commitment as unutilized
 	// and report it as cost). When any analytics-only filter is active, skip
 	// commitment application and report the raw filtered cost.
-	filterSkipCommitment := len(data.Params.PropertyFilters) > 0 ||
-		len(data.Params.Sources) > 0
+	//
+	// User group_by also triggers skip: each fanned-out (source, properties)
+	// combo analytic carries its own per-combo Usage and Points, and applying
+	// commitment math per combo would over-charge — the line item's commitment
+	// would fire once per combo instead of once across the whole line item.
+	//
+	// ForceApplyCommitment (internal-only, set by the CSV export path)
+	// overrides the group_by skip so bucketed commitment line items keep their
+	// true-up / overage cost even when the export requests group_by=source.
+	// Filter-based skip is NOT overridden — a filter subset is genuinely
+	// partial data and commitment math on it would still be misleading.
+	skipCommitment := len(data.Params.PropertyFilters) > 0 ||
+		len(data.Params.Sources) > 0 ||
+		(hasUserBucketedGroupBy(data.Params.GroupBy) && !data.Params.ForceApplyCommitment)
 
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
@@ -2284,17 +2300,6 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		if !hasPricing {
 			continue
 		}
-
-		// Per-item skip for source/properties fan-out: when this specific
-		// analytic represents one combo of a fanned-out result set, its Usage
-		// / Points cover only that slice — applying commitment here would fire
-		// the line item's commitment once per combo. An unfanned analytic
-		// (Source="" and no Properties), including the step-12 synthetic
-		// zero-fill entries created for zero-usage commitment line items,
-		// represents the whole line item and MUST apply commitment so the
-		// true-up amount is surfaced (this is where the export-vs-analytics
-		// $0-cost regression came from).
-		skipCommitment := filterSkipCommitment || item.Source != "" || len(item.Properties) > 0
 
 		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
 			s.calculateBucketedCost(ctx, priceService, item, p, m, data, skipCommitment)
