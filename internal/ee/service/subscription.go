@@ -194,13 +194,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if priceResponse.Price.Type == types.PRICE_TYPE_USAGE && priceResponse.Meter != nil {
 			item.MeterID = priceResponse.Meter.ID
 			item.MeterDisplayName = priceResponse.Meter.Name
-			item.DisplayName = priceResponse.Meter.Name
 			item.Quantity = decimal.Zero
-		} else {
-			item.DisplayName = plan.Name
-			if item.Quantity.IsZero() {
-				item.Quantity = decimal.NewFromInt(1)
-			}
 		}
 
 		item.SubscriptionID = sub.ID
@@ -1407,30 +1401,16 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			return err
 		}
 
-		// Update line item quantity if specified
+		// Update line item quantity if specified — zero resolves to min_quantity default.
 		if override.Quantity != nil {
-			lineItem.Quantity = *override.Quantity
+			lineItem.Quantity = price.ApplyQuantityDefault(*override.Quantity, originalPrice.Price)
 		}
 
 		// Update the line item to reference the new subscription-scoped price
 		// Also update display name to match the new price (which preserves the original display name)
 		lineItem.PriceID = overriddenPriceResp.ID
-		if overriddenPriceResp.DisplayName != "" {
-			lineItem.DisplayName = overriddenPriceResp.DisplayName
-		}
+		lineItem.DisplayName = overriddenPriceResp.DisplayName
 
-		s.Logger.Info(ctx, "created subscription-scoped price override",
-			"subscription_id", sub.ID,
-			"original_price_id", override.PriceID,
-			"override_price_id", overriddenPriceResp.ID,
-			"amount_override", override.Amount != nil,
-			"quantity_override", override.Quantity != nil,
-			"billing_model_override", override.BillingModel != "",
-			"tier_mode_override", override.TierMode != "",
-			"tiers_override", len(override.Tiers) > 0,
-			"transform_quantity_override", override.TransformQuantity != nil,
-			"price_unit_amount_override", override.PriceUnitAmount != nil,
-			"price_unit_tiers_override", len(override.PriceUnitTiers) > 0)
 	}
 
 	return nil
@@ -5095,13 +5075,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set display name from price (always use price display name)
-	if price.DisplayName != "" {
-		lineItem.DisplayName = price.DisplayName
-	} else {
-		// Fallback to addon name if price display name is not set
-		lineItem.DisplayName = addonName
-	}
+	lineItem.DisplayName = price.DisplayName
 
 	// Set price-related fields
 	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
@@ -5109,7 +5083,11 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		lineItem.MeterDisplayName = priceResponse.Meter.Name
 		lineItem.Quantity = decimal.Zero
 	} else {
-		lineItem.Quantity = decimal.NewFromInt(1)
+		if price.MinQuantity != nil && !price.MinQuantity.IsZero() {
+			lineItem.Quantity = lo.FromPtr(price.MinQuantity)
+		} else {
+			lineItem.Quantity = decimal.NewFromInt(1)
+		}
 	}
 
 	// Copy price unit fields from price to line item
@@ -5964,7 +5942,6 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 		return fmt.Sprintf("Proration (%s)", effectiveDate.Format("2006-01-02"))
 	}
 }
-
 
 // GetMeterUsageBySubscription queries the meter_usage table for usage data.
 // Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,

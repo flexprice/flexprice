@@ -288,6 +288,36 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 	s.NoError(err)
 }
 
+// TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity verifies that when an
+// inline price has min_quantity=5, sending quantity=0 stores quantity=5 (the min_quantity default).
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity() {
+	ctx := s.GetContext()
+
+	inlinePrice := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+		LookupKey:          "inline_min_quantity_floor",
+		MinQuantity:        lo.ToPtr(int64(5)),
+	}
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		Price:                inlinePrice,
+		Quantity:             decimal.Zero, // zero → should default to min_quantity=5
+		SkipEntitlementCheck: true,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err, "zero quantity with inline price should succeed and default to min_quantity")
+	s.Require().NotNil(resp)
+	s.True(decimal.NewFromInt(5).Equal(resp.Quantity),
+		"quantity should default to min_quantity=5, got %s", resp.Quantity)
+}
+
 // TestAddSubscriptionLineItem_DateBoundsValidation asserts that when sub is passed, date-bounds validation runs:
 // line item start_date cannot be before subscription start date; line item end_date cannot be after subscription end date.
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_DateBoundsValidation() {
@@ -721,7 +751,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 				Quantity:             decimal.NewFromInt(-1),
 				SkipEntitlementCheck: true,
 			},
-			wantErrCont: "quantity must be positive",
+			wantErrCont: "quantity must be non-negative",
 		},
 	}
 

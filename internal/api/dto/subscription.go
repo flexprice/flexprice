@@ -1526,16 +1526,8 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil {
-		if r.Quantity.IsNegative() {
-			return ierr.NewError("quantity must be non-negative").
-				WithHint("Override quantity cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"quantity": r.Quantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Get original price - it must be available for validation
