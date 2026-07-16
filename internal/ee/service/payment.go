@@ -699,7 +699,8 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		updateReq.FailedAt = lo.ToPtr(now)
 	}
 
-	if _, err := s.UpdatePayment(ctx, p.ID, updateReq); err != nil {
+	updatedPayment, err := s.UpdatePayment(ctx, p.ID, updateReq)
+	if err != nil {
 		s.Logger.Error(ctx, "failed to update payment status from gateway sync",
 			"payment_id", p.ID, "new_status", newStatus, "error", err)
 		return p, err
@@ -713,13 +714,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		}
 	}
 
-	fresh, err := s.PaymentRepo.Get(ctx, p.ID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to re-fetch payment after gateway sync",
-			"payment_id", p.ID, "error", err)
-		return p, err
-	}
-	return fresh, nil
+	return updatedPayment.ToPayment(), nil // return the updated payment
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
