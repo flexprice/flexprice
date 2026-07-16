@@ -662,7 +662,7 @@ func ApplyQuantityDefault(qty decimal.Decimal, p *Price) decimal.Decimal {
 	if !qty.IsZero() {
 		return qty
 	}
-	if p != nil && p.MinQuantity != nil && !p.MinQuantity.IsZero() {
+	if p != nil && p.MinQuantity != nil {
 		return lo.FromPtr(p.MinQuantity)
 	}
 	if p != nil {
