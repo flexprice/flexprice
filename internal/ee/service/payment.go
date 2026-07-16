@@ -585,6 +585,9 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	if p.PaymentGateway == nil {
 		return p, nil
 	}
+	if s.IntegrationFactory == nil {
+		return p, nil
+	}
 
 	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
