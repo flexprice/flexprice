@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/types/integrations"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
@@ -572,15 +573,7 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 
 // TODO: extract into a GatewayStatusSyncer when supporting more gateways or throttling
 func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *payment.Payment) (*payment.Payment, error) {
-
-	// Only sync payment status for pending payments
-	// and payments with a gateway payment ID and gateway type
-	paymentPendingStatuses := []types.PaymentStatus{
-		types.PaymentStatusPending,
-		types.PaymentStatusProcessing,
-	}
-
-	if !lo.Contains(paymentPendingStatuses, p.PaymentStatus) {
+	if p.PaymentStatus != types.PaymentStatusPending && p.PaymentStatus != types.PaymentStatusProcessing {
 		return p, nil
 	}
 	if p.GatewayPaymentID == nil || lo.FromPtr(p.GatewayPaymentID) == "" {
@@ -593,90 +586,60 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
-	var rawStatus string
+	// Fetch raw status from gateway and map to FlexPrice status in one step per gateway.
+	var newStatus types.PaymentStatus
+	var mapped bool
 	switch gateway {
 	case types.PaymentGatewayTypeStripe:
 		stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to get Stripe integration for payment sync",
+			s.Logger.Warn(ctx, "failed to get Stripe integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		resp, err := stripeIntegration.PaymentSvc.GetPaymentStatusByPaymentIntent(ctx, gatewayPaymentID, "")
 		if err != nil {
-			s.Logger.Error(ctx, "failed to fetch payment status from Stripe",
+			s.Logger.Warn(ctx, "failed to fetch payment status from Stripe",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
-		rawStatus = resp.Status
+		newStatus, mapped = integrations.MapStripePaymentStatus(resp.Status)
 
 	case types.PaymentGatewayTypeRazorpay:
 		razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to get Razorpay integration for payment sync",
+			s.Logger.Warn(ctx, "failed to get Razorpay integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		status, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to fetch payment status from Razorpay",
+			s.Logger.Warn(ctx, "failed to fetch payment status from Razorpay",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
-		rawStatus = status
+		newStatus, mapped = integrations.MapRazorpayPaymentStatus(status)
 
 	case types.PaymentGatewayTypeMoyasar:
 		moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to get Moyasar integration for payment sync",
+			s.Logger.Warn(ctx, "failed to get Moyasar integration for payment sync",
 				"payment_id", p.ID, "error", err)
 			return p, err
 		}
 		resp, err := moyasarIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to fetch payment status from Moyasar",
+			s.Logger.Warn(ctx, "failed to fetch payment status from Moyasar",
 				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
 			return p, err
 		}
-		rawStatus = resp.Status
+		newStatus, mapped = integrations.MapMoyasarPaymentStatus(resp.Status)
 
 	default:
 		return p, nil
 	}
 
-	// Map gateway-native status → FlexPrice status
-	var newStatus types.PaymentStatus
-	switch gateway {
-	case types.PaymentGatewayTypeStripe:
-		switch rawStatus {
-		case "succeeded":
-			newStatus = types.PaymentStatusSucceeded
-		case "requires_payment_method", "canceled":
-			newStatus = types.PaymentStatusFailed
-		default:
-			return p, nil
-		}
-	case types.PaymentGatewayTypeRazorpay:
-		switch rawStatus {
-		case "captured":
-			newStatus = types.PaymentStatusSucceeded
-		case "failed":
-			newStatus = types.PaymentStatusFailed
-		default:
-			return p, nil
-		}
-	case types.PaymentGatewayTypeMoyasar:
-		switch rawStatus {
-		case "paid":
-			newStatus = types.PaymentStatusSucceeded
-		case "failed":
-			newStatus = types.PaymentStatusFailed
-		default:
-			return p, nil
-		}
-	}
-
-	if newStatus == p.PaymentStatus {
+	if !mapped || newStatus == p.PaymentStatus {
 		return p, nil
 	}
 
@@ -684,7 +647,6 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		"payment_id", p.ID,
 		"gateway", gateway,
 		"db_status", p.PaymentStatus,
-		"gateway_raw_status", rawStatus,
 		"new_status", newStatus,
 	)
 
@@ -714,7 +676,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		}
 	}
 
-	return updatedPayment.ToPayment(), nil // return the updated payment
+	return updatedPayment.ToPayment(), nil
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
