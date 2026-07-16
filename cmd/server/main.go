@@ -568,6 +568,7 @@ func startServer(
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startHealthServer(lc, cfg, log) // temporal_worker serves no API; expose /health for k8s probes
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
@@ -576,6 +577,7 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
+		startHealthServer(lc, cfg, log) // consumer serves no API; expose /health for k8s probes
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -635,6 +637,29 @@ func startAPIServer(
 		OnStop: func(ctx context.Context) error {
 			log.Info(ctx, "Shutting down server...")
 			log.Shutdown(ctx)
+			return nil
+		},
+	})
+}
+
+// startHealthServer runs a minimal HTTP server exposing only /health on the
+// configured server address. Modes that don't run the full API server
+// (consumer, temporal_worker) still need it: the k8s readiness/liveness probes
+// hit /health, so without it those pods fail health checks even though they
+// serve no business traffic.
+func startHealthServer(lc fx.Lifecycle, cfg *config.Configuration, log *logger.Logger) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			h := gin.New()
+			health := func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) }
+			h.GET("/health", health)
+			h.POST("/health", health)
+			log.Info(ctx, "Starting health-only HTTP server", "address", cfg.Server.Address)
+			go func() {
+				if err := h.Run(cfg.Server.Address); err != nil {
+					log.Fatalf("Failed to start health server: %v", err)
+				}
+			}()
 			return nil
 		},
 	})
