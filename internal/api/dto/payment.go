@@ -101,6 +101,7 @@ func (p *PaymentResponse) ToPayment() *payment.Payment {
 		ErrorMessage:      p.ErrorMessage,
 		EnvironmentID:     p.EnvironmentID,
 		BaseModel: types.BaseModel{
+			TenantID:  p.TenantID,
 			CreatedAt: p.CreatedAt,
 			UpdatedAt: p.UpdatedAt,
 			CreatedBy: p.CreatedBy,
