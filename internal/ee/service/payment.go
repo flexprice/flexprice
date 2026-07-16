@@ -579,9 +579,6 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	if p.PaymentStatus != types.PaymentStatusPending && p.PaymentStatus != types.PaymentStatusProcessing {
 		return p, nil
 	}
-	if p.GatewayPaymentID == nil || lo.FromPtr(p.GatewayPaymentID) == "" {
-		return p, nil
-	}
 	if p.PaymentGateway == nil {
 		return p, nil
 	}
@@ -590,32 +587,46 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	}
 
 	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
+	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
 	var newStatus types.PaymentStatus
 	var err error
-	switch gateway {
-	case types.PaymentGatewayTypeStripe:
-		newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
-	case types.PaymentGatewayTypeRazorpay:
-		newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
-	case types.PaymentGatewayTypeMoyasar:
-		newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
-	default:
-		return p, nil
+	var backfillGatewayPaymentID string
+
+	if gatewayPaymentID != "" {
+		switch gateway {
+		case types.PaymentGatewayTypeStripe:
+			newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
+		case types.PaymentGatewayTypeRazorpay:
+			newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
+		case types.PaymentGatewayTypeMoyasar:
+			newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
+		default:
+			return p, nil
+		}
+	} else if gatewayTrackingID != "" {
+		switch gateway {
+		case types.PaymentGatewayTypeRazorpay:
+			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(ctx, gatewayTrackingID)
+		default:
+			return p, nil
+		}
 	}
+
 	if err != nil {
 		s.Logger.Error(ctx,
 			"failed to fetch payment status from gateway",
 			"payment_id", p.ID,
 			"gateway", gateway,
 			"gateway_payment_id", gatewayPaymentID,
+			"gateway_tracking_id", gatewayTrackingID,
 			"error", err,
 		)
 		return p, err
 	}
 
-	if newStatus == p.PaymentStatus {
+	if newStatus == "" || newStatus == p.PaymentStatus {
 		return p, nil
 	}
 
@@ -629,6 +640,9 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	now := time.Now().UTC()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: lo.ToPtr(string(newStatus)),
+	}
+	if backfillGatewayPaymentID != "" {
+		updateReq.GatewayPaymentID = lo.ToPtr(backfillGatewayPaymentID)
 	}
 	switch newStatus {
 	case types.PaymentStatusSucceeded:
@@ -677,6 +691,30 @@ func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gateway
 		return "", err
 	}
 	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+}
+
+// fetchRazorpayPaymentLinkStatus reconciles a payment record against a Razorpay
+// payment link when the direct pay_xxx isn't known yet. When the link exposes a
+// captured pay_xxx it is returned as backfillGatewayPaymentID for the caller to persist.
+func (s *paymentService) fetchRazorpayPaymentLinkStatus(
+	ctx context.Context,
+	paymentLinkID string,
+) (types.PaymentStatus, string, error) {
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	linkStatus, err := razorpayIntegration.PaymentSvc.GetPaymentLinkStatus(ctx, paymentLinkID)
+	if err != nil {
+		return "", "", err
+	}
+
+	fpPaymentStatus, err := integrations.RazorpayPaymentLinkStatus(linkStatus.Status).ToFlexpricePaymentStatus()
+	if err != nil {
+		return "", "", err
+	}
+	return fpPaymentStatus, linkStatus.RazorpayPaymentID, nil
 }
 
 func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
