@@ -337,7 +337,10 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 	}
 
 	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
-	p, _ = s.syncPaymentStatusFromGateway(ctx, p)
+	p, err = s.syncPaymentStatusFromGateway(ctx, p)
+	if err != nil {
+		s.Logger.Error(ctx, err.Error())
+	}
 
 	response := dto.NewPaymentResponse(p)
 	if p.DestinationType == types.PaymentDestinationTypeInvoice {
@@ -642,7 +645,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		}
 	}
 
-	return updatedPayment.ToPayment(), nil
+	return updatedPayment.ToPayment(), err
 }
 
 func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, bool, error) {
