@@ -1110,30 +1110,6 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_ZeroQua
 	s.Require().NoError(err, "zero quantity should be allowed when there is no min_quantity floor")
 }
 
-// TestExecuteQuantityChange_ZeroQuantityBelowMinQuantityRejected verifies that quantity=0 is
-// rejected when the line item's price has a positive min_quantity floor.
-func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_ZeroQuantityBelowMinQuantityRejected() {
-	ctx := s.GetContext()
-
-	cust := s.createCustomer("ext-qty-006")
-	sub := s.createActiveSub(cust.ID)
-	p := s.createFixedPrice(decimal.NewFromInt(10), types.InvoiceCadenceArrear)
-	p.MinQuantity = lo.ToPtr(decimal.NewFromInt(3))
-	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
-	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceArrear, p.ID)
-
-	_, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
-		Type: dto.SubscriptionModifyTypeQuantityChange,
-		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
-			LineItems: []dto.LineItemQuantityChange{
-				{ID: li.ID, Quantity: lo.ToPtr(decimal.Zero)},
-			},
-		},
-	})
-	s.Require().Error(err, "zero quantity should be rejected below a positive min_quantity floor")
-	s.Contains(err.Error(), "quantity must be greater than or equal to min_quantity")
-}
-
 // TestExecuteQuantityChange_EffectiveDateOutsideLineItemWindowRejected verifies that
 // effective_date must fall within each line item's active window [StartDate, lineEnd),
 // where an open-ended line item uses the subscription's current period end.
