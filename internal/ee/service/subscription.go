@@ -2163,8 +2163,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	// Validate expand fields
-	if err := filter.GetExpand().Validate(types.SubscriptionExpandConfig); err != nil {
+	expand := filter.GetExpand()
+	if err := expand.Validate(types.SubscriptionExpandConfig); err != nil {
 		return nil, err
+	}
+
+	// Back-fill deprecated WithLineItems from expand so both request styles
+	// eager-load line items in the repository query.
+	if expand.Has(types.ExpandSubscriptionLineItems) {
+		filter.WithLineItems = true
 	}
 
 	// Resolve external customer ID to internal customer ID if provided
@@ -2332,15 +2339,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
 
-	if filter.WithEntitlements && len(response.Items) > 0 {
+	if expand.Has(types.ExpandEntitlements) && len(response.Items) > 0 {
 		billingService := NewBillingService(s.ServiceParams)
-		entitlementsByCustomer := make(map[string]*dto.CustomerEntitlementsResponse)
+		featuresByCustomer := make(map[string][]*dto.AggregatedFeature)
 		for _, item := range response.Items {
 			cid := item.CustomerID
 			if cid == "" {
 				continue
 			}
-			if _, ok := entitlementsByCustomer[cid]; ok {
+			if _, ok := featuresByCustomer[cid]; ok {
 				continue
 			}
 
@@ -2348,15 +2355,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 			if err != nil {
 				// ponytail: don't fail the search if entitlement lookup fails for one customer; log and skip.
 				s.Logger.Error(ctx, "failed to load entitlements for customer", "error", err, "customer_id", cid)
-				entitlementsByCustomer[cid] = nil
+				featuresByCustomer[cid] = nil
 				continue
 			}
-			entitlementsByCustomer[cid] = ents
+			featuresByCustomer[cid] = ents.Features
 		}
 
 		for _, item := range response.Items {
-			if ents, ok := entitlementsByCustomer[item.CustomerID]; ok {
-				item.Entitlements = ents
+			if features, ok := featuresByCustomer[item.CustomerID]; ok {
+				item.Features = features
 			}
 		}
 	}

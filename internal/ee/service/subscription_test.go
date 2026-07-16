@@ -4989,14 +4989,15 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 	}
 }
 
-// TestListSubscriptions_WithEntitlements exercises the with_entitlements flag on
-// POST /subscriptions/search: entitlements should be attached per item, and
-// only fetched once per unique customer.
-func (s *SubscriptionServiceSuite) TestListSubscriptions_WithEntitlements() {
+// TestListSubscriptions_ExpandEntitlements exercises expand="entitlements" on
+// POST /subscriptions/search: the aggregated features list should be attached
+// per item, and only fetched once per unique customer.
+func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
+	qf := types.NewDefaultQueryFilter()
+	qf.Expand = lo.ToPtr(string(types.ExpandEntitlements))
 	filter := &types.SubscriptionFilter{
-		QueryFilter:      types.NewDefaultQueryFilter(),
-		CustomerID:       s.testData.customer.ID,
-		WithEntitlements: true,
+		QueryFilter: qf,
+		CustomerID:  s.testData.customer.ID,
 	}
 
 	subs, err := s.service.ListSubscriptions(s.GetContext(), filter)
@@ -5004,16 +5005,17 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions_WithEntitlements() {
 	s.NotEmpty(subs.Items, "seed data must contain at least one subscription for the test customer")
 
 	for _, sub := range subs.Items {
-		s.NotNil(sub.Entitlements, "with_entitlements=true should populate Entitlements")
-		s.Equal(s.testData.customer.ID, sub.Entitlements.CustomerID)
+		// Features slice may be empty if the customer has no entitlements, but
+		// it must be non-nil once the caller opts in via expand.
+		s.NotNil(sub.Features, "expand=entitlements should populate Features (possibly empty slice)")
 	}
 
-	// Flag off → field must stay nil (default behavior preserved).
-	filter.WithEntitlements = false
+	// No expand → field must stay nil (default behavior preserved).
+	qf.Expand = nil
 	subs, err = s.service.ListSubscriptions(s.GetContext(), filter)
 	s.NoError(err)
 	for _, sub := range subs.Items {
-		s.Nil(sub.Entitlements, "with_entitlements=false must not populate Entitlements")
+		s.Nil(sub.Features, "without expand=entitlements, Features must be nil")
 	}
 }
 
