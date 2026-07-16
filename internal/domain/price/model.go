@@ -656,22 +656,19 @@ func ValidateQuantityNonNegative(qty *decimal.Decimal) error {
 		Mark(ierr.ErrValidation)
 }
 
-// ValidateQuantityFloor rejects an explicit quantity below minQuantity.
-// No-op if either qty or minQuantity is nil.
-func ValidateQuantityFloor(qty *decimal.Decimal, minQuantity *decimal.Decimal) error {
-	if qty == nil || minQuantity == nil {
-		return nil
+// ApplyQuantityDefault resolves the effective quantity: non-zero values are returned as-is;
+// zero is replaced by MinQuantity when set and non-zero, or by the price's default quantity.
+func ApplyQuantityDefault(qty decimal.Decimal, p *Price) decimal.Decimal {
+	if !qty.IsZero() {
+		return qty
 	}
-	if qty.LessThan(*minQuantity) {
-		return ierr.NewError("quantity must be greater than or equal to min_quantity").
-			WithHint("Quantity must be at least the minimum quantity specified for this price").
-			WithReportableDetails(map[string]interface{}{
-				"quantity":     qty.String(),
-				"min_quantity": minQuantity.String(),
-			}).
-			Mark(ierr.ErrValidation)
+	if p != nil && p.MinQuantity != nil && !p.MinQuantity.IsZero() {
+		return *p.MinQuantity
 	}
-	return nil
+	if p != nil {
+		return p.GetDefaultQuantity()
+	}
+	return decimal.NewFromInt(1)
 }
 
 // GetDisplayName returns the display name for a price

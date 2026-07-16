@@ -73,30 +73,55 @@ func TestValidateQuantityNonNegative(t *testing.T) {
 	}
 }
 
-func TestValidateQuantityFloor(t *testing.T) {
+func TestApplyQuantityDefault(t *testing.T) {
+	makePrice := func(minQty *decimal.Decimal, priceType types.PriceType) *Price {
+		p := &Price{Type: priceType}
+		p.MinQuantity = minQty
+		return p
+	}
+	toPtr := func(d decimal.Decimal) *decimal.Decimal { return &d }
+
 	tests := []struct {
-		name        string
-		qty         *decimal.Decimal
-		minQuantity *decimal.Decimal
-		wantErr     bool
+		name    string
+		qty     decimal.Decimal
+		price   *Price
+		wantQty decimal.Decimal
 	}{
-		{name: "nil qty is no-op", qty: nil, minQuantity: lo.ToPtr(decimal.NewFromInt(5)), wantErr: false},
-		{name: "nil min_quantity is no-op", qty: lo.ToPtr(decimal.Zero), minQuantity: nil, wantErr: false},
-		{name: "zero qty below positive floor is rejected", qty: lo.ToPtr(decimal.Zero), minQuantity: lo.ToPtr(decimal.NewFromInt(5)), wantErr: true},
-		{name: "qty at floor is allowed", qty: lo.ToPtr(decimal.NewFromInt(5)), minQuantity: lo.ToPtr(decimal.NewFromInt(5)), wantErr: false},
-		{name: "qty above floor is allowed", qty: lo.ToPtr(decimal.NewFromInt(6)), minQuantity: lo.ToPtr(decimal.NewFromInt(5)), wantErr: false},
-		{name: "qty below floor is rejected", qty: lo.ToPtr(decimal.NewFromInt(4)), minQuantity: lo.ToPtr(decimal.NewFromInt(5)), wantErr: true},
-		{name: "zero qty with zero floor is allowed", qty: lo.ToPtr(decimal.Zero), minQuantity: lo.ToPtr(decimal.Zero), wantErr: false},
+		{
+			name:    "non-zero qty returned as-is",
+			qty:     decimal.NewFromInt(3),
+			price:   makePrice(toPtr(decimal.NewFromInt(5)), types.PRICE_TYPE_FIXED),
+			wantQty: decimal.NewFromInt(3),
+		},
+		{
+			name:    "zero qty with min_quantity returns min_quantity",
+			qty:     decimal.Zero,
+			price:   makePrice(toPtr(decimal.NewFromInt(5)), types.PRICE_TYPE_FIXED),
+			wantQty: decimal.NewFromInt(5),
+		},
+		{
+			name:    "zero qty with nil min_quantity returns default (1 for fixed)",
+			qty:     decimal.Zero,
+			price:   makePrice(nil, types.PRICE_TYPE_FIXED),
+			wantQty: decimal.NewFromInt(1),
+		},
+		{
+			name:    "zero qty with zero min_quantity falls through to default",
+			qty:     decimal.Zero,
+			price:   makePrice(toPtr(decimal.Zero), types.PRICE_TYPE_FIXED),
+			wantQty: decimal.NewFromInt(1),
+		},
+		{
+			name:    "zero qty with nil price returns 1",
+			qty:     decimal.Zero,
+			price:   nil,
+			wantQty: decimal.NewFromInt(1),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateQuantityFloor(tt.qty, tt.minQuantity)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "quantity must be greater than or equal to min_quantity")
-			} else {
-				assert.NoError(t, err)
-			}
+			got := ApplyQuantityDefault(tt.qty, tt.price)
+			assert.True(t, tt.wantQty.Equal(got), "want %s got %s", tt.wantQty, got)
 		})
 	}
 }
