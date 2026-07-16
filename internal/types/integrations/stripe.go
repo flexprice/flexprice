@@ -1,6 +1,9 @@
 package integrations
 
-import "github.com/flexprice/flexprice/internal/types"
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type StripePaymentStatus string
 
@@ -14,15 +17,18 @@ const (
 	StripePaymentStatusCanceled              StripePaymentStatus = "canceled"
 )
 
-// ToFlexPricePaymentStatus maps a Stripe PaymentIntent status to a FlexPrice PaymentStatus.
-// Returns (status, true) when a transition should be applied; ("", false) for in-flight statuses.
-func (s StripePaymentStatus) ToFlexPricePaymentStatus() (types.PaymentStatus, bool) {
+// ToFlexpricePaymentStatus maps a Stripe PaymentIntent status to a FlexPrice PaymentStatus.
+func (s StripePaymentStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
 	switch s {
 	case StripePaymentStatusSucceeded:
-		return types.PaymentStatusSucceeded, true
+		return types.PaymentStatusSucceeded, nil
 	case StripePaymentStatusRequiresPaymentMethod, StripePaymentStatusCanceled:
-		return types.PaymentStatusFailed, true
+		return types.PaymentStatusFailed, nil
 	default:
-		return "", false
+		return "", ierr.NewError("unmapped stripe payment status").
+			WithReportableDetails(map[string]interface{}{
+				"stripe_status": s,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 }

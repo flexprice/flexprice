@@ -1,6 +1,9 @@
 package integrations
 
-import "github.com/flexprice/flexprice/internal/types"
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type MoyasarPaymentStatus string
 
@@ -12,15 +15,18 @@ const (
 	MoyasarPaymentStatusRefunded   MoyasarPaymentStatus = "refunded"
 )
 
-// ToFlexPricePaymentStatus maps a Moyasar payment status to a FlexPrice PaymentStatus.
-// Returns (status, true) when a transition should be applied; ("", false) for in-flight statuses.
-func (s MoyasarPaymentStatus) ToFlexPricePaymentStatus() (types.PaymentStatus, bool) {
+// ToFlexpricePaymentStatus maps a Moyasar payment status to a FlexPrice PaymentStatus.
+func (s MoyasarPaymentStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
 	switch s {
 	case MoyasarPaymentStatusPaid:
-		return types.PaymentStatusSucceeded, true
+		return types.PaymentStatusSucceeded, nil
 	case MoyasarPaymentStatusFailed:
-		return types.PaymentStatusFailed, true
+		return types.PaymentStatusFailed, nil
 	default:
-		return "", false
+		return "", ierr.NewError("unmapped moyasar payment status").
+			WithReportableDetails(map[string]interface{}{
+				"moyasar_status": s,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 }

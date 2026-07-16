@@ -590,15 +590,14 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
 	var newStatus types.PaymentStatus
-	var mapped bool
 	var err error
 	switch gateway {
 	case types.PaymentGatewayTypeStripe:
-		newStatus, mapped, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
+		newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
 	case types.PaymentGatewayTypeRazorpay:
-		newStatus, mapped, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
+		newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
 	case types.PaymentGatewayTypeMoyasar:
-		newStatus, mapped, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
+		newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
 	default:
 		return p, nil
 	}
@@ -608,7 +607,7 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		return p, err
 	}
 
-	if !mapped || newStatus == p.PaymentStatus {
+	if newStatus == p.PaymentStatus {
 		return p, nil
 	}
 
@@ -648,43 +647,40 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	return updatedPayment.ToPayment(), err
 }
 
-func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, bool, error) {
+func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 	resp, err := stripeIntegration.PaymentSvc.GetPaymentStatusByPaymentIntent(ctx, gatewayPaymentID, "")
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
-	status, mapped := integrations.StripePaymentStatus(resp.Status).ToFlexPricePaymentStatus()
-	return status, mapped, nil
+	return integrations.StripePaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
-func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, bool, error) {
+func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 	rawStatus, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
-	status, mapped := integrations.RazorpayPaymentStatus(rawStatus).ToFlexPricePaymentStatus()
-	return status, mapped, nil
+	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
 }
 
-func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, bool, error) {
+func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
 	moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 	resp, err := moyasarIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
-	status, mapped := integrations.MoyasarPaymentStatus(resp.Status).ToFlexPricePaymentStatus()
-	return status, mapped, nil
+	return integrations.MoyasarPaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout

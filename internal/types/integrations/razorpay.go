@@ -1,6 +1,9 @@
 package integrations
 
-import "github.com/flexprice/flexprice/internal/types"
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type RazorpayPaymentStatus string
 
@@ -12,15 +15,18 @@ const (
 	RazorpayPaymentStatusFailed     RazorpayPaymentStatus = "failed"
 )
 
-// ToFlexPricePaymentStatus maps a Razorpay payment status to a FlexPrice PaymentStatus.
-// Returns (status, true) when a transition should be applied; ("", false) for in-flight statuses.
-func (s RazorpayPaymentStatus) ToFlexPricePaymentStatus() (types.PaymentStatus, bool) {
+// ToFlexpricePaymentStatus maps a Razorpay payment status to a FlexPrice PaymentStatus.
+func (s RazorpayPaymentStatus) ToFlexpricePaymentStatus() (types.PaymentStatus, error) {
 	switch s {
 	case RazorpayPaymentStatusCaptured:
-		return types.PaymentStatusSucceeded, true
+		return types.PaymentStatusSucceeded, nil
 	case RazorpayPaymentStatusFailed:
-		return types.PaymentStatusFailed, true
+		return types.PaymentStatusFailed, nil
 	default:
-		return "", false
+		return "", ierr.NewError("unmapped razorpay payment status").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_status": s,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 }
