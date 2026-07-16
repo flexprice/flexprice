@@ -5943,7 +5943,6 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 	}
 }
 
-
 // GetMeterUsageBySubscription queries the meter_usage table for usage data.
 // Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,
 // then converts results to billing charges and applies commitment/overage logic.
