@@ -85,7 +85,7 @@ type CreateSubscriptionLineItemRequest struct {
 	PriceID string `json:"price_id,omitempty"`
 	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
 	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
-	Quantity             *decimal.Decimal                `json:"quantity,omitempty" swaggertype:"string"`
+	Quantity             decimal.Decimal                 `json:"quantity,omitempty" swaggertype:"string"`
 	StartDate            *time.Time                      `json:"start_date,omitempty"`
 	EndDate              *time.Time                      `json:"end_date,omitempty"`
 	Metadata             map[string]string               `json:"metadata,omitempty"`
@@ -269,9 +269,11 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 		}
 	}
 
-	// Validate quantity is non-negative if provided (nil/omitted is allowed and defaults downstream)
-	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
-		return err
+	// Reject negative quantity; zero defaults to min_quantity downstream.
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Quantity cannot be negative").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate commitment fields if provided
@@ -283,15 +285,6 @@ func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub
 
 	if hasPrice {
 		if err := validator.ValidateRequest(r.Price); err != nil {
-			return err
-		}
-	}
-
-	// price_id path: validate against price when provided (e.g. MinQuantity).
-	// Explicit quantity (including 0) is checked as-is; omitted quantity (nil) defaults
-	// downstream in ToSubscriptionLineItem and is not checked here.
-	if linePrice != nil && linePrice.Type == types.PRICE_TYPE_FIXED {
-		if err := price.ValidateQuantityFloor(r.Quantity, linePrice.MinQuantity); err != nil {
 			return err
 		}
 	}
@@ -476,10 +469,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
-	// Always use price display name (priority: request > price display name)
 	if r.DisplayName != "" {
 		lineItem.DisplayName = r.DisplayName
-	} else if params.Price != nil && params.Price.DisplayName != "" {
+	} else if params.Price != nil {
 		lineItem.DisplayName = params.Price.DisplayName
 	}
 
@@ -492,15 +484,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 			}
 			lineItem.Quantity = decimal.Zero
 		} else {
-			// For fixed prices: an explicit quantity (already floor-checked in Validate) is used
-			// as-is; an omitted quantity defaults to MinQuantity, else the price's default.
-			if r.Quantity != nil {
-				lineItem.Quantity = *r.Quantity
-			} else if params.Price.MinQuantity != nil {
-				lineItem.Quantity = lo.FromPtr(params.Price.MinQuantity)
-			} else {
-				lineItem.Quantity = params.Price.GetDefaultQuantity()
-			}
+			// Zero/omitted quantity defaults to MinQuantity, else the price's default.
+			// Non-zero quantity is used as-is (no floor validation on the create path).
+			lineItem.Quantity = price.ApplyQuantityDefault(r.Quantity, params.Price.Price)
 		}
 
 		// Copy price unit fields from price to line item

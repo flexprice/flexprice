@@ -181,69 +181,18 @@ func TestCreateSubscriptionLineItemRequest_Validate_Quantity(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		quantity  *decimal.Decimal
+		quantity  decimal.Decimal
 		linePrice *price.Price
 		wantErr   bool
 		errSub    string
 	}{
-		{
-			name:      "nil quantity, no min quantity set: no error",
-			quantity:  nil,
-			linePrice: fixedPriceNoMin,
-		},
-		{
-			name:      "nil quantity, min quantity set: no error (nil is never checked against floor)",
-			quantity:  nil,
-			linePrice: fixedPriceMin5,
-		},
-		{
-			name:      "explicit zero quantity, no min quantity: no error",
-			quantity:  lo.ToPtr(decimal.Zero),
-			linePrice: fixedPriceNoMin,
-		},
-		{
-			name:      "explicit zero quantity, min quantity set: error below floor",
-			quantity:  lo.ToPtr(decimal.Zero),
-			linePrice: fixedPriceMin5,
-			wantErr:   true,
-			errSub:    "quantity must be greater than or equal to min_quantity",
-		},
-		{
-			name:      "explicit quantity below min quantity: error",
-			quantity:  lo.ToPtr(decimal.NewFromInt(2)),
-			linePrice: fixedPriceMin5,
-			wantErr:   true,
-			errSub:    "quantity must be greater than or equal to min_quantity",
-		},
-		{
-			name:      "explicit quantity at min quantity: no error",
-			quantity:  lo.ToPtr(decimal.NewFromInt(5)),
-			linePrice: fixedPriceMin5,
-		},
-		{
-			name:      "explicit quantity above min quantity: no error",
-			quantity:  lo.ToPtr(decimal.NewFromInt(10)),
-			linePrice: fixedPriceMin5,
-		},
-		{
-			name:      "negative quantity: error regardless of min quantity",
-			quantity:  lo.ToPtr(decimal.NewFromInt(-1)),
-			linePrice: fixedPriceMin5,
-			wantErr:   true,
-			errSub:    "quantity must be non-negative",
-		},
-		{
-			name:      "nil linePrice, negative quantity: error not dependent on linePrice",
-			quantity:  lo.ToPtr(decimal.NewFromInt(-1)),
-			linePrice: nil,
-			wantErr:   true,
-			errSub:    "quantity must be non-negative",
-		},
-		{
-			name:      "nil linePrice, explicit quantity (including 0): no floor check applies",
-			quantity:  lo.ToPtr(decimal.Zero),
-			linePrice: nil,
-		},
+		{name: "zero qty is valid (will default downstream)", quantity: decimal.Zero, linePrice: fixedPriceNoMin, wantErr: false},
+		{name: "zero qty with floor is valid (floor only a default)", quantity: decimal.Zero, linePrice: fixedPriceMin5, wantErr: false},
+		{name: "positive qty below floor is valid (no floor validation)", quantity: decimal.NewFromInt(2), linePrice: fixedPriceMin5, wantErr: false},
+		{name: "positive qty at floor is valid", quantity: decimal.NewFromInt(5), linePrice: fixedPriceMin5, wantErr: false},
+		{name: "positive qty above floor is valid", quantity: decimal.NewFromInt(10), linePrice: fixedPriceMin5, wantErr: false},
+		{name: "negative qty rejected", quantity: decimal.NewFromInt(-1), linePrice: fixedPriceNoMin, wantErr: true, errSub: "non-negative"},
+		{name: "negative qty with floor rejected", quantity: decimal.NewFromInt(-1), linePrice: fixedPriceMin5, wantErr: true, errSub: "non-negative"},
 	}
 
 	for _, tt := range tests {
@@ -288,33 +237,33 @@ func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_QuantityDefaul
 
 	tests := []struct {
 		name        string
-		quantity    *decimal.Decimal
+		quantity    decimal.Decimal
 		minQuantity *decimal.Decimal
 		wantQty     decimal.Decimal
 	}{
 		{
-			name:        "omitted quantity, min quantity set: defaults to min quantity",
-			quantity:    nil,
+			name:        "zero qty + min_quantity → defaults to min_quantity",
+			quantity:    decimal.Zero,
 			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
 			wantQty:     decimal.NewFromInt(5),
 		},
 		{
-			name:        "omitted quantity, no min quantity: defaults to price default quantity",
-			quantity:    nil,
+			name:        "zero qty + no min_quantity → defaults to 1",
+			quantity:    decimal.Zero,
 			minQuantity: nil,
-			wantQty:     decimal.NewFromInt(1), // fixed price default quantity
+			wantQty:     decimal.NewFromInt(1),
 		},
 		{
-			name:        "explicit zero quantity, min quantity set: honored as-is, not substituted",
-			quantity:    lo.ToPtr(decimal.Zero),
-			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
-			wantQty:     decimal.Zero,
-		},
-		{
-			name:        "explicit quantity, min quantity set: passes through as-is",
-			quantity:    lo.ToPtr(decimal.NewFromInt(3)),
+			name:        "explicit qty=3 with min_quantity=5 → stored as 3 (no floor)",
+			quantity:    decimal.NewFromInt(3),
 			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
 			wantQty:     decimal.NewFromInt(3),
+		},
+		{
+			name:        "explicit qty=7 with min_quantity=5 → stored as 7",
+			quantity:    decimal.NewFromInt(7),
+			minQuantity: lo.ToPtr(decimal.NewFromInt(5)),
+			wantQty:     decimal.NewFromInt(7),
 		},
 	}
 

@@ -1550,14 +1550,6 @@ func (r *OverrideLineItemRequest) Validate(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Explicit override quantity (including 0) must respect the original price's min_quantity floor.
-	// Not meaningful for usage-based prices, which don't accept a quantity override at all (checked below).
-	if originalPrice.Type == types.PRICE_TYPE_FIXED {
-		if err := price.ValidateQuantityFloor(r.Quantity, originalPrice.MinQuantity); err != nil {
-			return err
-		}
-	}
-
 	// Quantity can only be set for fixed prices, not usage-based prices
 	if r.Quantity != nil && originalPrice.Type == types.PRICE_TYPE_USAGE && r.Quantity.GreaterThan(decimal.Zero) {
 		return ierr.NewError("quantity cannot be set for usage-based prices").
