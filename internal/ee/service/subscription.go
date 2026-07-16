@@ -2332,6 +2332,35 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
 
+	if filter.WithEntitlements && len(response.Items) > 0 {
+		billingService := NewBillingService(s.ServiceParams)
+		entitlementsByCustomer := make(map[string]*dto.CustomerEntitlementsResponse)
+		for _, item := range response.Items {
+			cid := item.CustomerID
+			if cid == "" {
+				continue
+			}
+			if _, ok := entitlementsByCustomer[cid]; ok {
+				continue
+			}
+
+			ents, err := billingService.GetCustomerEntitlements(ctx, cid, &dto.GetCustomerEntitlementsRequest{})
+			if err != nil {
+				// ponytail: don't fail the search if entitlement lookup fails for one customer; log and skip.
+				s.Logger.Error(ctx, "failed to load entitlements for customer", "error", err, "customer_id", cid)
+				entitlementsByCustomer[cid] = nil
+				continue
+			}
+			entitlementsByCustomer[cid] = ents
+		}
+
+		for _, item := range response.Items {
+			if ents, ok := entitlementsByCustomer[item.CustomerID]; ok {
+				item.Entitlements = ents
+			}
+		}
+	}
+
 	s.Logger.Debug(ctx, "completed ListSubscriptions successfully",
 		"total_items", len(response.Items),
 		"total_count", count,

@@ -4989,6 +4989,34 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 	}
 }
 
+// TestListSubscriptions_WithEntitlements exercises the with_entitlements flag on
+// POST /subscriptions/search: entitlements should be attached per item, and
+// only fetched once per unique customer.
+func (s *SubscriptionServiceSuite) TestListSubscriptions_WithEntitlements() {
+	filter := &types.SubscriptionFilter{
+		QueryFilter:      types.NewDefaultQueryFilter(),
+		CustomerID:       s.testData.customer.ID,
+		WithEntitlements: true,
+	}
+
+	subs, err := s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	s.NotEmpty(subs.Items, "seed data must contain at least one subscription for the test customer")
+
+	for _, sub := range subs.Items {
+		s.NotNil(sub.Entitlements, "with_entitlements=true should populate Entitlements")
+		s.Equal(s.testData.customer.ID, sub.Entitlements.CustomerID)
+	}
+
+	// Flag off → field must stay nil (default behavior preserved).
+	filter.WithEntitlements = false
+	subs, err = s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	for _, sub := range subs.Items {
+		s.Nil(sub.Entitlements, "with_entitlements=false must not populate Entitlements")
+	}
+}
+
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// Create a test subscription that's ready for period transition
 	now := time.Now().UTC()

@@ -346,6 +346,11 @@ type SubscriptionFilter struct {
 
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
+
+	// WithEntitlements, when true, includes the customer's aggregated entitlements
+	// (same shape as GET /customers/:id/entitlements) on each SubscriptionResponse.
+	// Entitlements are fetched once per unique customer in the result set.
+	WithEntitlements bool `json:"with_entitlements,omitempty" form:"with_entitlements"`
 }
 
 // NewSubscriptionFilter creates a new SubscriptionFilter with default values

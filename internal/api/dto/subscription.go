@@ -737,6 +737,10 @@ type SubscriptionResponse struct {
 
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
+
+	// Entitlements is populated only when the caller sets with_entitlements=true
+	// on the search filter. Aggregated across all of the customer's subscriptions.
+	Entitlements *CustomerEntitlementsResponse `json:"entitlements,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
