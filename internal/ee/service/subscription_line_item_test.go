@@ -272,7 +272,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              price2.ID,
-		Quantity:             lo.ToPtr(decimal.NewFromInt(2)),
+		Quantity:             decimal.NewFromInt(2),
 		SkipEntitlementCheck: true,
 	}
 
@@ -288,7 +288,9 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 	s.NoError(err)
 }
 
-func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceMinQuantityFloor() {
+// TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity verifies that when an
+// inline price has min_quantity=5, sending quantity=0 stores quantity=5 (the min_quantity default).
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity() {
 	ctx := s.GetContext()
 
 	inlinePrice := &dto.SubscriptionPriceCreateRequest{
@@ -305,13 +307,15 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePri
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		Price:                inlinePrice,
-		Quantity:             lo.ToPtr(decimal.NewFromInt(2)), // below the inline price's min_quantity of 5
+		Quantity:             decimal.Zero, // zero → should default to min_quantity=5
 		SkipEntitlementCheck: true,
 	}
 
-	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
-	s.Error(err, "quantity below the inline price's min_quantity should be rejected")
-	s.Contains(err.Error(), "quantity must be greater than or equal to min_quantity")
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err, "zero quantity with inline price should succeed and default to min_quantity")
+	s.Require().NotNil(resp)
+	s.True(decimal.NewFromInt(5).Equal(resp.Quantity),
+		"quantity should default to min_quantity=5, got %s", resp.Quantity)
 }
 
 // TestAddSubscriptionLineItem_DateBoundsValidation asserts that when sub is passed, date-bounds validation runs:
@@ -389,7 +393,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithCreat
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              secondPrice.ID,
-		Quantity:             lo.ToPtr(decimal.NewFromInt(1)),
+		Quantity:             decimal.NewFromInt(1),
 		SkipEntitlementCheck: true,
 		ProrationBehavior:    types.ProrationBehaviorCreateProrations,
 	}
@@ -440,7 +444,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_NoneProra
 
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:              thirdPrice.ID,
-		Quantity:             lo.ToPtr(decimal.NewFromInt(1)),
+		Quantity:             decimal.NewFromInt(1),
 		SkipEntitlementCheck: true,
 		ProrationBehavior:    types.ProrationBehaviorNone,
 	}
@@ -744,7 +748,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			subID: s.testData.subscription.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				PriceID:              s.testData.price.ID,
-				Quantity:             lo.ToPtr(decimal.NewFromInt(-1)),
+				Quantity:             decimal.NewFromInt(-1),
 				SkipEntitlementCheck: true,
 			},
 			wantErrCont: "quantity must be non-negative",
