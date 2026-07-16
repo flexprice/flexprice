@@ -479,7 +479,7 @@ func (s *subscriptionModificationService) executeQuantityChange(
 				PriceUnitID:             lineItem.PriceUnitID,
 				PriceUnit:               lineItem.PriceUnit,
 				DisplayName:             lineItem.DisplayName,
-				Quantity:                change.Quantity,
+				Quantity:                *change.Quantity,
 				Currency:                lineItem.Currency,
 				BillingPeriod:           lineItem.BillingPeriod,
 				BillingPeriodCount:      lineItem.BillingPeriodCount,
@@ -676,7 +676,7 @@ func (s *subscriptionModificationService) previewQuantityChange(
 			dto.ChangedLineItem{
 				ID:           "(preview-created)",
 				PriceID:      lineItem.PriceID,
-				Quantity:     change.Quantity,
+				Quantity:     *change.Quantity,
 				StartDate:    &startDate,
 				EndDate:      &newEndDate,
 				ChangeAction: dto.ChangedLineItemActionCreated,
@@ -688,7 +688,7 @@ func (s *subscriptionModificationService) previewQuantityChange(
 		if lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
 			previewNewItem := &subscription.SubscriptionLineItem{
 				PriceID:  lineItem.PriceID,
-				Quantity: change.Quantity,
+				Quantity: *change.Quantity,
 			}
 			inv, err := s.previewQuantityChangeProration(ctx, sub, lineItem, previewNewItem, effectiveDate)
 			if err != nil {

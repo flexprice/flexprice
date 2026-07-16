@@ -194,10 +194,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if priceResponse.Price.Type == types.PRICE_TYPE_USAGE && priceResponse.Meter != nil {
 			item.MeterID = priceResponse.Meter.ID
 			item.MeterDisplayName = priceResponse.Meter.Name
-			item.DisplayName = priceResponse.Meter.Name
 			item.Quantity = decimal.Zero
 		} else {
-			item.DisplayName = plan.Name
 			if item.Quantity.IsZero() {
 				item.Quantity = decimal.NewFromInt(1)
 			}
@@ -1415,9 +1413,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		// Update the line item to reference the new subscription-scoped price
 		// Also update display name to match the new price (which preserves the original display name)
 		lineItem.PriceID = overriddenPriceResp.ID
-		if overriddenPriceResp.DisplayName != "" {
-			lineItem.DisplayName = overriddenPriceResp.DisplayName
-		}
+		lineItem.DisplayName = overriddenPriceResp.DisplayName
 
 		s.Logger.Info(ctx, "created subscription-scoped price override",
 			"subscription_id", sub.ID,
@@ -5095,13 +5091,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set display name from price (always use price display name)
-	if price.DisplayName != "" {
-		lineItem.DisplayName = price.DisplayName
-	} else {
-		// Fallback to addon name if price display name is not set
-		lineItem.DisplayName = addonName
-	}
+	lineItem.DisplayName = price.DisplayName
 
 	// Set price-related fields
 	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
