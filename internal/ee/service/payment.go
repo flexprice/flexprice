@@ -332,8 +332,11 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 
 	p, err := s.PaymentRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err // Repository already using ierr
+		return nil, err
 	}
+
+	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
+	p, _ = s.syncPaymentStatusFromGateway(ctx, p)
 
 	response := dto.NewPaymentResponse(p)
 	if p.DestinationType == types.PaymentDestinationTypeInvoice {
@@ -341,7 +344,6 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 		if err != nil {
 			return nil, err
 		}
-
 		if invoice.InvoiceNumber != nil {
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
@@ -566,6 +568,150 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 	}
 
 	return count > 0, nil
+}
+
+// TODO: extract into a GatewayStatusSyncer when supporting more gateways or throttling
+func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *payment.Payment) (*payment.Payment, error) {
+	if p.PaymentStatus != types.PaymentStatusPending && p.PaymentStatus != types.PaymentStatusProcessing {
+		return p, nil
+	}
+	if p.GatewayPaymentID == nil || lo.FromPtr(p.GatewayPaymentID) == "" {
+		return p, nil
+	}
+	if p.PaymentGateway == nil {
+		return p, nil
+	}
+
+	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
+	gateway := types.PaymentGatewayType(*p.PaymentGateway)
+
+	var rawStatus string
+	switch gateway {
+	case types.PaymentGatewayTypeStripe:
+		stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to get Stripe integration for payment sync",
+				"payment_id", p.ID, "error", err)
+			return p, err
+		}
+		resp, err := stripeIntegration.PaymentSvc.GetPaymentStatusByPaymentIntent(ctx, gatewayPaymentID, "")
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to fetch payment status from Stripe",
+				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
+			return p, err
+		}
+		rawStatus = resp.Status
+
+	case types.PaymentGatewayTypeRazorpay:
+		razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to get Razorpay integration for payment sync",
+				"payment_id", p.ID, "error", err)
+			return p, err
+		}
+		status, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to fetch payment status from Razorpay",
+				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
+			return p, err
+		}
+		rawStatus = status
+
+	case types.PaymentGatewayTypeMoyasar:
+		moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to get Moyasar integration for payment sync",
+				"payment_id", p.ID, "error", err)
+			return p, err
+		}
+		resp, err := moyasarIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+		if err != nil {
+			s.Logger.Warn(ctx, "failed to fetch payment status from Moyasar",
+				"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "error", err)
+			return p, err
+		}
+		rawStatus = resp.Status
+
+	default:
+		return p, nil
+	}
+
+	// Map gateway-native status → FlexPrice status
+	var newStatus types.PaymentStatus
+	switch gateway {
+	case types.PaymentGatewayTypeStripe:
+		switch rawStatus {
+		case "succeeded":
+			newStatus = types.PaymentStatusSucceeded
+		case "requires_payment_method", "canceled":
+			newStatus = types.PaymentStatusFailed
+		default:
+			return p, nil
+		}
+	case types.PaymentGatewayTypeRazorpay:
+		switch rawStatus {
+		case "captured":
+			newStatus = types.PaymentStatusSucceeded
+		case "failed":
+			newStatus = types.PaymentStatusFailed
+		default:
+			return p, nil
+		}
+	case types.PaymentGatewayTypeMoyasar:
+		switch rawStatus {
+		case "paid":
+			newStatus = types.PaymentStatusSucceeded
+		case "failed":
+			newStatus = types.PaymentStatusFailed
+		default:
+			return p, nil
+		}
+	}
+
+	if newStatus == p.PaymentStatus {
+		return p, nil
+	}
+
+	s.Logger.Info(ctx, "gateway status differs from DB, applying transition",
+		"payment_id", p.ID,
+		"gateway", gateway,
+		"db_status", p.PaymentStatus,
+		"gateway_raw_status", rawStatus,
+		"new_status", newStatus,
+	)
+
+	now := time.Now().UTC()
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: lo.ToPtr(string(newStatus)),
+	}
+	switch newStatus {
+	case types.PaymentStatusSucceeded:
+		updateReq.SucceededAt = lo.ToPtr(now)
+	case types.PaymentStatusFailed:
+		updateReq.FailedAt = lo.ToPtr(now)
+	}
+
+	if _, err := s.UpdatePayment(ctx, p.ID, updateReq); err != nil {
+		s.Logger.Error(ctx, "failed to update payment status from gateway sync",
+			"payment_id", p.ID, "new_status", newStatus, "error", err)
+		return p, err
+	}
+
+	if newStatus == types.PaymentStatusSucceeded && p.DestinationType == types.PaymentDestinationTypeInvoice {
+		invoiceSvc := NewInvoiceService(s.ServiceParams)
+		if err := invoiceSvc.ReconcilePaymentStatus(ctx, p.DestinationID, types.PaymentStatusSucceeded, &p.Amount); err != nil {
+			s.Logger.Error(ctx, "failed to reconcile invoice after gateway sync",
+				"payment_id", p.ID, "invoice_id", p.DestinationID, "error", err)
+		}
+	}
+
+	fresh, err := s.PaymentRepo.Get(ctx, p.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to re-fetch payment after gateway sync",
+			"payment_id", p.ID, "error", err)
+		return p, err
+	}
+	return fresh, nil
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
