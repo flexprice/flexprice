@@ -1015,6 +1015,15 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, razorpayPaymentID
 			"error", err)
 		return "", err
 	}
-	status, _ := result["status"].(string)
+	status, ok := result["status"].(string)
+	if !ok || status == "" {
+		return "", ierr.NewError("razorpay payment status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay FetchPayment response").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_payment_id": razorpayPaymentID,
+				"status":              result["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
 	return status, nil
 }

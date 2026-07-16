@@ -602,8 +602,13 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		return p, nil
 	}
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to fetch payment status from gateway",
-			"payment_id", p.ID, "gateway", gateway, "gateway_payment_id", gatewayPaymentID, "error", err)
+		s.Logger.Error(ctx,
+			"failed to fetch payment status from gateway",
+			"payment_id", p.ID,
+			"gateway", gateway,
+			"gateway_payment_id", gatewayPaymentID,
+			"error", err,
+		)
 		return p, err
 	}
 
