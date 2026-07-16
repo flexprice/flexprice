@@ -97,7 +97,7 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 		assert.Contains(t, err.Error(), "at least one override field")
 	})
 
-	t.Run("should reject override quantity below min_quantity", func(t *testing.T) {
+	t.Run("should allow override quantity below min_quantity (floor is a default, not a gate)", func(t *testing.T) {
 		qty := decimal.NewFromInt(2)
 		priceMap := map[string]*dto.PriceResponse{
 			"test_price_min_qty": {
@@ -115,11 +115,10 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 			Quantity: &qty,
 		}
 		err := override.Validate(priceMap, nil, "test_plan_456")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "quantity must be greater than or equal to min_quantity")
+		assert.NoError(t, err, "explicit override qty=2 below min_quantity=5 should be allowed; min_quantity is only a default")
 	})
 
-	t.Run("should allow zero override quantity when no min_quantity floor", func(t *testing.T) {
+	t.Run("should allow zero override quantity (resolves to min_quantity at service layer)", func(t *testing.T) {
 		qty := decimal.Zero
 		priceMap := map[string]*dto.PriceResponse{
 			"test_price_no_floor": {

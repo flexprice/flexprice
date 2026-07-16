@@ -195,10 +195,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			item.MeterID = priceResponse.Meter.ID
 			item.MeterDisplayName = priceResponse.Meter.Name
 			item.Quantity = decimal.Zero
-		} else {
-			if item.Quantity.IsZero() {
-				item.Quantity = decimal.NewFromInt(1)
-			}
 		}
 
 		item.SubscriptionID = sub.ID
@@ -1405,9 +1401,9 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			return err
 		}
 
-		// Update line item quantity if specified
+		// Update line item quantity if specified — zero resolves to min_quantity default.
 		if override.Quantity != nil {
-			lineItem.Quantity = *override.Quantity
+			lineItem.Quantity = price.ApplyQuantityDefault(*override.Quantity, originalPrice.Price)
 		}
 
 		// Update the line item to reference the new subscription-scoped price
@@ -5099,7 +5095,11 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		lineItem.MeterDisplayName = priceResponse.Meter.Name
 		lineItem.Quantity = decimal.Zero
 	} else {
-		lineItem.Quantity = decimal.NewFromInt(1)
+		if price.MinQuantity != nil && !price.MinQuantity.IsZero() {
+			lineItem.Quantity = *price.MinQuantity
+		} else {
+			lineItem.Quantity = decimal.NewFromInt(1)
+		}
 	}
 
 	// Copy price unit fields from price to line item
