@@ -1001,3 +1001,29 @@ func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID s
 	refundID, _ := refundResp["id"].(string)
 	return refundID, nil
 }
+
+// GetPaymentStatus fetches the current status of a Razorpay payment.
+// Returns the raw Razorpay status string: "created", "authorized", "captured", "refunded", "failed".
+func (s *PaymentService) GetPaymentStatus(ctx context.Context, razorpayPaymentID string) (string, error) {
+	if razorpayPaymentID == "" {
+		return "", ierr.NewError("razorpay_payment_id is required").Mark(ierr.ErrValidation)
+	}
+	result, err := s.client.FetchPayment(ctx, razorpayPaymentID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to fetch Razorpay payment status",
+			"razorpay_payment_id", razorpayPaymentID,
+			"error", err)
+		return "", err
+	}
+	status, ok := result["status"].(string)
+	if !ok || status == "" {
+		return "", ierr.NewError("razorpay payment status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay FetchPayment response").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_payment_id": razorpayPaymentID,
+				"status":              result["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
+	return status, nil
+}

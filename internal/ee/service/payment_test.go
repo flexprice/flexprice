@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -177,4 +178,70 @@ func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {
 
 	// Verify that the payment is in a state that would be accepted by the processor
 	s.True(payment.PaymentStatus == types.PaymentStatusInitiated || payment.PaymentStatus == types.PaymentStatusPending)
+}
+
+func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_GuardConditions() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	tests := []struct {
+		name   string
+		status types.PaymentStatus
+		gwID   *string
+		gw     *string
+	}{
+		{
+			name:   "terminal FAILED — no sync",
+			status: types.PaymentStatusFailed,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "INITIATED — no sync",
+			status: types.PaymentStatusInitiated,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "PENDING nil gateway_payment_id — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   nil,
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "PENDING nil gateway — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     nil,
+		},
+		{
+			name:   "PENDING unsupported gateway nomod — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   lo.ToPtr("nomod_ref"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeNomod)),
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			p := &payment.Payment{
+				ID:                "pay_guard_" + tt.name,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     s.testData.invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypePaymentLink,
+				PaymentStatus:     tt.status,
+				Amount:            decimal.NewFromFloat(100),
+				Currency:          "usd",
+				GatewayPaymentID:  tt.gwID,
+				PaymentGateway:    tt.gw,
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+			svc := s.service.(*paymentService)
+			result, err := svc.syncPaymentStatusFromGateway(ctx, p)
+			s.NoError(err)
+			s.Equal(p.ID, result.ID)
+			s.Equal(tt.status, result.PaymentStatus)
+		})
+	}
 }

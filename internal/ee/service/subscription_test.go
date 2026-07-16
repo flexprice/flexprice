@@ -4989,6 +4989,36 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 	}
 }
 
+// TestListSubscriptions_ExpandEntitlements exercises expand="entitlements" on
+// POST /subscriptions/search: the aggregated features list should be attached
+// per item, and only fetched once per unique customer.
+func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
+	qf := types.NewDefaultQueryFilter()
+	qf.Expand = lo.ToPtr(string(types.ExpandEntitlements))
+	filter := &types.SubscriptionFilter{
+		QueryFilter: qf,
+		CustomerID:  s.testData.customer.ID,
+	}
+
+	subs, err := s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	s.NotEmpty(subs.Items, "seed data must contain at least one subscription for the test customer")
+
+	for _, sub := range subs.Items {
+		// Entitlements slice may be empty if the customer has no entitlements,
+		// but it must be non-nil once the caller opts in via expand.
+		s.NotNil(sub.Entitlements, "expand=entitlements should populate Entitlements (possibly empty slice)")
+	}
+
+	// No expand → field must stay nil (default behavior preserved).
+	qf.Expand = nil
+	subs, err = s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	for _, sub := range subs.Items {
+		s.Nil(sub.Entitlements, "without expand=entitlements, Entitlements must be nil")
+	}
+}
+
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// Create a test subscription that's ready for period transition
 	now := time.Now().UTC()
