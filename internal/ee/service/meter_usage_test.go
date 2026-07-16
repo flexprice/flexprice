@@ -4696,3 +4696,295 @@ func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ParentCustomer_Include
 		"parent analytics with include_children must roll up parent+child (125); got %s",
 		s.totalUsageForMeter(resp, s.meterAPI.ID))
 }
+
+// TestGetDetailedAnalytics_ForceApplyCommitment_KeepsCostOnFannedSources: the
+// CSV export sets ForceApplyCommitment=true so bucketed commitment line items
+// keep their true-up / overage cost even though the bucketed path fans the
+// analytics per source (Source populated on each row). Without the flag the
+// per-source rows zero out and the export totals drift from the analytics API.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_KeepsCostOnFannedSources() {
+	ctx := s.GetContext()
+
+	// Bucketed SUM meter — commitment items on bucketed meters go through
+	// queryBucketedMeterAnalyticsDetailed under group_by=source (no
+	// commitment/non-commitment split in that path), so the analytic ends up
+	// with Source set. That's the scenario the flag exists to unblock.
+	m := &meter.Meter{
+		ID:        "mtr_bkt_commit_fanned",
+		Name:      "Bucketed SUM w/ commitment",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_commit_fanned", m.ID, decimal.NewFromFloat(0.01))
+
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_bkt_commit_fanned",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 p.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 m.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// 10 units under a specific source — below the $100 commitment, so
+	// true-up would bill the full commitment if applied.
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "prod-api",
+		time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 10, nil)
+
+	// Default behaviour — Source is set on the fanned analytic → skip commitment.
+	respDefault, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"source", "feature_id"},
+	})
+	s.NoError(err)
+	var defaultItem *dto.UsageAnalyticItem
+	for i := range respDefault.Items {
+		if respDefault.Items[i].SubLineItemID == "li_bkt_commit_fanned" {
+			defaultItem = &respDefault.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(defaultItem, "expected fanned analytic for the bucketed commitment line item")
+	s.True(defaultItem.TotalCost.Equal(decimal.NewFromFloat(0.10)),
+		"without ForceApplyCommitment, bucketed commitment fanned by source must NOT apply commitment; got %s",
+		defaultItem.TotalCost)
+
+	// Export behaviour — same request plus ForceApplyCommitment. Commitment fires
+	// and the true-up bills the full $100.
+	respForced, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   s.customer.ExternalID,
+		StartTime:            s.periodStart,
+		EndTime:              s.periodEnd,
+		GroupBy:              []string{"source", "feature_id"},
+		ForceApplyCommitment: true,
+	})
+	s.NoError(err)
+	var forcedItem *dto.UsageAnalyticItem
+	for i := range respForced.Items {
+		if respForced.Items[i].SubLineItemID == "li_bkt_commit_fanned" {
+			forcedItem = &respForced.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(forcedItem)
+	s.True(forcedItem.TotalCost.Equal(commitmentAmount),
+		"with ForceApplyCommitment, fanned analytic must surface true-up cost (%s); got %s",
+		commitmentAmount, forcedItem.TotalCost)
+	s.Require().NotNil(forcedItem.CommitmentInfo,
+		"commitment_info must be populated when ForceApplyCommitment is set")
+}
+
+// TestGetDetailedAnalytics_ForceApplyCommitment_ParityWithAnalyticsAPI pins the
+// contract the CSV export relies on: an export-style call (group_by=source +
+// ForceApplyCommitment=true) must yield the same total cost as the plain
+// analytics-widget call (no group_by, no flag) for a bucketed commitment line
+// item — WHEN there is only one source of usage. With N sources the export
+// intentionally fires the line item's commitment on each per-source row and
+// multi-counts the true-up; the CSV total will exceed the widget's aggregate.
+// That's a documented trade-off of the ForceApplyCommitment flag — the export
+// needs per-source rows for auditability more than it needs exact totals.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_ParityWithAnalyticsAPI() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        "mtr_bkt_commit_parity",
+		Name:      "Bucketed SUM parity",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_commit_parity", m.ID, decimal.NewFromFloat(0.01))
+
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_bkt_commit_parity",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 p.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 m.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// Single source, below the $100 commitment → true-up bills the shortfall.
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "prod-api",
+		time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 10, nil)
+
+	// Analytics widget: no group_by, no flag.
+	widgetResp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	// Export shape: group_by=source, ForceApplyCommitment=true.
+	exportResp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   s.customer.ExternalID,
+		StartTime:            s.periodStart,
+		EndTime:              s.periodEnd,
+		GroupBy:              []string{"source", "meter_id"},
+		ForceApplyCommitment: true,
+	})
+	s.NoError(err)
+
+	widgetTotal := s.totalCostForLineItem(widgetResp, li.ID)
+	exportTotal := s.totalCostForLineItem(exportResp, li.ID)
+
+	s.True(widgetTotal.Equal(exportTotal),
+		"export (group_by=source + ForceApplyCommitment) must produce the same total cost as the analytics widget; widget=%s, export=%s",
+		widgetTotal, exportTotal)
+	s.True(widgetTotal.GreaterThan(decimal.Zero),
+		"parity is only meaningful when the commitment actually fires; got %s", widgetTotal)
+}
+
+// totalCostForLineItem sums TotalCost across every response item that belongs
+// to the given subscription line item — the export slices one line item into
+// N per-source rows, so parity checks must sum across them.
+func (s *MeterUsageServiceSuite) totalCostForLineItem(resp *dto.GetUsageAnalyticsResponse, subLineItemID string) decimal.Decimal {
+	total := decimal.Zero
+	for _, item := range resp.Items {
+		if item.SubLineItemID == subLineItemID {
+			total = total.Add(item.TotalCost)
+		}
+	}
+	return total
+}
+
+// TestGetDetailedAnalytics_ForceApplyCommitment_FansCommitmentLIsBySource pins
+// the routing bypass in queryAndAppendAnalyticsEntries: without the flag a
+// commitment line item never fans by source (returns one aggregated row); with
+// the flag it fans just like a non-commitment line item and the CSV export
+// gets one row per source. Regression guard against a future refactor putting
+// the commitment/non-commitment split back in the way.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_FansCommitmentLIsBySource() {
+	ctx := s.GetContext()
+
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_commit_fan_by_source",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 s.priceAPI.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 s.meterAPI.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// Usage on two distinct sources on the same meter.
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, s.customer.ExternalID, "web",
+		time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 4, nil)
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, s.customer.ExternalID, "web",
+		time.Date(2026, 1, 10, 12, 5, 0, 0, time.UTC), 1003, nil)
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, s.customer.ExternalID, "api",
+		time.Date(2026, 1, 10, 12, 10, 0, 0, time.UTC), 4, nil)
+
+	sourcesOf := func(resp *dto.GetUsageAnalyticsResponse) map[string]decimal.Decimal {
+		out := make(map[string]decimal.Decimal)
+		for _, item := range resp.Items {
+			if item.SubLineItemID != li.ID {
+				continue
+			}
+			out[item.Source] = out[item.Source].Add(item.TotalUsage)
+		}
+		return out
+	}
+
+	// Default routing: commitment LI takes the non-fanning path even when
+	// group_by=source. One aggregated row, Source="" — this was Higgsfield's
+	// original observation in the export.
+	respNoFlag, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"source", "meter_id"},
+	})
+	s.NoError(err)
+	bySrcNoFlag := sourcesOf(respNoFlag)
+	s.Require().Len(bySrcNoFlag, 1,
+		"without ForceApplyCommitment, commitment LI must NOT fan by source; got rows: %v", bySrcNoFlag)
+	s.True(bySrcNoFlag[""].Equal(decimal.NewFromInt(1011)),
+		"aggregated row should carry the full usage (4 + 1003 + 4 = 1011); got %s", bySrcNoFlag[""])
+
+	// Export routing: ForceApplyCommitment=true routes the commitment LI
+	// through the fanning path. One row per source, no aggregated Source="" row.
+	respFlag, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   s.customer.ExternalID,
+		StartTime:            s.periodStart,
+		EndTime:              s.periodEnd,
+		GroupBy:              []string{"source", "meter_id"},
+		ForceApplyCommitment: true,
+	})
+	s.NoError(err)
+	bySrcFlag := sourcesOf(respFlag)
+	s.Require().Len(bySrcFlag, 2,
+		"with ForceApplyCommitment, commitment LI must fan into one row per source; got rows: %v", bySrcFlag)
+	s.True(bySrcFlag["web"].Equal(decimal.NewFromInt(1007)),
+		"source=web usage should sum the two web events (4 + 1003); got %s", bySrcFlag["web"])
+	s.True(bySrcFlag["api"].Equal(decimal.NewFromInt(4)),
+		"source=api usage should equal the single event (4); got %s", bySrcFlag["api"])
+	// Sanity: no aggregated Source="" row from the commitment fallback.
+	_, hasEmpty := bySrcFlag[""]
+	s.False(hasEmpty, "with the flag the commitment LI must not also emit a Source=\"\" row: %v", bySrcFlag)
+}

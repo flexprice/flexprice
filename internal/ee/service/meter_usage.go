@@ -143,6 +143,15 @@ type GetSubscriptionMeterUsageRequest struct {
 	// scope to every inherited child customer's external_id. False (default)
 	// restricts the query to the subscription owner's external_id only.
 	IncludeChildren bool
+
+	// ForceApplyCommitment, when true, keeps commitment / true-up cost active
+	// even on fanned-out analytics AND routes commitment line items through
+	// the source-fanning query path so the CSV export can produce per-source
+	// rows for them. Internal-only — the export pipeline flips this on and
+	// accepts that per-source rows will each fire the line item's commitment
+	// (multi-counts the true-up amount across rows). Default (false) is what
+	// every user-facing caller uses.
+	ForceApplyCommitment bool
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -164,19 +173,20 @@ type lineItemWithMeter struct {
 // usage-analytics CSV exporter).
 func (s *meterUsageService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	return s.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerID:  req.ExternalCustomerID,
-		ExternalCustomerIDs: req.ExternalCustomerIDs,
-		FeatureIDs:          req.FeatureIDs,
-		StartTime:           req.StartTime,
-		EndTime:             req.EndTime,
-		GroupBy:             req.GroupBy,
-		PropertyFilters:     req.PropertyFilters,
-		Sources:             req.Sources,
-		WindowSize:          req.WindowSize,
-		Expand:              req.Expand,
-		IncludeChildren:     req.IncludeChildren,
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   req.ExternalCustomerID,
+		ExternalCustomerIDs:  req.ExternalCustomerIDs,
+		FeatureIDs:           req.FeatureIDs,
+		StartTime:            req.StartTime,
+		EndTime:              req.EndTime,
+		GroupBy:              req.GroupBy,
+		PropertyFilters:      req.PropertyFilters,
+		Sources:              req.Sources,
+		WindowSize:           req.WindowSize,
+		Expand:               req.Expand,
+		IncludeChildren:      req.IncludeChildren,
+		ForceApplyCommitment: req.ForceApplyCommitment,
 	})
 }
 
@@ -507,7 +517,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			// with the full group_by (per-group breakdown in the response).
 			hasExtraGroupBy := false
 			for _, g := range req.GroupBy {
-				if g != "" && g != "meter_id" {
+				if g != "" && g != "meter_id" && g != "feature_id" {
 					hasExtraGroupBy = true
 					break
 				}
@@ -516,7 +526,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if hasExtraGroupBy {
 				for _, liw := range lineItemsInGroup {
-					if liw.Item != nil && liw.Item.HasAnyCommitment() {
+					// ForceApplyCommitment (export path) folds commitment LIs
+					// into the fan-out path so the CSV gets per-source rows for
+					// them too. Trade-off: commitment fires per fanned row and
+					// multi-counts the true-up across sources — accepted at the
+					// flag's call site.
+					if !req.ForceApplyCommitment && liw.Item != nil && liw.Item.HasAnyCommitment() {
 						commitmentLIs = append(commitmentLIs, liw)
 					} else {
 						nonCommitmentLIs = append(nonCommitmentLIs, liw)
@@ -769,7 +784,7 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 	groupBy := []string{"meter_id"}
 	if useUserGroupBy {
 		for _, g := range req.GroupBy {
-			if g != "" && g != "meter_id" {
+			if g != "" && g != "meter_id" && g != "feature_id" {
 				groupBy = append(groupBy, g)
 			}
 		}
@@ -1161,19 +1176,20 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 
 		usage, err := s.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
-			SubscriptionID:  sub.ID,
-			StartTime:       params.StartTime,
-			EndTime:         subEndTime,
-			WindowSize:      params.WindowSize,
-			BillingAnchor:   billingAnchor,
-			UseFinal:        params.UseFinal,
-			IncludeFeatures: true,
-			MeterIDs:        params.MeterIDs,
-			GroupBy:         params.GroupBy,
-			PropertyFilters: params.PropertyFilters,
-			Sources:         params.Sources,
-			CollectSources:  lo.Contains(params.Expand, "source"),
-			IncludeChildren: params.IncludeChildren,
+			SubscriptionID:       sub.ID,
+			StartTime:            params.StartTime,
+			EndTime:              subEndTime,
+			WindowSize:           params.WindowSize,
+			BillingAnchor:        billingAnchor,
+			UseFinal:             params.UseFinal,
+			IncludeFeatures:      true,
+			MeterIDs:             params.MeterIDs,
+			GroupBy:              params.GroupBy,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			CollectSources:       lo.Contains(params.Expand, "source"),
+			IncludeChildren:      params.IncludeChildren,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		})
 		if err != nil {
 			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
@@ -1188,13 +1204,10 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Merge into AnalyticsData
 	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params)
 
-	// Calculate costs inline (no dependency on featureUsageTrackingService)
-	if len(data.Analytics) > 0 {
-		if err := s.calculateCosts(ctx, data); err != nil {
-			s.logger.Info(ctx, "failed to calculate costs for meter usage analytics, costs will be zero",
-				"error", err,
-			)
-		}
+	// Calculate costs inline
+	err = s.calculateCosts(ctx, data)
+	if err != nil {
+		s.logger.Error(ctx, "failed to calculate costs for meter usage analytics, costs will be zero", "error", err)
 	}
 
 	// Set currency on all analytics items
@@ -1235,17 +1248,18 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:           params.TenantID,
-			EnvironmentID:      params.EnvironmentID,
-			ExternalCustomerID: params.ExternalCustomerID,
-			StartTime:          params.StartTime,
-			EndTime:            params.EndTime,
-			GroupBy:            params.GroupBy,
-			WindowSize:         params.WindowSize,
-			PropertyFilters:    params.PropertyFilters,
-			Sources:            params.Sources,
-			AggregationTypes:   params.AggregationTypes,
-			BillingAnchor:      params.BillingAnchor,
+			TenantID:             params.TenantID,
+			EnvironmentID:        params.EnvironmentID,
+			ExternalCustomerID:   params.ExternalCustomerID,
+			StartTime:            params.StartTime,
+			EndTime:              params.EndTime,
+			GroupBy:              params.GroupBy,
+			WindowSize:           params.WindowSize,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			AggregationTypes:     params.AggregationTypes,
+			BillingAnchor:        params.BillingAnchor,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
 	}
 
@@ -1572,17 +1586,18 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(allResults)),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:           params.TenantID,
-			EnvironmentID:      params.EnvironmentID,
-			ExternalCustomerID: params.ExternalCustomerID,
-			StartTime:          params.StartTime,
-			EndTime:            params.EndTime,
-			GroupBy:            params.GroupBy,
-			WindowSize:         params.WindowSize,
-			PropertyFilters:    params.PropertyFilters,
-			Sources:            params.Sources,
-			AggregationTypes:   params.AggregationTypes,
-			BillingAnchor:      params.BillingAnchor,
+			TenantID:             params.TenantID,
+			EnvironmentID:        params.EnvironmentID,
+			ExternalCustomerID:   params.ExternalCustomerID,
+			StartTime:            params.StartTime,
+			EndTime:              params.EndTime,
+			GroupBy:              params.GroupBy,
+			WindowSize:           params.WindowSize,
+			PropertyFilters:      params.PropertyFilters,
+			Sources:              params.Sources,
+			AggregationTypes:     params.AggregationTypes,
+			BillingAnchor:        params.BillingAnchor,
+			ForceApplyCommitment: params.ForceApplyCommitment,
 		},
 	}
 
@@ -2255,6 +2270,10 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 
 // calculateCosts calculates costs for all analytics items in the data.
 func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
+	if len(data.Analytics) == 0 {
+		return nil
+	}
+
 	priceService := NewPriceService(s.ServiceParams)
 
 	// Analytics filters (property_filters, sources) restrict the SQL result set
@@ -2269,9 +2288,15 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 	// combo analytic carries its own per-combo Usage and Points, and applying
 	// commitment math per combo would over-charge — the line item's commitment
 	// would fire once per combo instead of once across the whole line item.
+	//
+	// ForceApplyCommitment (internal-only, set by the CSV export path)
+	// overrides the group_by skip so bucketed commitment line items keep their
+	// true-up / overage cost even when the export requests group_by=source.
+	// Filter-based skip is NOT overridden — a filter subset is genuinely
+	// partial data and commitment math on it would still be misleading.
 	skipCommitment := len(data.Params.PropertyFilters) > 0 ||
 		len(data.Params.Sources) > 0 ||
-		hasUserBucketedGroupBy(data.Params.GroupBy)
+		(hasUserBucketedGroupBy(data.Params.GroupBy) && !data.Params.ForceApplyCommitment)
 
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
