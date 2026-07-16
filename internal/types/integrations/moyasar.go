@@ -2,13 +2,23 @@ package integrations
 
 import "github.com/flexprice/flexprice/internal/types"
 
-// MapMoyasarPaymentStatus maps a Moyasar payment status to a FlexPrice PaymentStatus.
+type MoyasarPaymentStatus string
+
+const (
+	MoyasarPaymentStatusInitiated  MoyasarPaymentStatus = "initiated"
+	MoyasarPaymentStatusAuthorized MoyasarPaymentStatus = "authorized"
+	MoyasarPaymentStatusPaid       MoyasarPaymentStatus = "paid"
+	MoyasarPaymentStatusFailed     MoyasarPaymentStatus = "failed"
+	MoyasarPaymentStatusRefunded   MoyasarPaymentStatus = "refunded"
+)
+
+// ToFlexPricePaymentStatus maps a Moyasar payment status to a FlexPrice PaymentStatus.
 // Returns (status, true) when a transition should be applied; ("", false) for in-flight statuses.
-func MapMoyasarPaymentStatus(moyasarStatus string) (types.PaymentStatus, bool) {
-	switch moyasarStatus {
-	case "paid":
+func (s MoyasarPaymentStatus) ToFlexPricePaymentStatus() (types.PaymentStatus, bool) {
+	switch s {
+	case MoyasarPaymentStatusPaid:
 		return types.PaymentStatusSucceeded, true
-	case "failed":
+	case MoyasarPaymentStatusFailed:
 		return types.PaymentStatusFailed, true
 	default:
 		return "", false

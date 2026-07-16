@@ -657,7 +657,7 @@ func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPa
 	if err != nil {
 		return "", false, err
 	}
-	status, mapped := integrations.MapStripePaymentStatus(resp.Status)
+	status, mapped := integrations.StripePaymentStatus(resp.Status).ToFlexPricePaymentStatus()
 	return status, mapped, nil
 }
 
@@ -670,7 +670,7 @@ func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gateway
 	if err != nil {
 		return "", false, err
 	}
-	status, mapped := integrations.MapRazorpayPaymentStatus(rawStatus)
+	status, mapped := integrations.RazorpayPaymentStatus(rawStatus).ToFlexPricePaymentStatus()
 	return status, mapped, nil
 }
 
@@ -683,7 +683,7 @@ func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayP
 	if err != nil {
 		return "", false, err
 	}
-	status, mapped := integrations.MapMoyasarPaymentStatus(resp.Status)
+	status, mapped := integrations.MoyasarPaymentStatus(resp.Status).ToFlexPricePaymentStatus()
 	return status, mapped, nil
 }
 
