@@ -103,6 +103,12 @@ type MeterUsageDetailedAnalyticsParams struct {
 	// true, each point is stamped with its BucketID/PriceID and per-bucket
 	// summaries are appended. Requires WindowSize to be set.
 	BreakdownBucket bool
+	// ForceApplyCommitment overrides the per-item skip that calculateCosts
+	// normally applies to fanned-out analytics (Source or Properties set).
+	// Internal-only — set by the CSV export pipeline so bucketed commitment
+	// line items keep their true-up / overage cost even when the export
+	// requests group_by=source. NEVER wire this into a user-facing DTO field.
+	ForceApplyCommitment bool
 }
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination

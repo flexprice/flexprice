@@ -4696,3 +4696,202 @@ func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ParentCustomer_Include
 		"parent analytics with include_children must roll up parent+child (125); got %s",
 		s.totalUsageForMeter(resp, s.meterAPI.ID))
 }
+
+// TestGetDetailedAnalytics_ForceApplyCommitment_KeepsCostOnFannedSources: the
+// CSV export sets ForceApplyCommitment=true so bucketed commitment line items
+// keep their true-up / overage cost even though the bucketed path fans the
+// analytics per source (Source populated on each row). Without the flag the
+// per-source rows zero out and the export totals drift from the analytics API.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_KeepsCostOnFannedSources() {
+	ctx := s.GetContext()
+
+	// Bucketed SUM meter — commitment items on bucketed meters go through
+	// queryBucketedMeterAnalyticsDetailed under group_by=source (no
+	// commitment/non-commitment split in that path), so the analytic ends up
+	// with Source set. That's the scenario the flag exists to unblock.
+	m := &meter.Meter{
+		ID:        "mtr_bkt_commit_fanned",
+		Name:      "Bucketed SUM w/ commitment",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_commit_fanned", m.ID, decimal.NewFromFloat(0.01))
+
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_bkt_commit_fanned",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 p.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 m.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// 10 units under a specific source — below the $100 commitment, so
+	// true-up would bill the full commitment if applied.
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "prod-api",
+		time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 10, nil)
+
+	// Default behaviour — Source is set on the fanned analytic → skip commitment.
+	respDefault, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"source", "feature_id"},
+	})
+	s.NoError(err)
+	var defaultItem *dto.UsageAnalyticItem
+	for i := range respDefault.Items {
+		if respDefault.Items[i].SubLineItemID == "li_bkt_commit_fanned" {
+			defaultItem = &respDefault.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(defaultItem, "expected fanned analytic for the bucketed commitment line item")
+	s.True(defaultItem.TotalCost.Equal(decimal.NewFromFloat(0.10)),
+		"without ForceApplyCommitment, bucketed commitment fanned by source must NOT apply commitment; got %s",
+		defaultItem.TotalCost)
+
+	// Export behaviour — same request plus ForceApplyCommitment. Commitment fires
+	// and the true-up bills the full $100.
+	respForced, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   s.customer.ExternalID,
+		StartTime:            s.periodStart,
+		EndTime:              s.periodEnd,
+		GroupBy:              []string{"source", "feature_id"},
+		ForceApplyCommitment: true,
+	})
+	s.NoError(err)
+	var forcedItem *dto.UsageAnalyticItem
+	for i := range respForced.Items {
+		if respForced.Items[i].SubLineItemID == "li_bkt_commit_fanned" {
+			forcedItem = &respForced.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(forcedItem)
+	s.True(forcedItem.TotalCost.Equal(commitmentAmount),
+		"with ForceApplyCommitment, fanned analytic must surface true-up cost (%s); got %s",
+		commitmentAmount, forcedItem.TotalCost)
+	s.Require().NotNil(forcedItem.CommitmentInfo,
+		"commitment_info must be populated when ForceApplyCommitment is set")
+}
+
+// TestGetDetailedAnalytics_ForceApplyCommitment_ParityWithAnalyticsAPI pins the
+// contract the CSV export relies on: an export-style call (group_by=source +
+// ForceApplyCommitment=true) must yield the same total cost as the plain
+// analytics-widget call (no group_by, no flag) for a bucketed commitment line
+// item. Otherwise the CSV totals drift from what the UI shows.
+//
+// Setup uses a single source of usage so the commitment / true-up math is not
+// split across per-source rows (that's a separate concern — commitment fired
+// per fanned combo would multi-count, and the export doesn't try to solve it).
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_ParityWithAnalyticsAPI() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        "mtr_bkt_commit_parity",
+		Name:      "Bucketed SUM parity",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := s.createPriceForMeter(ctx, "pr_bkt_commit_parity", m.ID, decimal.NewFromFloat(0.01))
+
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_bkt_commit_parity",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 p.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 m.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// Single source, below the $100 commitment → true-up bills the shortfall.
+	s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "prod-api",
+		time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), 10, nil)
+
+	// Analytics widget: no group_by, no flag.
+	widgetResp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	// Export shape: group_by=source, ForceApplyCommitment=true.
+	exportResp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:             types.GetTenantID(ctx),
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		ExternalCustomerID:   s.customer.ExternalID,
+		StartTime:            s.periodStart,
+		EndTime:              s.periodEnd,
+		GroupBy:              []string{"source", "meter_id"},
+		ForceApplyCommitment: true,
+	})
+	s.NoError(err)
+
+	widgetTotal := s.totalCostForLineItem(widgetResp, li.ID)
+	exportTotal := s.totalCostForLineItem(exportResp, li.ID)
+
+	s.True(widgetTotal.Equal(exportTotal),
+		"export (group_by=source + ForceApplyCommitment) must produce the same total cost as the analytics widget; widget=%s, export=%s",
+		widgetTotal, exportTotal)
+	s.True(widgetTotal.GreaterThan(decimal.Zero),
+		"parity is only meaningful when the commitment actually fires; got %s", widgetTotal)
+}
+
+// totalCostForLineItem sums TotalCost across every response item that belongs
+// to the given subscription line item — the export slices one line item into
+// N per-source rows, so parity checks must sum across them.
+func (s *MeterUsageServiceSuite) totalCostForLineItem(resp *dto.GetUsageAnalyticsResponse, subLineItemID string) decimal.Decimal {
+	total := decimal.Zero
+	for _, item := range resp.Items {
+		if item.SubLineItemID == subLineItemID {
+			total = total.Add(item.TotalCost)
+		}
+	}
+	return total
+}
