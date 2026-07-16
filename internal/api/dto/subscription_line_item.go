@@ -85,7 +85,7 @@ type CreateSubscriptionLineItemRequest struct {
 	PriceID string `json:"price_id,omitempty"`
 	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
 	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
-	Quantity             decimal.Decimal                 `json:"quantity,omitempty" swaggertype:"string"`
+	Quantity             decimal.Decimal                 `json:"quantity,omitempty"`
 	StartDate            *time.Time                      `json:"start_date,omitempty"`
 	EndDate              *time.Time                      `json:"end_date,omitempty"`
 	Metadata             map[string]string               `json:"metadata,omitempty"`
