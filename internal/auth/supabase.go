@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -254,7 +256,34 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 		},
 	})
 	if err != nil {
-		return nil, err
+		// supabase-go returns a raw *supabase.ErrorResponse with no ierr classification,
+		// which would otherwise surface as an opaque HTTP 500 with an empty body. Wrap it
+		// so the caller gets a meaningful status/message, and detect the common
+		// "email already registered" conflict. Supabase auth users are global (not
+		// tenant-scoped), so an email absent from the Flexprice DB can still exist here.
+		if supaErr, ok := err.(*supabase.ErrorResponse); ok {
+			details := map[string]interface{}{
+				"email":          req.Email,
+				"supabase_code":  supaErr.Code,
+				"supabase_error": supaErr.Message,
+			}
+			if supaErr.Code == http.StatusConflict ||
+				supaErr.Code == http.StatusUnprocessableEntity ||
+				strings.Contains(strings.ToLower(supaErr.Message), "already") {
+				return nil, ierr.WithError(supaErr).
+					WithHint("A user with this email already exists in the authentication provider").
+					WithReportableDetails(details).
+					Mark(ierr.ErrAlreadyExists)
+			}
+			return nil, ierr.WithError(supaErr).
+				WithHintf("Authentication provider rejected user creation (code %d)", supaErr.Code).
+				WithReportableDetails(details).
+				Mark(ierr.ErrSystem)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create user in the authentication provider").
+			WithReportableDetails(map[string]interface{}{"email": req.Email}).
+			Mark(ierr.ErrSystem)
 	}
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil
