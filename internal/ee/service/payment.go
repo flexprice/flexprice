@@ -572,7 +572,15 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 
 // TODO: extract into a GatewayStatusSyncer when supporting more gateways or throttling
 func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *payment.Payment) (*payment.Payment, error) {
-	if p.PaymentStatus != types.PaymentStatusPending && p.PaymentStatus != types.PaymentStatusProcessing {
+
+	// Only sync payment status for pending payments
+	// and payments with a gateway payment ID and gateway type
+	paymentPendingStatuses := []types.PaymentStatus{
+		types.PaymentStatusPending,
+		types.PaymentStatusProcessing,
+	}
+
+	if !lo.Contains(paymentPendingStatuses, p.PaymentStatus) {
 		return p, nil
 	}
 	if p.GatewayPaymentID == nil || lo.FromPtr(p.GatewayPaymentID) == "" {
