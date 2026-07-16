@@ -738,10 +738,10 @@ type SubscriptionResponse struct {
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
 
-	// Features is populated only when the caller adds "entitlements" to the
-	// search filter's expand string. Each entry is a feature with its
+	// Entitlements is populated only when the caller adds "entitlements" to
+	// the search filter's expand string. Each entry is a feature with its
 	// aggregated entitlement info (same shape as CustomerEntitlementsResponse.Features).
-	Features []*AggregatedFeature `json:"features,omitempty"`
+	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions

@@ -2340,14 +2340,18 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
 
 	if expand.Has(types.ExpandEntitlements) && len(response.Items) > 0 {
+		// TODO(perf): serial per-customer fetch is fine for the typical
+		// external_customer_id search (1 unique customer). For wide pages with
+		// many unique customers, consider either a bulk BillingService method
+		// or a bounded errgroup here.
 		billingService := NewBillingService(s.ServiceParams)
-		featuresByCustomer := make(map[string][]*dto.AggregatedFeature)
+		entitlementsByCustomer := make(map[string][]*dto.AggregatedFeature)
 		for _, item := range response.Items {
 			cid := item.CustomerID
 			if cid == "" {
 				continue
 			}
-			if _, ok := featuresByCustomer[cid]; ok {
+			if _, ok := entitlementsByCustomer[cid]; ok {
 				continue
 			}
 
@@ -2355,15 +2359,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 			if err != nil {
 				// ponytail: don't fail the search if entitlement lookup fails for one customer; log and skip.
 				s.Logger.Error(ctx, "failed to load entitlements for customer", "error", err, "customer_id", cid)
-				featuresByCustomer[cid] = nil
+				entitlementsByCustomer[cid] = nil
 				continue
 			}
-			featuresByCustomer[cid] = ents.Features
+			entitlementsByCustomer[cid] = ents.Features
 		}
 
 		for _, item := range response.Items {
-			if features, ok := featuresByCustomer[item.CustomerID]; ok {
-				item.Features = features
+			if features, ok := entitlementsByCustomer[item.CustomerID]; ok {
+				item.Entitlements = features
 			}
 		}
 	}

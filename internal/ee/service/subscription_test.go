@@ -5005,9 +5005,9 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
 	s.NotEmpty(subs.Items, "seed data must contain at least one subscription for the test customer")
 
 	for _, sub := range subs.Items {
-		// Features slice may be empty if the customer has no entitlements, but
-		// it must be non-nil once the caller opts in via expand.
-		s.NotNil(sub.Features, "expand=entitlements should populate Features (possibly empty slice)")
+		// Entitlements slice may be empty if the customer has no entitlements,
+		// but it must be non-nil once the caller opts in via expand.
+		s.NotNil(sub.Entitlements, "expand=entitlements should populate Entitlements (possibly empty slice)")
 	}
 
 	// No expand → field must stay nil (default behavior preserved).
@@ -5015,7 +5015,7 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
 	subs, err = s.service.ListSubscriptions(s.GetContext(), filter)
 	s.NoError(err)
 	for _, sub := range subs.Items {
-		s.Nil(sub.Features, "without expand=entitlements, Features must be nil")
+		s.Nil(sub.Entitlements, "without expand=entitlements, Entitlements must be nil")
 	}
 }
 
