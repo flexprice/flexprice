@@ -4696,3 +4696,67 @@ func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ParentCustomer_Include
 		"parent analytics with include_children must roll up parent+child (125); got %s",
 		s.totalUsageForMeter(resp, s.meterAPI.ID))
 }
+
+// TestGetDetailedAnalytics_ZeroUsageCommitment_WithGroupBySource: an unfanned
+// analytic (Source="", no Properties) must apply commitment even when the
+// request carries group_by=source. The synthetic zero-fill created by step 12
+// for a zero-usage commitment line item represents the whole line item, not a
+// per-source slice — skipping commitment there hides the true-up cost, which
+// is how the CSV export path was reporting $0 for reserved-capacity line items
+// with no usage in the window.
+func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ZeroUsageCommitment_WithGroupBySource() {
+	ctx := s.GetContext()
+
+	// $100 committed, 1.5x overage, true-up on. Zero usage → true-up bills the
+	// entire commitment.
+	commitmentAmount := decimal.NewFromInt(100)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_commit_no_usage",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 s.priceAPI.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 s.meterAPI.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// No usage inserted.
+
+	// Same shape the export pipeline uses: GroupBy: ["source", "feature_id"].
+	// Previously this pinned skipCommitment=true globally and zeroed the cost.
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"source", "meter_id"},
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_commit_no_usage" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "expected an analytic entry for the zero-usage commitment line item")
+	s.True(item.TotalUsage.IsZero(), "zero-usage assertion: %s", item.TotalUsage)
+	s.True(item.TotalCost.Equal(commitmentAmount),
+		"zero-usage commitment must surface true-up cost (%s); got %s",
+		commitmentAmount, item.TotalCost)
+	s.Require().NotNil(item.CommitmentInfo, "commitment_info must be populated for zero-usage commitment items")
+}

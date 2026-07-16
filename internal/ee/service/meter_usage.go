@@ -2264,14 +2264,8 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 	// zero matching events would otherwise show the full commitment as unutilized
 	// and report it as cost). When any analytics-only filter is active, skip
 	// commitment application and report the raw filtered cost.
-	//
-	// User group_by also triggers skip: each fanned-out (source, properties)
-	// combo analytic carries its own per-combo Usage and Points, and applying
-	// commitment math per combo would over-charge — the line item's commitment
-	// would fire once per combo instead of once across the whole line item.
-	skipCommitment := len(data.Params.PropertyFilters) > 0 ||
-		len(data.Params.Sources) > 0 ||
-		hasUserBucketedGroupBy(data.Params.GroupBy)
+	filterSkipCommitment := len(data.Params.PropertyFilters) > 0 ||
+		len(data.Params.Sources) > 0
 
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
@@ -2290,6 +2284,17 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		if !hasPricing {
 			continue
 		}
+
+		// Per-item skip for source/properties fan-out: when this specific
+		// analytic represents one combo of a fanned-out result set, its Usage
+		// / Points cover only that slice — applying commitment here would fire
+		// the line item's commitment once per combo. An unfanned analytic
+		// (Source="" and no Properties), including the step-12 synthetic
+		// zero-fill entries created for zero-usage commitment line items,
+		// represents the whole line item and MUST apply commitment so the
+		// true-up amount is surfaced (this is where the export-vs-analytics
+		// $0-cost regression came from).
+		skipCommitment := filterSkipCommitment || item.Source != "" || len(item.Properties) > 0
 
 		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
 			s.calculateBucketedCost(ctx, priceService, item, p, m, data, skipCommitment)
