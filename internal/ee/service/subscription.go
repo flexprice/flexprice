@@ -2375,9 +2375,9 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 				if item.Subscription == nil {
 					continue
 				}
-				for _, li := range item.Subscription.LineItems {
+				for i, li := range item.Subscription.LineItems {
 					if m, ok := meterMap[li.MeterID]; ok {
-						li.Meter = m
+						item.Subscription.LineItems[i].Meter = m
 					}
 				}
 			}
