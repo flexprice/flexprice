@@ -32,6 +32,11 @@ func NewCreditAdjustmentService(
 	}
 }
 
+// prepaidCreditApplyLockKey is the Redis key that serializes prepaid-credit application to one invoice.
+func prepaidCreditApplyLockKey(invoiceID string) string {
+	return "prepaid_credit_apply:invoice:" + invoiceID
+}
+
 // CalculateCreditAdjustments calculates how much amount to apply from prepaid wallets to invoice line items.
 //
 // The basic idea is simple: we take all the money available in wallets, put it in a pool, then

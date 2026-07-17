@@ -215,3 +215,11 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	s.True(decimal.NewFromInt(30).Equal(debits["wallet_a"]))
 	s.True(decimal.NewFromInt(20).Equal(debits["wallet_b"]))
 }
+
+func TestPrepaidCreditApplyLockKey(t *testing.T) {
+	got := prepaidCreditApplyLockKey("inv_123")
+	want := "prepaid_credit_apply:invoice:inv_123"
+	if got != want {
+		t.Fatalf("prepaidCreditApplyLockKey = %q, want %q", got, want)
+	}
+}
