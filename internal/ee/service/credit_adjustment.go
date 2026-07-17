@@ -241,7 +241,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(inv.LineItems) == 0 {
 		s.Logger.Info(ctx, "no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
 			Currency:                   inv.Currency,
 		}, nil
 	}
@@ -261,14 +261,6 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		return nil, err
 	}
 
-	if len(wallets) == 0 {
-		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
-		return &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
-			Currency:                   inv.Currency,
-		}, nil
-	}
-
 	// Step 2: Calculate all credit adjustments (OUTSIDE TRANSACTION)
 	// This method:
 	// - Filters usage-based line items only
@@ -276,17 +268,12 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// - Determines how much credit to apply from each wallet
 	// - Directly modifies lineItem.PrepaidCreditsApplied in memory (NOT persisted yet)
 	// - Returns a map of wallet debits (walletID -> total amount to debit)
-	amountsToDebitFromWallets, err := s.CalculateCreditAdjustments(inv, wallets)
-	if err != nil {
-		return nil, err
-	}
-
-	// If no amounts were calculated to apply, return zero result
-	if len(amountsToDebitFromWallets) == 0 {
-		return &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
-			Currency:                   inv.Currency,
-		}, nil
+	var amountsToDebitFromWallets map[string]decimal.Decimal
+	if len(wallets) > 0 {
+		amountsToDebitFromWallets, err = s.CalculateCreditAdjustments(inv, wallets)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	walletService := NewWalletService(s.ServiceParams)
@@ -297,9 +284,13 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		walletLookupMap[w.ID] = w
 	}
 
+	// Always enter the transaction and persist line items - even when there's no NEW credit to debit,
+	// the spread above may have changed per-line PrepaidCreditsApplied values (e.g. after a recompute
+	// shrank a line's ceiling below what was previously applied), and those must land in the DB
+	// regardless of whether this call found additional wallet balance to apply.
 	var result *dto.CreditAdjustmentResult
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Take money from each wallet that contributed amounts
+		// Take money from each wallet that contributed amounts (no-op if amountsToDebitFromWallets is nil/empty)
 		for walletID, amountToDebit := range amountsToDebitFromWallets {
 			walletToDebit, exists := walletLookupMap[walletID]
 			if !exists {

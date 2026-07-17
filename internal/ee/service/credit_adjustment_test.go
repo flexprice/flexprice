@@ -376,6 +376,65 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_HonorsPriorAndA
 		"wallet balance: expected 60 (100 - 40 delta debited), got %s", reloadedWallet.Balance.String())
 }
 
+// TestApplyCreditsToInvoice_PersistsSpreadEvenWithoutNewWalletDebit is a regression test for a bug
+// where ApplyCreditsToInvoice's early-return branches ("no wallets available" / "no amounts to
+// debit") returned right after spreadPrepaidCreditsAcrossLineItems mutated inv.LineItems in memory,
+// WITHOUT persisting those (possibly now-smaller, re-derived) values via InvoiceLineItemRepo.Update.
+// This left invoice_line_items.PrepaidCreditsApplied stale in the DB even though the returned
+// TotalPrepaidCreditsApplied was correct, desyncing invoice PDF display and
+// GetUnpaidInvoicesToBePaid's unpaidUsageCharges (which feeds WalletBalanceResponse.RealTimeBalance).
+func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_PersistsSpreadEvenWithoutNewWalletDebit() {
+	// 1. Draft invoice with one usage line item, amount 100 USD.
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_persist_spread", "USD", decimal.NewFromInt(100))
+	lineItemID := inv.LineItems[0].ID
+
+	// 2. Credit a prepaid wallet with 60 USD.
+	w := s.createWalletWithCredit("wallet_persist_spread", "USD", decimal.NewFromInt(60))
+
+	// 3. First call: applies the full 60 available and drains the wallet to 0.
+	result1, err := s.service.ApplyCreditsToInvoice(s.GetContext(), inv)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(result1.TotalPrepaidCreditsApplied),
+		"first call: expected 60 applied, got %s", result1.TotalPrepaidCreditsApplied.String())
+
+	walletAfterFirstCall, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(walletAfterFirstCall.Balance.IsZero(),
+		"wallet should be fully drained after first call, got %s", walletAfterFirstCall.Balance.String())
+
+	// Persist the invoice-level authority, as the real caller is responsible for doing.
+	inv.TotalPrepaidCreditsApplied = result1.TotalPrepaidCreditsApplied
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+
+	// 4. Simulate a recompute (mirroring reconcileLineItems in production): the line's ceiling
+	// shrinks below the previously-applied amount (Amount drops from 100 to 40, below the 60 already
+	// applied), and the line item's in-memory PrepaidCreditsApplied is reset to 0. The invoice-level
+	// TotalPrepaidCreditsApplied is the preserved authority and recompute never touches it, so it
+	// stays at the old (now too-high) value of 60.
+	reloadedInv := s.reloadInvoiceWithLineItems(inv.ID)
+	reloadedInv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied // still 60, preserved authority
+	reloadedInv.LineItems[0].Amount = decimal.NewFromInt(40)
+	reloadedInv.LineItems[0].PrepaidCreditsApplied = decimal.Zero
+
+	// 5. Second call. The wallet is fully drained (balance 0), so GetWalletsForCreditAdjustment
+	// returns no wallets and there is no NEW credit to debit - this is exactly the path that used to
+	// return early without persisting.
+	result2, err := s.service.ApplyCreditsToInvoice(s.GetContext(), reloadedInv)
+	s.Require().NoError(err)
+
+	// The re-derived, correctly-capped value is min(authority=60, new ceiling=40) = 40.
+	s.True(decimal.NewFromInt(40).Equal(result2.TotalPrepaidCreditsApplied),
+		"second call: expected re-derived 40 applied, got %s", result2.TotalPrepaidCreditsApplied.String())
+
+	// 6. Reload the line item FRESH from the repo (not the in-memory struct) to prove the DB was
+	// actually written. It must reflect the correctly-capped, spread-derived value (40) - not the
+	// stale 60 from before this call, and not an unpersisted 0.
+	persistedLineItem, err := s.GetStores().InvoiceLineItemRepo.Get(s.GetContext(), lineItemID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(40).Equal(persistedLineItem.PrepaidCreditsApplied),
+		"persisted line item PrepaidCreditsApplied: expected 40, got %s", persistedLineItem.PrepaidCreditsApplied.String())
+}
+
 func TestPrepaidCreditApplyLockKey(t *testing.T) {
 	got := prepaidCreditApplyLockKey("inv_123")
 	want := "prepaid_credit_apply:invoice:inv_123"
