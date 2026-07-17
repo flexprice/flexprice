@@ -49,6 +49,9 @@ type WalletOperation struct {
 	// operation's transaction ID) crediting this many bonus credits in the same DB transaction.
 	// nil for every caller except TopUpWallet's direct-purchase branch.
 	BonusCreditAmount *decimal.Decimal `json:"-"`
+	// BonusExpiryDate is the expiry timestamp applied to the bonus tx (independent of the
+	// purchase tx's ExpiryDate/ExpiryDateTime). nil means the bonus never expires.
+	BonusExpiryDate *time.Time `json:"-"`
 }
 
 func (w *WalletOperation) Validate() error {

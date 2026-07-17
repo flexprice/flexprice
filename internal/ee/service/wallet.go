@@ -601,6 +601,10 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		if bonusCfg.Enabled {
 			if slab := findBonusSlab(bonusCfg.Slabs, req.CreditsToAdd); slab != nil {
 				req.BonusCreditsToAdd = lo.ToPtr(resolveBonusCredits(slab, req.CreditsToAdd))
+				// Slab expiry only kicks in if the caller didn't pin an explicit expiry.
+				if req.BonusCreditsExpiryDateUTC == nil {
+					req.BonusCreditsExpiryDateUTC = resolveBonusExpiry(slab, time.Now().UTC())
+				}
 			}
 		}
 	}
@@ -679,6 +683,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		IdempotencyKey:    idempotencyKey,
 		Priority:          req.Priority,
 		BonusCreditAmount: req.BonusCreditsToAdd,
+		BonusExpiryDate:   req.BonusCreditsExpiryDateUTC,
 	}
 
 	// Process wallet credit immediately
@@ -731,6 +736,29 @@ func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Deci
 	default:
 		return decimal.Zero
 	}
+}
+
+// resolveBonusExpiry computes the bonus tx expiry from a matched slab (now + duration).
+// Returns nil when the slab omits the duration config (bonus never expires).
+func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time {
+	if slab.ExpirationDuration == nil || slab.ExpirationDurationUnit == nil {
+		return nil
+	}
+	duration := *slab.ExpirationDuration
+	var expiry time.Time
+	switch *slab.ExpirationDurationUnit {
+	case types.CreditGrantExpiryDurationUnitDays:
+		expiry = now.Add(time.Duration(duration) * 24 * time.Hour)
+	case types.CreditGrantExpiryDurationUnitWeeks:
+		expiry = now.Add(time.Duration(duration) * 7 * 24 * time.Hour)
+	case types.CreditGrantExpiryDurationUnitMonths:
+		expiry = now.AddDate(0, duration, 0)
+	case types.CreditGrantExpiryDurationUnitYears:
+		expiry = now.AddDate(duration, 0, 0)
+	default:
+		return nil
+	}
+	return &expiry
 }
 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
@@ -858,6 +886,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				CreditBalanceAfter:  bonusCreditBalanceAfter,
 				Currency:            w.Currency,
 				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				ExpiryDate:          req.BonusCreditsExpiryDateUTC,
 				BaseModel:           types.GetDefaultBaseModel(ctx),
 			}
 
@@ -927,6 +956,24 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			amountPaid = &amount
 		}
 
+		// Pull the customer's auto-apply tax rates and stamp them on the top-up invoice so
+		// the purchase gets taxed the same as any other one-off charge for that customer.
+		taxService := NewTaxService(s.ServiceParams)
+		taxFilter := types.NewNoLimitTaxAssociationFilter()
+		taxFilter.EntityType = types.TaxRateEntityTypeCustomer
+		taxFilter.EntityID = w.CustomerID
+		taxFilter.AutoApply = lo.ToPtr(true)
+		taxFilter.Status = lo.ToPtr(types.StatusPublished)
+		customerTaxAssociations, err := taxService.ListTaxAssociations(ctx, taxFilter)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to fetch customer tax associations").
+				Mark(ierr.ErrInternal)
+		}
+		taxRateIDs := lo.Map(customerTaxAssociations.Items, func(a *dto.TaxAssociationResponse, _ int) string {
+			return a.TaxRateID
+		})
+
 		invReq := dto.CreateInvoiceRequest{
 			CustomerID:     w.CustomerID,
 			AmountDue:      amount,
@@ -948,6 +995,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			Metadata:         invoiceMetadata,
 			BillingReason:    req.BillingReason,
 			ForceSyncInvoice: req.ForceSyncInvoice,
+			TaxRates:         taxRateIDs,
 		}
 		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
@@ -2045,6 +2093,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 				Currency:            w.Currency,
 				EnvironmentID:       types.GetEnvironmentID(ctx),
 				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				ExpiryDate:          req.BonusExpiryDate,
 				BaseModel:           types.GetDefaultBaseModel(ctx),
 			}
 			bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable()
@@ -3836,4 +3885,3 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 	return balance
 }
-
