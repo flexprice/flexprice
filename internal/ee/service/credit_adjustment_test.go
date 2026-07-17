@@ -324,3 +324,59 @@ func TestSpreadPrepaidCreditsAcrossLineItems(t *testing.T) {
 		}
 	})
 }
+
+func TestCalculateCreditAdjustments_Additive(t *testing.T) {
+	svc := &creditAdjustmentService{}
+	newWallet := func(id string, bal float64) *wallet.Wallet {
+		return &wallet.Wallet{ID: id, Balance: decimal.NewFromFloat(bal), WalletType: types.WalletTypePrePaid}
+	}
+
+	t.Run("adds on top of already-applied, capped at remaining ceiling", func(t *testing.T) {
+		line := usageLine(100, 0, 0)                        // ceiling 100
+		line.PrepaidCreditsApplied = decimal.NewFromInt(30) // already applied
+		inv := &invoice.Invoice{Currency: "USD", LineItems: []*invoice.InvoiceLineItem{line}}
+		debits, err := svc.CalculateCreditAdjustments(inv, []*wallet.Wallet{newWallet("w1", 1000)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// remaining ceiling 70 -> applies 70 more -> line total 100
+		if !line.PrepaidCreditsApplied.Equal(decimal.NewFromInt(100)) {
+			t.Fatalf("line applied = %s, want 100", line.PrepaidCreditsApplied)
+		}
+		if !debits["w1"].Equal(decimal.NewFromInt(70)) {
+			t.Fatalf("debit = %s, want 70 (delta only)", debits["w1"])
+		}
+	})
+
+	t.Run("mixed fixed+usage never credits the fixed line", func(t *testing.T) {
+		u := usageLine(100, 20, 0) // ceiling 80
+		f := fixedLine(50)
+		inv := &invoice.Invoice{Currency: "USD", LineItems: []*invoice.InvoiceLineItem{u, f}}
+		_, err := svc.CalculateCreditAdjustments(inv, []*wallet.Wallet{newWallet("w1", 1000)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !u.PrepaidCreditsApplied.Equal(decimal.NewFromInt(80)) {
+			t.Fatalf("usage applied = %s, want 80", u.PrepaidCreditsApplied)
+		}
+		if !f.PrepaidCreditsApplied.IsZero() {
+			t.Fatalf("fixed applied = %s, want 0", f.PrepaidCreditsApplied)
+		}
+	})
+
+	t.Run("fully-applied line gets no new debit", func(t *testing.T) {
+		line := usageLine(100, 0, 0)
+		line.PrepaidCreditsApplied = decimal.NewFromInt(100) // maxed
+		inv := &invoice.Invoice{Currency: "USD", LineItems: []*invoice.InvoiceLineItem{line}}
+		debits, err := svc.CalculateCreditAdjustments(inv, []*wallet.Wallet{newWallet("w1", 1000)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(debits) != 0 {
+			t.Fatalf("debits = %v, want empty", debits)
+		}
+		if !line.PrepaidCreditsApplied.Equal(decimal.NewFromInt(100)) {
+			t.Fatalf("line applied = %s, want unchanged 100", line.PrepaidCreditsApplied)
+		}
+	})
+}

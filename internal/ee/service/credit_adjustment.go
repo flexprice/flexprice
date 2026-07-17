@@ -123,9 +123,9 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 
 	// Go through each line item and apply amounts
 	for _, lineItem := range inv.LineItems {
-		// Only usage-based items get amounts applied (one-time charges don't)
+		// Only usage-based items get amounts applied (one-time charges don't). Non-usage lines are
+		// left untouched here (not reset) - resetting is the caller's job (see spreadPrepaidCreditsAcrossLineItems).
 		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
-			lineItem.PrepaidCreditsApplied = decimal.Zero
 			continue
 		}
 
@@ -133,14 +133,17 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 		// We apply amounts to the net amount, not the gross amount
 		lineItemAmountAfterDiscounts := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
 
-		// If it's already free (or negative), skip it
-		if lineItemAmountAfterDiscounts.LessThanOrEqual(decimal.Zero) {
-			lineItem.PrepaidCreditsApplied = decimal.Zero
+		// Additive floor: existing PrepaidCreditsApplied is only added to, never overwritten.
+		// The room left to apply is the ceiling minus what's already been applied to this line.
+		remainingCeiling := lineItemAmountAfterDiscounts.Sub(lineItem.PrepaidCreditsApplied)
+
+		// If there's no room left (already free, negative, or fully applied), skip it
+		if remainingCeiling.LessThanOrEqual(decimal.Zero) {
 			continue
 		}
 
 		// How much can we apply to this line item? Can't exceed what's available or what's needed
-		maxAmountToApply := decimal.Min(remainingAmountAvailable, lineItemAmountAfterDiscounts)
+		maxAmountToApply := decimal.Min(remainingAmountAvailable, remainingCeiling)
 		amountAppliedToLineItem := decimal.Zero
 
 		// Take money from wallets one by one until we've covered this line item or run out
@@ -183,7 +186,8 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 			}
 		}
 
-		lineItem.PrepaidCreditsApplied = amountAppliedToLineItem
+		// Additive: add the newly applied amount on top of what was already on the line.
+		lineItem.PrepaidCreditsApplied = lineItem.PrepaidCreditsApplied.Add(amountAppliedToLineItem)
 
 		// Subtract what we used from the pool (use unrounded value to keep precision)
 		remainingAmountAvailable = remainingAmountAvailable.Sub(amountAppliedToLineItem)
