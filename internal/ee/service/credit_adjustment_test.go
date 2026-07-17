@@ -24,6 +24,23 @@ type CreditAdjustmentServiceSuite struct {
 	}
 }
 
+// usageLine creates a usage-type line item for testing.
+func usageLine(amount, lineDisc, invDisc float64) *invoice.InvoiceLineItem {
+	pt := string(types.PRICE_TYPE_USAGE)
+	return &invoice.InvoiceLineItem{
+		PriceType:            &pt,
+		Amount:               decimal.NewFromFloat(amount),
+		LineItemDiscount:     decimal.NewFromFloat(lineDisc),
+		InvoiceLevelDiscount: decimal.NewFromFloat(invDisc),
+	}
+}
+
+// fixedLine creates a fixed-price line item for testing.
+func fixedLine(amount float64) *invoice.InvoiceLineItem {
+	pt := string(types.PRICE_TYPE_FIXED)
+	return &invoice.InvoiceLineItem{PriceType: &pt, Amount: decimal.NewFromFloat(amount)}
+}
+
 func TestCreditAdjustmentService(t *testing.T) {
 	suite.Run(t, new(CreditAdjustmentServiceSuite))
 }
@@ -222,4 +239,76 @@ func TestPrepaidCreditApplyLockKey(t *testing.T) {
 	if got != want {
 		t.Fatalf("prepaidCreditApplyLockKey = %q, want %q", got, want)
 	}
+}
+
+func TestSpreadPrepaidCreditsAcrossLineItems(t *testing.T) {
+	t.Run("spreads across usage lines capped at ceiling, skips fixed", func(t *testing.T) {
+		a := usageLine(100, 20, 0) // ceiling 80
+		b := fixedLine(50)         // not creditable
+		inv := &invoice.Invoice{
+			TotalPrepaidCreditsApplied: decimal.NewFromInt(80),
+			LineItems:                  []*invoice.InvoiceLineItem{a, b},
+		}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.Equal(decimal.NewFromInt(80)) {
+			t.Fatalf("usage line applied = %s, want 80", a.PrepaidCreditsApplied)
+		}
+		if !b.PrepaidCreditsApplied.IsZero() {
+			t.Fatalf("fixed line applied = %s, want 0", b.PrepaidCreditsApplied)
+		}
+	})
+
+	t.Run("over-application caps at ceiling, excess dropped from per-line sum", func(t *testing.T) {
+		a := usageLine(100, 40, 0) // ceiling 60
+		inv := &invoice.Invoice{
+			TotalPrepaidCreditsApplied: decimal.NewFromInt(80), // authority higher than ceiling
+			LineItems:                  []*invoice.InvoiceLineItem{a},
+		}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.Equal(decimal.NewFromInt(60)) {
+			t.Fatalf("applied = %s, want 60 (capped)", a.PrepaidCreditsApplied)
+		}
+	})
+
+	t.Run("multiple usage lines consumed in order", func(t *testing.T) {
+		a := usageLine(30, 0, 0) // ceiling 30
+		b := usageLine(50, 0, 0) // ceiling 50
+		inv := &invoice.Invoice{
+			TotalPrepaidCreditsApplied: decimal.NewFromInt(60),
+			LineItems:                  []*invoice.InvoiceLineItem{a, b},
+		}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)) {
+			t.Fatalf("line a = %s, want 30", a.PrepaidCreditsApplied)
+		}
+		if !b.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)) {
+			t.Fatalf("line b = %s, want 30", b.PrepaidCreditsApplied)
+		}
+	})
+
+	t.Run("zero authority zeroes all lines", func(t *testing.T) {
+		a := usageLine(100, 0, 0)
+		a.PrepaidCreditsApplied = decimal.NewFromInt(40) // stale
+		inv := &invoice.Invoice{TotalPrepaidCreditsApplied: decimal.Zero, LineItems: []*invoice.InvoiceLineItem{a}}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.IsZero() {
+			t.Fatalf("applied = %s, want 0", a.PrepaidCreditsApplied)
+		}
+	})
+
+	t.Run("total higher than sum of all ceilings: excess left unplaced, no panic", func(t *testing.T) {
+		a := usageLine(30, 0, 0) // ceiling 30
+		b := usageLine(20, 0, 0) // ceiling 20
+		inv := &invoice.Invoice{
+			TotalPrepaidCreditsApplied: decimal.NewFromInt(100), // way more than 30+20
+			LineItems:                  []*invoice.InvoiceLineItem{a, b},
+		}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.Equal(decimal.NewFromInt(30)) {
+			t.Fatalf("line a = %s, want 30", a.PrepaidCreditsApplied)
+		}
+		if !b.PrepaidCreditsApplied.Equal(decimal.NewFromInt(20)) {
+			t.Fatalf("line b = %s, want 20", b.PrepaidCreditsApplied)
+		}
+	})
 }

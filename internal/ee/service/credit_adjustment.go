@@ -37,6 +37,32 @@ func prepaidCreditApplyLockKey(invoiceID string) string {
 	return "prepaid_credit_apply:invoice:" + invoiceID
 }
 
+// spreadPrepaidCreditsAcrossLineItems re-derives each usage line item's PrepaidCreditsApplied from the
+// invoice-level authority inv.TotalPrepaidCreditsApplied. It performs NO wallet movement. Usage line items
+// receive credit up to their ceiling (amount - line_discount - invoice_level_discount), in list order;
+// non-usage lines get zero. Any amount that cannot be placed (all usage lines maxed) is the burned /
+// over-consumed remainder and is intentionally left out of the per-line sum.
+func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) {
+	remaining := inv.TotalPrepaidCreditsApplied
+	if remaining.IsNegative() {
+		remaining = decimal.Zero
+	}
+	for _, lineItem := range inv.LineItems {
+		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			lineItem.PrepaidCreditsApplied = decimal.Zero
+			continue
+		}
+		ceiling := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
+		if ceiling.LessThanOrEqual(decimal.Zero) || remaining.LessThanOrEqual(decimal.Zero) {
+			lineItem.PrepaidCreditsApplied = decimal.Zero
+			continue
+		}
+		applied := decimal.Min(remaining, ceiling)
+		lineItem.PrepaidCreditsApplied = applied
+		remaining = remaining.Sub(applied)
+	}
+}
+
 // CalculateCreditAdjustments calculates how much amount to apply from prepaid wallets to invoice line items.
 //
 // The basic idea is simple: we take all the money available in wallets, put it in a pool, then
