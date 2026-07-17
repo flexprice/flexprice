@@ -459,11 +459,18 @@ func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoi
 	billingStartDate := lo.FromPtr(inv.IssueDate)
 	itemsByCategory := groupLineItemsByCategory(inv.LineItems)
 
-	grossFixed, fixedStart, fixedEnd := aggregateLineItems(itemsByCategory[categoryFixed])
-	grossUsage, usageStart, usageEnd := aggregateLineItems(itemsByCategory[categoryUsage])
+	// Aggregate only the categories present on the invoice (it may carry just one type of charge).
+	grossByCategory := make(map[chargeCategory]decimal.Decimal, len(itemsByCategory))
+	periodByCategory := make(map[chargeCategory][2]time.Time, len(itemsByCategory))
+	for category, items := range itemsByCategory {
+		gross, start, end := aggregateLineItems(items)
+		grossByCategory[category] = gross
+		periodByCategory[category] = [2]time.Time{start, end}
+	}
 
 	// Apply prepaid credits + payments to usage first, then the remainder to fixed (no taxes/discounts
 	// here). Clamped at 0, so netUsage + netFixed == invoice amount remaining.
+	grossUsage, grossFixed := grossByCategory[categoryUsage], grossByCategory[categoryFixed]
 	paidAmount := inv.TotalPrepaidCreditsApplied.Add(inv.AmountPaid)
 	netUsage := decimal.Max(grossUsage.Sub(paidAmount), decimal.Zero)
 	creditLeft := decimal.Max(paidAmount.Sub(grossUsage), decimal.Zero)
@@ -472,10 +479,6 @@ func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoi
 	amountByCategory := map[chargeCategory]decimal.Decimal{
 		categoryFixed: netFixed,
 		categoryUsage: netUsage,
-	}
-	periodByCategory := map[chargeCategory][2]time.Time{
-		categoryFixed: {fixedStart, fixedEnd},
-		categoryUsage: {usageStart, usageEnd},
 	}
 
 	for category, items := range itemsByCategory {
@@ -687,7 +690,8 @@ func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*
 	return nil
 }
 
-// aggregateLineItems returns the sum of the line items' amounts and the service period of the first item.
+// aggregateLineItems sums the line items' amounts and returns the group total and its service period.
+// Must be called with a non-empty group.
 func aggregateLineItems(items []*invoice.InvoiceLineItem) (total decimal.Decimal, serviceStart, serviceEnd time.Time) {
 	total = decimal.Zero
 	serviceStart = lo.FromPtr(items[0].PeriodStart)
