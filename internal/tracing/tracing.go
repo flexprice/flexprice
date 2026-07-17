@@ -328,6 +328,20 @@ func (s *Service) initMeter(ctx context.Context) error {
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(interval))),
+		// Drop the framework's auto-emitted HTTP metrics (http.server.* / http.client.*).
+		// Turning on the MeterProvider auto-enabled these; they were ~31% of metric
+		// ingestion and are referenced by no dashboard or alert. Body-size histograms
+		// are unwanted, and request latency is already covered by APM (derived from
+		// traces). NOTE: if API traces are ever sampled below 100%, re-add a coarse
+		// http.server.request.duration here as the always-on latency source.
+		sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "http.server.*"},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		)),
+		sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: "http.client.*"},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationDrop{}},
+		)),
 	)
 	otel.SetMeterProvider(mp)
 	s.meterProvider = mp
