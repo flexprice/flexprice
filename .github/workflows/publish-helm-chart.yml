@@ -109,19 +109,16 @@ jobs:
           helm repo update
 
       - name: Build Helm Dependencies
-        continue-on-error: true
         run: |
           helm dependency build internal/ee/infrastructure/helm/flexprice
 
       - name: Lint Helm Chart
-        continue-on-error: true
         run: |
           helm lint internal/ee/infrastructure/helm/flexprice --set secrets.existingSecret=test
           helm template flexprice-test internal/ee/infrastructure/helm/flexprice --set secrets.existingSecret=test --debug
 
       - name: Package Helm Chart
         if: ${{ steps.changed.outputs.publish == 'true' }}
-        continue-on-error: true
         run: |
           helm package internal/ee/infrastructure/helm/flexprice --version ${{ steps.chart-version.outputs.version }}
 
@@ -146,7 +143,7 @@ jobs:
         continue-on-error: true
 
       - name: Login to GHCR
-        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/chart-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+        if: ${{ steps.changed.outputs.publish == 'true' }}
         env:
           # PAT auth — see comment in publish-app-image.yml. Override the
           # username via vars.GHCR_USERNAME if the PAT owner differs from
@@ -154,13 +151,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
           GH_USER: ${{ vars.GHCR_USERNAME || github.actor }}
           GHCR_HOST: ${{ env.GHCR_HOST }}
-        continue-on-error: true
         run: |
           echo "$GH_TOKEN" | helm registry login "$GHCR_HOST" -u "$GH_USER" --password-stdin
 
       - name: Push Helm Chart to GHCR
-        if: ${{ (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/chart-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
-        continue-on-error: true
+        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
@@ -176,8 +171,7 @@ jobs:
           echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
 
       - name: Verify Published Chart (GHCR)
-        if: ${{ (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/chart-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
-        continue-on-error: true
+        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
@@ -198,6 +192,7 @@ jobs:
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
           EXISTS: ${{ steps.version-check.outputs.exists }}
           FORCE: ${{ github.event.inputs.force }}
+          PUBLISH: ${{ steps.changed.outputs.publish }}
         run: |
           OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
           TARGET="oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}"
@@ -206,9 +201,11 @@ jobs:
           echo "- **Chart Name**: $CHART_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **Chart Version**: $CHART_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry**: $TARGET" >> $GITHUB_STEP_SUMMARY
-          if [ "$EXISTS" == "true" ] && [ "$FORCE" != "true" ]; then
+          if [ "$PUBLISH" != "true" ]; then
+            echo "- **Status**: ℹ️ Chart version unchanged — nothing published" >> $GITHUB_STEP_SUMMARY
+          elif [ "$EXISTS" == "true" ] && [ "$FORCE" != "true" ]; then
             echo "- **Status**: ⚠️ Version already exists (skipped)" >> $GITHUB_STEP_SUMMARY
-          elif [ "$EXISTS" != "true" ] || [ "$FORCE" == "true" ]; then
+          else
             echo "- **Status**: ✅ Published successfully" >> $GITHUB_STEP_SUMMARY
             echo "- **Chart URL**: \`helm pull $TARGET --version $CHART_VERSION\`" >> $GITHUB_STEP_SUMMARY
           fi
