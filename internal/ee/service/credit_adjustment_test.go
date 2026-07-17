@@ -311,4 +311,16 @@ func TestSpreadPrepaidCreditsAcrossLineItems(t *testing.T) {
 			t.Fatalf("line b = %s, want 20", b.PrepaidCreditsApplied)
 		}
 	})
+
+	t.Run("negative authority zeroes all usage lines (defensive clamp)", func(t *testing.T) {
+		a := usageLine(100, 0, 0)
+		inv := &invoice.Invoice{
+			TotalPrepaidCreditsApplied: decimal.NewFromInt(-50), // corrupt/invalid input
+			LineItems:                  []*invoice.InvoiceLineItem{a},
+		}
+		spreadPrepaidCreditsAcrossLineItems(inv)
+		if !a.PrepaidCreditsApplied.IsZero() {
+			t.Fatalf("applied = %s, want 0 (negative authority must not go negative or apply)", a.PrepaidCreditsApplied)
+		}
+	})
 }
