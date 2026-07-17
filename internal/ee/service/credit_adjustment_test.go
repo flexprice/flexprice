@@ -351,6 +351,7 @@ func TestCalculateCreditAdjustments_Additive(t *testing.T) {
 	t.Run("mixed fixed+usage never credits the fixed line", func(t *testing.T) {
 		u := usageLine(100, 20, 0) // ceiling 80
 		f := fixedLine(50)
+		f.PrepaidCreditsApplied = decimal.NewFromInt(15) // stale value; must NOT be reset by this function
 		inv := &invoice.Invoice{Currency: "USD", LineItems: []*invoice.InvoiceLineItem{u, f}}
 		_, err := svc.CalculateCreditAdjustments(inv, []*wallet.Wallet{newWallet("w1", 1000)})
 		if err != nil {
@@ -359,8 +360,8 @@ func TestCalculateCreditAdjustments_Additive(t *testing.T) {
 		if !u.PrepaidCreditsApplied.Equal(decimal.NewFromInt(80)) {
 			t.Fatalf("usage applied = %s, want 80", u.PrepaidCreditsApplied)
 		}
-		if !f.PrepaidCreditsApplied.IsZero() {
-			t.Fatalf("fixed applied = %s, want 0", f.PrepaidCreditsApplied)
+		if !f.PrepaidCreditsApplied.Equal(decimal.NewFromInt(15)) {
+			t.Fatalf("fixed applied = %s, want unchanged 15 (not reset)", f.PrepaidCreditsApplied)
 		}
 	})
 
