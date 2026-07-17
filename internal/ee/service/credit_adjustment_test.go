@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -275,6 +276,55 @@ func (s *CreditAdjustmentServiceSuite) createWalletWithCredit(id string, currenc
 	return w
 }
 
+// createWalletCredit directly creates a wallet credit transaction via the repository, bypassing
+// WalletOperation.Validate() (which unconditionally rejects a past ExpiryDate). Use this whenever a
+// test needs a credit with a past ExpiryDate - the exact population applyExpiringCreditToInvoice
+// targets - and/or an explicit Priority. Updates the wallet's Balance/CreditBalance to match, mirroring
+// what processWalletOperation does for an ordinary credit (all test wallets use conversion rate 1).
+func (s *CreditAdjustmentServiceSuite) createWalletCredit(walletID string, amount decimal.Decimal, expiryDate *time.Time, priority *int) *wallet.Transaction {
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), walletID)
+	s.Require().NoError(err)
+
+	tx := &wallet.Transaction{
+		ID:                  s.GetUUID(),
+		WalletID:            walletID,
+		CustomerID:          w.CustomerID,
+		Type:                types.TransactionTypeCredit,
+		Amount:              amount,
+		CreditAmount:        amount,
+		TxStatus:            types.TransactionStatusCompleted,
+		TransactionReason:   types.TransactionReasonFreeCredit,
+		ExpiryDate:          expiryDate,
+		Priority:            priority,
+		CreditBalanceBefore: w.CreditBalance,
+		CreditBalanceAfter:  w.CreditBalance.Add(amount),
+		CreditsAvailable:    amount,
+		Currency:            w.Currency,
+		EnvironmentID:       "env_test",
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), tx))
+
+	newCreditBalance := w.CreditBalance.Add(amount)
+	newBalance := w.Balance.Add(amount) // conversion rate is 1 for all test wallets
+	s.Require().NoError(s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), walletID, newBalance, newCreditBalance))
+
+	return tx
+}
+
+// walletBalance sums Balance across all of a customer's wallets in the given currency.
+func (s *CreditAdjustmentServiceSuite) walletBalance(customerID, currency string) decimal.Decimal {
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(s.GetContext(), customerID)
+	s.Require().NoError(err)
+	total := decimal.Zero
+	for _, w := range wallets {
+		if w.Currency == currency {
+			total = total.Add(w.Balance)
+		}
+	}
+	return total
+}
+
 // createDraftInvoiceWithUsageLineItem creates a DB-backed draft invoice with a single usage line
 // item of the given amount. Mirrors InvoiceDiscountCreditWorkflowSuite.createInvoiceWithLineItems.
 func (s *CreditAdjustmentServiceSuite) createDraftInvoiceWithUsageLineItem(id string, currency string, amount decimal.Decimal) *invoice.Invoice {
@@ -433,6 +483,100 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_PersistsSpreadE
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(40).Equal(persistedLineItem.PrepaidCreditsApplied),
 		"persisted line item PrepaidCreditsApplied: expected 40, got %s", persistedLineItem.PrepaidCreditsApplied.String())
+}
+
+// applyExpiringCreditToInvoice must draw ONLY from the named source transaction, never from another,
+// unrelated (non-expiring) credit grant sitting in the same wallet - regression test for the
+// FindEligibleCredits expiry-window exclusion bug (a generic debit could never reach an already-past-
+// expiry transaction, and could drain an unrelated higher-priority credit instead).
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_TargetsOnlySourceGrant() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_targets_only", "USD", decimal.NewFromInt(100)) // ceiling 100
+
+	w := s.createWalletWithCredit("wallet_targets_only", "USD", decimal.Zero)
+
+	// A large, non-expiring, high-priority credit that would normally win generic FIFO selection...
+	s.createWalletCredit(w.ID, decimal.NewFromInt(500), nil, lo.ToPtr(1))
+
+	// ...and the actual expiring grant we're targeting (ExpiryDate in the past).
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(40), &pastExpiry, lo.ToPtr(2))
+
+	result, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(40).Equal(result.TotalPrepaidCreditsApplied),
+		"expected 40 applied, got %s", result.TotalPrepaidCreditsApplied.String())
+
+	// The 40 source grant must be fully drawn down...
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(reloadedSource.CreditsAvailable.IsZero(),
+		"source grant should be fully consumed, got %s available", reloadedSource.CreditsAvailable.String())
+
+	// ...and the 500 non-expiring credit must be untouched.
+	s.True(decimal.NewFromInt(500).Equal(s.walletBalance(inv.CustomerID, "USD")),
+		"non-expiring credit must be untouched, wallet balance = %s", s.walletBalance(inv.CustomerID, "USD").String())
+}
+
+// A source grant larger than the invoice's settleable ceiling is capped at the ceiling - the excess
+// stays available on the source grant (for the next invoice, or the eventual expiry debit).
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_CapsAtCeiling() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_caps_at_ceiling", "USD", decimal.NewFromInt(30)) // ceiling 30
+
+	w := s.createWalletWithCredit("wallet_caps_at_ceiling", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(100), &pastExpiry, nil)
+
+	result, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(30).Equal(result.TotalPrepaidCreditsApplied),
+		"expected 30 applied (capped at ceiling), got %s", result.TotalPrepaidCreditsApplied.String())
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(70).Equal(reloadedSource.CreditsAvailable),
+		"70 should remain on the source grant, got %s", reloadedSource.CreditsAvailable.String())
+}
+
+// Even when no NEW debit is needed (source.CreditsAvailable is fully spent, or the ceiling leaves no
+// room), spreadPrepaidCreditsAcrossLineItems's re-derived per-line values must still be persisted to the
+// DB - this is the exact bug class Task 4 fixed in ApplyCreditsToInvoice; this function must not repeat
+// it.
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_PersistsSpreadEvenWithoutNewDebit() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_persist_no_debit", "USD", decimal.NewFromInt(100)) // ceiling 100
+	lineItemID := inv.LineItems[0].ID
+
+	w := s.createWalletWithCredit("wallet_persist_no_debit", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(60), &pastExpiry, nil)
+
+	first, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(first.TotalPrepaidCreditsApplied),
+		"first call: expected 60 applied, got %s", first.TotalPrepaidCreditsApplied.String())
+
+	// Simulate a recompute that shrinks the line's ceiling to 40 (e.g. a discount added) and resets the
+	// in-memory line item's PrepaidCreditsApplied to 0 (mirroring what reconcileLineItems does in
+	// production), while inv.TotalPrepaidCreditsApplied (the preserved authority) stays at 60.
+	inv.LineItems[0].LineItemDiscount = decimal.NewFromInt(60) // ceiling now 100-60=40
+	inv.LineItems[0].PrepaidCreditsApplied = decimal.Zero      // simulated reset
+
+	// Re-fetch the source transaction: it now has 0 CreditsAvailable (fully spent by the first call), so
+	// this second call needs no new debit - exactly the path that used to skip persistence.
+	exhaustedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(exhaustedSource.CreditsAvailable.IsZero(),
+		"source should be exhausted before second call, got %s", exhaustedSource.CreditsAvailable.String())
+
+	second, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, exhaustedSource)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(40).Equal(second.TotalPrepaidCreditsApplied),
+		"second call: expected 40 applied (capped at the shrunk ceiling), got %s", second.TotalPrepaidCreditsApplied.String())
+
+	// Reload the line item FRESH from the repo (not the in-memory struct) to prove the DB was written.
+	reloadedLineItem, err := s.GetStores().InvoiceLineItemRepo.Get(s.GetContext(), lineItemID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(40).Equal(reloadedLineItem.PrepaidCreditsApplied),
+		"persisted value = %s, want 40 (spread must persist even with no new debit)", reloadedLineItem.PrepaidCreditsApplied.String())
 }
 
 func TestPrepaidCreditApplyLockKey(t *testing.T) {

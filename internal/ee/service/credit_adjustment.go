@@ -361,3 +361,108 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	return result, nil
 }
+
+// applyExpiringCreditToInvoice applies up to tx.CreditsAvailable of credit from ONE specific about-to-
+// expire wallet transaction to an invoice, spreading it across usage line items and debiting ONLY that
+// transaction's grant (via ParentCreditTxID). Unlike ApplyCreditsToInvoice, this never touches
+// FindEligibleCredits or wallet pooling: the source and amount are already fully known, and generic FIFO
+// selection would exclude this credit anyway (FindEligibleCredits excludes any credit whose expiry has
+// already passed - exactly the population pre-expiry processes).
+//
+// The invoice-level total is set in memory only; the CALLER must persist the invoice's own Total/AmountDue
+// fields (this function DOES persist every line item's PrepaidCreditsApplied itself, unconditionally,
+// whether or not a new debit was made - see the Task 4 lesson above for why that matters).
+func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (*dto.CreditAdjustmentResult, error) {
+	if len(inv.LineItems) == 0 {
+		return &dto.CreditAdjustmentResult{TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied, Currency: inv.Currency}, nil
+	}
+
+	// Full ceiling across all usage lines (amount - discounts), independent of what's already applied.
+	totalCeiling := decimal.Zero
+	for _, li := range inv.LineItems {
+		if li.PriceType == nil || lo.FromPtr(li.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			continue
+		}
+		ceiling := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
+		if ceiling.IsPositive() {
+			totalCeiling = totalCeiling.Add(ceiling)
+		}
+	}
+	remainingCeiling := totalCeiling.Sub(inv.TotalPrepaidCreditsApplied)
+	if remainingCeiling.IsNegative() {
+		remainingCeiling = decimal.Zero
+	}
+
+	rawAmount := decimal.Min(remainingCeiling, tx.CreditsAvailable)
+	amountToApply := decimal.Min(types.RoundToCurrencyPrecision(rawAmount, inv.Currency), rawAmount)
+	if amountToApply.IsNegative() {
+		amountToApply = decimal.Zero
+	}
+
+	// Always enter the transaction and persist every line item - even when there's no NEW credit to debit
+	// (amountToApply may be zero), spreadPrepaidCreditsAcrossLineItems below may still change per-line
+	// values relative to what's currently in the DB (e.g. after a recompute reset them), and those must be
+	// persisted regardless of whether a debit happens. See the Task 4 lesson above.
+	var result *dto.CreditAdjustmentResult
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if amountToApply.GreaterThan(decimal.Zero) {
+			generator := idempotency.NewGenerator()
+			// Deterministic per (invoice, source grant): naturally dedupes activity retries, and is distinct
+			// from ExpireCredits' remainder-expiry key (tx.ID alone) so the two debits never collide on the
+			// unique (tenant, environment, idempotency_key) index.
+			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
+				"invoice_id":   inv.ID,
+				"source_tx_id": tx.ID,
+			})
+
+			walletService := NewWalletService(s.ServiceParams)
+			walletDebitOperation := &wallet.WalletOperation{
+				WalletID:          tx.WalletID,
+				ParentCreditTxID:  tx.ID,
+				Type:              types.TransactionTypeDebit,
+				Amount:            amountToApply,
+				ReferenceType:     types.WalletTxReferenceTypeInvoice,
+				ReferenceID:       inv.ID,
+				Description:       fmt.Sprintf("Pre-expiry credit adjustment applied to invoice %s from transaction %s", inv.ID, tx.ID),
+				TransactionReason: types.TransactionReasonCreditAdjustment,
+				IdempotencyKey:    idempotencyKey,
+				Metadata: types.Metadata{
+					"invoice_id":      inv.ID,
+					"customer_id":     inv.CustomerID,
+					"source_tx_id":    tx.ID,
+					"adjustment_type": "pre_expiry_credit_adjustment",
+				},
+			}
+			if err := walletService.DebitWallet(ctx, walletDebitOperation); err != nil {
+				return err
+			}
+
+			inv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied.Add(amountToApply)
+		}
+
+		spreadPrepaidCreditsAcrossLineItems(inv) // place the (possibly unchanged) total across lines
+
+		// Re-derive the invoice-level authority from what actually landed on the persisted line items,
+		// mirroring ApplyCreditsToInvoice's Phase 2 (see the Task 4 lesson above). Within this call this is
+		// a no-op whenever a new debit was just made (remainingCeiling already bounded amountToApply to fit
+		// totalCeiling), but it matters whenever the ceiling had ALREADY shrunk below inv.TotalPrepaidCreditsApplied
+		// before this call (e.g. a prior recompute) and no new debit is needed: without this recompute, the
+		// returned/stored total would stay at the stale, too-high authority even though the per-line values
+		// were correctly capped down - the same "reported total desyncs from persisted lines" bug class.
+		totalApplied := decimal.Zero
+		for _, li := range inv.LineItems {
+			totalApplied = totalApplied.Add(li.PrepaidCreditsApplied)
+			if err := s.InvoiceLineItemRepo.Update(ctx, li); err != nil {
+				return err
+			}
+		}
+		inv.TotalPrepaidCreditsApplied = totalApplied
+
+		result = &dto.CreditAdjustmentResult{TotalPrepaidCreditsApplied: totalApplied, Currency: inv.Currency}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
