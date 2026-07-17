@@ -83,7 +83,7 @@ var (
 			ExpandPrices:                {ExpandMeters},
 			ExpandSchedule:              {},
 			ExpandCouponAssociations:    {ExpandCoupon},
-			ExpandSubscriptionLineItems: {ExpandPrices},
+			ExpandSubscriptionLineItems: {ExpandPrices, ExpandMeters},
 			ExpandEntitlements:          {},
 		},
 	}
