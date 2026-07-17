@@ -16,8 +16,9 @@ import (
 
 type CreditAdjustmentServiceSuite struct {
 	testutil.BaseServiceTestSuite
-	service  CreditAdjustmentService
-	testData struct {
+	service       CreditAdjustmentService
+	walletService WalletService
+	testData      struct {
 		customer *customer.Customer
 		wallets  []*wallet.Wallet
 		invoice  *invoice.Invoice
@@ -62,12 +63,14 @@ func (s *CreditAdjustmentServiceSuite) GetContext() context.Context {
 
 func (s *CreditAdjustmentServiceSuite) setupService() {
 	stores := s.GetStores()
-	s.service = NewCreditAdjustmentService(ServiceParams{
+	params := ServiceParams{
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
+		CustomerRepo:             stores.CustomerRepo,
 		WalletRepo:               stores.WalletRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		SettingsRepo:             stores.SettingsRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
 		SubRepo:                  stores.SubscriptionRepo,
@@ -77,7 +80,9 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 		FeatureRepo:              stores.FeatureRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
-	})
+	}
+	s.service = NewCreditAdjustmentService(params)
+	s.walletService = NewWalletService(params)
 }
 
 // getServiceImpl returns the concrete service implementation for accessing testing-only methods
@@ -231,6 +236,144 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	s.Len(debits, 2)
 	s.True(decimal.NewFromInt(30).Equal(debits["wallet_a"]))
 	s.True(decimal.NewFromInt(20).Equal(debits["wallet_b"]))
+}
+
+// createWalletWithCredit creates a DB-backed prepaid wallet and credits it via WalletService.
+// Mirrors InvoiceDiscountCreditWorkflowSuite.createWalletWithCredit.
+func (s *CreditAdjustmentServiceSuite) createWalletWithCredit(id string, currency string, balance decimal.Decimal) *wallet.Wallet {
+	w := &wallet.Wallet{
+		ID:             id,
+		CustomerID:     s.testData.customer.ID,
+		Currency:       currency,
+		Balance:        decimal.Zero,
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "Test Wallet " + id,
+		Description:    "Test wallet",
+		ConversionRate: decimal.NewFromInt(1),
+		EnvironmentID:  "env_test",
+		WalletType:     types.WalletTypePrePaid,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), w))
+
+	if balance.GreaterThan(decimal.Zero) {
+		creditOp := &wallet.WalletOperation{
+			WalletID:          w.ID,
+			Type:              types.TransactionTypeCredit,
+			CreditAmount:      balance,
+			Description:       "Initial credit for test wallet",
+			TransactionReason: types.TransactionReasonFreeCredit,
+		}
+		s.NoError(s.walletService.CreditWallet(s.GetContext(), creditOp))
+
+		updatedWallet, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+		s.NoError(err)
+		w = updatedWallet
+	}
+
+	return w
+}
+
+// createDraftInvoiceWithUsageLineItem creates a DB-backed draft invoice with a single usage line
+// item of the given amount. Mirrors InvoiceDiscountCreditWorkflowSuite.createInvoiceWithLineItems.
+func (s *CreditAdjustmentServiceSuite) createDraftInvoiceWithUsageLineItem(id string, currency string, amount decimal.Decimal) *invoice.Invoice {
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        id,
+		CustomerID:       s.testData.customer.ID,
+		Amount:           amount,
+		Currency:         currency,
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	inv := &invoice.Invoice{
+		ID:            id,
+		CustomerID:    s.testData.customer.ID,
+		Currency:      currency,
+		Subtotal:      amount,
+		Total:         amount,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		InvoiceStatus: types.InvoiceStatusDraft,
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:     []*invoice.InvoiceLineItem{li},
+	}
+
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+	return inv
+}
+
+// reloadInvoiceWithLineItems reloads an invoice and its line items from the repos, mirroring the
+// reload pattern used throughout InvoiceDiscountCreditWorkflowSuite (Get() no longer eager-loads
+// line items; they must be fetched separately).
+func (s *CreditAdjustmentServiceSuite) reloadInvoiceWithLineItems(id string) *invoice.Invoice {
+	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), id)
+	s.NoError(err)
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), id)
+	s.NoError(err)
+	inv.LineItems = lineItems
+	return inv
+}
+
+// Applying twice must be additive and must not double-debit: the second call honors the first
+// via the invoice-level TotalPrepaidCreditsApplied authority and only applies the remaining delta.
+func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_HonorsPriorAndAddsDelta() {
+	// 1. Draft invoice with one usage line item, amount 100 USD.
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_honor_prior", "USD", decimal.NewFromInt(100))
+
+	// 2. Credit a prepaid wallet for the invoice's customer with 60 USD.
+	w := s.createWalletWithCredit("wallet_honor_prior", "USD", decimal.NewFromInt(60))
+
+	// 3. First call: applies the full 60 available.
+	result1, err := s.service.ApplyCreditsToInvoice(s.GetContext(), inv)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(result1.TotalPrepaidCreditsApplied),
+		"first call: expected 60 applied, got %s", result1.TotalPrepaidCreditsApplied.String())
+
+	// Persist the invoice-level authority, as the real caller is responsible for doing.
+	inv.TotalPrepaidCreditsApplied = result1.TotalPrepaidCreditsApplied
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+
+	// 4. Credit the SAME wallet with another 100 USD. The first call already really debited the
+	// wallet's 60 (balance 60 -> 0), so the wallet's balance right after this credit is 100 (total
+	// ever credited across both credits is 160, but 60 of that was already spent by the first call).
+	creditOp := &wallet.WalletOperation{
+		WalletID:          w.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(100),
+		Description:       "Additional credit for test wallet",
+		TransactionReason: types.TransactionReasonFreeCredit,
+	}
+	s.NoError(s.walletService.CreditWallet(s.GetContext(), creditOp))
+
+	walletBeforeSecondCall, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(100).Equal(walletBeforeSecondCall.Balance),
+		"wallet balance before second call: expected 100 (0 after first debit + 100 new credit), got %s", walletBeforeSecondCall.Balance.String())
+
+	// 5. Reload the invoice WITH ITS LINE ITEMS from the repo (line item carries the 60 already
+	// applied from step 3; invoice-level authority carries the persisted 60 from step 3's update).
+	reloadedInv := s.reloadInvoiceWithLineItems(inv.ID)
+	reloadedInv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied
+
+	// 6. Second call.
+	result2, err := s.service.ApplyCreditsToInvoice(s.GetContext(), reloadedInv)
+	s.Require().NoError(err)
+
+	// 7. Cumulative total is capped at the line's ceiling (100), not naively summed (60+160=220,
+	// nor is it just the wallet's new credit of 100).
+	s.True(decimal.NewFromInt(100).Equal(result2.TotalPrepaidCreditsApplied),
+		"second call: expected cumulative 100 applied, got %s", result2.TotalPrepaidCreditsApplied.String())
+
+	// 8. Wallet was debited only the NEW delta (40): balance goes from 100 -> 60, not drained to 0.
+	reloadedWallet, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(reloadedWallet.Balance),
+		"wallet balance: expected 60 (100 - 40 delta debited), got %s", reloadedWallet.Balance.String())
 }
 
 func TestPrepaidCreditApplyLockKey(t *testing.T) {

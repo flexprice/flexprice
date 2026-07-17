@@ -246,6 +246,12 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		}, nil
 	}
 
+	// Spread the already-applied invoice-level authority onto current line items first, so
+	// CalculateCreditAdjustments' additive floor (line.PrepaidCreditsApplied) reflects prior state
+	// correctly even after a recompute rebuilt the line items (which zeroes the per-line field but
+	// never the invoice-level authority).
+	spreadPrepaidCreditsAcrossLineItems(inv)
+
 	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
 
 	// Get all the prepaid wallets we can use for this customer
@@ -258,7 +264,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(wallets) == 0 {
 		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
 			Currency:                   inv.Currency,
 		}, nil
 	}
@@ -278,7 +284,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// If no amounts were calculated to apply, return zero result
 	if len(amountsToDebitFromWallets) == 0 {
 		return &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
 			Currency:                   inv.Currency,
 		}, nil
 	}
@@ -337,11 +343,9 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// We calculated these values earlier, now we're just saving them to the database
 		totalAmountApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
-			if lineItem.PrepaidCreditsApplied.GreaterThan(decimal.Zero) {
-				totalAmountApplied = totalAmountApplied.Add(lineItem.PrepaidCreditsApplied)
-				if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
-					return err
-				}
+			totalAmountApplied = totalAmountApplied.Add(lineItem.PrepaidCreditsApplied)
+			if err := s.InvoiceLineItemRepo.Update(ctx, lineItem); err != nil {
+				return err
 			}
 		}
 
