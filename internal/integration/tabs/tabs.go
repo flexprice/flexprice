@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -19,10 +18,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
-
-const tabsDateLayout = "2006-01-02"
-
-const tabsInvoiceSyncLockTTL = 2 * time.Minute
 
 type TabsInvoiceService interface {
 	SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceSyncRequest) (*TabsInvoiceSyncResponse, error)
@@ -33,7 +28,6 @@ type InvoiceService struct {
 	customerRepo customer.Repository
 	subRepo      subscription.Repository
 	planRepo     plan.Repository
-	priceRepo    price.Repository
 	invoiceRepo  invoice.Repository
 	mappingRepo  entityintegrationmapping.Repository
 	locker       cache.Locker
@@ -45,7 +39,6 @@ func NewInvoiceService(
 	customerRepo customer.Repository,
 	subRepo subscription.Repository,
 	planRepo plan.Repository,
-	priceRepo price.Repository,
 	invoiceRepo invoice.Repository,
 	mappingRepo entityintegrationmapping.Repository,
 	locker cache.Locker,
@@ -56,7 +49,6 @@ func NewInvoiceService(
 		customerRepo: customerRepo,
 		subRepo:      subRepo,
 		planRepo:     planRepo,
-		priceRepo:    priceRepo,
 		invoiceRepo:  invoiceRepo,
 		mappingRepo:  mappingRepo,
 		locker:       locker,
@@ -86,7 +78,7 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	existingMapping, alreadySynced, err := s.existingInvoiceMapping(ctx, req.InvoiceID)
+	existingMapping, alreadySynced, err := s.getExistingInvoiceMapping(ctx, req.InvoiceID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,22 +105,36 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 		return nil, err
 	}
 
-	// On a re-sync, drop the previously-synced obligations (from Tabs and locally) so they are
-	// recreated from the invoice's current line items below. Deletion is driven by the obligation
-	// ids recorded on the invoice mapping, so obligations whose line items were removed (or recreated
-	// with new ids) since the last sync are still cleaned up.
+	// Re-sync: delete the previously-synced obligations (by the obligation ids on the invoice mapping,
+	// so obligations for removed/recreated line items are caught too) before recreating them below.
 	if alreadySynced {
 		if err = s.deletePreviousObligations(ctx, existingMapping, inv, tabsContractID); err != nil {
 			return nil, err
 		}
 	}
 
-	if err = s.syncObligations(ctx, inv, tabsContractID); err != nil {
+	if !inv.AmountRemaining.IsPositive() {
+		if existingMapping != nil {
+			if err = s.mappingRepo.Delete(ctx, existingMapping); err != nil {
+				return nil, err
+			}
+		}
+		s.logger.Info(ctx, "tabs: previously-synced invoice is now zero, removed tabs obligations",
+			"invoice_id", inv.ID, "tabs_contract_id", tabsContractID)
+		return &TabsInvoiceSyncResponse{
+			ContractID:     tabsContractID,
+			TabsCustomerID: tabsCustomerID,
+			Currency:       inv.Currency,
+		}, nil
+	}
+
+	// Returned ids are recorded on the mapping so a later re-sync can delete these obligations.
+	obligationIDs, err := s.syncObligations(ctx, inv, tabsContractID)
+	if err != nil {
 		return nil, err
 	}
 
-	// Look up the Tabs invoice(s) generated for the obligations (by contract + issue date). The
-	// invoice is mapped to its Tabs contract; the Tabs invoice id is recorded in the metadata.
+	// Find the Tabs invoice generated from the obligations (by contract + issue date).
 	issueDate := lo.FromPtr(inv.IssueDate)
 	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, issueDate.Format(tabsDateLayout))
 	if err != nil {
@@ -137,13 +143,6 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 
 	if tabsInvoiceID == "" {
 		return nil, fmt.Errorf("unable to create invoice in tabs")
-	}
-
-	// Record the obligations synced for this invoice so a later re-sync can delete them even if the
-	// invoice's line items change (or are recreated with new ids) in the meantime.
-	obligationIDs, err := s.syncedObligationIDs(ctx, inv.LineItems)
-	if err != nil {
-		return nil, err
 	}
 
 	if err := s.persistInvoiceMapping(ctx, existingMapping, inv, tabsContractID, tabsCustomerID, tabsInvoiceID, obligationIDs); err != nil {
@@ -163,8 +162,8 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 	}, nil
 }
 
-// existingInvoiceMapping returns the published Tabs mapping for the invoice, if any.
-func (s *InvoiceService) existingInvoiceMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, bool, error) {
+// getExistingInvoiceMapping returns the published Tabs mapping for the invoice, if any.
+func (s *InvoiceService) getExistingInvoiceMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, bool, error) {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = invoiceID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
@@ -201,9 +200,8 @@ func (s *InvoiceService) persistInvoiceMapping(ctx context.Context, existing *en
 	return s.mappingRepo.Create(ctx, mapping)
 }
 
-// tabsInvoiceMetadata builds the metadata recorded on an invoice mapping. obligation_ids records the
-// Tabs obligations synced for the invoice so a re-sync can delete them independently of the current
-// line items.
+// tabsInvoiceMetadata builds the metadata for an invoice mapping. obligation_ids lets a re-sync delete
+// the invoice's obligations independently of its current line items.
 func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, obligationIDs []string) map[string]interface{} {
 	return map[string]interface{}{
 		"contract_id":      contractID,
@@ -217,15 +215,14 @@ func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, oblig
 func (s *InvoiceService) deletePreviousObligations(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping, inv *invoice.Invoice, contractID string) error {
 	obligationIDs := metadataStrings(mapping.Metadata, "obligation_ids")
 
-	// Match the line-item mappings to drop by obligation id, so mappings for removed/recreated line
-	// items are found too. Fall back to the current line items for invoices mapped before obligation
-	// ids were recorded.
+	// Prefer matching by obligation id (catches removed/recreated line items); fall back to the current
+	// line items for invoices mapped before obligation ids were recorded.
 	var lineItemMappings []*entityintegrationmapping.EntityIntegrationMapping
 	var err error
 	if len(obligationIDs) > 0 {
-		lineItemMappings, err = s.mappingsByObligationIDs(ctx, obligationIDs)
+		lineItemMappings, err = s.getMappingsByObligationIDs(ctx, obligationIDs)
 	} else {
-		lineItemMappings, err = s.lineItemObligationMappings(ctx, inv.LineItems)
+		lineItemMappings, err = s.getLineItemObligationMappings(ctx, inv.LineItems)
 		obligationIDs = distinctObligationIDs(lineItemMappings)
 	}
 	if err != nil {
@@ -252,20 +249,8 @@ func (s *InvoiceService) deletePreviousObligations(ctx context.Context, mapping 
 	return nil
 }
 
-// syncedObligationIDs returns the distinct Tabs obligation ids currently mapped to the invoice's line
-// items, i.e. the obligations just synced.
-func (s *InvoiceService) syncedObligationIDs(ctx context.Context, lineItems []*invoice.InvoiceLineItem) ([]string, error) {
-	mappings, err := s.lineItemObligationMappings(ctx, lineItems)
-	if err != nil {
-		return nil, err
-	}
-	return distinctObligationIDs(mappings), nil
-}
-
-// mappingsByObligationIDs returns the published line-item -> Tabs-obligation mappings whose obligation
-// (provider entity) id is in the given set. Obligation ids are unique per Tabs obligation, so this
-// scopes to a single invoice's obligations.
-func (s *InvoiceService) mappingsByObligationIDs(ctx context.Context, obligationIDs []string) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+// getMappingsByObligationIDs returns the line-item mappings whose obligation id is in the given set.
+func (s *InvoiceService) getMappingsByObligationIDs(ctx context.Context, obligationIDs []string) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	if len(obligationIDs) == 0 {
 		return nil, nil
 	}
@@ -279,8 +264,7 @@ func (s *InvoiceService) mappingsByObligationIDs(ctx context.Context, obligation
 	return s.mappingRepo.List(ctx, filter)
 }
 
-// distinctObligationIDs returns the distinct non-empty obligation (provider entity) ids from the
-// given line-item mappings.
+// distinctObligationIDs returns the distinct non-empty obligation ids from the line-item mappings.
 func distinctObligationIDs(mappings []*entityintegrationmapping.EntityIntegrationMapping) []string {
 	ids := make([]string, 0, len(mappings))
 	for _, m := range mappings {
@@ -289,6 +273,15 @@ func distinctObligationIDs(mappings []*entityintegrationmapping.EntityIntegratio
 		}
 	}
 	return lo.Uniq(ids)
+}
+
+// metadataString safely reads a string value from a mapping's metadata.
+func metadataString(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, _ := m[key].(string)
+	return v
 }
 
 // metadataStrings reads a string slice from a mapping's metadata, tolerating the []interface{} form
@@ -313,9 +306,8 @@ func metadataStrings(m map[string]interface{}, key string) []string {
 	}
 }
 
-// ensureCustomer guarantees a flexprice-customer -> tabs-customer mapping exists, creating the
-// customer in Tabs (async job) if needed, and returns the Tabs customer id. It is idempotent:
-// if a mapping already exists it is returned without calling Tabs.
+// ensureCustomer returns the Tabs customer id for a flexprice customer, creating it (async job) and
+// mapping it on first use. Idempotent: an existing mapping is returned without calling Tabs.
 func (s *InvoiceService) ensureCustomer(ctx context.Context, cust *customer.Customer, currency string) (string, error) {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = cust.ID
@@ -372,9 +364,8 @@ func (s *InvoiceService) ensureCustomer(ctx context.Context, cust *customer.Cust
 	return tabsCustomerID, nil
 }
 
-// ensureContract guarantees a flexprice-subscription -> tabs-contract mapping exists, creating
-// the contract in Tabs (synchronous) if needed, and returns the Tabs contract id. It is
-// idempotent: if a mapping already exists it is returned without calling Tabs.
+// ensureContract returns the Tabs contract id for a flexprice subscription, creating and mapping it on
+// first use. Idempotent: an existing mapping is returned without calling Tabs.
 func (s *InvoiceService) ensureContract(ctx context.Context, subscriptionID, tabsCustomerID string) (string, error) {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = subscriptionID
@@ -391,15 +382,14 @@ func (s *InvoiceService) ensureContract(ctx context.Context, subscriptionID, tab
 	}
 
 	contract, err := s.client.CreateContract(ctx, CreateContractRequest{
-		Name:       s.contractName(ctx, subscriptionID),
+		Name:       s.getContractName(ctx, subscriptionID),
 		CustomerID: tabsCustomerID,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	// The contract is created in NEW status; mark it PROCESSED before persisting the mapping so
-	// a mapping only ever records a fully-processed contract.
+	// Contracts are created in NEW status; move to PROCESSED before mapping it.
 	if err = s.client.MarkContractProcessed(ctx, contract.Payload.ID); err != nil {
 		return "", err
 	}
@@ -422,9 +412,8 @@ func (s *InvoiceService) ensureContract(ctx context.Context, subscriptionID, tab
 	return contract.Payload.ID, nil
 }
 
-// contractName derives the Tabs contract name from the subscription's plan name, falling back
-// to a subscription-id based name if the subscription or plan cannot be resolved.
-func (s *InvoiceService) contractName(ctx context.Context, subscriptionID string) string {
+// getContractName is the subscription's plan name, or a subscription-id based fallback if unresolved.
+func (s *InvoiceService) getContractName(ctx context.Context, subscriptionID string) string {
 	fallback := fmt.Sprintf("Flexprice Subscription %s", subscriptionID)
 
 	sub, err := s.subRepo.Get(ctx, subscriptionID)
@@ -438,89 +427,219 @@ func (s *InvoiceService) contractName(ctx context.Context, subscriptionID string
 	return pl.Name
 }
 
-// syncObligations creates Tabs obligations for an invoice's line items on the given contract.
-// Line items are grouped by the Tabs product their price maps to (a product is auto-created and
-// mapped when the price isn't mapped yet); each product group is aggregated into a single
-// obligation whose amount is the sum of the group's line items.
+// syncObligations creates at most two obligations for an invoice — one fixed, one usage — on the
+// environment's shared category products, and returns the distinct obligation ids now backing the
+// invoice (this run's plus any from an earlier partial attempt) for recording on the invoice mapping.
 //
-// It is idempotent and safe to retry after a partial failure: after each obligation is created,
-// a line-item -> obligation mapping is persisted for every line item in the group, and any group
-// whose line items are already mapped is skipped on a subsequent run. This prevents a retry (e.g.
-// when a later group's CreateObligation fails) from duplicating obligations already pushed to Tabs.
-func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoice, contractID string) (err error) {
+// Idempotent and retry-safe: each obligation's line-item mappings are persisted, so a category already
+// mapped by a prior attempt is skipped rather than duplicated. Categories that net to zero (fully
+// covered by prepaid credits/payments) create no obligation.
+func (s *InvoiceService) syncObligations(ctx context.Context, inv *invoice.Invoice, contractID string) ([]string, error) {
 	if len(inv.LineItems) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	// The Tabs product name/description and the obligation cadence all come from the price
-	// (bulk-loaded by PriceID), not the invoice/subscription line item.
-	pricesByID, err := s.pricesByID(ctx, inv.LineItems)
-	if err != nil {
-		return err
-	}
-
-	// Resolve every referenced price to a Tabs product id, creating (and mapping) a product in Tabs
-	// for any price that isn't mapped yet.
-	productByPrice, err := s.ensureProducts(ctx, inv.LineItems, pricesByID)
-	if err != nil {
-		return err
-	}
-
-	// Line items already pushed to a Tabs obligation on a previous (possibly partial) attempt.
-	syncedLineItems, err := s.syncedLineItemIDs(ctx, inv.LineItems)
-	if err != nil {
-		return err
-	}
-
-	// Group line items by Tabs product id and emit one obligation per group. The billingSchedule
-	// startDate is the invoice issue date.
-	billingStartDate := lo.FromPtr(inv.IssueDate)
-
-	itemsByProduct := groupByProduct(inv.LineItems, productByPrice)
-	for productID, items := range itemsByProduct {
-		// A product group's obligation is created by a single atomic call, so if any of its line
-		// items is already mapped the whole group was synced on a prior attempt — skip it.
-		if groupAlreadySynced(items, syncedLineItems) {
-			continue
-		}
-
-		// Resolve the obligation fields from the group before building the request. Cadence comes
-		// from the price; total and the service period come from the items.
-		cadence := pricesByID[lo.FromPtr(items[0].PriceID)].InvoiceCadence
-		total, serviceStart, serviceEnd := aggregateLineItems(items)
-
-		req := buildObligation(billingStartDate, productID, cadence, total, serviceStart, serviceEnd)
-		resp, cErr := s.client.CreateObligation(ctx, contractID, req)
-		if cErr != nil {
-			return cErr
-		}
-
-		// Record the line-item -> obligation mapping so a retry skips this group.
-		if err = s.mapLineItemsToObligation(ctx, items, resp.Payload.ID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// syncedLineItemIDs returns the set of the invoice's line item ids that already carry a Tabs
-// obligation mapping, i.e. were synced on a previous attempt.
-func (s *InvoiceService) syncedLineItemIDs(ctx context.Context, lineItems []*invoice.InvoiceLineItem) (map[string]struct{}, error) {
-	mappings, err := s.lineItemObligationMappings(ctx, lineItems)
+	productByCategory, err := s.resolveCategoryProducts(ctx, inv.LineItems)
 	if err != nil {
 		return nil, err
 	}
-	synced := make(map[string]struct{}, len(mappings))
-	for _, m := range mappings {
-		synced[m.EntityID] = struct{}{}
+
+	// Line items (and obligations) already mapped by a previous, possibly partial, attempt. The line-item
+	// set skips re-creating an already-synced category; the obligation ids seed the returned set.
+	existingMappings, err := s.getLineItemObligationMappings(ctx, inv.LineItems)
+	if err != nil {
+		return nil, err
 	}
-	return synced, nil
+	syncedLineItems := make(map[string]struct{}, len(existingMappings))
+	for _, m := range existingMappings {
+		syncedLineItems[m.EntityID] = struct{}{}
+	}
+	obligationIDs := distinctObligationIDs(existingMappings)
+
+	billingStartDate := lo.FromPtr(inv.IssueDate)
+	itemsByCategory := groupLineItemsByCategory(inv.LineItems)
+
+	grossFixed, fixedStart, fixedEnd := aggregateLineItems(itemsByCategory[categoryFixed])
+	grossUsage, usageStart, usageEnd := aggregateLineItems(itemsByCategory[categoryUsage])
+
+	// Apply prepaid credits + payments to usage first, then the remainder to fixed (no taxes/discounts
+	// here). Clamped at 0, so netUsage + netFixed == invoice amount remaining.
+	paidAmount := inv.TotalPrepaidCreditsApplied.Add(inv.AmountPaid)
+	netUsage := decimal.Max(grossUsage.Sub(paidAmount), decimal.Zero)
+	creditLeft := decimal.Max(paidAmount.Sub(grossUsage), decimal.Zero)
+	netFixed := decimal.Max(grossFixed.Sub(creditLeft), decimal.Zero)
+
+	amountByCategory := map[chargeCategory]decimal.Decimal{
+		categoryFixed: netFixed,
+		categoryUsage: netUsage,
+	}
+	periodByCategory := map[chargeCategory][2]time.Time{
+		categoryFixed: {fixedStart, fixedEnd},
+		categoryUsage: {usageStart, usageEnd},
+	}
+
+	for category, items := range itemsByCategory {
+		// Already synced by a prior attempt, or nothing to bill.
+		if groupAlreadySynced(items, syncedLineItems) {
+			continue
+		}
+		amount := amountByCategory[category]
+		if !amount.IsPositive() {
+			continue
+		}
+
+		period := periodByCategory[category]
+		req := buildObligation(billingStartDate, productByCategory[category], category.cadence(), amount, period[0], period[1])
+		resp, cErr := s.client.CreateObligation(ctx, contractID, req)
+		if cErr != nil {
+			return nil, cErr
+		}
+		obligationIDs = append(obligationIDs, resp.Payload.ID)
+
+		// Map the line items to the obligation so a retry skips this category.
+		if err = s.mapLineItemsToObligation(ctx, items, resp.Payload.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	return lo.Uniq(obligationIDs), nil
 }
 
-// lineItemObligationMappings returns the published line-item -> Tabs-obligation mappings for the
-// invoice's line items (empty when the invoice has no line items).
-func (s *InvoiceService) lineItemObligationMappings(ctx context.Context, lineItems []*invoice.InvoiceLineItem) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+// categorizeLineItem classifies a line item by PriceType; anything not explicitly USAGE falls back to
+// fixed, so a nil/unknown type is never dropped or billed as usage.
+func categorizeLineItem(li *invoice.InvoiceLineItem) chargeCategory {
+	if lo.FromPtr(li.PriceType) == string(types.PRICE_TYPE_USAGE) {
+		return categoryUsage
+	}
+	return categoryFixed
+}
+
+// productName is the name of the Tabs product backing this category in an environment.
+func (c chargeCategory) productName() string {
+	if c == categoryUsage {
+		return "Usage Charges"
+	}
+	return "Fixed Charges"
+}
+
+// cadence maps a category to the invoice cadence its obligation bills on: fixed charges in advance,
+// usage charges in arrears. invoiceDateStrategy turns this into the Tabs invoiceDateStrategy.
+func (c chargeCategory) cadence() types.InvoiceCadence {
+	if c == categoryUsage {
+		return types.InvoiceCadenceArrear
+	}
+	return types.InvoiceCadenceAdvance
+}
+
+// groupLineItemsByCategory groups the invoice's line items into the fixed and usage categories (at most two groups).
+func groupLineItemsByCategory(lineItems []*invoice.InvoiceLineItem) map[chargeCategory][]*invoice.InvoiceLineItem {
+	itemsByCategory := make(map[chargeCategory][]*invoice.InvoiceLineItem, 2)
+	for _, li := range lineItems {
+		category := categorizeLineItem(li)
+		itemsByCategory[category] = append(itemsByCategory[category], li)
+	}
+	return itemsByCategory
+}
+
+// resolveCategoryProducts returns the Tabs product id per category the invoice touches. Each environment
+// has at most two products (fixed, usage), reused across invoices: a product is created only when the
+// environment has none for that category, and every referenced price is mapped to its category product.
+func (s *InvoiceService) resolveCategoryProducts(ctx context.Context, lineItems []*invoice.InvoiceLineItem) (map[chargeCategory]string, error) {
+	categoryByPrice := make(map[string]chargeCategory)
+	neededCategories := make(map[chargeCategory]struct{})
+	for _, li := range lineItems {
+		category := categorizeLineItem(li)
+		neededCategories[category] = struct{}{}
+		if li.PriceID != nil && *li.PriceID != "" {
+			categoryByPrice[*li.PriceID] = category
+		}
+	}
+
+	// The environment's price -> product mappings yield each category's existing product (from the
+	// metadata) and the prices already mapped.
+	existing, err := s.mappingRepo.List(ctx, newTabsPriceMappingFilter())
+	if err != nil {
+		return nil, err
+	}
+	productByCategory := make(map[chargeCategory]string, 2)
+	mappedPrices := make(map[string]struct{}, len(existing))
+	for _, m := range existing {
+		mappedPrices[m.EntityID] = struct{}{}
+		if category := metadataString(m.Metadata, "tabs_category"); category != "" {
+			productByCategory[chargeCategory(category)] = m.ProviderEntityID
+		}
+	}
+
+	// Create a product for any needed category the environment doesn't have yet.
+	for category := range neededCategories {
+		if productByCategory[category] == "" {
+			productID, cErr := s.createCategoryProduct(ctx, category)
+			if cErr != nil {
+				return nil, cErr
+			}
+			productByCategory[category] = productID
+		}
+	}
+
+	// Map any not-yet-mapped price to its category product.
+	for priceID, category := range categoryByPrice {
+		if _, ok := mappedPrices[priceID]; ok {
+			continue
+		}
+		if err = s.mapPriceToProduct(ctx, priceID, productByCategory[category], category); err != nil {
+			return nil, err
+		}
+	}
+
+	return productByCategory, nil
+}
+
+// newTabsPriceMappingFilter returns the filter for the environment's published price -> Tabs-product mappings.
+func newTabsPriceMappingFilter() *types.EntityIntegrationMappingFilter {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityType = types.IntegrationEntityTypePrice
+	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	return filter
+}
+
+// createCategoryProduct creates the shared Tabs product backing a category and returns its id.
+func (s *InvoiceService) createCategoryProduct(ctx context.Context, category chargeCategory) (string, error) {
+	resp, err := s.client.CreateProduct(ctx, CreateProductRequest{
+		Status:      "ACTIVE",
+		Name:        category.productName(),
+		Description: category.productName(),
+	})
+	if err != nil {
+		return "", err
+	}
+	s.logger.Info(ctx, "tabs: category product created",
+		"category", string(category), "tabs_product_id", resp.Payload.ID)
+	return resp.Payload.ID, nil
+}
+
+// mapPriceToProduct persists a price -> Tabs-product mapping, recording the category in the metadata.
+func (s *InvoiceService) mapPriceToProduct(ctx context.Context, priceID, productID string, category chargeCategory) error {
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         priceID,
+		EntityType:       types.IntegrationEntityTypePrice,
+		ProviderType:     string(types.SecretProviderTabs),
+		ProviderEntityID: productID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+		Metadata:         map[string]interface{}{"tabs_category": string(category)},
+	}
+	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
+		return err
+	}
+	s.logger.Info(ctx, "tabs: price mapped to category product",
+		"flexprice_price_id", priceID, "tabs_product_id", productID, "category", string(category))
+	return nil
+}
+
+// getLineItemObligationMappings returns the line-item -> Tabs-obligation mappings for the line items.
+func (s *InvoiceService) getLineItemObligationMappings(ctx context.Context, lineItems []*invoice.InvoiceLineItem) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	ids := lineItemIDs(lineItems)
 	if len(ids) == 0 {
 		return nil, nil
@@ -535,8 +654,8 @@ func (s *InvoiceService) lineItemObligationMappings(ctx context.Context, lineIte
 	return s.mappingRepo.List(ctx, filter)
 }
 
-// groupAlreadySynced reports whether a product group was already synced to Tabs. A group's
-// obligation is created atomically, so a single already-mapped line item implies the whole group.
+// groupAlreadySynced reports whether a category was already synced — one mapped line item implies all,
+// since its obligation is created atomically.
 func groupAlreadySynced(items []*invoice.InvoiceLineItem, synced map[string]struct{}) bool {
 	for _, li := range items {
 		if _, ok := synced[li.ID]; ok {
@@ -546,8 +665,7 @@ func groupAlreadySynced(items []*invoice.InvoiceLineItem, synced map[string]stru
 	return false
 }
 
-// mapLineItemsToObligation persists a line-item -> Tabs-obligation mapping for every line item in
-// a synced group, making the obligation retrievable (and the group skippable) on a retry.
+// mapLineItemsToObligation persists a line-item -> Tabs-obligation mapping for every line item.
 func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*invoice.InvoiceLineItem, obligationID string) error {
 	for _, li := range items {
 		if li.ID == "" {
@@ -569,22 +687,7 @@ func (s *InvoiceService) mapLineItemsToObligation(ctx context.Context, items []*
 	return nil
 }
 
-// groupByProduct groups line items by the Tabs product their price maps to. Line items whose
-// price has no resolvable product are skipped.
-func groupByProduct(lineItems []*invoice.InvoiceLineItem, productByPrice map[string]string) map[string][]*invoice.InvoiceLineItem {
-	itemsByProduct := make(map[string][]*invoice.InvoiceLineItem)
-	for _, li := range lineItems {
-		productID := productByPrice[lo.FromPtr(li.PriceID)]
-		if productID == "" {
-			continue
-		}
-		itemsByProduct[productID] = append(itemsByProduct[productID], li)
-	}
-	return itemsByProduct
-}
-
-// aggregateLineItems sums the line items' amounts and widens the service period to cover every
-// item, returning the group total and the earliest start / latest end.
+// aggregateLineItems returns the sum of the line items' amounts and the service period of the first item.
 func aggregateLineItems(items []*invoice.InvoiceLineItem) (total decimal.Decimal, serviceStart, serviceEnd time.Time) {
 	total = decimal.Zero
 	serviceStart = lo.FromPtr(items[0].PeriodStart)
@@ -595,77 +698,7 @@ func aggregateLineItems(items []*invoice.InvoiceLineItem) (total decimal.Decimal
 	return total, serviceStart, serviceEnd
 }
 
-// ensureProducts resolves every line item's price to a Tabs product id. Existing price -> product
-// mappings are loaded in one query; any price without a mapping gets a product created in Tabs and
-// a mapping persisted. Returns a priceID -> tabsProductID map.
-func (s *InvoiceService) ensureProducts(ctx context.Context, lineItems []*invoice.InvoiceLineItem, pricesByID map[string]*price.Price) (map[string]string, error) {
-	priceIDs := lineItemPriceIDs(lineItems)
-	out := make(map[string]string, len(priceIDs))
-	if len(priceIDs) == 0 {
-		return out, nil
-	}
-
-	filter := types.NewNoLimitEntityIntegrationMappingFilter()
-	filter.EntityIDs = priceIDs
-	filter.EntityType = types.IntegrationEntityTypePrice
-	filter.ProviderTypes = []string{string(types.SecretProviderTabs)}
-	filter.Status = lo.ToPtr(types.StatusPublished)
-
-	existing, err := s.mappingRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range existing {
-		out[m.EntityID] = m.ProviderEntityID
-	}
-
-	for _, priceID := range priceIDs {
-		if _, ok := out[priceID]; ok {
-			continue
-		}
-		productID, cErr := s.createProduct(ctx, priceID, pricesByID[priceID])
-		if cErr != nil {
-			return nil, cErr
-		}
-		out[priceID] = productID
-	}
-	return out, nil
-}
-
-// createProduct creates a Tabs product for a flexprice price and persists the price -> product
-// mapping, returning the new Tabs product id.
-func (s *InvoiceService) createProduct(ctx context.Context, priceID string, p *price.Price) (string, error) {
-	name, description := productNameDescription(priceID, p)
-	resp, err := s.client.CreateProduct(ctx, CreateProductRequest{
-		Status:      "ACTIVE",
-		Name:        name,
-		Description: description,
-	})
-	if err != nil {
-		return "", err
-	}
-	productID := resp.Payload.ID
-
-	mapping := &entityintegrationmapping.EntityIntegrationMapping{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
-		EntityID:         priceID,
-		EntityType:       types.IntegrationEntityTypePrice,
-		ProviderType:     string(types.SecretProviderTabs),
-		ProviderEntityID: productID,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
-	}
-	if err = s.mappingRepo.Create(ctx, mapping); err != nil {
-		return "", err
-	}
-
-	s.logger.Info(ctx, "tabs: product created and mapped",
-		"flexprice_price_id", priceID, "tabs_product_id", productID)
-	return productID, nil
-}
-
-// fetchTabsInvoiceID looks up the Tabs invoices created for the given contract and obligation
-// issue date, returning the first Tabs invoice id (empty when none exist yet).
+// fetchTabsInvoiceID returns the first Tabs invoice for the contract + issue date (empty if none yet).
 func (s *InvoiceService) fetchTabsInvoiceID(ctx context.Context, contractID string, issueDate string) (string, error) {
 	resp, err := s.client.ListInvoicesByContract(ctx, contractID, issueDate)
 	if err != nil {
@@ -677,24 +710,7 @@ func (s *InvoiceService) fetchTabsInvoiceID(ctx context.Context, contractID stri
 	return resp.Payload.Data[0].ID, nil
 }
 
-// pricesByID bulk-loads the invoice line items' prices and maps priceID -> price.
-func (s *InvoiceService) pricesByID(ctx context.Context, lineItems []*invoice.InvoiceLineItem) (map[string]*price.Price, error) {
-	priceIDs := lineItemPriceIDs(lineItems)
-	out := make(map[string]*price.Price, len(priceIDs))
-	if len(priceIDs) == 0 {
-		return out, nil
-	}
-	prices, err := s.priceRepo.List(ctx, types.NewNoLimitPriceFilter().WithPriceIDs(priceIDs))
-	if err != nil {
-		return nil, err
-	}
-	for _, p := range prices {
-		out[p.ID] = p
-	}
-	return out, nil
-}
-
-// buildObligation maps an aggregated product group's resolved fields to a Tabs obligation request.
+// buildObligation maps an aggregated category's resolved fields to a Tabs obligation request.
 func buildObligation(billingStartDate time.Time, productID string, cadence types.InvoiceCadence, total decimal.Decimal, serviceStart, serviceEnd time.Time) CreateObligationRequest {
 	return CreateObligationRequest{
 		ServiceStartDate: serviceStart.Format(tabsDateLayout),
@@ -721,11 +737,6 @@ func buildObligation(billingStartDate time.Time, productID string, cadence types
 	}
 }
 
-const (
-	invoiceDateStrategyArrears       = "ARREARS"
-	invoiceDateStrategyFirstOfPeriod = "FIRST_OF_PERIOD"
-)
-
 // invoiceDateStrategy maps a flexprice invoice cadence to a Tabs invoiceDateStrategy.
 func invoiceDateStrategy(cadence types.InvoiceCadence) string {
 	if cadence == types.InvoiceCadenceAdvance {
@@ -743,31 +754,4 @@ func lineItemIDs(lineItems []*invoice.InvoiceLineItem) []string {
 		}
 	}
 	return lo.Uniq(ids)
-}
-
-// lineItemPriceIDs returns the distinct non-empty price ids referenced by the line items.
-func lineItemPriceIDs(lineItems []*invoice.InvoiceLineItem) []string {
-	ids := make([]string, 0, len(lineItems))
-	for _, li := range lineItems {
-		if li.PriceID != nil && *li.PriceID != "" {
-			ids = append(ids, *li.PriceID)
-		}
-	}
-	return lo.Uniq(ids)
-}
-
-// productNameDescription derives the Tabs product name and description from the price, falling back
-// to the price id when the price is missing or unnamed.
-func productNameDescription(priceID string, p *price.Price) (name, description string) {
-	name = priceID
-	if p != nil && p.DisplayName != "" {
-		name = p.DisplayName
-	}
-	if p != nil {
-		description = p.Description
-	}
-	if description == "" {
-		description = name
-	}
-	return name, description
 }
