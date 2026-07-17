@@ -764,6 +764,7 @@ func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
 	// Initialize required services
 	invoiceService := NewInvoiceService(s.ServiceParams)
+	taxService := NewTaxService(s.ServiceParams)
 
 	settingsService := &settingsService{
 		ServiceParams: s.ServiceParams,
@@ -958,7 +959,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 		// Pull the customer's auto-apply tax rates and stamp them on the top-up invoice so
 		// the purchase gets taxed the same as any other one-off charge for that customer.
-		taxService := NewTaxService(s.ServiceParams)
 		taxFilter := types.NewNoLimitTaxAssociationFilter()
 		taxFilter.EntityType = types.TaxRateEntityTypeCustomer
 		taxFilter.EntityID = w.CustomerID

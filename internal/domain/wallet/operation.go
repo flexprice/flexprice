@@ -137,6 +137,15 @@ func (w *WalletOperation) Validate() error {
 		}
 	}
 
+	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(time.Now().UTC()) {
+		return ierr.NewError("bonus expiry date cannot be in the past").
+			WithHint("Bonus expiry date must be in the future").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_expiry_date": w.BonusExpiryDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
