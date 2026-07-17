@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -60,20 +60,22 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 		return
 	}
 
-	// Create filter to find expired credits (expired at least 6 hours ago - grace period after expiry).
+	// Create filter to find expired credits.
 	filter := types.NewNoLimitWalletTransactionFilter()
 	filter.Type = lo.ToPtr(types.TransactionTypeCredit)
 	filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
-	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC().Add(-6 * time.Hour))
+	// Pick credits already past expiry that still hold available credit. No grace buffer: ExpireCredits
+	// now tries to consume them into invoices first (best-effort), then expires whatever remains.
+	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC())
 	filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
 
 	response := &dto.ExpiredCreditsResponse{
-		Items:                          make([]*dto.ExpiredCreditsResponseItem, 0),
-		Total:                          0,
-		Success:                        0,
-		Failed:                         0,
-		SkippedDueToActiveSubscription: 0,
-		SkippedDueToActiveInvoice:      0,
+		Items:                       make([]*dto.ExpiredCreditsResponseItem, 0),
+		Total:                       0,
+		Success:                     0,
+		Failed:                      0,
+		CreditsConsumedIntoInvoices: 0,
+		AmountConsumedIntoInvoices:  decimal.Zero,
 	}
 
 	for _, tenant := range tenants {
@@ -91,13 +93,13 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environment.ID)
 
 			tenantResponse := &dto.ExpiredCreditsResponseItem{
-				TenantID:                       tenant.ID,
-				EnvironmentID:                  environment.ID,
-				Count:                          0,
-				Success:                        0,
-				Failed:                         0,
-				SkippedDueToActiveSubscription: 0,
-				SkippedDueToActiveInvoice:      0,
+				TenantID:                    tenant.ID,
+				EnvironmentID:               environment.ID,
+				Count:                       0,
+				Success:                     0,
+				Failed:                      0,
+				CreditsConsumedIntoInvoices: 0,
+				AmountConsumedIntoInvoices:  decimal.Zero,
 			}
 
 			transactions, err := h.walletService.ListWalletTransactionsByFilter(ctx, filter)
@@ -121,20 +123,17 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 					response.Failed++
 					continue
 				}
+				if result.AmountConsumedIntoInvoices.GreaterThan(decimal.Zero) {
+					tenantResponse.CreditsConsumedIntoInvoices++
+					tenantResponse.AmountConsumedIntoInvoices = tenantResponse.AmountConsumedIntoInvoices.Add(result.AmountConsumedIntoInvoices)
+					response.CreditsConsumedIntoInvoices++
+					response.AmountConsumedIntoInvoices = response.AmountConsumedIntoInvoices.Add(result.AmountConsumedIntoInvoices)
+				}
 				if result.Expired {
 					tenantResponse.Success++
 					response.Success++
 					h.logger.Info(c.Request.Context(), "expired credits successfully",
 						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
-					continue
-				}
-				switch result.SkipReason {
-				case types.CreditExpirySkipReasonActiveSubscription:
-					tenantResponse.SkippedDueToActiveSubscription++
-					response.SkippedDueToActiveSubscription++
-				case types.CreditExpirySkipReasonActiveInvoice:
-					tenantResponse.SkippedDueToActiveInvoice++
-					response.SkippedDueToActiveInvoice++
 				}
 			}
 
