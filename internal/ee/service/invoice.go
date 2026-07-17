@@ -3946,6 +3946,15 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 		return nil, err
 	}
 
+	// Parse and validate expand up front so a bad token 400s instead of silently no-op.
+	var expand types.Expand
+	if req.Expand != "" {
+		expand = types.NewExpand(req.Expand)
+		if err := expand.Validate(types.InvoiceExpandConfig); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get the invoice first
 	invoice, err := s.GetInvoice(ctx, req.ID)
 	if err != nil {
@@ -3966,6 +3975,21 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 		if req.ForceRuntimeRecalculation {
 			s.recalculateInvoiceTotals(invoice)
 		}
+	}
+
+	// Attach per-rate details to each applied tax when the caller asked for it.
+	// GetInvoice always returns `taxes`, but with only IDs + amounts; the tax_rate object
+	// (name/code/percentage/fixed value) is nil unless we re-fetch with expand.
+	if expand.Has(types.ExpandTaxApplied) && expand.GetNested(types.ExpandTaxApplied).Has(types.ExpandTaxRate) {
+		taxFilter := types.NewNoLimitTaxAppliedFilter()
+		taxFilter.EntityType = types.TaxRateEntityTypeInvoice
+		taxFilter.EntityID = invoice.ID
+		taxFilter.QueryFilter.Expand = lo.ToPtr(string(types.ExpandTaxRate))
+		taxes, err := NewTaxService(s.ServiceParams).ListTaxApplied(ctx, taxFilter)
+		if err != nil {
+			return nil, err
+		}
+		invoice.WithTaxes(taxes.Items)
 	}
 
 	return invoice, nil

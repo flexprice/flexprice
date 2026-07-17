@@ -388,6 +388,11 @@ type BonusCreditsSlab struct {
 	Threshold decimal.Decimal    `json:"threshold" validate:"required"`
 	Operator  FilterOperatorType `json:"operator" validate:"required"`
 	Bonus     BonusValue         `json:"bonus" validate:"required"`
+	// ExpirationDuration + ExpirationDurationUnit optionally set the bonus tx expiry when this
+	// slab resolves the bonus (expiry = now + duration). Both must be set together, or neither.
+	// Skipped if the caller passes bonus_credits_expiry_date_utc explicitly on the top-up request.
+	ExpirationDuration     *int                           `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 }
 
 // BonusCreditsTopupConfig defines slab-based bonus-credit rules applied to a purchased wallet top-up.
@@ -435,6 +440,21 @@ func (c BonusCreditsTopupConfig) Validate() error {
 					"bonus_value": slab.Bonus.Value,
 				}).
 				Mark(ierr.ErrValidation)
+		}
+		if (slab.ExpirationDuration == nil) != (slab.ExpirationDurationUnit == nil) {
+			return ierr.NewError("bonus_credits_topup_config: expiration_duration and expiration_duration_unit must be set together").
+				WithHint("Provide both fields, or neither (bonus never expires)").
+				Mark(ierr.ErrValidation)
+		}
+		if slab.ExpirationDuration != nil {
+			if *slab.ExpirationDuration <= 0 {
+				return ierr.NewError("bonus_credits_topup_config: expiration_duration must be greater than 0").
+					WithHint("Duration must be a positive integer").
+					Mark(ierr.ErrValidation)
+			}
+			if err := slab.ExpirationDurationUnit.Validate(); err != nil {
+				return err
+			}
 		}
 		if i > 0 && !c.Slabs[i-1].Threshold.GreaterThan(slab.Threshold) {
 			return ierr.NewError("bonus_credits_topup_config: slabs must be sorted descending by threshold").

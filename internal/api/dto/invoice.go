@@ -1367,6 +1367,12 @@ type GetInvoiceWithBreakdownRequest struct {
 
 	// Force Runtime recalculation of usage breakdown
 	ForceRuntimeRecalculation bool `json:"force_runtime_recalculation,omitempty" default:"false"`
+
+	// Expand is a comma-separated list of related fields to include on the response.
+	// Currently supports: "tax_applied.tax_rate" to attach the underlying rate details
+	// (name/code/percentage) to each entry in `taxes` so callers can render the per-rate
+	// calculation without a separate lookup.
+	Expand string `json:"expand,omitempty"`
 }
 
 func (r *GetInvoiceWithBreakdownRequest) Validate() error {

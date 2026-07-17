@@ -123,11 +123,12 @@ var (
 
 	// InvoiceExpandConfig defines what can be expanded on an invoice
 	InvoiceExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandSubscription, ExpandCustomer, ExpandCouponApplications},
+		AllowedFields: []ExpandableField{ExpandSubscription, ExpandCustomer, ExpandCouponApplications, ExpandTaxApplied},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandSubscription:       {ExpandPlan},
 			ExpandCustomer:           {},
 			ExpandCouponApplications: {ExpandCoupon},
+			ExpandTaxApplied:         {ExpandTaxRate},
 		},
 	}
 
