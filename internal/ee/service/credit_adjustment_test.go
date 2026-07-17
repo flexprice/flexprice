@@ -1140,12 +1140,15 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Sto
 func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_MostRecentPeriodFirst() {
 	sub := s.createActiveStandaloneSubscription("sub_period_order", "USD")
 
-	// Create the EARLIER-period invoice first (so a naive "repo list order" would process it first if the
-	// sort were a no-op), and the LATER-period invoice second.
-	earlierPeriodInv := s.createDraftSubInvoiceWithUsageLineItem(
-		"inv_period_order_earlier", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow().Add(-48*time.Hour))
+	// Create the LATER-period invoice first (so its CreatedAt is earlier), and the EARLIER-period invoice
+	// second (so its CreatedAt is later). This decouples CreatedAt order from PeriodStart order: if the sort
+	// by PeriodStart is a no-op, the repo's default CreatedAt DESC order would wrongly process the
+	// earlierPeriodInv first, causing it to get the credit. The sort must execute correctly to achieve the
+	// desired "most recent period first" behavior.
 	laterPeriodInv := s.createDraftSubInvoiceWithUsageLineItem(
 		"inv_period_order_later", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow())
+	earlierPeriodInv := s.createDraftSubInvoiceWithUsageLineItem(
+		"inv_period_order_earlier", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow().Add(-48*time.Hour))
 
 	w := s.createWalletWithCredit("wallet_period_order", "USD", decimal.Zero)
 	pastExpiry := s.GetNow().Add(-time.Hour)
