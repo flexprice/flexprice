@@ -53,7 +53,6 @@ type InvoiceService interface {
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, id string, forceGenerate bool) (string, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
-	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRealtimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error)
@@ -3008,10 +3007,9 @@ func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types
 	)
 }
 
-// reconcileLineItems updates existing line items in-place when sub_line_item_id matches,
-// inserts new ones, and archives unmatched old ones.
-// Falls back to delete+create when existing items have no sub_line_item_id (pre-migration data).
-// Credits/discounts are NOT applied here — call applyCreditsAndCouponsToInvoice after this returns.
+// reconcileLineItems syncs invoice line items to the new billing payload
+// (update-in-place by sub_line_item_id, or delete+create as fallback).
+// Does not apply credits or coupons.
 func (s *invoiceService) reconcileLineItems(
 	ctx context.Context,
 	inv *invoice.Invoice,
@@ -3118,156 +3116,6 @@ func (s *invoiceService) reconcileLineItems(
 	result = append(result, toUpdate...)
 	result = append(result, toInsert...)
 	return result, nil
-}
-
-// RecalculateInvoiceV2 recalculates a draft subscription invoice in-place (replaces line items, reapplies credits/coupons/taxes).
-func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
-	s.Logger.Info(ctx, "recalculating invoice v2 (draft)", "invoice_id", id)
-
-	// Get the invoice with its line items
-	inv, err := s.getInvoiceWithLineItems(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate invoice is in draft state
-	if inv.InvoiceStatus != types.InvoiceStatusDraft {
-		return nil, ierr.NewError("invoice is not in draft status").
-			WithHint("Only draft invoices can be recalculated").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id":     inv.ID,
-				"current_status": inv.InvoiceStatus,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate this is a subscription invoice
-	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
-		return nil, ierr.NewError("invoice is not a subscription invoice").
-			WithHint("Only subscription invoices can be recalculated").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id":   inv.ID,
-				"invoice_type": inv.InvoiceType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate period dates are available
-	if inv.PeriodStart == nil || inv.PeriodEnd == nil {
-		return nil, ierr.NewError("invoice period dates are missing").
-			WithHint("Invoice must have period start and end dates for recalculation").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Get sub with line items
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start transaction to update invoice atomically
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// STEP 2: Call PrepareSubscriptionInvoiceRequest for fresh calculation.
-		// Line items are reconciled after this call (update-in-place or delete+create).
-		billingService := NewBillingService(s.ServiceParams)
-
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
-
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, &dto.PrepareSubscriptionInvoiceRequestParams{
-			Subscription:   sub,
-			PeriodStart:    *inv.PeriodStart,
-			PeriodEnd:      *inv.PeriodEnd,
-			ReferencePoint: referencePoint,
-		})
-		if err != nil {
-			return err
-		}
-
-		// STEP 3: Update invoice totals, metadata, and customer ID
-		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
-		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
-		prevAmountDue := inv.AmountDue
-		inv.Total = newInvoiceReq.Total
-		inv.Subtotal = newInvoiceReq.Subtotal
-		inv.CustomerID = newInvoiceReq.CustomerID
-		inv.AmountDue = newInvoiceReq.AmountDue
-		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
-		inv.Description = newInvoiceReq.Description
-		if newInvoiceReq.Metadata != nil {
-			inv.Metadata = newInvoiceReq.Metadata
-		}
-
-		// Update payment status if amount due changed
-		if inv.AmountRemaining.IsZero() {
-			inv.PaymentStatus = types.PaymentStatusSucceeded
-		} else if inv.AmountPaid.IsZero() {
-			inv.PaymentStatus = types.PaymentStatusPending
-		} else {
-			inv.PaymentStatus = types.PaymentStatusPending // Partially paid
-		}
-
-		// STEP 4+5: Reconcile line items (update-in-place or delete+create fallback)
-		reconciledItems, err := s.reconcileLineItems(txCtx, inv, newInvoiceReq.LineItems)
-		if err != nil {
-			return err
-		}
-		inv.LineItems = reconciledItems
-
-		// STEP 6: Update the invoice with subtotal/totals from billing
-		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-			return err
-		}
-
-		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		computeReq := newInvoiceReq.ToComputeRequest()
-		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, computeReq); err != nil {
-			return err
-		}
-		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-			return err
-		}
-
-		// STEP 7: Apply taxes after recalculation
-		if err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
-			return err
-		}
-
-		s.Logger.Info(ctx, "successfully recalculated invoice with fresh calculation",
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID,
-			"old_amount_due", prevAmountDue,
-			"new_amount_due", newInvoiceReq.AmountDue,
-			"new_line_items", len(reconciledItems),
-			"recalculation_type", "complete_fresh_calculation")
-
-		return nil
-	})
-
-	if err != nil {
-		s.Logger.Error(ctx, "failed to recalculate invoice",
-			"error", err,
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID)
-		return nil, err
-	}
-
-	// Publish webhook event for invoice recalculation
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
-
-	// Finalize the invoice if requested
-	if finalize {
-		if err := s.FinalizeInvoice(ctx, id); err != nil {
-			s.Logger.Error(ctx, "failed to finalize invoice after recalculation",
-				"error", err,
-				"invoice_id", id)
-			return nil, err
-		}
-		s.Logger.Info(ctx, "successfully finalized invoice after recalculation", "invoice_id", id)
-	}
-
-	// Return updated invoice
-	return s.GetInvoice(ctx, id)
 }
 
 // RecalculateVoidedInvoice creates a fresh replacement invoice for a voided subscription invoice

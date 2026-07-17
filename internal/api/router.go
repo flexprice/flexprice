@@ -394,7 +394,6 @@ func NewRouter(
 			invoices.POST("/:id/payment/attempt", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
 			invoices.POST("/:id/recalculate", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoice)
-			invoices.POST("/:id/recalculate-v2", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.RecalculateInvoiceV2)
 			invoices.POST("/:id/comms/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerCommunication)
 			invoices.POST("/:id/webhook/trigger", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.TriggerWebhook)
 		}
