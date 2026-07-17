@@ -579,6 +579,189 @@ func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_Persists
 		"persisted value = %s, want 40 (spread must persist even with no new debit)", reloadedLineItem.PrepaidCreditsApplied.String())
 }
 
+// Gap 1 (non-zero starting authority): all the TestApplyExpiringCreditToInvoice_* tests above start
+// from inv.TotalPrepaidCreditsApplied == 0. Here the invoice already carries prior authority from a
+// real ApplyCreditsToInvoice call (a pooled/general credit, unrelated to the targeted expiring grant),
+// and the targeted expiring credit must add ON TOP of that, capped at the remaining room - not
+// overwrite it, and not ignore it when computing the ceiling.
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_AddsOnTopOfNonZeroAuthority() {
+	// 1. Draft invoice with one usage line item, ceiling 100 USD.
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_nonzero_authority", "USD", decimal.NewFromInt(100))
+
+	// 2. A general prepaid wallet credited with 50 USD, applied via the normal pooled path.
+	s.createWalletWithCredit("wallet_general_pool", "USD", decimal.NewFromInt(50))
+	result1, err := s.service.ApplyCreditsToInvoice(s.GetContext(), inv)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(result1.TotalPrepaidCreditsApplied),
+		"pooled call: expected 50 applied, got %s", result1.TotalPrepaidCreditsApplied.String())
+
+	// Persist the invoice-level authority, as the real caller is responsible for doing.
+	inv.TotalPrepaidCreditsApplied = result1.TotalPrepaidCreditsApplied
+	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+
+	// 3. Reload the invoice WITH its persisted line items (the 50 already applied is on the line
+	// item too, since ApplyCreditsToInvoice persists line items unconditionally).
+	reloadedInv := s.reloadInvoiceWithLineItems(inv.ID)
+	reloadedInv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied
+
+	// 4. A targeted, about-to-expire credit of 80 sitting on a DIFFERENT wallet.
+	targetWallet := s.createWalletWithCredit("wallet_targeted_expiry", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(targetWallet.ID, decimal.NewFromInt(80), &pastExpiry, nil)
+
+	// 5. Applying the expiring credit must only add the remaining room (100 - 50 = 50), not the full
+	// 80 available, and must not clobber the 50 already applied.
+	result2, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), reloadedInv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(100).Equal(result2.TotalPrepaidCreditsApplied),
+		"expected cumulative 100 applied (50 prior + 50 new, capped at ceiling), got %s", result2.TotalPrepaidCreditsApplied.String())
+
+	// 6. Only 50 of the 80 available was drawn from the source grant; 30 remains for the next invoice
+	// (or the eventual expiry sweep).
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(30).Equal(reloadedSource.CreditsAvailable),
+		"expected 30 remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
+}
+
+// Gap 2 (retry/idempotency-collision safety): calling applyExpiringCreditToInvoice twice with the
+// SAME (inv, source) pair - as a Temporal activity retry might, before anything about the invoice or
+// source is reloaded/mutated externally - must not double-debit the wallet.
+//
+// NOTE on which angle this covers: the function's own defense here is the additive ceiling check
+// (remainingCeiling := totalCeiling.Sub(inv.TotalPrepaidCreditsApplied)) - the first call mutates
+// inv.TotalPrepaidCreditsApplied in place, so the second call naturally computes remainingCeiling as
+// already-exhausted and amountToApply=0, and DebitWallet is never even invoked a second time. This is
+// the angle exercised below.
+//
+// The OTHER layer of protection - the deterministic per-(invoice,source) idempotency key colliding on
+// wallet_transactions' unique (tenant_id, environment_id, idempotency_key) index - is enforced only by
+// the real Postgres index. This suite runs against testutil's InMemoryWalletStore, whose CreateTransaction
+// does not replicate that uniqueness constraint (InMemoryWalletStore.GetTransactionByIdempotencyKey exists
+// as a lookup but nothing calls it to reject a duplicate insert), so a true collision on that index cannot
+// be reproduced here without a Postgres-backed test. The additive-ceiling angle below is what's actually
+// exercisable in this suite, and it is also the first line of defense in production (the idempotency key
+// is the backstop for the case where the ceiling math doesn't already prevent it, e.g. a concurrent/
+// interleaved retry racing on a stale in-memory inv copy).
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_RepeatedCallDoesNotDoubleDebit() {
+	// Ceiling equals the source grant exactly, so the first call fully exhausts both.
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_retry_safety", "USD", decimal.NewFromInt(60))
+
+	w := s.createWalletWithCredit("wallet_retry_safety", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(60), &pastExpiry, nil)
+
+	// First call: applies the full 60, draining both the ceiling and the source grant.
+	first, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(first.TotalPrepaidCreditsApplied),
+		"first call: expected 60 applied, got %s", first.TotalPrepaidCreditsApplied.String())
+
+	walletAfterFirstCall, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(walletAfterFirstCall.Balance.IsZero(),
+		"wallet should be fully drained after first call, got %s", walletAfterFirstCall.Balance.String())
+
+	// Second call: SAME inv pointer (already mutated in place to TotalPrepaidCreditsApplied=60) and
+	// SAME source struct (its in-memory CreditsAvailable field is untouched by the function itself -
+	// nothing is reloaded from the DB between calls). A naive re-run that recomputed
+	// remainingCeiling from scratch without honoring the prior authority would apply another 60.
+	second, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(second.TotalPrepaidCreditsApplied),
+		"second call: expected total to remain 60 (not 120), got %s", second.TotalPrepaidCreditsApplied.String())
+
+	// The wallet must NOT have been debited a second time.
+	walletAfterSecondCall, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(walletAfterSecondCall.Balance.IsZero(),
+		"wallet should still be zero, not over-debited, got %s", walletAfterSecondCall.Balance.String())
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(reloadedSource.CreditsAvailable.IsZero(),
+		"source grant should still show zero available, not negative, got %s", reloadedSource.CreditsAvailable.String())
+}
+
+// Gap 3 (currency-rounding edge case): a fractional CreditsAvailable that matters at 2-decimal USD
+// precision must round sensibly and never result in an applied amount greater than what's actually
+// available - mirroring the rounding-safety pattern covered for CalculateCreditAdjustments by
+// TestCalculateCreditAdjustments_DustBalanceNoHang.
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_RoundsFractionalSourceWithoutExceedingAvailable() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_fractional_source", "USD", decimal.NewFromInt(1000)) // ceiling far exceeds the source
+
+	w := s.createWalletWithCredit("wallet_fractional_source", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.RequireFromString("33.334"), &pastExpiry, nil)
+
+	result, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+
+	// 33.334 rounds down to 33.33 at USD's 2-decimal precision.
+	s.True(decimal.RequireFromString("33.33").Equal(result.TotalPrepaidCreditsApplied),
+		"expected 33.33 applied (rounded), got %s", result.TotalPrepaidCreditsApplied.String())
+
+	// Never exceeds what was actually available on the source grant.
+	s.True(result.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.RequireFromString("33.334")),
+		"applied (%s) must not exceed available (33.334)", result.TotalPrepaidCreditsApplied.String())
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.RequireFromString("0.004").Equal(reloadedSource.CreditsAvailable),
+		"expected 0.004 dust remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
+}
+
+// Companion to the above: this time the INVOICE ceiling (not the source grant) is the fractional,
+// binding constraint, and rounding it UP (12.347 -> 12.35) would exceed the ceiling. The
+// decimal.Min(rounded, raw) guard in applyExpiringCreditToInvoice must fall back to the raw,
+// unrounded amount rather than over-apply past what the line item can actually hold.
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_RoundsFractionalCeilingWithoutExceeding() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_fractional_ceiling", "USD", decimal.RequireFromString("12.347")) // ceiling 12.347
+
+	w := s.createWalletWithCredit("wallet_fractional_ceiling", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(1000), &pastExpiry, nil) // plenty available
+
+	result, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+
+	// Rounding 12.347 up to 12.35 would exceed the 12.347 ceiling, so the raw (unrounded) amount is
+	// used instead - it never exceeds the ceiling.
+	s.True(decimal.RequireFromString("12.347").Equal(result.TotalPrepaidCreditsApplied),
+		"expected 12.347 applied (raw, ceiling-bound), got %s", result.TotalPrepaidCreditsApplied.String())
+	s.True(result.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.RequireFromString("12.347")),
+		"applied (%s) must not exceed the ceiling (12.347)", result.TotalPrepaidCreditsApplied.String())
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.RequireFromString("987.653").Equal(reloadedSource.CreditsAvailable),
+		"expected 987.653 remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
+}
+
+// Nice-to-have: a 0-decimal currency (JPY) rounds down sensibly too, using the same helpers with no
+// extra plumbing.
+func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_ZeroDecimalCurrencyRounding() {
+	inv := s.createDraftInvoiceWithUsageLineItem("inv_jpy_rounding", "JPY", decimal.NewFromInt(1000)) // ceiling far exceeds the source
+
+	w := s.createWalletWithCredit("wallet_jpy_rounding", "JPY", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-24 * time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.RequireFromString("333.4"), &pastExpiry, nil)
+
+	result, err := s.getServiceImpl().applyExpiringCreditToInvoice(s.GetContext(), inv, source)
+	s.Require().NoError(err)
+
+	// 333.4 rounds down to 333 at JPY's 0-decimal precision.
+	s.True(decimal.NewFromInt(333).Equal(result.TotalPrepaidCreditsApplied),
+		"expected 333 applied (rounded), got %s", result.TotalPrepaidCreditsApplied.String())
+	s.True(result.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.RequireFromString("333.4")),
+		"applied (%s) must not exceed available (333.4)", result.TotalPrepaidCreditsApplied.String())
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.RequireFromString("0.4").Equal(reloadedSource.CreditsAvailable),
+		"expected 0.4 dust remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
+}
+
 func TestPrepaidCreditApplyLockKey(t *testing.T) {
 	got := prepaidCreditApplyLockKey("inv_123")
 	want := "prepaid_credit_apply:invoice:inv_123"
