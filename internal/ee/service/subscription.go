@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	domainMeter "github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
 
@@ -2338,6 +2339,50 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
+
+	// Attach meters to subscription line items when the caller asks for both
+	// "subscription_line_items" and "meters" (either top-level or nested as
+	// "subscription_line_items.meters"). Bulk-fetch across all usage line items.
+	shouldExpandLineItemMeters := expand.Has(types.ExpandSubscriptionLineItems) &&
+		(expand.Has(types.ExpandMeters) || expand.GetNested(types.ExpandSubscriptionLineItems).Has(types.ExpandMeters))
+	if shouldExpandLineItemMeters && len(response.Items) > 0 {
+		meterIDSet := make(map[string]struct{})
+		for _, item := range response.Items {
+			if item.Subscription == nil {
+				continue
+			}
+			for _, li := range item.Subscription.LineItems {
+				if li.MeterID != "" {
+					meterIDSet[li.MeterID] = struct{}{}
+				}
+			}
+		}
+
+		if len(meterIDSet) > 0 {
+			meterIDs := lo.Keys(meterIDSet)
+			meterFilter := types.NewNoLimitMeterFilter()
+			meterFilter.MeterIDs = meterIDs
+			meters, err := s.MeterRepo.List(ctx, meterFilter)
+			if err != nil {
+				return nil, err
+			}
+			meterMap := make(map[string]*domainMeter.Meter, len(meters))
+			for _, m := range meters {
+				meterMap[m.ID] = m
+			}
+
+			for _, item := range response.Items {
+				if item.Subscription == nil {
+					continue
+				}
+				for _, li := range item.Subscription.LineItems {
+					if m, ok := meterMap[li.MeterID]; ok {
+						li.Meter = m
+					}
+				}
+			}
+		}
+	}
 
 	if expand.Has(types.ExpandEntitlements) && len(response.Items) > 0 {
 		// TODO(perf): serial per-customer fetch is fine for the typical
