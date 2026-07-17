@@ -480,7 +480,7 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return consumed, nil
 	}
 
-	subFilter := types.NewSubscriptionFilter()
+	subFilter := types.NewNoLimitSubscriptionFilter()
 	subFilter.CustomerID = tx.CustomerID
 	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
 	subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
@@ -490,7 +490,7 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	}
 
 	for _, sub := range subs {
-		f := types.NewInvoiceFilter()
+		f := types.NewNoLimitInvoiceFilter()
 		f.SubscriptionID = sub.ID
 		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
 		f.Currency = tx.Currency // wallets are per-currency
@@ -509,7 +509,8 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 			// Re-read the tx: prior invoices in this pass may have drawn down the credit.
 			latestTx, err := s.WalletRepo.GetTransactionByID(ctx, tx.ID)
 			if err != nil {
-				return consumed, err
+				s.Logger.Error(ctx, "pre_expiry_reread_transaction_failed", "transaction_id", tx.ID, "error", err)
+				continue // best-effort
 			}
 			if latestTx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
 				return consumed, nil
@@ -549,46 +550,53 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	// Standard recompute — usage naturally reflects "as of now". No period override.
+	// Standard recompute — usage naturally reflects "as of now". No period override. Runs OUTSIDE the
+	// transaction (it's expensive/ClickHouse-backed), matching ComputeInvoice's own established pattern
+	// of not holding a DB lock during the compute.
 	if _, err := invoiceService.ComputeInvoice(ctx, invoiceID, nil); err != nil {
 		return decimal.Zero, err
 	}
 
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	// A zero-usage recompute may mark the invoice SKIPPED; only DRAFT invoices are eligible.
-	if inv.InvoiceStatus != types.InvoiceStatusDraft {
-		return decimal.Zero, nil
-	}
-	lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, invoiceID)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	inv.LineItems = lineItems
-
-	before := inv.TotalPrepaidCreditsApplied
 	var newlyApplied decimal.Decimal
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		result, err := s.applyExpiringCreditToInvoice(ctx, inv, tx)
+		// Row-lock the invoice and re-check its status under the lock, mirroring
+		// performFinalizeInvoiceActions (internal/ee/service/invoice.go) — another process (finalize, a
+		// payment, another recompute) could have changed this invoice between ComputeInvoice above and
+		// this point, and we must not blindly overwrite it.
+		lockedInv, err := s.InvoiceRepo.GetForUpdate(ctx, invoiceID)
+		if err != nil {
+			return err
+		}
+		// A zero-usage recompute may mark the invoice SKIPPED, or another process may have finalized/
+		// voided it; only DRAFT invoices are eligible.
+		if lockedInv.InvoiceStatus != types.InvoiceStatusDraft {
+			return nil
+		}
+		lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, invoiceID)
+		if err != nil {
+			return err
+		}
+		lockedInv.LineItems = lineItems
+
+		before := lockedInv.TotalPrepaidCreditsApplied
+		result, err := s.applyExpiringCreditToInvoice(ctx, lockedInv, tx)
 		if err != nil {
 			return err
 		}
 
-		newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied)
+		newTotal := lockedInv.Subtotal.Sub(lockedInv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied)
 		if newTotal.IsNegative() {
 			newTotal = decimal.Zero
 		}
-		inv.Total = newTotal
-		inv.AmountDue = inv.Total
-		inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+		lockedInv.Total = newTotal
+		lockedInv.AmountDue = lockedInv.Total
+		lockedInv.AmountRemaining = lockedInv.Total.Sub(lockedInv.AmountPaid)
 
 		newlyApplied = result.TotalPrepaidCreditsApplied.Sub(before)
 		if newlyApplied.IsNegative() {
 			newlyApplied = decimal.Zero
 		}
-		return s.InvoiceRepo.Update(ctx, inv)
+		return s.InvoiceRepo.Update(ctx, lockedInv)
 	})
 	if err != nil {
 		return decimal.Zero, err
