@@ -71,7 +71,9 @@ type WalletService interface {
 	// CreditWallet processes a credit operation on a wallet
 	CreditWallet(ctx context.Context, req *wallet.WalletOperation) error
 
-	// ExpireCredits expires credits for a given transaction. Returns result with Expired or SkipReason (active_subscription, active_invoice).
+	// ExpireCredits best-effort consumes the credit into the customer's active-subscription draft invoices
+	// before expiring whatever balance remains. Returns AmountConsumedIntoInvoices (how much was applied) and
+	// Expired (whether a remainder was actually debited as expired credit).
 	ExpireCredits(ctx context.Context, transactionID string) (*types.ExpireCreditsResult, error)
 
 	// conversion rate operations
@@ -2158,6 +2160,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	}
 	if tx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
 		// Fully consumed into invoices; nothing left to expire.
+		s.Logger.Info(ctx, "pre_expiry_fully_consumed", "transaction_id", tx.ID, "amount_consumed", consumed)
 		return &types.ExpireCreditsResult{Expired: false, AmountConsumedIntoInvoices: consumed}, nil
 	}
 
@@ -2191,6 +2194,8 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		return nil, err
 	}
 
+	s.Logger.Info(ctx, "pre_expiry_partially_consumed_remainder_expired",
+		"transaction_id", tx.ID, "amount_consumed", consumed, "amount_expired", tx.CreditsAvailable)
 	return &types.ExpireCreditsResult{Expired: true, AmountConsumedIntoInvoices: consumed}, nil
 }
 
