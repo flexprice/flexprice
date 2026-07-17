@@ -99,8 +99,9 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 				}
 				if expireResult.Expired {
 					result.Succeeded++
+					amountExpired := tx.CreditsAvailable.Sub(expireResult.AmountConsumedIntoInvoices)
 					a.logger.Info(ctx, "expired credits successfully",
-						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
+						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", amountExpired)
 				}
 			}
 		}
@@ -111,6 +112,8 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		"total", result.Total,
 		"succeeded", result.Succeeded,
 		"failed", result.Failed,
+		"credits_consumed_into_invoices", result.CreditsConsumedIntoInvoices,
+		"amount_consumed_into_invoices", result.AmountConsumedIntoInvoices,
 	)
 	return result, nil
 }

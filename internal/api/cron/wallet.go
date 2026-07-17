@@ -132,8 +132,9 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 				if result.Expired {
 					tenantResponse.Success++
 					response.Success++
+					amountExpired := tx.CreditsAvailable.Sub(result.AmountConsumedIntoInvoices)
 					h.logger.Info(c.Request.Context(), "expired credits successfully",
-						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
+						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", amountExpired)
 				}
 			}
 
