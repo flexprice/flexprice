@@ -515,7 +515,8 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
-			alertActs.SpendAlertsActivity,
+			alertActs.SpendAlertsActivity, // legacy — retained for Temporal history replay
+			alertActs.SpendAndEntitlementAlertsActivity,
 			alertActs.WalletAlertsActivity,
 		)
 	case types.TemporalTaskQueueReprocessEvents:

@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -166,6 +167,39 @@ func StartDate(v time.Time) predicate.Entitlement {
 // EndDate applies equality check predicate on the "end_date" field. It's identical to EndDateEQ.
 func EndDate(v time.Time) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldEndDate, v))
+}
+
+// GrantType applies equality check predicate on the "grant_type" field. It's identical to GrantTypeEQ.
+func GrantType(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantType, vc))
+}
+
+// GrantMeasure applies equality check predicate on the "grant_measure" field. It's identical to GrantMeasureEQ.
+func GrantMeasure(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantMeasure, vc))
+}
+
+// GrantDurationValue applies equality check predicate on the "grant_duration_value" field. It's identical to GrantDurationValueEQ.
+func GrantDurationValue(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantDurationValue, v))
+}
+
+// GrantDurationUnit applies equality check predicate on the "grant_duration_unit" field. It's identical to GrantDurationUnitEQ.
+func GrantDurationUnit(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantDurationUnit, vc))
+}
+
+// GrantQuota applies equality check predicate on the "grant_quota" field. It's identical to GrantQuotaEQ.
+func GrantQuota(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantQuota, v))
+}
+
+// Parallel applies equality check predicate on the "parallel" field. It's identical to ParallelEQ.
+func Parallel(v bool) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldParallel, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1383,6 +1417,388 @@ func ConfigValueIsNil() predicate.Entitlement {
 // ConfigValueNotNil applies the NotNil predicate on the "config_value" field.
 func ConfigValueNotNil() predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldNotNull(FieldConfigValue))
+}
+
+// GrantTypeEQ applies the EQ predicate on the "grant_type" field.
+func GrantTypeEQ(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantType, vc))
+}
+
+// GrantTypeNEQ applies the NEQ predicate on the "grant_type" field.
+func GrantTypeNEQ(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantType, vc))
+}
+
+// GrantTypeIn applies the In predicate on the "grant_type" field.
+func GrantTypeIn(vs ...types.EntitlementGrantType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldGrantType, v...))
+}
+
+// GrantTypeNotIn applies the NotIn predicate on the "grant_type" field.
+func GrantTypeNotIn(vs ...types.EntitlementGrantType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantType, v...))
+}
+
+// GrantTypeGT applies the GT predicate on the "grant_type" field.
+func GrantTypeGT(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldGrantType, vc))
+}
+
+// GrantTypeGTE applies the GTE predicate on the "grant_type" field.
+func GrantTypeGTE(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantType, vc))
+}
+
+// GrantTypeLT applies the LT predicate on the "grant_type" field.
+func GrantTypeLT(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldGrantType, vc))
+}
+
+// GrantTypeLTE applies the LTE predicate on the "grant_type" field.
+func GrantTypeLTE(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantType, vc))
+}
+
+// GrantTypeContains applies the Contains predicate on the "grant_type" field.
+func GrantTypeContains(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldGrantType, vc))
+}
+
+// GrantTypeHasPrefix applies the HasPrefix predicate on the "grant_type" field.
+func GrantTypeHasPrefix(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldGrantType, vc))
+}
+
+// GrantTypeHasSuffix applies the HasSuffix predicate on the "grant_type" field.
+func GrantTypeHasSuffix(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldGrantType, vc))
+}
+
+// GrantTypeEqualFold applies the EqualFold predicate on the "grant_type" field.
+func GrantTypeEqualFold(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldGrantType, vc))
+}
+
+// GrantTypeContainsFold applies the ContainsFold predicate on the "grant_type" field.
+func GrantTypeContainsFold(v types.EntitlementGrantType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldGrantType, vc))
+}
+
+// GrantMeasureEQ applies the EQ predicate on the "grant_measure" field.
+func GrantMeasureEQ(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureNEQ applies the NEQ predicate on the "grant_measure" field.
+func GrantMeasureNEQ(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureIn applies the In predicate on the "grant_measure" field.
+func GrantMeasureIn(vs ...types.EntitlementGrantMeasure) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldGrantMeasure, v...))
+}
+
+// GrantMeasureNotIn applies the NotIn predicate on the "grant_measure" field.
+func GrantMeasureNotIn(vs ...types.EntitlementGrantMeasure) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantMeasure, v...))
+}
+
+// GrantMeasureGT applies the GT predicate on the "grant_measure" field.
+func GrantMeasureGT(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureGTE applies the GTE predicate on the "grant_measure" field.
+func GrantMeasureGTE(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureLT applies the LT predicate on the "grant_measure" field.
+func GrantMeasureLT(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureLTE applies the LTE predicate on the "grant_measure" field.
+func GrantMeasureLTE(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureContains applies the Contains predicate on the "grant_measure" field.
+func GrantMeasureContains(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureHasPrefix applies the HasPrefix predicate on the "grant_measure" field.
+func GrantMeasureHasPrefix(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureHasSuffix applies the HasSuffix predicate on the "grant_measure" field.
+func GrantMeasureHasSuffix(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureIsNil applies the IsNil predicate on the "grant_measure" field.
+func GrantMeasureIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldGrantMeasure))
+}
+
+// GrantMeasureNotNil applies the NotNil predicate on the "grant_measure" field.
+func GrantMeasureNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldGrantMeasure))
+}
+
+// GrantMeasureEqualFold applies the EqualFold predicate on the "grant_measure" field.
+func GrantMeasureEqualFold(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldGrantMeasure, vc))
+}
+
+// GrantMeasureContainsFold applies the ContainsFold predicate on the "grant_measure" field.
+func GrantMeasureContainsFold(v types.EntitlementGrantMeasure) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldGrantMeasure, vc))
+}
+
+// GrantDurationValueEQ applies the EQ predicate on the "grant_duration_value" field.
+func GrantDurationValueEQ(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueNEQ applies the NEQ predicate on the "grant_duration_value" field.
+func GrantDurationValueNEQ(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueIn applies the In predicate on the "grant_duration_value" field.
+func GrantDurationValueIn(vs ...int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldGrantDurationValue, vs...))
+}
+
+// GrantDurationValueNotIn applies the NotIn predicate on the "grant_duration_value" field.
+func GrantDurationValueNotIn(vs ...int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantDurationValue, vs...))
+}
+
+// GrantDurationValueGT applies the GT predicate on the "grant_duration_value" field.
+func GrantDurationValueGT(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueGTE applies the GTE predicate on the "grant_duration_value" field.
+func GrantDurationValueGTE(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueLT applies the LT predicate on the "grant_duration_value" field.
+func GrantDurationValueLT(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueLTE applies the LTE predicate on the "grant_duration_value" field.
+func GrantDurationValueLTE(v int) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantDurationValue, v))
+}
+
+// GrantDurationValueIsNil applies the IsNil predicate on the "grant_duration_value" field.
+func GrantDurationValueIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldGrantDurationValue))
+}
+
+// GrantDurationValueNotNil applies the NotNil predicate on the "grant_duration_value" field.
+func GrantDurationValueNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldGrantDurationValue))
+}
+
+// GrantDurationUnitEQ applies the EQ predicate on the "grant_duration_unit" field.
+func GrantDurationUnitEQ(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitNEQ applies the NEQ predicate on the "grant_duration_unit" field.
+func GrantDurationUnitNEQ(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitIn applies the In predicate on the "grant_duration_unit" field.
+func GrantDurationUnitIn(vs ...types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldGrantDurationUnit, v...))
+}
+
+// GrantDurationUnitNotIn applies the NotIn predicate on the "grant_duration_unit" field.
+func GrantDurationUnitNotIn(vs ...types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantDurationUnit, v...))
+}
+
+// GrantDurationUnitGT applies the GT predicate on the "grant_duration_unit" field.
+func GrantDurationUnitGT(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitGTE applies the GTE predicate on the "grant_duration_unit" field.
+func GrantDurationUnitGTE(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitLT applies the LT predicate on the "grant_duration_unit" field.
+func GrantDurationUnitLT(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitLTE applies the LTE predicate on the "grant_duration_unit" field.
+func GrantDurationUnitLTE(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitContains applies the Contains predicate on the "grant_duration_unit" field.
+func GrantDurationUnitContains(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitHasPrefix applies the HasPrefix predicate on the "grant_duration_unit" field.
+func GrantDurationUnitHasPrefix(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitHasSuffix applies the HasSuffix predicate on the "grant_duration_unit" field.
+func GrantDurationUnitHasSuffix(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitIsNil applies the IsNil predicate on the "grant_duration_unit" field.
+func GrantDurationUnitIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldGrantDurationUnit))
+}
+
+// GrantDurationUnitNotNil applies the NotNil predicate on the "grant_duration_unit" field.
+func GrantDurationUnitNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldGrantDurationUnit))
+}
+
+// GrantDurationUnitEqualFold applies the EqualFold predicate on the "grant_duration_unit" field.
+func GrantDurationUnitEqualFold(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldGrantDurationUnit, vc))
+}
+
+// GrantDurationUnitContainsFold applies the ContainsFold predicate on the "grant_duration_unit" field.
+func GrantDurationUnitContainsFold(v types.EntitlementGrantDurationUnit) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldGrantDurationUnit, vc))
+}
+
+// GrantQuotaEQ applies the EQ predicate on the "grant_quota" field.
+func GrantQuotaEQ(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantQuota, v))
+}
+
+// GrantQuotaNEQ applies the NEQ predicate on the "grant_quota" field.
+func GrantQuotaNEQ(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantQuota, v))
+}
+
+// GrantQuotaIn applies the In predicate on the "grant_quota" field.
+func GrantQuotaIn(vs ...decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldGrantQuota, vs...))
+}
+
+// GrantQuotaNotIn applies the NotIn predicate on the "grant_quota" field.
+func GrantQuotaNotIn(vs ...decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantQuota, vs...))
+}
+
+// GrantQuotaGT applies the GT predicate on the "grant_quota" field.
+func GrantQuotaGT(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldGrantQuota, v))
+}
+
+// GrantQuotaGTE applies the GTE predicate on the "grant_quota" field.
+func GrantQuotaGTE(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantQuota, v))
+}
+
+// GrantQuotaLT applies the LT predicate on the "grant_quota" field.
+func GrantQuotaLT(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldGrantQuota, v))
+}
+
+// GrantQuotaLTE applies the LTE predicate on the "grant_quota" field.
+func GrantQuotaLTE(v decimal.Decimal) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantQuota, v))
+}
+
+// GrantQuotaIsNil applies the IsNil predicate on the "grant_quota" field.
+func GrantQuotaIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldGrantQuota))
+}
+
+// GrantQuotaNotNil applies the NotNil predicate on the "grant_quota" field.
+func GrantQuotaNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldGrantQuota))
+}
+
+// ParallelEQ applies the EQ predicate on the "parallel" field.
+func ParallelEQ(v bool) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldParallel, v))
+}
+
+// ParallelNEQ applies the NEQ predicate on the "parallel" field.
+func ParallelNEQ(v bool) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldParallel, v))
 }
 
 // And groups predicates with the AND operator between them.

@@ -33,6 +33,17 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache
 	}
 }
 
+// defaultedGrantType maps an empty GrantType to NONE. The ent column has a
+// default of NONE at the DB level, but ent's SetGrantType receives a Go string
+// and would emit "" if we passed it through. Centralising the fallback here
+// keeps Create / Update / CreateBulk callers identical.
+func defaultedGrantType(g types.EntitlementGrantType) types.EntitlementGrantType {
+	if g == "" {
+		return types.EntitlementGrantTypeNone
+	}
+	return g
+}
+
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
 	client := r.client.Writer(ctx)
 
@@ -70,7 +81,15 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetUpdatedAt(e.UpdatedAt).
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
-		SetEnvironmentID(e.EnvironmentID)
+		SetEnvironmentID(e.EnvironmentID).
+		// Grant config. Zero-value grant_type is fine — column has a default of
+		// NONE, so a legacy insert with GrantType="" still lands as NONE.
+		SetGrantType(defaultedGrantType(e.GrantType)).
+		SetGrantMeasure(e.GrantMeasure).
+		SetNillableGrantDurationValue(e.GrantDurationValue).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetNillableGrantQuota(e.GrantQuota).
+		SetParallel(e.Parallel)
 	if e.ConfigValue != nil {
 		createQuery = createQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -298,7 +317,13 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableParentEntitlementID(e.ParentEntitlementID).
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx))
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetGrantType(defaultedGrantType(e.GrantType)).
+		SetGrantMeasure(e.GrantMeasure).
+		SetNillableGrantDurationValue(e.GrantDurationValue).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetNillableGrantQuota(e.GrantQuota).
+		SetParallel(e.Parallel)
 	if e.ConfigValue != nil {
 		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -408,7 +433,13 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetUpdatedAt(e.UpdatedAt).
 			SetCreatedBy(e.CreatedBy).
 			SetUpdatedBy(e.UpdatedBy).
-			SetEnvironmentID(e.EnvironmentID)
+			SetEnvironmentID(e.EnvironmentID).
+			SetGrantType(defaultedGrantType(e.GrantType)).
+			SetGrantMeasure(e.GrantMeasure).
+			SetNillableGrantDurationValue(e.GrantDurationValue).
+			SetGrantDurationUnit(e.GrantDurationUnit).
+			SetNillableGrantQuota(e.GrantQuota).
+			SetParallel(e.Parallel)
 		if e.ConfigValue != nil {
 			builder = builder.SetConfigValue(e.ConfigValue)
 		}

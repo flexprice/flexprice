@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -80,6 +81,7 @@ type Stores struct {
 	TenantRepo                   tenant.Repository
 	EnvironmentRepo              environment.Repository
 	EntitlementRepo              entitlement.Repository
+	EntitlementGrantRepo         entitlementgrant.Repository
 	FeatureRepo                  feature.Repository
 	TaskRepo                     task.Repository
 	SecretRepo                   secret.Repository
@@ -230,6 +232,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		TenantRepo:                   NewInMemoryTenantStore(),
 		EnvironmentRepo:              NewInMemoryEnvironmentStore(),
 		EntitlementRepo:              NewInMemoryEntitlementStore(),
+		EntitlementGrantRepo:         NewInMemoryEntitlementGrantStore(),
 		FeatureRepo:                  NewInMemoryFeatureStore(),
 		TaskRepo:                     NewInMemoryTaskStore(),
 		SecretRepo:                   NewInMemorySecretStore(),
@@ -288,6 +291,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.TenantRepo.(*InMemoryTenantStore).Clear()
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()
+	s.stores.EntitlementGrantRepo.(*InMemoryEntitlementGrantStore).Clear()
 	s.stores.FeatureRepo.(*InMemoryFeatureStore).Clear()
 	s.stores.TaskRepo.(*InMemoryTaskStore).Clear()
 	s.stores.SecretRepo.(*InMemorySecretStore).Clear()

@@ -56,6 +56,18 @@ const (
 	FieldEndDate = "end_date"
 	// FieldConfigValue holds the string denoting the config_value field in the database.
 	FieldConfigValue = "config_value"
+	// FieldGrantType holds the string denoting the grant_type field in the database.
+	FieldGrantType = "grant_type"
+	// FieldGrantMeasure holds the string denoting the grant_measure field in the database.
+	FieldGrantMeasure = "grant_measure"
+	// FieldGrantDurationValue holds the string denoting the grant_duration_value field in the database.
+	FieldGrantDurationValue = "grant_duration_value"
+	// FieldGrantDurationUnit holds the string denoting the grant_duration_unit field in the database.
+	FieldGrantDurationUnit = "grant_duration_unit"
+	// FieldGrantQuota holds the string denoting the grant_quota field in the database.
+	FieldGrantQuota = "grant_quota"
+	// FieldParallel holds the string denoting the parallel field in the database.
+	FieldParallel = "parallel"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -84,6 +96,12 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldConfigValue,
+	FieldGrantType,
+	FieldGrantMeasure,
+	FieldGrantDurationValue,
+	FieldGrantDurationUnit,
+	FieldGrantQuota,
+	FieldParallel,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
@@ -132,6 +150,10 @@ var (
 	DefaultIsSoftLimit bool
 	// DefaultDisplayOrder holds the default value on creation for the "display_order" field.
 	DefaultDisplayOrder int
+	// DefaultGrantType holds the default value on creation for the "grant_type" field.
+	DefaultGrantType types.EntitlementGrantType
+	// DefaultParallel holds the default value on creation for the "parallel" field.
+	DefaultParallel bool
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -242,4 +264,34 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
+}
+
+// ByGrantType orders the results by the grant_type field.
+func ByGrantType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantType, opts...).ToFunc()
+}
+
+// ByGrantMeasure orders the results by the grant_measure field.
+func ByGrantMeasure(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantMeasure, opts...).ToFunc()
+}
+
+// ByGrantDurationValue orders the results by the grant_duration_value field.
+func ByGrantDurationValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantDurationValue, opts...).ToFunc()
+}
+
+// ByGrantDurationUnit orders the results by the grant_duration_unit field.
+func ByGrantDurationUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantDurationUnit, opts...).ToFunc()
+}
+
+// ByGrantQuota orders the results by the grant_quota field.
+func ByGrantQuota(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantQuota, opts...).ToFunc()
+}
+
+// ByParallel orders the results by the parallel field.
+func ByParallel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParallel, opts...).ToFunc()
 }

@@ -130,28 +130,43 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 			Mark(ierr.ErrValidation)
 	}
 
-	// For metered features, check if it's a bucketed max meter
+	// For metered features, check if it's a bucketed max meter and (below)
+	// carry the meter through to grant-shape validation.
+	var meterForGrantCheck *meter.Meter
 	if feature.Type == types.FeatureTypeMetered {
-		meter, err := s.MeterRepo.GetMeter(ctx, feature.MeterID)
+		m, err := s.MeterRepo.GetMeter(ctx, feature.MeterID)
 		if err != nil {
 			return nil, err
 		}
 
 		// Entitlements are restricted for bucketed max meters
-		if meter.IsBucketedMaxMeter() {
+		if m.IsBucketedMaxMeter() {
 			return nil, ierr.NewError("entitlements not supported for bucketed max meters").
 				WithHint("Bucketed max meters process each bucket independently and cannot have entitlements").
 				WithReportableDetails(map[string]interface{}{
-					"meter_id":     meter.ID,
-					"bucket_size":  meter.Aggregation.BucketSize,
+					"meter_id":     m.ID,
+					"bucket_size":  m.Aggregation.BucketSize,
 					"feature_type": req.FeatureType,
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		meterForGrantCheck = m
 	}
 
-	// Create entitlement
+	// Create entitlement (runs the field-coherence checks from
+	// entitlement.validateGrantConfig internally when we call Validate below).
 	e := req.ToEntitlement(ctx)
+
+	// Domain-level invariants (grant field coherence, feature-type coupling).
+	if err := e.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Grant-shape checks that need meter + price context (ERD §7.1). Cheap
+	// no-op for legacy (GrantType=NONE) entitlements.
+	if err := s.validateEntitlementGrantShape(ctx, e, meterForGrantCheck); err != nil {
+		return nil, err
+	}
 	// Ensure entity type and ID are set correctly
 	e.EntityType = entityType
 	e.EntityID = entityID
@@ -303,28 +318,41 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 					Mark(ierr.ErrValidation)
 			}
 
-			// For metered features, check if it's a bucketed max meter
+			// For metered features, check if it's a bucketed max meter, and
+			// carry the meter through to grant-shape validation.
+			var meterForGrantCheck *meter.Meter
 			if feature.Type == types.FeatureTypeMetered {
-				meter, err := s.MeterRepo.GetMeter(txCtx, feature.MeterID)
+				m, err := s.MeterRepo.GetMeter(txCtx, feature.MeterID)
 				if err != nil {
 					return err
 				}
 
 				// Bucketed max meters cannot have entitlements
-				if meter.IsBucketedMaxMeter() {
+				if m.IsBucketedMaxMeter() {
 					return ierr.NewError("entitlements not supported for bucketed max meters").
 						WithHint("Bucketed max meters process each bucket independently and cannot have entitlements").
 						WithReportableDetails(map[string]interface{}{
-							"meter_id":     meter.ID,
-							"bucket_size":  meter.Aggregation.BucketSize,
+							"meter_id":     m.ID,
+							"bucket_size":  m.Aggregation.BucketSize,
 							"feature_type": entReq.FeatureType,
 							"index":        i,
 						}).
 						Mark(ierr.ErrValidation)
 				}
+				meterForGrantCheck = m
 			}
 
 			ent := entReq.ToEntitlement(txCtx)
+			if err := ent.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
+			if err := s.validateEntitlementGrantShape(txCtx, ent, meterForGrantCheck); err != nil {
+				return ierr.WithError(err).
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
 			entitlements[i] = ent
 		}
 
@@ -650,9 +678,54 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		existing.ConfigValue = req.ConfigValue
 	}
 
-	// Validate updated entitlement
+	// Grant fields. Each pointer is "unset = leave alone". Passing GrantType=NONE
+	// explicitly clears the grant config (see entitlement.validateGrantConfig).
+	if req.GrantType != nil {
+		existing.GrantType = *req.GrantType
+		// When switching back to NONE, clear the rest so the coherence check
+		// passes cleanly.
+		if existing.GrantType == types.EntitlementGrantTypeNone {
+			existing.GrantMeasure = ""
+			existing.GrantDurationValue = nil
+			existing.GrantDurationUnit = ""
+			existing.GrantQuota = nil
+		}
+	}
+	if req.GrantMeasure != nil {
+		existing.GrantMeasure = *req.GrantMeasure
+	}
+	if req.GrantDurationValue != nil {
+		existing.GrantDurationValue = req.GrantDurationValue
+	}
+	if req.GrantDurationUnit != nil {
+		existing.GrantDurationUnit = *req.GrantDurationUnit
+	}
+	if req.GrantQuota != nil {
+		existing.GrantQuota = req.GrantQuota
+	}
+	if req.Parallel != nil {
+		existing.Parallel = *req.Parallel
+	}
+
+	// Validate updated entitlement (includes grant field coherence).
 	if err := existing.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Grant-shape checks that need meter + price context (ERD §7.1). Only load
+	// the meter when we actually have a live grant config to check.
+	if existing.GrantType != "" && existing.GrantType != types.EntitlementGrantTypeNone && existing.FeatureType == types.FeatureTypeMetered {
+		featureRow, err := s.FeatureRepo.Get(ctx, existing.FeatureID)
+		if err != nil {
+			return nil, err
+		}
+		m, err := s.MeterRepo.GetMeter(ctx, featureRow.MeterID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.validateEntitlementGrantShape(ctx, existing, m); err != nil {
+			return nil, err
+		}
 	}
 
 	result, err := s.EntitlementRepo.Update(ctx, existing)

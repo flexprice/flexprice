@@ -335,3 +335,57 @@ func (s *alertService) EvaluateSpendBreachForEvent(ctx context.Context, event *e
 		s.Logger.Error(ctx, "failed to evaluate spend alerts for event", "error", err, "event_id", event.ID, "customer_id", cust.ID)
 	}
 }
+
+// EvaluateSpendAndEntitlementAlertsForCustomer runs the FLE-959 fused
+// evaluation used by the Temporal debouncer: spend alerts first (unchanged),
+// then EnsureGrants + per-grant refresh + snapshot + alert_logs transitions.
+//
+// The two halves share the customer/subscription setup implicitly by walking
+// the same customer + `at`. They deliberately do NOT share CH reads — spend
+// needs cycle-scoped usage feeding the pricer, grants need per-window usage
+// per grant; each is bounded and cheap on its own. Wallet alerts are the
+// third pillar and remain on their own activity because their throttle and
+// query shape are different.
+//
+// Idempotent under Temporal retries: LogAlert dedups by state transition,
+// UpdateSnapshot is upsert-by-primary-key, EnsureGrants converges on the
+// same live set on repeated calls.
+func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
+	ctx context.Context,
+	cust *customer.Customer,
+) error {
+	if cust == nil {
+		return nil
+	}
+	at := time.Now().UTC()
+
+	// Existing spend evaluation. Errors bubble up but we still want to try
+	// grants below — a mis-configured spend alert setting shouldn't block a
+	// grant crossing its exhaustion threshold.
+	spendErr := s.EvaluateSpendAlertsForCustomer(ctx, cust, nil, nil)
+	if spendErr != nil {
+		s.Logger.Error(ctx, "fused evaluator: spend alerts returned error", "error", spendErr, "customer_id", cust.ID)
+	}
+
+	// Ensure grants exist for the customer + surface the current live set.
+	// If the customer has no time-boxed ECs, this returns nil/empty cheaply
+	// and we're done — nothing else to do beyond what spend already did.
+	grantSvc := NewEntitlementGrantService(s.ServiceParams)
+	grants, err := grantSvc.EnsureGrants(ctx, cust, at)
+	if err != nil {
+		// Return the spend error first if we already had one so the caller
+		// sees the higher-severity issue; otherwise surface the grant error.
+		if spendErr != nil {
+			return spendErr
+		}
+		return err
+	}
+
+	if err := s.evaluateEntitlementGrantsForCustomer(ctx, cust, grants, at); err != nil {
+		if spendErr != nil {
+			return spendErr
+		}
+		return err
+	}
+	return spendErr
+}

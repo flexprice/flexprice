@@ -34,6 +34,16 @@ type AlertService interface {
 	// used by the sync per-event caller (nil for the Temporal-driven path).
 	EvaluateSpendAlertsForCustomer(ctx context.Context, cust *customer.Customer, meterIDs []string, periodStart *time.Time) error
 
+	// EvaluateSpendAndEntitlementAlertsForCustomer is the FLE-959 fused entry
+	// point called by the debounced Temporal activity. It runs spend
+	// evaluation (unchanged from EvaluateSpendAlertsForCustomer) and then, in
+	// the same call, ensures the customer's time-boxed entitlement grants
+	// exist, refreshes each grant's usage from ClickHouse, transitions
+	// alert_logs state, and snapshots the grant. Wallet alerts stay on their
+	// own activity (see EvaluateWalletAlertsForCustomer) — they need a
+	// different query path and their own throttle.
+	EvaluateSpendAndEntitlementAlertsForCustomer(ctx context.Context, cust *customer.Customer) error
+
 	// EvaluateWalletAlertsForCustomer resolves the tenant's wallet alert config,
 	// fetches every wallet for the customer, computes real-time balance for each,
 	// and runs wallet-level + feature-level alert checks and auto-topup.

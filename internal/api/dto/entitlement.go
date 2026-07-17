@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/shopspring/decimal"
 )
 
 // CreateEntitlementRequest represents the request to create a new entitlement
@@ -28,6 +29,17 @@ type CreateEntitlementRequest struct {
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
+
+	// Grant config (FLE-959). All optional; legacy requests omit them and land
+	// with GrantType=NONE. TIME_BOXED requires the full quartet
+	// (measure, duration_value, duration_unit, quota) — see
+	// entitlement.validateGrantConfig for the exact rules.
+	GrantType          types.EntitlementGrantType         `json:"grant_type,omitempty"`
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
+	Parallel           bool                               `json:"parallel,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -99,6 +111,15 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		r.EntityID = r.PlanID
 	}
 
+	// Default grant_type to `none` so a legacy request (no grant fields at
+	// all) round-trips through the domain object as the same explicit value
+	// the ent column stores. Keeps the in-memory test store, ent-backed
+	// repo, and downstream readers on the same page.
+	grantType := r.GrantType
+	if grantType == "" {
+		grantType = types.EntitlementGrantTypeNone
+	}
+
 	ent := &entitlement.Entitlement{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
 		EntityType:          r.EntityType,
@@ -114,6 +135,12 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		ParentEntitlementID: r.ParentEntitlementID,
 		StartDate:           r.StartDate,
 		EndDate:             r.EndDate,
+		GrantType:           grantType,
+		GrantMeasure:        r.GrantMeasure,
+		GrantDurationValue:  r.GrantDurationValue,
+		GrantDurationUnit:   r.GrantDurationUnit,
+		GrantQuota:          r.GrantQuota,
+		Parallel:            r.Parallel,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
@@ -128,6 +155,17 @@ type UpdateEntitlementRequest struct {
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`
 	StaticValue      string                            `json:"static_value"`
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
+
+	// Grant config (FLE-959). All optional; unset fields are left as-is on the
+	// existing row. To turn a grant EC back into a legacy entitlement, set
+	// GrantType=NONE explicitly — that clears the grant fields via
+	// entitlement.validateGrantConfig.
+	GrantType          *types.EntitlementGrantType         `json:"grant_type,omitempty"`
+	GrantMeasure       *types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                                `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  *types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                    `json:"grant_quota,omitempty" swaggertype:"string"`
+	Parallel           *bool                               `json:"parallel,omitempty"`
 }
 
 // Validate validates the update entitlement request

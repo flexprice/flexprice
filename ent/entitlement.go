@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Entitlement is the model entity for the Entitlement schema.
@@ -60,7 +61,19 @@ type Entitlement struct {
 	// End date for time-bound entitlements (subscription-scoped only)
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// ConfigValue holds the value of the "config_value" field.
-	ConfigValue        map[string]interface{} `json:"config_value,omitempty"`
+	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
+	// none = legacy behavior, no grants. time_boxed = auto-rotate grants of grant_duration each.
+	GrantType types.EntitlementGrantType `json:"grant_type,omitempty"`
+	// QUANTITY or AMOUNT. Interprets grant_quota and EG.usage.
+	GrantMeasure types.EntitlementGrantMeasure `json:"grant_measure,omitempty"`
+	// Length of each time-boxed grant, expressed with grant_duration_unit. Minimum equivalent of 1 hour.
+	GrantDurationValue *int `json:"grant_duration_value,omitempty"`
+	// HOUR, DAY, or WEEK.
+	GrantDurationUnit types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	// Per-grant quota, interpreted by grant_measure.
+	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
+	// If true, multiple ECs on the same feature produce independent grants (parallel counting). If false, additive as today.
+	Parallel           bool `json:"parallel,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -70,13 +83,15 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case entitlement.FieldGrantQuota:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case entitlement.FieldConfigValue:
 			values[i] = new([]byte)
-		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit:
+		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit, entitlement.FieldParallel:
 			values[i] = new(sql.NullBool)
-		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder:
+		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantType, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -235,6 +250,44 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field config_value: %w", err)
 				}
 			}
+		case entitlement.FieldGrantType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_type", values[i])
+			} else if value.Valid {
+				e.GrantType = types.EntitlementGrantType(value.String)
+			}
+		case entitlement.FieldGrantMeasure:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_measure", values[i])
+			} else if value.Valid {
+				e.GrantMeasure = types.EntitlementGrantMeasure(value.String)
+			}
+		case entitlement.FieldGrantDurationValue:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_duration_value", values[i])
+			} else if value.Valid {
+				e.GrantDurationValue = new(int)
+				*e.GrantDurationValue = int(value.Int64)
+			}
+		case entitlement.FieldGrantDurationUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_duration_unit", values[i])
+			} else if value.Valid {
+				e.GrantDurationUnit = types.EntitlementGrantDurationUnit(value.String)
+			}
+		case entitlement.FieldGrantQuota:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_quota", values[i])
+			} else if value.Valid {
+				e.GrantQuota = new(decimal.Decimal)
+				*e.GrantQuota = *value.S.(*decimal.Decimal)
+			}
+		case entitlement.FieldParallel:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field parallel", values[i])
+			} else if value.Valid {
+				e.Parallel = value.Bool
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -348,6 +401,28 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("config_value=")
 	builder.WriteString(fmt.Sprintf("%v", e.ConfigValue))
+	builder.WriteString(", ")
+	builder.WriteString("grant_type=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantType))
+	builder.WriteString(", ")
+	builder.WriteString("grant_measure=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantMeasure))
+	builder.WriteString(", ")
+	if v := e.GrantDurationValue; v != nil {
+		builder.WriteString("grant_duration_value=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("grant_duration_unit=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantDurationUnit))
+	builder.WriteString(", ")
+	if v := e.GrantQuota; v != nil {
+		builder.WriteString("grant_quota=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("parallel=")
+	builder.WriteString(fmt.Sprintf("%v", e.Parallel))
 	builder.WriteByte(')')
 	return builder.String()
 }

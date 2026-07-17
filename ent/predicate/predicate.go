@@ -60,6 +60,9 @@ type Customer func(*sql.Selector)
 // Entitlement is the predicate function for entitlement builders.
 type Entitlement func(*sql.Selector)
 
+// EntitlementGrant is the predicate function for entitlementgrant builders.
+type EntitlementGrant func(*sql.Selector)
+
 // EntityIntegrationMapping is the predicate function for entityintegrationmapping builders.
 type EntityIntegrationMapping func(*sql.Selector)
 

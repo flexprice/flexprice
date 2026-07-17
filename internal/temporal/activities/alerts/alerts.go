@@ -49,6 +49,12 @@ func (a *AlertActivities) prepare(ctx context.Context, tenantID, environmentID, 
 // SpendAlertsActivity evaluates subscription / line-item / group spend
 // alerts for the customer end to end (fetch subs + configs + usage + charges,
 // compare thresholds, log alerts). Self-contained.
+//
+// Deprecated: kept for backward compatibility with pre-FLE-959 workflow
+// definitions still running through Temporal's history replay. New workflow
+// runs use SpendAndEntitlementAlertsActivity, which fuses spend and grant
+// evaluation to share subscription/customer setup and cover FLE-959 grants
+// in the same activity.
 func (a *AlertActivities) SpendAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
 	log := activity.GetLogger(ctx)
 	log.Info("SpendAlertsActivity started",
@@ -66,6 +72,35 @@ func (a *AlertActivities) SpendAlertsActivity(ctx context.Context, input models.
 	}
 
 	return service.NewAlertService(a.serviceParams).EvaluateSpendAlertsForCustomer(ctx, cust, nil, nil)
+}
+
+// SpendAndEntitlementAlertsActivity is the FLE-959 fused evaluator: subscription /
+// line-item / group spend alerts AND per-grant threshold + exhaustion alerts,
+// running in one activity so subscription and customer setup are shared.
+// Wallet alerts remain on their own activity (WalletAlertsActivity) — the
+// wallet path has its own throttle + balance-cache semantics that don't fuse
+// cleanly here.
+//
+// The heavy lifting is in the service layer; this activity is a thin adapter.
+// Idempotent under Temporal retries via LogAlert's state-transition dedup and
+// UpdateSnapshot's upsert semantics.
+func (a *AlertActivities) SpendAndEntitlementAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
+	log := activity.GetLogger(ctx)
+	log.Info("SpendAndEntitlementAlertsActivity started",
+		"tenant_id", input.TenantID,
+		"customer_id", input.CustomerID,
+	)
+
+	ctx, cust, err := a.prepare(ctx, input.TenantID, input.EnvironmentID, input.CustomerID)
+	if err != nil {
+		return err
+	}
+	if cust == nil {
+		log.Info("customer not found, fused alerts activity is a no-op", "customer_id", input.CustomerID)
+		return nil
+	}
+
+	return service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust)
 }
 
 // WalletAlertsActivity evaluates wallet-balance / feature-wallet-balance
