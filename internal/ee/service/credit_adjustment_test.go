@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -79,8 +80,14 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		PriceRepo:                stores.PriceRepo,
 		FeatureRepo:              stores.FeatureRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		PlanRepo:                 stores.PlanRepo,
+		AddonRepo:                stores.AddonRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		CreditGrantRepo:          stores.CreditGrantRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
+		Locker:                   s.GetLocker(),
 	}
 	s.service = NewCreditAdjustmentService(params)
 	s.walletService = NewWalletService(params)
@@ -366,6 +373,72 @@ func (s *CreditAdjustmentServiceSuite) reloadInvoiceWithLineItems(id string) *in
 	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), id)
 	s.NoError(err)
 	inv.LineItems = lineItems
+	return inv
+}
+
+// createActiveStandaloneSubscription creates and persists a minimal active standalone subscription for
+// the suite's test customer. ConsumeExpiringCreditIntoInvoices filters draft invoices by active
+// standalone/parent subscriptions, so its tests need a real, persisted subscription (no plan/prices
+// needed - we bypass usage-pricing machinery for these tests, per the fallback described in the plan).
+func (s *CreditAdjustmentServiceSuite) createActiveStandaloneSubscription(id, currency string) *subscription.Subscription {
+	now := s.GetNow()
+	sub := &subscription.Subscription{
+		ID:                 id,
+		CustomerID:         s.testData.customer.ID,
+		Currency:           currency,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		StartDate:          now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+	return sub
+}
+
+// createDraftSubInvoiceWithUsageLineItem creates a DB-backed draft invoice tied to a real subscription,
+// with a single usage line item of the given amount. Uses InvoiceType OneOff (not Subscription) with
+// req=nil on the ComputeInvoice call this exercises: for a OneOff invoice, ComputeInvoice's nil-request
+// path does not touch line items or recompute totals from usage (that recompute path is
+// Subscription-type-only and requires real ClickHouse-backed usage data), so the manually-seeded line
+// item and Subtotal survive the orchestrator's recompute call untouched - letting this test exercise the
+// ORCHESTRATION (finding the subscription/invoice, locking, calling ComputeInvoice, applying credit)
+// without needing a full usage-pricing fixture.
+func (s *CreditAdjustmentServiceSuite) createDraftSubInvoiceWithUsageLineItem(id, currency string, amount decimal.Decimal, subID string, periodStart time.Time) *invoice.Invoice {
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        id,
+		CustomerID:       s.testData.customer.ID,
+		Amount:           amount,
+		Currency:         currency,
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	periodEnd := periodStart.Add(30 * 24 * time.Hour)
+	inv := &invoice.Invoice{
+		ID:             id,
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: lo.ToPtr(subID),
+		Currency:       currency,
+		Subtotal:       amount,
+		Total:          amount,
+		AmountDue:      amount,
+		InvoiceType:    types.InvoiceTypeOneOff,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		PeriodStart:    lo.ToPtr(periodStart),
+		PeriodEnd:      lo.ToPtr(periodEnd),
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:      []*invoice.InvoiceLineItem{li},
+	}
+
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
 	return inv
 }
 
@@ -909,4 +982,110 @@ func TestCalculateCreditAdjustments_Additive(t *testing.T) {
 			t.Fatalf("line applied = %s, want unchanged 100", line.PrepaidCreditsApplied)
 		}
 	})
+}
+
+// TestConsumeExpiringCreditIntoInvoices_EndToEnd proves the full orchestration: given an about-to-expire
+// wallet transaction, the service finds the customer's active subscription, finds its draft invoice,
+// takes the per-invoice lock, recomputes the invoice via ComputeInvoice, and applies the credit -
+// persisting both the line item and the invoice's Total/AmountDue/AmountRemaining.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_EndToEnd() {
+	sub := s.createActiveStandaloneSubscription("sub_e2e", "USD")
+	inv := s.createDraftSubInvoiceWithUsageLineItem("inv_e2e", "USD", decimal.NewFromInt(100), sub.ID, s.GetNow().Add(-24*time.Hour))
+
+	w := s.createWalletWithCredit("wallet_e2e", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(60), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(consumed),
+		"expected 60 consumed, got %s", consumed.String())
+
+	// The source grant must be drawn down by exactly what was consumed.
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(reloadedSource.CreditsAvailable.IsZero(),
+		"source grant should be fully consumed, got %s available", reloadedSource.CreditsAvailable.String())
+
+	// The invoice's Total/AmountDue/AmountRemaining must reflect the applied credit, and the line item's
+	// PrepaidCreditsApplied must be persisted (not just held in memory).
+	reloadedInv := s.reloadInvoiceWithLineItems(inv.ID)
+	s.True(decimal.NewFromInt(60).Equal(reloadedInv.TotalPrepaidCreditsApplied),
+		"invoice TotalPrepaidCreditsApplied = %s, want 60", reloadedInv.TotalPrepaidCreditsApplied.String())
+	s.True(decimal.NewFromInt(40).Equal(reloadedInv.Total),
+		"invoice Total = %s, want 40 (100 - 60)", reloadedInv.Total.String())
+	s.True(decimal.NewFromInt(40).Equal(reloadedInv.AmountDue),
+		"invoice AmountDue = %s, want 40", reloadedInv.AmountDue.String())
+	s.True(decimal.NewFromInt(40).Equal(reloadedInv.AmountRemaining),
+		"invoice AmountRemaining = %s, want 40", reloadedInv.AmountRemaining.String())
+	s.Require().Len(reloadedInv.LineItems, 1)
+	s.True(decimal.NewFromInt(60).Equal(reloadedInv.LineItems[0].PrepaidCreditsApplied),
+		"line item PrepaidCreditsApplied = %s, want 60", reloadedInv.LineItems[0].PrepaidCreditsApplied.String())
+}
+
+// TestConsumeExpiringCreditIntoInvoices_BestEffortSkipsFailingInvoice proves per-invoice failures are
+// isolated: one invoice whose recompute errors (a Subscription-type invoice missing PeriodStart/PeriodEnd,
+// which ComputeInvoice rejects) must not block the credit from being applied to the other, healthy draft
+// invoice on the same subscription, and the orchestrator itself must return no error (best-effort).
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_BestEffortSkipsFailingInvoice() {
+	sub := s.createActiveStandaloneSubscription("sub_best_effort", "USD")
+
+	// Healthy invoice: OneOff, ceiling 50.
+	healthyInv := s.createDraftSubInvoiceWithUsageLineItem("inv_healthy", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow())
+
+	// Broken invoice: InvoiceType Subscription with SubscriptionID set but PeriodStart/PeriodEnd nil -
+	// ComputeInvoice rejects this combination with a validation error before ever touching line items.
+	pt := string(types.PRICE_TYPE_USAGE)
+	brokenLine := &invoice.InvoiceLineItem{
+		ID:         s.GetUUID(),
+		InvoiceID:  "inv_broken",
+		CustomerID: s.testData.customer.ID,
+		Amount:     decimal.NewFromInt(999),
+		Currency:   "USD",
+		Quantity:   decimal.NewFromInt(1),
+		PriceType:  &pt,
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	brokenInv := &invoice.Invoice{
+		ID:             "inv_broken",
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: lo.ToPtr(sub.ID),
+		Currency:       "USD",
+		Subtotal:       decimal.NewFromInt(999),
+		Total:          decimal.NewFromInt(999),
+		AmountDue:      decimal.NewFromInt(999),
+		InvoiceType:    types.InvoiceTypeSubscription, // PeriodStart/PeriodEnd required, but left nil below
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:      []*invoice.InvoiceLineItem{brokenLine},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), brokenInv))
+
+	w := s.createWalletWithCredit("wallet_best_effort", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(200), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err, "orchestrator must be best-effort and not fail the whole call")
+	s.True(decimal.NewFromInt(50).Equal(consumed),
+		"expected only the healthy invoice's ceiling (50) consumed, got %s", consumed.String())
+
+	// The healthy invoice got its credit.
+	reloadedHealthy := s.reloadInvoiceWithLineItems(healthyInv.ID)
+	s.True(decimal.NewFromInt(50).Equal(reloadedHealthy.TotalPrepaidCreditsApplied),
+		"healthy invoice TotalPrepaidCreditsApplied = %s, want 50", reloadedHealthy.TotalPrepaidCreditsApplied.String())
+
+	// The broken invoice was left untouched - no credit applied, no line item mutated.
+	reloadedBroken := s.reloadInvoiceWithLineItems(brokenInv.ID)
+	s.True(reloadedBroken.TotalPrepaidCreditsApplied.IsZero(),
+		"broken invoice TotalPrepaidCreditsApplied should remain 0, got %s", reloadedBroken.TotalPrepaidCreditsApplied.String())
+	s.Require().Len(reloadedBroken.LineItems, 1)
+	s.True(reloadedBroken.LineItems[0].PrepaidCreditsApplied.IsZero(),
+		"broken invoice line item PrepaidCreditsApplied should remain 0, got %s", reloadedBroken.LineItems[0].PrepaidCreditsApplied.String())
+
+	// Only 50 of the 200 available was drawn from the source grant; 150 remains.
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(150).Equal(reloadedSource.CreditsAvailable),
+		"expected 150 remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
 }

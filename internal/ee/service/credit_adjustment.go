@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -465,4 +468,130 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 		return nil, err
 	}
 	return result, nil
+}
+
+// ConsumeExpiringCreditIntoInvoices best-effort applies an about-to-expire credit transaction against the
+// customer's active standalone/parent subscription draft invoices before the remaining credit is expired.
+// Returns the total amount consumed into invoices. Per-invoice failures are logged and skipped so that
+// credit expiry is never blocked.
+func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error) {
+	consumed := decimal.Zero
+	if tx.ExpiryDate == nil {
+		return consumed, nil
+	}
+
+	subFilter := types.NewSubscriptionFilter()
+	subFilter.CustomerID = tx.CustomerID
+	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+	subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
+	subs, err := s.SubRepo.List(ctx, subFilter)
+	if err != nil {
+		return consumed, err
+	}
+
+	for _, sub := range subs {
+		f := types.NewInvoiceFilter()
+		f.SubscriptionID = sub.ID
+		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+		f.Currency = tx.Currency // wallets are per-currency
+		invoices, err := s.InvoiceRepo.List(ctx, f)
+		if err != nil {
+			s.Logger.Error(ctx, "pre_expiry_list_invoices_failed", "subscription_id", sub.ID, "error", err)
+			continue
+		}
+
+		// Most-recent period first.
+		sort.SliceStable(invoices, func(i, j int) bool {
+			return lo.FromPtr(invoices[i].PeriodStart).After(lo.FromPtr(invoices[j].PeriodStart))
+		})
+
+		for _, inv := range invoices {
+			// Re-read the tx: prior invoices in this pass may have drawn down the credit.
+			latestTx, err := s.WalletRepo.GetTransactionByID(ctx, tx.ID)
+			if err != nil {
+				return consumed, err
+			}
+			if latestTx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
+				return consumed, nil
+			}
+
+			applied, err := s.consumeExpiringCreditIntoInvoice(ctx, inv.ID, latestTx)
+			if err != nil {
+				s.Logger.Error(ctx, "pre_expiry_apply_failed", "invoice_id", inv.ID, "transaction_id", tx.ID, "error", err)
+				continue // best-effort
+			}
+			consumed = consumed.Add(applied)
+		}
+	}
+
+	return consumed, nil
+}
+
+// consumeExpiringCreditIntoInvoice recomputes one draft invoice (usage as of now — ComputeInvoice is called
+// with a nil request, no period override; usage naturally reflects "as of now" since there's no future
+// event data to aggregate) and applies up to the credit's CreditsAvailable of prepaid credit to it, under a
+// per-invoice Redis lock. Returns how much credit was newly applied to this invoice.
+func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.Context, invoiceID string, tx *wallet.Transaction) (decimal.Decimal, error) {
+	if s.Locker == nil {
+		return decimal.Zero, ierr.NewError("prepaid credit apply lock unavailable").
+			WithHint("Redis cache is not available").
+			Mark(ierr.ErrServiceUnavailable)
+	}
+	lock, err := s.Locker.AcquireLock(ctx, prepaidCreditApplyLockKey(invoiceID), cache.ExpiryPrepaidCreditApplyLock)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	if !lock.AcquiredSuccessfully() {
+		s.Logger.Info(ctx, "pre_expiry_lock_rejected", "invoice_id", invoiceID)
+		return decimal.Zero, nil // another worker holds it; retried next schedule tick
+	}
+	defer func() { _ = lock.Release(ctx) }()
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	// Standard recompute — usage naturally reflects "as of now". No period override.
+	if _, err := invoiceService.ComputeInvoice(ctx, invoiceID, nil); err != nil {
+		return decimal.Zero, err
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	// A zero-usage recompute may mark the invoice SKIPPED; only DRAFT invoices are eligible.
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return decimal.Zero, nil
+	}
+	lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, invoiceID)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	inv.LineItems = lineItems
+
+	before := inv.TotalPrepaidCreditsApplied
+	var newlyApplied decimal.Decimal
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		result, err := s.applyExpiringCreditToInvoice(ctx, inv, tx)
+		if err != nil {
+			return err
+		}
+
+		newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied)
+		if newTotal.IsNegative() {
+			newTotal = decimal.Zero
+		}
+		inv.Total = newTotal
+		inv.AmountDue = inv.Total
+		inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+
+		newlyApplied = result.TotalPrepaidCreditsApplied.Sub(before)
+		if newlyApplied.IsNegative() {
+			newlyApplied = decimal.Zero
+		}
+		return s.InvoiceRepo.Update(ctx, inv)
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return newlyApplied, nil
 }

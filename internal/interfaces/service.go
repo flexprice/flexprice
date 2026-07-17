@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -205,6 +206,10 @@ type PriceUnitService interface {
 type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
+
+	// ConsumeExpiringCreditIntoInvoices best-effort applies an about-to-expire credit against the
+	// customer's active-subscription draft invoices before it is expired. Returns the amount consumed.
+	ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error)
 }
 
 type CheckoutSessionService interface {
