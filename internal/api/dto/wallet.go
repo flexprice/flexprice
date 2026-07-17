@@ -344,6 +344,10 @@ type TopUpWalletRequest struct {
 	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
 	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
 	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+	// bonus_credits_expiry_date_utc is the expiry (UTC, full precision) applied to the bonus
+	// credits transaction. Independent of expiry_date_utc, which governs the purchase credits.
+	// Only honored when bonus credits are actually granted (explicit BonusCreditsToAdd or slab).
+	BonusCreditsExpiryDateUTC *time.Time `json:"bonus_credits_expiry_date_utc,omitempty"`
 
 	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
 }
@@ -398,6 +402,12 @@ func (r *TopUpWalletRequest) Validate() error {
 			WithReportableDetails(map[string]interface{}{
 				"bonus_credits_to_add": r.BonusCreditsToAdd,
 			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+		return ierr.NewError("bonus_credits_expiry_date_utc cannot be in the past").
+			WithHint("Bonus credits expiry date must be in the future").
 			Mark(ierr.ErrValidation)
 	}
 
