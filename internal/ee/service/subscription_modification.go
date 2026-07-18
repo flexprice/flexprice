@@ -49,7 +49,7 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeInheritance:
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
-		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
+		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
@@ -305,14 +305,14 @@ func (s *subscriptionModificationService) previewInheritance(
 
 // ─────────────────────────────────────────────
 // Sub-feature 2: Quantity Change
-// Plan (A) + proration (B) + apply (C) + settlePayLater (D1) in subscription_modification_quantity.go.
-// Pay-first checkout is Module D3+.
+// Plan (A) + proration (B) + apply/settle in subscription_modification_quantity.go.
 // ─────────────────────────────────────────────
 
 func (s *subscriptionModificationService) executeQuantityChange(
 	ctx context.Context,
 	subscriptionID string,
 	params *dto.SubModifyQuantityChangeRequest,
+	checkout *dto.CheckoutParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
@@ -326,15 +326,31 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		return nil, err
 	}
 
+	// Pay-first: checkout present + net charge > 0 (and no credits in the same batch).
+	if checkout != nil {
+		if err := checkout.Validate(); err != nil {
+			return nil, err
+		}
+		netCharge := prorationResult.GetNetCharge()
+		netCredit := prorationResult.GetNetCredit()
+		if netCharge.GreaterThan(decimal.Zero) && netCredit.GreaterThan(decimal.Zero) {
+			return nil, ierr.NewError("checkout cannot be used with mixed upgrade and downgrade proration").
+				WithHint("Split quantity increases and decreases into separate requests when using checkout").
+				Mark(ierr.ErrValidation)
+		}
+		if netCharge.GreaterThan(decimal.Zero) {
+			return s.settlePayFirst(ctx, plan, prorationResult, checkout)
+		}
+		// checkout + credit/zero → immediate path (ignore checkout)
+	}
+
 	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, plan, prorationResult)
 	if err != nil {
 		return nil, err
 	}
 
-	// Publish webhook event
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	// Build response
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {

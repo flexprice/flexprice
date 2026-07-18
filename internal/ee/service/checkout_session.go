@@ -179,6 +179,17 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 			}
 		}
 	}
+	// modify_subscription (and other actions) store ids on the session columns.
+	if session.CheckoutPaymentID != nil && *session.CheckoutPaymentID != "" {
+		if err := s.PaymentRepo.Delete(ctx, *session.CheckoutPaymentID); err != nil {
+			s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", *session.CheckoutPaymentID, "error", err)
+		}
+	}
+	if session.CheckoutInvoiceID != nil && *session.CheckoutInvoiceID != "" {
+		if err := s.InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID); err != nil {
+			s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", *session.CheckoutInvoiceID, "error", err)
+		}
+	}
 
 	// Terminal status depends on whether this is a natural expiry or an error.
 	if reason != nil {

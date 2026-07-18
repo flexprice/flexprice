@@ -6,6 +6,7 @@ import (
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
@@ -70,6 +71,13 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 
 	if err := r.Action.Validate(); err != nil {
 		return err
+	}
+
+	// modify_subscription sessions are created only via subscription modify/execute (pay-first).
+	if r.Action == types.CheckoutActionModifySubscription {
+		return ierr.NewError("modify_subscription is not supported via create checkout session").
+			WithHint("Use POST /subscriptions/{id}/modify/execute with a checkout object instead").
+			Mark(ierr.ErrValidation)
 	}
 
 	if err := r.CheckoutParams.Validate(); err != nil {

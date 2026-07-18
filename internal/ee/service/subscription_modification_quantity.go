@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -52,6 +54,32 @@ func (p *quantityChangePlan) GetModifications() []*quantityChangeLineItemMod {
 		return nil
 	}
 	return p.modifications
+}
+
+// toModifySubscriptionParams maps the validated plan into checkout configuration
+// for payment-gated apply on webhook complete.
+func (p *quantityChangePlan) toModifySubscriptionParams() *types.ModifySubscriptionParams {
+	if p == nil {
+		return nil
+	}
+	mods := p.GetModifications()
+	lineMods := make([]types.ModifySubscriptionLineItem, 0, len(mods))
+	for _, m := range mods {
+		if m == nil {
+			continue
+		}
+		effectiveDate := m.getEffectiveDate()
+		ed := effectiveDate
+		lineMods = append(lineMods, types.ModifySubscriptionLineItem{
+			LineItemID:    m.getLineItemID(),
+			Quantity:      m.getQuantity(),
+			EffectiveDate: &ed,
+		})
+	}
+	return &types.ModifySubscriptionParams{
+		SubscriptionID:        p.GetSubscriptionID(),
+		LineItemModifications: lineMods,
+	}
 }
 
 // previewChangedLineItems returns placeholder changed_resources line items
@@ -293,14 +321,14 @@ func (r *quantityChangeProration) getItems() []*quantityChangeProrationItem {
 	return r.items
 }
 
-func (r *quantityChangeProration) getNetCharge() decimal.Decimal {
+func (r *quantityChangeProration) GetNetCharge() decimal.Decimal {
 	if r == nil {
 		return decimal.Zero
 	}
 	return r.netCharge
 }
 
-func (r *quantityChangeProration) getNetCredit() decimal.Decimal {
+func (r *quantityChangeProration) GetNetCredit() decimal.Decimal {
 	if r == nil {
 		return decimal.Zero
 	}
@@ -558,6 +586,262 @@ func (s *subscriptionModificationService) settlePayLater(
 	}
 
 	return changedLineItems, changedInvoices, nil
+}
+
+// ─────────────────────────────────────────────
+// Module D3 — pay-first settlement (no LI apply)
+// ─────────────────────────────────────────────
+
+// settlePayFirst persists the plan on a checkout session, locks money on a DRAFT
+// ONE_OFF invoice, and returns a payment link. Line items are applied on payment success.
+func (s *subscriptionModificationService) settlePayFirst(
+	ctx context.Context,
+	plan *quantityChangePlan,
+	prorationResult *quantityChangeProration,
+	checkout *dto.CheckoutParams,
+) (*dto.SubscriptionModifyResponse, error) {
+	if plan == nil || prorationResult == nil || checkout == nil {
+		return nil, ierr.NewError("pay-first settlement requires plan, proration, and checkout").
+			Mark(ierr.ErrValidation)
+	}
+
+	sp := s.serviceParams
+	sub := plan.GetSubscription()
+	if sub == nil {
+		return nil, ierr.NewError("quantity change plan has no subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	modifyParams := plan.toModifySubscriptionParams()
+	if err := modifyParams.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.guardPendingModifyCheckout(ctx, sub.CustomerID, plan.GetSubscriptionID()); err != nil {
+		return nil, err
+	}
+
+	providerCfg := &types.CheckoutPaymentProviderConfig{}
+	if checkout.PaymentProviderConfig != nil {
+		providerCfg = checkout.PaymentProviderConfig
+	}
+	if providerCfg.CollectionMethod == "" {
+		providerCfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+	if err := providerCfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	draftInvoice, err := s.createAggregatedProrationDraftInvoice(ctx, sub, prorationResult)
+	if err != nil {
+		return nil, err
+	}
+
+	var meta types.Metadata
+	if len(checkout.Metadata) > 0 {
+		meta = types.Metadata(checkout.Metadata)
+	}
+
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      sub.CustomerID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusInitiated,
+		PaymentProvider: checkout.PaymentProvider,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: modifyParams,
+		}),
+		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(providerCfg),
+		IdempotencyKey:        checkout.IdempotencyKey,
+		SuccessURL:            checkout.SuccessURL,
+		FailureURL:            checkout.FailureURL,
+		CancelURL:             checkout.CancelURL,
+		ExpiresAt:             time.Now().UTC().Add(checkout.PaymentProvider.SessionExpiry()),
+		Metadata:              meta,
+		BaseModel:             types.GetDefaultBaseModel(ctx),
+	}
+
+	if err := sp.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		return nil, err
+	}
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: sp}
+
+	// Fulfill: payment + provider link. On failure, best-effort cleanup.
+	if err := s.fulfillModifySubscriptionCheckout(ctx, checkoutSvc, session, &draftInvoice.Invoice); err != nil {
+		if cleanupErr := checkoutSvc.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
+			sp.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
+				"session_id", session.ID,
+				"error", cleanupErr,
+				"original_err", err,
+			)
+		}
+		return nil, err
+	}
+
+	sessionResp := dto.ToCheckoutSessionResponse(session)
+	checkoutSvc.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
+
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, plan.GetSubscriptionID())
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-fetch draft invoice for response (amounts after compute).
+	invoiceSvc := NewInvoiceService(sp)
+	latestInv, err := invoiceSvc.GetInvoice(ctx, draftInvoice.ID)
+	if err != nil {
+		latestInv = draftInvoice
+	}
+
+	return &dto.SubscriptionModifyResponse{
+		Subscription: subResp,
+		ChangedResources: dto.ChangedResources{
+			LineItems: plan.previewChangedLineItems(),
+			Invoices: []dto.ChangedInvoice{
+				{
+					ID:      latestInv.ID,
+					Action:  dto.ChangedInvoiceActionCreated,
+					Status:  dto.ChangedInvoiceStatusFromPaymentStatus(latestInv.PaymentStatus),
+					Invoice: latestInv,
+				},
+			},
+		},
+		CheckoutSession: sessionResp,
+	}, nil
+}
+
+func (s *subscriptionModificationService) fulfillModifySubscriptionCheckout(
+	ctx context.Context,
+	checkoutSvc *checkoutSessionService,
+	session *domainCheckout.CheckoutSession,
+	inv *invoice.Invoice,
+) error {
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, inv, session.PaymentProvider)
+	if err != nil {
+		return err
+	}
+	session.CheckoutInvoiceID = &inv.ID
+	session.CheckoutPaymentID = &payResp.ID
+
+	providerResult, err := checkoutSvc.callCheckoutProvider(ctx, session, payResp)
+	if err != nil {
+		return err
+	}
+	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	session.CheckoutStatus = types.CheckoutStatusPending
+	return s.serviceParams.CheckoutSessionRepo.Update(ctx, session)
+}
+
+func (s *subscriptionModificationService) guardPendingModifyCheckout(
+	ctx context.Context,
+	customerID string,
+	subscriptionID string,
+) error {
+	filter := &types.CheckoutSessionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerIDs: []string{customerID},
+		Actions:     []types.CheckoutAction{types.CheckoutActionModifySubscription},
+		CheckoutStatuses: []types.CheckoutStatus{
+			types.CheckoutStatusInitiated,
+			types.CheckoutStatusPending,
+		},
+	}
+	sessions, err := s.serviceParams.CheckoutSessionRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess == nil {
+			continue
+		}
+		cfg := sess.Configuration.ToCheckoutConfiguration()
+		if cfg.ModifySubscriptionParams != nil &&
+			cfg.ModifySubscriptionParams.SubscriptionID == subscriptionID {
+			return ierr.NewError("a pending checkout session already exists for this subscription").
+				WithHint("Complete or cancel the existing checkout before starting another payment-gated modification").
+				WithReportableDetails(map[string]any{
+					"subscription_id":     subscriptionID,
+					"checkout_session_id": sess.ID,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+	}
+	return nil
+}
+
+// createAggregatedProrationDraftInvoice locks the total net charge on one DRAFT ONE_OFF invoice.
+func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	prorationResult *quantityChangeProration,
+) (*dto.InvoiceResponse, error) {
+	chargeItems := make([]*quantityChangeProrationItem, 0)
+	for _, item := range prorationResult.getItems() {
+		if item != nil && item.getNetAmount().GreaterThan(decimal.Zero) {
+			chargeItems = append(chargeItems, item)
+		}
+	}
+	if len(chargeItems) == 0 {
+		return nil, ierr.NewError("no proration charge to collect via checkout").
+			Mark(ierr.ErrValidation)
+	}
+
+	req := buildAggregatedProrationChargeInvoiceRequest(sub, chargeItems)
+	invoiceSvc := NewInvoiceService(s.serviceParams)
+	draftResp, err := invoiceSvc.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+	if err != nil {
+		return nil, err
+	}
+	computeReq := req.ToComputeRequest()
+	skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	if err != nil {
+		return nil, err
+	}
+	if skipped {
+		return nil, ierr.NewError("proration draft invoice was skipped").
+			WithHint("Expected a non-zero proration charge").
+			WithReportableDetails(map[string]any{"invoice_id": draftResp.ID}).
+			Mark(ierr.ErrValidation)
+	}
+	return invoiceSvc.GetInvoice(ctx, draftResp.ID)
+}
+
+func buildAggregatedProrationChargeInvoiceRequest(
+	sub *subscription.Subscription,
+	items []*quantityChangeProrationItem,
+) dto.CreateInvoiceRequest {
+	lineItems := make([]dto.CreateInvoiceLineItemRequest, 0, len(items))
+	total := decimal.Zero
+	var periodStart *time.Time
+	periodEnd := sub.CurrentPeriodEnd
+	billingPeriod := string(sub.BillingPeriod)
+
+	for _, item := range items {
+		single := buildProrationChargeInvoiceRequest(sub, item)
+		total = total.Add(single.AmountDue)
+		lineItems = append(lineItems, single.LineItems...)
+		if single.PeriodStart != nil && (periodStart == nil || single.PeriodStart.Before(*periodStart)) {
+			periodStart = single.PeriodStart
+		}
+	}
+
+	return dto.CreateInvoiceRequest{
+		CustomerID:     sub.GetInvoicingCustomerID(),
+		SubscriptionID: &sub.ID,
+		InvoiceType:    types.InvoiceTypeOneOff,
+		Currency:       sub.Currency,
+		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
+		AmountDue:      total,
+		Total:          total,
+		Subtotal:       total,
+		PeriodStart:    periodStart,
+		PeriodEnd:      &periodEnd,
+		BillingPeriod:  &billingPeriod,
+		LineItems:      lineItems,
+	}
 }
 
 // createProrationChargeInvoice creates a ONE_OFF proration charge for one B item.
