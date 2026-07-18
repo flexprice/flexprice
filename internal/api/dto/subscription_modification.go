@@ -32,6 +32,11 @@ type SubModifyInheritanceRequest struct {
 	ExternalCustomerIDsToRemove []string `json:"external_customer_ids_to_remove,omitempty"`
 }
 
+// checkoutAllowedModifyTypes is the allowlist of modification types that accept checkout.
+var checkoutAllowedModifyTypes = []SubscriptionModifyType{
+	SubscriptionModifyTypeQuantityChange,
+}
+
 func (r *SubModifyInheritanceRequest) Validate() error {
 	switch r.Action {
 	case InheritanceActionRemove:
@@ -59,7 +64,7 @@ func (r *SubModifyInheritanceRequest) Validate() error {
 
 // LineItemQuantityChange describes a quantity change for a single line item.
 type LineItemQuantityChange struct {
-	ID       string           `json:"id" binding:"required"`
+	ID       string          `json:"id" binding:"required"`
 	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
 	// EffectiveDate is when the quantity change takes effect.
 	// If omitted, the change is effective immediately (now).
@@ -277,6 +282,7 @@ func (r *SubModifyTaxParams) Validate() error {
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of the *Params fields must be set, matching the type.
+// Optional Checkout opts into pay-first for allowlisted types (e.g. quantity_change).
 type ExecuteSubscriptionModifyRequest struct {
 	Type                   SubscriptionModifyType           `json:"type" binding:"required"`
 	InheritanceParams      *SubModifyInheritanceRequest     `json:"inheritance_params,omitempty"`
@@ -285,51 +291,80 @@ type ExecuteSubscriptionModifyRequest struct {
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
+	Checkout               *CheckoutParams                  `json:"checkout,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
+	var err error
 	switch r.Type {
 	case SubscriptionModifyTypeInheritance:
 		if r.InheritanceParams == nil {
 			return ierr.NewError("inheritance_params is required for type 'inheritance'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.InheritanceParams.Validate()
+		err = r.InheritanceParams.Validate()
 	case SubscriptionModifyTypeQuantityChange:
 		if r.QuantityChangeParams == nil {
 			return ierr.NewError("quantity_change_params is required for type 'quantity_change'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.QuantityChangeParams.Validate()
+		err = r.QuantityChangeParams.Validate()
 	case SubscriptionModifyTypeGroupedInvoicing:
 		if r.GroupedInvoicingParams == nil {
 			return ierr.NewError("grouped_invoicing_params is required for type 'grouped_invoicing'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.GroupedInvoicingParams.Validate()
+		err = r.GroupedInvoicingParams.Validate()
 	case SubscriptionModifyTypeTrialEnd:
 		if r.TrialEndParams == nil {
 			return ierr.NewError("trial_end_params is required for type 'trial_end'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.TrialEndParams.Validate()
+		err = r.TrialEndParams.Validate()
 	case SubscriptionModifyTypeCoupon:
 		if r.CouponParams == nil {
 			return ierr.NewError("coupon_params is required for type 'coupon'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.CouponParams.Validate()
+		err = r.CouponParams.Validate()
 	case SubscriptionModifyTypeTax:
 		if r.TaxParams == nil {
 			return ierr.NewError("tax_params is required for type 'tax'").
 				Mark(ierr.ErrValidation)
 		}
-		return r.TaxParams.Validate()
+		err = r.TaxParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
 			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax").
 			Mark(ierr.ErrValidation)
 	}
+	if err != nil {
+		return err
+	}
+	return r.validateCheckout()
+}
+
+func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
+	if r.Checkout == nil {
+		return nil
+	}
+	allowed := false
+	for _, t := range checkoutAllowedModifyTypes {
+		if r.Type == t {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return ierr.NewError("checkout is not supported for this modification type").
+			WithHint("checkout is only allowed for quantity_change").
+			WithReportableDetails(map[string]any{
+				"type":          r.Type,
+				"allowed_types": checkoutAllowedModifyTypes,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return r.Checkout.Validate()
 }
 
 // ChangedLineItemAction describes how a subscription line item changed.
@@ -421,4 +456,8 @@ type SubscriptionModifyResponse struct {
 	Subscription *SubscriptionResponse `json:"subscription"`
 	// All resources created or mutated as a result of this modification.
 	ChangedResources ChangedResources `json:"changed_resources"`
+	// CheckoutSession is set on pay-first execute when payment must be collected
+	// before line-item changes apply. Reuses CheckoutSessionResponse (payment_action
+	// at session root). Omitted for pay-later and preview.
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }

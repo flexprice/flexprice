@@ -1,9 +1,8 @@
-  
-Payment-Gated Subscription Quantity Change — Design ERD
+# Payment-Gated Subscription Quantity Change — Design ERD
 
 Status: **Design (not implemented)**  
-Date: 2026-07-17  
-Related: [Seat-Based Pricing](https://docs.flexprice.io/docs/subscriptions/seat-based-pricing), [Checkout overview](https://docs.flexprice.io/docs/checkout/overview.md), checkout create-subscription flow in `internal/ee/service/checkout_session.go`
+Date: 2026-07-17 (updated 2026-07-18)  
+Related: [Seat-Based Pricing](https://docs.flexprice.io/docs/subscriptions/seat-based-pricing), [Checkout overview](https://docs.flexprice.io/docs/checkout/overview.md), checkout create-subscription in `internal/ee/service/checkout_session.go`
 
 ---
 
@@ -13,7 +12,7 @@ Today, `POST /subscriptions/{id}/modify/execute` with `type: quantity_change` **
 
 For B2B2C (e.g. Sarvam-style), a seat increase that produces a **proration charge** must only take effect **after** checkout payment succeeds — same gate as hosted checkout for `create_subscription`.
 
-**Goal:** opt-in pay-first path for quantity changes with net charge > 0; zero behavior change for existing pay-later modify; reuse checkout sessions as the short-lived payment vehicle (no separate pending-operations table).
+**Goal:** opt-in pay-first path for quantity changes with net charge > 0; zero behavior change for existing pay-later modify; reuse checkout sessions as the short-lived payment vehicle (no new pending-operations table).
 
 ---
 
@@ -22,57 +21,98 @@ For B2B2C (e.g. Sarvam-style), a seat increase that produces a **proration charg
 ### 2.1 API surface (backward compatible)
 
 - `modify/preview` — unchanged (dry-run).
-- `modify/execute` — default unchanged (pay-later).
-- Opt-in flag on execute (name TBD, e.g. `require_payment: true`):
-  - If net proration **charge ≤ 0** (credit / no-op / ARREAR-only versioning): keep today’s immediate path.
-  - If net proration **charge > 0**: do **not** mutate live line items; create checkout session + draft invoice + payment; return same `SubscriptionModifyResponse` extended with checkout / `payment_action`.
+- `modify/execute` — default unchanged (pay-later) when `checkout` is omitted.
+- Opt-in: optional `**checkout**` object on the execute request. Presence means “collect payment before applying.”
+
+```json
+{
+  "type": "quantity_change",
+  "quantity_change_params": {
+    "line_items": [
+      { "id": "subs_line_old", "quantity": "15", "effective_date": "2026-07-20T04:00:00Z" }
+    ]
+  },
+  "checkout": {
+    "payment_provider": "razorpay",
+    "success_url": "https://app.example.com/ok",
+    "failure_url": "https://app.example.com/fail",
+    "cancel_url": "https://app.example.com/cancel",
+    "idempotency_key": "optional-client-retry-key",
+    "payment_provider_config": {},
+    "metadata": {}
+  }
+}
+```
+
+
+| `checkout` field                             | Required | Notes                                                      |
+| -------------------------------------------- | -------- | ---------------------------------------------------------- |
+| `payment_provider`                           | Yes      | e.g. `razorpay`                                            |
+| `success_url` / `failure_url` / `cancel_url` | Optional | Redirect UX                                                |
+| `idempotency_key`                            | Optional | Client retries; omit if duplicates on retry are acceptable |
+| `payment_provider_config`                    | Optional | Mandates later                                             |
+| `metadata`                                   | Optional |                                                            |
+
+
+Not taken from full `CreateCheckoutSessionRequest`: `customer_external_id` (from sub), `action` (implied), `configuration.create_subscription_params`.
+
+**Branching:**
+
+
+| Condition                                         | Behavior                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| No `checkout`                                     | Today’s pay-later path                                                                |
+| `checkout` present + net proration **charge > 0** | Pay-first: no LI mutation; create session + draft invoice + payment                   |
+| `checkout` present + net **≤ 0** (credit / zero)  | Immediate path (ignore checkout / or validation error — prefer immediate credit path) |
+
 
 ### 2.2 Where the intent lives
 
-**Checkout session** `configuration` **JSONB only** — same pattern as `create_subscription_params`.
+**Checkout session `configuration` JSONB only** — parallel to `create_subscription_params`.
 
-Intent is short-lived; after payment, durable truth is line items + invoices.
+Money amount is locked on the **DRAFT ONE_OFF invoice** (`checkout_invoice_id` → `amount_due`), same idea as create-sub compute.
 
-**When fields are set (not only on completed):** same as create-subscription checkout today — at pay-first execute / fulfill (session → `pending`):
+**Apply plan (approach B):** store minimal modifications; on webhook reload old LI from DB, end it, create replacement with a **new** UUID (generated at apply time — not preallocated).
 
+**Response ids match preview:** `changed_resources.line_items` use placeholders `(preview-ended)` / `(preview-created)` until payment completes. Real new LI ids exist only after webhook apply (client refetches subscription).
 
-| Field                                                                                                         | When set                                                 |
-| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `configuration.subscription_id` + quantity-change plan + locked amount + **preallocated `new_line_item_id`s** | At session create (execute), before payment              |
-| `result` (subscription_id, invoice_id, payment_id)                                                            | When draft invoice/payment are created (still `pending`) |
-| `checkout_invoice_id` / `checkout_payment_id`                                                                 | Same moment                                              |
-| Live LI rows                                                                                                  | **Only** on webhook complete                             |
+### 2.3 Concurrent guard
 
+Before creating a pay-first session: use the subscription id from the modify path (`POST /subscriptions/{id}/modify/execute`) and reject if any `initiated`/`pending` checkout session already exists for that subscription (action `modify_subscription`). Prevents a second pending checkout for the same sub.
 
-So `result` / `configuration.subscription_id` are **not** nil while waiting for payment — they are populated as soon as the session is ready for the customer to pay. Concurrent guard: list `initiated`/`pending` sessions for this tenant/env whose `configuration.subscription_id` (or `result.subscription_id`) matches; reject a second pay-first modify.
-
-### 2.3 Lifecycle
+### 2.4 Lifecycle
 
 ```text
-modify/execute (require_payment, charge > 0)
-  → validate + compute proration (lock amount)
-  → preallocate new line item IDs (store in configuration; return in changed_resources; NOT inserted in DB yet)
-  → CheckoutSession (action = subscription_quantity_change, status → pending)
-       configuration = full apply plan (see §4), not a bare re-executable modify request alone
-  → DRAFT ONE_OFF invoice + INITIATED payment
-  → result + checkout_*_id columns set now
-  → return ModifyResponse + payment_action.url
+modify/execute (checkout present, charge > 0)
+  → validate + compute proration once
+  → concurrent guard
+  → CheckoutSession (action = modify_subscription → pending)
+       configuration.modify_subscription_params = apply plan (§4)
+       (subscription_id taken from modify path, not request body)
+  → DRAFT ONE_OFF invoice (amount_due = proration) + INITIATED payment
+  → set checkout_invoice_id / checkout_payment_id
+  → return SubscriptionModifyResponse:
+       subscription = current (unchanged)
+       changed_resources = preview-style placeholders + draft invoice
+       checkout_session (with nested payment)
 
 Razorpay webhook (payment_link.paid / payment.captured)
   → CompleteCheckoutSession
-  → apply from configuration (deterministic): end old LIs / create new LIs with stored IDs
-       — do NOT re-run modify/execute or recompute proration
+  → for each line_item_modification:
+       load line_item_id, end at effective_date,
+       create new LI (new UUID) copying fields, quantity = modification.quantity
   → finalize existing draft invoice + reconcile payment
+       — do NOT recompute proration
   → session completed
 
 fail / expire / cancel
-  → existing checkout cleanup (archive invoice/payment; session failed|expired)
+  → checkout cleanup (archive invoice/payment)
   → line items never changed
 ```
 
-### 2.4 Client UX (non-persistence)
+### 2.5 Client UX
 
-Hosted payment link: redirect or new tab → return on `success_url` / `cancel_url` → poll `GET /checkout/sessions/:id`. Webhook is source of truth; closing a polling dialog does not cancel the session.
+Redirect / new tab to `checkout_session.payment.payment_action.url` → return on success/cancel URL → poll `GET /checkout/sessions/{id}`. Closing a local polling UI does not cancel the session. After `completed`, refetch subscription for real LI ids.
 
 ---
 
@@ -87,18 +127,17 @@ erDiagram
     INVOICE ||--o{ PAYMENT : "collected_via"
     CHECKOUT_SESSION }o--o| INVOICE : "checkout_invoice_id"
     CHECKOUT_SESSION }o--o| PAYMENT : "checkout_payment_id"
-    CHECKOUT_SESSION }o--|| SUBSCRIPTION : "configuration.subscription_id logical"
+    CHECKOUT_SESSION }o--|| SUBSCRIPTION : "subscription_id from modify path"
 
     CHECKOUT_SESSION {
         string id PK
         string customer_id FK
-        string action "EXTENDED: subscription_quantity_change"
+        string action "EXTENDED: modify_subscription"
         string checkout_status "initiated pending completed failed expired"
         string payment_provider
-        string checkout_invoice_id FK "DRAFT ONE_OFF proration"
+        string checkout_invoice_id FK "DRAFT ONE_OFF — amount lock"
         string checkout_payment_id FK "INITIATED until webhook"
-        jsonb configuration "EXTENDED: quantity_change_params"
-        jsonb result "EXTENDED: QuantityChangeResult"
+        jsonb configuration "EXTENDED: modify_subscription_params"
         jsonb provider_result "payment link / next_action"
         time expires_at
         string success_url
@@ -128,7 +167,7 @@ erDiagram
         string invoice_status "DRAFT until complete then FINALIZED"
         string billing_reason "SUBSCRIPTION_UPDATE"
         string payment_status
-        decimal amount_due "locked proration amount"
+        decimal amount_due "proration charge — source of truth"
     }
 
     PAYMENT {
@@ -140,96 +179,141 @@ erDiagram
 
 
 
-**No new tables.** Persistence delta vs today:
+**No new tables.** Persistence delta:
 
 
-| Piece                             | Change                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `checkout_sessions.action`        | New allowed value, e.g. `subscription_quantity_change`                     |
-| `checkout_sessions.configuration` | New JSON branch (see §4)                                                   |
-| `checkout_sessions.result`        | New JSON branch with subscription / invoice / payment ids + applied LI ids |
-| Line items / invoices / payments  | Existing tables and statuses only                                          |
+| Piece                             | Change                            |
+| --------------------------------- | --------------------------------- |
+| `checkout_sessions.action`        | New value: `modify_subscription`  |
+| `checkout_sessions.configuration` | `modify_subscription_params` (§4) |
+| `checkout_sessions.result`        | **Unused** for this action        |
+| Line items / invoices / payments  | Existing only                     |
 
-
-**Explicitly not added:** dedicated pending-operations table, protobuf blobs, pay-later audit rows for every modify.
 
 ---
 
-## 4. Configuration & result JSON (v1)
+## 4. Configuration JSON (v1)
 
-Mirrors `CreateSubscriptionParams` / `CreateSubscriptionResult` style in `internal/types/checkout_configuration.go`.
+Parallel to `CreateSubscriptionParams` in `internal/types/checkout_configuration.go`.
 
-### 4.1 `configuration.quantity_change_params` (name TBD)
+### 4.1 `configuration.modify_subscription_params`
 
 ```json
 {
   "subscription_id": "subs_...",
-  "schema_version": 1,
-  "quantity_change_params": {
+  "line_item_modifications": [
+    {
+      "line_item_id": "subs_line_old",
+      "quantity": "15",
+      "effective_date": "2026-07-20T04:00:00.000Z"
+    }
+  ]
+}
+```
+
+`subscription_id` is **not** on the modify execute request body — it is taken from the path (`/subscriptions/{id}/modify/execute`) when the session is created and stored here for webhook apply / lookups.
+
+
+| Field                                      | Meaning                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| `subscription_id`                          | From modify path; used for concurrent guard match + webhook apply |
+| `line_item_modifications[].line_item_id`   | Existing LI to end                                                |
+| `line_item_modifications[].quantity`       | New quantity (fields present = values to apply)                   |
+| `line_item_modifications[].effective_date` | Optional; omit = now at execute time, stored for apply            |
+
+
+**Webhook apply (per modification):** load `line_item_id` → set `end_date = effective_date` → create new LI with **new** generated id, copy fields from old, set `quantity` and `start_date = effective_date`. Finalize + reconcile invoice already on the session — **no proration recalculation**.
+
+---
+
+## 5. Execute response (pay-first)
+
+Extend `SubscriptionModifyResponse`:
+
+```json
+{
+  "subscription": { },
+  "changed_resources": {
     "line_items": [
       {
-        "id": "subs_line_..._existing",
+        "id": "(old-item-id)",
+        "quantity": "10",
+        "change_action": "ended",
+        "...": "..."
+      },
+      {
+        "id": "(modified-item-id)",
         "quantity": "15",
-        "effective_date": "2026-07-20T04:00:00.000Z",
-        "new_line_item_id": "subs_line_..._preallocated"
+        "change_action": "created",
+        "...": "..."
+      }
+    ],
+    "invoices": [
+      {
+        "action": "created",
+        "status": "PENDING",
+        "invoice": { "id": "inv_...", "amount_due": "1298.39", "invoice_status": "DRAFT" }
       }
     ]
   },
-  "locked_amount": "1298.39",
-  "currency": "inr",
-  "require_payment": true
+  "checkout_session": {
+    "id": "cs_...",
+    "checkout_status": "pending",
+    "payment": {
+      "id": "pay_...",
+      "payment_status": "INITIATED",
+      "payment_action": { "type": "payment_link", "url": "https://rzp.io/..." },
+      "expires_at": "..."
+    }
+  }
 }
 ```
 
-- `new_line_item_id`: preallocated ID returned in `changed_resources` at execute; created only on webhook apply.
-- `locked_amount`: proration computed at execute time; payment link uses this amount.
-
-### 4.2 `result.quantity_change_result` (name TBD)
-
-Set when the session becomes `pending` (draft money created), **not** only after payment:
-
-```json
-{
-  "subscription_id": "subs_...",
-  "invoice_id": "inv_...",
-  "payment_id": "pay_..."
-}
-```
-
-After webhook apply, optionally extend with `ended_line_item_ids` / `created_line_item_ids` for traceability (same IDs as `new_line_item_id` in configuration). Apply logic must use **configuration**, not re-call execute.
+- `subscription` = **current** state (old quantities), like preview.
+- Line item ids in `changed_resources` = **placeholders**, not real future ids.
+- Payment lives **inside** `checkout_session` (includes `payment_action` + `expires_at`); no top-level `payment` field.
+- Poll: `GET /v1/checkout/sessions/{checkout_session.id}`.
 
 ---
 
-## 5. Status mapping
+## 6. Status mapping
 
 
-| Phase                   | Checkout             | Invoice            | Payment     | Live line items         |
-| ----------------------- | -------------------- | ------------------ | ----------- | ----------------------- |
-| After pay-first execute | `pending`            | `DRAFT`            | `INITIATED` | Unchanged (old qty)     |
-| After webhook success   | `completed`          | `FINALIZED` + paid | `SUCCEEDED` | Old ended / new created |
-| Fail / expire / cancel  | `failed` / `expired` | Archived           | Archived    | Unchanged               |
+| Phase                   | Checkout             | Invoice            | Payment     | Live line items                    |
+| ----------------------- | -------------------- | ------------------ | ----------- | ---------------------------------- |
+| After pay-first execute | `pending`            | `DRAFT`            | `INITIATED` | Unchanged                          |
+| After webhook success   | `completed`          | `FINALIZED` + paid | `SUCCEEDED` | Old ended / new created (new UUID) |
+| Fail / expire / cancel  | `failed` / `expired` | Archived           | Archived    | Unchanged                          |
 
 
 ---
 
-## 6. Scenarios
+## 7. Scenarios
 
 
-| #   | Scenario                                      | Handling                                                        |
-| --- | --------------------------------------------- | --------------------------------------------------------------- |
-| 1   | Execute without require_payment               | Today’s path: apply LIs + invoice/credit immediately            |
-| 2   | require_payment + net charge > 0              | Checkout session + draft money; LIs deferred                    |
-| 3   | require_payment + net credit / zero           | Immediate path (no checkout)                                    |
-| 4   | Second pay-first modify while session pending | Rejected                                                        |
-| 5   | Payment succeeds                              | Apply LIs from configuration; finalize + reconcile              |
-| 6   | Link cancel / expire / cron expiry            | Cleanup session artifacts; seats unchanged                      |
-| 7   | Late capture after expired/failed             | Existing refund path; no LI apply                               |
-| 8   | Client closes poll UI mid-pay                 | Session continues; return URL / later GET session / refetch sub |
+| #   | Scenario                               | Handling                                                             |
+| --- | -------------------------------------- | -------------------------------------------------------------------- |
+| 1   | Execute without `checkout`             | Pay-later: apply LIs + invoice/credit immediately                    |
+| 2   | `checkout` + net charge > 0            | Session + draft money; LIs deferred; preview-style changed_resources |
+| 3   | `checkout` + net credit / zero         | Immediate path (no session)                                          |
+| 4   | Second pay-first while session pending | Rejected (concurrent guard)                                          |
+| 5   | Payment succeeds                       | Apply B from config; finalize/reconcile existing invoice             |
+| 6   | Link cancel / expire / cron            | Cleanup; seats unchanged                                             |
+| 7   | Late capture after expired/failed      | Existing refund path; no LI apply                                    |
+| 8   | Client closes poll UI mid-pay          | Session continues; return URL / GET session / refetch sub            |
 
 
-  
-NOTE:
+---
 
-- In future we could think of a separate table to store payment gated intents as they would be an increasing thing in future starting from now.
-- Right now such intent is captured in checkoutSession.Configuration linking any discoverability of that intent to checkout session existence which is a dependency.
+## 8. Implementation touchpoints (for later)
+
+
+| Area                             | Likely files                                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Modify execute + `checkout` DTO  | `internal/ee/service/subscription_modification.go`, `internal/api/dto/subscription_modification.go` |
+| Checkout action + complete apply | `internal/ee/service/checkout_session.go`, `checkout_session_actions.go`                            |
+| Types                            | `internal/types/checkout.go`, `checkout_configuration.go`                                           |
+| Razorpay webhook                 | existing → `CompleteCheckoutSession`                                                                |
+| Dashboard                        | quantity dialog → redirect; poll session; refetch sub                                               |
+
 

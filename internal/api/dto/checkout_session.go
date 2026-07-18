@@ -11,18 +11,56 @@ import (
 	"github.com/samber/lo"
 )
 
+// PaymentParams groups payment-provider settings for checkout flows.
+type PaymentParams struct {
+	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required"`
+	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
+}
+
+func (p *PaymentParams) Validate() error {
+	if p == nil {
+		return nil
+	}
+	if err := p.PaymentProvider.Validate(); err != nil {
+		return err
+	}
+	if p.PaymentProviderConfig != nil {
+		if err := p.PaymentProviderConfig.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RedirectionParams groups post-checkout redirect URLs.
+type RedirectionParams struct {
+	SuccessURL *string `json:"success_url,omitempty"`
+	FailureURL *string `json:"failure_url,omitempty"`
+	CancelURL  *string `json:"cancel_url,omitempty"`
+}
+
+// CheckoutParams is the reusable checkout opt-in payload shared by
+// create-session and payment-gated subscription modify.
+type CheckoutParams struct {
+	PaymentParams
+	RedirectionParams
+	IdempotencyKey *string           `json:"idempotency_key,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+}
+
+func (p *CheckoutParams) Validate() error {
+	if p == nil {
+		return nil
+	}
+	return p.PaymentParams.Validate()
+}
+
 // CreateCheckoutSessionRequest is the request body for POST /checkout/sessions.
 type CreateCheckoutSessionRequest struct {
-	CustomerExternalID    string                               `json:"customer_external_id" binding:"required"`
-	Action                types.CheckoutAction                 `json:"action" binding:"required"`
-	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required"`
-	Configuration         types.CheckoutConfiguration          `json:"configuration"`
-	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
-	IdempotencyKey        *string                              `json:"idempotency_key,omitempty"`
-	SuccessURL            *string                              `json:"success_url,omitempty"`
-	FailureURL            *string                              `json:"failure_url,omitempty"`
-	CancelURL             *string                              `json:"cancel_url,omitempty"`
-	Metadata              map[string]string                    `json:"metadata,omitempty"`
+	CustomerExternalID string                      `json:"customer_external_id" binding:"required"`
+	Action             types.CheckoutAction        `json:"action" binding:"required"`
+	Configuration      types.CheckoutConfiguration `json:"configuration"`
+	CheckoutParams
 }
 
 func (r *CreateCheckoutSessionRequest) Validate() error {
@@ -34,18 +72,12 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 		return err
 	}
 
-	if err := r.PaymentProvider.Validate(); err != nil {
+	if err := r.CheckoutParams.Validate(); err != nil {
 		return err
 	}
 
 	if err := r.Configuration.Validate(r.Action); err != nil {
 		return err
-	}
-
-	if r.PaymentProviderConfig != nil {
-		if err := r.PaymentProviderConfig.Validate(); err != nil {
-			return err
-		}
 	}
 
 	return nil
