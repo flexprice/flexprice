@@ -326,22 +326,16 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		return nil, err
 	}
 
-	// Pay-first: checkout present + net charge > 0 (and no credits in the same batch).
+	// Pay-first when checkout is present and the batch nets to a charge
+	// (charges − credits). Mixed upgrade/downgrade LIs are netted into one total.
 	if checkout != nil {
 		if err := checkout.Validate(); err != nil {
 			return nil, err
 		}
-		netCharge := prorationResult.GetNetCharge()
-		netCredit := prorationResult.GetNetCredit()
-		if netCharge.GreaterThan(decimal.Zero) && netCredit.GreaterThan(decimal.Zero) {
-			return nil, ierr.NewError("checkout cannot be used with mixed upgrade and downgrade proration").
-				WithHint("Split quantity increases and decreases into separate requests when using checkout").
-				Mark(ierr.ErrValidation)
-		}
-		if netCharge.GreaterThan(decimal.Zero) {
+		if prorationResult.GetNetAmount().GreaterThan(decimal.Zero) {
 			return s.settlePayFirst(ctx, plan, prorationResult, checkout)
 		}
-		// checkout + credit/zero → immediate path (ignore checkout)
+		// checkout + net credit/zero → immediate path (ignore checkout)
 	}
 
 	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, plan, prorationResult)

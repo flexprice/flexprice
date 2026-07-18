@@ -294,8 +294,8 @@ Extend `SubscriptionModifyResponse`:
 | #   | Scenario                               | Handling                                                             |
 | --- | -------------------------------------- | -------------------------------------------------------------------- |
 | 1   | Execute without `checkout`             | Pay-later: apply LIs + invoice/credit immediately                    |
-| 2   | `checkout` + net charge > 0            | Session + draft money; LIs deferred; preview-style changed_resources |
-| 3   | `checkout` + net credit / zero         | Immediate path (no session)                                          |
+| 2   | `checkout` + net (charges − credits) > 0 | Session + one DRAFT for net; LIs deferred; mixed LI up/down netted |
+| 3   | `checkout` + net credit / zero         | Immediate path (no session); ignore checkout                         |
 | 4   | Second pay-first while session pending | Rejected (concurrent guard)                                          |
 | 5   | Payment succeeds                       | Apply B from config; finalize/reconcile existing invoice             |
 | 6   | Link cancel / expire / cron            | Cleanup; seats unchanged                                             |

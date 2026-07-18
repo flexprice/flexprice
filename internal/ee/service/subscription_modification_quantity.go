@@ -335,6 +335,14 @@ func (r *quantityChangeProration) GetNetCredit() decimal.Decimal {
 	return r.netCredit
 }
 
+// GetNetAmount is charges minus credits across the batch (can be negative).
+func (r *quantityChangeProration) GetNetAmount() decimal.Decimal {
+	if r == nil {
+		return decimal.Zero
+	}
+	return r.netCharge.Sub(r.netCredit)
+}
+
 // quantityChangeProrationItem is one ADVANCE line-item's non-zero proration result.
 type quantityChangeProrationItem struct {
 	mod       *quantityChangeLineItemMod
@@ -592,8 +600,10 @@ func (s *subscriptionModificationService) settlePayLater(
 // Module D3 — pay-first settlement (no LI apply)
 // ─────────────────────────────────────────────
 
-// settlePayFirst persists the plan on a checkout session, locks money on a DRAFT
-// ONE_OFF invoice, and returns a payment link. Line items are applied on payment success.
+// settlePayFirst persists the plan on a checkout session, locks the batch net
+// (charges − credits) on one DRAFT ONE_OFF, and returns a payment link.
+// Line items are applied on payment success — do not also issue wallet credits
+// for downgrade LIs already netted into that invoice.
 func (s *subscriptionModificationService) settlePayFirst(
 	ctx context.Context,
 	plan *quantityChangePlan,
@@ -772,24 +782,30 @@ func (s *subscriptionModificationService) guardPendingModifyCheckout(
 	return nil
 }
 
-// createAggregatedProrationDraftInvoice locks the total net charge on one DRAFT ONE_OFF invoice.
+// createAggregatedProrationDraftInvoice locks the batch net (charges − credits) on one DRAFT ONE_OFF.
+// Line items keep per-LI charge/credit amounts; AmountDue is their sum (the net).
 func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	prorationResult *quantityChangeProration,
 ) (*dto.InvoiceResponse, error) {
-	chargeItems := make([]*quantityChangeProrationItem, 0)
-	for _, item := range prorationResult.getItems() {
-		if item != nil && item.getNetAmount().GreaterThan(decimal.Zero) {
-			chargeItems = append(chargeItems, item)
-		}
-	}
-	if len(chargeItems) == 0 {
+	if !prorationResult.GetNetAmount().GreaterThan(decimal.Zero) {
 		return nil, ierr.NewError("no proration charge to collect via checkout").
 			Mark(ierr.ErrValidation)
 	}
 
-	req := buildAggregatedProrationChargeInvoiceRequest(sub, chargeItems)
+	items := make([]*quantityChangeProrationItem, 0)
+	for _, item := range prorationResult.getItems() {
+		if item != nil && !item.getNetAmount().IsZero() {
+			items = append(items, item)
+		}
+	}
+	if len(items) == 0 {
+		return nil, ierr.NewError("no proration charge to collect via checkout").
+			Mark(ierr.ErrValidation)
+	}
+
+	req := buildAggregatedProrationChargeInvoiceRequest(sub, items)
 	invoiceSvc := NewInvoiceService(s.serviceParams)
 	draftResp, err := invoiceSvc.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
 	if err != nil {
