@@ -192,12 +192,88 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 	switch session.Action {
 	case types.CheckoutActionCreateSubscription:
 		return s.completeSubscriptionCheckout(ctx, session, providerResult)
+	case types.CheckoutActionModifySubscription:
+		return s.completeModifySubscriptionCheckout(ctx, session, providerResult)
 	default:
 		return ierr.NewError("unsupported checkout action for completion").
 			WithHint("No completion handler for this action type").
 			WithReportableDetails(map[string]any{"action": session.Action}).
 			Mark(ierr.ErrValidation)
 	}
+}
+
+// completeModifySubscriptionCheckout applies the saved quantity-change plan (C), then
+// finalizes the existing DRAFT proration invoice and reconciles payment.
+// Does not recompute proration — amount is locked on the draft from pay-first execute.
+func (s *checkoutSessionService) completeModifySubscriptionCheckout(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	providerResult *types.CheckoutProviderResult,
+) error {
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	params := cfg.ModifySubscriptionParams
+	if params == nil {
+		return ierr.NewError("session has no modify_subscription_params").
+			WithHint("checkout session must have modify_subscription_params before it can be completed").
+			Mark(ierr.ErrValidation)
+	}
+	if session.CheckoutInvoiceID == nil || *session.CheckoutInvoiceID == "" {
+		return ierr.NewError("session has no checkout invoice").
+			WithHint("checkout session must have checkout_invoice_id before it can be completed").
+			Mark(ierr.ErrValidation)
+	}
+	if session.CheckoutPaymentID == nil || *session.CheckoutPaymentID == "" {
+		return ierr.NewError("session has no checkout payment").
+			WithHint("checkout session must have checkout_payment_id before it can be completed").
+			Mark(ierr.ErrValidation)
+	}
+
+	invoiceID := *session.CheckoutInvoiceID
+	paymentID := *session.CheckoutPaymentID
+
+	modSvc := &subscriptionModificationService{serviceParams: s.ServiceParams}
+	plan, err := modSvc.planFromModifySubscriptionParams(ctx, params)
+	if err != nil {
+		return err
+	}
+	if _, err := modSvc.applyQuantityChangePlan(ctx, plan); err != nil {
+		return err
+	}
+
+	// Finalize the draft invoice (idempotent: check status first).
+	invSvc := NewInvoiceService(s.ServiceParams)
+	invResp, err := invSvc.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
+		if err := invSvc.FinalizeInvoice(ctx, invoiceID); err != nil {
+			return err
+		}
+	}
+
+	// Mark the checkout payment as SUCCEEDED, storing the gateway payment ID.
+	statusStr := string(types.PaymentStatusSucceeded)
+	now := time.Now().UTC()
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: &statusStr,
+		SucceededAt:   &now,
+	}
+	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
+		id := providerResult.ProviderPaymentIntentID
+		updateReq.GatewayPaymentID = &id
+	}
+	paySvc := NewPaymentService(s.ServiceParams)
+	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
+		return err
+	}
+
+	if err := invSvc.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, nil); err != nil {
+		return err
+	}
+
+	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	return nil
 }
 
 func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {

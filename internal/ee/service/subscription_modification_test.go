@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -80,6 +81,7 @@ func (s *SubscriptionModificationServiceSuite) buildServiceParams() ServiceParam
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
@@ -1820,4 +1822,104 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsInheritedSub(
 	_, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().Error(err)
 	s.Contains(err.Error(), "inherited subscription")
+}
+
+// TestCompleteModifySubscriptionCheckout_AppliesPlanAndFinalizes covers D4:
+// payment success rebuilds the plan from checkout config, applies LIs, finalizes
+// the existing DRAFT invoice, and marks the session completed. No proration recalc.
+func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_AppliesPlanAndFinalizes() {
+	ctx := s.GetContext()
+	periodStart := s.GetNow()
+	effectiveDate := periodStart.AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-complete")
+	sub := s.createActiveSub(cust.ID)
+	priceAmount := decimal.NewFromInt(50)
+	p := s.createFixedPrice(priceAmount, types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+
+	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	s.Require().NoError(err)
+	s.Require().True(proration.GetNetAmount().GreaterThan(decimal.Zero))
+
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	s.Require().NoError(err)
+	s.Require().NotNil(draftInv)
+
+	params := s.buildServiceParams()
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+
+	invID := draftInv.ID
+	payID := payResp.ID
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      cust.ID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+		}),
+		CheckoutInvoiceID: &invID,
+		CheckoutPaymentID: &payID,
+		ExpiresAt:         time.Now().UTC().Add(time.Hour),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+
+	before, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	s.True(before.EndDate.IsZero(), "line items must stay unchanged until checkout completes")
+
+	err = checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_test_complete_001",
+	})
+	s.Require().NoError(err)
+
+	after, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	s.True(after.EndDate.Equal(effectiveDate), "old line item should end at effective_date")
+
+	_, lineItems, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+	s.Require().NoError(err)
+	var newLI *subscription.SubscriptionLineItem
+	for _, item := range lineItems {
+		if item.ID != li.ID && item.Quantity.Equal(decimal.NewFromInt(3)) {
+			newLI = item
+			break
+		}
+	}
+	s.Require().NotNil(newLI, "expected a new line item with quantity 3")
+	s.True(newLI.StartDate.Equal(effectiveDate))
+
+	invSvc := NewInvoiceService(params)
+	finalInv, err := invSvc.GetInvoice(ctx, invID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalInv.InvoiceStatus)
+
+	paySvc := NewPaymentService(params)
+	finalPay, err := paySvc.GetPayment(ctx, payID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, finalPay.PaymentStatus)
+
+	completed, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusCompleted, completed.CheckoutStatus)
+
+	// Second complete is a no-op error (terminal session).
+	err = checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_test_complete_001",
+	})
+	s.Require().Error(err)
 }

@@ -1,6 +1,6 @@
 # Payment-Gated Subscription Quantity Change — Design ERD
 
-Status: **Design (not implemented)**  
+Status: **In progress** (A–D3 + D4 complete path wired; D5/D6 tests/polish remain)  
 Date: 2026-07-17 (updated 2026-07-18)  
 Related: [Seat-Based Pricing](https://docs.flexprice.io/docs/subscriptions/seat-based-pricing), [Checkout overview](https://docs.flexprice.io/docs/checkout/overview.md), checkout create-subscription in `internal/ee/service/checkout_session.go`
 

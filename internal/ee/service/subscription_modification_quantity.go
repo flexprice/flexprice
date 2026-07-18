@@ -56,6 +56,62 @@ func (p *quantityChangePlan) GetModifications() []*quantityChangeLineItemMod {
 	return p.modifications
 }
 
+// planFromModifySubscriptionParams rebuilds an apply plan from checkout configuration.
+// Used on payment success — does not recompute proration. Validation is lighter than
+// buildQuantityChangePlan (intent was already validated at pay-first execute).
+func (s *subscriptionModificationService) planFromModifySubscriptionParams(
+	ctx context.Context,
+	params *types.ModifySubscriptionParams,
+) (*quantityChangePlan, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+
+	sp := s.serviceParams
+	sub, _, err := sp.SubRepo.GetWithLineItems(ctx, params.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItemModifications))
+	for _, m := range params.LineItemModifications {
+		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, m.LineItemID)
+		if err != nil {
+			return nil, err
+		}
+		if lineItem.SubscriptionID != params.SubscriptionID {
+			return nil, ierr.NewError("line item does not belong to subscription").
+				WithHint("Checkout modify_subscription_params line item must belong to the subscription").
+				WithReportableDetails(map[string]any{
+					"line_item_id":    m.LineItemID,
+					"subscription_id": params.SubscriptionID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		effectiveDate := now
+		if m.EffectiveDate != nil {
+			effectiveDate = m.EffectiveDate.UTC()
+		}
+
+		newEndDate := sub.CurrentPeriodEnd
+		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
+			newEndDate = lineItem.EndDate
+		}
+
+		mods = append(mods, newQuantityChangeLineItemMod(
+			m.LineItemID,
+			m.Quantity,
+			effectiveDate,
+			lineItem,
+			newEndDate,
+		))
+	}
+
+	return NewQuantityChangePlan(params.SubscriptionID, sub, mods), nil
+}
+
 // toModifySubscriptionParams maps the validated plan into checkout configuration
 // for payment-gated apply on webhook complete.
 func (p *quantityChangePlan) toModifySubscriptionParams() *types.ModifySubscriptionParams {
@@ -468,6 +524,8 @@ func (s *subscriptionModificationService) calculateProrationForPlan(
 
 // applyQuantityChangePlan ends old line items and creates replacements inside one
 // transaction. New LI UUIDs are generated at apply time. No invoices, payments, or wallets.
+// Idempotent: if a line item is already ended at effective_date, that mod is skipped
+// (safe for duplicate checkout-complete webhooks).
 func (s *subscriptionModificationService) applyQuantityChangePlan(
 	ctx context.Context,
 	plan *quantityChangePlan,
@@ -498,6 +556,24 @@ func (s *subscriptionModificationService) applyQuantityChangePlan(
 			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, lineItemID)
 			if err != nil {
 				return err
+			}
+
+			// Already applied: EndDate was set to effective_date on a prior complete.
+			// Pre-apply finite LIs have EndDate after effective_date (validated at plan build).
+			if !lineItem.EndDate.IsZero() && !lineItem.EndDate.After(effectiveDate) {
+				if lineItem.EndDate.Equal(effectiveDate) {
+					sp.Logger.Debug(txCtx, "skipping quantity change apply: already applied",
+						"line_item_id", lineItemID, "effective_date", effectiveDate)
+					continue
+				}
+				return ierr.NewError("line item already ended before effective_date").
+					WithHint("Cannot apply quantity change to a line item that ended before the effective date").
+					WithReportableDetails(map[string]any{
+						"line_item_id":    lineItemID,
+						"line_item_end":   lineItem.EndDate,
+						"effective_date":  effectiveDate,
+					}).
+					Mark(ierr.ErrValidation)
 			}
 
 			lineItem.EndDate = effectiveDate
