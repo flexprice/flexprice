@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -306,8 +305,8 @@ func (s *subscriptionModificationService) previewInheritance(
 
 // ─────────────────────────────────────────────
 // Sub-feature 2: Quantity Change
-// Validate/plan lives in subscription_modification_quantity.go (Module A).
-// Apply + proration settlement remain here until Modules B/C/D.
+// Plan (A) + proration calc (B) in subscription_modification_quantity.go.
+// Apply + money settlement remain here until Modules C/D.
 // ─────────────────────────────────────────────
 
 func (s *subscriptionModificationService) executeQuantityChange(
@@ -323,24 +322,17 @@ func (s *subscriptionModificationService) executeQuantityChange(
 	}
 	sub := plan.GetSubscription()
 
-	changedLineItems := make([]dto.ChangedLineItem, 0)
-	changedInvoices := make([]dto.ChangedInvoice, 0)
-
-	// itemsForProration accumulates pairs of old/new line items + their effective dates.
-	// It is populated inside the transaction and consumed after it commits.
-	type prorationPair struct {
-		old           *subscription.SubscriptionLineItem
-		new_          *subscription.SubscriptionLineItem
-		effectiveDate time.Time
+	prorationResult, err := s.calculateProrationForPlan(ctx, plan)
+	if err != nil {
+		return nil, err
 	}
-	var itemsForProration []prorationPair
+
+	changedLineItems := make([]dto.ChangedLineItem, 0)
 
 	// Single transaction: end all old line items and create all new ones atomically.
-	// Proration (invoice creation / wallet credits) happens after the transaction commits
-	// because those operations have their own side effects.
+	// Money settlement runs after the transaction (invoice/payment/wallet side effects).
 	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		changedLineItems = nil  // reset for safety
-		itemsForProration = nil // reset for safety
+		changedLineItems = nil // reset for safety
 
 		for _, mod := range plan.GetModifications() {
 			if mod == nil {
@@ -419,30 +411,23 @@ func (s *subscriptionModificationService) executeQuantityChange(
 					ChangeAction: dto.ChangedLineItemActionCreated,
 				},
 			)
-
-			// Collect pairs that need proration (handled after the transaction commits).
-			// ADVANCE items are billed upfront, so any mid-cycle quantity change requires a proration.
-			if lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
-				itemsForProration = append(itemsForProration, prorationPair{old: lineItem, new_: newItem, effectiveDate: effectiveDate})
-			}
-		}
-
-		// Post-transaction: handle proration outside the DB transaction because invoice creation
-		// and wallet top-ups carry their own side effects (payment attempts, credit grants).
-		for _, pair := range itemsForProration {
-			inv, err := s.handleQuantityChangeProration(ctx, sub, pair.old, pair.new_, pair.effectiveDate)
-			if err != nil {
-				return err
-			}
-			if inv != nil {
-				changedInvoices = append(changedInvoices, *inv)
-			}
 		}
 
 		return nil
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	changedInvoices := make([]dto.ChangedInvoice, 0)
+	for _, item := range prorationResult.getItems() {
+		inv, err := s.settleQuantityChangeProrationItem(ctx, sub, item)
+		if err != nil {
+			return nil, err
+		}
+		if inv != nil {
+			changedInvoices = append(changedInvoices, *inv)
+		}
 	}
 
 	// Publish webhook event
@@ -475,32 +460,16 @@ func (s *subscriptionModificationService) previewQuantityChange(
 	if err != nil {
 		return nil, err
 	}
-	sub := plan.GetSubscription()
-	changedLineItems := plan.previewChangedLineItems()
-	changedInvoices := make([]dto.ChangedInvoice, 0)
 
-	for _, mod := range plan.GetModifications() {
-		if mod == nil {
-			continue
-		}
-		lineItem := mod.getOldLineItem()
-		if lineItem == nil {
-			continue
-		}
-		// Preview proration for ADVANCE items — calculate only, do NOT create invoices or wallet credits.
-		if lineItem.InvoiceCadence != types.InvoiceCadenceAdvance {
-			continue
-		}
-		previewNewItem := &subscription.SubscriptionLineItem{
-			PriceID:  lineItem.PriceID,
-			Quantity: mod.getQuantity(),
-		}
-		inv, err := s.previewQuantityChangeProration(ctx, sub, lineItem, previewNewItem, mod.getEffectiveDate())
-		if err != nil {
-			sp.Logger.Info(context.Background(), "failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
-		} else if inv != nil {
-			changedInvoices = append(changedInvoices, *inv)
-		}
+	prorationResult, err := s.calculateProrationForPlan(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+
+	changedLineItems := plan.previewChangedLineItems()
+	changedInvoices, err := s.toPreviewChangedInvoices(ctx, plan.GetSubscription(), prorationResult)
+	if err != nil {
+		return nil, err
 	}
 
 	subSvc := NewSubscriptionService(sp)
@@ -518,67 +487,36 @@ func (s *subscriptionModificationService) previewQuantityChange(
 	}, nil
 }
 
-// handleQuantityChangeProration handles the proration logic for quantity changes on in-advance line items.
-func (s *subscriptionModificationService) handleQuantityChangeProration(
+// settleQuantityChangeProrationItem persists money for one Module B proration item
+// (finalized ONE_OFF invoice + AttemptPayment, or wallet credit). Draft/checkout is Module D.
+func (s *subscriptionModificationService) settleQuantityChangeProrationItem(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	oldItem *subscription.SubscriptionLineItem,
-	newItem *subscription.SubscriptionLineItem,
-	effectiveDate time.Time,
+	item *quantityChangeProrationItem,
 ) (*dto.ChangedInvoice, error) {
-	sp := s.serviceParams
-	prorationSvc := NewProrationService(sp)
-	priceSvc := NewPriceService(sp)
-
-	price, err := priceSvc.GetPrice(ctx, oldItem.PriceID)
-	if err != nil {
-		return nil, err
+	if item == nil || sub == nil {
+		return nil, nil
 	}
-
-	customerTimezone := sub.Timezone
-	if customerTimezone == "" {
-		customerTimezone = types.DefaultTimezone
-	}
-
-	prorationParams := proration.ProrationParams{
-		SubscriptionID:     sub.ID,
-		LineItemID:         oldItem.ID,
-		PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
-		Action:             types.ProrationActionQuantityChange,
-		NewPriceID:         newItem.PriceID,
-		OldQuantity:        oldItem.Quantity,
-		NewQuantity:        newItem.Quantity,
-		NewPricePerUnit:    price.Price.Amount,
-		OldPricePerUnit:    price.Price.Amount,
-		ProrationDate:      effectiveDate,
-		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-		ProrationStrategy:  types.StrategySecondBased,
-		Currency:           sub.Currency,
-		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:           customerTimezone,
-	}
-
-	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.NetAmount.IsZero() {
+	mod := item.getMod()
+	oldItem := mod.getOldLineItem()
+	price := item.getPrice()
+	netAmount := item.getNetAmount()
+	if mod == nil || oldItem == nil || price == nil || netAmount.IsZero() {
 		return nil, nil
 	}
 
-	if result.NetAmount.GreaterThan(decimal.Zero) {
+	sp := s.serviceParams
+	effectiveDate := mod.getEffectiveDate()
+	newQuantity := mod.getQuantity()
+
+	if netAmount.GreaterThan(decimal.Zero) {
 		// Upgrade: create a delta-only invoice for exactly the prorated amount (Stripe-style).
-		// We do NOT re-bill the full remaining period — only the incremental charge.
 		invoiceSvc := NewInvoiceService(sp)
 		periodEnd := sub.CurrentPeriodEnd
 		billingPeriod := string(sub.BillingPeriod)
 		billingCustomer := sub.GetInvoicingCustomerID()
 
-		// Build a descriptive line item for the delta charge.
-		qtyDelta := newItem.Quantity.Sub(oldItem.Quantity)
+		qtyDelta := newQuantity.Sub(oldItem.Quantity)
 		displayName := fmt.Sprintf("%s — Quantity Change Proration (%s – %s)",
 			oldItem.DisplayName,
 			effectiveDate.Format("2 Jan 2006"),
@@ -587,7 +525,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		priceType := string(price.Price.Type)
 		planDisplayName := oldItem.PlanDisplayName
 		lineItemDescription := fmt.Sprintf("Proration for quantity change: %s → %s units × %s %s/unit (%s – %s)",
-			oldItem.Quantity.String(), newItem.Quantity.String(),
+			oldItem.Quantity.String(), newQuantity.String(),
 			strings.ToUpper(sub.Currency), price.Price.Amount.String(),
 			effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
 		lineItems := []dto.CreateInvoiceLineItemRequest{
@@ -596,7 +534,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 				PriceType:       &priceType,
 				PlanDisplayName: &planDisplayName,
 				DisplayName:     &displayName,
-				Amount:          result.NetAmount,
+				Amount:          netAmount,
 				Quantity:        qtyDelta,
 				PeriodStart:     &effectiveDate,
 				PeriodEnd:       &periodEnd,
@@ -604,18 +542,15 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 			},
 		}
 
-		// Use InvoiceTypeOneOff so ComputeInvoice uses the explicit delta amount rather
-		// than recomputing from the subscription's (now-updated) line items.
-		// SubscriptionID is set for reference/traceability only.
 		inv, err := invoiceSvc.CreateInvoice(ctx, dto.CreateInvoiceRequest{
 			CustomerID:     billingCustomer,
 			SubscriptionID: &sub.ID,
 			InvoiceType:    types.InvoiceTypeOneOff,
 			Currency:       sub.Currency,
 			BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
-			AmountDue:      result.NetAmount,
-			Total:          result.NetAmount,
-			Subtotal:       result.NetAmount,
+			AmountDue:      netAmount,
+			Total:          netAmount,
+			Subtotal:       netAmount,
 			PeriodStart:    &effectiveDate,
 			PeriodEnd:      &periodEnd,
 			BillingPeriod:  &billingPeriod,
@@ -645,9 +580,8 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 
 	// Downgrade: wallet credit
 	walletSvc := NewWalletService(sp)
-	creditAmount := result.NetAmount.Abs()
+	creditAmount := netAmount.Abs()
 	billingCustomer := sub.GetInvoicingCustomerID()
-	// Stable idempotency key: prevents duplicate credits if this call is retried.
 	idempotencyKey := fmt.Sprintf("proration_credit_%s_%s_%s", sub.ID, oldItem.ID, effectiveDate.Format(time.RFC3339))
 	walletTx, err := walletSvc.TopUpWalletForProratedCharge(ctx, billingCustomer, creditAmount, sub.Currency, idempotencyKey)
 	if err != nil {
@@ -664,6 +598,55 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		Status:            dto.ChangedInvoiceStatusWalletIssued,
 		WalletTransaction: walletTx,
 	}, nil
+}
+
+// toPreviewChangedInvoices maps Module B calc results to synthetic ChangedInvoice entries.
+func (s *subscriptionModificationService) toPreviewChangedInvoices(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	prorationResult *quantityChangeProration,
+) ([]dto.ChangedInvoice, error) {
+	if sub == nil || prorationResult == nil {
+		return nil, nil
+	}
+	out := make([]dto.ChangedInvoice, 0, len(prorationResult.getItems()))
+	for _, item := range prorationResult.getItems() {
+		if item == nil {
+			continue
+		}
+		mod := item.getMod()
+		oldItem := mod.getOldLineItem()
+		price := item.getPrice()
+		netAmount := item.getNetAmount()
+		if mod == nil || oldItem == nil || price == nil || netAmount.IsZero() {
+			continue
+		}
+		newItem := &subscription.SubscriptionLineItem{
+			PriceID:  oldItem.PriceID,
+			Quantity: mod.getQuantity(),
+		}
+		if netAmount.GreaterThan(decimal.Zero) {
+			invResp := previewProrationQuantityChangeInvoiceResponse(ctx, sub, oldItem, newItem, mod.getEffectiveDate(), price, netAmount)
+			out = append(out, dto.ChangedInvoice{
+				ID:      "(preview-invoice)",
+				Action:  dto.ChangedInvoiceActionCreated,
+				Status:  dto.ChangedInvoiceStatusPreview,
+				Invoice: invResp,
+			})
+			continue
+		}
+		walletTx, err := s.previewProrationWalletTransactionResponse(ctx, sub, netAmount.Abs())
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, dto.ChangedInvoice{
+			ID:                "(preview-wallet-credit)",
+			Action:            dto.ChangedInvoiceActionWalletCredit,
+			Status:            dto.ChangedInvoiceStatusPreview,
+			WalletTransaction: walletTx,
+		})
+	}
+	return out, nil
 }
 
 // previewProrationQuantityChangeInvoiceResponse builds a non-persisted invoice shaped like the execute-path delta invoice.
@@ -800,80 +783,6 @@ func (s *subscriptionModificationService) previewProrationWalletTransactionRespo
 		TopupConversionRate: lo.ToPtr(topupRate),
 	}
 	return dto.FromWalletTransaction(tx), nil
-}
-
-// previewQuantityChangeProration calculates what proration would occur without creating any
-// invoices, wallet credits, or other side effects. Safe to call from the preview endpoint.
-func (s *subscriptionModificationService) previewQuantityChangeProration(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	oldItem *subscription.SubscriptionLineItem,
-	newItem *subscription.SubscriptionLineItem,
-	effectiveDate time.Time,
-) (*dto.ChangedInvoice, error) {
-	sp := s.serviceParams
-	prorationSvc := NewProrationService(sp)
-	priceSvc := NewPriceService(sp)
-
-	price, err := priceSvc.GetPrice(ctx, oldItem.PriceID)
-	if err != nil {
-		return nil, err
-	}
-
-	customerTimezone := sub.Timezone
-	if customerTimezone == "" {
-		customerTimezone = types.DefaultTimezone
-	}
-
-	prorationParams := proration.ProrationParams{
-		SubscriptionID:     sub.ID,
-		LineItemID:         oldItem.ID,
-		PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
-		Action:             types.ProrationActionQuantityChange,
-		NewPriceID:         newItem.PriceID,
-		OldQuantity:        oldItem.Quantity,
-		NewQuantity:        newItem.Quantity,
-		NewPricePerUnit:    price.Price.Amount,
-		OldPricePerUnit:    price.Price.Amount,
-		ProrationDate:      effectiveDate,
-		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-		ProrationStrategy:  types.StrategySecondBased,
-		Currency:           sub.Currency,
-		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:           customerTimezone,
-	}
-
-	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.NetAmount.IsZero() {
-		return nil, nil
-	}
-
-	// Return a preview-only ChangedInvoice — no invoice is created, no payment attempted.
-	if result.NetAmount.GreaterThan(decimal.Zero) {
-		invResp := previewProrationQuantityChangeInvoiceResponse(ctx, sub, oldItem, newItem, effectiveDate, price, result.NetAmount)
-		return &dto.ChangedInvoice{
-			ID:      "(preview-invoice)",
-			Action:  dto.ChangedInvoiceActionCreated,
-			Status:  dto.ChangedInvoiceStatusPreview,
-			Invoice: invResp,
-		}, nil
-	}
-	walletTx, err := s.previewProrationWalletTransactionResponse(ctx, sub, result.NetAmount.Abs())
-	if err != nil {
-		return nil, err
-	}
-	return &dto.ChangedInvoice{
-		ID:                "(preview-wallet-credit)",
-		Action:            dto.ChangedInvoiceActionWalletCredit,
-		Status:            dto.ChangedInvoiceStatusPreview,
-		WalletTransaction: walletTx,
-	}, nil
 }
 
 // ─────────────────────────────────────────────

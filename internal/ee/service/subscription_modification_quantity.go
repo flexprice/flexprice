@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -259,6 +260,168 @@ func (s *subscriptionModificationService) buildQuantityChangePlan(
 	}
 
 	return NewQuantityChangePlan(subscriptionID, sub, mods), nil
+}
+
+// ─────────────────────────────────────────────
+// Module B — proration calculation (no money writes)
+// ─────────────────────────────────────────────
+
+// quantityChangeProration is the calc-only money outcome for a quantityChangePlan.
+type quantityChangeProration struct {
+	items     []*quantityChangeProrationItem
+	netCharge decimal.Decimal
+	netCredit decimal.Decimal
+}
+
+func newQuantityChangeProration(items []*quantityChangeProrationItem, netCharge, netCredit decimal.Decimal) *quantityChangeProration {
+	if items == nil {
+		items = []*quantityChangeProrationItem{}
+	}
+	return &quantityChangeProration{
+		items:     items,
+		netCharge: netCharge,
+		netCredit: netCredit,
+	}
+}
+
+func (r *quantityChangeProration) getItems() []*quantityChangeProrationItem {
+	if r == nil {
+		return nil
+	}
+	return r.items
+}
+
+func (r *quantityChangeProration) getNetCharge() decimal.Decimal {
+	if r == nil {
+		return decimal.Zero
+	}
+	return r.netCharge
+}
+
+func (r *quantityChangeProration) getNetCredit() decimal.Decimal {
+	if r == nil {
+		return decimal.Zero
+	}
+	return r.netCredit
+}
+
+// quantityChangeProrationItem is one ADVANCE line-item's non-zero proration result.
+type quantityChangeProrationItem struct {
+	mod       *quantityChangeLineItemMod
+	netAmount decimal.Decimal
+	price     *dto.PriceResponse
+}
+
+func newQuantityChangeProrationItem(mod *quantityChangeLineItemMod, netAmount decimal.Decimal, price *dto.PriceResponse) *quantityChangeProrationItem {
+	return &quantityChangeProrationItem{
+		mod:       mod,
+		netAmount: netAmount,
+		price:     price,
+	}
+}
+
+func (i *quantityChangeProrationItem) getMod() *quantityChangeLineItemMod {
+	if i == nil {
+		return nil
+	}
+	return i.mod
+}
+
+func (i *quantityChangeProrationItem) getNetAmount() decimal.Decimal {
+	if i == nil {
+		return decimal.Zero
+	}
+	return i.netAmount
+}
+
+func (i *quantityChangeProrationItem) getPrice() *dto.PriceResponse {
+	if i == nil {
+		return nil
+	}
+	return i.price
+}
+
+// calculateProrationForPlan computes proration amounts for ADVANCE mods on the plan.
+// It does not create invoices, attempt payment, or issue wallet credits.
+func (s *subscriptionModificationService) calculateProrationForPlan(
+	ctx context.Context,
+	plan *quantityChangePlan,
+) (*quantityChangeProration, error) {
+	if plan == nil {
+		return newQuantityChangeProration(nil, decimal.Zero, decimal.Zero), nil
+	}
+
+	sp := s.serviceParams
+	sub := plan.GetSubscription()
+	if sub == nil {
+		return nil, ierr.NewError("quantity change plan has no subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	prorationSvc := NewProrationService(sp)
+	priceSvc := NewPriceService(sp)
+
+	customerTimezone := sub.Timezone
+	if customerTimezone == "" {
+		customerTimezone = types.DefaultTimezone
+	}
+
+	items := make([]*quantityChangeProrationItem, 0)
+	netCharge := decimal.Zero
+	netCredit := decimal.Zero
+
+	for _, mod := range plan.GetModifications() {
+		if mod == nil {
+			continue
+		}
+		oldItem := mod.getOldLineItem()
+		if oldItem == nil {
+			continue
+		}
+		if oldItem.InvoiceCadence != types.InvoiceCadenceAdvance {
+			continue
+		}
+
+		price, err := priceSvc.GetPrice(ctx, oldItem.PriceID)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := prorationSvc.CalculateProration(ctx, proration.ProrationParams{
+			SubscriptionID:     sub.ID,
+			LineItemID:         oldItem.ID,
+			PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
+			CurrentPeriodStart: sub.CurrentPeriodStart,
+			CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
+			Action:             types.ProrationActionQuantityChange,
+			NewPriceID:         oldItem.PriceID,
+			OldQuantity:        oldItem.Quantity,
+			NewQuantity:        mod.getQuantity(),
+			NewPricePerUnit:    price.Price.Amount,
+			OldPricePerUnit:    price.Price.Amount,
+			ProrationDate:      mod.getEffectiveDate(),
+			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+			ProrationStrategy:  types.StrategySecondBased,
+			Currency:           sub.Currency,
+			PlanDisplayName:    oldItem.PlanDisplayName,
+			Timezone:           customerTimezone,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if result == nil || result.NetAmount.IsZero() {
+			continue
+		}
+
+		items = append(items, newQuantityChangeProrationItem(mod, result.NetAmount, price))
+		if result.NetAmount.GreaterThan(decimal.Zero) {
+			netCharge = netCharge.Add(result.NetAmount)
+		} else {
+			netCredit = netCredit.Add(result.NetAmount.Abs())
+		}
+	}
+
+	return newQuantityChangeProration(items, netCharge, netCredit), nil
 }
 
 // validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
