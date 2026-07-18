@@ -424,6 +424,97 @@ func (s *subscriptionModificationService) calculateProrationForPlan(
 	return newQuantityChangeProration(items, netCharge, netCredit), nil
 }
 
+// ─────────────────────────────────────────────
+// Module C — apply plan (line-item writes only)
+// ─────────────────────────────────────────────
+
+// applyQuantityChangePlan ends old line items and creates replacements inside one
+// transaction. New LI UUIDs are generated at apply time. No invoices, payments, or wallets.
+func (s *subscriptionModificationService) applyQuantityChangePlan(
+	ctx context.Context,
+	plan *quantityChangePlan,
+) ([]dto.ChangedLineItem, error) {
+	if plan == nil {
+		return nil, ierr.NewError("quantity change plan is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	sp := s.serviceParams
+	mods := plan.GetModifications()
+	if len(mods) == 0 {
+		return []dto.ChangedLineItem{}, nil
+	}
+
+	changedLineItems := make([]dto.ChangedLineItem, 0, len(mods)*2)
+
+	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		changedLineItems = nil
+
+		for _, mod := range mods {
+			if mod == nil {
+				continue
+			}
+			effectiveDate := mod.getEffectiveDate()
+			lineItemID := mod.getLineItemID()
+
+			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, lineItemID)
+			if err != nil {
+				return err
+			}
+
+			lineItem.EndDate = effectiveDate
+			if err := sp.SubscriptionLineItemRepo.Update(txCtx, lineItem); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to end existing line item").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Copy from the ended line item, then override identity / window / quantity.
+			// Clear EndDate so the replacement is open-ended (or later clipped via newEndDate in response only).
+			newItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
+				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)).
+				WithQuantity(mod.getQuantity()).
+				WithStartDate(effectiveDate).
+				WithEndDate(time.Time{}).
+				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
+				Build()
+			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
+				return err
+			}
+
+			oldStart := lineItem.StartDate
+			endDate := effectiveDate
+			startDate := effectiveDate
+			newEndDate := mod.getNewEndDate()
+			changedLineItems = append(changedLineItems,
+				dto.ChangedLineItem{
+					ID:           lineItem.ID,
+					PriceID:      lineItem.PriceID,
+					Quantity:     lineItem.Quantity,
+					StartDate:    &oldStart,
+					EndDate:      &endDate,
+					ChangeAction: dto.ChangedLineItemActionEnded,
+				},
+				dto.ChangedLineItem{
+					ID:           newItem.ID,
+					PriceID:      newItem.PriceID,
+					Quantity:     newItem.Quantity,
+					StartDate:    &startDate,
+					EndDate:      &newEndDate,
+					ChangeAction: dto.ChangedLineItemActionCreated,
+				},
+			)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return changedLineItems, nil
+}
+
 // validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
 // [lineItem.StartDate, lineEnd), where lineEnd is lineItem.EndDate when set, otherwise
 // sub.CurrentPeriodEnd (open-ended line item). Subscription period bounds are validated separately.

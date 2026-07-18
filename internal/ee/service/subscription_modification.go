@@ -305,8 +305,8 @@ func (s *subscriptionModificationService) previewInheritance(
 
 // ─────────────────────────────────────────────
 // Sub-feature 2: Quantity Change
-// Plan (A) + proration calc (B) in subscription_modification_quantity.go.
-// Apply + money settlement remain here until Modules C/D.
+// Plan (A) + proration calc (B) + apply (C) in subscription_modification_quantity.go.
+// Money settlement remains here until Module D.
 // ─────────────────────────────────────────────
 
 func (s *subscriptionModificationService) executeQuantityChange(
@@ -327,94 +327,7 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		return nil, err
 	}
 
-	changedLineItems := make([]dto.ChangedLineItem, 0)
-
-	// Single transaction: end all old line items and create all new ones atomically.
-	// Money settlement runs after the transaction (invoice/payment/wallet side effects).
-	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		changedLineItems = nil // reset for safety
-
-		for _, mod := range plan.GetModifications() {
-			if mod == nil {
-				continue
-			}
-			effectiveDate := mod.getEffectiveDate()
-			lineItemID := mod.getLineItemID()
-
-			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, lineItemID)
-			if err != nil {
-				return err
-			}
-
-			// End the old line item at effective date
-			lineItem.EndDate = effectiveDate
-			if err := sp.SubscriptionLineItemRepo.Update(txCtx, lineItem); err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to end existing line item").
-					Mark(ierr.ErrDatabase)
-			}
-
-			// Create new line item (copy with new quantity)
-			newItem := &subscription.SubscriptionLineItem{
-				ID:                      types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-				SubscriptionID:          lineItem.SubscriptionID,
-				CustomerID:              lineItem.CustomerID,
-				EntityID:                lineItem.EntityID,
-				EntityType:              lineItem.EntityType,
-				PlanDisplayName:         lineItem.PlanDisplayName,
-				PriceID:                 lineItem.PriceID,
-				PriceType:               lineItem.PriceType,
-				MeterID:                 lineItem.MeterID,
-				MeterDisplayName:        lineItem.MeterDisplayName,
-				PriceUnitID:             lineItem.PriceUnitID,
-				PriceUnit:               lineItem.PriceUnit,
-				DisplayName:             lineItem.DisplayName,
-				Quantity:                mod.getQuantity(),
-				Currency:                lineItem.Currency,
-				BillingPeriod:           lineItem.BillingPeriod,
-				BillingPeriodCount:      lineItem.BillingPeriodCount,
-				InvoiceCadence:          lineItem.InvoiceCadence,
-				StartDate:               effectiveDate,
-				CommitmentAmount:        lineItem.CommitmentAmount,
-				CommitmentQuantity:      lineItem.CommitmentQuantity,
-				CommitmentType:          lineItem.CommitmentType,
-				CommitmentOverageFactor: lineItem.CommitmentOverageFactor,
-				CommitmentTrueUpEnabled: lineItem.CommitmentTrueUpEnabled,
-				CommitmentWindowed:      lineItem.CommitmentWindowed,
-				CommitmentDuration:      lineItem.CommitmentDuration,
-				EnvironmentID:           lineItem.EnvironmentID,
-				BaseModel:               types.GetDefaultBaseModel(txCtx),
-			}
-			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
-				return err
-			}
-
-			oldStart := lineItem.StartDate
-			endDate := effectiveDate
-			startDate := effectiveDate
-			newEndDate := mod.getNewEndDate()
-			changedLineItems = append(changedLineItems,
-				dto.ChangedLineItem{
-					ID:           lineItem.ID,
-					PriceID:      lineItem.PriceID,
-					Quantity:     lineItem.Quantity,
-					StartDate:    &oldStart,
-					EndDate:      &endDate,
-					ChangeAction: dto.ChangedLineItemActionEnded,
-				},
-				dto.ChangedLineItem{
-					ID:           newItem.ID,
-					PriceID:      newItem.PriceID,
-					Quantity:     newItem.Quantity,
-					StartDate:    &startDate,
-					EndDate:      &newEndDate,
-					ChangeAction: dto.ChangedLineItemActionCreated,
-				},
-			)
-		}
-
-		return nil
-	})
+	changedLineItems, err := s.applyQuantityChangePlan(ctx, plan)
 	if err != nil {
 		return nil, err
 	}
