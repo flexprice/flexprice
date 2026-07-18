@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -513,6 +515,215 @@ func (s *subscriptionModificationService) applyQuantityChangePlan(
 	}
 
 	return changedLineItems, nil
+}
+
+// ─────────────────────────────────────────────
+// Module D1 — money settlement helpers (pay-later)
+// ─────────────────────────────────────────────
+
+// settlePayLater applies the plan (C) then settles each proration item (charge or wallet credit).
+func (s *subscriptionModificationService) settlePayLater(
+	ctx context.Context,
+	plan *quantityChangePlan,
+	prorationResult *quantityChangeProration,
+) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
+	changedLineItems, err := s.applyQuantityChangePlan(ctx, plan)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sub := plan.GetSubscription()
+	changedInvoices := make([]dto.ChangedInvoice, 0)
+	for _, item := range prorationResult.getItems() {
+		if item == nil {
+			continue
+		}
+		netAmount := item.getNetAmount()
+		if netAmount.IsZero() {
+			continue
+		}
+
+		var inv *dto.ChangedInvoice
+		if netAmount.GreaterThan(decimal.Zero) {
+			inv, err = s.createProrationChargeInvoice(ctx, sub, item, false)
+		} else {
+			inv, err = s.issueProrationWalletCredit(ctx, sub, item)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if inv != nil {
+			changedInvoices = append(changedInvoices, *inv)
+		}
+	}
+
+	return changedLineItems, changedInvoices, nil
+}
+
+// createProrationChargeInvoice creates a ONE_OFF proration charge for one B item.
+// draft=false: finalize + AttemptPayment (pay-later). draft=true: leave DRAFT (pay-first).
+func (s *subscriptionModificationService) createProrationChargeInvoice(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *quantityChangeProrationItem,
+	draft bool,
+) (*dto.ChangedInvoice, error) {
+	if item == nil || sub == nil {
+		return nil, nil
+	}
+	mod := item.getMod()
+	oldItem := mod.getOldLineItem()
+	price := item.getPrice()
+	netAmount := item.getNetAmount()
+	if mod == nil || oldItem == nil || price == nil || !netAmount.GreaterThan(decimal.Zero) {
+		return nil, nil
+	}
+
+	sp := s.serviceParams
+	invoiceSvc := NewInvoiceService(sp)
+	req := buildProrationChargeInvoiceRequest(sub, item)
+
+	if draft {
+		draftResp, err := invoiceSvc.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+		if err != nil {
+			sp.Logger.Error(ctx, "failed to create draft proration invoice for quantity change", "error", err)
+			return nil, err
+		}
+		computeReq := req.ToComputeRequest()
+		skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+		if err != nil {
+			return nil, err
+		}
+		if skipped {
+			return nil, ierr.NewError("proration draft invoice was skipped").
+				WithHint("Expected a non-zero proration charge").
+				WithReportableDetails(map[string]any{"invoice_id": draftResp.ID}).
+				Mark(ierr.ErrValidation)
+		}
+		latest, err := invoiceSvc.GetInvoice(ctx, draftResp.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &dto.ChangedInvoice{
+			ID:      latest.ID,
+			Action:  dto.ChangedInvoiceActionCreated,
+			Status:  dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus),
+			Invoice: latest,
+		}, nil
+	}
+
+	inv, err := invoiceSvc.CreateInvoice(ctx, req)
+	if err != nil {
+		sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
+		return nil, err
+	}
+	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
+		sp.Logger.Info(context.Background(), "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
+	}
+	latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
+	if fetchErr != nil {
+		latest = inv
+	}
+	return &dto.ChangedInvoice{
+		ID:      latest.ID,
+		Action:  dto.ChangedInvoiceActionCreated,
+		Status:  dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus),
+		Invoice: latest,
+	}, nil
+}
+
+// issueProrationWalletCredit issues a wallet credit for a negative proration item.
+func (s *subscriptionModificationService) issueProrationWalletCredit(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *quantityChangeProrationItem,
+) (*dto.ChangedInvoice, error) {
+	if item == nil || sub == nil {
+		return nil, nil
+	}
+	mod := item.getMod()
+	oldItem := mod.getOldLineItem()
+	netAmount := item.getNetAmount()
+	if mod == nil || oldItem == nil || !netAmount.LessThan(decimal.Zero) {
+		return nil, nil
+	}
+
+	sp := s.serviceParams
+	walletSvc := NewWalletService(sp)
+	creditAmount := netAmount.Abs()
+	billingCustomer := sub.GetInvoicingCustomerID()
+	effectiveDate := mod.getEffectiveDate()
+	idempotencyKey := fmt.Sprintf("proration_credit_%s_%s_%s", sub.ID, oldItem.ID, effectiveDate.Format(time.RFC3339))
+	walletTx, err := walletSvc.TopUpWalletForProratedCharge(ctx, billingCustomer, creditAmount, sub.Currency, idempotencyKey)
+	if err != nil {
+		sp.Logger.Error(ctx, "failed to top up wallet for downgrade proration", "error", err)
+		return nil, err
+	}
+	changedID := "(wallet_credit)"
+	if walletTx != nil && walletTx.Transaction != nil && walletTx.ID != "" {
+		changedID = walletTx.ID
+	}
+	return &dto.ChangedInvoice{
+		ID:                changedID,
+		Action:            dto.ChangedInvoiceActionWalletCredit,
+		Status:            dto.ChangedInvoiceStatusWalletIssued,
+		WalletTransaction: walletTx,
+	}, nil
+}
+
+func buildProrationChargeInvoiceRequest(
+	sub *subscription.Subscription,
+	item *quantityChangeProrationItem,
+) dto.CreateInvoiceRequest {
+	mod := item.getMod()
+	oldItem := mod.getOldLineItem()
+	price := item.getPrice()
+	netAmount := item.getNetAmount()
+	effectiveDate := mod.getEffectiveDate()
+	newQuantity := mod.getQuantity()
+	periodEnd := sub.CurrentPeriodEnd
+	billingPeriod := string(sub.BillingPeriod)
+	billingCustomer := sub.GetInvoicingCustomerID()
+
+	qtyDelta := newQuantity.Sub(oldItem.Quantity)
+	displayName := fmt.Sprintf("%s — Quantity Change Proration (%s – %s)",
+		oldItem.DisplayName,
+		effectiveDate.Format("2 Jan 2006"),
+		periodEnd.Format("2 Jan 2006"))
+	priceID := oldItem.PriceID
+	priceType := string(price.Price.Type)
+	planDisplayName := oldItem.PlanDisplayName
+	lineItemDescription := fmt.Sprintf("Proration for quantity change: %s → %s units × %s %s/unit (%s – %s)",
+		oldItem.Quantity.String(), newQuantity.String(),
+		strings.ToUpper(sub.Currency), price.Price.Amount.String(),
+		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
+
+	return dto.CreateInvoiceRequest{
+		CustomerID:     billingCustomer,
+		SubscriptionID: &sub.ID,
+		InvoiceType:    types.InvoiceTypeOneOff,
+		Currency:       sub.Currency,
+		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
+		AmountDue:      netAmount,
+		Total:          netAmount,
+		Subtotal:       netAmount,
+		PeriodStart:    &effectiveDate,
+		PeriodEnd:      &periodEnd,
+		BillingPeriod:  &billingPeriod,
+		LineItems: []dto.CreateInvoiceLineItemRequest{
+			{
+				PriceID:         &priceID,
+				PriceType:       &priceType,
+				PlanDisplayName: &planDisplayName,
+				DisplayName:     &displayName,
+				Amount:          netAmount,
+				Quantity:        qtyDelta,
+				PeriodStart:     &effectiveDate,
+				PeriodEnd:       &periodEnd,
+				Metadata:        types.Metadata{"description": lineItemDescription},
+			},
+		},
+	}
 }
 
 // validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
