@@ -93,58 +93,35 @@ func (Entitlement) Fields() []ent.Field {
 			Optional().
 			SchemaType(map[string]string{"postgres": "jsonb"}),
 
-		// -------------------------------------------------------------------
-		// Grant fields — layered on top of the legacy entitlement row so
-		// existing entitlements keep working (grant_type defaults to NONE and
-		// nothing changes). See ERD FLE-959 §7.1.
-		//
-		// A row with grant_type='TIME_BOXED' becomes an "entitlement config"
-		// that the alert workflow instantiates into entitlement_grants over
-		// time (5 h, 1 w, etc. windows), independent of the sub billing cycle.
-		// -------------------------------------------------------------------
-
+		// Grant config; a grant_type='time_boxed' row is instantiated into entitlement_grants.
 		field.String("grant_type").
-			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
-			}).
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			Default(string(types.EntitlementGrantTypeNone)).
-			GoType(types.EntitlementGrantType("")).
-			Comment("none = legacy behavior, no grants. time_boxed = auto-rotate grants of grant_duration each."),
+			GoType(types.EntitlementGrantType("")),
 
 		field.String("grant_measure").
-			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
-			}).
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			Optional().
-			GoType(types.EntitlementGrantMeasure("")).
-			Comment("QUANTITY or AMOUNT. Interprets grant_quota and EG.usage."),
+			GoType(types.EntitlementGrantMeasure("")),
 
-		// Duration as (value, unit) rather than raw nanoseconds — humans read
-		// this table too. Only meaningful when grant_type=TIME_BOXED.
 		field.Int("grant_duration_value").
 			Optional().
-			Nillable().
-			Comment("Length of each time-boxed grant, expressed with grant_duration_unit. Minimum equivalent of 1 hour."),
+			Nillable(),
 
 		field.String("grant_duration_unit").
-			SchemaType(map[string]string{
-				"postgres": "varchar(10)",
-			}).
+			SchemaType(map[string]string{"postgres": "varchar(10)"}).
 			Optional().
-			GoType(types.EntitlementGrantDurationUnit("")).
-			Comment("HOUR, DAY, or WEEK."),
+			GoType(types.EntitlementGrantDurationUnit("")),
 
 		field.Other("grant_quota", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(25,15)",
-			}).
+			SchemaType(map[string]string{"postgres": "numeric(25,15)"}).
 			Optional().
-			Nillable().
-			Comment("Per-grant quota, interpreted by grant_measure."),
+			Nillable(),
 
-		field.Bool("parallel").
-			Default(false).
-			Comment("If true, multiple ECs on the same feature produce independent grants (parallel counting). If false, additive as today."),
+		field.String("aggregation_mode").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Default(string(types.EntitlementGrantAggregationModeAdditive)).
+			GoType(types.EntitlementGrantAggregationMode("")),
 	}
 }
 

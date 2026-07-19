@@ -13,27 +13,18 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// adjustMeterUsageGrantsResult carries what the per-line-item integration point
-// needs to know: an adjusted billable quantity for the pricer to consume, an
-// overage amount ready to plug straight into the line item's Amount field, and
-// the grant lane it came from. Exactly one of {AdjustedQty, OverageAmount}
-// carries the load per invocation.
+// adjustMeterUsageGrantsResult is the per-line-item output of the grant folding.
+// Exactly one of {AdjustedQty, OverageAmount} carries the load per invocation,
+// selected by Measure.
 type adjustMeterUsageGrantsResult struct {
 	Measure        types.EntitlementGrantMeasure
 	AdjustedQty    decimal.Decimal
 	OverageAmount  decimal.Decimal
-	AppliedGrantID string // audit — the first grant that contributed to overage; may be empty when none breached
+	AppliedGrantID string
 }
 
-// loadEntitlementGrantsByMeterID pulls every grant whose window overlaps the
-// billing cycle for the given subscription/customer and buckets them by the
-// meter their feature points at. Same shape as the sibling
-// entitlementsByMeterID map in CalculateMeterUsageCharges so both paths can be
-// consulted symmetrically in the per-line-item loop.
-//
-// The billing-path filter (WithCycleOverlap + WithScopeEntityIDs) matches the
-// composite (tenant, env, customer, scope_entity_type, scope_entity_id,
-// valid_from, valid_to) index, so this is one indexed PG hit per cycle build.
+// loadEntitlementGrantsByMeterID returns grants overlapping the billing cycle
+// for this subscription's features, bucketed by meter id.
 func (s *billingService) loadEntitlementGrantsByMeterID(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -43,8 +34,6 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 	if s.EntitlementGrantRepo == nil || sub == nil {
 		return nil, nil
 	}
-	// Feature IDs the subscription actually touches — anything else can't be
-	// referenced by a grant snapshot we'd act on here.
 	featureIDs := lo.Uniq(lo.FilterMap(aggregatedFeatures, func(f *dto.AggregatedFeature, _ int) (string, bool) {
 		if f == nil || f.Feature == nil {
 			return "", false
@@ -68,8 +57,6 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 		return nil, nil
 	}
 
-	// Feature id → meter id lookup so we can key the return map by meter id
-	// (what the outer loop's line item exposes).
 	meterByFeatureID := make(map[string]string, len(aggregatedFeatures))
 	for _, f := range aggregatedFeatures {
 		if f == nil || f.Feature == nil {
@@ -94,32 +81,10 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 	return out, nil
 }
 
-// adjustMeterUsageGrants folds the summed per-grant overage into the line item.
-// The math matches ERD §8.6 and §11.3: each grant is an independent budget and
-// its overage contributes to billable regardless of what other grants have
-// left — "combined-pool" was rejected precisely because it silently masked
-// overage across parallel budgets.
-//
-// Two lanes, mutually exclusive per line item (grant_measure is per-EC and
-// EC-validated to stay consistent across all grants on a feature):
-//
-//   - Quantity lane: adjusted_qty = Σ max(0, grant.usage − grant.quota) across
-//     the cycle-overlapping grants. Returned as AdjustedQty for the pricer to
-//     apply commit / tier / true-up on top of. `matchingCharge.Amount` is
-//     recomputed from this qty against the line item's price.
-//
-//   - Amount lane: overage_amount = Σ max(0, grant.usage − grant.quota) in
-//     currency units. Overage is already priced (amount grants are validated
-//     as flat/linear at EC-write time, so the multiplication happened when the
-//     grant refreshed its snapshot). Returned as OverageAmount, which the
-//     caller writes into matchingCharge.Amount and zeros the qty out — the
-//     pricer sees no work to do for this line item.
-//
-// Runtime guard: if the caller passes an amount-lane line item whose price
-// carries commit / tier / true-up (should be rejected by
-// validateEntitlementGrantShape at EC-write time), we log a warning and
-// return `applied=false` so the caller falls through to the legacy
-// entitlement adjustment rather than silently mis-charge.
+// adjustMeterUsageGrants folds Σ max(0, grant.usage − grant.quota) into the line
+// item. Quantity lane returns AdjustedQty for the pricer; amount lane returns
+// OverageAmount (already priced) and zeros the qty. Returns applied=false when
+// the runtime pricing guard rejects an amount-lane line item.
 func (s *billingService) adjustMeterUsageGrants(
 	ctx context.Context,
 	item *subscription.SubscriptionLineItem,
@@ -135,10 +100,7 @@ func (s *billingService) adjustMeterUsageGrants(
 		return adjustMeterUsageGrantsResult{}, false
 	}
 
-	// All grants on a feature share a measure (per EC validation). If a
-	// mismatch shows up at runtime (schema drift, admin surgery), fall
-	// through to the legacy path — safer than picking one measure and
-	// silently ignoring the other set.
+	// EC validation keeps measure consistent per feature; drop out if runtime disagrees.
 	for _, g := range grants[1:] {
 		if g.Measure != measure {
 			s.Logger.Warn(ctx, "entitlement grant overage: mixed measures on same feature, skipping grants",
@@ -148,10 +110,7 @@ func (s *billingService) adjustMeterUsageGrants(
 		}
 	}
 
-	// Amount-lane guard: reject if the line item's pricing has commit / tier /
-	// true-up. Amount grants aren't safe on top of these because the pricer
-	// needs full-cycle scope to be correct (ERD §8.6). Config validation
-	// should have kept this from happening; belt-and-braces.
+	// Belt-and-braces guard for amount lane; EC validation should have caught this.
 	if measure == types.EntitlementGrantMeasureAmount {
 		if guardErr := amountLanePricingGuard(item, matchingCharge.Price); guardErr != nil {
 			s.Logger.Warn(ctx, "entitlement grant overage: amount lane rejected by runtime pricing guard, skipping grants",
@@ -183,9 +142,6 @@ func (s *billingService) adjustMeterUsageGrants(
 		}
 	}
 
-	// Update matchingCharge in place so the caller's downstream reads
-	// (line_item_amount, quantity, is_overage) reflect the grant math. This
-	// mirrors what adjustMeterUsageEntitlement does today.
 	switch measure {
 	case types.EntitlementGrantMeasureQuantity:
 		if matchingCharge.Price != nil {
@@ -201,18 +157,13 @@ func (s *billingService) adjustMeterUsageGrants(
 		} else {
 			matchingCharge.Amount = res.OverageAmount.InexactFloat64()
 		}
-		// The pricer has nothing to do for amount-lane grants — the grant's
-		// usage snapshot was already priced at refresh time. Zero the qty so
-		// downstream aggregation (line item quantity) doesn't double-count.
+		// Amount-lane grants are already priced; zero the qty so aggregation doesn't double-count.
 		matchingCharge.Quantity = 0
 	}
 	return res, true
 }
 
-// amountLanePricingGuard defends adjustMeterUsageGrants against complex-priced
-// line items that the EC-write-time validator was supposed to reject.
-// Returns nil when the line item is safe for the amount lane, and an error
-// naming the offending piece when it isn't.
+// amountLanePricingGuard returns nil when the line item is safe for the amount lane.
 func amountLanePricingGuard(item *subscription.SubscriptionLineItem, price *priceDomain.Price) error {
 	if item == nil {
 		return nil
@@ -232,8 +183,6 @@ func amountLanePricingGuard(item *subscription.SubscriptionLineItem, price *pric
 	return nil
 }
 
-// Sentinel-typed errors so the log line is grep-friendly and tests can assert
-// on the exact reason without string-matching prose.
 var (
 	errAmountLaneCommitment = errAmountLaneReason("line item carries a commitment")
 	errAmountLaneTrueUp     = errAmountLaneReason("line item enables true-up")

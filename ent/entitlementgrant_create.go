@@ -202,34 +202,6 @@ func (egc *EntitlementGrantCreate) SetNillableGrantStatus(tgs *types.Entitlement
 	return egc
 }
 
-// SetLastAlertPct sets the "last_alert_pct" field.
-func (egc *EntitlementGrantCreate) SetLastAlertPct(i int) *EntitlementGrantCreate {
-	egc.mutation.SetLastAlertPct(i)
-	return egc
-}
-
-// SetNillableLastAlertPct sets the "last_alert_pct" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableLastAlertPct(i *int) *EntitlementGrantCreate {
-	if i != nil {
-		egc.SetLastAlertPct(*i)
-	}
-	return egc
-}
-
-// SetLastAlertAt sets the "last_alert_at" field.
-func (egc *EntitlementGrantCreate) SetLastAlertAt(t time.Time) *EntitlementGrantCreate {
-	egc.mutation.SetLastAlertAt(t)
-	return egc
-}
-
-// SetNillableLastAlertAt sets the "last_alert_at" field if the given value is not nil.
-func (egc *EntitlementGrantCreate) SetNillableLastAlertAt(t *time.Time) *EntitlementGrantCreate {
-	if t != nil {
-		egc.SetLastAlertAt(*t)
-	}
-	return egc
-}
-
 // SetLastComputedAt sets the "last_computed_at" field.
 func (egc *EntitlementGrantCreate) SetLastComputedAt(t time.Time) *EntitlementGrantCreate {
 	egc.mutation.SetLastComputedAt(t)
@@ -508,14 +480,6 @@ func (egc *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.Cr
 	if value, ok := egc.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
 		_node.GrantStatus = value
-	}
-	if value, ok := egc.mutation.LastAlertPct(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertPct, field.TypeInt, value)
-		_node.LastAlertPct = &value
-	}
-	if value, ok := egc.mutation.LastAlertAt(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertAt, field.TypeTime, value)
-		_node.LastAlertAt = &value
 	}
 	if value, ok := egc.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)

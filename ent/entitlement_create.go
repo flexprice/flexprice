@@ -354,16 +354,16 @@ func (ec *EntitlementCreate) SetNillableGrantQuota(d *decimal.Decimal) *Entitlem
 	return ec
 }
 
-// SetParallel sets the "parallel" field.
-func (ec *EntitlementCreate) SetParallel(b bool) *EntitlementCreate {
-	ec.mutation.SetParallel(b)
+// SetAggregationMode sets the "aggregation_mode" field.
+func (ec *EntitlementCreate) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementCreate {
+	ec.mutation.SetAggregationMode(tgam)
 	return ec
 }
 
-// SetNillableParallel sets the "parallel" field if the given value is not nil.
-func (ec *EntitlementCreate) SetNillableParallel(b *bool) *EntitlementCreate {
-	if b != nil {
-		ec.SetParallel(*b)
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementCreate {
+	if tgam != nil {
+		ec.SetAggregationMode(*tgam)
 	}
 	return ec
 }
@@ -445,9 +445,9 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultGrantType
 		ec.mutation.SetGrantType(v)
 	}
-	if _, ok := ec.mutation.Parallel(); !ok {
-		v := entitlement.DefaultParallel
-		ec.mutation.SetParallel(v)
+	if _, ok := ec.mutation.AggregationMode(); !ok {
+		v := entitlement.DefaultAggregationMode
+		ec.mutation.SetAggregationMode(v)
 	}
 }
 
@@ -523,8 +523,13 @@ func (ec *EntitlementCreate) check() error {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
 		}
 	}
-	if _, ok := ec.mutation.Parallel(); !ok {
-		return &ValidationError{Name: "parallel", err: errors.New(`ent: missing required field "Entitlement.parallel"`)}
+	if _, ok := ec.mutation.AggregationMode(); !ok {
+		return &ValidationError{Name: "aggregation_mode", err: errors.New(`ent: missing required field "Entitlement.aggregation_mode"`)}
+	}
+	if v, ok := ec.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
+		}
 	}
 	if v, ok := ec.mutation.ID(); ok {
 		if err := entitlement.IDValidator(v); err != nil {
@@ -670,9 +675,9 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
 		_node.GrantQuota = &value
 	}
-	if value, ok := ec.mutation.Parallel(); ok {
-		_spec.SetField(entitlement.FieldParallel, field.TypeBool, value)
-		_node.Parallel = value
+	if value, ok := ec.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
+		_node.AggregationMode = value
 	}
 	return _node, _spec
 }

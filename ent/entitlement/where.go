@@ -197,9 +197,10 @@ func GrantQuota(v decimal.Decimal) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldGrantQuota, v))
 }
 
-// Parallel applies equality check predicate on the "parallel" field. It's identical to ParallelEQ.
-func Parallel(v bool) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldParallel, v))
+// AggregationMode applies equality check predicate on the "aggregation_mode" field. It's identical to AggregationModeEQ.
+func AggregationMode(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldAggregationMode, vc))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1791,14 +1792,88 @@ func GrantQuotaNotNil() predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldNotNull(FieldGrantQuota))
 }
 
-// ParallelEQ applies the EQ predicate on the "parallel" field.
-func ParallelEQ(v bool) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldParallel, v))
+// AggregationModeEQ applies the EQ predicate on the "aggregation_mode" field.
+func AggregationModeEQ(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldAggregationMode, vc))
 }
 
-// ParallelNEQ applies the NEQ predicate on the "parallel" field.
-func ParallelNEQ(v bool) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNEQ(FieldParallel, v))
+// AggregationModeNEQ applies the NEQ predicate on the "aggregation_mode" field.
+func AggregationModeNEQ(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldAggregationMode, vc))
+}
+
+// AggregationModeIn applies the In predicate on the "aggregation_mode" field.
+func AggregationModeIn(vs ...types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldAggregationMode, v...))
+}
+
+// AggregationModeNotIn applies the NotIn predicate on the "aggregation_mode" field.
+func AggregationModeNotIn(vs ...types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldAggregationMode, v...))
+}
+
+// AggregationModeGT applies the GT predicate on the "aggregation_mode" field.
+func AggregationModeGT(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldAggregationMode, vc))
+}
+
+// AggregationModeGTE applies the GTE predicate on the "aggregation_mode" field.
+func AggregationModeGTE(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldAggregationMode, vc))
+}
+
+// AggregationModeLT applies the LT predicate on the "aggregation_mode" field.
+func AggregationModeLT(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldAggregationMode, vc))
+}
+
+// AggregationModeLTE applies the LTE predicate on the "aggregation_mode" field.
+func AggregationModeLTE(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldAggregationMode, vc))
+}
+
+// AggregationModeContains applies the Contains predicate on the "aggregation_mode" field.
+func AggregationModeContains(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldAggregationMode, vc))
+}
+
+// AggregationModeHasPrefix applies the HasPrefix predicate on the "aggregation_mode" field.
+func AggregationModeHasPrefix(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldAggregationMode, vc))
+}
+
+// AggregationModeHasSuffix applies the HasSuffix predicate on the "aggregation_mode" field.
+func AggregationModeHasSuffix(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldAggregationMode, vc))
+}
+
+// AggregationModeEqualFold applies the EqualFold predicate on the "aggregation_mode" field.
+func AggregationModeEqualFold(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldAggregationMode, vc))
+}
+
+// AggregationModeContainsFold applies the ContainsFold predicate on the "aggregation_mode" field.
+func AggregationModeContainsFold(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldAggregationMode, vc))
 }
 
 // And groups predicates with the AND operator between them.

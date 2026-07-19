@@ -112,53 +112,6 @@ func (egu *EntitlementGrantUpdate) SetNillableGrantStatus(tgs *types.Entitlement
 	return egu
 }
 
-// SetLastAlertPct sets the "last_alert_pct" field.
-func (egu *EntitlementGrantUpdate) SetLastAlertPct(i int) *EntitlementGrantUpdate {
-	egu.mutation.ResetLastAlertPct()
-	egu.mutation.SetLastAlertPct(i)
-	return egu
-}
-
-// SetNillableLastAlertPct sets the "last_alert_pct" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableLastAlertPct(i *int) *EntitlementGrantUpdate {
-	if i != nil {
-		egu.SetLastAlertPct(*i)
-	}
-	return egu
-}
-
-// AddLastAlertPct adds i to the "last_alert_pct" field.
-func (egu *EntitlementGrantUpdate) AddLastAlertPct(i int) *EntitlementGrantUpdate {
-	egu.mutation.AddLastAlertPct(i)
-	return egu
-}
-
-// ClearLastAlertPct clears the value of the "last_alert_pct" field.
-func (egu *EntitlementGrantUpdate) ClearLastAlertPct() *EntitlementGrantUpdate {
-	egu.mutation.ClearLastAlertPct()
-	return egu
-}
-
-// SetLastAlertAt sets the "last_alert_at" field.
-func (egu *EntitlementGrantUpdate) SetLastAlertAt(t time.Time) *EntitlementGrantUpdate {
-	egu.mutation.SetLastAlertAt(t)
-	return egu
-}
-
-// SetNillableLastAlertAt sets the "last_alert_at" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableLastAlertAt(t *time.Time) *EntitlementGrantUpdate {
-	if t != nil {
-		egu.SetLastAlertAt(*t)
-	}
-	return egu
-}
-
-// ClearLastAlertAt clears the value of the "last_alert_at" field.
-func (egu *EntitlementGrantUpdate) ClearLastAlertAt() *EntitlementGrantUpdate {
-	egu.mutation.ClearLastAlertAt()
-	return egu
-}
-
 // SetLastComputedAt sets the "last_computed_at" field.
 func (egu *EntitlementGrantUpdate) SetLastComputedAt(t time.Time) *EntitlementGrantUpdate {
 	egu.mutation.SetLastComputedAt(t)
@@ -255,21 +208,6 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if value, ok := egu.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
-	}
-	if value, ok := egu.mutation.LastAlertPct(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertPct, field.TypeInt, value)
-	}
-	if value, ok := egu.mutation.AddedLastAlertPct(); ok {
-		_spec.AddField(entitlementgrant.FieldLastAlertPct, field.TypeInt, value)
-	}
-	if egu.mutation.LastAlertPctCleared() {
-		_spec.ClearField(entitlementgrant.FieldLastAlertPct, field.TypeInt)
-	}
-	if value, ok := egu.mutation.LastAlertAt(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertAt, field.TypeTime, value)
-	}
-	if egu.mutation.LastAlertAtCleared() {
-		_spec.ClearField(entitlementgrant.FieldLastAlertAt, field.TypeTime)
 	}
 	if value, ok := egu.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)
@@ -376,53 +314,6 @@ func (eguo *EntitlementGrantUpdateOne) SetNillableGrantStatus(tgs *types.Entitle
 	if tgs != nil {
 		eguo.SetGrantStatus(*tgs)
 	}
-	return eguo
-}
-
-// SetLastAlertPct sets the "last_alert_pct" field.
-func (eguo *EntitlementGrantUpdateOne) SetLastAlertPct(i int) *EntitlementGrantUpdateOne {
-	eguo.mutation.ResetLastAlertPct()
-	eguo.mutation.SetLastAlertPct(i)
-	return eguo
-}
-
-// SetNillableLastAlertPct sets the "last_alert_pct" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableLastAlertPct(i *int) *EntitlementGrantUpdateOne {
-	if i != nil {
-		eguo.SetLastAlertPct(*i)
-	}
-	return eguo
-}
-
-// AddLastAlertPct adds i to the "last_alert_pct" field.
-func (eguo *EntitlementGrantUpdateOne) AddLastAlertPct(i int) *EntitlementGrantUpdateOne {
-	eguo.mutation.AddLastAlertPct(i)
-	return eguo
-}
-
-// ClearLastAlertPct clears the value of the "last_alert_pct" field.
-func (eguo *EntitlementGrantUpdateOne) ClearLastAlertPct() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearLastAlertPct()
-	return eguo
-}
-
-// SetLastAlertAt sets the "last_alert_at" field.
-func (eguo *EntitlementGrantUpdateOne) SetLastAlertAt(t time.Time) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetLastAlertAt(t)
-	return eguo
-}
-
-// SetNillableLastAlertAt sets the "last_alert_at" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableLastAlertAt(t *time.Time) *EntitlementGrantUpdateOne {
-	if t != nil {
-		eguo.SetLastAlertAt(*t)
-	}
-	return eguo
-}
-
-// ClearLastAlertAt clears the value of the "last_alert_at" field.
-func (eguo *EntitlementGrantUpdateOne) ClearLastAlertAt() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearLastAlertAt()
 	return eguo
 }
 
@@ -552,21 +443,6 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	}
 	if value, ok := eguo.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
-	}
-	if value, ok := eguo.mutation.LastAlertPct(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertPct, field.TypeInt, value)
-	}
-	if value, ok := eguo.mutation.AddedLastAlertPct(); ok {
-		_spec.AddField(entitlementgrant.FieldLastAlertPct, field.TypeInt, value)
-	}
-	if eguo.mutation.LastAlertPctCleared() {
-		_spec.ClearField(entitlementgrant.FieldLastAlertPct, field.TypeInt)
-	}
-	if value, ok := eguo.mutation.LastAlertAt(); ok {
-		_spec.SetField(entitlementgrant.FieldLastAlertAt, field.TypeTime, value)
-	}
-	if eguo.mutation.LastAlertAtCleared() {
-		_spec.ClearField(entitlementgrant.FieldLastAlertAt, field.TypeTime)
 	}
 	if value, ok := eguo.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)

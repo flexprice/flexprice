@@ -118,9 +118,7 @@ func TestAdjustMeterUsageGrants_NoGrants(t *testing.T) {
 }
 
 func TestAdjustMeterUsageGrants_QuantityLane_SumOfOverages(t *testing.T) {
-	// Two quantity grants — one under quota, one over. Overage-sum model
-	// (ERD §11.3): sum(max(0, usage−quota)) across grants. Only the second
-	// contributes; first returns 0.
+	// Overage-sum model: sum(max(0, usage-quota)) across grants; only the second contributes.
 	bs := newTestBillingService()
 	li := linItem(false, false)
 	c := charge(flatPrice(0.5))

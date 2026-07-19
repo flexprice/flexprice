@@ -159,16 +159,6 @@ func GrantStatus(v types.EntitlementGrantStatus) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldGrantStatus, vc))
 }
 
-// LastAlertPct applies equality check predicate on the "last_alert_pct" field. It's identical to LastAlertPctEQ.
-func LastAlertPct(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldLastAlertPct, v))
-}
-
-// LastAlertAt applies equality check predicate on the "last_alert_at" field. It's identical to LastAlertAtEQ.
-func LastAlertAt(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldLastAlertAt, v))
-}
-
 // LastComputedAt applies equality check predicate on the "last_computed_at" field. It's identical to LastComputedAtEQ.
 func LastComputedAt(v time.Time) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldLastComputedAt, v))
@@ -1279,106 +1269,6 @@ func GrantStatusEqualFold(v types.EntitlementGrantStatus) predicate.EntitlementG
 func GrantStatusContainsFold(v types.EntitlementGrantStatus) predicate.EntitlementGrant {
 	vc := string(v)
 	return predicate.EntitlementGrant(sql.FieldContainsFold(FieldGrantStatus, vc))
-}
-
-// LastAlertPctEQ applies the EQ predicate on the "last_alert_pct" field.
-func LastAlertPctEQ(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldLastAlertPct, v))
-}
-
-// LastAlertPctNEQ applies the NEQ predicate on the "last_alert_pct" field.
-func LastAlertPctNEQ(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNEQ(FieldLastAlertPct, v))
-}
-
-// LastAlertPctIn applies the In predicate on the "last_alert_pct" field.
-func LastAlertPctIn(vs ...int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIn(FieldLastAlertPct, vs...))
-}
-
-// LastAlertPctNotIn applies the NotIn predicate on the "last_alert_pct" field.
-func LastAlertPctNotIn(vs ...int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotIn(FieldLastAlertPct, vs...))
-}
-
-// LastAlertPctGT applies the GT predicate on the "last_alert_pct" field.
-func LastAlertPctGT(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGT(FieldLastAlertPct, v))
-}
-
-// LastAlertPctGTE applies the GTE predicate on the "last_alert_pct" field.
-func LastAlertPctGTE(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGTE(FieldLastAlertPct, v))
-}
-
-// LastAlertPctLT applies the LT predicate on the "last_alert_pct" field.
-func LastAlertPctLT(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLT(FieldLastAlertPct, v))
-}
-
-// LastAlertPctLTE applies the LTE predicate on the "last_alert_pct" field.
-func LastAlertPctLTE(v int) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLTE(FieldLastAlertPct, v))
-}
-
-// LastAlertPctIsNil applies the IsNil predicate on the "last_alert_pct" field.
-func LastAlertPctIsNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIsNull(FieldLastAlertPct))
-}
-
-// LastAlertPctNotNil applies the NotNil predicate on the "last_alert_pct" field.
-func LastAlertPctNotNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotNull(FieldLastAlertPct))
-}
-
-// LastAlertAtEQ applies the EQ predicate on the "last_alert_at" field.
-func LastAlertAtEQ(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldLastAlertAt, v))
-}
-
-// LastAlertAtNEQ applies the NEQ predicate on the "last_alert_at" field.
-func LastAlertAtNEQ(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNEQ(FieldLastAlertAt, v))
-}
-
-// LastAlertAtIn applies the In predicate on the "last_alert_at" field.
-func LastAlertAtIn(vs ...time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIn(FieldLastAlertAt, vs...))
-}
-
-// LastAlertAtNotIn applies the NotIn predicate on the "last_alert_at" field.
-func LastAlertAtNotIn(vs ...time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotIn(FieldLastAlertAt, vs...))
-}
-
-// LastAlertAtGT applies the GT predicate on the "last_alert_at" field.
-func LastAlertAtGT(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGT(FieldLastAlertAt, v))
-}
-
-// LastAlertAtGTE applies the GTE predicate on the "last_alert_at" field.
-func LastAlertAtGTE(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGTE(FieldLastAlertAt, v))
-}
-
-// LastAlertAtLT applies the LT predicate on the "last_alert_at" field.
-func LastAlertAtLT(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLT(FieldLastAlertAt, v))
-}
-
-// LastAlertAtLTE applies the LTE predicate on the "last_alert_at" field.
-func LastAlertAtLTE(v time.Time) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLTE(FieldLastAlertAt, v))
-}
-
-// LastAlertAtIsNil applies the IsNil predicate on the "last_alert_at" field.
-func LastAlertAtIsNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIsNull(FieldLastAlertAt))
-}
-
-// LastAlertAtNotNil applies the NotNil predicate on the "last_alert_at" field.
-func LastAlertAtNotNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotNull(FieldLastAlertAt))
 }
 
 // LastComputedAtEQ applies the EQ predicate on the "last_computed_at" field.

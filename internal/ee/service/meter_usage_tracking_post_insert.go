@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -46,11 +47,8 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		event.CustomerID = cust.ID
 	}
 
-	// When the debouncer is on it supersedes the Kafka wallet-alert path and the
-	// inline spend-breach check — a single Temporal workflow (deduped per customer)
-	// runs both checks once per debounce window. When off, the legacy paths stay
-	// available behind their existing flags so rollout can be flipped without a
-	// code change.
+	// Debouncer supersedes the Kafka wallet-alert and inline spend-breach paths
+	// with one deduped Temporal workflow per customer.
 	if s.Config.MeterUsageTracking.AlertDebounceEnabled {
 		s.scheduleUsageAlertWorkflow(ctx, cust)
 		return
@@ -66,16 +64,20 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 	}
 }
 
-// scheduleUsageAlertWorkflow starts a debounced Temporal workflow that runs
-// the alert evaluation (spend + wallet balance) for the customer after
-// Config.AlertDebounceWindow. The workflow ID is stable per (tenant, environment,
-// customer); when a workflow with that ID is already running (armed but not yet
-// fired) Temporal rejects the start with WorkflowExecutionAlreadyStarted — that
-// error IS the dedupe signal and is swallowed.
+// scheduleUsageAlertWorkflow starts a debounced per-customer workflow. WorkflowID
+// is stable per (tenant, env, customer); AlreadyStarted is the dedup signal.
+// hasUsageAlertConfigForCustomer prevents OOMs for customers with no alert config.
 func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Context, cust *customer.Customer) {
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
 		s.Logger.Debug(ctx, "temporal service not available, skipping usage alert workflow",
+			"customer_id", cust.ID,
+		)
+		return
+	}
+
+	if !s.hasUsageAlertConfigForCustomer(ctx, cust) {
+		s.Logger.Debug(ctx, "no usage alert config for customer, skipping workflow schedule",
 			"customer_id", cust.ID,
 		)
 		return
@@ -124,6 +126,143 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		"workflow_id", workflowID,
 		"fires_in", s.Config.MeterUsageTracking.AlertDebounceWindow.String(),
 	)
+}
+
+// hasUsageAlertConfigForCustomer is true when the customer has any spend-alert
+// setting or a wallet under a tenant with wallet alerts on. Redis-cached with a
+// short TTL. Fail-open on repo errors — a spurious workflow is cheaper than a miss.
+func (s *meterUsageTrackingService) hasUsageAlertConfigForCustomer(ctx context.Context, cust *customer.Customer) bool {
+	if cust == nil {
+		return false
+	}
+	if v, ok := s.getUsageAlertGateCache(ctx, cust.ID); ok {
+		return v
+	}
+	result := s.computeUsageAlertGate(ctx, cust)
+	s.setUsageAlertGateCache(ctx, cust.ID, result)
+	return result
+}
+
+func (s *meterUsageTrackingService) computeUsageAlertGate(ctx context.Context, cust *customer.Customer) bool {
+	subIDs, err := s.activeSubscriptionIDsForCustomer(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "usage alert gate: subscription lookup failed, scheduling anyway",
+			"error", err, "customer_id", cust.ID)
+		return true
+	}
+	if len(subIDs) > 0 {
+		hasSpendAlerts, err := s.hasEnabledSpendAlertConfig(ctx, subIDs)
+		if err != nil {
+			s.Logger.Error(ctx, "usage alert gate: alert_settings lookup failed, scheduling anyway",
+				"error", err, "customer_id", cust.ID)
+			return true
+		}
+		if hasSpendAlerts {
+			return true
+		}
+	}
+
+	needsWallet, err := s.customerNeedsWalletAlertCheck(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "usage alert gate: wallet lookup failed, scheduling anyway",
+			"error", err, "customer_id", cust.ID)
+		return true
+	}
+	return needsWallet
+}
+
+func (s *meterUsageTrackingService) getUsageAlertGateCache(ctx context.Context, customerID string) (bool, bool) {
+	if s.RedisCache == nil || !s.RedisCache.IsEnabled() {
+		return false, false
+	}
+	raw, ok := s.RedisCache.Get(ctx, usageAlertGateCacheKey(ctx, customerID))
+	if !ok {
+		return false, false
+	}
+	v, ok := raw.(bool)
+	return v, ok
+}
+
+func (s *meterUsageTrackingService) setUsageAlertGateCache(ctx context.Context, customerID string, v bool) {
+	if s.RedisCache == nil || !s.RedisCache.IsEnabled() {
+		return
+	}
+	s.RedisCache.Set(ctx, usageAlertGateCacheKey(ctx, customerID), v, cache.ExpiryUsageAlertGate)
+}
+
+func usageAlertGateCacheKey(ctx context.Context, customerID string) string {
+	return cache.GenerateKey(ctx, cache.PrefixUsageAlertGate, customerID)
+}
+
+func (s *meterUsageTrackingService) activeSubscriptionIDsForCustomer(ctx context.Context, customerID string) ([]string, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.CustomerID = customerID
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+	subs, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(subs))
+	for _, sub := range subs {
+		if sub != nil && sub.ID != "" {
+			ids = append(ids, sub.ID)
+		}
+	}
+	return ids, nil
+}
+
+// hasEnabledSpendAlertConfig counts subscription-scope and parent-scope alert
+// settings separately: subscription-scoped rows live on entity_id, line-item
+// and group scopes live on parent_entity_id.
+func (s *meterUsageTrackingService) hasEnabledSpendAlertConfig(ctx context.Context, subIDs []string) (bool, error) {
+	if len(subIDs) == 0 {
+		return false, nil
+	}
+	enabled := lo.ToPtr(true)
+
+	n, err := s.AlertRepo.Count(ctx, &types.AlertSettingsFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  types.AlertEntityTypeSubscription,
+		EntityIDs:   subIDs,
+		Enabled:     enabled,
+	})
+	if err != nil {
+		return false, err
+	}
+	if n > 0 {
+		return true, nil
+	}
+
+	n, err = s.AlertRepo.Count(ctx, &types.AlertSettingsFilter{
+		QueryFilter:      types.NewNoLimitQueryFilter(),
+		ParentEntityType: types.AlertEntityTypeSubscription,
+		ParentEntityIDs:  subIDs,
+		Enabled:          enabled,
+	})
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// customerNeedsWalletAlertCheck: tenant setting enabled AND customer has any wallet.
+func (s *meterUsageTrackingService) customerNeedsWalletAlertCheck(ctx context.Context, customerID string) (bool, error) {
+	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
+	cfg, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+	if err != nil {
+		return false, nil
+	}
+	if !cfg.IsAlertEnabled() {
+		return false, nil
+	}
+	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
+	if err != nil {
+		return false, err
+	}
+	return len(wallets) > 0, nil
 }
 
 // publishWalletBalanceAlert publishes a wallet balance alert for the given event and customer.

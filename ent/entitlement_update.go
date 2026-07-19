@@ -427,16 +427,16 @@ func (eu *EntitlementUpdate) ClearGrantQuota() *EntitlementUpdate {
 	return eu
 }
 
-// SetParallel sets the "parallel" field.
-func (eu *EntitlementUpdate) SetParallel(b bool) *EntitlementUpdate {
-	eu.mutation.SetParallel(b)
+// SetAggregationMode sets the "aggregation_mode" field.
+func (eu *EntitlementUpdate) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementUpdate {
+	eu.mutation.SetAggregationMode(tgam)
 	return eu
 }
 
-// SetNillableParallel sets the "parallel" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableParallel(b *bool) *EntitlementUpdate {
-	if b != nil {
-		eu.SetParallel(*b)
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementUpdate {
+	if tgam != nil {
+		eu.SetAggregationMode(*tgam)
 	}
 	return eu
 }
@@ -517,6 +517,11 @@ func (eu *EntitlementUpdate) check() error {
 	if v, ok := eu.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := eu.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -657,8 +662,8 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if eu.mutation.GrantQuotaCleared() {
 		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
 	}
-	if value, ok := eu.mutation.Parallel(); ok {
-		_spec.SetField(entitlement.FieldParallel, field.TypeBool, value)
+	if value, ok := eu.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1077,16 +1082,16 @@ func (euo *EntitlementUpdateOne) ClearGrantQuota() *EntitlementUpdateOne {
 	return euo
 }
 
-// SetParallel sets the "parallel" field.
-func (euo *EntitlementUpdateOne) SetParallel(b bool) *EntitlementUpdateOne {
-	euo.mutation.SetParallel(b)
+// SetAggregationMode sets the "aggregation_mode" field.
+func (euo *EntitlementUpdateOne) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementUpdateOne {
+	euo.mutation.SetAggregationMode(tgam)
 	return euo
 }
 
-// SetNillableParallel sets the "parallel" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableParallel(b *bool) *EntitlementUpdateOne {
-	if b != nil {
-		euo.SetParallel(*b)
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementUpdateOne {
+	if tgam != nil {
+		euo.SetAggregationMode(*tgam)
 	}
 	return euo
 }
@@ -1180,6 +1185,11 @@ func (euo *EntitlementUpdateOne) check() error {
 	if v, ok := euo.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := euo.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -1337,8 +1347,8 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	if euo.mutation.GrantQuotaCleared() {
 		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
 	}
-	if value, ok := euo.mutation.Parallel(); ok {
-		_spec.SetField(entitlement.FieldParallel, field.TypeBool, value)
+	if value, ok := euo.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

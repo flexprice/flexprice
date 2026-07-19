@@ -157,13 +157,10 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	// entitlement.validateGrantConfig internally when we call Validate below).
 	e := req.ToEntitlement(ctx)
 
-	// Domain-level invariants (grant field coherence, feature-type coupling).
 	if err := e.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Grant-shape checks that need meter + price context (ERD §7.1). Cheap
-	// no-op for legacy (GrantType=NONE) entitlements.
 	if err := s.validateEntitlementGrantShape(ctx, e, meterForGrantCheck); err != nil {
 		return nil, err
 	}
@@ -703,17 +700,14 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if req.GrantQuota != nil {
 		existing.GrantQuota = req.GrantQuota
 	}
-	if req.Parallel != nil {
-		existing.Parallel = *req.Parallel
+	if req.AggregationMode != nil {
+		existing.AggregationMode = *req.AggregationMode
 	}
 
-	// Validate updated entitlement (includes grant field coherence).
 	if err := existing.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Grant-shape checks that need meter + price context (ERD §7.1). Only load
-	// the meter when we actually have a live grant config to check.
 	if existing.GrantType != "" && existing.GrantType != types.EntitlementGrantTypeNone && existing.FeatureType == types.FeatureTypeMetered {
 		featureRow, err := s.FeatureRepo.Get(ctx, existing.FeatureID)
 		if err != nil {

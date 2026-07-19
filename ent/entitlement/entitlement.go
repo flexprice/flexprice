@@ -66,8 +66,8 @@ const (
 	FieldGrantDurationUnit = "grant_duration_unit"
 	// FieldGrantQuota holds the string denoting the grant_quota field in the database.
 	FieldGrantQuota = "grant_quota"
-	// FieldParallel holds the string denoting the parallel field in the database.
-	FieldParallel = "parallel"
+	// FieldAggregationMode holds the string denoting the aggregation_mode field in the database.
+	FieldAggregationMode = "aggregation_mode"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -101,7 +101,7 @@ var Columns = []string{
 	FieldGrantDurationValue,
 	FieldGrantDurationUnit,
 	FieldGrantQuota,
-	FieldParallel,
+	FieldAggregationMode,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
@@ -152,8 +152,8 @@ var (
 	DefaultDisplayOrder int
 	// DefaultGrantType holds the default value on creation for the "grant_type" field.
 	DefaultGrantType types.EntitlementGrantType
-	// DefaultParallel holds the default value on creation for the "parallel" field.
-	DefaultParallel bool
+	// DefaultAggregationMode holds the default value on creation for the "aggregation_mode" field.
+	DefaultAggregationMode types.EntitlementGrantAggregationMode
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -291,7 +291,7 @@ func ByGrantQuota(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGrantQuota, opts...).ToFunc()
 }
 
-// ByParallel orders the results by the parallel field.
-func ByParallel(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldParallel, opts...).ToFunc()
+// ByAggregationMode orders the results by the aggregation_mode field.
+func ByAggregationMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAggregationMode, opts...).ToFunc()
 }

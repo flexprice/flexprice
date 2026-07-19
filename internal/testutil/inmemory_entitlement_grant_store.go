@@ -10,10 +10,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// InMemoryEntitlementGrantStore implements entitlementgrant.Repository against
-// the shared InMemoryStore[T]. Same shape as InMemoryEntitlementStore — the
-// filter function is where all the grant-specific query logic lives (window
-// predicates, live-status shortcut, cycle-overlap).
+// InMemoryEntitlementGrantStore implements entitlementgrant.Repository in memory.
 type InMemoryEntitlementGrantStore struct {
 	*InMemoryStore[*entitlementgrant.EntitlementGrant]
 }
@@ -24,9 +21,7 @@ func NewInMemoryEntitlementGrantStore() *InMemoryEntitlementGrantStore {
 	}
 }
 
-// entitlementGrantFilterFn is the InMemoryStore filter predicate. It has to
-// mirror the ent-based applyEntitlementGrantFilter — the moment they diverge,
-// tests silently pass against something production doesn't do.
+// entitlementGrantFilterFn mirrors applyEntitlementGrantFilter in the ent repo.
 func entitlementGrantFilterFn(ctx context.Context, g *entitlementgrant.EntitlementGrant, filter interface{}) bool {
 	if g == nil {
 		return false
@@ -120,9 +115,7 @@ func (s *InMemoryEntitlementGrantStore) Create(ctx context.Context, g *entitleme
 	if g.EnvironmentID == "" {
 		g.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
-	// Emulate the partial unique index on (entitlement_config_id, customer_id)
-	// WHERE grant_status IN ('active','exhausted'): reject a create that
-	// would produce two live rows on the same slot.
+	// Mirrors the partial unique index: reject a second live grant on the same slot.
 	if g.GrantStatus.IsLive() {
 		existing, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, other *entitlementgrant.EntitlementGrant, _ interface{}) bool {
 			return other != nil &&
@@ -217,8 +210,6 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 	}
 	existing.Usage = g.Usage
 	existing.GrantStatus = g.GrantStatus
-	existing.LastAlertPct = g.LastAlertPct
-	existing.LastAlertAt = g.LastAlertAt
 	existing.LastComputedAt = g.LastComputedAt
 	existing.UpdatedAt = time.Now().UTC()
 	return s.InMemoryStore.Update(ctx, g.ID, existing)

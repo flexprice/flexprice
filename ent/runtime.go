@@ -854,10 +854,10 @@ func init() {
 	entitlementDescGrantType := entitlementFields[15].Descriptor()
 	// entitlement.DefaultGrantType holds the default value on creation for the grant_type field.
 	entitlement.DefaultGrantType = types.EntitlementGrantType(entitlementDescGrantType.Default.(string))
-	// entitlementDescParallel is the schema descriptor for parallel field.
-	entitlementDescParallel := entitlementFields[20].Descriptor()
-	// entitlement.DefaultParallel holds the default value on creation for the parallel field.
-	entitlement.DefaultParallel = entitlementDescParallel.Default.(bool)
+	// entitlementDescAggregationMode is the schema descriptor for aggregation_mode field.
+	entitlementDescAggregationMode := entitlementFields[20].Descriptor()
+	// entitlement.DefaultAggregationMode holds the default value on creation for the aggregation_mode field.
+	entitlement.DefaultAggregationMode = types.EntitlementGrantAggregationMode(entitlementDescAggregationMode.Default.(string))
 	// entitlementDescID is the schema descriptor for id field.
 	entitlementDescID := entitlementFields[0].Descriptor()
 	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.

@@ -30,26 +30,20 @@ type Entitlement struct {
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 
-	// Grant fields — only meaningful when GrantType == time_boxed. A legacy
-	// entitlement leaves GrantType == NONE (default) and behaves exactly as
-	// before. See ERD FLE-959 §7.1.
-	GrantType          types.EntitlementGrantType         `json:"grant_type,omitempty"`
-	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
-	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
-	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
-	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty"`
-	Parallel           bool                               `json:"parallel"`
+	// Grant config; only meaningful when GrantType == time_boxed.
+	GrantType          types.EntitlementGrantType            `json:"grant_type,omitempty"`
+	GrantMeasure       types.EntitlementGrantMeasure         `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                                  `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit    `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                      `json:"grant_quota,omitempty"`
+	AggregationMode    types.EntitlementGrantAggregationMode `json:"aggregation_mode,omitempty"`
 
 	types.BaseModel
 }
 
-// GrantDuration returns the configured grant window as a wall-clock
-// time.Duration, or a zero duration with an error if the fields are missing /
-// invalid. Only meaningful when GrantType == time_boxed.
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
 	if e == nil || e.GrantDurationValue == nil {
 		return 0, ierr.NewError("grant_duration_value is required for time-boxed grants").
-			WithHint("Set grant_duration_value and grant_duration_unit on the entitlement").
 			Mark(ierr.ErrValidation)
 	}
 	return types.EntitlementGrantDurationOf(*e.GrantDurationValue, e.GrantDurationUnit)
@@ -156,25 +150,16 @@ func (e *Entitlement) Validate() error {
 	return nil
 }
 
-// validateGrantConfig enforces the grant-config invariants documented in ERD
-// FLE-959 §7.1:
-//   - grant_type defaults to NONE; NONE means "legacy behavior, grant fields
-//     must be blank" so we can't accidentally act on partial config.
-//   - time_boxed requires measure, duration (value + unit), and quota. Duration
-//     must resolve to at least the product-mandated 1-hour floor.
-//   - Grants only make sense on metered features; static features can't have a
-//     time-boxed quota.
-//
-// This does NOT check the meter-shape restrictions (no MAX/bucketed, amount
-// only on linear pricing) — those live in the service layer where meter/price
-// info is available.
+// validateGrantConfig enforces coherence between GrantType and the grant fields.
+// Meter-shape and pricing-shape checks live in the service layer.
 func (e *Entitlement) validateGrantConfig() error {
-	// Empty grant_type is treated as NONE (default). Anything else must round-
-	// trip through the enum validator.
 	if e.GrantType != "" {
 		if err := e.GrantType.Validate(); err != nil {
 			return err
 		}
+	}
+	if err := e.AggregationMode.Validate(); err != nil {
+		return err
 	}
 
 	grantType := e.GrantType
@@ -183,9 +168,6 @@ func (e *Entitlement) validateGrantConfig() error {
 	}
 
 	if grantType == types.EntitlementGrantTypeNone {
-		// Reject partial grant config on a NONE row — otherwise the DB carries
-		// half-configured grants that nothing acts on but that surprise the
-		// next reader.
 		if e.GrantMeasure != "" || e.GrantDurationValue != nil || e.GrantDurationUnit != "" || e.GrantQuota != nil {
 			return ierr.NewError("grant fields must be empty when grant_type is none").
 				WithHint("Set grant_type=time_boxed to opt in, or clear grant_measure/duration/quota").
@@ -194,10 +176,8 @@ func (e *Entitlement) validateGrantConfig() error {
 		return nil
 	}
 
-	// time_boxed — from here every grant field is required.
 	if e.FeatureType != types.FeatureTypeMetered {
 		return ierr.NewError("time-boxed grants require a metered feature").
-			WithHint("Grants track usage against a meter — static features cannot be time-boxed").
 			WithReportableDetails(map[string]interface{}{"feature_type": e.FeatureType}).
 			Mark(ierr.ErrValidation)
 	}
@@ -207,7 +187,6 @@ func (e *Entitlement) validateGrantConfig() error {
 	}
 	if e.GrantMeasure == "" {
 		return ierr.NewError("grant_measure is required for time-boxed grants").
-			WithHint("Set grant_measure to quantity or amount").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -220,7 +199,6 @@ func (e *Entitlement) validateGrantConfig() error {
 	}
 	if dur < types.EntitlementGrantMinDuration {
 		return ierr.NewError("grant_duration must be at least 1 hour").
-			WithHint("Product rule: no grants shorter than 1 hour").
 			WithReportableDetails(map[string]interface{}{
 				"grant_duration_value": e.GrantDurationValue,
 				"grant_duration_unit":  e.GrantDurationUnit,
@@ -230,7 +208,6 @@ func (e *Entitlement) validateGrantConfig() error {
 
 	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
 		return ierr.NewError("grant_quota must be positive for time-boxed grants").
-			WithHint("Provide a positive decimal for grant_quota").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -265,7 +242,7 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		GrantDurationValue:  e.GrantDurationValue,
 		GrantDurationUnit:   e.GrantDurationUnit,
 		GrantQuota:          e.GrantQuota,
-		Parallel:            e.Parallel,
+		AggregationMode:     e.AggregationMode,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

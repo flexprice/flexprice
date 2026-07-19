@@ -62,18 +62,18 @@ type Entitlement struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// ConfigValue holds the value of the "config_value" field.
 	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
-	// none = legacy behavior, no grants. time_boxed = auto-rotate grants of grant_duration each.
+	// GrantType holds the value of the "grant_type" field.
 	GrantType types.EntitlementGrantType `json:"grant_type,omitempty"`
-	// QUANTITY or AMOUNT. Interprets grant_quota and EG.usage.
+	// GrantMeasure holds the value of the "grant_measure" field.
 	GrantMeasure types.EntitlementGrantMeasure `json:"grant_measure,omitempty"`
-	// Length of each time-boxed grant, expressed with grant_duration_unit. Minimum equivalent of 1 hour.
+	// GrantDurationValue holds the value of the "grant_duration_value" field.
 	GrantDurationValue *int `json:"grant_duration_value,omitempty"`
-	// HOUR, DAY, or WEEK.
+	// GrantDurationUnit holds the value of the "grant_duration_unit" field.
 	GrantDurationUnit types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
-	// Per-grant quota, interpreted by grant_measure.
+	// GrantQuota holds the value of the "grant_quota" field.
 	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
-	// If true, multiple ECs on the same feature produce independent grants (parallel counting). If false, additive as today.
-	Parallel           bool `json:"parallel,omitempty"`
+	// AggregationMode holds the value of the "aggregation_mode" field.
+	AggregationMode    types.EntitlementGrantAggregationMode `json:"aggregation_mode,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -87,11 +87,11 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case entitlement.FieldConfigValue:
 			values[i] = new([]byte)
-		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit, entitlement.FieldParallel:
+		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit:
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantType, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantType, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldAggregationMode:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -282,11 +282,11 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 				e.GrantQuota = new(decimal.Decimal)
 				*e.GrantQuota = *value.S.(*decimal.Decimal)
 			}
-		case entitlement.FieldParallel:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field parallel", values[i])
+		case entitlement.FieldAggregationMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field aggregation_mode", values[i])
 			} else if value.Valid {
-				e.Parallel = value.Bool
+				e.AggregationMode = types.EntitlementGrantAggregationMode(value.String)
 			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -421,8 +421,8 @@ func (e *Entitlement) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("parallel=")
-	builder.WriteString(fmt.Sprintf("%v", e.Parallel))
+	builder.WriteString("aggregation_mode=")
+	builder.WriteString(fmt.Sprintf("%v", e.AggregationMode))
 	builder.WriteByte(')')
 	return builder.String()
 }

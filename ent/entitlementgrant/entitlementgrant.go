@@ -51,10 +51,6 @@ const (
 	FieldValidTo = "valid_to"
 	// FieldGrantStatus holds the string denoting the grant_status field in the database.
 	FieldGrantStatus = "grant_status"
-	// FieldLastAlertPct holds the string denoting the last_alert_pct field in the database.
-	FieldLastAlertPct = "last_alert_pct"
-	// FieldLastAlertAt holds the string denoting the last_alert_at field in the database.
-	FieldLastAlertAt = "last_alert_at"
 	// FieldLastComputedAt holds the string denoting the last_computed_at field in the database.
 	FieldLastComputedAt = "last_computed_at"
 	// Table holds the table name of the entitlementgrant in the database.
@@ -82,8 +78,6 @@ var Columns = []string{
 	FieldValidFrom,
 	FieldValidTo,
 	FieldGrantStatus,
-	FieldLastAlertPct,
-	FieldLastAlertAt,
 	FieldLastComputedAt,
 }
 
@@ -224,16 +218,6 @@ func ByValidTo(opts ...sql.OrderTermOption) OrderOption {
 // ByGrantStatus orders the results by the grant_status field.
 func ByGrantStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGrantStatus, opts...).ToFunc()
-}
-
-// ByLastAlertPct orders the results by the last_alert_pct field.
-func ByLastAlertPct(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLastAlertPct, opts...).ToFunc()
-}
-
-// ByLastAlertAt orders the results by the last_alert_at field.
-func ByLastAlertAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLastAlertAt, opts...).ToFunc()
 }
 
 // ByLastComputedAt orders the results by the last_computed_at field.

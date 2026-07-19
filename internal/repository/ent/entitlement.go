@@ -33,15 +33,20 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache
 	}
 }
 
-// defaultedGrantType maps an empty GrantType to NONE. The ent column has a
-// default of NONE at the DB level, but ent's SetGrantType receives a Go string
-// and would emit "" if we passed it through. Centralising the fallback here
-// keeps Create / Update / CreateBulk callers identical.
+// defaultedGrantType maps zero-value to `none` so ent's SetGrantType doesn't
+// emit an empty string. Same for aggregation_mode below.
 func defaultedGrantType(g types.EntitlementGrantType) types.EntitlementGrantType {
 	if g == "" {
 		return types.EntitlementGrantTypeNone
 	}
 	return g
+}
+
+func defaultedAggregationMode(m types.EntitlementGrantAggregationMode) types.EntitlementGrantAggregationMode {
+	if m == "" {
+		return types.EntitlementGrantAggregationModeAdditive
+	}
+	return m
 }
 
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
@@ -82,14 +87,12 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
 		SetEnvironmentID(e.EnvironmentID).
-		// Grant config. Zero-value grant_type is fine — column has a default of
-		// NONE, so a legacy insert with GrantType="" still lands as NONE.
 		SetGrantType(defaultedGrantType(e.GrantType)).
 		SetGrantMeasure(e.GrantMeasure).
 		SetNillableGrantDurationValue(e.GrantDurationValue).
 		SetGrantDurationUnit(e.GrantDurationUnit).
 		SetNillableGrantQuota(e.GrantQuota).
-		SetParallel(e.Parallel)
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	if e.ConfigValue != nil {
 		createQuery = createQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -323,7 +326,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableGrantDurationValue(e.GrantDurationValue).
 		SetGrantDurationUnit(e.GrantDurationUnit).
 		SetNillableGrantQuota(e.GrantQuota).
-		SetParallel(e.Parallel)
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	if e.ConfigValue != nil {
 		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -439,7 +442,7 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetNillableGrantDurationValue(e.GrantDurationValue).
 			SetGrantDurationUnit(e.GrantDurationUnit).
 			SetNillableGrantQuota(e.GrantQuota).
-			SetParallel(e.Parallel)
+			SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 		if e.ConfigValue != nil {
 			builder = builder.SetConfigValue(e.ConfigValue)
 		}

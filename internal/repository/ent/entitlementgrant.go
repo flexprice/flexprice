@@ -70,8 +70,6 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetValidFrom(g.ValidFrom).
 		SetValidTo(g.ValidTo).
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
-		SetNillableLastAlertPct(g.LastAlertPct).
-		SetNillableLastAlertAt(g.LastAlertAt).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetTenantID(g.TenantID).
 		SetEnvironmentID(g.EnvironmentID).
@@ -85,9 +83,6 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsConstraintError(err) {
-			// A live grant (active or exhausted) already exists for this
-			// (config, customer). ensureGrants handles this by reading the
-			// winning row; other callers get a typed error.
 			return nil, ierr.WithError(err).
 				WithHint("A live grant already exists for this (entitlement_config, customer)").
 				WithReportableDetails(map[string]interface{}{
@@ -141,8 +136,6 @@ func (r *entitlementGrantRepository) Update(ctx context.Context, g *domainGrant.
 		SetUsage(g.Usage).
 		SetValidTo(g.ValidTo).
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
-		SetNillableLastAlertPct(g.LastAlertPct).
-		SetNillableLastAlertAt(g.LastAlertAt).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetStatus(string(g.Status)).
 		SetUpdatedAt(time.Now().UTC()).
@@ -205,8 +198,6 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 		).
 		SetUsage(g.Usage).
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
-		SetNillableLastAlertPct(g.LastAlertPct).
-		SetNillableLastAlertAt(g.LastAlertAt).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetUpdatedAt(time.Now().UTC())
 
@@ -236,8 +227,6 @@ func (r *entitlementGrantRepository) ExpireLiveByConfigAndCustomer(
 	})
 	defer FinishSpan(span)
 
-	// Transition any live-but-closed grant on this slot to expired. The partial
-	// unique index would otherwise reject the next INSERT.
 	n, err := r.client.Writer(ctx).EntitlementGrant.Update().
 		Where(
 			entitlementgrant.TenantID(types.GetTenantID(ctx)),
@@ -407,14 +396,13 @@ func applyEntitlementGrantFilter(q *ent.EntitlementGrantQuery, f *types.Entitlem
 		preds = append(preds, entitlementgrant.MeasureEQ(*f.Measure))
 	}
 
-	// Alert-path shorthand: "grant currently in window."
+	// Alert path: grant currently in window.
 	if f.ValidAtOrAfter != nil {
 		preds = append(preds, entitlementgrant.ValidToGT(*f.ValidAtOrAfter))
 		preds = append(preds, entitlementgrant.ValidFromLTE(*f.ValidAtOrAfter))
 	}
 
-	// Billing-path shorthand: "grant window overlaps [cycleStart, cycleEnd)."
-	// Two half-open intervals overlap iff a.start < b.end AND b.start < a.end.
+	// Billing path: half-open [cycleStart, cycleEnd) overlaps grant window.
 	if f.ValidFromBefore != nil {
 		preds = append(preds, entitlementgrant.ValidFromLT(*f.ValidFromBefore))
 	}
@@ -422,7 +410,6 @@ func applyEntitlementGrantFilter(q *ent.EntitlementGrantQuery, f *types.Entitlem
 		preds = append(preds, entitlementgrant.ValidToGT(*f.ValidToAfter))
 	}
 
-	// Row-level created_at range from TimeRangeFilter — separate from window predicates.
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {
 			preds = append(preds, entitlementgrant.CreatedAtGTE(*f.TimeRangeFilter.StartTime))

@@ -33,33 +33,29 @@ type EntitlementGrant struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// References the entitlement row (grant_type=TIME_BOXED) this grant was instantiated from.
+	// EntitlementConfigID holds the value of the "entitlement_config_id" field.
 	EntitlementConfigID string `json:"entitlement_config_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID string `json:"customer_id,omitempty"`
-	// Denormalized from the EC's resolution (plan/addon/sub override); enables cycle-window queries without joins.
+	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID string `json:"subscription_id,omitempty"`
-	// feature, subscription, or group. Phase 1 only writes feature.
+	// ScopeEntityType holds the value of the "scope_entity_type" field.
 	ScopeEntityType types.EntitlementGrantScopeEntityType `json:"scope_entity_type,omitempty"`
-	// Feature/subscription/group ID, interpreted by scope_entity_type. Denormalized from the EC's target for hot lookups.
+	// ScopeEntityID holds the value of the "scope_entity_id" field.
 	ScopeEntityID string `json:"scope_entity_id,omitempty"`
-	// QUANTITY or AMOUNT. Interprets quota and usage on this row.
+	// Measure holds the value of the "measure" field.
 	Measure types.EntitlementGrantMeasure `json:"measure,omitempty"`
-	// Per-grant quota, interpreted by measure. Copied from the resolved EC at open time; immutable for the life of the grant.
+	// Quota holds the value of the "quota" field.
 	Quota decimal.Decimal `json:"quota,omitempty"`
-	// Refreshed by the alert workflow every tick from ClickHouse. Source of truth for billing overage (ERD §8.6).
+	// Usage holds the value of the "usage" field.
 	Usage decimal.Decimal `json:"usage,omitempty"`
-	// Grant window start (inclusive).
+	// ValidFrom holds the value of the "valid_from" field.
 	ValidFrom time.Time `json:"valid_from,omitempty"`
-	// Grant window end (exclusive). Always <= sub.current_period_end (cycle-boundary cap, ERD §8.4). Updatable to support future extension via a grant-edit workflow.
+	// ValidTo holds the value of the "valid_to" field.
 	ValidTo time.Time `json:"valid_to,omitempty"`
-	// Grant lifecycle state — active, exhausted, expired, or superseded. See types.EntitlementGrantStatus.
+	// GrantStatus holds the value of the "grant_status" field.
 	GrantStatus types.EntitlementGrantStatus `json:"grant_status,omitempty"`
-	// Highest threshold percentage fired for this grant. Fast filter — source of truth is alert_logs.
-	LastAlertPct *int `json:"last_alert_pct,omitempty"`
-	// LastAlertAt holds the value of the "last_alert_at" field.
-	LastAlertAt *time.Time `json:"last_alert_at,omitempty"`
-	// Wall-clock time of the last workflow tick that refreshed this row.
+	// LastComputedAt holds the value of the "last_computed_at" field.
 	LastComputedAt *time.Time `json:"last_computed_at,omitempty"`
 	selectValues   sql.SelectValues
 }
@@ -71,11 +67,9 @@ func (*EntitlementGrant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entitlementgrant.FieldQuota, entitlementgrant.FieldUsage:
 			values[i] = new(decimal.Decimal)
-		case entitlementgrant.FieldLastAlertPct:
-			values[i] = new(sql.NullInt64)
 		case entitlementgrant.FieldID, entitlementgrant.FieldTenantID, entitlementgrant.FieldStatus, entitlementgrant.FieldCreatedBy, entitlementgrant.FieldUpdatedBy, entitlementgrant.FieldEnvironmentID, entitlementgrant.FieldEntitlementConfigID, entitlementgrant.FieldCustomerID, entitlementgrant.FieldSubscriptionID, entitlementgrant.FieldScopeEntityType, entitlementgrant.FieldScopeEntityID, entitlementgrant.FieldMeasure, entitlementgrant.FieldGrantStatus:
 			values[i] = new(sql.NullString)
-		case entitlementgrant.FieldCreatedAt, entitlementgrant.FieldUpdatedAt, entitlementgrant.FieldValidFrom, entitlementgrant.FieldValidTo, entitlementgrant.FieldLastAlertAt, entitlementgrant.FieldLastComputedAt:
+		case entitlementgrant.FieldCreatedAt, entitlementgrant.FieldUpdatedAt, entitlementgrant.FieldValidFrom, entitlementgrant.FieldValidTo, entitlementgrant.FieldLastComputedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -206,20 +200,6 @@ func (eg *EntitlementGrant) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				eg.GrantStatus = types.EntitlementGrantStatus(value.String)
 			}
-		case entitlementgrant.FieldLastAlertPct:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field last_alert_pct", values[i])
-			} else if value.Valid {
-				eg.LastAlertPct = new(int)
-				*eg.LastAlertPct = int(value.Int64)
-			}
-		case entitlementgrant.FieldLastAlertAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field last_alert_at", values[i])
-			} else if value.Valid {
-				eg.LastAlertAt = new(time.Time)
-				*eg.LastAlertAt = value.Time
-			}
 		case entitlementgrant.FieldLastComputedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field last_computed_at", values[i])
@@ -316,16 +296,6 @@ func (eg *EntitlementGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("grant_status=")
 	builder.WriteString(fmt.Sprintf("%v", eg.GrantStatus))
-	builder.WriteString(", ")
-	if v := eg.LastAlertPct; v != nil {
-		builder.WriteString("last_alert_pct=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := eg.LastAlertAt; v != nil {
-		builder.WriteString("last_alert_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteString(", ")
 	if v := eg.LastComputedAt; v != nil {
 		builder.WriteString("last_computed_at=")

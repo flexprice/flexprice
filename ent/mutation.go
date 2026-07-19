@@ -23652,7 +23652,7 @@ type EntitlementMutation struct {
 	addgrant_duration_value *int
 	grant_duration_unit     *types.EntitlementGrantDurationUnit
 	grant_quota             *decimal.Decimal
-	parallel                *bool
+	aggregation_mode        *types.EntitlementGrantAggregationMode
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*Entitlement, error)
@@ -24969,40 +24969,40 @@ func (m *EntitlementMutation) ResetGrantQuota() {
 	delete(m.clearedFields, entitlement.FieldGrantQuota)
 }
 
-// SetParallel sets the "parallel" field.
-func (m *EntitlementMutation) SetParallel(b bool) {
-	m.parallel = &b
+// SetAggregationMode sets the "aggregation_mode" field.
+func (m *EntitlementMutation) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) {
+	m.aggregation_mode = &tgam
 }
 
-// Parallel returns the value of the "parallel" field in the mutation.
-func (m *EntitlementMutation) Parallel() (r bool, exists bool) {
-	v := m.parallel
+// AggregationMode returns the value of the "aggregation_mode" field in the mutation.
+func (m *EntitlementMutation) AggregationMode() (r types.EntitlementGrantAggregationMode, exists bool) {
+	v := m.aggregation_mode
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldParallel returns the old "parallel" field's value of the Entitlement entity.
+// OldAggregationMode returns the old "aggregation_mode" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldParallel(ctx context.Context) (v bool, err error) {
+func (m *EntitlementMutation) OldAggregationMode(ctx context.Context) (v types.EntitlementGrantAggregationMode, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldParallel is only allowed on UpdateOne operations")
+		return v, errors.New("OldAggregationMode is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldParallel requires an ID field in the mutation")
+		return v, errors.New("OldAggregationMode requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldParallel: %w", err)
+		return v, fmt.Errorf("querying old value for OldAggregationMode: %w", err)
 	}
-	return oldValue.Parallel, nil
+	return oldValue.AggregationMode, nil
 }
 
-// ResetParallel resets all changes to the "parallel" field.
-func (m *EntitlementMutation) ResetParallel() {
-	m.parallel = nil
+// ResetAggregationMode resets all changes to the "aggregation_mode" field.
+func (m *EntitlementMutation) ResetAggregationMode() {
+	m.aggregation_mode = nil
 }
 
 // Where appends a list predicates to the EntitlementMutation builder.
@@ -25118,8 +25118,8 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.grant_quota != nil {
 		fields = append(fields, entitlement.FieldGrantQuota)
 	}
-	if m.parallel != nil {
-		fields = append(fields, entitlement.FieldParallel)
+	if m.aggregation_mode != nil {
+		fields = append(fields, entitlement.FieldAggregationMode)
 	}
 	return fields
 }
@@ -25181,8 +25181,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.GrantDurationUnit()
 	case entitlement.FieldGrantQuota:
 		return m.GrantQuota()
-	case entitlement.FieldParallel:
-		return m.Parallel()
+	case entitlement.FieldAggregationMode:
+		return m.AggregationMode()
 	}
 	return nil, false
 }
@@ -25244,8 +25244,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldGrantDurationUnit(ctx)
 	case entitlement.FieldGrantQuota:
 		return m.OldGrantQuota(ctx)
-	case entitlement.FieldParallel:
-		return m.OldParallel(ctx)
+	case entitlement.FieldAggregationMode:
+		return m.OldAggregationMode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -25437,12 +25437,12 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGrantQuota(v)
 		return nil
-	case entitlement.FieldParallel:
-		v, ok := value.(bool)
+	case entitlement.FieldAggregationMode:
+		v, ok := value.(types.EntitlementGrantAggregationMode)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetParallel(v)
+		m.SetAggregationMode(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
@@ -25709,8 +25709,8 @@ func (m *EntitlementMutation) ResetField(name string) error {
 	case entitlement.FieldGrantQuota:
 		m.ResetGrantQuota()
 		return nil
-	case entitlement.FieldParallel:
-		m.ResetParallel()
+	case entitlement.FieldAggregationMode:
+		m.ResetAggregationMode()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
@@ -25788,9 +25788,6 @@ type EntitlementGrantMutation struct {
 	valid_from            *time.Time
 	valid_to              *time.Time
 	grant_status          *types.EntitlementGrantStatus
-	last_alert_pct        *int
-	addlast_alert_pct     *int
-	last_alert_at         *time.Time
 	last_computed_at      *time.Time
 	clearedFields         map[string]struct{}
 	done                  bool
@@ -26589,125 +26586,6 @@ func (m *EntitlementGrantMutation) ResetGrantStatus() {
 	m.grant_status = nil
 }
 
-// SetLastAlertPct sets the "last_alert_pct" field.
-func (m *EntitlementGrantMutation) SetLastAlertPct(i int) {
-	m.last_alert_pct = &i
-	m.addlast_alert_pct = nil
-}
-
-// LastAlertPct returns the value of the "last_alert_pct" field in the mutation.
-func (m *EntitlementGrantMutation) LastAlertPct() (r int, exists bool) {
-	v := m.last_alert_pct
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastAlertPct returns the old "last_alert_pct" field's value of the EntitlementGrant entity.
-// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementGrantMutation) OldLastAlertPct(ctx context.Context) (v *int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastAlertPct is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastAlertPct requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastAlertPct: %w", err)
-	}
-	return oldValue.LastAlertPct, nil
-}
-
-// AddLastAlertPct adds i to the "last_alert_pct" field.
-func (m *EntitlementGrantMutation) AddLastAlertPct(i int) {
-	if m.addlast_alert_pct != nil {
-		*m.addlast_alert_pct += i
-	} else {
-		m.addlast_alert_pct = &i
-	}
-}
-
-// AddedLastAlertPct returns the value that was added to the "last_alert_pct" field in this mutation.
-func (m *EntitlementGrantMutation) AddedLastAlertPct() (r int, exists bool) {
-	v := m.addlast_alert_pct
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearLastAlertPct clears the value of the "last_alert_pct" field.
-func (m *EntitlementGrantMutation) ClearLastAlertPct() {
-	m.last_alert_pct = nil
-	m.addlast_alert_pct = nil
-	m.clearedFields[entitlementgrant.FieldLastAlertPct] = struct{}{}
-}
-
-// LastAlertPctCleared returns if the "last_alert_pct" field was cleared in this mutation.
-func (m *EntitlementGrantMutation) LastAlertPctCleared() bool {
-	_, ok := m.clearedFields[entitlementgrant.FieldLastAlertPct]
-	return ok
-}
-
-// ResetLastAlertPct resets all changes to the "last_alert_pct" field.
-func (m *EntitlementGrantMutation) ResetLastAlertPct() {
-	m.last_alert_pct = nil
-	m.addlast_alert_pct = nil
-	delete(m.clearedFields, entitlementgrant.FieldLastAlertPct)
-}
-
-// SetLastAlertAt sets the "last_alert_at" field.
-func (m *EntitlementGrantMutation) SetLastAlertAt(t time.Time) {
-	m.last_alert_at = &t
-}
-
-// LastAlertAt returns the value of the "last_alert_at" field in the mutation.
-func (m *EntitlementGrantMutation) LastAlertAt() (r time.Time, exists bool) {
-	v := m.last_alert_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldLastAlertAt returns the old "last_alert_at" field's value of the EntitlementGrant entity.
-// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementGrantMutation) OldLastAlertAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldLastAlertAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldLastAlertAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldLastAlertAt: %w", err)
-	}
-	return oldValue.LastAlertAt, nil
-}
-
-// ClearLastAlertAt clears the value of the "last_alert_at" field.
-func (m *EntitlementGrantMutation) ClearLastAlertAt() {
-	m.last_alert_at = nil
-	m.clearedFields[entitlementgrant.FieldLastAlertAt] = struct{}{}
-}
-
-// LastAlertAtCleared returns if the "last_alert_at" field was cleared in this mutation.
-func (m *EntitlementGrantMutation) LastAlertAtCleared() bool {
-	_, ok := m.clearedFields[entitlementgrant.FieldLastAlertAt]
-	return ok
-}
-
-// ResetLastAlertAt resets all changes to the "last_alert_at" field.
-func (m *EntitlementGrantMutation) ResetLastAlertAt() {
-	m.last_alert_at = nil
-	delete(m.clearedFields, entitlementgrant.FieldLastAlertAt)
-}
-
 // SetLastComputedAt sets the "last_computed_at" field.
 func (m *EntitlementGrantMutation) SetLastComputedAt(t time.Time) {
 	m.last_computed_at = &t
@@ -26791,7 +26669,7 @@ func (m *EntitlementGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementGrantMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlementgrant.FieldTenantID)
 	}
@@ -26846,12 +26724,6 @@ func (m *EntitlementGrantMutation) Fields() []string {
 	if m.grant_status != nil {
 		fields = append(fields, entitlementgrant.FieldGrantStatus)
 	}
-	if m.last_alert_pct != nil {
-		fields = append(fields, entitlementgrant.FieldLastAlertPct)
-	}
-	if m.last_alert_at != nil {
-		fields = append(fields, entitlementgrant.FieldLastAlertAt)
-	}
 	if m.last_computed_at != nil {
 		fields = append(fields, entitlementgrant.FieldLastComputedAt)
 	}
@@ -26899,10 +26771,6 @@ func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.ValidTo()
 	case entitlementgrant.FieldGrantStatus:
 		return m.GrantStatus()
-	case entitlementgrant.FieldLastAlertPct:
-		return m.LastAlertPct()
-	case entitlementgrant.FieldLastAlertAt:
-		return m.LastAlertAt()
 	case entitlementgrant.FieldLastComputedAt:
 		return m.LastComputedAt()
 	}
@@ -26950,10 +26818,6 @@ func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (e
 		return m.OldValidTo(ctx)
 	case entitlementgrant.FieldGrantStatus:
 		return m.OldGrantStatus(ctx)
-	case entitlementgrant.FieldLastAlertPct:
-		return m.OldLastAlertPct(ctx)
-	case entitlementgrant.FieldLastAlertAt:
-		return m.OldLastAlertAt(ctx)
 	case entitlementgrant.FieldLastComputedAt:
 		return m.OldLastComputedAt(ctx)
 	}
@@ -27091,20 +26955,6 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetGrantStatus(v)
 		return nil
-	case entitlementgrant.FieldLastAlertPct:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLastAlertPct(v)
-		return nil
-	case entitlementgrant.FieldLastAlertAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetLastAlertAt(v)
-		return nil
 	case entitlementgrant.FieldLastComputedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -27119,21 +26969,13 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *EntitlementGrantMutation) AddedFields() []string {
-	var fields []string
-	if m.addlast_alert_pct != nil {
-		fields = append(fields, entitlementgrant.FieldLastAlertPct)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *EntitlementGrantMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case entitlementgrant.FieldLastAlertPct:
-		return m.AddedLastAlertPct()
-	}
 	return nil, false
 }
 
@@ -27142,13 +26984,6 @@ func (m *EntitlementGrantMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *EntitlementGrantMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case entitlementgrant.FieldLastAlertPct:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddLastAlertPct(v)
-		return nil
 	}
 	return fmt.Errorf("unknown EntitlementGrant numeric field %s", name)
 }
@@ -27165,12 +27000,6 @@ func (m *EntitlementGrantMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(entitlementgrant.FieldEnvironmentID) {
 		fields = append(fields, entitlementgrant.FieldEnvironmentID)
-	}
-	if m.FieldCleared(entitlementgrant.FieldLastAlertPct) {
-		fields = append(fields, entitlementgrant.FieldLastAlertPct)
-	}
-	if m.FieldCleared(entitlementgrant.FieldLastAlertAt) {
-		fields = append(fields, entitlementgrant.FieldLastAlertAt)
 	}
 	if m.FieldCleared(entitlementgrant.FieldLastComputedAt) {
 		fields = append(fields, entitlementgrant.FieldLastComputedAt)
@@ -27197,12 +27026,6 @@ func (m *EntitlementGrantMutation) ClearField(name string) error {
 		return nil
 	case entitlementgrant.FieldEnvironmentID:
 		m.ClearEnvironmentID()
-		return nil
-	case entitlementgrant.FieldLastAlertPct:
-		m.ClearLastAlertPct()
-		return nil
-	case entitlementgrant.FieldLastAlertAt:
-		m.ClearLastAlertAt()
 		return nil
 	case entitlementgrant.FieldLastComputedAt:
 		m.ClearLastComputedAt()
@@ -27268,12 +27091,6 @@ func (m *EntitlementGrantMutation) ResetField(name string) error {
 		return nil
 	case entitlementgrant.FieldGrantStatus:
 		m.ResetGrantStatus()
-		return nil
-	case entitlementgrant.FieldLastAlertPct:
-		m.ResetLastAlertPct()
-		return nil
-	case entitlementgrant.FieldLastAlertAt:
-		m.ResetLastAlertAt()
 		return nil
 	case entitlementgrant.FieldLastComputedAt:
 		m.ResetLastComputedAt()

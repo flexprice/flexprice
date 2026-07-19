@@ -30,16 +30,13 @@ type CreateEntitlementRequest struct {
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
 
-	// Grant config (FLE-959). All optional; legacy requests omit them and land
-	// with GrantType=NONE. TIME_BOXED requires the full quartet
-	// (measure, duration_value, duration_unit, quota) — see
-	// entitlement.validateGrantConfig for the exact rules.
-	GrantType          types.EntitlementGrantType         `json:"grant_type,omitempty"`
-	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
-	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
-	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
-	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
-	Parallel           bool                               `json:"parallel,omitempty"`
+	// Grant config — optional. See entitlement.validateGrantConfig for rules.
+	GrantType          types.EntitlementGrantType             `json:"grant_type,omitempty"`
+	GrantMeasure       types.EntitlementGrantMeasure          `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                                   `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit     `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                       `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode    types.EntitlementGrantAggregationMode  `json:"aggregation_mode,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -111,10 +108,6 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		r.EntityID = r.PlanID
 	}
 
-	// Default grant_type to `none` so a legacy request (no grant fields at
-	// all) round-trips through the domain object as the same explicit value
-	// the ent column stores. Keeps the in-memory test store, ent-backed
-	// repo, and downstream readers on the same page.
 	grantType := r.GrantType
 	if grantType == "" {
 		grantType = types.EntitlementGrantTypeNone
@@ -140,7 +133,7 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		GrantDurationValue:  r.GrantDurationValue,
 		GrantDurationUnit:   r.GrantDurationUnit,
 		GrantQuota:          r.GrantQuota,
-		Parallel:            r.Parallel,
+		AggregationMode:     r.AggregationMode,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
@@ -156,16 +149,14 @@ type UpdateEntitlementRequest struct {
 	StaticValue      string                            `json:"static_value"`
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
 
-	// Grant config (FLE-959). All optional; unset fields are left as-is on the
-	// existing row. To turn a grant EC back into a legacy entitlement, set
-	// GrantType=NONE explicitly — that clears the grant fields via
-	// entitlement.validateGrantConfig.
-	GrantType          *types.EntitlementGrantType         `json:"grant_type,omitempty"`
-	GrantMeasure       *types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
-	GrantDurationValue *int                                `json:"grant_duration_value,omitempty"`
-	GrantDurationUnit  *types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
-	GrantQuota         *decimal.Decimal                    `json:"grant_quota,omitempty" swaggertype:"string"`
-	Parallel           *bool                               `json:"parallel,omitempty"`
+	// Grant config — optional. nil = leave alone; setting GrantType=none
+	// clears the rest via validateGrantConfig.
+	GrantType          *types.EntitlementGrantType             `json:"grant_type,omitempty"`
+	GrantMeasure       *types.EntitlementGrantMeasure          `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                                    `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  *types.EntitlementGrantDurationUnit     `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                        `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode    *types.EntitlementGrantAggregationMode  `json:"aggregation_mode,omitempty"`
 }
 
 // Validate validates the update entitlement request
