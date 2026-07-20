@@ -328,6 +328,12 @@ func (s *subscriptionService) createSubscriptionCore(ctx context.Context, req dt
 		return nil, err
 	}
 
+	if req.Inheritance != nil && len(req.Inheritance.GroupedInvoicingChildrenToCreate) > 0 {
+		if err := s.createGroupedInvoicingChildren(ctx, sub, req.Inheritance.GroupedInvoicingChildrenToCreate); err != nil {
+			return nil, err
+		}
+	}
+
 	if len(req.Addons) > 0 {
 		if err = s.handleSubscriptionAddons(ctx, sub, req.Addons); err != nil {
 			return nil, err
@@ -442,7 +448,13 @@ func (s *subscriptionService) createSubscriptionCore(ctx context.Context, req dt
 	}
 
 	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
-	if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
+	// Grouped-invoicing children created inline (SubscriptionType pre-set internally by
+	// createGroupedInvoicingChildren) skip their own opening invoice — their charges are
+	// folded into the parent's invoice via the existing Parent-type merge in
+	// PrepareSubscriptionInvoiceRequest.
+	if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
+		sub.SubscriptionStatus != types.SubscriptionStatusTrialing &&
+		sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
 		createReq := &dto.CreateSubscriptionInvoiceRequest{
@@ -7311,8 +7323,14 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 				Mark(ierr.ErrValidation)
 		}
 		sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
-		sub.SubscriptionType = types.SubscriptionTypeInherited
 		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
+		// Preserve a pre-set GroupedInvoicing type (set internally by
+		// createGroupedInvoicingChildren, never settable from external requests since
+		// CreateSubscriptionRequest.SubscriptionType is json:"-") instead of defaulting to
+		// Inherited.
+		if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
+			sub.SubscriptionType = types.SubscriptionTypeInherited
+		}
 	}
 
 	if inh.InvoicingCustomerExternalID != nil {
@@ -7340,7 +7358,7 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
 	groupedInvoicingSubIDs = inh.SubscriptionsIDsForGroupedInvoicing
 
-	if len(childCustomerIDs) > 0 || len(groupedInvoicingSubIDs) > 0 {
+	if len(childCustomerIDs) > 0 || len(groupedInvoicingSubIDs) > 0 || len(inh.GroupedInvoicingChildrenToCreate) > 0 {
 		sub.SubscriptionType = types.SubscriptionTypeParent
 	} else if sub.SubscriptionType == "" {
 		sub.SubscriptionType = types.SubscriptionTypeStandalone
@@ -7424,6 +7442,51 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 				"child_customer_id":      childCustomerID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+	return nil
+}
+
+// createGroupedInvoicingChildren creates each child spec as a brand-new grouped_invoicing
+// subscription under parent, inside the caller's existing transaction. Each child's own opening
+// invoice is suppressed (see the invoice-generation gate in createSubscriptionCore); its period-1
+// charges are folded into the parent's own opening invoice instead. Calls createSubscriptionCore
+// directly (not the public CreateSubscription): it must reuse the caller's already-open
+// transaction and must not fire the child's own post-transaction side effects (webhook,
+// HubSpot/Paddle sync) — only the parent's single post-tx block should run, once, after
+// everything commits.
+func (s *subscriptionService) createGroupedInvoicingChildren(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	childRequests []dto.GroupedInvoicingChildRequest,
+) error {
+	for _, c := range childRequests {
+		startDate := parent.StartDate
+		if c.StartDate != nil {
+			startDate = *c.StartDate
+		}
+		childReq := dto.CreateSubscriptionRequest{
+			ExternalCustomerID: c.ExternalCustomerID,
+			PlanID:             c.PlanID,
+			Currency:           parent.Currency,
+			StartDate:          &startDate,
+			BillingPeriod:      parent.BillingPeriod,
+			BillingPeriodCount: parent.BillingPeriodCount,
+			BillingCycle:       parent.BillingCycle,
+			SubscriptionType:   types.SubscriptionTypeGroupedInvoicing,
+			Inheritance: &dto.SubscriptionInheritanceConfig{
+				ParentSubscriptionID: parent.ID,
+			},
+		}
+		if _, err := s.createSubscriptionCore(ctx, childReq); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create grouped-invoicing child subscription").
+				WithReportableDetails(map[string]any{
+					"parent_subscription_id": parent.ID,
+					"external_customer_id":   c.ExternalCustomerID,
+					"plan_id":                c.PlanID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
 	}
 	return nil
 }

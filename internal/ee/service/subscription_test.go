@@ -8197,3 +8197,104 @@ func (s *SubscriptionServiceSuite) TestCancelSchedule_RevertCascadesToInheritedS
 	s.Nil(revertedParent.CancelAt)
 	s.Nil(revertedParent.CancelledAt)
 }
+
+// setupSeatFeePlan creates a plan with a single $50/month ADVANCE recurring fixed price,
+// for tests exercising grouped-invoicing inline child creation.
+func (s *SubscriptionServiceSuite) setupSeatFeePlan() *plan.Plan {
+	ctx := s.GetContext()
+	seatPlan := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Seat Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, seatPlan))
+
+	seatFee := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(50),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           seatPlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, seatFee))
+	return seatPlan
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	seat1External := "ext_seat_1"
+	seat1 := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seat1External,
+		Name:       "Seat 1",
+		Email:      "seat1@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat1))
+
+	seat2External := "ext_seat_2"
+	seat2 := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seat2External,
+		Name:       "Seat 2",
+		Email:      "seat2@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat2))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seat1External},
+				{PlanID: seatPlan.ID, ExternalCustomerID: seat2External},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.SubscriptionTypeParent, resp.SubscriptionType)
+
+	// Exactly one invoice, on the parent, covering parent + both seats' fees ($50 x 3 = $150).
+	s.NotNil(resp.LatestInvoice)
+	s.True(decimal.NewFromInt(150).Equal(resp.LatestInvoice.Total),
+		"expected consolidated invoice total 150, got %s", resp.LatestInvoice.Total.String())
+
+	// Both children exist as GROUPED_INVOICING, attached to the parent.
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Len(children, 2)
+
+	for _, c := range children {
+		s.NotNil(c.ParentSubscriptionID)
+		s.Equal(resp.ID, *c.ParentSubscriptionID)
+
+		// No opening invoice exists for this child.
+		invFilter := types.NewNoLimitInvoiceFilter()
+		invFilter.SubscriptionID = c.ID
+		childInvoices, err := s.GetStores().InvoiceRepo.List(ctx, invFilter)
+		s.NoError(err)
+		s.Empty(childInvoices, "expected no invoice for grouped-invoicing child %s", c.ID)
+	}
+}
