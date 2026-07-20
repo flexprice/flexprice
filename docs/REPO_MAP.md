@@ -65,7 +65,7 @@ flowchart TB
 - **Domain** (`internal/domain/*`): Models and repository **interfaces only** — no Implementations importing Ent.
 - **Repository** (`internal/repository/*`): PostgreSQL via **Ent generated code** under `repository/ent/`, analytics via **`repository/clickhouse/`**.
 - **Service** (`internal/ee/service/*`): Business orchestration; primary consumer of domain interfaces and infrastructure facades.
-- **API** (`internal/api/v1`, `internal/api/cron`, `internal/api/dto`): HTTP adapters; validates and maps DTOs; **no duplicated business rules**.
+- **API** (`internal/api/v1`, `internal/api/cron` — one remaining legacy trigger, `internal/api/dto`): HTTP adapters; validates and maps DTOs; **no duplicated business rules**.
 - **Enterprise** (`internal/ee/`): Commercial features layered on core; services composed in Fx alongside open-core services (`cmd/server/main.go`).
 
 ---
@@ -75,7 +75,7 @@ flowchart TB
 | Area | Path | Responsibility |
 | ---- | ---- | -------------- |
 | HTTP surface | `internal/api/v1/` | REST handlers (~one file per bounded context) |
-| Cron HTTP triggers | `internal/api/cron/` | Operational `/v1/cron/...` triggers (schedules primarily Temporal) |
+| Cron HTTP trigger | `internal/api/cron/` | Legacy manual `/v1/cron/invoices/void-old-pending` trigger (no Temporal equivalent); all other cron-style jobs run as Temporal schedules |
 | Middleware | `internal/rest/middleware/` | Auth (JWT / API key), RBAC permission checks, tenancy headers, observability hooks |
 | Services | `internal/ee/service/` | Core business logic (~50+ cohesive files plus tests) |
 | Domain | `internal/domain/` | Interfaces + pure models per aggregate |

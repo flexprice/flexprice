@@ -243,7 +243,7 @@ flexprice/
 ├── internal/
 │   ├── api/             # HTTP handlers and routing
 │   │   ├── v1/          # API v1 handlers
-│   │   └── cron/        # Scheduled job handlers
+│   │   └── cron/        # Legacy manual trigger for void-old-pending invoices (no Temporal equivalent); other cron-style jobs are Temporal schedules
 │   ├── domain/          # Domain models and interfaces
 │   ├── repository/      # Data access layer implementations
 │   ├── service/         # Business logic layer

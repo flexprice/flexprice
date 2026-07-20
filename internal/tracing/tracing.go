@@ -866,22 +866,6 @@ func (s *Service) StartMonitoringSpan(ctx context.Context, operation string, par
 	return s.startSpan(ctx, name, "monitoring.operation", params)
 }
 
-// StartKafkaLagMonitoringSpan tracks Kafka consumer lag metrics with tags so
-// downstream alerting can filter by topic / consumer group.
-func (s *Service) StartKafkaLagMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	name := fmt.Sprintf("monitoring.%s", operation)
-	span, newCtx := s.startSpan(ctx, name, "monitoring.kafka.lag", params)
-	if span != nil {
-		if topic, ok := params["topic"].(string); ok {
-			span.SetTag("kafka.topic", topic)
-		}
-		if cg, ok := params["consumer_group"].(string); ok {
-			span.SetTag("kafka.consumer_group", cg)
-		}
-	}
-	return span, newCtx
-}
-
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
