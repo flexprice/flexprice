@@ -440,17 +440,23 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
-	// Grouped-invoicing children created inline (SubscriptionType pre-set internally by
-	// createGroupedInvoicingChildren) skip their own opening invoice — their charges are
-	// folded into the parent's invoice via the existing Parent-type merge in
-	// PrepareSubscriptionInvoiceRequest. This condition is intentionally minimal: it only adds
-	// the GroupedInvoicing exclusion on top of the pre-existing status check, so every other
-	// subscription type (Standalone, Parent, Inherited, DelegatedInvoicing) keeps its existing
-	// invoicing behavior unchanged.
-	if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
-		sub.SubscriptionStatus != types.SubscriptionStatusTrialing &&
-		sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
+	// Skip the opening invoice for draft/trialing subscriptions (trial conversion invoice is
+	// created at trial end) and for grouped-invoicing children created inline (SubscriptionType
+	// pre-set internally by createGroupedInvoicingChildren) — their charges are folded into the
+	// parent's invoice via the existing Parent-type merge in PrepareSubscriptionInvoiceRequest.
+	//
+	// Deliberately a skip-list, not an allow-list: any SubscriptionType/Status added in the
+	// future keeps getting invoiced by default, same as every existing type does today. Only add
+	// an entry here when that type/status must NOT get its own opening invoice.
+	skipOpeningInvoiceStatuses := []types.SubscriptionStatus{
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusTrialing,
+	}
+	skipOpeningInvoiceTypes := []types.SubscriptionType{
+		types.SubscriptionTypeGroupedInvoicing,
+	}
+	if !lo.Contains(skipOpeningInvoiceStatuses, sub.SubscriptionStatus) &&
+		!lo.Contains(skipOpeningInvoiceTypes, sub.SubscriptionType) {
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
 		createReq := &dto.CreateSubscriptionInvoiceRequest{
