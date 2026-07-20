@@ -1,6 +1,6 @@
 # Payment-Gated Wallet Top-Up — Design ERD
 
-Status: **Design** — not yet implemented  
+Status: **Implemented (backend)** — pay-first wallet top-up live; swagger regen optional follow-up  
 Date: 2026-07-20  
 Related: [Payment-gated quantity change](2026-07-17-payment-gated-quantity-change.md), [Bonus credit top-up](2026-07-09-FLE-904-bonus-credit-topup.md), checkout create-subscription in `internal/ee/service/checkout_session.go`
 
@@ -18,6 +18,8 @@ For B2B2C (and any flow that needs hosted checkout before credits land), the mer
 **Goal:** opt-in pay-first path on wallet top-up when the client sends a `checkout` object with `PURCHASED_CREDIT_INVOICED`; zero behavior change when `checkout` is omitted; reuse checkout sessions as the short-lived payment vehicle (no new pending-operations table, no parallel credit-apply path).
 
 ---
+
+
 
 ## 2. Approach
 
@@ -346,26 +348,7 @@ Parallel to `CreateSubscriptionParams` / `ModifySubscriptionParams` in `internal
 
 
 
-## 7. Reuse map
-
-
-| Building block                                                           | Location                                                  | Role for wallet top-up                                     |
-| ------------------------------------------------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------- |
-| `CheckoutParams`                                                         | `internal/api/dto/checkout_session.go`                    | Opt-in payload on top-up request                           |
-| `CheckoutAction` + config validate                                       | `internal/types/checkout.go`, `checkout_configuration.go` | New `wallet_topup` + `WalletTopupParams`                   |
-| Concurrent guard                                                         | Same list-by-customer+action pattern as modify            | One pending session per wallet                             |
-| Draft invoice + orphan archive                                           | Mirror `settlePayFirst`                                   | Amount lock; cleanup if session Create fails               |
-| `createCheckoutPayment` + `callCheckoutProvider`                         | `checkout_session` service                                | Payment link / next action                                 |
-| `cleanupCheckoutSession`                                                 | `checkout_session.go`                                     | Archive invoice/payment on fulfill fail / expire           |
-| Razorpay webhook → `CompleteCheckoutSession`                             | Existing                                                  | No provider change if session + payment wired the same way |
-| `ReconcilePaymentStatus` → `CompletePurchasedCreditTransactionWithRetry` | `invoice.go` / `wallet.go`                                | Sole credit-apply path                                     |
-
-
----
-
-
-
-## 8. Scenarios
+## 7. Scenarios
 
 
 | #   | Scenario                                     | Handling                                                          |
@@ -386,25 +369,7 @@ Parallel to `CreateSubscriptionParams` / `ModifySubscriptionParams` in `internal
 
 
 
-## 9. Implementation phases (review / commit gates)
-
-
-| Phase | Scope                                 | Suggested commit                                                            |
-| ----- | ------------------------------------- | --------------------------------------------------------------------------- |
-| 1     | This ERD                              | `docs: add payment-gated wallet top-up ERD`                                 |
-| 2     | Types + DTO + create-session reject   | `feat(checkout): add wallet_topup action and top-up checkout DTO fields`    |
-| 3     | `TopUpWallet` pay-first create path   | `feat(wallet): pay-first top-up creates draft invoice and checkout session` |
-| 4     | `completeCheckoutAction` wallet_topup | `feat(checkout): complete wallet_topup via invoice reconcile`               |
-| 5     | Service tests + swagger polish        | `test(wallet): cover payment-gated top-up create and complete`              |
-
-
-**Do not deploy Phase 3 alone** — without Phase 4, provider payment succeeds but completion returns unsupported action and credits never apply.
-
----
-
-
-
-## 10. Evolvability notes
+## 8. Evolvability notes
 
 This reuses the same recipe as quantity-change pay-first:
 
@@ -415,3 +380,8 @@ This reuses the same recipe as quantity-change pay-first:
 5. Concurrent guard per resource (wallet)
 
 **v1 scope:** `wallet_topup` + `WalletTopupParams` for `PURCHASED_CREDIT_INVOICED` only. Direct / free top-ups stay immediate and out of checkout.
+
+NOTES:
+
+- If in setting tenant has chosen autoCompleteTopupInvoices but has sent checkout object, we still force them to pay if the reason is purchaseCreditsInvoiced.
+

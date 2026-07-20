@@ -74,10 +74,10 @@ func (s *WalletServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.ClearStores()
 }
 
-func (s *WalletServiceSuite) setupService() {
+func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
-	s.service = NewWalletService(ServiceParams{
+	return ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -92,21 +92,32 @@ func (s *WalletServiceSuite) setupService() {
 		MeterRepo:                    stores.MeterRepo,
 		CustomerRepo:                 stores.CustomerRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
+		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
 		FeatureRepo:                  stores.FeatureRepo,
 		AddonAssociationRepo:         stores.AddonAssociationRepo,
 		SettingsRepo:                 stores.SettingsRepo,
-		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		AlertLogsRepo:                stores.AlertLogsRepo,
+		PaymentRepo:                  stores.PaymentRepo,
+		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
+		CouponRepo:                   stores.CouponRepo,
+		CouponAssociationRepo:        stores.CouponAssociationRepo,
+		CouponApplicationRepo:        stores.CouponApplicationRepo,
+		TaxAssociationRepo:           stores.TaxAssociationRepo,
+		TaxRateRepo:                  stores.TaxRateRepo,
+		TaxAppliedRepo:               stores.TaxAppliedRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: pubsub},
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
-		TaxAssociationRepo:           stores.TaxAssociationRepo,
-		TaxRateRepo:                  stores.TaxRateRepo,
-		TaxAppliedRepo:               stores.TaxAppliedRepo,
-	})
+	}
+}
+
+func (s *WalletServiceSuite) setupService() {
+	s.service = NewWalletService(s.buildServiceParams())
+	stores := s.GetStores()
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
@@ -564,6 +575,7 @@ func (s *WalletServiceSuite) setupTestData() {
 func (s *WalletServiceSuite) setupWallet() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
+	s.GetStores().CheckoutSessionRepo.(*testutil.InMemoryCheckoutSessionStore).Clear()
 
 	s.testData.wallet = &wallet.Wallet{
 		ID:                  "wallet-1",
