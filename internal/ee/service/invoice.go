@@ -43,9 +43,8 @@ type InvoiceService interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
-	// GetOrCreateDraftInvoiceForSubscription returns the subscription's existing current-period draft
-	// invoice if the caller's own lookup already found none, or creates one via
-	// CreateDraftInvoiceForSubscription (BillingReason=SUBSCRIPTION_CYCLE) if not.
+	// GetOrCreateDraftInvoiceForSubscription creates a Draft invoice for the subscription's current
+	// period (BillingReason=SUBSCRIPTION_CYCLE) if none exists yet, or returns the existing one.
 	GetOrCreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
