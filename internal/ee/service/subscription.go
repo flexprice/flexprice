@@ -537,31 +537,30 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if err != nil {
 		return nil, err
 	}
-	sub, invoice, phases, plan, validPrices, customer := result.Sub, result.Invoice, result.Phases, result.Plan, result.ValidPrices, result.Customer
 
 	// Handle phases (post-transaction)
-	if req.SubscriptionStatus != types.SubscriptionStatusDraft && len(phases) > 0 {
-		if err = s.handleSubscriptionPhases(ctx, sub, phases, req.Phases, plan, validPrices); err != nil {
+	if req.SubscriptionStatus != types.SubscriptionStatusDraft && len(result.Phases) > 0 {
+		if err = s.handleSubscriptionPhases(ctx, result.Sub, result.Phases, req.Phases, result.Plan, result.ValidPrices); err != nil {
 			return nil, err
 		}
 	}
 
 	// Build response
-	response := &dto.SubscriptionResponse{Subscription: sub}
-	if invoice != nil {
-		response.LatestInvoice = invoice
+	response := &dto.SubscriptionResponse{Subscription: result.Sub}
+	if result.Invoice != nil {
+		response.LatestInvoice = result.Invoice
 	}
 
 	// Sync to HubSpot and publish webhooks
 	isDraft := req.SubscriptionStatus == types.SubscriptionStatusDraft
 	if isDraft {
-		s.triggerHubSpotQuoteSyncWorkflow(ctx, sub.ID, customer.ID)
-		s.runPaddleSubscriptionSync(ctx, sub)
-		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
+		s.triggerHubSpotQuoteSyncWorkflow(ctx, result.Sub.ID, result.Customer.ID)
+		s.runPaddleSubscriptionSync(ctx, result.Sub)
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, result.Sub.ID)
 	} else {
-		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
-		s.runPaddleSubscriptionSync(ctx, sub)
-		s.publishSubscriptionCreatedEvent(ctx, sub)
+		s.triggerHubSpotDealSyncWorkflow(ctx, result.Sub.ID, result.Customer.ID)
+		s.runPaddleSubscriptionSync(ctx, result.Sub)
+		s.publishSubscriptionCreatedEvent(ctx, result.Sub)
 	}
 	return response, nil
 }
