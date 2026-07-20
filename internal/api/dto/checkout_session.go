@@ -22,6 +22,11 @@ func (p *PaymentParams) Validate() error {
 	if p == nil {
 		return nil
 	}
+	if p.PaymentProvider == "" {
+		return ierr.NewError("payment_provider is required").
+			WithHint("Provide a payment_provider (e.g. razorpay)").
+			Mark(ierr.ErrValidation)
+	}
 	if err := p.PaymentProvider.Validate(); err != nil {
 		return err
 	}

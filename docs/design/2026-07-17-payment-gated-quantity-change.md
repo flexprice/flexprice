@@ -130,7 +130,7 @@ modify/execute (checkout present, net > 0)
   → return SubscriptionModifyResponse:
        subscription = current (unchanged)
        changed_resources = preview-style placeholders + draft invoice
-       checkout_session (with nested payment / payment_action)
+       checkout_session (includes top-level payment_action)
 
 Razorpay webhook (payment_link.paid / payment.captured)
   → CompleteCheckoutSession
@@ -150,7 +150,7 @@ fail / expire / cancel
 
 ### 2.6 Client UX
 
-Redirect / new tab to `checkout_session.payment.payment_action.url` → return on success/cancel URL → poll `GET /checkout/sessions/{id}`. Closing a local polling UI does not cancel the session. After `completed`, refetch subscription for real LI ids.
+Redirect / new tab to `checkout_session.payment_action.url` → return on success/cancel URL → poll `GET /v1/checkout/sessions/{id}`. Closing a local polling UI does not cancel the session. After `completed`, refetch subscription for real LI ids.
 
 ### 2.7 Pay-later vs pay-first money (important)
 
@@ -314,15 +314,16 @@ Parallel to `CreateSubscriptionParams` in `internal/types/checkout_configuration
   },
   "checkout_session": {
     "id": "cs_...",
-  },
-  "payment_action": {
-    ...
+    "checkout_status": "pending",
+    "payment_action": {
+      "type": "payment_link",
+      "url": "https://rzp.io/..."
+    }
   }
 }
 ```
 
-
-
+- Payment URL lives on `checkout_session.payment_action` (not a top-level sibling, not under `.payment`).
 - Poll: `GET /v1/checkout/sessions/{checkout_session.id}`.
 
 ---

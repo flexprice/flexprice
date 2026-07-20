@@ -57,8 +57,9 @@ func (p *quantityChangePlan) GetModifications() []*quantityChangeLineItemMod {
 }
 
 // planFromModifySubscriptionParams rebuilds an apply plan from checkout configuration.
-// Used on payment success — does not recompute proration. Validation is lighter than
-// buildQuantityChangePlan (intent was already validated at pay-first execute).
+// Used on payment success — does not recompute proration. Revalidates that the
+// subscription and line items are still safe to apply; already-applied LIs
+// (ended at effective_date) are allowed through for idempotent complete.
 func (s *subscriptionModificationService) planFromModifySubscriptionParams(
 	ctx context.Context,
 	params *types.ModifySubscriptionParams,
@@ -71,6 +72,16 @@ func (s *subscriptionModificationService) planFromModifySubscriptionParams(
 	sub, _, err := sp.SubRepo.GetWithLineItems(ctx, params.SubscriptionID)
 	if err != nil {
 		return nil, err
+	}
+
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.NewError("subscription is not active").
+			WithHint("Cannot apply a paid quantity change to a non-active subscription; refund or reconcile manually").
+			WithReportableDetails(map[string]any{
+				"subscription_id": params.SubscriptionID,
+				"status":          sub.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	now := time.Now().UTC()
@@ -89,10 +100,34 @@ func (s *subscriptionModificationService) planFromModifySubscriptionParams(
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if lineItem.Status != types.StatusPublished {
+			return nil, ierr.NewError("line item is not active").
+				WithHint("Cannot apply quantity change to an unpublished line item; refund or reconcile manually").
+				WithReportableDetails(map[string]any{"line_item_id": m.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+		if lineItem.PriceType != types.PRICE_TYPE_FIXED {
+			return nil, ierr.NewError("line item is not a fixed-price item").
+				WithHint("Quantity changes are only supported for fixed-price line items").
+				WithReportableDetails(map[string]any{
+					"line_item_id": m.LineItemID,
+					"price_type":   lineItem.PriceType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 
 		effectiveDate := now
 		if m.EffectiveDate != nil {
 			effectiveDate = m.EffectiveDate.UTC()
+		}
+
+		alreadyApplied := !lineItem.EndDate.IsZero() && lineItem.EndDate.Equal(effectiveDate)
+		if !alreadyApplied {
+			if err := validateQuantityChangeEffectiveDateWithinLineItemWindow(
+				effectiveDate, sub, lineItem, m.LineItemID,
+			); err != nil {
+				return nil, err
+			}
 		}
 
 		newEndDate := sub.CurrentPeriodEnd
@@ -722,6 +757,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 	if err != nil {
 		return nil, err
 	}
+	draftInvoiceID := draftInvoice.ID
 
 	var meta types.Metadata
 	if len(checkout.Metadata) > 0 {
@@ -739,6 +775,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 			ModifySubscriptionParams: modifyParams,
 		}),
 		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(providerCfg),
+		CheckoutInvoiceID:     &draftInvoiceID,
 		IdempotencyKey:        checkout.IdempotencyKey,
 		SuccessURL:            checkout.SuccessURL,
 		FailureURL:            checkout.FailureURL,
@@ -749,6 +786,14 @@ func (s *subscriptionModificationService) settlePayFirst(
 	}
 
 	if err := sp.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		// Session never persisted — archive the draft so it is not orphaned.
+		if delErr := sp.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
+			sp.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
+				"invoice_id", draftInvoiceID,
+				"error", delErr,
+				"original_err", err,
+			)
+		}
 		return nil, err
 	}
 
@@ -994,7 +1039,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 		return nil, err
 	}
 	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-		sp.Logger.Info(context.Background(), "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
+		sp.Logger.Info(ctx, "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
 	}
 	latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
 	if fetchErr != nil {

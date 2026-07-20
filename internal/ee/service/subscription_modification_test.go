@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -254,6 +255,43 @@ func (s *SubscriptionModificationServiceSuite) setSubPeriod(subID string, start,
 	sub.CurrentPeriodEnd = end
 	sub.BillingAnchor = start
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+}
+
+func (s *SubscriptionModificationServiceSuite) checkoutParamsRazorpay() *dto.CheckoutParams {
+	return &dto.CheckoutParams{
+		PaymentParams: dto.PaymentParams{
+			PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		},
+	}
+}
+
+// seedPendingModifyCheckout inserts a pending modify_subscription session for the given sub.
+func (s *SubscriptionModificationServiceSuite) seedPendingModifyCheckout(
+	customerID, subscriptionID string,
+	idempotencyKey *string,
+) *domainCheckout.CheckoutSession {
+	ctx := s.GetContext()
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      customerID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: &types.ModifySubscriptionParams{
+				SubscriptionID: subscriptionID,
+				LineItemModifications: []types.ModifySubscriptionLineItem{
+					{LineItemID: "subs_line_placeholder", Quantity: decimal.NewFromInt(1)},
+				},
+			},
+		}),
+		IdempotencyKey: idempotencyKey,
+		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+	return session
 }
 
 // ─────────────────────────────────────────────
@@ -1922,4 +1960,351 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		ProviderPaymentIntentID: "pay_test_complete_001",
 	})
 	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "expected ErrAlreadyExists on terminal session retry, got %v", err)
+}
+
+// ─────────────────────────────────────────────
+// Pay-first quantity change tests
+// ─────────────────────────────────────────────
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_CheckoutIgnoredOnCredit() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-credit-ignore")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceAdvance, p.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(2), EffectiveDate: &effectiveDate},
+			},
+		},
+		Checkout: s.checkoutParamsRazorpay(),
+	}
+	resp, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Nil(resp.CheckoutSession, "checkout must be ignored when batch nets to a credit")
+
+	s.Require().Len(resp.ChangedResources.LineItems, 2)
+	s.Require().Len(resp.ChangedResources.Invoices, 1)
+	s.Equal(dto.ChangedInvoiceActionWalletCredit, resp.ChangedResources.Invoices[0].Action)
+
+	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	s.False(ended.EndDate.IsZero(), "pay-later path must apply LI changes immediately")
+
+	sessions, err := s.GetStores().CheckoutSessionRepo.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerIDs: []string{cust.ID},
+		Actions:     []types.CheckoutAction{types.CheckoutActionModifySubscription},
+	})
+	s.Require().NoError(err)
+	s.Empty(sessions, "no checkout session should be created for credit path")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_CheckoutRejectedEmptyProvider() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-empty-provider")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+			},
+		},
+		Checkout: &dto.CheckoutParams{},
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "payment_provider")
+
+	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(getErr)
+	s.True(orig.EndDate.IsZero(), "LI must be unchanged when checkout validation fails")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PayFirstConcurrentGuard() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-concurrent")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	s.seedPendingModifyCheckout(cust.ID, sub.ID, nil)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+			},
+		},
+		Checkout: s.checkoutParamsRazorpay(),
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "expected concurrent guard AlreadyExists, got %v", err)
+
+	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(getErr)
+	s.True(orig.EndDate.IsZero())
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(listErr)
+	s.Empty(invoices, "guard must reject before creating a proration draft")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestCreateAggregatedProrationDraft_MixedChargeAndCredit() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-mixed-net")
+	sub := s.createActiveSub(cust.ID)
+	upPrice := s.createFixedPrice(decimal.NewFromInt(100), types.InvoiceCadenceAdvance)
+	downPrice := s.createFixedPrice(decimal.NewFromInt(10), types.InvoiceCadenceAdvance)
+	upLI := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, upPrice.ID)
+	downLI := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(10), types.InvoiceCadenceAdvance, downPrice.ID)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: upLI.ID, Quantity: decimal.NewFromInt(5), EffectiveDate: &effectiveDate},
+			{ID: downLI.ID, Quantity: decimal.NewFromInt(8), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+
+	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	s.Require().NoError(err)
+	s.True(proration.GetNetCharge().GreaterThan(decimal.Zero))
+	s.True(proration.GetNetCredit().GreaterThan(decimal.Zero))
+	s.True(proration.GetNetAmount().GreaterThan(decimal.Zero), "upgrade should dominate so net > 0")
+
+	draft, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	s.Require().NoError(err)
+	s.Require().NotNil(draft)
+	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
+
+	expectedNet := proration.GetNetAmount()
+	diff := draft.AmountDue.Sub(expectedNet).Abs()
+	s.True(diff.LessThanOrEqual(decimal.NewFromFloat(0.01)),
+		"draft amount_due %s should equal net %s", draft.AmountDue, expectedNet)
+
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.GreaterOrEqual(len(lineItems), 2, "mixed batch should keep per-LI charge and credit lines")
+
+	var hasPos, hasNeg bool
+	for _, li := range lineItems {
+		if li.Amount.GreaterThan(decimal.Zero) {
+			hasPos = true
+		}
+		if li.Amount.LessThan(decimal.Zero) {
+			hasNeg = true
+		}
+	}
+	s.True(hasPos, "expected a positive charge line")
+	s.True(hasNeg, "expected a negative credit line")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_IdempotentApply() {
+	ctx := s.GetContext()
+	periodStart := s.GetNow()
+	effectiveDate := periodStart.AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-idempotent-apply")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	s.Require().NoError(err)
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	s.Require().NoError(err)
+
+	params := s.buildServiceParams()
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+
+	invID := draftInv.ID
+	payID := payResp.ID
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      cust.ID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+		}),
+		CheckoutInvoiceID: &invID,
+		CheckoutPaymentID: &payID,
+		ExpiresAt:         time.Now().UTC().Add(time.Hour),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+
+	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_idempotent_001",
+	}))
+
+	_, afterFirst, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+	s.Require().NoError(err)
+	openCount := 0
+	for _, item := range afterFirst {
+		if item.PriceID == p.ID && item.EndDate.IsZero() {
+			openCount++
+		}
+	}
+	s.Equal(1, openCount, "exactly one open LI after first complete")
+
+	// Re-apply the same plan — must not create another open LI.
+	rebuilt, err := modSvc.planFromModifySubscriptionParams(ctx, plan.toModifySubscriptionParams())
+	s.Require().NoError(err)
+	_, err = modSvc.applyQuantityChangePlan(ctx, rebuilt)
+	s.Require().NoError(err)
+
+	_, afterSecond, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+	s.Require().NoError(err)
+	openCount = 0
+	for _, item := range afterSecond {
+		if item.PriceID == p.ID && item.EndDate.IsZero() {
+			openCount++
+		}
+	}
+	s.Equal(1, openCount, "idempotent re-apply must not create a second open LI")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_RejectsInactiveSubscription() {
+	ctx := s.GetContext()
+	periodStart := s.GetNow()
+	effectiveDate := periodStart.AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-inactive-sub")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	s.Require().NoError(err)
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	s.Require().NoError(err)
+
+	params := s.buildServiceParams()
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+
+	invID := draftInv.ID
+	payID := payResp.ID
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      cust.ID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+		}),
+		CheckoutInvoiceID: &invID,
+		CheckoutPaymentID: &payID,
+		ExpiresAt:         time.Now().UTC().Add(time.Hour),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+
+	// Cancel subscription after pay-first execute intent was saved.
+	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	err = checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_inactive_001",
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "not active")
+
+	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(getErr)
+	s.True(orig.EndDate.IsZero(), "LI must not change when complete revalidation fails")
+
+	pending, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusPending, pending.CheckoutStatus)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestSettlePayFirst_ArchivesDraftWhenSessionCreateFails() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-orphan-draft")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	// Same customer + idempotency key, but different subscription in config so the
+	// concurrent guard does not fire — only session Create's idempotency check fails
+	// after the draft invoice is created.
+	idempKey := "payfirst-orphan-idemp-key"
+	otherSubID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	s.seedPendingModifyCheckout(cust.ID, otherSubID, &idempKey)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	s.Require().NoError(err)
+	s.Require().True(proration.GetNetAmount().GreaterThan(decimal.Zero))
+
+	checkout := s.checkoutParamsRazorpay()
+	checkout.IdempotencyKey = &idempKey
+
+	_, err = modSvc.settlePayFirst(ctx, plan, proration, checkout)
+	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "expected session create AlreadyExists, got %v", err)
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(listErr)
+	s.Empty(invoices, "draft invoice must be archived when session create fails")
+
+	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(getErr)
+	s.True(orig.EndDate.IsZero())
 }
