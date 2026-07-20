@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -836,10 +837,10 @@ func (s *CreditAdjustmentServiceSuite) TestApplyExpiringCreditToInvoice_ZeroDeci
 }
 
 func TestPrepaidCreditApplyLockKey(t *testing.T) {
-	got := prepaidCreditApplyLockKey("inv_123")
-	want := "prepaid_credit_apply:invoice:inv_123"
+	got := cache.GenerateKey(nil, cache.PrefixPrepaidCreditApplyLock, "inv_123")
+	want := "prepaid_credit_apply:invoice::inv_123"
 	if got != want {
-		t.Fatalf("prepaidCreditApplyLockKey = %q, want %q", got, want)
+		t.Fatalf("GenerateKey prepaid credit apply lock = %q, want %q", got, want)
 	}
 }
 

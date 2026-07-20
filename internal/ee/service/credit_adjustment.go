@@ -34,11 +34,6 @@ func NewCreditAdjustmentService(
 	}
 }
 
-// prepaidCreditApplyLockKey is the Redis key that serializes prepaid-credit application to one invoice.
-func prepaidCreditApplyLockKey(invoiceID string) string {
-	return "prepaid_credit_apply:invoice:" + invoiceID
-}
-
 // spreadPrepaidCreditsAcrossLineItems re-derives each usage line item's PrepaidCreditsApplied from the
 // invoice-level authority inv.TotalPrepaidCreditsApplied. It performs NO wallet movement. Usage line items
 // receive credit up to their ceiling (amount - line_discount - invoice_level_discount), in list order;
@@ -530,7 +525,8 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 			WithHint("Redis cache is not available").
 			Mark(ierr.ErrServiceUnavailable)
 	}
-	lock, err := s.Locker.AcquireLock(ctx, prepaidCreditApplyLockKey(invoiceID), cache.ExpiryPrepaidCreditApplyLock)
+	lockKey := cache.GenerateKey(ctx, cache.PrefixPrepaidCreditApplyLock, invoiceID)
+	lock, err := s.Locker.AcquireLock(ctx, lockKey, cache.ExpiryPrepaidCreditApplyLock)
 	if err != nil {
 		return decimal.Zero, err
 	}
