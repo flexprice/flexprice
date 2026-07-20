@@ -366,7 +366,10 @@ func (r *invoiceLineItemRepository) ListByInvoiceID(ctx context.Context, invoice
 			invoicelineitem.InvoiceID(invoiceID),
 			invoicelineitem.Status(string(types.StatusPublished)),
 		).
-		Order(ent.Asc(invoicelineitem.FieldCreatedAt), ent.Asc(invoicelineitem.FieldID)).
+		Order(
+			ent.Asc(invoicelineitem.FieldCreatedAt),
+			ent.Asc(invoicelineitem.FieldID),
+		).
 		All(ctx)
 
 	if err != nil {
