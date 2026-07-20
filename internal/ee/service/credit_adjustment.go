@@ -555,10 +555,21 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 			if remaining.LessThanOrEqual(decimal.Zero) {
 				break
 			}
+			// A subscription's currency is fixed - any invoice for it (existing or newly created) is
+			// denominated in sub.Currency, so a mismatch here means this wallet's credit can never
+			// legitimately apply to this subscription's invoices.
+			if sub.Currency != tx.Currency {
+				continue
+			}
 
 			curFilter := types.NewNoLimitInvoiceFilter()
 			curFilter.SubscriptionID = sub.ID
 			curFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+			// Scope to the subscription's CURRENT period specifically - without this, a stale draft
+			// from an earlier period (or a proration draft) could be picked up instead of the current
+			// period's invoice, and its presence would wrongly suppress the create-if-missing fallback.
+			curFilter.PeriodStartGTE = &sub.CurrentPeriodStart
+			curFilter.PeriodEndLTE = &sub.CurrentPeriodEnd
 			curInvoices, err := s.InvoiceRepo.List(ctx, curFilter)
 			if err != nil {
 				s.Logger.Error(ctx, "pre_expiry_phase2_list_failed", "subscription_id", sub.ID, "error", err)
