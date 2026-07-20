@@ -59,7 +59,25 @@ func (s *subscriptionService) listSubscriptionLineItemsForUsageWindow(ctx contex
 	return s.SubscriptionLineItemRepo.List(ctx, filter)
 }
 
-func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+// subscriptionCoreResult carries everything CreateSubscription's post-transaction block
+// (phase handling, HubSpot/Paddle sync, webhook publish) needs, out of createSubscriptionCore.
+type subscriptionCoreResult struct {
+	Sub         *subscription.Subscription
+	Invoice     *dto.InvoiceResponse
+	Phases      []*subscription.SubscriptionPhase
+	Plan        *plan.Plan
+	ValidPrices []*dto.PriceResponse
+	Customer    *customer.Customer
+}
+
+// createSubscriptionCore contains everything from customer/plan validation through the
+// invoice-generation gate. It opens no transaction of its own — the caller must already be
+// inside one (either createSubscriptionCoreTx for a top-level call, or a caller that's already
+// inside its own s.DB.WithTx, e.g. createGroupedInvoicingChildren). It runs no post-transaction
+// side effects (no phase handling, no HubSpot/Paddle sync, no webhook) — those stay in the
+// public CreateSubscription wrapper so they fire exactly once, only for a top-level call, only
+// after commit.
+func (s *subscriptionService) createSubscriptionCore(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
 	if req.BillingCycle == "" {
 		req.BillingCycle = types.BillingCycleAnniversary
 	}
@@ -291,211 +309,239 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	var updatedSub *subscription.Subscription
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
+	groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
+		return nil, err
+	}
+
+	// Create bucket price rows for line items carrying commitment time
+	// buckets, inside this transaction so they roll back with the line items.
+	if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, lineItemBucketCfgs); err != nil {
+		return nil, err
+	}
+
+	if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
+		return nil, err
+	}
+
+	if len(req.Addons) > 0 {
+		if err = s.handleSubscriptionAddons(ctx, sub, req.Addons); err != nil {
+			return nil, err
+		}
+	}
+	// Add extra line items (price_id or price) in the same transaction
+	for i := range req.LineItems {
+		itemReq := req.LineItems[i]
+		itemReq.SkipEntitlementCheck = true
+		if _, err = s.AddSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
+			return nil, err
+		}
+	}
+	if len(req.OverrideEntitlements) > 0 {
+		if err = s.ProcessSubscriptionEntitlementOverrides(ctx, sub, req.OverrideEntitlements); err != nil {
+			return nil, err
+		}
+	}
+
+	// Prepare credit grants
+	var creditGrantRequests []dto.CreateCreditGrantRequest
+	if req.CreditGrants != nil {
+		creditGrantRequests = req.CreditGrants
+	} else {
+		creditGrantService := NewCreditGrantService(s.ServiceParams)
+		planCreditGrants, err := creditGrantService.GetCreditGrantsByPlan(ctx, plan.ID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
-			return err
-		}
-
-		// Create bucket price rows for line items carrying commitment time
-		// buckets, inside this transaction so they roll back with the line items.
-		if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, lineItemBucketCfgs); err != nil {
-			return err
-		}
-
-		if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
-			return err
-		}
-
-		if len(req.Addons) > 0 {
-			if err = s.handleSubscriptionAddons(ctx, sub, req.Addons); err != nil {
-				return err
+		if len(planCreditGrants.Items) > 0 {
+			s.Logger.Info(ctx, "plan has credit grants", "plan_id", plan.ID, "credit_grants_count", len(planCreditGrants.Items))
+			creditGrantRequests = make([]dto.CreateCreditGrantRequest, 0, len(planCreditGrants.Items))
+			for _, cg := range planCreditGrants.Items {
+				creditGrantRequests = append(creditGrantRequests, dto.CreateCreditGrantRequest{
+					Name:                   cg.Name,
+					Scope:                  types.CreditGrantScopeSubscription,
+					Credits:                cg.Credits,
+					Cadence:                cg.Cadence,
+					ExpirationType:         cg.ExpirationType,
+					Priority:               cg.Priority,
+					SubscriptionID:         lo.ToPtr(sub.ID),
+					Period:                 cg.Period,
+					PlanID:                 &plan.ID,
+					ExpirationDuration:     cg.ExpirationDuration,
+					ExpirationDurationUnit: cg.ExpirationDurationUnit,
+					Metadata:               cg.Metadata,
+					PeriodCount:            cg.PeriodCount,
+					ConversionRate:         cg.ConversionRate,
+					TopupConversionRate:    cg.TopupConversionRate,
+				})
 			}
 		}
-		// Add extra line items (price_id or price) in the same transaction
-		for i := range req.LineItems {
-			itemReq := req.LineItems[i]
-			itemReq.SkipEntitlementCheck = true
-			if _, err = s.AddSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
-				return err
-			}
-		}
-		if len(req.OverrideEntitlements) > 0 {
-			if err = s.ProcessSubscriptionEntitlementOverrides(ctx, sub, req.OverrideEntitlements); err != nil {
-				return err
-			}
-		}
+	}
+	if err = s.handleCreditGrants(ctx, sub, creditGrantRequests); err != nil {
+		return nil, err
+	}
+	if err = s.handleTaxRateLinking(ctx, sub, req); err != nil {
+		return nil, err
+	}
+	if err = s.handleSubCoupons(ctx, sub, req, originalPriceToLineItemMap); err != nil {
+		return nil, err
+	}
 
-		// Prepare credit grants
-		var creditGrantRequests []dto.CreateCreditGrantRequest
-		if req.CreditGrants != nil {
-			creditGrantRequests = req.CreditGrants
-		} else {
-			creditGrantService := NewCreditGrantService(s.ServiceParams)
-			planCreditGrants, err := creditGrantService.GetCreditGrantsByPlan(ctx, plan.ID)
-			if err != nil {
-				return err
-			}
-			if len(planCreditGrants.Items) > 0 {
-				s.Logger.Info(ctx, "plan has credit grants", "plan_id", plan.ID, "credit_grants_count", len(planCreditGrants.Items))
-				creditGrantRequests = make([]dto.CreateCreditGrantRequest, 0, len(planCreditGrants.Items))
-				for _, cg := range planCreditGrants.Items {
-					creditGrantRequests = append(creditGrantRequests, dto.CreateCreditGrantRequest{
-						Name:                   cg.Name,
-						Scope:                  types.CreditGrantScopeSubscription,
-						Credits:                cg.Credits,
-						Cadence:                cg.Cadence,
-						ExpirationType:         cg.ExpirationType,
-						Priority:               cg.Priority,
-						SubscriptionID:         lo.ToPtr(sub.ID),
-						Period:                 cg.Period,
-						PlanID:                 &plan.ID,
-						ExpirationDuration:     cg.ExpirationDuration,
-						ExpirationDurationUnit: cg.ExpirationDurationUnit,
-						Metadata:               cg.Metadata,
-						PeriodCount:            cg.PeriodCount,
-						ConversionRate:         cg.ConversionRate,
-						TopupConversionRate:    cg.TopupConversionRate,
-					})
-				}
-			}
+	// Handle entitlement proration for calendar billing
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
+		sub.BillingCycle == types.BillingCycleCalendar {
+		if err = s.handleEntitlementProration(ctx, sub); err != nil {
+			// Log error but don't fail subscription creation
+			s.Logger.Error(ctx, "failed to create prorated entitlements",
+				"error", err,
+				"subscription_id", sub.ID)
 		}
-		if err = s.handleCreditGrants(ctx, sub, creditGrantRequests); err != nil {
-			return err
-		}
-		if err = s.handleTaxRateLinking(ctx, sub, req); err != nil {
-			return err
-		}
-		if err = s.handleSubCoupons(ctx, sub, req, originalPriceToLineItemMap); err != nil {
-			return err
-		}
+	}
 
-		// Handle entitlement proration for calendar billing
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
-			sub.BillingCycle == types.BillingCycleCalendar {
-			if err = s.handleEntitlementProration(ctx, sub); err != nil {
-				// Log error but don't fail subscription creation
-				s.Logger.Error(ctx, "failed to create prorated entitlements",
-					"error", err,
-					"subscription_id", sub.ID)
-			}
+	// Create phase 0 DB record and its extra line items (e.g. ADVANCE one-time charges) BEFORE
+	// invoice generation so they are included in the opening invoice.
+	// Subsequent phases are handled post-transaction in handleSubscriptionPhases.
+	if len(phases) > 0 {
+		if err = s.SubscriptionPhaseRepo.Create(ctx, phases[0]); err != nil {
+			return nil, err
 		}
-
-		// Create phase 0 DB record and its extra line items (e.g. ADVANCE one-time charges) BEFORE
-		// invoice generation so they are included in the opening invoice.
-		// Subsequent phases are handled post-transaction in handleSubscriptionPhases.
-		if len(phases) > 0 {
-			if err = s.SubscriptionPhaseRepo.Create(ctx, phases[0]); err != nil {
-				return err
+		if len(req.Phases) > 0 && len(req.Phases[0].LineItems) > 0 {
+			extraItems, extraErr := s.createPhaseExtraLineItems(ctx, sub, phases[0], req.Phases[0])
+			if extraErr != nil {
+				return nil, extraErr
 			}
-			if len(req.Phases) > 0 && len(req.Phases[0].LineItems) > 0 {
-				extraItems, extraErr := s.createPhaseExtraLineItems(ctx, sub, phases[0], req.Phases[0])
-				if extraErr != nil {
-					return extraErr
-				}
-				// Apply phase 0 coupons to the extra line items created above.
-				// handleSubCoupons runs before this block and only covers req.Coupons /
-				// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
-				// req.Phases[0].LineItemCoupons) need to be resolved here using the
-				// just-created items.
-				phase0Req := req.Phases[0]
-				if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 || len(phase0Req.SubscriptionCoupons) > 0 {
-					phase0PriceToLIMap := make(map[string]string)
-					for _, li := range extraItems {
-						if li.PriceID != "" && li.ID != "" {
-							phase0PriceToLIMap[li.PriceID] = li.ID
-						}
+			// Apply phase 0 coupons to the extra line items created above.
+			// handleSubCoupons runs before this block and only covers req.Coupons /
+			// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
+			// req.Phases[0].LineItemCoupons) need to be resolved here using the
+			// just-created items.
+			phase0Req := req.Phases[0]
+			if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 || len(phase0Req.SubscriptionCoupons) > 0 {
+				phase0PriceToLIMap := make(map[string]string)
+				for _, li := range extraItems {
+					if li.PriceID != "" && li.ID != "" {
+						phase0PriceToLIMap[li.PriceID] = li.ID
 					}
-					phase0Coupons, err := s.normalizePhaseCoupons(ctx, phase0Req, phases[0].ID, phase0PriceToLIMap)
-					if err != nil {
-						return err
-					}
-					if len(phase0Coupons) > 0 {
-						couponSvc := NewCouponAssociationService(s.ServiceParams)
-						if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
-							return err
-						}
+				}
+				phase0Coupons, err := s.normalizePhaseCoupons(ctx, phase0Req, phases[0].ID, phase0PriceToLIMap)
+				if err != nil {
+					return nil, err
+				}
+				if len(phase0Coupons) > 0 {
+					couponSvc := NewCouponAssociationService(s.ServiceParams)
+					if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
+						return nil, err
 					}
 				}
 			}
 		}
+	}
 
-		// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
-		if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
-			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
+	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
+	if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
+		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
-			createReq := &dto.CreateSubscriptionInvoiceRequest{
-				SubscriptionID: sub.ID,
-				PeriodStart:    sub.CurrentPeriodStart,
-				PeriodEnd:      sub.CurrentPeriodEnd,
-				ReferencePoint: types.ReferencePointPeriodStart,
-			}
-
-			if req.OpeningInvoiceAdjustmentAmount != nil {
-				createReq.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
-				createReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
-			}
-
-			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, createReq, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
-			if err != nil {
-				return err
-			}
-			if updatedSub != nil {
-				sub = updatedSub
-			}
-			// Activate subscription if no invoice needed or already paid
-			if (req.Workflow == nil || *req.Workflow != types.TemporalStripeIntegrationWorkflow) &&
-				sub.SubscriptionStatus == types.SubscriptionStatusIncomplete &&
-				(invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
-				sub.SubscriptionStatus = types.SubscriptionStatusActive
-				if err = s.SubRepo.Update(ctx, sub); err != nil {
-					return err
-				}
-			}
-		} else if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
-			// Create a $0 preview invoice at trial start so downstream integrations (Stripe,
-			// Paddle) can drive card capture via their $0 checkout flow.
-			// syncTrialingStateFromCreateRequest has already aligned:
-			//   CurrentPeriodStart = TrialStart
-			//   CurrentPeriodEnd   = TrialEnd
-			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
-
-			invoice, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
-				SubscriptionID: sub.ID,
-				PeriodStart:    sub.CurrentPeriodStart, // == TrialStart
-				PeriodEnd:      sub.CurrentPeriodEnd,   // == TrialEnd
-				ReferencePoint: types.ReferencePointPeriodStart,
-				BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
-			}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
-			if err != nil {
-				return err
-			}
-			// Subscription stays TRIALING — trial start invoice does not gate activation.
+		createReq := &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: sub.ID,
+			PeriodStart:    sub.CurrentPeriodStart,
+			PeriodEnd:      sub.CurrentPeriodEnd,
+			ReferencePoint: types.ReferencePointPeriodStart,
 		}
 
-		// Inherited children must see the parent's final status/period fields after invoice + activation.
-		for _, childID := range childCustomerIDs {
-			if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
-				return err
-			}
+		if req.OpeningInvoiceAdjustmentAmount != nil {
+			createReq.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+			createReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
 		}
 
-		// Convert existing standalone subscriptions to grouped_invoicing under the newly created parent
-		for _, gSubID := range groupedInvoicingSubIDs {
-			if err := s.addToGroupedInvoicing(ctx, sub, gSubID); err != nil {
-				return err
+		invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, createReq, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+		if err != nil {
+			return nil, err
+		}
+		if updatedSub != nil {
+			sub = updatedSub
+		}
+		// Activate subscription if no invoice needed or already paid
+		if (req.Workflow == nil || *req.Workflow != types.TemporalStripeIntegrationWorkflow) &&
+			sub.SubscriptionStatus == types.SubscriptionStatusIncomplete &&
+			(invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			if err = s.SubRepo.Update(ctx, sub); err != nil {
+				return nil, err
 			}
 		}
+	} else if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
+		// Create a $0 preview invoice at trial start so downstream integrations (Stripe,
+		// Paddle) can drive card capture via their $0 checkout flow.
+		// syncTrialingStateFromCreateRequest has already aligned:
+		//   CurrentPeriodStart = TrialStart
+		//   CurrentPeriodEnd   = TrialEnd
+		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
-		return nil
+		invoice, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: sub.ID,
+			PeriodStart:    sub.CurrentPeriodStart, // == TrialStart
+			PeriodEnd:      sub.CurrentPeriodEnd,   // == TrialEnd
+			ReferencePoint: types.ReferencePointPeriodStart,
+			BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
+		}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+		if err != nil {
+			return nil, err
+		}
+		// Subscription stays TRIALING — trial start invoice does not gate activation.
+	}
+
+	// Inherited children must see the parent's final status/period fields after invoice + activation.
+	for _, childID := range childCustomerIDs {
+		if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
+			return nil, err
+		}
+	}
+
+	// Convert existing standalone subscriptions to grouped_invoicing under the newly created parent
+	for _, gSubID := range groupedInvoicingSubIDs {
+		if err := s.addToGroupedInvoicing(ctx, sub, gSubID); err != nil {
+			return nil, err
+		}
+	}
+
+	return &subscriptionCoreResult{
+		Sub:         sub,
+		Invoice:     invoice,
+		Phases:      phases,
+		Plan:        plan,
+		ValidPrices: validPrices,
+		Customer:    customer,
+	}, nil
+}
+
+// createSubscriptionCoreTx opens the transaction and runs createSubscriptionCore inside it.
+// Only the public CreateSubscription calls this — createGroupedInvoicingChildren calls
+// createSubscriptionCore directly, reusing the caller's already-open transaction instead.
+func (s *subscriptionService) createSubscriptionCoreTx(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
+	var result *subscriptionCoreResult
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		var txErr error
+		result, txErr = s.createSubscriptionCore(ctx, req)
+		return txErr
 	})
 	if err != nil {
 		return nil, err
 	}
+	return result, nil
+}
+
+// CreateSubscription validates and persists a new subscription, generating its opening invoice
+// (unless draft/trialing) and syncing/publishing side effects once the transaction has committed.
+func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	result, err := s.createSubscriptionCoreTx(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	sub, invoice, phases, plan, validPrices, customer := result.Sub, result.Invoice, result.Phases, result.Plan, result.ValidPrices, result.Customer
 
 	// Handle phases (post-transaction)
 	if req.SubscriptionStatus != types.SubscriptionStatusDraft && len(phases) > 0 {
