@@ -554,6 +554,24 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 	}
 }
 
+// TestGetOrCreateDraftInvoiceForSubscription_CreatesWhenMissingThenReturnsExisting proves the
+// get-or-create semantics: the first call creates a Draft invoice for the subscription's current
+// period (SUBSCRIPTION_CYCLE), and a second call for the same period returns the SAME invoice rather
+// than creating a duplicate.
+func (s *InvoiceServiceSuite) TestGetOrCreateDraftInvoiceForSubscription_CreatesWhenMissingThenReturnsExisting() {
+	sub := s.testData.subscription
+
+	first, err := s.service.GetOrCreateDraftInvoiceForSubscription(s.GetContext(), sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(first.ID)
+	s.Equal(types.InvoiceStatusDraft, first.InvoiceStatus)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), first.BillingReason) // BillingReason is a plain string field on invoice.Invoice
+
+	second, err := s.service.GetOrCreateDraftInvoiceForSubscription(s.GetContext(), sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	s.Require().NoError(err)
+	s.Equal(first.ID, second.ID, "second call must return the same invoice, not create a duplicate")
+}
+
 func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 	// Create a draft invoice first with line items
 	draftInvoice := &invoice.Invoice{

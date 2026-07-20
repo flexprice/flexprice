@@ -43,6 +43,10 @@ type InvoiceService interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
+	// GetOrCreateDraftInvoiceForSubscription returns the subscription's existing current-period draft
+	// invoice if the caller's own lookup already found none, or creates one via
+	// CreateDraftInvoiceForSubscription (BillingReason=SUBSCRIPTION_CYCLE) if not.
+	GetOrCreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -367,6 +371,15 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	}
 	req.SubscriptionCustomerID = &sub.CustomerID
 	return s.CreateEmptyDraftInvoice(ctx, req)
+}
+
+// GetOrCreateDraftInvoiceForSubscription creates a Draft invoice for the subscription's given period if
+// none exists yet (BillingReason=SUBSCRIPTION_CYCLE), or returns the existing one. See
+// CreateDraftInvoiceForSubscription for the underlying idempotency-key + GetForPeriod dedup this relies
+// on — best-effort, not backed by a DB unique constraint on subscription+period+reason (the index named
+// idx_subscription_period_unique in ent/schema/invoice.go is not actually marked .Unique()).
+func (s *invoiceService) GetOrCreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error) {
+	return s.CreateDraftInvoiceForSubscription(ctx, subscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd)
 }
 
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
