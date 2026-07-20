@@ -499,10 +499,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		eligibleSubIDs[sub.ID] = true
 	}
 
-	// Phase 1 (fast path): query directly for invoices that can actually absorb credit - draft, same
-	// currency as the wallet, and still owing something - instead of enumerating each subscription's
-	// invoices individually. Eligibility here is defined by invoice state, so this stays correct
-	// unchanged even if a future flow pre-creates draft invoices ahead of time.
 	invFilter := types.NewNoLimitInvoiceFilter()
 	invFilter.CustomerID = tx.CustomerID
 	invFilter.Currency = tx.Currency // wallets are per-currency
@@ -520,11 +516,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		}
 	}
 
-	// Track the credit's remaining balance in memory across the whole pass (both phases) instead of
-	// re-reading the transaction from the DB before every invoice. DebitWallet independently
-	// re-validates the real balance under its own wallet-level lock before every debit, so a stale
-	// local value can only ever make us request too much - which DebitWallet rejects, and that invoice
-	// is skipped like any other per-invoice failure - never a double-spend.
 	remaining := tx.CreditsAvailable
 	processedIDs := make(map[string]bool, len(phase1))
 	for _, inv := range phase1 {
@@ -545,19 +536,12 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		processedIDs[inv.ID] = true
 	}
 
-	// Phase 2 (fallback, only if credit remains): a subscription's current-period invoice may be
-	// invisible to Phase 1 because its stored AmountRemaining is stale/zero (nothing has recomputed it
-	// today), or because the draft row doesn't exist yet at all (draft creation for a new period can be
-	// lazy). Look up each eligible subscription's current-period draft directly; create one if missing.
 	if remaining.IsPositive() {
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		for _, sub := range subs {
 			if remaining.LessThanOrEqual(decimal.Zero) {
 				break
 			}
-			// A subscription's currency is fixed - any invoice for it (existing or newly created) is
-			// denominated in sub.Currency, so a mismatch here means this wallet's credit can never
-			// legitimately apply to this subscription's invoices.
 			if sub.Currency != tx.Currency {
 				continue
 			}
@@ -565,9 +549,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 			curFilter := types.NewNoLimitInvoiceFilter()
 			curFilter.SubscriptionID = sub.ID
 			curFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
-			// Scope to the subscription's CURRENT period specifically - without this, a stale draft
-			// from an earlier period (or a proration draft) could be picked up instead of the current
-			// period's invoice, and its presence would wrongly suppress the create-if-missing fallback.
 			curFilter.PeriodStartGTE = &sub.CurrentPeriodStart
 			curFilter.PeriodEndLTE = &sub.CurrentPeriodEnd
 			curInvoices, err := s.InvoiceRepo.List(ctx, curFilter)
@@ -583,14 +564,10 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 					continue
 				}
 			} else {
-				// CreateDraftInvoiceForSubscription's own dedup check is scoped to
-				// billing_reason=SUBSCRIPTION_CYCLE only; reaching this branch means the broader
-				// SubscriptionID+Draft lookup above already found nothing under ANY billing reason,
-				// so creating here cannot produce a reason-mismatch duplicate.
 				resp, err := invoiceService.GetOrCreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 				if err != nil {
 					s.Logger.Error(ctx, "pre_expiry_create_draft_failed", "subscription_id", sub.ID, "error", err)
-					continue // best-effort - not guaranteed by a DB constraint, see GetOrCreateDraftInvoiceForSubscription's doc comment
+					continue // best-effort
 				}
 				curInv = &resp.Invoice
 			}
