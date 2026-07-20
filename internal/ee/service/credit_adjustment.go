@@ -476,6 +476,14 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return consumed, nil
 	}
 
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		tenantID = tx.TenantID
+	}
+	if s.Config == nil || !s.Config.FeatureFlag.IsPreExpiryCreditConsumptionEnabled(tenantID) {
+		return consumed, nil
+	}
+
 	subFilter := types.NewNoLimitSubscriptionFilter()
 	subFilter.CustomerID = tx.CustomerID
 	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}

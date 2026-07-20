@@ -207,7 +207,8 @@ type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 
-	// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices. Returns amount consumed.
+	// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices for
+	// tenants enabled via feature_flag.pre_expiry_credit_consumption_*. Returns amount consumed.
 	ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error)
 }
 

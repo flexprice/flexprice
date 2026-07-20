@@ -387,6 +387,11 @@ feature_flag:
   #   disabled_tenants > enabled_tenants > global enable_* flag above.
   meter_usage_for_billing_enabled_tenants: []
   meter_usage_for_billing_disabled_tenants: []
+  # Apply about-to-expire wallet credits into draft invoices before expiry. Global off by default;
+  # roll out tenant-by-tenant via enabled_tenants (same resolution order as meter-usage above).
+  enable_pre_expiry_credit_consumption: false
+  pre_expiry_credit_consumption_enabled_tenants: []
+  pre_expiry_credit_consumption_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:

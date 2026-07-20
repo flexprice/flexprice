@@ -578,6 +578,13 @@ type FeatureFlagConfig struct {
 	//   3. global flag above — applies to everyone else
 	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
 	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
+
+	// Pre-expiry credit consumption: apply about-to-expire wallet credits into draft invoices
+	// before the remainder is expired. Default global off; roll out via enabled_tenants.
+	EnablePreExpiryCreditConsumption bool `mapstructure:"enable_pre_expiry_credit_consumption" validate:"omitempty"`
+	// Per-tenant overrides. Resolution order: disabled_tenants > enabled_tenants > global flag.
+	PreExpiryCreditConsumptionEnabledTenants  []string `mapstructure:"pre_expiry_credit_consumption_enabled_tenants" validate:"omitempty"`
+	PreExpiryCreditConsumptionDisabledTenants []string `mapstructure:"pre_expiry_credit_consumption_disabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
@@ -587,15 +594,21 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool 
 		tenantID,
 		c.EnableMeterUsageForBilling,
 		c.MeterUsageForBillingEnabledTenants,
-		c.MeterUsageForBillingDisabledTenants,
 	)
 }
 
-func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants, disabledTenants []string) bool {
+// IsPreExpiryCreditConsumptionEnabled resolves whether pre-expiry credit
+// consumption into draft invoices is enabled for a tenant.
+func (c *FeatureFlagConfig) IsPreExpiryCreditConsumptionEnabled(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnablePreExpiryCreditConsumption,
+		c.PreExpiryCreditConsumptionEnabledTenants,
+	)
+}
+
+func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants []string) bool {
 	if tenantID != "" {
-		if slices.Contains(disabledTenants, tenantID) {
-			return false
-		}
 		if slices.Contains(enabledTenants, tenantID) {
 			return true
 		}
