@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -520,18 +519,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 			phase1 = append(phase1, inv)
 		}
 	}
-
-	// Most-recent period first so scarce credit prefers the current billing period.
-	sort.SliceStable(phase1, func(i, j int) bool {
-		a, b := phase1[i].PeriodStart, phase1[j].PeriodStart
-		if a == nil {
-			return false
-		}
-		if b == nil {
-			return true
-		}
-		return a.After(*b)
-	})
 
 	// Track the credit's remaining balance in memory across the whole pass (both phases) instead of
 	// re-reading the transaction from the DB before every invoice. DebitWallet independently

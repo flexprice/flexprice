@@ -2423,19 +2423,20 @@ func (s *WalletServiceSuite) createDraftSubInvoiceWithUsageLineItemForExpiry(id,
 
 	periodEnd := periodStart.Add(30 * 24 * time.Hour)
 	inv := &invoice.Invoice{
-		ID:             id,
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(subID),
-		Currency:       currency,
-		Subtotal:       amount,
-		Total:          amount,
-		AmountDue:      amount,
-		InvoiceType:    types.InvoiceTypeOneOff,
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		PeriodStart:    lo.ToPtr(periodStart),
-		PeriodEnd:      lo.ToPtr(periodEnd),
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
-		LineItems:      []*invoice.InvoiceLineItem{li},
+		ID:              id,
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subID),
+		Currency:        currency,
+		Subtotal:        amount,
+		Total:           amount,
+		AmountDue:       amount,
+		AmountRemaining: amount, // required: ConsumeExpiringCreditIntoInvoices filters AmountRemainingGt=0
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(periodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
 	}
 
 	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))

@@ -402,18 +402,17 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return false, nil
 	}
 
-	// check if the sub is of type inherited and if so, skip computation
-	if inv.SubscriptionID == nil {
-		return false, nil
-	}
-
-	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
-	if err != nil {
-		return false, err
-	}
-	if sub.SubscriptionType == types.SubscriptionTypeInherited ||
-		sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
-		return true, nil
+	// Skip computation for inherited / grouped-invoicing subscriptions — their charges
+	// are rolled into the parent invoice. One-off invoices (no SubscriptionID) continue.
+	if inv.SubscriptionID != nil {
+		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return false, err
+		}
+		if sub.SubscriptionType == types.SubscriptionTypeInherited ||
+			sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+			return true, nil
+		}
 	}
 
 	// 2. Compute the request OUTSIDE the lock (expensive for subscription invoices).
