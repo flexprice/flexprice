@@ -1248,31 +1248,90 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 }
 
 // TestConsumeExpiringCreditIntoInvoices_Phase2SkipsAlreadyProcessedInvoice proves Phase 2 does not
-// re-process an invoice Phase 1 already found and applied credit to, even when Phase 1 only partially
-// drained the credit and Phase 2 runs. A second, untouched subscription proves Phase 2 DID run (it
-// still gets its share) - just not against the already-processed invoice.
+// re-process an invoice Phase 1 already found and applied credit to. Invoice A is found and fully
+// applied by Phase 1, but credit remains afterward, so Phase 2 actually runs - and its own
+// SubscriptionID+Draft+period lookup for subA's current period RE-FINDS invoice A (its period is
+// aligned with subA's current period), which must be skipped via the processedIDs dedup rather than
+// re-applied. Invoice B (stale AmountRemaining, invisible to Phase 1) is genuinely found and applied by
+// Phase 2, proving Phase 2 did run and dedup isn't just a no-op from Phase 2 never firing.
 func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2SkipsAlreadyProcessedInvoice() {
+	pt := string(types.PRICE_TYPE_USAGE)
+
 	subA := s.createActiveStandaloneSubscription("sub_dedup_a", "USD")
-	invA := s.createDraftSubInvoiceWithUsageLineItem("inv_dedup_a", "USD", decimal.NewFromInt(30), subA.ID, s.GetNow())
+	liA := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        "inv_dedup_a",
+		CustomerID:       s.testData.customer.ID,
+		Amount:           decimal.NewFromInt(20),
+		Currency:         "USD",
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+	invA := &invoice.Invoice{
+		ID:              "inv_dedup_a",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subA.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(20),
+		Total:           decimal.NewFromInt(20),
+		AmountDue:       decimal.NewFromInt(20),
+		AmountRemaining: decimal.NewFromInt(20), // found by Phase 1 directly
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(subA.CurrentPeriodStart), // aligned so Phase 2's lookup re-finds it
+		PeriodEnd:       lo.ToPtr(subA.CurrentPeriodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{liA},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), invA))
 
 	subB := s.createActiveStandaloneSubscription("sub_dedup_b", "USD")
-	invB := s.createDraftSubInvoiceWithUsageLineItem("inv_dedup_b", "USD", decimal.NewFromInt(30), subB.ID, s.GetNow().Add(-1*time.Hour))
+	liB := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        "inv_dedup_b",
+		CustomerID:       s.testData.customer.ID,
+		Amount:           decimal.NewFromInt(30),
+		Currency:         "USD",
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+	invB := &invoice.Invoice{
+		ID:              "inv_dedup_b",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subB.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(30),
+		Total:           decimal.NewFromInt(30),
+		AmountDue:       decimal.NewFromInt(30),
+		AmountRemaining: decimal.Zero, // stale - invisible to Phase 1, forcing Phase 2 to find it
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(subB.CurrentPeriodStart),
+		PeriodEnd:       lo.ToPtr(subB.CurrentPeriodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{liB},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), invB))
 
 	w := s.createWalletWithCredit("wallet_dedup", "USD", decimal.Zero)
 	pastExpiry := s.GetNow().Add(-time.Hour)
-	source := s.createWalletCredit(w.ID, decimal.NewFromInt(60), &pastExpiry, nil)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
 
 	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
 	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(60).Equal(consumed), "expected 60 consumed across both invoices, got %s", consumed.String())
+	s.True(decimal.NewFromInt(50).Equal(consumed), "expected 50 consumed across both invoices, got %s", consumed.String())
 
 	reloadedA := s.reloadInvoiceWithLineItems(invA.ID)
-	s.True(decimal.NewFromInt(30).Equal(reloadedA.TotalPrepaidCreditsApplied),
-		"invoice A TotalPrepaidCreditsApplied = %s, want 30 (applied exactly once)", reloadedA.TotalPrepaidCreditsApplied.String())
+	s.True(decimal.NewFromInt(20).Equal(reloadedA.TotalPrepaidCreditsApplied),
+		"invoice A TotalPrepaidCreditsApplied = %s, want 20 (applied once by Phase 1, not re-applied by Phase 2)", reloadedA.TotalPrepaidCreditsApplied.String())
 
 	reloadedB := s.reloadInvoiceWithLineItems(invB.ID)
 	s.True(decimal.NewFromInt(30).Equal(reloadedB.TotalPrepaidCreditsApplied),
-		"invoice B TotalPrepaidCreditsApplied = %s, want 30", reloadedB.TotalPrepaidCreditsApplied.String())
+		"invoice B TotalPrepaidCreditsApplied = %s, want 30 (found and applied by Phase 2)", reloadedB.TotalPrepaidCreditsApplied.String())
 }
 
 // TestConsumeExpiringCreditIntoInvoices_NonEligibleSubscriptionTypesUntouched proves delegated_invoicing,
