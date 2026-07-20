@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -366,9 +367,8 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 // selection would exclude this credit anyway (FindEligibleCredits excludes any credit whose expiry has
 // already passed - exactly the population pre-expiry processes).
 //
-// The invoice-level total is set in memory only; the CALLER must persist the invoice's own Total/AmountDue
-// fields (this function DOES persist every line item's PrepaidCreditsApplied itself, unconditionally,
-// whether or not a new debit was made - see the Task 4 lesson above for why that matters).
+// Persists line-item PrepaidCreditsApplied and the invoice's TotalPrepaidCreditsApplied / Total /
+// AmountDue / AmountRemaining in one transaction.
 func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (*dto.CreditAdjustmentResult, error) {
 	if len(inv.LineItems) == 0 {
 		return &dto.CreditAdjustmentResult{
@@ -403,7 +403,7 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 	// Always enter the transaction and persist every line item - even when there's no NEW credit to debit
 	// (amountToApply may be zero), spreadPrepaidCreditsAcrossLineItems below may still change per-line
 	// values relative to what's currently in the DB (e.g. after a recompute reset them), and those must be
-	// persisted regardless of whether a debit happens. See the Task 4 lesson above.
+	// persisted regardless of whether a debit happens.
 	var result *dto.CreditAdjustmentResult
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if amountToApply.GreaterThan(decimal.Zero) {
@@ -442,15 +442,19 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 		}
 
 		totalApplied := spreadPrepaidCreditsAcrossLineItems(inv)
-
-		// Persist re-derived per-line values. totalApplied may be less than the prior authority when
-		// ceilings shrank (e.g. after recompute) — keep the invoice-level total in sync with lines.
 		for _, li := range inv.LineItems {
 			if err := s.InvoiceLineItemRepo.Update(ctx, li); err != nil {
 				return err
 			}
 		}
+
 		inv.TotalPrepaidCreditsApplied = totalApplied
+		inv.Total = decimal.Max(decimal.Zero, inv.Subtotal.Sub(inv.TotalDiscount).Sub(totalApplied).Add(inv.TotalTax))
+		inv.AmountDue = inv.Total
+		inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+		if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
+			return err
+		}
 
 		result = &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalApplied,
@@ -501,6 +505,18 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return consumed, err
 	}
 
+	// Most-recent period first so scarce credit prefers the current billing period.
+	sort.SliceStable(invoices, func(i, j int) bool {
+		a, b := invoices[i].PeriodStart, invoices[j].PeriodStart
+		if a == nil {
+			return false
+		}
+		if b == nil {
+			return true
+		}
+		return a.After(*b)
+	})
+
 	// Track the credit's remaining balance in memory across the pass instead of re-reading the
 	// transaction from the DB before every invoice. DebitWallet independently re-validates the real
 	// balance under its own wallet-level lock before every debit, so a stale local value can only
@@ -530,7 +546,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 // consumeExpiringCreditIntoInvoice recomputes a draft invoice and applies available credit under a per-invoice lock.
 // Returns how much was newly applied.
 func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (decimal.Decimal, error) {
-
 	lockKey := cache.GenerateKey(ctx, cache.PrefixPrepaidCreditApplyLock, inv.ID)
 	lock, err := s.Locker.AcquireLock(ctx, lockKey, cache.ExpiryPrepaidCreditApplyLock)
 	if err != nil {
@@ -543,17 +558,20 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 	defer func() { _ = lock.Release(ctx) }()
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
-
 	skipped, err := invoiceService.ComputeInvoice(ctx, inv.ID, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	// A zero-usage recompute marks the invoice SKIPPED - nothing left to apply credit to, so there's no point fetching it just to discover that
+	// A zero-usage recompute marks the invoice SKIPPED — nothing left to apply credit to.
 	if skipped {
 		return decimal.Zero, nil
 	}
 
-	// ComputeInvoice above and this point; only DRAFT invoices are eligible.
+	// Reload after compute so Subtotal/discounts/tax match what we net prepaid against.
+	inv, err = s.InvoiceRepo.Get(ctx, inv.ID)
+	if err != nil {
+		return decimal.Zero, err
+	}
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
 		return decimal.Zero, ierr.NewError("invoice is not draft").
 			WithHint("Only draft invoices can be consumed into").
@@ -568,29 +586,9 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 	}
 	inv.LineItems = lineItems
 
-	var newlyApplied decimal.Decimal
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-
-		// Another process (finalize, a payment) may have changed this invoice's status between
-
-		result, err := s.applyExpiringCreditToInvoice(ctx, inv, tx)
-		if err != nil {
-			return err
-		}
-
-		newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied).Add(inv.TotalTax)
-		if newTotal.IsNegative() {
-			newTotal = decimal.Zero
-		}
-		inv.Total = newTotal
-		inv.AmountDue = inv.Total
-		inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
-
-		newlyApplied = result.AmountApplied
-		return s.InvoiceRepo.Update(ctx, inv)
-	})
+	result, err := s.applyExpiringCreditToInvoice(ctx, inv, tx)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	return newlyApplied, nil
+	return result.AmountApplied, nil
 }
