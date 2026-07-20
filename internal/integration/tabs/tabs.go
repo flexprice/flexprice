@@ -136,7 +136,7 @@ func (s *InvoiceService) SyncInvoiceToTabs(ctx context.Context, req TabsInvoiceS
 
 	// Find the Tabs invoice generated from the obligations (by contract + issue date).
 	issueDate := lo.FromPtr(inv.IssueDate)
-	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, issueDate.Format(tabsDateLayout))
+	tabsInvoiceID, err := s.fetchTabsInvoiceID(ctx, tabsContractID, issueDate.Format(time.DateOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -717,10 +717,10 @@ func (s *InvoiceService) fetchTabsInvoiceID(ctx context.Context, contractID stri
 // buildObligation maps an aggregated category's resolved fields to a Tabs obligation request.
 func buildObligation(billingStartDate time.Time, productID string, cadence types.InvoiceCadence, total decimal.Decimal, serviceStart, serviceEnd time.Time) CreateObligationRequest {
 	return CreateObligationRequest{
-		ServiceStartDate: serviceStart.Format(tabsDateLayout),
-		ServiceEndDate:   serviceEnd.Format(tabsDateLayout),
+		ServiceStartDate: serviceStart.Format(time.DateOnly),
+		ServiceEndDate:   serviceEnd.Format(time.DateOnly),
 		BillingSchedule: BillingSchedule{
-			StartDate:           billingStartDate.Format(tabsDateLayout),
+			StartDate:           billingStartDate.Format(time.DateOnly),
 			InvoiceDateStrategy: invoiceDateStrategy(cadence),
 			IsRecurring:         false,
 			Interval:            "NONE",

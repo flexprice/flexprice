@@ -2,9 +2,6 @@ package tabs
 
 import "time"
 
-// tabsDateLayout is the date format Tabs expects for service/billing dates (YYYY-MM-DD).
-const tabsDateLayout = "2006-01-02"
-
 // tabsInvoiceSyncLockTTL bounds how long a single invoice's sync holds its distributed lock.
 const tabsInvoiceSyncLockTTL = 2 * time.Minute
 
