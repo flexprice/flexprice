@@ -414,3 +414,183 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 		Gateway: gateway,
 	})
 }
+
+// payFirstCheckoutRequest is the shared settlement input for payment-gated flows.
+// Callers create domain intent + DRAFT invoice after guardPendingPayFirstCheckout;
+// startPayFirstCheckout owns session create, fulfill, cleanup, and initiated webhook.
+type payFirstCheckoutRequest struct {
+	customerID    string
+	action        types.CheckoutAction
+	configuration types.CheckoutConfiguration
+	draftInvoice  *invoice.Invoice
+	checkout      *dto.CheckoutParams
+}
+
+// pendingCheckoutConflict describes the AlreadyExists error when a pending session matches.
+type pendingCheckoutConflict struct {
+	message string
+	hint    string
+	details map[string]any
+}
+
+// checkIfAnyCheckoutPending rejects when an initiated/pending session already
+// exists for the same customer + action and matchesPending returns true.
+func (s *checkoutSessionService) checkIfAnyCheckoutPending(
+	ctx context.Context,
+	customerID string,
+	action types.CheckoutAction,
+	matchesPending func(cfg *types.CheckoutConfiguration) bool,
+	conflict pendingCheckoutConflict,
+) error {
+	if matchesPending == nil {
+		return ierr.NewError("matchesPending is required for pay-first concurrent guard").
+			Mark(ierr.ErrInternal)
+	}
+
+	filter := &types.CheckoutSessionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerIDs: []string{customerID},
+		Actions:     []types.CheckoutAction{action},
+		CheckoutStatuses: []types.CheckoutStatus{
+			types.CheckoutStatusInitiated,
+			types.CheckoutStatusPending,
+		},
+	}
+	sessions, err := s.CheckoutSessionRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess == nil {
+			continue
+		}
+		cfg := sess.Configuration.ToCheckoutConfiguration()
+		if !matchesPending(&cfg) {
+			continue
+		}
+		details := map[string]any{"checkout_session_id": sess.ID}
+		for k, v := range conflict.details {
+			details[k] = v
+		}
+		msg := conflict.message
+		if msg == "" {
+			msg = "a pending checkout session already exists"
+		}
+		hint := conflict.hint
+		if hint == "" {
+			hint = "Complete or cancel the existing checkout before starting another payment-gated operation"
+		}
+		return ierr.NewError(msg).
+			WithHint(hint).
+			WithReportableDetails(details).
+			Mark(ierr.ErrAlreadyExists)
+	}
+	return nil
+}
+
+// startPayFirstCheckout creates a checkout session on an existing DRAFT invoice,
+// fulfills payment + provider link, and publishes checkout.session.initiated.
+// On session create failure the draft is archived. On fulfill failure the session is cleaned up.
+// Caller must have already run guardPendingPayFirstCheckout (before creating the draft).
+func (s *checkoutSessionService) startPayFirstCheckout(
+	ctx context.Context,
+	req *payFirstCheckoutRequest,
+) (*dto.CheckoutSessionResponse, error) {
+	if req == nil || req.checkout == nil {
+		return nil, ierr.NewError("pay-first checkout requires checkout params").
+			Mark(ierr.ErrValidation)
+	}
+	if req.draftInvoice == nil || req.draftInvoice.ID == "" {
+		return nil, ierr.NewError("pay-first checkout requires a draft invoice").
+			Mark(ierr.ErrValidation)
+	}
+	if req.customerID == "" {
+		return nil, ierr.NewError("pay-first checkout requires customer_id").
+			Mark(ierr.ErrValidation)
+	}
+
+	providerCfg := &types.CheckoutPaymentProviderConfig{}
+	if req.checkout.PaymentProviderConfig != nil {
+		providerCfg = req.checkout.PaymentProviderConfig
+	}
+	if providerCfg.CollectionMethod == "" {
+		providerCfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+	if err := providerCfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	var meta types.Metadata
+	if len(req.checkout.Metadata) > 0 {
+		meta = types.Metadata(req.checkout.Metadata)
+	}
+
+	draftInvoiceID := req.draftInvoice.ID
+	session := &domainCheckout.CheckoutSession{
+		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:         types.GetEnvironmentID(ctx),
+		CustomerID:            req.customerID,
+		Action:                req.action,
+		CheckoutStatus:        types.CheckoutStatusInitiated,
+		PaymentProvider:       req.checkout.PaymentProvider,
+		Configuration:         domainCheckout.ToJSONBCheckoutConfiguration(req.configuration),
+		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(providerCfg),
+		CheckoutInvoiceID:     &draftInvoiceID,
+		IdempotencyKey:        req.checkout.IdempotencyKey,
+		SuccessURL:            req.checkout.SuccessURL,
+		FailureURL:            req.checkout.FailureURL,
+		CancelURL:             req.checkout.CancelURL,
+		ExpiresAt:             time.Now().UTC().Add(req.checkout.PaymentProvider.SessionExpiry()),
+		Metadata:              meta,
+		BaseModel:             types.GetDefaultBaseModel(ctx),
+	}
+
+	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
+			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
+				"invoice_id", draftInvoiceID,
+				"error", delErr,
+				"original_err", err,
+			)
+		}
+		return nil, err
+	}
+
+	if err := s.fulfillCheckoutSession(ctx, session, req.draftInvoice); err != nil {
+		if cleanupErr := s.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
+			s.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
+				"session_id", session.ID,
+				"error", cleanupErr,
+				"original_err", err,
+			)
+		}
+		return nil, err
+	}
+
+	sessionResp := dto.ToCheckoutSessionResponse(session)
+	s.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
+	return sessionResp, nil
+}
+
+// fulfillCheckoutSession creates the INITIATED payment, calls the provider for a
+// payment link / next action, and marks the session pending.
+func (s *checkoutSessionService) fulfillCheckoutSession(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	inv *invoice.Invoice,
+) error {
+	payResp, err := s.createCheckoutPayment(ctx, inv, session.PaymentProvider)
+	if err != nil {
+		return err
+	}
+	session.CheckoutInvoiceID = &inv.ID
+	session.CheckoutPaymentID = &payResp.ID
+
+	providerResult, err := s.callCheckoutProvider(ctx, session, payResp)
+	if err != nil {
+		return err
+	}
+	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	session.CheckoutStatus = types.CheckoutStatusPending
+	return s.CheckoutSessionRepo.Update(ctx, session)
+}

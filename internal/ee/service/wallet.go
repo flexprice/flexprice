@@ -622,15 +622,37 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		})
 	}
 
-	// Handle special case for purchased credits with invoice
+	// Handle purchased credits with invoice (pay-later / auto-complete, or pay-first checkout).
 	if req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced {
-		// This creates a PENDING wallet transaction and invoice
-		// No wallet balance update happens yet
+		checkoutSvc := &checkoutSessionService{ServiceParams: s.ServiceParams}
+
+		// Opt-in checkout: force pending + DRAFT so credits apply only after payment.
+		if req.Checkout != nil {
+			if err := checkoutSvc.checkIfAnyCheckoutPending(
+				ctx,
+				w.CustomerID,
+				types.CheckoutActionWalletTopup,
+				func(cfg *types.CheckoutConfiguration) bool {
+					return cfg != nil &&
+						cfg.WalletTopupParams != nil &&
+						cfg.WalletTopupParams.WalletID == walletID
+				},
+				pendingCheckoutConflict{
+					message: "a pending checkout session already exists for this wallet",
+					hint:    "Complete or cancel the existing checkout before starting another payment-gated top-up",
+					details: map[string]any{"wallet_id": walletID},
+				},
+			); err != nil {
+				return nil, err
+			}
+		}
+
 		walletTransactionID, invoiceID, err := s.handlePurchasedCreditInvoicedTransaction(
 			ctx,
 			walletID,
 			lo.ToPtr(idempotencyKey),
 			req,
+			req.Checkout != nil,
 		)
 		if err != nil {
 			return nil, err
@@ -641,26 +663,52 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			"wallet_transaction_id", walletTransactionID,
 			"invoice_id", invoiceID,
 			"credits", req.CreditsToAdd.String(),
+			"pay_first", req.Checkout != nil,
 		)
 
-		// Get the wallet transaction
 		tx, err := s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get updated wallet
 		walletResp, err := s.GetWalletByID(ctx, walletID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Return response with transaction, invoice ID, and wallet
-		return &dto.TopUpWalletResponse{
+		resp := &dto.TopUpWalletResponse{
 			WalletTransaction: dto.FromWalletTransaction(tx),
 			InvoiceID:         &invoiceID,
 			Wallet:            walletResp,
-		}, nil
+		}
+
+		if req.Checkout != nil {
+			invoiceSvc := NewInvoiceService(s.ServiceParams)
+			draftInvoice, err := invoiceSvc.GetInvoice(ctx, invoiceID)
+			if err != nil {
+				return nil, err
+			}
+
+			sessionResp, err := checkoutSvc.startPayFirstCheckout(ctx, &payFirstCheckoutRequest{
+				customerID: w.CustomerID,
+				action:     types.CheckoutActionWalletTopup,
+				configuration: types.CheckoutConfiguration{
+					WalletTopupParams: &types.WalletTopupParams{
+						WalletID:            walletID,
+						WalletTransactionID: walletTransactionID,
+					},
+				},
+				draftInvoice: &draftInvoice.Invoice,
+				checkout:     req.Checkout,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			resp.CheckoutSession = sessionResp
+		}
+
+		return resp, nil
 	}
 
 	// Handle direct credit purchase (PURCHASED_CREDIT_DIRECT) or any other transaction reason
@@ -761,7 +809,13 @@ func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time 
 	return &expiry
 }
 
-func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
+func (s *walletService) handlePurchasedCreditInvoicedTransaction(
+	ctx context.Context,
+	walletID string,
+	idempotencyKey *string,
+	req *dto.TopUpWalletRequest,
+	isPayFirst bool,
+) (string, string, error) {
 	// Initialize required services
 	invoiceService := NewInvoiceService(s.ServiceParams)
 	taxService := NewTaxService(s.ServiceParams)
@@ -786,12 +840,14 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		return "", "", err
 	}
 
-	// Check if auto-complete is enabled
-	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction
+	// Check if auto-complete is enabled. Pay-first checkout always forces pending
+	// so credits are not applied before payment succeeds.
+	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction && !isPayFirst
 
 	s.Logger.Debug(ctx, "processing purchased credit transaction",
 		"wallet_id", walletID,
 		"auto_complete_enabled", autoCompleteEnabled,
+		"pay_first", isPayFirst,
 		"credits", req.CreditsToAdd.String(),
 	)
 
@@ -994,14 +1050,26 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			PaymentStatus:    lo.ToPtr(paymentStatus),
 			Metadata:         invoiceMetadata,
 			BillingReason:    req.BillingReason,
-			ForceSyncInvoice: req.ForceSyncInvoice,
+			ForceSyncInvoice: req.ForceSyncInvoice && !isPayFirst,
 			TaxRates:         taxRateIDs,
 		}
-		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create invoice for purchased credits").
-				Mark(ierr.ErrInternal)
+
+		var inv *dto.InvoiceResponse
+		if isPayFirst {
+			// Pay-first: leave DRAFT until checkout complete finalizes + reconciles.
+			inv, err = invoiceService.CreateComputedDraftInvoice(ctx, invReq)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create draft invoice for purchased credits").
+					Mark(ierr.ErrInternal)
+			}
+		} else {
+			inv, err = invoiceService.CreateOneOffInvoice(ctx, invReq)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create invoice for purchased credits").
+					Mark(ierr.ErrInternal)
+			}
 		}
 
 		invoiceID = inv.ID
@@ -1022,6 +1090,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				"wallet_id", walletID,
 				"credits", req.CreditsToAdd.String(),
 				"amount", amount.String(),
+				"invoice_status", inv.InvoiceStatus,
 			)
 		}
 

@@ -37,6 +37,9 @@ type InvoiceService interface {
 	// Additional methods specific to this service
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
+	// CreateComputedDraftInvoice creates a DRAFT invoice and computes amounts/line items
+	// without finalizing. Used by pay-first checkout flows that finalize on payment success.
+	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
@@ -346,6 +349,30 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	return dto.NewInvoiceResponse(inv), nil
+}
+
+// CreateComputedDraftInvoice creates an empty DRAFT invoice and computes line items/amounts
+// without finalizing. Callers that need a payment-gated lock should use this instead of
+// CreateOneOffInvoice / CreateInvoice (which finalize ONE_OFF invoices).
+func (s *invoiceService) CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error) {
+	draftResp, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+	if err != nil {
+		return nil, err
+	}
+
+	computeReq := req.ToComputeRequest()
+	skipped, err := s.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	if err != nil {
+		return nil, err
+	}
+	if skipped {
+		return nil, ierr.NewError("draft invoice was skipped").
+			WithHint("Expected a non-zero invoice amount").
+			WithReportableDetails(map[string]any{"invoice_id": draftResp.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.GetInvoice(ctx, draftResp.ID)
 }
 
 // CreateDraftInvoiceForSubscription creates a zero-dollar draft invoice without line items for a subscription period.
