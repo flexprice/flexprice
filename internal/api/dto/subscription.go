@@ -403,6 +403,14 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Inline children require creating a parent, not attaching under an existing parent.
+	// InvoicingCustomerExternalID is allowed (delegated payer for seat fees).
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with parent_subscription_id").
+			WithHint("grouped_invoicing_children_to_create can only be used when creating a parent subscription").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Validate that no element in SubscriptionsIDsForGroupedInvoicing is empty.
 	for i, id := range c.SubscriptionsIDsForGroupedInvoicing {
 		if id == "" {
