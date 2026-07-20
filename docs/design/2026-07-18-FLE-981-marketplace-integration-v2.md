@@ -571,7 +571,6 @@ gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
 also grant `consumerprocurement.entitlementViewer` (Procurement API read access): Flexprice never
 calls the Procurement API (Section 3.2), so that grant would only widen what our workload can see, for
 no benefit. If a future reconciliation feature ever needs it, add it then, scoped to that feature.
-(This is a deliberate departure from Metronome's setup script, which includes the grant.)
 
 **Step 5 — the trust binding: let the AWS identity from step 2 impersonate the service account.**
 
@@ -995,7 +994,7 @@ actually requires the preceding `check` call, we'd add it back as a pure preflig
 billability gate.
 
 **Open — does GCP/AWS reject a late report by submission time, or by usage timestamp?** Our snapshot window runs 4–10 hours behind real time by design. If GCP enforces a hard cutoff based on how long after the entitlement ended we submit, the last window before a subscription closes could be rejected outright. If instead it only checks that the report's `startTime`/`endTime` fall inside the period the
-entitlement was active, submitting late is fine. The tenant contract (Section 7) mitigates this in
+entitlement was active, submitting late is fine. The tenant contract (Section 8) mitigates this in
 practice, but it's worth confirming GCP's actual rule before launch — it determines whether marketplace
 subscriptions need a shorter buffer than everything else.
 
@@ -1003,23 +1002,7 @@ subscriptions need a shorter buffer than everything else.
 
 
 
-## 10. How this compares to Metronome
-
-Metronome's public GCP integration guide was our starting reference. We match them on the WIF setup
-shape and on the USD-cents model with a fixed `usage_fee` metric at $0.01/unit. We diverge in two
-ways worth noting. First, Metronome tracks a running total per customer and reports "everything accrued
-since the last report," while we snapshot fixed, clock-aligned windows into individual rows — ours is
-more auditable (a stuck window is one identifiable unreported row, not an opaque running total) at the
-cost of a bit more state. Second, we drop the Procurement API IAM grant they include, because unlike
-their design we never call that API. Their prepaid/postpaid/credit invoice rules are specific to
-Metronome's own contract-billing model and don't apply to us — our amount is already fully resolved by
-the time it reaches `usage_records`.
-
----
-
-
-
-## 11. Known gaps
+## 10. Known gaps
 
 - **Stale-record retries.** A row the marketplace will never accept — e.g. the buyer's entitlement
 closed before it could be reported — currently retries forever, because nothing marks a row as
@@ -1034,11 +1017,8 @@ today. Grouping a connection's records per window would cut round-trips; deferre
 
 
 
-## 12. Reference
+## 11. Reference
 
-- Metronome setup script (verbatim gcloud commands): [https://raw.githubusercontent.com/Metronome-Industries/metronome-gcp-marketplace-configuration/main/setup-gcp-marketplace-integration.sh](https://raw.githubusercontent.com/Metronome-Industries/metronome-gcp-marketplace-configuration/main/setup-gcp-marketplace-integration.sh)
-- Metronome GCLOUD_SETUP.md (auth chain narrative): [https://raw.githubusercontent.com/Metronome-Industries/metronome-gcp-marketplace-configuration/main/GCLOUD_SETUP.md](https://raw.githubusercontent.com/Metronome-Industries/metronome-gcp-marketplace-configuration/main/GCLOUD_SETUP.md)
-- Metronome GCP integration guide: [https://docs.metronome.com/integrations/marketplace-integrations/gcp](https://docs.metronome.com/integrations/marketplace-integrations/gcp)
 - `services.report` method reference: [https://docs.cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/services/report](https://docs.cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/services/report)
 - `Operation` object schema (the object inside `operations[]`): [https://docs.cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/Operation](https://docs.cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/Operation)
 - Configuring usage reports (GCP Marketplace side, `usageReportingId` → `consumerId`): [https://docs.cloud.google.com/marketplace/docs/partners/integrated-saas/configure-usage-reports](https://docs.cloud.google.com/marketplace/docs/partners/integrated-saas/configure-usage-reports)
