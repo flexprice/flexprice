@@ -71,9 +71,7 @@ type WalletService interface {
 	// CreditWallet processes a credit operation on a wallet
 	CreditWallet(ctx context.Context, req *wallet.WalletOperation) error
 
-	// ExpireCredits best-effort consumes the credit into the customer's active-subscription draft invoices
-	// before expiring whatever balance remains. Returns AmountConsumedIntoInvoices (how much was applied) and
-	// Expired (whether a remainder was actually debited as expired credit).
+	// ExpireCredits best-effort applies an expiring credit to draft invoices, then expires any remainder.
 	ExpireCredits(ctx context.Context, transactionID string) (*types.ExpireCreditsResult, error)
 
 	// conversion rate operations
@@ -2193,8 +2191,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Consume the expiring credit against the customer's active-subscription draft invoices before
-	// expiring whatever remains. Best-effort: consumption failures must never block expiry.
+	// Best-effort: apply expiring credit to draft invoices; failures must not block expiry.
 	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
 	consumed, cerr := creditAdjustmentService.ConsumeExpiringCreditIntoInvoices(ctx, tx)
 	if cerr != nil {
@@ -2202,18 +2199,17 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		consumed = decimal.Zero
 	}
 
-	// Re-read: consumption may have drawn down the credit's available amount.
+	// Re-read in case consumption drew down available credits.
 	tx, err = s.WalletRepo.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		return nil, err
 	}
 	if tx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
-		// Fully consumed into invoices; nothing left to expire.
 		s.Logger.Info(ctx, "pre_expiry_fully_consumed", "transaction_id", tx.ID, "amount_consumed", consumed)
 		return &types.ExpireCreditsResult{Expired: false}, nil
 	}
 
-	// Create a debit operation for the remaining expired credits
+	// Debit whatever remains as expired credit.
 	debitReq := &wallet.WalletOperation{
 		WalletID:          tx.WalletID,
 		ParentCreditTxID:  tx.ID,
