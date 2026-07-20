@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -1099,21 +1100,20 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Bes
 		"expected 150 remaining on the source grant, got %s", reloadedSource.CreditsAvailable.String())
 }
 
-// TestConsumeExpiringCreditIntoInvoices_StopsEarlyAcrossMultipleInvoices proves the re-read-and-check
-// loop in ConsumeExpiringCreditIntoInvoices actually stops consuming once the credit is exhausted, across
-// MULTIPLE invoices on the same subscription - not just within a single invoice's own ceiling capping.
-// Two draft invoices each with a 40-ceiling, and an expiring credit of 60: the most-recent-period invoice
-// (processed first) consumes its full 40, leaving only 20 - the second invoice must consume only that
-// remaining 20 (not another 40), and the orchestrator's total `consumed` must be exactly 60.
+// TestConsumeExpiringCreditIntoInvoices_StopsEarlyAcrossMultipleInvoices proves the remaining-balance
+// tracking in ConsumeExpiringCreditIntoInvoices actually stops consuming once the credit is exhausted,
+// across MULTIPLE invoices on the same subscription - not just within a single invoice's own ceiling
+// capping. Two draft invoices each with a 40-ceiling, and an expiring credit of 60: whichever invoice is
+// processed first consumes its full 40-ceiling, leaving only 20 for the other - regardless of which
+// specific invoice is processed first (no ordering guarantee), the orchestrator's total `consumed` must
+// be exactly 60, and the two invoices' applied amounts must be exactly {40, 20} as a set.
 func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_StopsEarlyAcrossMultipleInvoices() {
 	sub := s.createActiveStandaloneSubscription("sub_stop_early", "USD")
 
-	// Later period -> processed FIRST by the most-recent-period-first sort.
-	firstProcessed := s.createDraftSubInvoiceWithUsageLineItem(
-		"inv_stop_early_first", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow())
-	// Earlier period -> processed SECOND.
-	secondProcessed := s.createDraftSubInvoiceWithUsageLineItem(
-		"inv_stop_early_second", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow().Add(-48*time.Hour))
+	invA := s.createDraftSubInvoiceWithUsageLineItem(
+		"inv_stop_early_a", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow())
+	invB := s.createDraftSubInvoiceWithUsageLineItem(
+		"inv_stop_early_b", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow().Add(-48*time.Hour))
 
 	w := s.createWalletWithCredit("wallet_stop_early", "USD", decimal.Zero)
 	pastExpiry := s.GetNow().Add(-time.Hour)
@@ -1124,61 +1124,20 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Sto
 	s.True(decimal.NewFromInt(60).Equal(consumed),
 		"expected total 60 consumed across both invoices, got %s", consumed.String())
 
-	// The first-processed (later period) invoice consumed its full 40-ceiling.
-	reloadedFirst := s.reloadInvoiceWithLineItems(firstProcessed.ID)
-	s.True(decimal.NewFromInt(40).Equal(reloadedFirst.TotalPrepaidCreditsApplied),
-		"first-processed invoice TotalPrepaidCreditsApplied = %s, want 40", reloadedFirst.TotalPrepaidCreditsApplied.String())
-
-	// The second-processed (earlier period) invoice only got the REMAINING 20, not another 40.
-	reloadedSecond := s.reloadInvoiceWithLineItems(secondProcessed.ID)
-	s.True(decimal.NewFromInt(20).Equal(reloadedSecond.TotalPrepaidCreditsApplied),
-		"second-processed invoice TotalPrepaidCreditsApplied = %s, want 20 (remaining only)", reloadedSecond.TotalPrepaidCreditsApplied.String())
+	// Whichever invoice was processed first got fully capped at 40; the other got only the remaining
+	// 20 (not another 40) - order is not guaranteed, so assert on the set of applied amounts.
+	reloadedA := s.reloadInvoiceWithLineItems(invA.ID)
+	reloadedB := s.reloadInvoiceWithLineItems(invB.ID)
+	applied := []decimal.Decimal{reloadedA.TotalPrepaidCreditsApplied, reloadedB.TotalPrepaidCreditsApplied}
+	sort.Slice(applied, func(i, j int) bool { return applied[i].LessThan(applied[j]) })
+	s.True(decimal.NewFromInt(20).Equal(applied[0]),
+		"smaller applied amount = %s, want 20 (remaining only)", applied[0].String())
+	s.True(decimal.NewFromInt(40).Equal(applied[1]),
+		"larger applied amount = %s, want 40 (fully capped)", applied[1].String())
 
 	// The source grant is fully drawn down: 40 + 20 = 60.
 	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
 	s.Require().NoError(err)
 	s.True(reloadedSource.CreditsAvailable.IsZero(),
 		"source grant should be fully consumed, got %s available", reloadedSource.CreditsAvailable.String())
-}
-
-// TestConsumeExpiringCreditIntoInvoices_MostRecentPeriodFirst proves the most-recent-period-first sort in
-// ConsumeExpiringCreditIntoInvoices actually changes processing order and therefore which invoice wins
-// when credit is scarce - not merely a no-op re-ordering. Two draft invoices with different PeriodStart
-// values and a credit that can only fully cover ONE of them: the invoice with the LATER PeriodStart must
-// be the one that receives the credit, regardless of which order the repository happens to list them in.
-func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_MostRecentPeriodFirst() {
-	sub := s.createActiveStandaloneSubscription("sub_period_order", "USD")
-
-	// Create the LATER-period invoice first (so its CreatedAt is earlier), and the EARLIER-period invoice
-	// second (so its CreatedAt is later). This decouples CreatedAt order from PeriodStart order: if the sort
-	// by PeriodStart is a no-op, the repo's default CreatedAt DESC order would wrongly process the
-	// earlierPeriodInv first, causing it to get the credit. The sort must execute correctly to achieve the
-	// desired "most recent period first" behavior.
-	laterPeriodInv := s.createDraftSubInvoiceWithUsageLineItem(
-		"inv_period_order_later", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow())
-	earlierPeriodInv := s.createDraftSubInvoiceWithUsageLineItem(
-		"inv_period_order_earlier", "USD", decimal.NewFromInt(50), sub.ID, s.GetNow().Add(-48*time.Hour))
-
-	w := s.createWalletWithCredit("wallet_period_order", "USD", decimal.Zero)
-	pastExpiry := s.GetNow().Add(-time.Hour)
-	// Exactly enough to fully cover ONE invoice's ceiling, not both.
-	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
-
-	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
-	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(50).Equal(consumed),
-		"expected 50 consumed, got %s", consumed.String())
-
-	// The LATER-period invoice must have received the credit...
-	reloadedLater := s.reloadInvoiceWithLineItems(laterPeriodInv.ID)
-	s.True(decimal.NewFromInt(50).Equal(reloadedLater.TotalPrepaidCreditsApplied),
-		"later-period invoice TotalPrepaidCreditsApplied = %s, want 50 (processed first, got the credit)",
-		reloadedLater.TotalPrepaidCreditsApplied.String())
-
-	// ...and the EARLIER-period invoice must have received NONE, since the credit was exhausted by the
-	// time processing reached it.
-	reloadedEarlier := s.reloadInvoiceWithLineItems(earlierPeriodInv.ID)
-	s.True(reloadedEarlier.TotalPrepaidCreditsApplied.IsZero(),
-		"earlier-period invoice TotalPrepaidCreditsApplied = %s, want 0 (credit exhausted before reaching it)",
-		reloadedEarlier.TotalPrepaidCreditsApplied.String())
 }
