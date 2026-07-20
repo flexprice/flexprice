@@ -8639,3 +8639,138 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	s.True(decimal.NewFromInt(100).Equal(resp.LatestInvoice.Total),
 		"expected consolidated invoice total 100 (parent 50 + 1 seat 50), got %s", resp.LatestInvoice.Total.String())
 }
+
+// setupParentPlatformFeePlan creates a plan with a single $30/month ADVANCE recurring fixed
+// price, deliberately distinct in amount from setupSeatFeePlan's $50 seat fee, so line-item-level
+// tests can't pass by coincidence of equal amounts.
+func (s *SubscriptionServiceSuite) setupParentPlatformFeePlan() *plan.Plan {
+	ctx := s.GetContext()
+	parentPlan := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Org Platform Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, parentPlan))
+
+	platformFee := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           parentPlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, platformFee))
+	return parentPlan
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_OpeningInvoiceLineItems verifies, at
+// the line-item level (not just the total), that the parent's opening invoice contains the
+// parent's own ADVANCE charge AND each child's ADVANCE charge — each correctly attributed to its
+// originating subscription via SubscriptionID and (for children) the child-customer metadata key
+// the grouped-invoicing merge in PrepareSubscriptionInvoiceRequest sets
+// (billing.go:1570-1577). Parent and children use different plans/amounts (30 vs 50 x 2) so the
+// assertions can't pass by coincidence of equal totals.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_OpeningInvoiceLineItems() {
+	ctx := s.GetContext()
+	parentPlan := s.setupParentPlatformFeePlan()
+	seatPlan := s.setupSeatFeePlan()
+
+	seat1External := "ext_seat_li_1"
+	seat1 := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seat1External,
+		Name:       "Seat LI 1",
+		Email:      "seatli1@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat1))
+
+	seat2External := "ext_seat_li_2"
+	seat2 := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seat2External,
+		Name:       "Seat LI 2",
+		Email:      "seatli2@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat2))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             parentPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seat1External},
+				{PlanID: seatPlan.ID, ExternalCustomerID: seat2External},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+
+	// Total = parent's 30 platform fee + 2 x 50 seat fee = 130.
+	s.True(decimal.NewFromInt(130).Equal(resp.LatestInvoice.Total),
+		"expected consolidated invoice total 130 (parent 30 + 2 seats x 50), got %s", resp.LatestInvoice.Total.String())
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 2)
+	childCustomerIDByChildID := map[string]string{
+		children[0].ID: children[0].CustomerID,
+		children[1].ID: children[1].CustomerID,
+	}
+
+	// Exactly one line item per subscription (parent + 2 children) — every ADVANCE charge shows
+	// up exactly once, none duplicated, none missing.
+	s.Require().Len(resp.LatestInvoice.LineItems, 3,
+		"expected exactly 3 line items: 1 from the parent, 1 from each of the 2 children")
+
+	var parentLineItemAmount decimal.Decimal
+	var parentLineItemFound bool
+	childLineItemAmounts := map[string]decimal.Decimal{}
+
+	for _, li := range resp.LatestInvoice.LineItems {
+		s.Require().NotNil(li.SubscriptionID, "every merged line item must carry a subscription_id")
+		switch *li.SubscriptionID {
+		case resp.ID:
+			parentLineItemFound = true
+			parentLineItemAmount = li.Amount
+		default:
+			childCustomerID, isChild := childCustomerIDByChildID[*li.SubscriptionID]
+			s.Require().True(isChild, "line item subscription_id %s is neither the parent nor a known child", *li.SubscriptionID)
+			childLineItemAmounts[*li.SubscriptionID] = li.Amount
+			// The grouped-invoicing merge tags each forwarded child line item with the
+			// child's customer ID under this metadata key (billing.go:1576).
+			s.Equal(childCustomerID, li.Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID],
+				"child line item must be tagged with its own customer_id, not the parent's")
+		}
+	}
+
+	s.True(parentLineItemFound, "parent's own ADVANCE line item must be present in the opening invoice")
+	s.True(decimal.NewFromInt(30).Equal(parentLineItemAmount),
+		"expected parent's own line item amount 30, got %s", parentLineItemAmount.String())
+
+	s.Require().Len(childLineItemAmounts, 2, "expected one line item per child")
+	for childID, amount := range childLineItemAmounts {
+		s.True(decimal.NewFromInt(50).Equal(amount),
+			"expected child %s line item amount 50, got %s", childID, amount.String())
+	}
+}
