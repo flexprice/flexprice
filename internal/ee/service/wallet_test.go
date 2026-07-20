@@ -107,6 +107,9 @@ func (s *WalletServiceSuite) setupService() {
 		AddonRepo:                    stores.AddonRepo,
 		CreditGrantRepo:              stores.CreditGrantRepo,
 		Locker:                       s.GetLocker(),
+		TaxAssociationRepo:           stores.TaxAssociationRepo,
+		TaxRateRepo:                  stores.TaxRateRepo,
+		TaxAppliedRepo:               stores.TaxAppliedRepo,
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
@@ -2617,6 +2620,9 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		TaxAssociationRepo:       stores.TaxAssociationRepo,
+		TaxRateRepo:              stores.TaxRateRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
 	})
 }
 
@@ -2854,6 +2860,9 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		TaxAssociationRepo:       stores.TaxAssociationRepo,
+		TaxRateRepo:              stores.TaxRateRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
 	})
 }
 
