@@ -440,21 +440,17 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Create opening invoice for eligible statuses (trial conversion invoice is created at trial end).
-	// Grouped_invoicing / inherited skip; charges for grouped children land on the parent.
-	eligibleStatusesForOpeningInvoice := []types.SubscriptionStatus{
-		types.SubscriptionStatusIncomplete,
-		types.SubscriptionStatusActive,
-	}
-
-	eligibleTypesForOpeningInvoice := []types.SubscriptionType{
-		types.SubscriptionTypeStandalone,
-		types.SubscriptionTypeParent,
-		types.SubscriptionTypeDelegatedInvoicing,
-	}
-
-	if lo.Contains(eligibleStatusesForOpeningInvoice, sub.SubscriptionStatus) &&
-		lo.Contains(eligibleTypesForOpeningInvoice, sub.SubscriptionType) {
+	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
+	// Grouped-invoicing children created inline (SubscriptionType pre-set internally by
+	// createGroupedInvoicingChildren) skip their own opening invoice — their charges are
+	// folded into the parent's invoice via the existing Parent-type merge in
+	// PrepareSubscriptionInvoiceRequest. This condition is intentionally minimal: it only adds
+	// the GroupedInvoicing exclusion on top of the pre-existing status check, so every other
+	// subscription type (Standalone, Parent, Inherited, DelegatedInvoicing) keeps its existing
+	// invoicing behavior unchanged.
+	if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
+		sub.SubscriptionStatus != types.SubscriptionStatusTrialing &&
+		sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
 		createReq := &dto.CreateSubscriptionInvoiceRequest{
