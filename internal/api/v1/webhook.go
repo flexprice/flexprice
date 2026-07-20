@@ -1205,7 +1205,9 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
 	if tenantID == "" || environmentID == "" {
-		h.logger.Info(context.Background(), "missing tenant_id or environment_id in Whop webhook URL")
+		h.logger.Info(context.Background(), "missing tenant_id or environment_id in Whop webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
 		return
 	}
 
@@ -1217,6 +1219,13 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	var event whopwebhook.WhopWebhookEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
+		return
+	}
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
@@ -1224,19 +1233,44 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		return
 	}
 
-	signature := c.GetHeader("X-Whop-Signature")
-	if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
-		h.logger.Error(context.Background(), "Whop webhook signature verification failed",
-			"error", err,
-			"tenant_id", tenantID,
-			"environment_id", environmentID)
+	// Get connection to check if webhook secret is configured
+	conn, err := whopIntegration.Client.GetConnection(ctx)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to get Whop connection", "error", err)
 		return
 	}
 
-	var event whopwebhook.WhopWebhookEvent
-	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
-		return
+	// Check if webhook secret is configured in FlexPrice
+	hasWebhookSecretConfigured := conn.EncryptedSecretData.Whop != nil &&
+		conn.EncryptedSecretData.Whop.WebhookSecret != ""
+
+	// Verify X-Whop-Signature if configured (same optional-secret pattern as Moyasar)
+	if hasWebhookSecretConfigured {
+		signature := c.GetHeader("X-Whop-Signature")
+		if signature == "" {
+			h.logger.Info(context.Background(), "Whop webhook secret configured but X-Whop-Signature header missing - rejecting request",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+
+		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
+			h.logger.Info(context.Background(), "Whop webhook signature verification failed - rejecting request",
+				"error", err,
+				"tenant_id", tenantID,
+				"environment_id", environmentID,
+				"note", "signature does not match configured webhook_secret")
+			return
+		}
+
+		h.logger.Info(context.Background(), "Whop webhook signature verified successfully",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	} else {
+		// No webhook secret configured - allow with warning
+		h.logger.Info(context.Background(), "Whop webhook received without secret verification",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
 	}
 
 	h.logger.Info(context.Background(), "received Whop webhook",
