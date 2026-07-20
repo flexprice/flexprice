@@ -495,11 +495,15 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	if len(subs) == 0 {
 		return consumed, nil
 	}
+	eligibleSubIDs := make(map[string]bool, len(subs))
+	for _, sub := range subs {
+		eligibleSubIDs[sub.ID] = true
+	}
 
-	// Query directly for invoices that can actually absorb credit - draft, same currency as the
-	// wallet, and still owing something - instead of enumerating each subscription's invoices
-	// individually. Eligibility here is defined by invoice state, so this stays correct unchanged
-	// even if a future flow pre-creates draft invoices ahead of time.
+	// Phase 1 (fast path): query directly for invoices that can actually absorb credit - draft, same
+	// currency as the wallet, and still owing something - instead of enumerating each subscription's
+	// invoices individually. Eligibility here is defined by invoice state, so this stays correct
+	// unchanged even if a future flow pre-creates draft invoices ahead of time.
 	invFilter := types.NewNoLimitInvoiceFilter()
 	invFilter.CustomerID = tx.CustomerID
 	invFilter.Currency = tx.Currency // wallets are per-currency
@@ -510,9 +514,16 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return consumed, err
 	}
 
+	phase1 := make([]*invoice.Invoice, 0, len(invoices))
+	for _, inv := range invoices {
+		if inv.SubscriptionID != nil && eligibleSubIDs[*inv.SubscriptionID] {
+			phase1 = append(phase1, inv)
+		}
+	}
+
 	// Most-recent period first so scarce credit prefers the current billing period.
-	sort.SliceStable(invoices, func(i, j int) bool {
-		a, b := invoices[i].PeriodStart, invoices[j].PeriodStart
+	sort.SliceStable(phase1, func(i, j int) bool {
+		a, b := phase1[i].PeriodStart, phase1[j].PeriodStart
 		if a == nil {
 			return false
 		}
@@ -522,9 +533,14 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return a.After(*b)
 	})
 
-	// Track remaining in memory; DebitWallet re-validates the real balance before each debit.
+	// Track the credit's remaining balance in memory across the whole pass (both phases) instead of
+	// re-reading the transaction from the DB before every invoice. DebitWallet independently
+	// re-validates the real balance under its own wallet-level lock before every debit, so a stale
+	// local value can only ever make us request too much - which DebitWallet rejects, and that invoice
+	// is skipped like any other per-invoice failure - never a double-spend.
 	remaining := tx.CreditsAvailable
-	for _, inv := range invoices {
+	processedIDs := make(map[string]bool, len(phase1))
+	for _, inv := range phase1 {
 		if remaining.LessThanOrEqual(decimal.Zero) {
 			break
 		}
@@ -539,6 +555,59 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		}
 		consumed = consumed.Add(applied)
 		remaining = remaining.Sub(applied)
+		processedIDs[inv.ID] = true
+	}
+
+	// Phase 2 (fallback, only if credit remains): a subscription's current-period invoice may be
+	// invisible to Phase 1 because its stored AmountRemaining is stale/zero (nothing has recomputed it
+	// today), or because the draft row doesn't exist yet at all (draft creation for a new period can be
+	// lazy). Look up each eligible subscription's current-period draft directly; create one if missing.
+	if remaining.IsPositive() {
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		for _, sub := range subs {
+			if remaining.LessThanOrEqual(decimal.Zero) {
+				break
+			}
+
+			curFilter := types.NewNoLimitInvoiceFilter()
+			curFilter.SubscriptionID = sub.ID
+			curFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+			curInvoices, err := s.InvoiceRepo.List(ctx, curFilter)
+			if err != nil {
+				s.Logger.Error(ctx, "pre_expiry_phase2_list_failed", "subscription_id", sub.ID, "error", err)
+				continue // best-effort
+			}
+
+			var curInv *invoice.Invoice
+			if len(curInvoices) > 0 {
+				curInv = curInvoices[0]
+				if processedIDs[curInv.ID] {
+					continue
+				}
+			} else {
+				// CreateDraftInvoiceForSubscription's own dedup check is scoped to
+				// billing_reason=SUBSCRIPTION_CYCLE only; reaching this branch means the broader
+				// SubscriptionID+Draft lookup above already found nothing under ANY billing reason,
+				// so creating here cannot produce a reason-mismatch duplicate.
+				resp, err := invoiceService.GetOrCreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+				if err != nil {
+					s.Logger.Error(ctx, "pre_expiry_create_draft_failed", "subscription_id", sub.ID, "error", err)
+					continue // best-effort - also covers the create-race unique-violation case
+				}
+				curInv = &resp.Invoice
+			}
+
+			txSnapshot := lo.FromPtr(tx)
+			txSnapshot.CreditsAvailable = remaining
+
+			applied, err := s.consumeExpiringCreditIntoInvoice(ctx, curInv, &txSnapshot)
+			if err != nil {
+				s.Logger.Error(ctx, "pre_expiry_apply_failed", "invoice_id", curInv.ID, "transaction_id", tx.ID, "error", err)
+				continue // best-effort
+			}
+			consumed = consumed.Add(applied)
+			remaining = remaining.Sub(applied)
+		}
 	}
 
 	return consumed, nil
