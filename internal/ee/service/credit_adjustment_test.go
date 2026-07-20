@@ -866,9 +866,12 @@ func TestSpreadPrepaidCreditsAcrossLineItems(t *testing.T) {
 			TotalPrepaidCreditsApplied: decimal.NewFromInt(80), // authority higher than ceiling
 			LineItems:                  []*invoice.InvoiceLineItem{a},
 		}
-		spreadPrepaidCreditsAcrossLineItems(inv)
+		got := spreadPrepaidCreditsAcrossLineItems(inv)
 		if !a.PrepaidCreditsApplied.Equal(decimal.NewFromInt(60)) {
 			t.Fatalf("applied = %s, want 60 (capped)", a.PrepaidCreditsApplied)
+		}
+		if !got.Equal(decimal.NewFromInt(60)) {
+			t.Fatalf("total applied = %s, want 60", got)
 		}
 	})
 

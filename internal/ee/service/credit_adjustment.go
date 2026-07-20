@@ -43,13 +43,14 @@ func prepaidCreditApplyLockKey(invoiceID string) string {
 // spreadPrepaidCreditsAcrossLineItems re-derives each usage line item's PrepaidCreditsApplied from the
 // invoice-level authority inv.TotalPrepaidCreditsApplied. It performs NO wallet movement. Usage line items
 // receive credit up to their ceiling (amount - line_discount - invoice_level_discount), in list order;
-// non-usage lines get zero. Any amount that cannot be placed (all usage lines maxed) is the burned /
-// over-consumed remainder and is intentionally left out of the per-line sum.
-func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) {
+// non-usage lines get zero. Returns the total actually placed on line items (may be less than the
+// authority when ceilings cannot absorb it all).
+func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) decimal.Decimal {
 	remaining := inv.TotalPrepaidCreditsApplied
 	if remaining.IsNegative() {
 		remaining = decimal.Zero
 	}
+	totalApplied := decimal.Zero
 	for _, lineItem := range inv.LineItems {
 		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
 			lineItem.PrepaidCreditsApplied = decimal.Zero
@@ -63,7 +64,9 @@ func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) {
 		applied := decimal.Min(remaining, ceiling)
 		lineItem.PrepaidCreditsApplied = applied
 		remaining = remaining.Sub(applied)
+		totalApplied = totalApplied.Add(applied)
 	}
+	return totalApplied
 }
 
 // CalculateCreditAdjustments calculates how much amount to apply from prepaid wallets to invoice line items.
@@ -443,18 +446,11 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 			inv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied.Add(amountToApply)
 		}
 
-		spreadPrepaidCreditsAcrossLineItems(inv) // place the (possibly unchanged) total across lines
+		totalApplied := spreadPrepaidCreditsAcrossLineItems(inv)
 
-		// Re-derive the invoice-level authority from what actually landed on the persisted line items,
-		// mirroring ApplyCreditsToInvoice's Phase 2 (see the Task 4 lesson above). Within this call this is
-		// a no-op whenever a new debit was just made (remainingCeiling already bounded amountToApply to fit
-		// totalCeiling), but it matters whenever the ceiling had ALREADY shrunk below inv.TotalPrepaidCreditsApplied
-		// before this call (e.g. a prior recompute) and no new debit is needed: without this recompute, the
-		// returned/stored total would stay at the stale, too-high authority even though the per-line values
-		// were correctly capped down - the same "reported total desyncs from persisted lines" bug class.
-		totalApplied := decimal.Zero
+		// Persist re-derived per-line values. totalApplied may be less than the prior authority when
+		// ceilings shrank (e.g. after recompute) — keep the invoice-level total in sync with lines.
 		for _, li := range inv.LineItems {
-			totalApplied = totalApplied.Add(li.PrepaidCreditsApplied)
 			if err := s.InvoiceLineItemRepo.Update(ctx, li); err != nil {
 				return err
 			}

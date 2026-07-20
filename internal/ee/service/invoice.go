@@ -530,32 +530,16 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 					return err
 				}
 
-				// If a prior pre-expiry credit consumption already set a preserved authority
-				// (inv.TotalPrepaidCreditsApplied) on this invoice, honor it here too — otherwise this
-				// recompute would silently revert Total/AmountDue to the un-credited amount even though
-				// the authority itself (and the underlying wallet debit) remain correct. reconcileLineItems
-				// already reset each line's PrepaidCreditsApplied to 0 above; re-derive it from the
-				// preserved authority (capped at each line's current ceiling, which may have shrunk or
-				// grown since the authority was set), persist it, and net the ACTUAL (re-derived, not the
-				// raw stale) applied amount back out of Total/AmountDue — mirroring how
-				// applyExpiringCreditToInvoice avoids trusting a possibly-stale authority value directly.
+				// Re-apply any preserved prepaid credits so recompute doesn't wipe the prior debit.
 				if inv.TotalPrepaidCreditsApplied.IsPositive() {
-					spreadPrepaidCreditsAcrossLineItems(inv)
-
-					effectiveApplied := decimal.Zero
+					effectiveApplied := spreadPrepaidCreditsAcrossLineItems(inv)
 					for _, li := range inv.LineItems {
-						effectiveApplied = effectiveApplied.Add(li.PrepaidCreditsApplied)
 						if err := s.InvoiceLineItemRepo.Update(txCtx, li); err != nil {
 							return err
 						}
 					}
 					inv.TotalPrepaidCreditsApplied = effectiveApplied
-
-					newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
-					if newTotal.IsNegative() {
-						newTotal = decimal.Zero
-					}
-					inv.Total = newTotal
+					inv.Total = decimal.Max(decimal.Zero, inv.Subtotal.Sub(inv.TotalDiscount).Sub(effectiveApplied).Add(inv.TotalTax))
 					inv.AmountDue = inv.Total
 					inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 				}

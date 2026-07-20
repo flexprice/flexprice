@@ -2193,19 +2193,14 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 
 	// Best-effort: apply expiring credit to draft invoices; failures must not block expiry.
 	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
-	consumed, cerr := creditAdjustmentService.ConsumeExpiringCreditIntoInvoices(ctx, tx)
+	creditsConsumed, cerr := creditAdjustmentService.ConsumeExpiringCreditIntoInvoices(ctx, tx)
 	if cerr != nil {
 		s.Logger.Error(ctx, "pre_expiry_consume_failed", "transaction_id", tx.ID, "error", cerr)
-		consumed = decimal.Zero
 	}
 
-	// Re-read in case consumption drew down available credits.
-	tx, err = s.WalletRepo.GetTransactionByID(ctx, transactionID)
-	if err != nil {
-		return nil, err
-	}
+	tx.CreditsAvailable = tx.CreditsAvailable.Sub(creditsConsumed)
+
 	if tx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
-		s.Logger.Info(ctx, "pre_expiry_fully_consumed", "transaction_id", tx.ID, "amount_consumed", consumed)
 		return &types.ExpireCreditsResult{Expired: false}, nil
 	}
 
@@ -2239,8 +2234,6 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		return nil, err
 	}
 
-	s.Logger.Info(ctx, "pre_expiry_partially_consumed_remainder_expired",
-		"transaction_id", tx.ID, "amount_consumed", consumed, "amount_expired", tx.CreditsAvailable)
 	return &types.ExpireCreditsResult{Expired: true}, nil
 }
 
