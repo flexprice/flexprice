@@ -92,6 +92,45 @@ type customerVendorSyncInput struct {
 	CustomerID    string
 }
 
+// DispatchTabsInvoiceVendorSync starts the Tabs invoice sync workflow when a Tabs
+// connection exists. Used for invoice.update; other providers sync on invoice.update.finalized.
+func DispatchTabsInvoiceVendorSync(
+	ctx context.Context,
+	cfg *config.Configuration,
+	connRepo connection.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	log *logger.Logger,
+	event *types.WebhookEvent,
+	msgUUID string,
+) error {
+	if cfg != nil && !cfg.IntegrationEvents.Enabled {
+		return nil
+	}
+
+	var payload webhookDto.InternalInvoiceEvent
+	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.InvoiceID == "" {
+		log.Error(ctx, "integration_events: invalid invoice payload, dropping",
+			"message_uuid", msgUUID,
+			"error", err,
+		)
+		return nil
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return errTemporalUnavailable
+	}
+
+	in := invoiceVendorSyncInput{
+		TenantID:      event.TenantID,
+		EnvironmentID: event.EnvironmentID,
+		UserID:        event.UserID,
+		InvoiceID:     payload.InvoiceID,
+	}
+
+	return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
+}
+
 // DispatchInvoiceVendorSync parses the invoice ID from the event payload and starts
 // Temporal sync workflows for each enabled provider. No DB reads are performed here —
 // the invoice is fetched inside the Temporal activity after a short sleep, avoiding
@@ -111,10 +150,8 @@ func DispatchInvoiceVendorSync(
 	}
 
 	// Parse invoice ID from the event payload — no DB calls at this stage.
-	var pl struct {
-		InvoiceID string `json:"invoice_id"`
-	}
-	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
+	var payload webhookDto.InternalInvoiceEvent
+	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payload, dropping",
 			"message_uuid", msgUUID,
 			"error", err,
@@ -126,7 +163,7 @@ func DispatchInvoiceVendorSync(
 		TenantID:      event.TenantID,
 		EnvironmentID: event.EnvironmentID,
 		UserID:        event.UserID,
-		InvoiceID:     pl.InvoiceID,
+		InvoiceID:     payload.InvoiceID,
 	}
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()
@@ -140,26 +177,20 @@ func DispatchInvoiceVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	triggers := []func() error{
-		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	}
-	if event.EventName == types.WebhookEventInvoiceUpdateFinalized {
-		triggers = append(triggers,
-			func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-			func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		)
-	}
-
 	var dispatchErrs []error
-	for _, trigger := range triggers {
+	for _, trigger := range []func() error{
+		func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
+	} {
 		if err := trigger(); err != nil {
 			dispatchErrs = append(dispatchErrs, err)
 		}
@@ -850,10 +881,8 @@ func DispatchInvoicePaidVendorSync(
 		return nil
 	}
 
-	var pl struct {
-		InvoiceID string `json:"invoice_id"`
-	}
-	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
+	var payload webhookDto.InternalInvoiceEvent
+	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.InvoiceID == "" {
 		log.Error(ctx, "integration_events: invalid invoice payment payload, dropping",
 			"message_uuid", msgUUID,
 			"error", err,
@@ -865,7 +894,7 @@ func DispatchInvoicePaidVendorSync(
 		TenantID:      event.TenantID,
 		EnvironmentID: event.EnvironmentID,
 		UserID:        event.UserID,
-		InvoiceID:     pl.InvoiceID,
+		InvoiceID:     payload.InvoiceID,
 	}
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()

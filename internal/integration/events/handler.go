@@ -67,7 +67,8 @@ func NewHandler(deps Deps) Handler {
 			)
 		},
 		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
-			return DispatchInvoiceVendorSync(
+			// invoice.update is Tabs-only; other providers sync on invoice.update.finalized.
+			return DispatchTabsInvoiceVendorSync(
 				ctx,
 				h.deps.Config,
 				h.deps.ConnectionRepo,
