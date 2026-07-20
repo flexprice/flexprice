@@ -1205,7 +1205,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
 	if tenantID == "" || environmentID == "" {
-		h.logger.Info(context.Background(), "missing tenant_id or environment_id in Whop webhook URL",
+		h.logger.Info(c.Request.Context(), "missing tenant_id or environment_id in Whop webhook URL",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return
@@ -1213,7 +1213,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to read Whop webhook body", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to read Whop webhook body", "error", err)
 		return
 	}
 
@@ -1223,20 +1223,20 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	var event whopwebhook.WhopWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
+		h.logger.Error(ctx, "failed to parse Whop webhook payload", "error", err)
 		return
 	}
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
+		h.logger.Error(ctx, "failed to get Whop integration", "error", err)
 		return
 	}
 
 	// Get connection to check if webhook secret is configured
 	conn, err := whopIntegration.Client.GetConnection(ctx)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop connection", "error", err)
+		h.logger.Error(ctx, "failed to get Whop connection", "error", err)
 		return
 	}
 
@@ -1248,14 +1248,14 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	if hasWebhookSecretConfigured {
 		signature := c.GetHeader("X-Whop-Signature")
 		if signature == "" {
-			h.logger.Info(context.Background(), "Whop webhook secret configured but X-Whop-Signature header missing - rejecting request",
+			h.logger.Info(ctx, "Whop webhook secret configured but X-Whop-Signature header missing - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
 			return
 		}
 
 		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
-			h.logger.Info(context.Background(), "Whop webhook signature verification failed - rejecting request",
+			h.logger.Info(ctx, "Whop webhook signature verification failed - rejecting request",
 				"error", err,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
@@ -1263,17 +1263,17 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 			return
 		}
 
-		h.logger.Info(context.Background(), "Whop webhook signature verified successfully",
+		h.logger.Info(ctx, "Whop webhook signature verified successfully",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	} else {
 		// No webhook secret configured - allow with warning
-		h.logger.Info(context.Background(), "Whop webhook received without secret verification",
+		h.logger.Info(ctx, "Whop webhook received without secret verification",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 	}
 
-	h.logger.Info(context.Background(), "received Whop webhook",
+	h.logger.Info(ctx, "received Whop webhook",
 		"type", event.Type,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
@@ -1289,7 +1289,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	}
 
 	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
-		h.logger.Error(context.Background(), "failed to handle Whop webhook event",
+		h.logger.Error(ctx, "failed to handle Whop webhook event",
 			"error", err,
 			"type", event.Type)
 	}

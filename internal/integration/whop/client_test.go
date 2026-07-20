@@ -50,6 +50,14 @@ func (r *fakeConnectionRepo) GetByProvider(_ context.Context, provider types.Sec
 	return c, nil
 }
 
+func (r *fakeConnectionRepo) ListPublishedByProvider(_ context.Context, provider types.SecretProvider) ([]*connection.Connection, error) {
+	c, ok := r.byProvider[provider]
+	if !ok || c.Status != types.StatusPublished {
+		return nil, nil
+	}
+	return []*connection.Connection{c}, nil
+}
+
 func (r *fakeConnectionRepo) List(_ context.Context, _ *types.ConnectionFilter) ([]*connection.Connection, error) {
 	out := make([]*connection.Connection, 0, len(r.byProvider))
 	for _, c := range r.byProvider {
