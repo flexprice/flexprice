@@ -469,10 +469,7 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 	return result, nil
 }
 
-// ConsumeExpiringCreditIntoInvoices best-effort applies an about-to-expire credit transaction against the
-// customer's active standalone/parent subscription draft invoices before the remaining credit is expired.
-// Returns the total amount consumed into invoices. Per-invoice failures are logged and skipped so that
-// credit expiry is never blocked.
+// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices. Returns amount consumed.
 func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error) {
 	consumed := decimal.Zero
 	if tx.ExpiryDate == nil {
@@ -517,11 +514,7 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return a.After(*b)
 	})
 
-	// Track the credit's remaining balance in memory across the pass instead of re-reading the
-	// transaction from the DB before every invoice. DebitWallet independently re-validates the real
-	// balance under its own wallet-level lock before every debit, so a stale local value can only
-	// ever make us request too much - which DebitWallet rejects, and that invoice is skipped like any
-	// other per-invoice failure - never a double-spend.
+	// Track remaining in memory; DebitWallet re-validates the real balance before each debit.
 	remaining := tx.CreditsAvailable
 	for _, inv := range invoices {
 		if remaining.LessThanOrEqual(decimal.Zero) {
