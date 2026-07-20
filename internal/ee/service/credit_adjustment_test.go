@@ -1254,6 +1254,14 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 // aligned with subA's current period), which must be skipped via the processedIDs dedup rather than
 // re-applied. Invoice B (stale AmountRemaining, invisible to Phase 1) is genuinely found and applied by
 // Phase 2, proving Phase 2 did run and dedup isn't just a no-op from Phase 2 never firing.
+//
+// Invoice B's ceiling (10) is deliberately much smaller than what remains after Phase 1 (30), so Phase 2
+// can never fully drain `remaining` by applying to B alone - `remaining` stays positive (30 or 20)
+// regardless of which subscription Phase 2's loop visits first, guaranteeing subA's dedup-skip branch is
+// exercised either way. (An earlier version of this test gave B a large-enough ceiling to fully drain
+// `remaining` if visited first, which - combined with the in-memory subscription store's
+// CreatedAt-descending default order - let B "win" the race and skip subA's turn entirely, leaving the
+// dedup branch untested despite the assertions passing.)
 func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2SkipsAlreadyProcessedInvoice() {
 	pt := string(types.PRICE_TYPE_USAGE)
 
@@ -1292,7 +1300,7 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 		ID:               s.GetUUID(),
 		InvoiceID:        "inv_dedup_b",
 		CustomerID:       s.testData.customer.ID,
-		Amount:           decimal.NewFromInt(30),
+		Amount:           decimal.NewFromInt(10),
 		Currency:         "USD",
 		Quantity:         decimal.NewFromInt(1),
 		PriceType:        &pt,
@@ -1304,9 +1312,9 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 		CustomerID:      s.testData.customer.ID,
 		SubscriptionID:  lo.ToPtr(subB.ID),
 		Currency:        "USD",
-		Subtotal:        decimal.NewFromInt(30),
-		Total:           decimal.NewFromInt(30),
-		AmountDue:       decimal.NewFromInt(30),
+		Subtotal:        decimal.NewFromInt(10),
+		Total:           decimal.NewFromInt(10),
+		AmountDue:       decimal.NewFromInt(10),
 		AmountRemaining: decimal.Zero, // stale - invisible to Phase 1, forcing Phase 2 to find it
 		InvoiceType:     types.InvoiceTypeOneOff,
 		InvoiceStatus:   types.InvoiceStatusDraft,
@@ -1323,15 +1331,15 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 
 	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
 	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(50).Equal(consumed), "expected 50 consumed across both invoices, got %s", consumed.String())
+	s.True(decimal.NewFromInt(30).Equal(consumed), "expected 30 consumed (20 by Phase 1 + 10 by Phase 2; 20 of the 50 credit is left unused), got %s", consumed.String())
 
 	reloadedA := s.reloadInvoiceWithLineItems(invA.ID)
 	s.True(decimal.NewFromInt(20).Equal(reloadedA.TotalPrepaidCreditsApplied),
 		"invoice A TotalPrepaidCreditsApplied = %s, want 20 (applied once by Phase 1, not re-applied by Phase 2)", reloadedA.TotalPrepaidCreditsApplied.String())
 
 	reloadedB := s.reloadInvoiceWithLineItems(invB.ID)
-	s.True(decimal.NewFromInt(30).Equal(reloadedB.TotalPrepaidCreditsApplied),
-		"invoice B TotalPrepaidCreditsApplied = %s, want 30 (found and applied by Phase 2)", reloadedB.TotalPrepaidCreditsApplied.String())
+	s.True(decimal.NewFromInt(10).Equal(reloadedB.TotalPrepaidCreditsApplied),
+		"invoice B TotalPrepaidCreditsApplied = %s, want 10 (found and applied by Phase 2)", reloadedB.TotalPrepaidCreditsApplied.String())
 }
 
 // TestConsumeExpiringCreditIntoInvoices_NonEligibleSubscriptionTypesUntouched proves delegated_invoicing,
@@ -1466,8 +1474,12 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 
 // TestConsumeExpiringCreditIntoInvoices_Phase2CreateErrorIsolated proves a
 // GetOrCreateDraftInvoiceForSubscription failure for one subscription (here: a finalized invoice
-// already occupies its exact current period, so creation is rejected) is logged and skipped, and does
-// not block credit from reaching a healthy subscription processed in the same run.
+// already occupies its exact current period, so creation is rejected) is logged and skipped rather than
+// aborting the whole run - the orchestrator still returns no error, and a healthy subscription's credit
+// application elsewhere in the same run is unaffected. The healthy invoice's period is deliberately
+// aligned to its subscription's current period (built directly rather than via
+// createDraftSubInvoiceWithUsageLineItem, whose hardcoded period length isn't period-aligned) so Phase 2
+// doesn't spuriously create an extra, untested draft for it if Phase 2's loop reaches that subscription.
 func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2CreateErrorIsolated() {
 	brokenSub := s.createActiveStandaloneSubscription("sub_create_error", "USD")
 	// A FINALIZED invoice already exists for this exact (subscription, period, SUBSCRIPTION_CYCLE) -
@@ -1493,7 +1505,35 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Pha
 	s.Require().NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), finalized))
 
 	healthySub := s.createActiveStandaloneSubscription("sub_create_error_healthy", "USD")
-	healthyInv := s.createDraftSubInvoiceWithUsageLineItem("inv_create_error_healthy", "USD", decimal.NewFromInt(30), healthySub.ID, s.GetNow())
+	pt := string(types.PRICE_TYPE_USAGE)
+	healthyLi := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        "inv_create_error_healthy",
+		CustomerID:       s.testData.customer.ID,
+		Amount:           decimal.NewFromInt(30),
+		Currency:         "USD",
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+	healthyInv := &invoice.Invoice{
+		ID:              "inv_create_error_healthy",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(healthySub.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(30),
+		Total:           decimal.NewFromInt(30),
+		AmountDue:       decimal.NewFromInt(30),
+		AmountRemaining: decimal.NewFromInt(30), // found by Phase 1 directly
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(healthySub.CurrentPeriodStart),
+		PeriodEnd:       lo.ToPtr(healthySub.CurrentPeriodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{healthyLi},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), healthyInv))
 
 	w := s.createWalletWithCredit("wallet_create_error", "USD", decimal.Zero)
 	pastExpiry := s.GetNow().Add(-time.Hour)
