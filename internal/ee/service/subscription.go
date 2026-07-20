@@ -7444,9 +7444,6 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 ) error {
 	for _, c := range childRequests {
 		startDate := parent.StartDate
-		if c.StartDate != nil {
-			startDate = *c.StartDate
-		}
 		childReq := dto.CreateSubscriptionRequest{
 			ExternalCustomerID: c.ExternalCustomerID,
 			PlanID:             c.PlanID,
@@ -7461,14 +7458,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 			},
 		}
 		if _, err := s.createSubscription(ctx, childReq); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create grouped-invoicing child subscription").
-				WithReportableDetails(map[string]any{
-					"parent_subscription_id": parent.ID,
-					"external_customer_id":   c.ExternalCustomerID,
-					"plan_id":                c.PlanID,
-				}).
-				Mark(ierr.ErrDatabase)
+			return err
 		}
 	}
 	return nil
