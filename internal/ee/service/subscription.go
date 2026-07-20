@@ -70,14 +70,10 @@ type subscriptionCoreResult struct {
 	Customer    *customer.Customer
 }
 
-// createSubscriptionCore contains everything from customer/plan validation through the
-// invoice-generation gate. It opens no transaction of its own — the caller must already be
-// inside one (either createSubscriptionCoreTx for a top-level call, or a caller that's already
-// inside its own s.DB.WithTx, e.g. createGroupedInvoicingChildren). It runs no post-transaction
-// side effects (no phase handling, no HubSpot/Paddle sync, no webhook) — those stay in the
-// public CreateSubscription wrapper so they fire exactly once, only for a top-level call, only
-// after commit.
-func (s *subscriptionService) createSubscriptionCore(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
+// createSubscription validates the request and creates the subscription through invoice
+// generation. Caller must already be inside a transaction. Post-commit side effects (phases,
+// syncs, webhooks) stay in CreateSubscription.
+func (s *subscriptionService) createSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
 	if req.BillingCycle == "" {
 		req.BillingCycle = types.BillingCycleAnniversary
 	}
@@ -530,26 +526,14 @@ func (s *subscriptionService) createSubscriptionCore(ctx context.Context, req dt
 	}, nil
 }
 
-// createSubscriptionCoreTx opens the transaction and runs createSubscriptionCore inside it.
-// Only the public CreateSubscription calls this — createGroupedInvoicingChildren calls
-// createSubscriptionCore directly, reusing the caller's already-open transaction instead.
-func (s *subscriptionService) createSubscriptionCoreTx(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
+// CreateSubscription creates a subscription and its opening invoice, then runs post-commit side effects.
+func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
 	var result *subscriptionCoreResult
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		var txErr error
-		result, txErr = s.createSubscriptionCore(ctx, req)
+		result, txErr = s.createSubscription(ctx, req)
 		return txErr
 	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// CreateSubscription validates and persists a new subscription, generating its opening invoice
-// (unless draft/trialing) and syncing/publishing side effects once the transaction has committed.
-func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
-	result, err := s.createSubscriptionCoreTx(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -7477,7 +7461,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 				ParentSubscriptionID: parent.ID,
 			},
 		}
-		if _, err := s.createSubscriptionCore(ctx, childReq); err != nil {
+		if _, err := s.createSubscription(ctx, childReq); err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to create grouped-invoicing child subscription").
 				WithReportableDetails(map[string]any{
