@@ -406,6 +406,12 @@ postgres:
 clickhouse:
   mode: standalone   # standalone | altinity | external
 
+  # Namespace for the in-cluster ClickHouse (standalone/altinity modes). Empty =
+  # release namespace (backward compatible). Set to isolate ClickHouse in its own
+  # namespace; the chart then auto-creates it (resource-policy: keep) and the app +
+  # migration job resolve ClickHouse via its cross-namespace FQDN.
+  namespace: ""
+
   # Shared connection settings (used by all modes)
   tls: false
   username: "default"
