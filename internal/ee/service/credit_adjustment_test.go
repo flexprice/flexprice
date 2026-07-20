@@ -1141,3 +1141,318 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Sto
 	s.True(reloadedSource.CreditsAvailable.IsZero(),
 		"source grant should be fully consumed, got %s available", reloadedSource.CreditsAvailable.String())
 }
+
+// TestConsumeExpiringCreditIntoInvoices_Phase1SufficientSkipsPhase2 proves Phase 2 never runs when
+// Phase 1 alone fully consumes the credit: a second active subscription with NO draft invoice at all
+// must be left completely untouched (no invoice created for it).
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase1SufficientSkipsPhase2() {
+	subWithInvoice := s.createActiveStandaloneSubscription("sub_phase1_sufficient", "USD")
+	s.createDraftSubInvoiceWithUsageLineItem("inv_phase1_sufficient", "USD", decimal.NewFromInt(50), subWithInvoice.ID, s.GetNow())
+
+	// Second subscription has no draft invoice at all - if Phase 2 ran, it would try to create one.
+	subWithoutInvoice := s.createActiveStandaloneSubscription("sub_phase1_sufficient_untouched", "USD")
+
+	w := s.createWalletWithCredit("wallet_phase1_sufficient", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(consumed), "expected 50 consumed, got %s", consumed.String())
+
+	untouchedFilter := types.NewNoLimitInvoiceFilter()
+	untouchedFilter.SubscriptionID = subWithoutInvoice.ID
+	untouchedInvoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), untouchedFilter)
+	s.Require().NoError(err)
+	s.Empty(untouchedInvoices, "Phase 2 must not have created a draft invoice for the untouched subscription")
+}
+
+// TestConsumeExpiringCreditIntoInvoices_Phase2CreatesMissingDraft proves Phase 2 creates a draft
+// invoice for a subscription's current period when none exists, instead of skipping it. The
+// subscription has no plan/priced line items, so the freshly-created draft's ComputeInvoice call finds
+// zero usage and marks it SKIPPED - this test asserts on CREATION, not on credit being applied.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2CreatesMissingDraft() {
+	sub := s.createActiveStandaloneSubscription("sub_phase2_creates", "USD")
+
+	w := s.createWalletWithCredit("wallet_phase2_creates", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(consumed.IsZero(), "expected zero consumed (subscription has no usage), got %s", consumed.String())
+
+	f := types.NewNoLimitInvoiceFilter()
+	f.SubscriptionID = sub.ID
+	// The in-memory store's default List() excludes SKIPPED invoices (mirroring the real repository
+	// default), and this zero-usage subscription's freshly-created draft lands on SKIPPED once
+	// ComputeInvoice runs - so both statuses must be requested explicitly to observe the creation.
+	f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusSkipped}
+	created, err := s.GetStores().InvoiceRepo.List(s.GetContext(), f)
+	s.Require().NoError(err)
+	s.Require().Len(created, 1, "Phase 2 must have created exactly one draft invoice for the subscription's current period")
+	s.Equal(sub.CurrentPeriodStart.Unix(), created[0].PeriodStart.Unix())
+	s.Equal(sub.CurrentPeriodEnd.Unix(), created[0].PeriodEnd.Unix())
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), created[0].BillingReason) // BillingReason is a plain string field
+}
+
+// TestConsumeExpiringCreditIntoInvoices_Phase2PicksUpStaleAmountRemaining proves Phase 2 finds and
+// applies credit to a current-period invoice that Phase 1's AmountRemainingGt(0) filter would have
+// excluded because its STORED AmountRemaining is zero, even though its line item has real room. The
+// invoice's period is set to exactly match the subscription's current period (required for Phase 2's
+// period-scoped lookup to find it).
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2PicksUpStaleAmountRemaining() {
+	sub := s.createActiveStandaloneSubscription("sub_phase2_stale", "USD")
+
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        "inv_phase2_stale",
+		CustomerID:       s.testData.customer.ID,
+		Amount:           decimal.NewFromInt(50),
+		Currency:         "USD",
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+	inv := &invoice.Invoice{
+		ID:              "inv_phase2_stale",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(50),
+		Total:           decimal.NewFromInt(50),
+		AmountDue:       decimal.NewFromInt(50),
+		AmountRemaining: decimal.Zero, // stale - Phase 1's AmountRemainingGt(0) filter must skip this
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(sub.CurrentPeriodStart),
+		PeriodEnd:       lo.ToPtr(sub.CurrentPeriodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+
+	w := s.createWalletWithCredit("wallet_phase2_stale", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(consumed), "expected 50 consumed via Phase 2, got %s", consumed.String())
+
+	reloaded := s.reloadInvoiceWithLineItems(inv.ID)
+	s.True(decimal.NewFromInt(50).Equal(reloaded.TotalPrepaidCreditsApplied),
+		"TotalPrepaidCreditsApplied = %s, want 50", reloaded.TotalPrepaidCreditsApplied.String())
+}
+
+// TestConsumeExpiringCreditIntoInvoices_Phase2SkipsAlreadyProcessedInvoice proves Phase 2 does not
+// re-process an invoice Phase 1 already found and applied credit to, even when Phase 1 only partially
+// drained the credit and Phase 2 runs. A second, untouched subscription proves Phase 2 DID run (it
+// still gets its share) - just not against the already-processed invoice.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2SkipsAlreadyProcessedInvoice() {
+	subA := s.createActiveStandaloneSubscription("sub_dedup_a", "USD")
+	invA := s.createDraftSubInvoiceWithUsageLineItem("inv_dedup_a", "USD", decimal.NewFromInt(30), subA.ID, s.GetNow())
+
+	subB := s.createActiveStandaloneSubscription("sub_dedup_b", "USD")
+	invB := s.createDraftSubInvoiceWithUsageLineItem("inv_dedup_b", "USD", decimal.NewFromInt(30), subB.ID, s.GetNow().Add(-1*time.Hour))
+
+	w := s.createWalletWithCredit("wallet_dedup", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(60), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(60).Equal(consumed), "expected 60 consumed across both invoices, got %s", consumed.String())
+
+	reloadedA := s.reloadInvoiceWithLineItems(invA.ID)
+	s.True(decimal.NewFromInt(30).Equal(reloadedA.TotalPrepaidCreditsApplied),
+		"invoice A TotalPrepaidCreditsApplied = %s, want 30 (applied exactly once)", reloadedA.TotalPrepaidCreditsApplied.String())
+
+	reloadedB := s.reloadInvoiceWithLineItems(invB.ID)
+	s.True(decimal.NewFromInt(30).Equal(reloadedB.TotalPrepaidCreditsApplied),
+		"invoice B TotalPrepaidCreditsApplied = %s, want 30", reloadedB.TotalPrepaidCreditsApplied.String())
+}
+
+// TestConsumeExpiringCreditIntoInvoices_NonEligibleSubscriptionTypesUntouched proves delegated_invoicing,
+// grouped_invoicing, and inherited subscriptions are never processed by either phase - Phase 2 must not
+// attempt to create a draft for them.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_NonEligibleSubscriptionTypesUntouched() {
+	now := s.GetNow()
+	makeSub := func(id string, subType types.SubscriptionType) *subscription.Subscription {
+		sub := &subscription.Subscription{
+			ID:                 id,
+			CustomerID:         s.testData.customer.ID,
+			Currency:           "USD",
+			SubscriptionType:   subType,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+		}
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+		return sub
+	}
+
+	delegated := makeSub("sub_non_eligible_delegated", types.SubscriptionTypeDelegatedInvoicing)
+	grouped := makeSub("sub_non_eligible_grouped", types.SubscriptionTypeGroupedInvoicing)
+	inherited := makeSub("sub_non_eligible_inherited", types.SubscriptionTypeInherited)
+
+	w := s.createWalletWithCredit("wallet_non_eligible", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(consumed.IsZero(), "expected zero consumed (no eligible subscriptions), got %s", consumed.String())
+
+	for _, sub := range []*subscription.Subscription{delegated, grouped, inherited} {
+		f := types.NewNoLimitInvoiceFilter()
+		f.SubscriptionID = sub.ID
+		invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), f)
+		s.Require().NoError(err)
+		s.Empty(invoices, "no invoice should have been created for subscription %s (type %s)", sub.ID, sub.SubscriptionType)
+	}
+}
+
+// TestConsumeExpiringCreditIntoInvoices_CumulativeAcrossCallPaths proves TotalPrepaidCreditsApplied
+// accumulates across independent call paths: a general/pooled ApplyCreditsToInvoice application first,
+// then a separate pre-expiry ConsumeExpiringCreditIntoInvoices application, must sum together.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_CumulativeAcrossCallPaths() {
+	sub := s.createActiveStandaloneSubscription("sub_cumulative", "USD")
+	inv := s.createDraftSubInvoiceWithUsageLineItem("inv_cumulative", "USD", decimal.NewFromInt(100), sub.ID, s.GetNow())
+
+	// First: general/pooled path applies 20 from an ordinary (non-expiring) wallet.
+	poolWallet := s.createWalletWithCredit("wallet_cumulative_pool", "USD", decimal.NewFromInt(20))
+	_, err := s.service.ApplyCreditsToInvoice(s.GetContext(), inv)
+	s.Require().NoError(err)
+	s.Require().NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+	_ = poolWallet
+
+	afterPool := s.reloadInvoiceWithLineItems(inv.ID)
+	s.True(decimal.NewFromInt(20).Equal(afterPool.TotalPrepaidCreditsApplied),
+		"after pooled application, TotalPrepaidCreditsApplied = %s, want 20", afterPool.TotalPrepaidCreditsApplied.String())
+
+	// Second: a SEPARATE expiring credit, applied via ConsumeExpiringCreditIntoInvoices.
+	expiringWallet := s.createWalletWithCredit("wallet_cumulative_expiring", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(expiringWallet.ID, decimal.NewFromInt(30), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(30).Equal(consumed), "expected 30 consumed, got %s", consumed.String())
+
+	final := s.reloadInvoiceWithLineItems(inv.ID)
+	s.True(decimal.NewFromInt(50).Equal(final.TotalPrepaidCreditsApplied),
+		"final TotalPrepaidCreditsApplied = %s, want 50 (20 pooled + 30 expiring)", final.TotalPrepaidCreditsApplied.String())
+}
+
+// TestConsumeExpiringCreditIntoInvoices_Phase2FindsNonCycleReasonDraftNoDuplicate proves Phase 2's
+// broad SubscriptionID+Draft lookup (no billing-reason filter) finds an existing draft invoice created
+// under a DIFFERENT billing reason (e.g. SUBSCRIPTION_CREATE for a subscription still in its first
+// period), and does not create a duplicate SUBSCRIPTION_CYCLE draft alongside it.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2FindsNonCycleReasonDraftNoDuplicate() {
+	sub := s.createActiveStandaloneSubscription("sub_first_period", "USD")
+
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        "inv_first_period_create",
+		CustomerID:       s.testData.customer.ID,
+		Amount:           decimal.NewFromInt(50),
+		Currency:         "USD",
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+	existing := &invoice.Invoice{
+		ID:              "inv_first_period_create",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(50),
+		Total:           decimal.NewFromInt(50),
+		AmountDue:       decimal.NewFromInt(50),
+		AmountRemaining: decimal.Zero, // forces Phase 1 to skip it, so Phase 2 must be the one to find it
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCreate),
+		PeriodStart:     lo.ToPtr(sub.CurrentPeriodStart),
+		PeriodEnd:       lo.ToPtr(sub.CurrentPeriodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), existing))
+
+	w := s.createWalletWithCredit("wallet_first_period", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(consumed), "expected 50 consumed, got %s", consumed.String())
+
+	f := types.NewNoLimitInvoiceFilter()
+	f.SubscriptionID = sub.ID
+	allInvoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), f)
+	s.Require().NoError(err)
+	s.Require().Len(allInvoices, 1, "Phase 2 must not have created a duplicate SUBSCRIPTION_CYCLE draft")
+	s.Equal(existing.ID, allInvoices[0].ID)
+}
+
+// TestConsumeExpiringCreditIntoInvoices_Phase2CreateErrorIsolated proves a
+// GetOrCreateDraftInvoiceForSubscription failure for one subscription (here: a finalized invoice
+// already occupies its exact current period, so creation is rejected) is logged and skipped, and does
+// not block credit from reaching a healthy subscription processed in the same run.
+func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Phase2CreateErrorIsolated() {
+	brokenSub := s.createActiveStandaloneSubscription("sub_create_error", "USD")
+	// A FINALIZED invoice already exists for this exact (subscription, period, SUBSCRIPTION_CYCLE) -
+	// CreateEmptyDraftInvoice's period-conflict check rejects creating another draft for it. Not found
+	// by Phase 1 (InvoiceStatus filter is Draft-only) or by Phase 2's Draft-status lookup either -
+	// only surfaces when Phase 2 attempts to create.
+	finalized := &invoice.Invoice{
+		ID:             "inv_create_error_finalized",
+		CustomerID:     s.testData.customer.ID,
+		SubscriptionID: lo.ToPtr(brokenSub.ID),
+		Currency:       "USD",
+		Subtotal:       decimal.NewFromInt(10),
+		Total:          decimal.NewFromInt(10),
+		AmountDue:      decimal.NewFromInt(10),
+		AmountPaid:     decimal.NewFromInt(10),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusFinalized,
+		BillingReason:  string(types.InvoiceBillingReasonSubscriptionCycle),
+		PeriodStart:    lo.ToPtr(brokenSub.CurrentPeriodStart),
+		PeriodEnd:      lo.ToPtr(brokenSub.CurrentPeriodEnd),
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), finalized))
+
+	healthySub := s.createActiveStandaloneSubscription("sub_create_error_healthy", "USD")
+	healthyInv := s.createDraftSubInvoiceWithUsageLineItem("inv_create_error_healthy", "USD", decimal.NewFromInt(30), healthySub.ID, s.GetNow())
+
+	w := s.createWalletWithCredit("wallet_create_error", "USD", decimal.Zero)
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	// More than healthyInv's 30 ceiling, so credit remains after Phase 1 and Phase 2 actually runs.
+	source := s.createWalletCredit(w.ID, decimal.NewFromInt(50), &pastExpiry, nil)
+
+	consumed, err := s.service.ConsumeExpiringCreditIntoInvoices(s.GetContext(), source)
+	s.Require().NoError(err, "orchestrator must remain best-effort despite the create failure")
+	s.True(decimal.NewFromInt(30).Equal(consumed), "expected 30 consumed from the healthy subscription only, got %s", consumed.String())
+
+	reloadedHealthy := s.reloadInvoiceWithLineItems(healthyInv.ID)
+	s.True(decimal.NewFromInt(30).Equal(reloadedHealthy.TotalPrepaidCreditsApplied),
+		"healthy invoice TotalPrepaidCreditsApplied = %s, want 30", reloadedHealthy.TotalPrepaidCreditsApplied.String())
+
+	f := types.NewNoLimitInvoiceFilter()
+	f.SubscriptionID = brokenSub.ID
+	brokenSubInvoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), f)
+	s.Require().NoError(err)
+	s.Require().Len(brokenSubInvoices, 1, "no new draft should have been created for the broken subscription")
+	s.Equal(types.InvoiceStatusFinalized, brokenSubInvoices[0].InvoiceStatus)
+}
