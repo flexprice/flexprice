@@ -198,6 +198,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
+// GetForUpdate returns the invoice; in-memory store has no row locking.
+func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
