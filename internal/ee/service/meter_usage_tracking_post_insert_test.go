@@ -6,6 +6,7 @@ import (
 
 	domainAlert "github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	domainSettings "github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -48,6 +49,7 @@ func (s *UsageAlertGateSuite) SetupTest() {
 			CustomerRepo:             s.GetStores().CustomerRepo,
 			WalletRepo:               s.GetStores().WalletRepo,
 			SettingsRepo:             s.GetStores().SettingsRepo,
+			EntitlementRepo:          s.GetStores().EntitlementRepo,
 			RedisCache:               testutil.NewInMemoryRedis(),
 			WebhookPublisher:         s.GetWebhookPublisher(),
 		},
@@ -159,6 +161,43 @@ func (s *UsageAlertGateSuite) TestGate_NilCustomer_ReturnsFalse() {
 	s.False(s.svc.hasUsageAlertConfigForCustomer(s.GetContext(), nil))
 }
 
+func (s *UsageAlertGateSuite) TestGate_TimeBoxedEC_ReturnsTrue() {
+	// A tenant with any time-boxed entitlement config must schedule the
+	// workflow for customers with active subs — grants are opened/refreshed by
+	// the same workflow, so gating them out would mean grants never open.
+	s.createSub("sub_grant_ec")
+	s.createTimeBoxedEC("ec_gate")
+	s.True(s.svc.hasUsageAlertConfigForCustomer(s.GetContext(), s.cust))
+}
+
+func (s *UsageAlertGateSuite) TestGate_TimeBoxedECButNoActiveSub_ReturnsFalse() {
+	// EC exists in the tenant but this customer has no active subs — nothing
+	// for EnsureGrants to do, so the gate stays closed.
+	s.createTimeBoxedEC("ec_gate_nosub")
+	s.False(s.svc.hasUsageAlertConfigForCustomer(s.GetContext(), s.cust))
+}
+
+func (s *UsageAlertGateSuite) TestGate_DisabledTimeBoxedEC_ReturnsFalse() {
+	s.createSub("sub_disabled_ec")
+	e := &entitlement.Entitlement{
+		ID:                 "ec_gate_disabled",
+		EntityType:         types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:           "plan_gate",
+		FeatureID:          "feat_gate",
+		FeatureType:        types.FeatureTypeMetered,
+		IsEnabled:          false,
+		GrantType:          types.EntitlementGrantTypeTimeBoxed,
+		GrantMeasure:       types.EntitlementGrantMeasureQuantity,
+		GrantDurationValue: lo.ToPtr(5),
+		GrantDurationUnit:  types.EntitlementGrantDurationUnitHour,
+		GrantQuota:         lo.ToPtr(decimal.NewFromInt(100)),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), e)
+	s.Require().NoError(err)
+	s.False(s.svc.hasUsageAlertConfigForCustomer(s.GetContext(), s.cust))
+}
+
 func (s *UsageAlertGateSuite) TestGate_CachesAcrossRepeatCalls() {
 	// First call populates the cache; second call must return the same result
 	// even after the underlying config is deleted. Proves reads short-circuit
@@ -215,6 +254,25 @@ func (s *UsageAlertGateSuite) createLineItemAlertSettings(id, lineItemID, parent
 		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.Require().NoError(s.GetStores().AlertRepo.Create(s.GetContext(), as))
+}
+
+func (s *UsageAlertGateSuite) createTimeBoxedEC(id string) {
+	e := &entitlement.Entitlement{
+		ID:                 id,
+		EntityType:         types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:           "plan_gate",
+		FeatureID:          "feat_gate",
+		FeatureType:        types.FeatureTypeMetered,
+		IsEnabled:          true,
+		GrantType:          types.EntitlementGrantTypeTimeBoxed,
+		GrantMeasure:       types.EntitlementGrantMeasureQuantity,
+		GrantDurationValue: lo.ToPtr(5),
+		GrantDurationUnit:  types.EntitlementGrantDurationUnitHour,
+		GrantQuota:         lo.ToPtr(decimal.NewFromInt(100)),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), e)
+	s.Require().NoError(err)
 }
 
 func (s *UsageAlertGateSuite) createWallet(id string) {

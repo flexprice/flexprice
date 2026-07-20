@@ -686,6 +686,7 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 			existing.GrantDurationValue = nil
 			existing.GrantDurationUnit = ""
 			existing.GrantQuota = nil
+			existing.AggregationMode = types.EntitlementGrantAggregationModeAdditive
 		}
 	}
 	if req.GrantMeasure != nil {

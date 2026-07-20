@@ -87,11 +87,9 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// FLE-959 grants — cycle-overlapping grants per meter. When a line item's
-	// meter has grants here, adjustMeterUsageGrants below takes precedence
-	// over adjustMeterUsageEntitlement (grants replace legacy entitlement
-	// quota semantics for that feature). Empty map means "no grants
-	// configured on this subscription" — the loop stays on the legacy path.
+	// When a line item's meter has grants here, adjustMeterUsageGrants below takes precedence
+	// over adjustMeterUsageEntitlement (grants replace legacy entitlement quota semantics for that feature).
+	// Empty map means "no grants configured on this subscription" — the loop stays on the legacy path.
 	grantsByMeterID, err := s.loadEntitlementGrantsByMeterID(ctx, sub, aggregatedEntitlements.Features, periodStart, periodEnd)
 	if err != nil {
 		return nil, decimal.Zero, err
@@ -173,11 +171,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			quantityForCalculation = cost.Quantity
 		}
 
-		// 2. Grant / entitlement adjustment — reads windowed usage from
-		// meter_usage (not raw events). FLE-959 grants take precedence over
-		// the legacy entitlement when present on the same meter, and if the
-		// grant fold falls through (mixed measure, amount-lane guard trip)
-		// the code drops back to the legacy path.
+		// 2. Entitlement adjustment — reads windowed usage from meter_usage (not raw events)
 		rawQtyBeforeEntitlement := quantityForCalculation
 		var entitlementAdjustedQty *decimal.Decimal
 		entitlement := entitlementsByMeterID[item.MeterID]

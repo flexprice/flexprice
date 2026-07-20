@@ -2125,7 +2125,17 @@ func (s *billingService) applyProrationToLineItem(
 	return prorationResult.NetAmount, nil
 }
 
-// Helper functions for aggregating entitlements
+// aggregateMeteredEntitlementsForBilling merges the entitlements that target the
+// same metered feature. Two aggregation modes:
+//
+//   - additive (default): UsageLimit sums across contributors — one bucket the
+//     UI can render as a single quota.
+//   - parallel: each contributor keeps its own bucket. UsageLimit is still
+//     reported as the sum for legacy display, but Buckets carries the per-EC
+//     view so the caller can render independent quotas.
+//
+// Buckets is also emitted (regardless of mode) whenever any contributor is a
+// time-boxed grant so amount-based and grant-duration information isn't lost.
 func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	hasUnlimitedEntitlement := false
 	isSoftLimit := false
@@ -2133,22 +2143,30 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	var usageResetPeriod types.EntitlementUsageResetPeriod
 	resetPeriodCounts := make(map[types.EntitlementUsageResetPeriod]int)
 
+	aggregationMode := types.EntitlementGrantAggregationModeAdditive
+	hasGrantConfig := false
+
 	for _, e := range entitlements {
 		if !e.IsEnabled {
 			continue
 		}
 
+		if e.AggregationMode == types.EntitlementGrantAggregationModeParallel {
+			aggregationMode = types.EntitlementGrantAggregationModeParallel
+		}
+		if e.GrantType == types.EntitlementGrantTypeTimeBoxed {
+			hasGrantConfig = true
+		}
+
 		if e.UsageLimit == nil {
 			hasUnlimitedEntitlement = true
-			break
+		} else {
+			totalLimit += *e.UsageLimit
 		}
 
 		if e.IsSoftLimit {
 			isSoftLimit = true
 		}
-
-		// total limit is the sum of all limits
-		totalLimit += *e.UsageLimit
 
 		if e.UsageResetPeriod != "" {
 			resetPeriodCounts[e.UsageResetPeriod]++
@@ -2169,13 +2187,34 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 		finalLimit = &totalLimit
 	}
 
-	return &dto.AggregatedEntitlement{
+	out := &dto.AggregatedEntitlement{
 		IsEnabled:        len(entitlements) > 0,
 		UsageLimit:       finalLimit,
 		IsSoftLimit:      isSoftLimit,
 		UsageResetPeriod: usageResetPeriod,
+		AggregationMode:  aggregationMode,
 	}
 
+	if aggregationMode == types.EntitlementGrantAggregationModeParallel || hasGrantConfig {
+		out.Buckets = make([]*dto.AggregatedEntitlementBucket, 0, len(entitlements))
+		for _, e := range entitlements {
+			if !e.IsEnabled {
+				continue
+			}
+			out.Buckets = append(out.Buckets, &dto.AggregatedEntitlementBucket{
+				EntitlementID:      e.ID,
+				SourceEntityID:     e.EntityID,
+				UsageLimit:         e.UsageLimit,
+				GrantType:          e.GrantType,
+				GrantMeasure:       e.GrantMeasure,
+				GrantQuota:         e.GrantQuota,
+				GrantDurationValue: e.GrantDurationValue,
+				GrantDurationUnit:  e.GrantDurationUnit,
+			})
+		}
+	}
+
+	return out
 }
 
 func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
@@ -2329,17 +2368,23 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 		domainEntitlements := make([]*entitlement.Entitlement, 0, len(entResponses))
 		for _, entResp := range entResponses {
 			domainEnt := &entitlement.Entitlement{
-				ID:               entResp.ID,
-				EntityType:       types.EntitlementEntityType(entResp.EntityType),
-				EntityID:         entResp.EntityID,
-				FeatureID:        entResp.FeatureID,
-				FeatureType:      types.FeatureType(entResp.FeatureType),
-				IsEnabled:        entResp.IsEnabled,
-				UsageLimit:       entResp.UsageLimit,
-				UsageResetPeriod: types.EntitlementUsageResetPeriod(entResp.UsageResetPeriod),
-				IsSoftLimit:      entResp.IsSoftLimit,
-				StaticValue:      entResp.StaticValue,
-				ConfigValue:      entResp.ConfigValue,
+				ID:                 entResp.ID,
+				EntityType:         types.EntitlementEntityType(entResp.EntityType),
+				EntityID:           entResp.EntityID,
+				FeatureID:          entResp.FeatureID,
+				FeatureType:        types.FeatureType(entResp.FeatureType),
+				IsEnabled:          entResp.IsEnabled,
+				UsageLimit:         entResp.UsageLimit,
+				UsageResetPeriod:   types.EntitlementUsageResetPeriod(entResp.UsageResetPeriod),
+				IsSoftLimit:        entResp.IsSoftLimit,
+				StaticValue:        entResp.StaticValue,
+				ConfigValue:        entResp.ConfigValue,
+				GrantType:          entResp.GrantType,
+				GrantMeasure:       entResp.GrantMeasure,
+				GrantDurationValue: entResp.GrantDurationValue,
+				GrantDurationUnit:  entResp.GrantDurationUnit,
+				GrantQuota:         entResp.GrantQuota,
+				AggregationMode:    entResp.AggregationMode,
 			}
 			domainEntitlements = append(domainEntitlements, domainEnt)
 		}

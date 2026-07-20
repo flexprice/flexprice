@@ -32,9 +32,7 @@ func (i UsageAlertWorkflowInput) Validate() error {
 	return nil
 }
 
-// UsageAlertActivityInput is the input to both SpendAlertsActivity and
-// WalletAlertsActivity. Same fields as the workflow input; kept as a separate
-// type so activity signatures don't couple to workflow-level input evolution.
+// UsageAlertActivityInput is the input to the usage-alert activities.
 type UsageAlertActivityInput struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`

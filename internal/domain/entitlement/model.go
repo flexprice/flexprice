@@ -41,6 +41,13 @@ type Entitlement struct {
 	types.BaseModel
 }
 
+func (e *Entitlement) IsTimeBoxed() bool {
+	if e == nil {
+		return false
+	}
+	return e.GrantType == types.EntitlementGrantTypeTimeBoxed
+}
+
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
 	if e == nil || e.GrantDurationValue == nil {
 		return 0, ierr.NewError("grant_duration_value is required for time-boxed grants").
@@ -171,6 +178,11 @@ func (e *Entitlement) validateGrantConfig() error {
 		if e.GrantMeasure != "" || e.GrantDurationValue != nil || e.GrantDurationUnit != "" || e.GrantQuota != nil {
 			return ierr.NewError("grant fields must be empty when grant_type is none").
 				WithHint("Set grant_type=time_boxed to opt in, or clear grant_measure/duration/quota").
+				Mark(ierr.ErrValidation)
+		}
+		if e.AggregationMode == types.EntitlementGrantAggregationModeParallel {
+			return ierr.NewError("aggregation_mode=parallel requires grant_type=time_boxed").
+				WithHint("Parallel buckets only exist for time-boxed grants; legacy entitlements always aggregate additively").
 				Mark(ierr.ErrValidation)
 		}
 		return nil

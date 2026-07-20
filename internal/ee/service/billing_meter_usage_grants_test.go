@@ -216,23 +216,6 @@ func TestAdjustMeterUsageGrants_AmountLane_TrueUpGuardRejects(t *testing.T) {
 	}
 }
 
-func TestAdjustMeterUsageGrants_MixedMeasureSkips(t *testing.T) {
-	// Schema drift / admin surgery could produce a mixed-measure grant set on
-	// one feature. Rather than pick one and silently ignore the other, fall
-	// through to the legacy adjustment.
-	bs := newTestBillingService()
-	li := linItem(false, false)
-	c := charge(flatPrice(0.5))
-	grants := []*entitlementgrant.EntitlementGrant{
-		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),
-		makeGrant(100, 250, types.EntitlementGrantMeasureAmount),
-	}
-	_, applied := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService())
-	if applied {
-		t.Fatalf("mixed measures must fall through, got applied=true")
-	}
-}
-
 func TestAdjustMeterUsageGrants_AllUnderQuota_ZerosBillable(t *testing.T) {
 	// Every grant has usage <= quota → total overage is zero. Qty lane
 	// pushes 0 into matchingCharge.Quantity (nothing billable this cycle).

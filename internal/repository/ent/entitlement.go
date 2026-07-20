@@ -675,6 +675,10 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		query = query.Where(entitlement.IsEnabled(*f.IsEnabled))
 	}
 
+	if len(f.GrantTypes) > 0 {
+		query = query.Where(entitlement.GrantTypeIn(f.GrantTypes...))
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {

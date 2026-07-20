@@ -47,14 +47,33 @@ type AggregatedFeature struct {
 	Sources     []*EntitlementSource   `json:"sources"`
 }
 
-// AggregatedEntitlement contains the final calculated entitlement values
+// AggregatedEntitlement contains the final calculated entitlement values.
+//
+// For metered features with parallel aggregation_mode OR any time-boxed grant
+// config, Buckets carries the per-entitlement view; UsageLimit still reports
+// the sum for legacy display but each independent budget lives in Buckets.
 type AggregatedEntitlement struct {
-	IsEnabled        bool                              `json:"is_enabled"`
-	UsageLimit       *int64                            `json:"usage_limit,omitempty"`
-	IsSoftLimit      bool                              `json:"is_soft_limit"`
-	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
-	StaticValues     []string                          `json:"static_values,omitempty"`
-	ConfigValues     []map[string]any                  `json:"config_values,omitempty"`
+	IsEnabled        bool                                   `json:"is_enabled"`
+	UsageLimit       *int64                                 `json:"usage_limit,omitempty"`
+	IsSoftLimit      bool                                   `json:"is_soft_limit"`
+	UsageResetPeriod types.EntitlementUsageResetPeriod      `json:"usage_reset_period,omitempty"`
+	StaticValues     []string                               `json:"static_values,omitempty"`
+	ConfigValues     []map[string]any                       `json:"config_values,omitempty"`
+	AggregationMode  types.EntitlementGrantAggregationMode  `json:"aggregation_mode,omitempty"`
+	Buckets          []*AggregatedEntitlementBucket         `json:"buckets,omitempty"`
+}
+
+// AggregatedEntitlementBucket is the per-entitlement view within an aggregated
+// feature. Emitted when parallel aggregation or a time-boxed grant is present.
+type AggregatedEntitlementBucket struct {
+	EntitlementID      string                             `json:"entitlement_id"`
+	SourceEntityID     string                             `json:"source_entity_id"`
+	UsageLimit         *int64                             `json:"usage_limit,omitempty"`
+	GrantType          types.EntitlementGrantType         `json:"grant_type,omitempty"`
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
 }
 
 // EntitlementSourceType defines the type of entitlement source

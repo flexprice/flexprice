@@ -9,7 +9,6 @@ import (
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -24,7 +23,13 @@ type adjustMeterUsageGrantsResult struct {
 }
 
 // loadEntitlementGrantsByMeterID returns grants overlapping the billing cycle
-// for this subscription's features, bucketed by meter id.
+// for this subscription, bucketed by meter id.
+//
+// One query, all scopes; folding is feature-scope only. A GROUP or SUBSCRIPTION
+// grant spans multiple meters, and this map is consumed per line item — putting
+// the same grant in more than one meter bucket would count its overage once per
+// meter. Those scopes need a cross-line allocation pass at the invoice level
+// before they can bill; until that exists they are intentionally not folded.
 func (s *billingService) loadEntitlementGrantsByMeterID(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -34,20 +39,10 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 	if s.EntitlementGrantRepo == nil || sub == nil {
 		return nil, nil
 	}
-	featureIDs := lo.Uniq(lo.FilterMap(aggregatedFeatures, func(f *dto.AggregatedFeature, _ int) (string, bool) {
-		if f == nil || f.Feature == nil {
-			return "", false
-		}
-		return f.Feature.ID, f.Feature.ID != ""
-	}))
-	if len(featureIDs) == 0 {
-		return nil, nil
-	}
 
 	filter := types.NewNoLimitEntitlementGrantFilter().
 		WithCustomerIDs(sub.CustomerID).
 		WithSubscriptionIDs(sub.ID).
-		WithFeatureIDs(featureIDs...).
 		WithCycleOverlap(periodStart, periodEnd)
 	grants, err := s.EntitlementGrantRepo.List(ctx, filter)
 	if err != nil {
@@ -59,12 +54,10 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 
 	meterByFeatureID := make(map[string]string, len(aggregatedFeatures))
 	for _, f := range aggregatedFeatures {
-		if f == nil || f.Feature == nil {
+		if f == nil || f.Feature == nil || f.Feature.MeterID == "" {
 			continue
 		}
-		if f.Feature.MeterID != "" {
-			meterByFeatureID[f.Feature.ID] = f.Feature.MeterID
-		}
+		meterByFeatureID[f.Feature.ID] = f.Feature.MeterID
 	}
 
 	out := make(map[string][]*entitlementgrant.EntitlementGrant)
@@ -72,11 +65,9 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 		if g == nil || !g.IsFeatureScoped() {
 			continue
 		}
-		meterID := meterByFeatureID[g.ScopeEntityID]
-		if meterID == "" {
-			continue
+		if meterID := meterByFeatureID[g.ScopeEntityID]; meterID != "" {
+			out[meterID] = append(out[meterID], g)
 		}
-		out[meterID] = append(out[meterID], g)
 	}
 	return out, nil
 }
@@ -95,25 +86,19 @@ func (s *billingService) adjustMeterUsageGrants(
 	if len(grants) == 0 {
 		return adjustMeterUsageGrantsResult{}, false
 	}
+	// Measure is set on the EC and copied to every grant at open time; EC-write
+	// validation keeps it consistent per feature, so we can trust the first row.
 	measure := grants[0].Measure
 	if measure == "" {
 		return adjustMeterUsageGrantsResult{}, false
 	}
 
-	// EC validation keeps measure consistent per feature; drop out if runtime disagrees.
-	for _, g := range grants[1:] {
-		if g.Measure != measure {
-			s.Logger.Warn(ctx, "entitlement grant overage: mixed measures on same feature, skipping grants",
-				"meter_id", item.MeterID,
-				"line_item_id", item.ID)
-			return adjustMeterUsageGrantsResult{}, false
-		}
-	}
-
-	// Belt-and-braces guard for amount lane; EC validation should have caught this.
+	// Runtime-only guard: commitments and true-up live on the sub line item, not
+	// the plan-level EC, so this check has to happen here — EC-write validation
+	// can't see them at config time.
 	if measure == types.EntitlementGrantMeasureAmount {
 		if guardErr := amountLanePricingGuard(item, matchingCharge.Price); guardErr != nil {
-			s.Logger.Warn(ctx, "entitlement grant overage: amount lane rejected by runtime pricing guard, skipping grants",
+			s.Logger.Error(ctx, "entitlement grant overage: amount lane rejected, skipping grants",
 				"meter_id", item.MeterID,
 				"line_item_id", item.ID,
 				"reason", guardErr.Error(),
@@ -164,6 +149,18 @@ func (s *billingService) adjustMeterUsageGrants(
 }
 
 // amountLanePricingGuard returns nil when the line item is safe for the amount lane.
+//
+// Why each of these disqualifies amount grants:
+//   - commitment: the pricer walks the sub line's minimum commitment across the
+//     full cycle. Amount grants pre-price a slice of usage inside a window and
+//     hand back OverageAmount; the pricer would then re-apply commitment on top
+//     and either double-charge or under-charge the commit floor.
+//   - true-up: same shape — true-up reconciles the whole cycle against actual
+//     usage. Pre-priced overage bypasses it and produces a wrong final invoice.
+//   - tiered: tier boundaries walk with cumulative cycle quantity. A grant only
+//     knows its own window's qty, so it can't price against the right tier.
+//     EC-write validation already rejects this, but the guard keeps the
+//     billing path safe if a tier is ever added after the EC was created.
 func amountLanePricingGuard(item *subscription.SubscriptionLineItem, price *priceDomain.Price) error {
 	if item == nil {
 		return nil
