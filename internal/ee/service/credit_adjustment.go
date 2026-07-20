@@ -40,15 +40,16 @@ func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) decimal.Decimal {
 	remaining := decimal.Max(decimal.Zero, inv.TotalPrepaidCreditsApplied)
 	totalApplied := decimal.Zero
 	for _, li := range inv.LineItems {
-
+		applied := decimal.Zero
 		if lo.FromPtr(li.PriceType) == string(types.PRICE_TYPE_USAGE) && remaining.IsPositive() {
 			ceiling := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
-
-			applied := decimal.Min(remaining, ceiling)
-			remaining = remaining.Sub(applied)
-			totalApplied = totalApplied.Add(applied)
-			li.PrepaidCreditsApplied = applied
+			if ceiling.IsPositive() {
+				applied = decimal.Min(remaining, ceiling)
+				remaining = remaining.Sub(applied)
+				totalApplied = totalApplied.Add(applied)
+			}
 		}
+		li.PrepaidCreditsApplied = applied
 	}
 	return totalApplied
 }
@@ -232,6 +233,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		s.Logger.Info(ctx, "no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
+			AmountApplied:              decimal.Zero,
 			Currency:                   inv.Currency,
 		}, nil
 	}
@@ -337,8 +339,13 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// This design allows callers to batch invoice updates with other operations.
 		inv.TotalPrepaidCreditsApplied = totalAmountApplied
 
+		amountApplied := decimal.Zero
+		for _, amt := range amountsToDebitFromWallets {
+			amountApplied = amountApplied.Add(amt)
+		}
 		result = &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalAmountApplied,
+			AmountApplied:              amountApplied,
 			Currency:                   inv.Currency,
 		}
 
@@ -364,7 +371,11 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 // whether or not a new debit was made - see the Task 4 lesson above for why that matters).
 func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (*dto.CreditAdjustmentResult, error) {
 	if len(inv.LineItems) == 0 {
-		return &dto.CreditAdjustmentResult{TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied, Currency: inv.Currency}, nil
+		return &dto.CreditAdjustmentResult{
+			TotalPrepaidCreditsApplied: inv.TotalPrepaidCreditsApplied,
+			AmountApplied:              decimal.Zero,
+			Currency:                   inv.Currency,
+		}, nil
 	}
 
 	// Full ceiling across all usage lines (amount - discounts), independent of what's already applied.
@@ -441,7 +452,11 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 		}
 		inv.TotalPrepaidCreditsApplied = totalApplied
 
-		result = &dto.CreditAdjustmentResult{TotalPrepaidCreditsApplied: totalApplied, Currency: inv.Currency}
+		result = &dto.CreditAdjustmentResult{
+			TotalPrepaidCreditsApplied: totalApplied,
+			AmountApplied:              amountToApply,
+			Currency:                   inv.Currency,
+		}
 		return nil
 	})
 	if err != nil {
@@ -486,26 +501,21 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		return consumed, err
 	}
 
-	eligibleInvoices := make([]*invoice.Invoice, 0, len(invoices))
-	for _, inv := range invoices {
-		eligibleInvoices = append(eligibleInvoices, inv)
-	}
-
 	// Track the credit's remaining balance in memory across the pass instead of re-reading the
 	// transaction from the DB before every invoice. DebitWallet independently re-validates the real
 	// balance under its own wallet-level lock before every debit, so a stale local value can only
 	// ever make us request too much - which DebitWallet rejects, and that invoice is skipped like any
 	// other per-invoice failure - never a double-spend.
 	remaining := tx.CreditsAvailable
-	for _, inv := range eligibleInvoices {
+	for _, inv := range invoices {
 		if remaining.LessThanOrEqual(decimal.Zero) {
 			break
 		}
 
-		txSnapshot := *tx
+		txSnapshot := lo.FromPtr(tx)
 		txSnapshot.CreditsAvailable = remaining
 
-		applied, err := s.consumeExpiringCreditIntoInvoice(ctx, inv.ID, &txSnapshot)
+		applied, err := s.consumeExpiringCreditIntoInvoice(ctx, inv, &txSnapshot)
 		if err != nil {
 			s.Logger.Error(ctx, "pre_expiry_apply_failed", "invoice_id", inv.ID, "transaction_id", tx.ID, "error", err)
 			continue // best-effort
@@ -517,79 +527,67 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	return consumed, nil
 }
 
-// consumeExpiringCreditIntoInvoice recomputes one draft invoice (usage as of now — ComputeInvoice is called
-// with a nil request, no period override; usage naturally reflects "as of now" since there's no future
-// event data to aggregate) and applies up to the credit's CreditsAvailable of prepaid credit to it, under a
-// per-invoice Redis lock. Returns how much credit was newly applied to this invoice.
-func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.Context, invoiceID string, tx *wallet.Transaction) (decimal.Decimal, error) {
-	if s.Locker == nil {
-		return decimal.Zero, ierr.NewError("prepaid credit apply lock unavailable").
-			WithHint("Redis cache is not available").
-			Mark(ierr.ErrServiceUnavailable)
-	}
-	lockKey := cache.GenerateKey(ctx, cache.PrefixPrepaidCreditApplyLock, invoiceID)
+// consumeExpiringCreditIntoInvoice recomputes a draft invoice and applies available credit under a per-invoice lock.
+// Returns how much was newly applied.
+func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (decimal.Decimal, error) {
+
+	lockKey := cache.GenerateKey(ctx, cache.PrefixPrepaidCreditApplyLock, inv.ID)
 	lock, err := s.Locker.AcquireLock(ctx, lockKey, cache.ExpiryPrepaidCreditApplyLock)
 	if err != nil {
 		return decimal.Zero, err
 	}
 	if !lock.AcquiredSuccessfully() {
-		s.Logger.Info(ctx, "pre_expiry_lock_rejected", "invoice_id", invoiceID)
+		s.Logger.Info(ctx, "pre_expiry_lock_rejected", "invoice_id", inv.ID)
 		return decimal.Zero, nil // another worker holds it; retried next schedule tick
 	}
 	defer func() { _ = lock.Release(ctx) }()
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	// Standard recompute — usage naturally reflects "as of now". No period override. Runs OUTSIDE the
-	// transaction (it's expensive/ClickHouse-backed), matching ComputeInvoice's own established pattern
-	// of not holding a DB lock during the compute.
-	skipped, err := invoiceService.ComputeInvoice(ctx, invoiceID, nil)
+	skipped, err := invoiceService.ComputeInvoice(ctx, inv.ID, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	// A zero-usage recompute marks the invoice SKIPPED - nothing left to apply credit to, so there's no
-	// point fetching it just to discover that.
+	// A zero-usage recompute marks the invoice SKIPPED - nothing left to apply credit to, so there's no point fetching it just to discover that
 	if skipped {
 		return decimal.Zero, nil
 	}
 
+	// ComputeInvoice above and this point; only DRAFT invoices are eligible.
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return decimal.Zero, ierr.NewError("invoice is not draft").
+			WithHint("Only draft invoices can be consumed into").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": inv.ID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+	lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	inv.LineItems = lineItems
+
 	var newlyApplied decimal.Decimal
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
-		lockedInv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-		if err != nil {
-			return err
-		}
 		// Another process (finalize, a payment) may have changed this invoice's status between
-		// ComputeInvoice above and this point; only DRAFT invoices are eligible.
-		if lockedInv.InvoiceStatus != types.InvoiceStatusDraft {
-			return nil
-		}
-		lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, invoiceID)
-		if err != nil {
-			return err
-		}
-		lockedInv.LineItems = lineItems
 
-		before := lockedInv.TotalPrepaidCreditsApplied
-		result, err := s.applyExpiringCreditToInvoice(ctx, lockedInv, tx)
+		result, err := s.applyExpiringCreditToInvoice(ctx, inv, tx)
 		if err != nil {
 			return err
 		}
 
-		newTotal := lockedInv.Subtotal.Sub(lockedInv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied)
+		newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(result.TotalPrepaidCreditsApplied).Add(inv.TotalTax)
 		if newTotal.IsNegative() {
 			newTotal = decimal.Zero
 		}
-		lockedInv.Total = newTotal
-		lockedInv.AmountDue = lockedInv.Total
-		lockedInv.AmountRemaining = lockedInv.Total.Sub(lockedInv.AmountPaid)
+		inv.Total = newTotal
+		inv.AmountDue = inv.Total
+		inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
-		newlyApplied = result.TotalPrepaidCreditsApplied.Sub(before)
-		if newlyApplied.IsNegative() {
-			newlyApplied = decimal.Zero
-		}
-		return s.InvoiceRepo.Update(ctx, lockedInv)
+		newlyApplied = result.AmountApplied
+		return s.InvoiceRepo.Update(ctx, inv)
 	})
 	if err != nil {
 		return decimal.Zero, err
