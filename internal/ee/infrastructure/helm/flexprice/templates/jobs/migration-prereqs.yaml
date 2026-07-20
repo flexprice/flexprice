@@ -1,0 +1,30 @@
+{{- /*
+  Dedicated pre-install/pre-upgrade ServiceAccount for the migration Job.
+
+  The migration Job (jobs/migration.yaml) is a pre-install/pre-upgrade hook at
+  weight -5, so it needs a ServiceAccount that exists BEFORE it runs. The primary
+  application ServiceAccount is a normal release resource, created only after all
+  pre-install hooks, so on a fresh install the migration hook would fail with
+  "error looking up service account ...: serviceaccount not found".
+
+  Rather than convert the PRIMARY ServiceAccount into a hook (which would orphan it
+  on `helm uninstall` and delete it on a failed upgrade — see CodeRabbit review on
+  PR #2321), render a dedicated `-migration` ServiceAccount here at weight -10
+  (ahead of the Job). hook-delete-policy before-hook-creation,hook-succeeded cleans
+  it up after the Job completes so it never lingers. It carries the same
+  Workload-Identity / IRSA annotations as the app SA so the migration can reach
+  cloud dependencies (e.g. GMK via OAUTHBEARER).
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "flexprice.fullname" . }}-migration
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- with .Values.serviceAccount.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}

@@ -8,17 +8,6 @@ metadata:
   name: {{ include "flexprice.fullname" . }}-config
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
-  annotations:
-    # Rendered as a pre-install/pre-upgrade hook (weight -10, ahead of the
-    # migration job at -5) so the migration hook — which mounts this ConfigMap —
-    # can start on a fresh install. Without this, `helm install` deadlocks: the
-    # migration hook runs before the ConfigMap (a normal resource) is created and
-    # fails with `configmap "<release>-config" not found`. hook-delete-policy is
-    # before-hook-creation only (NOT hook-succeeded) so the ConfigMap persists for
-    # the long-lived app Deployments that also mount it.
-    "helm.sh/hook": pre-install,pre-upgrade
-    "helm.sh/hook-weight": "-10"
-    "helm.sh/hook-delete-policy": before-hook-creation
 data:
   config.yaml: |
     server:
