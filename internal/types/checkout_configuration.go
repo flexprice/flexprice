@@ -10,6 +10,7 @@ import (
 type CheckoutConfiguration struct {
 	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
+	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -31,6 +32,13 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.ModifySubscriptionParams.Validate()
+	case CheckoutActionWalletTopup:
+		if c.WalletTopupParams == nil {
+			return ierr.NewError("wallet_topup_params is required for wallet_topup action").
+				WithHint("Provide wallet_topup_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.WalletTopupParams.Validate()
 	}
 	return nil
 }
@@ -122,6 +130,27 @@ func (p *ModifySubscriptionParams) Validate() error {
 				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+	return nil
+}
+
+// WalletTopupParams is persisted on checkout sessions for payment-gated wallet
+// top-ups. Credits are applied on payment success via invoice metadata
+// (wallet_transaction_id), not by re-running top-up from this config.
+type WalletTopupParams struct {
+	WalletID            string `json:"wallet_id"`
+	WalletTransactionID string `json:"wallet_transaction_id,omitempty"`
+}
+
+func (p *WalletTopupParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("wallet_topup_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.WalletID == "" {
+		return ierr.NewError("wallet_id is required").
+			WithHint("Provide wallet_id in wallet_topup_params").
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }

@@ -44,7 +44,7 @@ type RedirectionParams struct {
 }
 
 // CheckoutParams is the reusable checkout opt-in payload shared by
-// create-session and payment-gated subscription modify.
+// create-session, payment-gated subscription modify, and wallet top-up.
 type CheckoutParams struct {
 	PaymentParams
 	RedirectionParams
@@ -80,6 +80,13 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 	if r.Action == types.CheckoutActionModifySubscription {
 		return ierr.NewError("modify_subscription is not supported via create checkout session").
 			WithHint("Use POST /subscriptions/{id}/modify/execute with a checkout object instead").
+			Mark(ierr.ErrValidation)
+	}
+
+	// wallet_topup sessions are created only via wallet top-up (pay-first).
+	if r.Action == types.CheckoutActionWalletTopup {
+		return ierr.NewError("wallet_topup is not supported via create checkout session").
+			WithHint("Use POST /wallets/{id}/top-up with a checkout object instead").
 			Mark(ierr.ErrValidation)
 	}
 
