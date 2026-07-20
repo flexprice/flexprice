@@ -440,11 +440,21 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
-	// Grouped_invoicing children skip their opening invoice; charges land on the parent instead.
-	if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
-		sub.SubscriptionStatus != types.SubscriptionStatusTrialing &&
-		sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
+	// Create opening invoice for eligible statuses (trial conversion invoice is created at trial end).
+	// Grouped_invoicing / inherited skip; charges for grouped children land on the parent.
+	eligibleStatusesForOpeningInvoice := []types.SubscriptionStatus{
+		types.SubscriptionStatusIncomplete,
+		types.SubscriptionStatusActive,
+	}
+
+	eligibleTypesForOpeningInvoice := []types.SubscriptionType{
+		types.SubscriptionTypeStandalone,
+		types.SubscriptionTypeParent,
+		types.SubscriptionTypeDelegatedInvoicing,
+	}
+
+	if lo.Contains(eligibleStatusesForOpeningInvoice, sub.SubscriptionStatus) &&
+		lo.Contains(eligibleTypesForOpeningInvoice, sub.SubscriptionType) {
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
 		createReq := &dto.CreateSubscriptionInvoiceRequest{
