@@ -90,8 +90,6 @@ const (
 	TemporalRazorpayCustomerSyncWorkflow               TemporalWorkflowType = "RazorpayCustomerSyncWorkflow"
 	TemporalRazorpayInvoiceSyncWorkflow                TemporalWorkflowType = "RazorpayInvoiceSyncWorkflow"
 	TemporalRecalculateInvoiceWorkflow                 TemporalWorkflowType = "RecalculateInvoiceWorkflow"
-	TemporalReprocessEventsForPlanWorkflow             TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
-	TemporalReprocessEventsWorkflow                    TemporalWorkflowType = "ReprocessEventsWorkflow"
 	TemporalReprocessRawEventsWorkflow                 TemporalWorkflowType = "ReprocessRawEventsWorkflow"
 	TemporalScheduleDraftFinalizationWorkflow          TemporalWorkflowType = "ScheduleDraftFinalizationWorkflow"
 	TemporalScheduleSubscriptionBillingWorkflow        TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
@@ -182,8 +180,6 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalRazorpayCustomerSyncWorkflow,
 		TemporalRazorpayInvoiceSyncWorkflow,
 		TemporalRecalculateInvoiceWorkflow,
-		TemporalReprocessEventsForPlanWorkflow,
-		TemporalReprocessEventsWorkflow,
 		TemporalReprocessRawEventsWorkflow,
 		TemporalScheduleDraftFinalizationWorkflow,
 		TemporalScheduleSubscriptionBillingWorkflow,
@@ -229,7 +225,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueInvoice
 	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow:
 		return TemporalTaskQueueWorkflows
-	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
+	case TemporalReprocessRawEventsWorkflow:
 		return TemporalTaskQueueReprocessEvents
 	default:
 		return TemporalTaskQueueTask // Default fallback
@@ -311,9 +307,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
-			TemporalReprocessEventsWorkflow,
 			TemporalReprocessRawEventsWorkflow,
-			TemporalReprocessEventsForPlanWorkflow,
 		}
 	case TemporalTaskQueueCron:
 		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))

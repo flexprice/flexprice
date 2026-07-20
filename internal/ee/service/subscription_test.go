@@ -389,7 +389,6 @@ func (s *SubscriptionServiceSuite) setupService() {
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
@@ -1512,10 +1511,10 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionSubscriberRejectedWhenC
 	s.Equal(child.ID, resp.CustomerID)
 }
 
-func (s *SubscriptionServiceSuite) TestGetFeatureUsageBySubscription_ParentAggregatesChildCustomerFeatureUsage() {
+func (s *SubscriptionServiceSuite) TestGetMeterUsageBySubscription_ParentAggregatesChildCustomerMeterUsage() {
 	ctx := s.GetContext()
 
-	childExternal := "ext_child_feature_usage_agg"
+	childExternal := "ext_child_meter_usage_agg"
 	child := &customer.Customer{
 		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
 		ExternalID: childExternal,
@@ -1564,26 +1563,34 @@ func (s *SubscriptionServiceSuite) TestGetFeatureUsageBySubscription_ParentAggre
 	}
 	s.Require().NotNil(apiLI, "expected API calls subscription line item in repo for subscription %s", parentSub.ID)
 
-	fuStore := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
-	s.NoError(fuStore.InsertProcessedEvent(ctx, &events.FeatureUsage{
-		Event: events.Event{
-			ID:                 s.GetUUID(),
-			TenantID:           parentSub.TenantID,
-			EnvironmentID:      parentSub.EnvironmentID,
-			EventName:          s.testData.meters.apiCalls.EventName,
-			CustomerID:         child.ID,
-			ExternalCustomerID: childExternal,
-			Timestamp:          parentSub.CurrentPeriodStart.Add(time.Hour),
-		},
-		SubscriptionID: parentSub.ID,
-		SubLineItemID:  apiLI.ID,
-		PriceID:        s.testData.prices.apiCalls.ID,
-		FeatureID:      types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FEATURE),
-		MeterID:        s.testData.meters.apiCalls.ID,
-		QtyTotal:       decimal.NewFromInt(99),
-	}))
+	// Seed 99 meter_usage rows under the CHILD's external_customer_id to verify
+	// GetMeterUsageBySubscription aggregates across inherited children. COUNT-style
+	// meters emit qty=1 per event; 99 rows → total qty = 99.
+	ts := parentSub.CurrentPeriodStart.Add(time.Hour)
+	records := make([]*events.MeterUsage, 0, 99)
+	for i := 0; i < 99; i++ {
+		id := s.GetUUID()
+		records = append(records, &events.MeterUsage{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           parentSub.TenantID,
+				EnvironmentID:      parentSub.EnvironmentID,
+				EventName:          s.testData.meters.apiCalls.EventName,
+				CustomerID:         child.ID,
+				ExternalCustomerID: childExternal,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+			},
+			MeterID:    s.testData.meters.apiCalls.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: fmt.Sprintf("%s:%s", s.testData.meters.apiCalls.EventName, id),
+		})
+	}
+	// apiLI is retained only to prove the parent's usage line item exists for this meter.
+	_ = apiLI
+	s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
 
-	out, err := s.service.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+	out, err := s.service.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: parentSub.ID,
 		Source:         string(types.UsageSourceAnalytics),
 		StartTime:      parentSub.CurrentPeriodStart,
@@ -4979,6 +4986,36 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 				}
 			}
 		})
+	}
+}
+
+// TestListSubscriptions_ExpandEntitlements exercises expand="entitlements" on
+// POST /subscriptions/search: the aggregated features list should be attached
+// per item, and only fetched once per unique customer.
+func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
+	qf := types.NewDefaultQueryFilter()
+	qf.Expand = lo.ToPtr(string(types.ExpandEntitlements))
+	filter := &types.SubscriptionFilter{
+		QueryFilter: qf,
+		CustomerID:  s.testData.customer.ID,
+	}
+
+	subs, err := s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	s.NotEmpty(subs.Items, "seed data must contain at least one subscription for the test customer")
+
+	for _, sub := range subs.Items {
+		// Entitlements slice may be empty if the customer has no entitlements,
+		// but it must be non-nil once the caller opts in via expand.
+		s.NotNil(sub.Entitlements, "expand=entitlements should populate Entitlements (possibly empty slice)")
+	}
+
+	// No expand → field must stay nil (default behavior preserved).
+	qf.Expand = nil
+	subs, err = s.service.ListSubscriptions(s.GetContext(), filter)
+	s.NoError(err)
+	for _, sub := range subs.Items {
+		s.Nil(sub.Entitlements, "without expand=entitlements, Entitlements must be nil")
 	}
 }
 

@@ -2466,8 +2466,12 @@ func init() {
 	usagerecordDescAmount := usagerecordFields[6].Descriptor()
 	// usagerecord.DefaultAmount holds the default value on creation for the amount field.
 	usagerecord.DefaultAmount = usagerecordDescAmount.Default.(decimal.Decimal)
+	// usagerecordDescCurrency is the schema descriptor for currency field.
+	usagerecordDescCurrency := usagerecordFields[7].Descriptor()
+	// usagerecord.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	usagerecord.CurrencyValidator = usagerecordDescCurrency.Validators[0].(func(string) error)
 	// usagerecordDescAllProvidersSynced is the schema descriptor for all_providers_synced field.
-	usagerecordDescAllProvidersSynced := usagerecordFields[10].Descriptor()
+	usagerecordDescAllProvidersSynced := usagerecordFields[11].Descriptor()
 	// usagerecord.DefaultAllProvidersSynced holds the default value on creation for the all_providers_synced field.
 	usagerecord.DefaultAllProvidersSynced = usagerecordDescAllProvidersSynced.Default.(bool)
 	userMixin := schema.User{}.Mixin()

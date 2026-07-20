@@ -182,23 +182,6 @@ func (p *CreateInvoiceRequestForChargesParams) Validate() error {
 	return validator.ValidateRequest(p)
 }
 
-// CalculateFeatureUsageChargesParams holds inputs for CalculateFeatureUsageCharges.
-type CalculateFeatureUsageChargesParams struct {
-	Subscription *subscription.Subscription `validate:"required"`
-	Usage        *GetUsageBySubscriptionResponse
-	PeriodStart  time.Time `validate:"required"`
-	PeriodEnd    time.Time `validate:"required"`
-	// Source controls which ClickHouse table / query mode is used.
-	// Set to types.UsageSourceInvoiceCreation to use FINAL on feature_usage.
-	// Zero value means no special source.
-	Source types.UsageSource
-}
-
-// Validate enforces struct tags.
-func (p *CalculateFeatureUsageChargesParams) Validate() error {
-	return validator.ValidateRequest(p)
-}
-
 // AggregateEntitlementsParams holds inputs for AggregateEntitlements.
 type AggregateEntitlementsParams struct {
 	Entitlements   []*EntitlementResponse
@@ -224,8 +207,3 @@ type CalculateUsageChargesResult struct {
 	TotalAmount decimal.Decimal
 }
 
-// CalculateFeatureUsageChargesResult holds the output of CalculateFeatureUsageCharges.
-type CalculateFeatureUsageChargesResult struct {
-	LineItems   []CreateInvoiceLineItemRequest
-	TotalAmount decimal.Decimal
-}

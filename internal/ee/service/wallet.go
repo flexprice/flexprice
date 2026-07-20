@@ -9,7 +9,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -602,6 +601,10 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		if bonusCfg.Enabled {
 			if slab := findBonusSlab(bonusCfg.Slabs, req.CreditsToAdd); slab != nil {
 				req.BonusCreditsToAdd = lo.ToPtr(resolveBonusCredits(slab, req.CreditsToAdd))
+				// Slab expiry only kicks in if the caller didn't pin an explicit expiry.
+				if req.BonusCreditsExpiryDateUTC == nil {
+					req.BonusCreditsExpiryDateUTC = resolveBonusExpiry(slab, time.Now().UTC())
+				}
 			}
 		}
 	}
@@ -680,6 +683,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		IdempotencyKey:    idempotencyKey,
 		Priority:          req.Priority,
 		BonusCreditAmount: req.BonusCreditsToAdd,
+		BonusExpiryDate:   req.BonusCreditsExpiryDateUTC,
 	}
 
 	// Process wallet credit immediately
@@ -734,9 +738,33 @@ func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Deci
 	}
 }
 
+// resolveBonusExpiry computes the bonus tx expiry from a matched slab (now + duration).
+// Returns nil when the slab omits the duration config (bonus never expires).
+func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time {
+	if slab.ExpirationDuration == nil || slab.ExpirationDurationUnit == nil {
+		return nil
+	}
+	duration := *slab.ExpirationDuration
+	var expiry time.Time
+	switch *slab.ExpirationDurationUnit {
+	case types.CreditGrantExpiryDurationUnitDays:
+		expiry = now.Add(time.Duration(duration) * 24 * time.Hour)
+	case types.CreditGrantExpiryDurationUnitWeeks:
+		expiry = now.Add(time.Duration(duration) * 7 * 24 * time.Hour)
+	case types.CreditGrantExpiryDurationUnitMonths:
+		expiry = now.AddDate(0, duration, 0)
+	case types.CreditGrantExpiryDurationUnitYears:
+		expiry = now.AddDate(duration, 0, 0)
+	default:
+		return nil
+	}
+	return &expiry
+}
+
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
 	// Initialize required services
 	invoiceService := NewInvoiceService(s.ServiceParams)
+	taxService := NewTaxService(s.ServiceParams)
 
 	settingsService := &settingsService{
 		ServiceParams: s.ServiceParams,
@@ -859,6 +887,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				CreditBalanceAfter:  bonusCreditBalanceAfter,
 				Currency:            w.Currency,
 				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				ExpiryDate:          req.BonusCreditsExpiryDateUTC,
 				BaseModel:           types.GetDefaultBaseModel(ctx),
 			}
 
@@ -928,6 +957,23 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			amountPaid = &amount
 		}
 
+		// Pull the customer's auto-apply tax rates and stamp them on the top-up invoice so
+		// the purchase gets taxed the same as any other one-off charge for that customer.
+		taxFilter := types.NewNoLimitTaxAssociationFilter()
+		taxFilter.EntityType = types.TaxRateEntityTypeCustomer
+		taxFilter.EntityID = w.CustomerID
+		taxFilter.AutoApply = lo.ToPtr(true)
+		taxFilter.Status = lo.ToPtr(types.StatusPublished)
+		customerTaxAssociations, err := taxService.ListTaxAssociations(ctx, taxFilter)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to fetch customer tax associations").
+				Mark(ierr.ErrInternal)
+		}
+		taxRateIDs := lo.Map(customerTaxAssociations.Items, func(a *dto.TaxAssociationResponse, _ int) string {
+			return a.TaxRateID
+		})
+
 		invReq := dto.CreateInvoiceRequest{
 			CustomerID:     w.CustomerID,
 			AmountDue:      amount,
@@ -945,12 +991,13 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", req.CreditsToAdd.String())),
 				},
 			},
-			PaymentStatus: lo.ToPtr(paymentStatus),
-			Metadata:      invoiceMetadata,
-			BillingReason: req.BillingReason,
+			PaymentStatus:    lo.ToPtr(paymentStatus),
+			Metadata:         invoiceMetadata,
+			BillingReason:    req.BillingReason,
+			ForceSyncInvoice: req.ForceSyncInvoice,
+			TaxRates:         taxRateIDs,
 		}
-		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-		inv, err := invoiceService.CreateInvoice(ctx, invReq)
+		inv, err := invoiceService.CreateOneOffInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to create invoice for purchased credits").
@@ -2046,6 +2093,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 				Currency:            w.Currency,
 				EnvironmentID:       types.GetEnvironmentID(ctx),
 				TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
+				ExpiryDate:          req.BonusExpiryDate,
 				BaseModel:           types.GetDefaultBaseModel(ctx),
 			}
 			bonusTx.CreditsAvailable, err = bonusTx.ComputeCreditsAvailable()
@@ -2945,7 +2993,6 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
-		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
 
 		// Calculate total pending charges (usage)
 		for _, sub := range filteredSubscriptions {
@@ -2960,24 +3007,12 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				Source:         string(types.UsageSourceWallet),
 			}
 
-			var usage *dto.GetUsageBySubscriptionResponse
-			var err error
-			if useMeterUsage {
-				usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
-			} else {
-				usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
-			}
+			usage, err := subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
 			if err != nil {
 				return nil, err
 			}
-			if s.Config != nil && s.Config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
-				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
-			}
 
-			// Calculate must match the Get branch. The two Calculate impls
-			// diverge in the source they read for bucketed meters, windowed
-			// entitlements, and windowed commitments
-			usageCharges, usageTotal, err := billingService.CalculateMeterUsageCharges(
+			lineItems, totalAmount, err := billingService.CalculateMeterUsageCharges(
 				ctx, sub, usage, periodStart, periodEnd, types.UsageSourceWallet,
 			)
 			if err != nil {
@@ -2986,11 +3021,10 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 
 			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", usageCharges,
-				"use_meter_usage", useMeterUsage)
+				"usage_total", totalAmount,
+				"num_usage_charges", len(lineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(totalAmount)
 		}
 	}
 
@@ -3850,23 +3884,4 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	}
 
 	return balance
-}
-
-// publishBenchmarkEvent publishes a usage benchmark event to Kafka.
-// Fire-and-forget: errors are logged but never returned to the caller.
-func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionID string, startTime, endTime time.Time) {
-	benchSvc := NewUsageBenchmarkService(s.ServiceParams, nil, nil, nil, nil)
-	evt := &events.UsageBenchmarkEvent{
-		SubscriptionID: subscriptionID,
-		StartTime:      startTime,
-		EndTime:        endTime,
-		TenantID:       types.GetTenantID(ctx),
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-	}
-	if err := benchSvc.PublishEvent(ctx, evt); err != nil {
-		s.Logger.Info(ctx, "usage benchmark: failed to publish event",
-			"subscription_id", subscriptionID,
-			"error", err,
-		)
-	}
 }

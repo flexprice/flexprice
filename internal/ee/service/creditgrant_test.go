@@ -85,7 +85,6 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,

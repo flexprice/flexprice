@@ -172,9 +172,9 @@ func (r *UpdateSubscriptionLineItemRequest) HasCommitment() bool {
 }
 
 // Validate validates the create subscription line item request.
-// price is optional and can be provided for MinQuantity validation when using price_id.
+// linePrice is optional and can be provided for MinQuantity validation when using price_id.
 // sub is optional; when provided, line item and inline price start/end dates are validated to fall within subscription bounds.
-func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *subscription.Subscription) error {
+func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub *subscription.Subscription) error {
 	// Exactly one of price_id or price must be set
 	hasPriceID := r.PriceID != ""
 	hasPrice := r.Price != nil
@@ -189,7 +189,7 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 			Mark(ierr.ErrValidation)
 	}
 
-	onetimeIgnoresRequestEndDate := (price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
+	onetimeIgnoresRequestEndDate := (linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
 		(r.Price != nil && r.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME)
 
 	// Validate start date is not after end date if both are provided
@@ -261,18 +261,18 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 	// Note: inline price path (r.Price) is nil here; ONETIME billing period is validated
 	// downstream in CreatePriceRequest.Validate() for that path.
 	// ONETIME charges must use ADVANCE invoice cadence
-	if price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-		if price.InvoiceCadence != "" && price.InvoiceCadence != types.InvoiceCadenceAdvance {
+	if linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		if linePrice.InvoiceCadence != "" && linePrice.InvoiceCadence != types.InvoiceCadenceAdvance {
 			return ierr.NewError("ONETIME charges must have invoice_cadence ADVANCE").
 				WithHint("One-time charges are always billed in advance").
 				Mark(ierr.ErrValidation)
 		}
 	}
 
-	// Validate quantity is positive if provided
-	if !r.Quantity.IsZero() && r.Quantity.IsNegative() {
-		return ierr.NewError("quantity must be positive").
-			WithHint("Quantity must be positive").
+	// Reject negative quantity; zero defaults to min_quantity downstream.
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Quantity cannot be negative").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -286,24 +286,6 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 	if hasPrice {
 		if err := validator.ValidateRequest(r.Price); err != nil {
 			return err
-		}
-	}
-
-	// price_id path: validate against price when provided (e.g. MinQuantity)
-	if price != nil && price.Type == types.PRICE_TYPE_FIXED && price.MinQuantity != nil {
-		finalQuantity := r.Quantity
-		if finalQuantity.IsZero() {
-			// Will be set to MinQuantity in ToSubscriptionLineItem, so validation passes
-			finalQuantity = *price.MinQuantity
-		}
-		if finalQuantity.LessThan(lo.FromPtr(price.MinQuantity)) {
-			return ierr.NewError("quantity must be greater than or equal to min_quantity").
-				WithHint("Quantity must be at least the minimum quantity specified for this price").
-				WithReportableDetails(map[string]interface{}{
-					"quantity":     finalQuantity.String(),
-					"min_quantity": price.MinQuantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -487,10 +469,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
-	// Always use price display name (priority: request > price display name)
 	if r.DisplayName != "" {
 		lineItem.DisplayName = r.DisplayName
-	} else if params.Price != nil && params.Price.DisplayName != "" {
+	} else if params.Price != nil {
 		lineItem.DisplayName = params.Price.DisplayName
 	}
 
@@ -503,14 +484,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 			}
 			lineItem.Quantity = decimal.Zero
 		} else {
-			// For fixed prices, use MinQuantity if quantity not provided and MinQuantity exists
-			if !r.Quantity.IsZero() {
-				lineItem.Quantity = r.Quantity
-			} else if params.Price.MinQuantity != nil {
-				lineItem.Quantity = lo.FromPtr(params.Price.MinQuantity)
-			} else {
-				lineItem.Quantity = params.Price.GetDefaultQuantity()
-			}
+			// Zero/omitted quantity defaults to MinQuantity, else the price's default.
+			// Non-zero quantity is used as-is (no floor validation on the create path).
+			lineItem.Quantity = price.ApplyQuantityDefault(r.Quantity, params.Price.Price)
 		}
 
 		// Copy price unit fields from price to line item

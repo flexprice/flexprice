@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
+	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
@@ -45,7 +46,6 @@ type InvoiceService interface {
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
-	GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
@@ -69,6 +69,7 @@ type InvoiceService interface {
 	SyncInvoiceToChargebeeIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, invoiceID string) error
+	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
 
@@ -130,7 +131,27 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	req.PreparedTaxRates = finalTaxRates
 
 	// Delegate to CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-	return s.CreateInvoice(ctx, req)
+	resp, err := s.CreateInvoice(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ForceSyncInvoice {
+		if err := s.SyncInvoiceToMoyasarIfEnabled(ctx, &resp.Invoice); err != nil {
+			s.Logger.Error(ctx, "force sync to Moyasar failed",
+				"error", err, "invoice_id", resp.ID)
+			return resp, nil
+		}
+		inv, err := s.InvoiceRepo.Get(ctx, resp.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to reload invoice after Moyasar sync",
+				"error", err, "invoice_id", resp.ID)
+			return resp, nil
+		}
+		resp = dto.NewInvoiceResponse(inv)
+	}
+
+	return resp, nil
 }
 
 // CreateEmptyDraftInvoice creates a zero-dollar draft invoice without line items or invoice number.
@@ -670,8 +691,8 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 		"feature_ids_count", len(featureIDs),
 		"customer_id", customer.ExternalID)
 
-	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
-	analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get bulk usage analytics",
 			"invoice_id", inv.ID,
@@ -1542,6 +1563,70 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 	return nil
 }
 
+// SyncInvoiceToMoyasarIfEnabled syncs the invoice to Moyasar if a Moyasar connection
+// is configured with outbound invoice sync enabled. If the customer has an active
+// saved payment method (token), the invoice is also charged automatically; otherwise
+// the invoice is synced as a Moyasar invoice link so the customer can pay manually.
+func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
+				"invoice_id", inv.ID)
+			return nil // Not an error, just skip sync
+		}
+		return err // Genuine failure (DB error, etc.) — let the caller retry
+	}
+	if conn == nil {
+		s.Logger.Debug(ctx, "Moyasar connection not available, skipping invoice sync",
+			"invoice_id", inv.ID)
+		return nil // Not an error, just skip sync
+	}
+	if !conn.IsInvoiceOutboundEnabled() {
+		s.Logger.Debug(ctx, "invoice sync disabled for Moyasar connection, skipping invoice sync",
+			"invoice_id", inv.ID, "connection_id", conn.ID)
+		return nil // Not an error, just skip sync
+	}
+
+	moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
+	if err != nil {
+		return err // Genuine failure — let the caller retry
+	}
+
+	customerService := NewCustomerService(s.ServiceParams)
+	syncResp, err := moyasarIntegration.InvoiceSyncSvc.SyncInvoiceToMoyasar(
+		ctx,
+		moyasar.MoyasarInvoiceSyncRequest{InvoiceID: inv.ID},
+		customerService,
+	)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "successfully synced invoice to Moyasar",
+		"invoice_id", inv.ID,
+		"moyasar_invoice_id", syncResp.MoyasarInvoiceID)
+
+	if inv.AmountDue.IsZero() {
+		s.Logger.Debug(ctx, "invoice amount is zero, skipping Moyasar autopay",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	charged, err := moyasarIntegration.ChargeInvoiceWithToken(
+		ctx, inv.ID, inv.CustomerID, inv.AmountDue, inv.Currency, syncResp.MoyasarInvoiceID,
+	)
+	if err != nil {
+		return err
+	}
+	if charged {
+		s.Logger.Info(ctx, "invoice charged via saved Moyasar token, webhook will confirm",
+			"invoice_id", inv.ID, "moyasar_invoice_id", syncResp.MoyasarInvoiceID)
+	}
+
+	return nil
+}
+
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
@@ -1940,62 +2025,6 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	s.Logger.Info(ctx, "prepared invoice request for internal preview",
-		"invoice_request", invReq)
-
-	if req.HideZeroChargesLineItems {
-		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
-			return !item.Amount.IsZero()
-		})
-	}
-
-	// Create a draft invoice object for preview; ToInvoice applies preview discounts and taxes
-	inv, err := invReq.ToInvoice(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create preview response
-	response := dto.NewInvoiceResponse(inv)
-
-	// Get customer information
-	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-	response.WithCustomer(&dto.CustomerResponse{Customer: customer})
-
-	return response, nil
-}
-
-// GetMeterUsagePreviewInvoice generates a preview invoice using the meter_usage table for usage data.
-func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
-	billingService := NewBillingService(s.ServiceParams)
-
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if req.PeriodStart == nil {
-		req.PeriodStart = &sub.CurrentPeriodStart
-	}
-
-	if req.PeriodEnd == nil {
-		req.PeriodEnd = &sub.CurrentPeriodEnd
-	}
-
-	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   sub,
-		PeriodStart:    *req.PeriodStart,
-		PeriodEnd:      *req.PeriodEnd,
-		ReferencePoint: types.ReferencePointMeterUsagePreview,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Info(ctx, "prepared invoice request for meter usage preview",
 		"invoice_request", invReq)
 
 	if req.HideZeroChargesLineItems {
@@ -3762,7 +3791,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 
 	// Step 3: Make analytics requests for each period group
 	allAnalyticsItems := make([]dto.UsageAnalyticItem, 0)
-	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
 
 	for periodKey, lineItemsInPeriod := range periodGroups {
 		// Collect feature IDs for this period
@@ -3794,7 +3823,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 			"line_items_count", len(lineItemsInPeriod),
 			"group_by", groupBy)
 
-		analyticsResponse, err := featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+		analyticsResponse, err := meterUsageService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get period-specific usage analytics",
 				"invoice_id", inv.ID,
@@ -3930,6 +3959,15 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 		return nil, err
 	}
 
+	// Parse and validate expand up front so a bad token 400s instead of silently no-op.
+	var expand types.Expand
+	if req.Expand != "" {
+		expand = types.NewExpand(req.Expand)
+		if err := expand.Validate(types.InvoiceExpandConfig); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get the invoice first
 	invoice, err := s.GetInvoice(ctx, req.ID)
 	if err != nil {
@@ -3950,6 +3988,21 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 		if req.ForceRuntimeRecalculation {
 			s.recalculateInvoiceTotals(invoice)
 		}
+	}
+
+	// Attach per-rate details to each applied tax when the caller asked for it.
+	// GetInvoice always returns `taxes`, but with only IDs + amounts; the tax_rate object
+	// (name/code/percentage/fixed value) is nil unless we re-fetch with expand.
+	if expand.Has(types.ExpandTaxApplied) && expand.GetNested(types.ExpandTaxApplied).Has(types.ExpandTaxRate) {
+		taxFilter := types.NewNoLimitTaxAppliedFilter()
+		taxFilter.EntityType = types.TaxRateEntityTypeInvoice
+		taxFilter.EntityID = invoice.ID
+		taxFilter.QueryFilter.Expand = lo.ToPtr(string(types.ExpandTaxRate))
+		taxes, err := NewTaxService(s.ServiceParams).ListTaxApplied(ctx, taxFilter)
+		if err != nil {
+			return nil, err
+		}
+		invoice.WithTaxes(taxes.Items)
 	}
 
 	return invoice, nil

@@ -171,6 +171,12 @@ func (urc *UsageRecordCreate) SetNillableAmount(d *decimal.Decimal) *UsageRecord
 	return urc
 }
 
+// SetCurrency sets the "currency" field.
+func (urc *UsageRecordCreate) SetCurrency(s string) *UsageRecordCreate {
+	urc.mutation.SetCurrency(s)
+	return urc
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (urc *UsageRecordCreate) SetPeriodStart(t time.Time) *UsageRecordCreate {
 	urc.mutation.SetPeriodStart(t)
@@ -323,6 +329,14 @@ func (urc *UsageRecordCreate) check() error {
 	if _, ok := urc.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "UsageRecord.amount"`)}
 	}
+	if _, ok := urc.mutation.Currency(); !ok {
+		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "UsageRecord.currency"`)}
+	}
+	if v, ok := urc.mutation.Currency(); ok {
+		if err := usagerecord.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
+		}
+	}
 	if _, ok := urc.mutation.PeriodStart(); !ok {
 		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "UsageRecord.period_start"`)}
 	}
@@ -418,6 +432,10 @@ func (urc *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) 
 	if value, ok := urc.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
+	}
+	if value, ok := urc.mutation.Currency(); ok {
+		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
+		_node.Currency = value
 	}
 	if value, ok := urc.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)

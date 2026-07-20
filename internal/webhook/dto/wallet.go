@@ -41,12 +41,14 @@ type TransactionWebhookPayload struct {
 	EventType   types.WebhookEventName         `json:"event_type"`
 	Transaction *dto.WalletTransactionResponse `json:"transaction"`
 	Wallet      *dto.WalletResponse            `json:"wallet"`
+	Customer    *dto.CustomerResponse          `json:"customer,omitempty"`
 }
 
 type TransactionUpdatedWebhookPayload struct {
 	EventType          types.WebhookEventName         `json:"event_type"`
 	UpdatedTransaction *dto.WalletTransactionResponse `json:"updated_transaction"`
 	Wallet             *dto.WalletResponse            `json:"wallet"`
+	Customer           *dto.CustomerResponse          `json:"customer,omitempty"`
 }
 
 func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerResponse, alert *WalletAlertInfo, eventType types.WebhookEventName) *WalletWebhookPayload {
@@ -58,19 +60,21 @@ func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerR
 	}
 }
 
-func NewTransactionWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, eventType types.WebhookEventName) *TransactionWebhookPayload {
+func NewTransactionWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, customer *dto.CustomerResponse, eventType types.WebhookEventName) *TransactionWebhookPayload {
 	return &TransactionWebhookPayload{
 		EventType:   eventType,
 		Transaction: transaction,
 		Wallet:      wallet,
+		Customer:    customer,
 	}
 }
 
 
-func NewTransactionUpdatedWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, eventType types.WebhookEventName) *TransactionUpdatedWebhookPayload {
+func NewTransactionUpdatedWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, customer *dto.CustomerResponse, eventType types.WebhookEventName) *TransactionUpdatedWebhookPayload {
 	return &TransactionUpdatedWebhookPayload{
 		EventType:          eventType,
 		UpdatedTransaction: transaction,
 		Wallet:             wallet,
+		Customer:           customer,
 	}
 }

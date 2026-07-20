@@ -78,7 +78,6 @@ type ServiceParams struct {
 	EventRepo                    events.Repository
 	CostSheetUsageRepo           events.CostSheetUsageRepository
 	ProcessedEventRepo           events.ProcessedEventRepository
-	FeatureUsageRepo             events.FeatureUsageRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
 	MeterRepo                    meter.Repository
@@ -143,7 +142,6 @@ type ServiceParams struct {
 
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
-	UsageBenchmarkPubSub     types.UsageBenchmarkPubSub
 	WebhookPubSub            pubsub.PubSub
 }
 
@@ -162,7 +160,6 @@ func NewServiceParams(
 	eventRepo events.Repository,
 	costSheetUsageRepo events.CostSheetUsageRepository,
 	processedEventRepo events.ProcessedEventRepository,
-	featureUsageRepo events.FeatureUsageRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
 	meterRepo meter.Repository,
@@ -211,7 +208,6 @@ func NewServiceParams(
 	prorationCalculator proration.Calculator,
 	integrationFactory *integration.Factory,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
-	usageBenchmarkPubSub types.UsageBenchmarkPubSub,
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
@@ -233,7 +229,6 @@ func NewServiceParams(
 		EventRepo:                    eventRepo,
 		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
-		FeatureUsageRepo:             featureUsageRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
 		MeterRepo:                    meterRepo,
@@ -284,7 +279,6 @@ func NewServiceParams(
 		IntegrationFactory:           integrationFactory,
 		EncryptionService:            encryptionService,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
-		UsageBenchmarkPubSub:         usageBenchmarkPubSub,
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,

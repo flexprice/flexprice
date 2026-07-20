@@ -33,14 +33,21 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		return nil, err
 	}
 
-	providerType := string(types.SecretProviderAWSMarketplace)
+	// req.Provider is already validated against allowedMarketplaceProviders in Validate() above.
+	providerType := string(req.Provider)
 
 	// The subscription must already exist and be active; this endpoint never creates subscriptions.
 	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "get_subscription")
 		return nil, err
 	}
 	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"subscription_status", sub.SubscriptionStatus, "error", "subscription is not active", "stage", "validate_subscription")
 		return nil, ierr.NewError("subscription is not active").
 			WithHintf("Subscription %s must be active to register a marketplace agreement", req.SubscriptionID).
 			WithReportableDetails(map[string]any{
@@ -50,11 +57,17 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 			Mark(ierr.ErrValidation)
 	}
 	if sub.CustomerID != req.CustomerID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "customer_id does not match subscription", "stage", "validate_customer")
 		return nil, ierr.NewError("customer_id does not match subscription").
 			WithHintf("Subscription %s belongs to a different customer", req.SubscriptionID).
 			Mark(ierr.ErrValidation)
 	}
 	if sub.PlanID != req.PlanID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "plan_id does not match subscription", "stage", "validate_plan")
 		return nil, ierr.NewError("plan_id does not match subscription").
 			WithHintf("Subscription %s belongs to a different plan", req.SubscriptionID).
 			Mark(ierr.ErrValidation)
@@ -69,9 +82,16 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		ProviderEntityIDs: []string{req.LicenseArn},
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "list_license_mappings")
 		return nil, err
 	}
 	if len(existingByLicense) > 0 && existingByLicense[0].EntityID != req.SubscriptionID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"existing_subscription_id", existingByLicense[0].EntityID,
+			"error", "license_arn already registered to a different subscription", "stage", "validate_license_uniqueness")
 		return nil, ierr.NewError("license_arn already registered").
 			WithHintf("AWS license_arn %s is already registered to a different subscription", req.LicenseArn).
 			Mark(ierr.ErrAlreadyExists)
@@ -85,9 +105,15 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		ProviderTypes: []string{providerType},
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "list_subscription_mappings")
 		return nil, err
 	}
 	if len(existingSubMapping) > 0 && existingSubMapping[0].ProviderEntityID != req.LicenseArn {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "subscription already mapped to a different license_arn", "stage", "validate_subscription_uniqueness")
 		return nil, ierr.NewError("subscription already mapped to a different license_arn").
 			WithHintf("Subscription %s is already registered against a different AWS license_arn", req.SubscriptionID).
 			Mark(ierr.ErrAlreadyExists)
@@ -127,6 +153,9 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		return nil
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "create_mappings")
 		return nil, err
 	}
 

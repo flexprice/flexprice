@@ -601,6 +601,16 @@ func (p *Price) ValidateEntityType() error {
 	return p.EntityType.Validate()
 }
 
+// ValidateMinQuantity checks that min_quantity, when set, is non-negative
+func (p *Price) ValidateMinQuantity() error {
+	if p.MinQuantity != nil && p.MinQuantity.IsNegative() {
+		return ierr.NewError("min_quantity must be non-negative").
+			WithHint("min_quantity cannot be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // Validate performs all validations on the price
 func (p *Price) Validate() error {
 	if err := p.ValidateAmount(); err != nil {
@@ -619,6 +629,10 @@ func (p *Price) Validate() error {
 		return err
 	}
 
+	if err := p.ValidateMinQuantity(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -628,6 +642,31 @@ func (p *Price) Validate() error {
 func (p *Price) GetDefaultQuantity() decimal.Decimal {
 	if p.Type == types.PRICE_TYPE_USAGE && p.MeterID != "" {
 		return decimal.Zero
+	}
+	return decimal.NewFromInt(1)
+}
+
+// ValidateQuantityNonNegative rejects a negative quantity. nil (omitted) is allowed.
+func ValidateQuantityNonNegative(qty *decimal.Decimal) error {
+	if qty == nil || !qty.IsNegative() {
+		return nil
+	}
+	return ierr.NewError("quantity must be non-negative").
+		WithHint("Quantity cannot be negative").
+		Mark(ierr.ErrValidation)
+}
+
+// ApplyQuantityDefault resolves the effective quantity: non-zero values are returned as-is;
+// zero is replaced by MinQuantity when set and non-zero, or by the price's default quantity.
+func ApplyQuantityDefault(qty decimal.Decimal, p *Price) decimal.Decimal {
+	if !qty.IsZero() {
+		return qty
+	}
+	if p != nil && p.MinQuantity != nil {
+		return lo.FromPtr(p.MinQuantity)
+	}
+	if p != nil {
+		return p.GetDefaultQuantity()
 	}
 	return decimal.NewFromInt(1)
 }

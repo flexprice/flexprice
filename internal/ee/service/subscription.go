@@ -11,8 +11,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	domainMeter "github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
 
@@ -195,13 +195,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if priceResponse.Price.Type == types.PRICE_TYPE_USAGE && priceResponse.Meter != nil {
 			item.MeterID = priceResponse.Meter.ID
 			item.MeterDisplayName = priceResponse.Meter.Name
-			item.DisplayName = priceResponse.Meter.Name
 			item.Quantity = decimal.Zero
-		} else {
-			item.DisplayName = plan.Name
-			if item.Quantity.IsZero() {
-				item.Quantity = decimal.NewFromInt(1)
-			}
 		}
 
 		item.SubscriptionID = sub.ID
@@ -1408,30 +1402,16 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			return err
 		}
 
-		// Update line item quantity if specified
+		// Update line item quantity if specified — zero resolves to min_quantity default.
 		if override.Quantity != nil {
-			lineItem.Quantity = *override.Quantity
+			lineItem.Quantity = price.ApplyQuantityDefault(*override.Quantity, originalPrice.Price)
 		}
 
 		// Update the line item to reference the new subscription-scoped price
 		// Also update display name to match the new price (which preserves the original display name)
 		lineItem.PriceID = overriddenPriceResp.ID
-		if overriddenPriceResp.DisplayName != "" {
-			lineItem.DisplayName = overriddenPriceResp.DisplayName
-		}
+		lineItem.DisplayName = overriddenPriceResp.DisplayName
 
-		s.Logger.Info(ctx, "created subscription-scoped price override",
-			"subscription_id", sub.ID,
-			"original_price_id", override.PriceID,
-			"override_price_id", overriddenPriceResp.ID,
-			"amount_override", override.Amount != nil,
-			"quantity_override", override.Quantity != nil,
-			"billing_model_override", override.BillingModel != "",
-			"tier_mode_override", override.TierMode != "",
-			"tiers_override", len(override.Tiers) > 0,
-			"transform_quantity_override", override.TransformQuantity != nil,
-			"price_unit_amount_override", override.PriceUnitAmount != nil,
-			"price_unit_tiers_override", len(override.PriceUnitTiers) > 0)
 	}
 
 	return nil
@@ -2184,8 +2164,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	// Validate expand fields
-	if err := filter.GetExpand().Validate(types.SubscriptionExpandConfig); err != nil {
+	expand := filter.GetExpand()
+	if err := expand.Validate(types.SubscriptionExpandConfig); err != nil {
 		return nil, err
+	}
+
+	// Back-fill deprecated WithLineItems from expand so both request styles
+	// eager-load line items in the repository query.
+	if expand.Has(types.ExpandSubscriptionLineItems) {
+		filter.WithLineItems = true
 	}
 
 	// Resolve external customer ID to internal customer ID if provided
@@ -2352,6 +2339,83 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	}
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
+
+	// Attach meters to subscription line items when the caller asks for both
+	// "subscription_line_items" and "meters" (either top-level or nested as
+	// "subscription_line_items.meters"). Bulk-fetch across all usage line items.
+	shouldExpandLineItemMeters := expand.Has(types.ExpandSubscriptionLineItems) &&
+		(expand.Has(types.ExpandMeters) || expand.GetNested(types.ExpandSubscriptionLineItems).Has(types.ExpandMeters))
+	if shouldExpandLineItemMeters && len(response.Items) > 0 {
+		meterIDSet := make(map[string]struct{})
+		for _, item := range response.Items {
+			if item.Subscription == nil {
+				continue
+			}
+			for _, li := range item.Subscription.LineItems {
+				if li.MeterID != "" {
+					meterIDSet[li.MeterID] = struct{}{}
+				}
+			}
+		}
+
+		if len(meterIDSet) > 0 {
+			meterIDs := lo.Keys(meterIDSet)
+			meterFilter := types.NewNoLimitMeterFilter()
+			meterFilter.MeterIDs = meterIDs
+			meters, err := s.MeterRepo.List(ctx, meterFilter)
+			if err != nil {
+				return nil, err
+			}
+			meterMap := make(map[string]*domainMeter.Meter, len(meters))
+			for _, m := range meters {
+				meterMap[m.ID] = m
+			}
+
+			for _, item := range response.Items {
+				if item.Subscription == nil {
+					continue
+				}
+				for i, li := range item.Subscription.LineItems {
+					if m, ok := meterMap[li.MeterID]; ok {
+						item.Subscription.LineItems[i].Meter = m
+					}
+				}
+			}
+		}
+	}
+
+	if expand.Has(types.ExpandEntitlements) && len(response.Items) > 0 {
+		// TODO(perf): serial per-customer fetch is fine for the typical
+		// external_customer_id search (1 unique customer). For wide pages with
+		// many unique customers, consider either a bulk BillingService method
+		// or a bounded errgroup here.
+		billingService := NewBillingService(s.ServiceParams)
+		entitlementsByCustomer := make(map[string][]*dto.AggregatedFeature)
+		for _, item := range response.Items {
+			cid := item.CustomerID
+			if cid == "" {
+				continue
+			}
+			if _, ok := entitlementsByCustomer[cid]; ok {
+				continue
+			}
+
+			ents, err := billingService.GetCustomerEntitlements(ctx, cid, &dto.GetCustomerEntitlementsRequest{})
+			if err != nil {
+				// ponytail: don't fail the search if entitlement lookup fails for one customer; log and skip.
+				s.Logger.Error(ctx, "failed to load entitlements for customer", "error", err, "customer_id", cid)
+				entitlementsByCustomer[cid] = nil
+				continue
+			}
+			entitlementsByCustomer[cid] = ents.Features
+		}
+
+		for _, item := range response.Items {
+			if features, ok := entitlementsByCustomer[item.CustomerID]; ok {
+				item.Entitlements = features
+			}
+		}
+	}
 
 	s.Logger.Debug(ctx, "completed ListSubscriptions successfully",
 		"total_items", len(response.Items),
@@ -5096,13 +5160,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set display name from price (always use price display name)
-	if price.DisplayName != "" {
-		lineItem.DisplayName = price.DisplayName
-	} else {
-		// Fallback to addon name if price display name is not set
-		lineItem.DisplayName = addonName
-	}
+	lineItem.DisplayName = price.DisplayName
 
 	// Set price-related fields
 	if price.Type == types.PRICE_TYPE_USAGE && price.MeterID != "" && priceResponse.Meter != nil {
@@ -5110,7 +5168,11 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		lineItem.MeterDisplayName = priceResponse.Meter.Name
 		lineItem.Quantity = decimal.Zero
 	} else {
-		lineItem.Quantity = decimal.NewFromInt(1)
+		if price.MinQuantity != nil && !price.MinQuantity.IsZero() {
+			lineItem.Quantity = lo.FromPtr(price.MinQuantity)
+		} else {
+			lineItem.Quantity = decimal.NewFromInt(1)
+		}
 	}
 
 	// Copy price unit fields from price to line item
@@ -5966,421 +6028,6 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 	}
 }
 
-func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
-	response := &dto.GetUsageBySubscriptionResponse{}
-	priceService := NewPriceService(s.ServiceParams)
-
-	// Get subscription with line items
-	subscription, err := s.SubRepo.Get(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	usageCustomerIDs, err := s.usageCustomerIDsForSubscription(ctx, subscription)
-	if err != nil {
-		return nil, err
-	}
-
-	usageStartTime := req.StartTime
-	if usageStartTime.IsZero() {
-		usageStartTime = subscription.CurrentPeriodStart
-	}
-
-	// TODO: Handle line item level end time - use the earliest end time among all line items
-	usageEndTime := req.EndTime
-	if usageEndTime.IsZero() {
-		usageEndTime = subscription.CurrentPeriodEnd
-	}
-
-	if req.LifetimeUsage {
-		usageStartTime = time.Time{}
-		usageEndTime = time.Now().UTC()
-	}
-
-	// For inherited subscriptions, line items live on the parent subscription.
-	// Use the parent's ID to fetch line items, but keep usageCustomerIDs scoped to
-	// the child so we only count the child's own events.
-	lineItemSubID := subscription.ID
-	if subscription.SubscriptionType == types.SubscriptionTypeInherited &&
-		subscription.ParentSubscriptionID != nil && lo.FromPtr(subscription.ParentSubscriptionID) != "" {
-		lineItemSubID = lo.FromPtr(subscription.ParentSubscriptionID)
-	}
-
-	// Fetch line items for the usage window
-	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, lineItemSubID, usageStartTime, req.LifetimeUsage)
-	if err != nil {
-		return nil, err
-	}
-
-	subscription.LineItems = lineItems
-
-	// Collect all price IDs and build meter to price mapping
-	priceIDs := make([]string, 0, len(lineItems))
-
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
-			continue
-		}
-		if item.MeterID == "" {
-			continue
-		}
-		priceIDs = append(priceIDs, item.PriceID)
-	}
-
-	// Fetch all prices in one call
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
-	priceFilter.AllowExpiredPrices = true
-	pricesList, err := priceService.GetPrices(ctx, priceFilter)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build price map for quick lookup
-	priceMap := make(map[string]*price.Price, len(pricesList.Items))
-	meterMap := make(map[string]*dto.MeterResponse, len(pricesList.Items))
-	meterDisplayNames := make(map[string]string)
-
-	for _, p := range pricesList.Items {
-		priceMap[p.ID] = p.Price
-		meterMap[p.Price.MeterID] = p.Meter
-		if p.Meter != nil {
-			meterDisplayNames[p.Price.MeterID] = p.Meter.Name
-		}
-	}
-
-	s.Logger.Debug(ctx, "calculating usage for subscription V2",
-		"subscription_id", req.SubscriptionID,
-		"start_time", usageStartTime,
-		"end_time", usageEndTime,
-		"metered_line_items", len(priceIDs))
-
-	// Extract aggregation types from meters for conditional query building
-	var aggTypes []types.AggregationType
-	for _, meter := range meterMap {
-		if meter != nil && meter.Aggregation.Type != "" {
-			aggTypes = append(aggTypes, meter.Aggregation.Type)
-		}
-	}
-	aggTypes = lo.Uniq(aggTypes)
-
-	// For inherited subscriptions, events in ClickHouse are stored under the parent's
-	// subscription_id (because line items belong to the parent). Use the parent's ID
-	// for the ClickHouse query so we match the stored rows correctly.
-	usageSubscriptionID := req.SubscriptionID
-	if subscription.SubscriptionType == types.SubscriptionTypeInherited &&
-		subscription.ParentSubscriptionID != nil && lo.FromPtr(subscription.ParentSubscriptionID) != "" {
-		usageSubscriptionID = lo.FromPtr(subscription.ParentSubscriptionID)
-	}
-
-	// Use the optimized single query with conditional aggregation
-	opts := &events.GetFeatureUsageBySubscriptionOpts{
-		Source: types.UsageSource(req.Source),
-	}
-	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, &events.GetFeatureUsageBySubscriptionParams{
-		SubscriptionID: usageSubscriptionID,
-		CustomerIDs:    usageCustomerIDs,
-		StartTime:      usageStartTime,
-		EndTime:        usageEndTime,
-		AggTypes:       aggTypes,
-		Opts:           opts,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Debug(ctx, "fetched usage for features using V2 query",
-		"feature_ids", lo.Keys(usageResults),
-		"total_usage_count", len(usageResults),
-		"subscription_id", req.SubscriptionID)
-
-	// Store usage charges for later sorting and processing
-	var usageCharges []*dto.SubscriptionUsageByMetersResponse
-	totalCost := decimal.Zero
-
-	// Track which line items have been processed
-	processedLineItems := make(map[string]bool)
-
-	// Process each feature result - now we have meter_id directly from ClickHouse
-	for subLineItemID, usageResult := range usageResults {
-		meterID := usageResult.MeterID
-		if meterID == "" {
-			s.Logger.Info(ctx, "meter_id not found in usage result, skipping",
-				"sub_line_item_id", subLineItemID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
-
-		priceID := usageResult.PriceID
-
-		priceObj, priceExists := priceMap[priceID]
-		if !priceExists || priceObj == nil {
-			s.Logger.Info(ctx, "price object not found, skipping",
-				"price_id", priceID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
-
-		meter := meterMap[meterID]
-		if meter == nil {
-			s.Logger.Info(ctx, "meter not found, skipping",
-				"sub_line_item_id", subLineItemID,
-				"meter_id", meterID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
-
-		// Calculate quantity based on meter aggregation type
-		var quantity decimal.Decimal
-		switch meter.Aggregation.Type {
-		case types.AggregationSum, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
-			quantity = usageResult.SumTotal
-		case types.AggregationMax:
-			quantity = usageResult.MaxTotal
-		case types.AggregationCount:
-			quantity = decimal.NewFromInt(int64(usageResult.CountDistinctIDs))
-		case types.AggregationCountUnique:
-			quantity = decimal.NewFromInt(int64(usageResult.CountUniqueQty))
-		case types.AggregationLatest:
-			quantity = usageResult.LatestQty
-		default:
-			quantity = usageResult.SumTotal // Default to sum
-		}
-
-		// Calculate cost using the price service
-		cost := priceService.CalculateCost(ctx, priceObj, quantity)
-		totalCost = totalCost.Add(cost)
-
-		// Create charge response
-		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: subLineItemID,
-			Amount:                 cost.InexactFloat64(),
-			Currency:               priceObj.Currency,
-			DisplayAmount:          fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
-			Quantity:               quantity.InexactFloat64(),
-			FilterValues:           make(price.JSONBFilters),
-			MeterID:                meterID,
-			MeterDisplayName:       meterDisplayNames[meterID],
-			Price:                  priceObj,
-			IsOverage:              false,
-		}
-
-		// Add filter values from meter
-		for _, filter := range meter.Filters {
-			charge.FilterValues[filter.Key] = filter.Values
-		}
-
-		usageCharges = append(usageCharges, charge)
-		processedLineItems[subLineItemID] = true
-	}
-
-	// Add zero-quantity, zero-cost charges for line items not found in usage results
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
-			continue
-		}
-		if item.MeterID == "" {
-			continue
-		}
-
-		// Skip if this line item was already processed
-		if processedLineItems[item.ID] {
-			continue
-		}
-
-		priceObj, priceExists := priceMap[item.PriceID]
-		if !priceExists || priceObj == nil {
-			s.Logger.Info(ctx, "price object not found for line item, skipping zero charge",
-				"line_item_id", item.ID,
-				"price_id", item.PriceID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
-
-		meter := meterMap[item.MeterID]
-		if meter == nil {
-			s.Logger.Info(ctx, "meter not found for line item, skipping zero charge",
-				"line_item_id", item.ID,
-				"meter_id", item.MeterID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
-
-		// Create zero-quantity, zero-cost charge for this line item
-		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: item.ID,
-			Amount:                 0.0,
-			Currency:               priceObj.Currency,
-			DisplayAmount:          fmt.Sprintf("0.00 %s", priceObj.Currency),
-			Quantity:               0.0,
-			FilterValues:           make(price.JSONBFilters),
-			MeterID:                item.MeterID,
-			MeterDisplayName:       meterDisplayNames[item.MeterID],
-			Price:                  priceObj,
-			IsOverage:              false,
-		}
-
-		// Add filter values from meter
-		for _, filter := range meter.Filters {
-			charge.FilterValues[filter.Key] = filter.Values
-		}
-
-		usageCharges = append(usageCharges, charge)
-	}
-
-	// Apply commitment-based overage logic if configured
-	commitmentAmount := lo.FromPtr(subscription.CommitmentAmount)
-	overageFactor := lo.FromPtr(subscription.OverageFactor)
-	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
-
-	// Default values assuming no commitment/overage
-	commitmentFloat, _ := commitmentAmount.Float64()
-	overageFactorFloat, _ := overageFactor.Float64()
-	response.CommitmentAmount = commitmentFloat
-	response.OverageFactor = overageFactorFloat
-	response.HasOverage = false
-
-	// Initialize charges list with enough capacity for potential overage splits
-	finalCharges := make([]*dto.SubscriptionUsageByMetersResponse, 0, len(usageCharges)*2)
-
-	// If using commitment-based pricing, process charges with overage logic
-	if hasCommitment {
-		// First, filter charges to only include usage-based charges for commitment calculations
-		// Fixed charges are not subject to commitment/overage
-		var usageOnlyCharges []*dto.SubscriptionUsageByMetersResponse
-		var fixedCharges []*dto.SubscriptionUsageByMetersResponse
-
-		for _, charge := range usageCharges {
-			if charge.Price != nil && charge.Price.Type == types.PRICE_TYPE_USAGE {
-				usageOnlyCharges = append(usageOnlyCharges, charge)
-			} else {
-				// Add fixed charges directly to the response without overage calculation
-				fixedCharges = append(fixedCharges, charge)
-			}
-		}
-
-		// Add all fixed charges directly to the response
-		finalCharges = append(finalCharges, fixedCharges...)
-
-		// Track remaining commitment and process each usage charge
-		remainingCommitment := commitmentAmount
-		totalOverageAmount := decimal.Zero
-
-		for _, charge := range usageOnlyCharges {
-			// Get charge amount as decimal for precise calculations
-			chargeAmount := decimal.NewFromFloat(charge.Amount)
-			pricePerUnit := decimal.Zero
-			if charge.Price != nil && charge.Price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
-				pricePerUnit = charge.Price.Amount
-			} else if charge.Quantity > 0 {
-				pricePerUnit = chargeAmount.Div(decimal.NewFromFloat(charge.Quantity))
-			}
-
-			// Normal price covers all of this charge
-			if remainingCommitment.GreaterThanOrEqual(chargeAmount) {
-				charge.IsOverage = false
-				remainingCommitment = remainingCommitment.Sub(chargeAmount)
-				finalCharges = append(finalCharges, charge)
-				continue
-			}
-
-			// Charge needs to be split between normal and overage
-			if remainingCommitment.GreaterThan(decimal.Zero) {
-				// Calculate exact quantity that can be covered by remaining commitment
-				var normalQuantityDecimal decimal.Decimal
-
-				if !pricePerUnit.IsZero() {
-					normalQuantityDecimal = remainingCommitment.Div(pricePerUnit)
-					// Round down to ensure we don't exceed commitment
-					normalQuantityDecimal = normalQuantityDecimal.Floor()
-				}
-
-				// Calculate the normal amount based on the normal quantity
-				normalAmountDecimal := normalQuantityDecimal.Mul(pricePerUnit)
-
-				// Create the normal charge
-				if normalQuantityDecimal.GreaterThan(decimal.Zero) {
-					normalCharge := *charge // Create a copy
-					normalCharge.Quantity = normalQuantityDecimal.InexactFloat64()
-					normalCharge.Amount = price.FormatAmountToFloat64WithPrecision(normalAmountDecimal, subscription.Currency)
-					normalCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(normalAmountDecimal, subscription.Currency)
-					normalCharge.IsOverage = false
-					finalCharges = append(finalCharges, &normalCharge)
-				}
-
-				// Calculate overage quantity and amount
-				overageQuantityDecimal := decimal.NewFromFloat(charge.Quantity).Sub(normalQuantityDecimal)
-
-				// Create the overage charge only if there's actual overage
-				if overageQuantityDecimal.GreaterThan(decimal.Zero) {
-					overageAmountDecimal := overageQuantityDecimal.Mul(pricePerUnit).Mul(overageFactor)
-					totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
-
-					overageCharge := *charge // Create a copy
-					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
-					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
-					overageCharge.DisplayAmount = price.GetDisplayAmountWithPrecision(overageAmountDecimal, subscription.Currency)
-					overageCharge.IsOverage = true
-					overageCharge.OverageFactor = overageFactorFloat
-					finalCharges = append(finalCharges, &overageCharge)
-					response.HasOverage = true
-				}
-
-				// Update remaining commitment (should be zero or very close to it due to rounding)
-				remainingCommitment = remainingCommitment.Sub(normalAmountDecimal)
-				continue
-			}
-
-			// Charge is entirely in overage
-			overageAmountDecimal := chargeAmount.Mul(overageFactor)
-			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
-
-			charge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
-			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
-			charge.IsOverage = true
-			charge.OverageFactor = overageFactorFloat
-			finalCharges = append(finalCharges, charge)
-			response.HasOverage = true
-		}
-
-		// Calculate final amounts for response
-		commitmentUtilized := commitmentAmount.Sub(remainingCommitment)
-		commitmentUtilizedFloat, _ := commitmentUtilized.Float64()
-		overageAmountFloat, _ := totalOverageAmount.Float64()
-		response.CommitmentUtilized = commitmentUtilizedFloat
-		response.OverageAmount = overageAmountFloat
-
-		// Update total cost with commitment + overage calculation
-		totalCost = commitmentUtilized.Add(totalOverageAmount)
-	} else {
-		// Without commitment, just use the original charges
-		finalCharges = usageCharges
-	}
-
-	// Sort charges by meter display name for consistent ordering
-	sort.Slice(finalCharges, func(i, j int) bool {
-		return finalCharges[i].MeterDisplayName < finalCharges[j].MeterDisplayName
-	})
-
-	// Build response
-	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
-	response.Currency = subscription.Currency
-	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
-	response.StartTime = usageStartTime
-	response.EndTime = usageEndTime
-	response.Charges = finalCharges
-
-	s.Logger.Debug(ctx, "subscription usage calculation completed V2",
-		"subscription_id", req.SubscriptionID,
-		"total_cost", totalCost.InexactFloat64(),
-		"charge_count", len(finalCharges),
-		"currency", response.Currency)
-
-	return response, nil
-}
-
 // GetMeterUsageBySubscription queries the meter_usage table for usage data.
 // Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,
 // then converts results to billing charges and applies commitment/overage logic.
@@ -6398,6 +6045,9 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 		LifetimeUsage:   req.LifetimeUsage,
 		UseFinal:        useFinal,
 		IncludeFeatures: false,
+		// Billing for a Parent subscription must roll up every inherited
+		// child's usage — that is the consolidated-invoice contract.
+		IncludeChildren: true,
 	})
 	if err != nil {
 		return nil, err

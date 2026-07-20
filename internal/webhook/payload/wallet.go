@@ -110,11 +110,22 @@ func (b TransactionPayloadBuilder) BuildPayload(
 		return nil, err
 	}
 
+	// Fetch customer data (best-effort — customer is optional in the payload)
+	var customerData *dto.CustomerResponse
+	if walletData.CustomerID != "" {
+		customer, cerr := b.services.CustomerService.GetCustomer(ctx, walletData.CustomerID)
+		if cerr != nil {
+			b.services.Tracing.CaptureException(ctx, cerr)
+		} else {
+			customerData = customer
+		}
+	}
+
 	var payload any
 	if eventType == types.WebhookEventWalletTransactionUpdated {
-		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, walletData, eventType)
+		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, walletData, customerData, eventType)
 	} else {
-		payload = webhookDto.NewTransactionWebhookPayload(transactionData, walletData, eventType)
+		payload = webhookDto.NewTransactionWebhookPayload(transactionData, walletData, customerData, eventType)
 	}
 
 	return json.Marshal(payload)

@@ -96,8 +96,7 @@ func SetSpanSuccess(span *tracing.Span) {
 // No-op on nil spans; Set/Delete paths should not call this (the concept
 // doesn't apply).
 func SetCacheHit(span *tracing.Span, hit bool) {
-	if span == nil {
-		return
-	}
-	span.SetData("cache.hit", hit)
+	// SetCacheHit is nil-safe; it tags the span (if any) and stashes hit/miss
+	// for the cache.requests metric emitted on Finish.
+	span.SetCacheHit(hit)
 }

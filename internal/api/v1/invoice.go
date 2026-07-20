@@ -74,6 +74,7 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param expand_by_source query bool false "Include source-level price breakdown for usage line items (legacy)"
 // @Param group_by query []string false "Group usage breakdown by specified fields (e.g., source, feature_id, properties.org_id)"
+// @Param expand query string false "Comma-separated related fields to include. Supports 'tax_applied.tax_rate' to attach rate details to each applied tax."
 // @Success 200 {object} dto.InvoiceResponse
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -94,6 +95,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		ID:                        id,
 		GroupBy:                   groupByParams,
 		ForceRuntimeRecalculation: forceRuntimeRecalculation,
+		Expand:                    c.Query("expand"),
 	}
 
 	invoice, err := h.invoiceService.GetInvoiceWithBreakdown(c.Request.Context(), req)
@@ -498,13 +500,7 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 		return
 	}
 
-	var resp *dto.InvoiceResponse
-	var err error
-	if h.config.FeatureFlag.IsMeterUsageEnabledForPreviewInvoice(types.GetTenantID(c.Request.Context())) {
-		resp, err = h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
-	} else {
-		resp, err = h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
-	}
+	resp, err := h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "Failed to get preview invoice", "error", err)
 		c.Error(err)
@@ -525,24 +521,6 @@ func (h *InvoiceHandler) GetInternalPreviewInvoice(c *gin.Context) {
 	resp, err := h.invoiceService.GetInternalPreviewInvoice(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "Failed to get internal preview invoice", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
-func (h *InvoiceHandler) GetMeterUsagePreviewInvoice(c *gin.Context) {
-	var req dto.GetPreviewInvoiceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
-		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
-	if err != nil {
-		h.logger.Error(c.Request.Context(), "Failed to get meter usage preview invoice", "error", err)
 		c.Error(err)
 		return
 	}

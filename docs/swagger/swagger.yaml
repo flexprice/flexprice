@@ -9,6 +9,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListAlertSettingsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/AlertSettingsResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCouponsResponse:
     properties:
       items:
@@ -176,6 +185,15 @@ definitions:
     properties:
       create_subscription_params:
         $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  checkout.JSONBCheckoutPaymentProviderConfig:
+    properties:
+      collection_method:
+        $ref: '#/definitions/types.CollectionMethod'
+      max_mandate_limit:
+        type: string
+      payment_method:
+        $ref: '#/definitions/types.PaymentMethodType'
     type: object
   checkout.JSONBCheckoutProviderResult:
     properties:
@@ -480,6 +498,10 @@ definitions:
         type: string
       created_by:
         type: string
+      credit_grants:
+        items:
+          $ref: '#/definitions/CreditGrantResponse'
+        type: array
       description:
         type: string
       entitlements:
@@ -604,6 +626,37 @@ definitions:
         type: string
       wallet:
         $ref: '#/definitions/WalletResponse'
+    type: object
+  AlertSettingsResponse:
+    properties:
+      config:
+        $ref: '#/definitions/types.AlertSettings'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      enabled:
+        type: boolean
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      parent_entity_id:
+        type: string
+      parent_entity_type:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   AttributedToCustomerResult:
     properties:
@@ -958,6 +1011,13 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.CheckoutPaymentProvider'
         description: PaymentProvider is required and immutable after creation.
+      payment_provider_config:
+        allOf:
+        - $ref: '#/definitions/checkout.JSONBCheckoutPaymentProviderConfig'
+        description: |-
+          PaymentProviderConfig holds provider-specific payment configuration
+          (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
+          Nil if not set on the request.
       provider_result:
         allOf:
         - $ref: '#/definitions/checkout.JSONBCheckoutProviderResult'
@@ -1330,6 +1390,10 @@ definitions:
         type: string
       created_by:
         type: string
+      credit_grants:
+        items:
+          $ref: '#/definitions/CreditGrantResponse'
+        type: array
       description:
         type: string
       entitlements:
@@ -1360,6 +1424,39 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  CreateAlertSettingsRequest:
+    properties:
+      config:
+        allOf:
+        - $ref: '#/definitions/types.AlertSettings'
+        description: config holds the threshold configuration (critical / warning
+          / info + alert_enabled).
+      entity_id:
+        description: |-
+          entity_id is the id of the monitored entity: subscription id, subscription_line_item id, or
+          group id, matching entity_type.
+        type: string
+      entity_type:
+        allOf:
+        - $ref: '#/definitions/types.AlertEntityType'
+        description: 'entity_type is the entity being monitored: "subscription", "subscription_line_item",
+          or "group".'
+      parent_entity_id:
+        description: |-
+          parent_entity_id is the subscription id that owns a line-item or group alert. Required when
+          entity_type is "subscription_line_item" or "group"; omitted for subscription-level alerts.
+        type: string
+      parent_entity_type:
+        allOf:
+        - $ref: '#/definitions/types.AlertEntityType'
+        description: |-
+          parent_entity_type must be "subscription" when entity_type is "subscription_line_item" or
+          "group"; omitted for subscription-level alerts.
+    required:
+    - config
+    - entity_id
+    - entity_type
     type: object
   CreateBulkEntitlementRequest:
     properties:
@@ -1417,6 +1514,8 @@ definitions:
         type: object
       payment_provider:
         $ref: '#/definitions/types.CheckoutPaymentProvider'
+      payment_provider_config:
+        $ref: '#/definitions/types.CheckoutPaymentProviderConfig'
       success_url:
         type: string
     required:
@@ -1495,6 +1594,8 @@ definitions:
     type: object
   CreateCreditGrantRequest:
     properties:
+      addon_id:
+        type: string
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
       conversion_rate:
@@ -1640,6 +1741,11 @@ definitions:
           100 characters
         maxLength: 100
         type: string
+      contact:
+        description: contact is an optional contact number for the customer (e.g.
+          phone)
+        maxLength: 20
+        type: string
       email:
         description: email is the customer's email address and must be a valid email
           format if provided
@@ -1662,6 +1768,7 @@ definitions:
         type: object
       name:
         description: name is the full name or company name of the customer
+        maxLength: 255
         type: string
       skip_onboarding_workflow:
         description: |-
@@ -1682,6 +1789,7 @@ definitions:
         type: string
     required:
     - external_id
+    - name
     type: object
   CreateEntitlementRequest:
     properties:
@@ -1921,6 +2029,13 @@ definitions:
       due_date:
         description: due_date is the date by which payment is expected
         type: string
+      force_sync_invoice:
+        description: |-
+          force_sync_invoice, when true, attempts to synchronously sync this invoice to
+          Moyasar (if enabled) before returning, instead of relying solely on the async
+          Kafka + Temporal vendor-sync pipeline. Only honored by CreateOneOffInvoice.
+          Best-effort: sync failures do not fail invoice creation.
+        type: boolean
       idempotency_key:
         description: idempotency_key is an optional key used to prevent duplicate
           invoice creation
@@ -2770,6 +2885,8 @@ definitions:
     type: object
   CreditGrantResponse:
     properties:
+      addon_id:
+        type: string
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
       conversion_rate:
@@ -3049,6 +3166,10 @@ definitions:
         type: string
       address_state:
         description: AddressState is the state of the customer's address
+        type: string
+      contact:
+        description: Contact is an optional contact number for the customer (e.g.
+          phone)
         type: string
       created_at:
         type: string
@@ -5031,6 +5152,48 @@ definitions:
         description: proration_date is the date used for proration calculations
         type: string
     type: object
+  RegisterMarketplaceAgreementRequest:
+    properties:
+      concurrent_agreements:
+        type: boolean
+      customer_aws_account_id:
+        type: string
+      customer_id:
+        type: string
+      dimension:
+        type: string
+      license_arn:
+        type: string
+      plan_id:
+        type: string
+      product_code:
+        type: string
+      provider:
+        description: e.g. "aws"
+        type: string
+      subscription_id:
+        type: string
+    required:
+    - customer_aws_account_id
+    - customer_id
+    - dimension
+    - license_arn
+    - plan_id
+    - product_code
+    - provider
+    - subscription_id
+    type: object
+  RegisterMarketplaceAgreementResponse:
+    properties:
+      customer_mapping_id:
+        type: string
+      plan_mapping_id:
+        type: string
+      status:
+        type: string
+      subscription_mapping_id:
+        type: string
+    type: object
   RemoveAddonRequest:
     properties:
       addon_association_id:
@@ -6519,6 +6682,13 @@ definitions:
           ex if the wallet has a conversion_rate of 2 then adding an amount of
           10 USD in the wallet wil add 5 credits in the wallet
         type: string
+      bonus_credits_to_add:
+        description: |-
+          bonus_credits_to_add is an explicit override for the bonus credits granted alongside this
+          purchase. When nil/omitted, the bonus is resolved from the tenant's
+          bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
+          used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
+        type: string
       credits_to_add:
         description: credits_to_add is the number of credits to add to the wallet
         type: string
@@ -6602,6 +6772,13 @@ definitions:
       name:
         type: string
     type: object
+  UpdateAlertSettingsRequest:
+    properties:
+      config:
+        $ref: '#/definitions/types.AlertSettings'
+    required:
+    - config
+    type: object
   UpdateCostsheetRequest:
     properties:
       description:
@@ -6673,6 +6850,11 @@ definitions:
         description: address_state is the updated state, province, or region name
           with maximum 100 characters
         maxLength: 100
+        type: string
+      contact:
+        description: contact is the updated contact number for the customer (e.g.
+          phone)
+        maxLength: 20
         type: string
       email:
         description: email is the updated email address and must be a valid email
@@ -7373,6 +7555,10 @@ definitions:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
+      real_time_balance:
+        type: string
+      real_time_credit_balance:
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -7433,6 +7619,11 @@ definitions:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
+      parent_transaction_id:
+        description: |-
+          ParentTransactionID is the ID of the parent wallet_transaction this row was earned from
+          (the purchase tx, for a bonus grant). Empty for ordinary transactions.
+        type: string
       priority:
         type: integer
       reference_id:
@@ -7505,6 +7696,7 @@ definitions:
     - database_error
     - service_unavailable
     - too_many_requests
+    - not_implemented
     type: string
     x-enum-varnames:
     - ErrCodeHTTPClient
@@ -7519,6 +7711,16 @@ definitions:
     - ErrCodeDatabase
     - ErrCodeServiceUnavailable
     - ErrCodeTooManyRequests
+    - ErrCodeNotImplemented
+  errors.ErrorResponse:
+    properties:
+      code:
+        $ref: '#/definitions/errors.ErrorCode'
+      http_status_code:
+        type: integer
+      message:
+        type: string
+    type: object
   Addon:
     properties:
       created_at:
@@ -7617,6 +7819,10 @@ definitions:
         type: string
       address_state:
         description: AddressState is the state of the customer's address
+        type: string
+      contact:
+        description: Contact is an optional contact number for the customer (e.g.
+          phone)
         type: string
       created_at:
         type: string
@@ -7731,287 +7937,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  errors.ErrorResponse:
-    properties:
-      code:
-        $ref: '#/definitions/errors.ErrorCode'
-      http_status_code:
-        type: integer
-      message:
-        type: string
-    type: object
-  types.AddonAssociationEntityType:
-    enum:
-    - subscription
-    - plan
-    - addon
-    type: string
-    x-enum-varnames:
-    - AddonAssociationEntityTypeSubscription
-    - AddonAssociationEntityTypePlan
-    - AddonAssociationEntityTypeAddon
-  types.AddonCadence:
-    enum:
-    - onetime
-    - recurring
-    type: string
-    x-enum-varnames:
-    - AddonCadenceOnetime
-    - AddonCadenceRecurring
-  types.AddonFilter:
-    properties:
-      addon_ids:
-        items:
-          type: string
-        type: array
-      end_time:
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      lookup_keys:
-        items:
-          type: string
-        type: array
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.AddonStatus:
-    enum:
-    - active
-    - cancelled
-    - pending
-    type: string
-    x-enum-varnames:
-    - AddonStatusActive
-    - AddonStatusCancelled
-    - AddonStatusPending
-  types.AggregationType:
-    enum:
-    - COUNT
-    - SUM
-    - AVG
-    - COUNT_UNIQUE
-    - LATEST
-    - SUM_WITH_MULTIPLIER
-    - MAX
-    - WEIGHTED_SUM
-    type: string
-    x-enum-comments:
-      AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
-    x-enum-varnames:
-    - AggregationCount
-    - AggregationSum
-    - AggregationAvg
-    - AggregationCountUnique
-    - AggregationLatest
-    - AggregationSumWithMultiplier
-    - AggregationMax
-    - AggregationWeightedSum
-  types.AlertCondition:
-    enum:
-    - above
-    - below
-    type: string
-    x-enum-varnames:
-    - AlertConditionAbove
-    - AlertConditionBelow
-  types.AlertEntityType:
-    enum:
-    - wallet
-    - feature
-    type: string
-    x-enum-varnames:
-    - AlertEntityTypeWallet
-    - AlertEntityTypeFeature
-  types.AlertInfo:
-    properties:
-      alert_settings:
-        $ref: '#/definitions/types.AlertSettings'
-      timestamp:
-        type: string
-      value_at_time:
-        type: string
-    type: object
-  types.AlertLogFilter:
-    properties:
-      alert_status:
-        $ref: '#/definitions/types.AlertState'
-      alert_type:
-        $ref: '#/definitions/types.AlertType'
-      customer_id:
-        type: string
-      end_time:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.AlertEntityType'
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.AlertSettings:
-    properties:
-      alert_enabled:
-        type: boolean
-      critical:
-        $ref: '#/definitions/types.AlertThreshold'
-      info:
-        $ref: '#/definitions/types.AlertThreshold'
-      warning:
-        $ref: '#/definitions/types.AlertThreshold'
-    type: object
-  types.AlertState:
-    enum:
-    - ok
-    - info
-    - warning
-    - in_alarm
-    type: string
-    x-enum-varnames:
-    - AlertStateOk
-    - AlertStateInfo
-    - AlertStateWarning
-    - AlertStateInAlarm
-  types.AlertThreshold:
-    properties:
-      condition:
-        $ref: '#/definitions/types.AlertCondition'
-      threshold:
-        type: string
-    type: object
-  types.AlertType:
-    enum:
-    - low_ongoing_balance
-    - low_credit_balance
-    - feature_wallet_balance
-    type: string
-    x-enum-varnames:
-    - AlertTypeLowOngoingBalance
-    - AlertTypeLowCreditBalance
-    - AlertTypeFeatureWalletBalance
-  types.ApplicationStatus:
-    enum:
-    - applied
-    - failed
-    - pending
-    - skipped
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ApplicationStatusApplied
-    - ApplicationStatusFailed
-    - ApplicationStatusPending
-    - ApplicationStatusSkipped
-    - ApplicationStatusCancelled
-  types.AutoTopup:
-    properties:
-      amount:
-        type: number
-      enabled:
-        type: boolean
-      invoicing:
-        type: boolean
-      threshold:
-        type: number
-    type: object
-  types.BillingCadence:
-    enum:
-    - RECURRING
-    type: string
-    x-enum-varnames:
-    - BILLING_CADENCE_RECURRING
-  types.BillingCycle:
-    enum:
-    - anniversary
-    - calendar
-    type: string
-    x-enum-varnames:
-    - BillingCycleAnniversary
-    - BillingCycleCalendar
-  types.BillingModel:
-    enum:
-    - FLAT_FEE
-    - PACKAGE
-    - TIERED
-    type: string
-    x-enum-varnames:
-    - BILLING_MODEL_FLAT_FEE
-    - BILLING_MODEL_PACKAGE
-    - BILLING_MODEL_TIERED
-  types.BillingPeriod:
-    enum:
-    - MONTHLY
-    - ANNUAL
-    - WEEKLY
-    - DAILY
-    - QUARTERLY
-    - HALF_YEARLY
-    - ONETIME
-    type: string
-    x-enum-varnames:
-    - BILLING_PERIOD_MONTHLY
-    - BILLING_PERIOD_ANNUAL
-    - BILLING_PERIOD_WEEKLY
-    - BILLING_PERIOD_DAILY
-    - BILLING_PERIOD_QUARTER
-    - BILLING_PERIOD_HALF_YEAR
-    - BILLING_PERIOD_ONETIME
-  types.BillingTier:
-    enum:
-    - VOLUME
-    - SLAB
-    type: string
-    x-enum-varnames:
-    - BILLING_TIER_VOLUME
-    - BILLING_TIER_SLAB
   types.Bucket:
     properties:
       hour:
@@ -8023,1892 +7948,6 @@ definitions:
         minimum: 0
         type: integer
     type: object
-  types.CancelImmediatelyInvoicePolicy:
-    enum:
-    - generate_invoice
-    - skip
-    type: string
-    x-enum-varnames:
-    - CancelImmediatelyInvoicePolicyGenerateInvoice
-    - CancelImmediatelyInvoicePolicySkip
-  types.CancellationType:
-    enum:
-    - immediate
-    - end_of_period
-    - scheduled_date
-    type: string
-    x-enum-varnames:
-    - CancellationTypeImmediate
-    - CancellationTypeEndOfPeriod
-    - CancellationTypeScheduledDate
-  types.CheckoutAction:
-    enum:
-    - create_subscription
-    type: string
-    x-enum-varnames:
-    - CheckoutActionCreateSubscription
-  types.CheckoutConfiguration:
-    properties:
-      create_subscription_params:
-        $ref: '#/definitions/types.CreateSubscriptionParams'
-    type: object
-  types.CheckoutPaymentProvider:
-    enum:
-    - razorpay
-    type: string
-    x-enum-varnames:
-    - CheckoutPaymentProviderRazorpay
-  types.CheckoutStatus:
-    enum:
-    - initiated
-    - pending
-    - completed
-    - failed
-    - expired
-    type: string
-    x-enum-varnames:
-    - CheckoutStatusInitiated
-    - CheckoutStatusPending
-    - CheckoutStatusCompleted
-    - CheckoutStatusFailed
-    - CheckoutStatusExpired
-  types.CollectionMethod:
-    enum:
-    - charge_automatically
-    - send_invoice
-    type: string
-    x-enum-varnames:
-    - CollectionMethodChargeAutomatically
-    - CollectionMethodSendInvoice
-  types.CommitmentInfo:
-    properties:
-      amount:
-        type: string
-      computed_commitment_utilized_amount:
-        type: string
-      computed_overage_amount:
-        type: string
-      computed_true_up_amount:
-        description: total_cost = computed_commitment_utilized_amount + computed_overage_amount
-          + computed_true_up_amount
-        type: string
-      duration:
-        $ref: '#/definitions/types.BillingPeriod'
-      is_windowed:
-        type: boolean
-      overage_factor:
-        type: string
-      quantity:
-        description: Only used for quantity-based commitments
-        type: string
-      true_up_enabled:
-        type: boolean
-      type:
-        $ref: '#/definitions/types.CommitmentType'
-    type: object
-  types.CommitmentType:
-    enum:
-    - amount
-    - quantity
-    type: string
-    x-enum-varnames:
-    - COMMITMENT_TYPE_AMOUNT
-    - COMMITMENT_TYPE_QUANTITY
-  types.CouponCadence:
-    enum:
-    - once
-    - repeated
-    - forever
-    type: string
-    x-enum-varnames:
-    - CouponCadenceOnce
-    - CouponCadenceRepeated
-    - CouponCadenceForever
-  types.CouponFilter:
-    properties:
-      coupon_codes:
-        items:
-          type: string
-        type: array
-      coupon_ids:
-        items:
-          type: string
-        type: array
-      expand:
-        type: string
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.CouponType:
-    enum:
-    - fixed
-    - percentage
-    type: string
-    x-enum-varnames:
-    - CouponTypeFixed
-    - CouponTypePercentage
-  types.CreateSubscriptionParams:
-    properties:
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      currency:
-        type: string
-      end_date:
-        type: string
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      plan_id:
-        type: string
-      start_date:
-        type: string
-    type: object
-  types.CreateSubscriptionResult:
-    properties:
-      invoice_id:
-        type: string
-      payment_id:
-        type: string
-      subscription_id:
-        type: string
-    type: object
-  types.CreditBreakdown:
-    properties:
-      free:
-        type: string
-      purchased:
-        type: string
-    type: object
-  types.CreditGrantApplicationReason:
-    enum:
-    - first_time_recurring_credit_grant
-    - recurring_credit_grant
-    - onetime_credit_grant
-    type: string
-    x-enum-varnames:
-    - ApplicationReasonFirstTimeRecurringCreditGrant
-    - ApplicationReasonRecurringCreditGrant
-    - ApplicationReasonOnetimeCreditGrant
-  types.CreditGrantCadence:
-    enum:
-    - ONETIME
-    - RECURRING
-    type: string
-    x-enum-varnames:
-    - CreditGrantCadenceOneTime
-    - CreditGrantCadenceRecurring
-  types.CreditGrantExpiryDurationUnit:
-    enum:
-    - DAY
-    - WEEK
-    - MONTH
-    - YEAR
-    type: string
-    x-enum-varnames:
-    - CreditGrantExpiryDurationUnitDays
-    - CreditGrantExpiryDurationUnitWeeks
-    - CreditGrantExpiryDurationUnitMonths
-    - CreditGrantExpiryDurationUnitYears
-  types.CreditGrantExpiryType:
-    enum:
-    - NEVER
-    - DURATION
-    - BILLING_CYCLE
-    type: string
-    x-enum-varnames:
-    - CreditGrantExpiryTypeNever
-    - CreditGrantExpiryTypeDuration
-    - CreditGrantExpiryTypeBillingCycle
-  types.CreditGrantPeriod:
-    enum:
-    - DAILY
-    - WEEKLY
-    - MONTHLY
-    - ANNUAL
-    - QUARTERLY
-    - HALF_YEARLY
-    type: string
-    x-enum-varnames:
-    - CREDIT_GRANT_PERIOD_DAILY
-    - CREDIT_GRANT_PERIOD_WEEKLY
-    - CREDIT_GRANT_PERIOD_MONTHLY
-    - CREDIT_GRANT_PERIOD_ANNUAL
-    - CREDIT_GRANT_PERIOD_QUARTER
-    - CREDIT_GRANT_PERIOD_HALF_YEARLY
-  types.CreditGrantScope:
-    enum:
-    - PLAN
-    - SUBSCRIPTION
-    type: string
-    x-enum-varnames:
-    - CreditGrantScopePlan
-    - CreditGrantScopeSubscription
-  types.CreditNoteReason:
-    enum:
-    - DUPLICATE
-    - FRAUDULENT
-    - ORDER_CHANGE
-    - UNSATISFACTORY
-    - SERVICE_ISSUE
-    - BILLING_ERROR
-    - SUBSCRIPTION_CANCELLATION
-    type: string
-    x-enum-varnames:
-    - CreditNoteReasonDuplicate
-    - CreditNoteReasonFraudulent
-    - CreditNoteReasonOrderChange
-    - CreditNoteReasonUnsatisfactory
-    - CreditNoteReasonService
-    - CreditNoteReasonBillingError
-    - CreditNoteReasonSubscriptionCancellation
-  types.CreditNoteStatus:
-    enum:
-    - DRAFT
-    - FINALIZED
-    - VOIDED
-    type: string
-    x-enum-varnames:
-    - CreditNoteStatusDraft
-    - CreditNoteStatusFinalized
-    - CreditNoteStatusVoided
-  types.CreditNoteType:
-    enum:
-    - ADJUSTMENT
-    - REFUND
-    type: string
-    x-enum-varnames:
-    - CreditNoteTypeAdjustment
-    - CreditNoteTypeRefund
-  types.CustomerFilter:
-    properties:
-      customer_ids:
-        items:
-          type: string
-        type: array
-      email:
-        type: string
-      end_time:
-        type: string
-      expand:
-        type: string
-      external_id:
-        type: string
-      external_ids:
-        items:
-          type: string
-        type: array
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.DataType:
-    enum:
-    - string
-    - number
-    - date
-    - array
-    type: string
-    x-enum-varnames:
-    - DataTypeString
-    - DataTypeNumber
-    - DataTypeDate
-    - DataTypeArray
-  types.DebugTrackerStatus:
-    enum:
-    - unprocessed
-    - not_found
-    - found
-    - error
-    - processing
-    - attributed
-    type: string
-    x-enum-varnames:
-    - DebugTrackerStatusUnprocessed
-    - DebugTrackerStatusNotFound
-    - DebugTrackerStatusFound
-    - DebugTrackerStatusError
-    - DebugTrackerStatusProcessing
-    - DebugTrackerStatusAttributed
-  types.EntitlementEntityType:
-    enum:
-    - PLAN
-    - SUBSCRIPTION
-    - ADDON
-    type: string
-    x-enum-varnames:
-    - ENTITLEMENT_ENTITY_TYPE_PLAN
-    - ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
-    - ENTITLEMENT_ENTITY_TYPE_ADDON
-  types.EntitlementFilter:
-    properties:
-      end_time:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.EntitlementEntityType'
-      expand:
-        type: string
-      feature_ids:
-        items:
-          type: string
-        type: array
-      feature_type:
-        $ref: '#/definitions/types.FeatureType'
-      filters:
-        description: Specific filters for entitlements
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      is_enabled:
-        type: boolean
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      plan_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.EntitlementUsageResetPeriod:
-    enum:
-    - MONTHLY
-    - ANNUAL
-    - WEEKLY
-    - DAILY
-    - QUARTERLY
-    - HALF_YEARLY
-    - NEVER
-    type: string
-    x-enum-varnames:
-    - ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY
-    - ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL
-    - ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY
-    - ENTITLEMENT_USAGE_RESET_PERIOD_DAILY
-    - ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER
-    - ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR
-    - ENTITLEMENT_USAGE_RESET_PERIOD_NEVER
-  types.EntitySyncConfig:
-    properties:
-      inbound:
-        description: Inbound from external provider to FlexPrice
-        type: boolean
-      outbound:
-        description: Outbound from FlexPrice to external provider
-        type: boolean
-    type: object
-  types.EntityType:
-    enum:
-    - EVENTS
-    - PRICES
-    - CUSTOMERS
-    - FEATURES
-    type: string
-    x-enum-varnames:
-    - EntityTypeEvents
-    - EntityTypePrices
-    - EntityTypeCustomers
-    - EntityTypeFeatures
-  types.EnvironmentType:
-    enum:
-    - development
-    - production
-    type: string
-    x-enum-varnames:
-    - EnvironmentDevelopment
-    - EnvironmentProduction
-  types.EventProcessingStatusType:
-    enum:
-    - processed
-    - processing
-    - failed
-    type: string
-    x-enum-varnames:
-    - EventProcessingStatusTypeProcessed
-    - EventProcessingStatusTypeProcessing
-    - EventProcessingStatusTypeFailed
-  types.ExportMetadataEntityType:
-    enum:
-    - customer
-    - wallet
-    type: string
-    x-enum-varnames:
-    - ExportMetadataEntityTypeCustomer
-    - ExportMetadataEntityTypeWallet
-  types.ExportMetadataField:
-    properties:
-      column_name:
-        description: CSV column header to be shown in the exported file
-        type: string
-      entity_type:
-        allOf:
-        - $ref: '#/definitions/types.ExportMetadataEntityType'
-        description: which entity's metadata to read from
-      field_key:
-        description: metadata key to look up
-        type: string
-    required:
-    - entity_type
-    - field_key
-    type: object
-  types.FailurePoint:
-    properties:
-      error:
-        $ref: '#/definitions/errors.ErrorResponse'
-      failure_point_type:
-        $ref: '#/definitions/types.FailurePointType'
-    type: object
-  types.FailurePointType:
-    enum:
-    - customer_lookup
-    - meter_lookup
-    - price_lookup
-    - subscription_line_item_lookup
-    - attributed_to_customer
-    type: string
-    x-enum-varnames:
-    - FailurePointTypeCustomerLookup
-    - FailurePointTypeMeterLookup
-    - FailurePointTypePriceLookup
-    - FailurePointTypeSubscriptionLineItemLookup
-    - FailurePointTypeAttributedToCustomer
-  types.FeatureFilter:
-    properties:
-      end_time:
-        type: string
-      expand:
-        type: string
-      feature_ids:
-        description: Feature specific filters
-        items:
-          type: string
-        type: array
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      lookup_key:
-        type: string
-      lookup_keys:
-        items:
-          type: string
-        type: array
-      meter_ids:
-        items:
-          type: string
-        type: array
-      name_contains:
-        type: string
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.FeatureType:
-    enum:
-    - metered
-    - boolean
-    - static
-    - config
-    type: string
-    x-enum-varnames:
-    - FeatureTypeMetered
-    - FeatureTypeBoolean
-    - FeatureTypeStatic
-    - FeatureTypeConfig
-  types.FileType:
-    enum:
-    - CSV
-    - JSON
-    type: string
-    x-enum-varnames:
-    - FileTypeCSV
-    - FileTypeJSON
-  types.FilterCondition:
-    properties:
-      data_type:
-        $ref: '#/definitions/types.DataType'
-      field:
-        type: string
-      operator:
-        $ref: '#/definitions/types.FilterOperatorType'
-      value:
-        $ref: '#/definitions/types.Value'
-    type: object
-  types.FilterOperatorType:
-    enum:
-    - eq
-    - contains
-    - not_contains
-    - gt
-    - lt
-    - in
-    - not_in
-    - before
-    - after
-    type: string
-    x-enum-varnames:
-    - EQUAL
-    - CONTAINS
-    - NOT_CONTAINS
-    - GREATER_THAN
-    - LESS_THAN
-    - IN
-    - NOT_IN
-    - BEFORE
-    - AFTER
-  types.GroupEntityType:
-    enum:
-    - price
-    - feature
-    type: string
-    x-enum-varnames:
-    - GroupEntityTypePrice
-    - GroupEntityTypeFeature
-  types.GroupFilter:
-    properties:
-      end_time:
-        type: string
-      entity_type:
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      group_ids:
-        description: Group specific filters
-        items:
-          type: string
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      lookup_key:
-        type: string
-      name:
-        type: string
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.IntegrationEntityType:
-    enum:
-    - customer
-    - plan
-    - invoice
-    - subscription
-    - payment
-    - credit_note
-    - addon
-    - item
-    - item_price
-    - price
-    type: string
-    x-enum-varnames:
-    - IntegrationEntityTypeCustomer
-    - IntegrationEntityTypePlan
-    - IntegrationEntityTypeInvoice
-    - IntegrationEntityTypeSubscription
-    - IntegrationEntityTypePayment
-    - IntegrationEntityTypeCreditNote
-    - IntegrationEntityTypeAddon
-    - IntegrationEntityTypeItem
-    - IntegrationEntityTypeItemPrice
-    - IntegrationEntityTypePrice
-  types.InvoiceBillingReason:
-    enum:
-    - SUBSCRIPTION_CREATE
-    - SUBSCRIPTION_CYCLE
-    - SUBSCRIPTION_UPDATE
-    - SUBSCRIPTION_TRIAL_END
-    - SUBSCRIPTION_TRIAL_START
-    - PRORATION
-    - MANUAL
-    - AUTO_INVOICE_THRESHOLD
-    - WALLET_AUTO_TOPUP
-    type: string
-    x-enum-varnames:
-    - InvoiceBillingReasonSubscriptionCreate
-    - InvoiceBillingReasonSubscriptionCycle
-    - InvoiceBillingReasonSubscriptionUpdate
-    - InvoiceBillingReasonSubscriptionTrialEnd
-    - InvoiceBillingReasonSubscriptionTrialStart
-    - InvoiceBillingReasonProration
-    - InvoiceBillingReasonManual
-    - InvoiceBillingReasonAutoInvoiceThreshold
-    - InvoiceBillingReasonWalletAutoTopup
-  types.InvoiceCadence:
-    enum:
-    - ARREAR
-    - ADVANCE
-    type: string
-    x-enum-varnames:
-    - InvoiceCadenceArrear
-    - InvoiceCadenceAdvance
-  types.InvoiceFilter:
-    properties:
-      amount_due_gt:
-        description: |-
-          amount_due_gt filters invoices with a total amount due greater than the specified value
-          Useful for finding invoices above a certain threshold or identifying high-value invoices
-        type: number
-      amount_remaining_gt:
-        description: |-
-          amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
-          Useful for finding invoices that still have significant unpaid amounts
-        type: number
-      billing_reason:
-        allOf:
-        - $ref: '#/definitions/types.InvoiceBillingReason'
-        description: BillingReason filters invoices by why they were generated
-      currency:
-        description: |-
-          currency filters invoices by their currency (ISO 4217 code, e.g. "usd", "eur").
-          Matches on the invoices.currency column exactly.
-        type: string
-      customer_id:
-        description: |-
-          customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
-          This is the ID returned by FlexPrice when creating or retrieving customers
-        type: string
-      end_time:
-        type: string
-      expand:
-        type: string
-      external_customer_id:
-        description: |-
-          external_customer_id filters invoices for a customer using your system's customer identifier
-          This is the ID you provided when creating the customer in FlexPrice
-        type: string
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      invoice_ids:
-        description: |-
-          invoice_ids restricts results to invoices with the specified IDs
-          Use this to retrieve specific invoices when you know their exact identifiers
-        items:
-          type: string
-        type: array
-      invoice_status:
-        description: |-
-          invoice_status filters by the current state of invoices in their lifecycle
-          Multiple statuses can be specified to include invoices in any of the listed states
-        items:
-          $ref: '#/definitions/types.InvoiceStatus'
-        type: array
-      invoice_type:
-        allOf:
-        - $ref: '#/definitions/types.InvoiceType'
-        description: |-
-          invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)
-          Use this to separate recurring charges from one-time fees or credit adjustments
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      payment_status:
-        description: |-
-          payment_status filters by the payment state of invoices
-          Multiple statuses can be specified to include invoices with any of the listed payment states
-        items:
-          $ref: '#/definitions/types.PaymentStatus'
-        type: array
-      period_end_gte:
-        description: period_end_gte filters invoices with period_end >= value
-        type: string
-      period_end_lte:
-        description: period_end_lte filters invoices with period_end <= value
-        type: string
-      period_start_gte:
-        description: period_start_gte filters invoices with period_start >= value
-        type: string
-      period_start_lte:
-        description: period_start_lte filters invoices with period_start <= value
-        type: string
-      skip_line_items:
-        description: SkipLineItems if true, will not include line items in the response
-        type: boolean
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_customer_id:
-        description: subscription_customer_id filters invoices by the subscription
-          owner's customer ID
-        items:
-          type: string
-        type: array
-      subscription_id:
-        description: |-
-          subscription_id filters invoices generated for a specific subscription
-          Only returns invoices that were created as part of the specified subscription's billing
-        type: string
-    type: object
-  types.InvoiceStatus:
-    enum:
-    - DRAFT
-    - FINALIZED
-    - VOIDED
-    - SKIPPED
-    type: string
-    x-enum-varnames:
-    - InvoiceStatusDraft
-    - InvoiceStatusFinalized
-    - InvoiceStatusVoided
-    - InvoiceStatusSkipped
-  types.InvoiceSyncSettings:
-    properties:
-      normalize_fixed_to:
-        allOf:
-        - $ref: '#/definitions/types.BillingPeriod'
-        description: |-
-          NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
-          For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
-          qty=3, rate=$100. Empty string means no normalization (keep original).
-    type: object
-  types.InvoiceType:
-    enum:
-    - SUBSCRIPTION
-    - ONE_OFF
-    - CREDIT
-    type: string
-    x-enum-varnames:
-    - InvoiceTypeSubscription
-    - InvoiceTypeOneOff
-    - InvoiceTypeCredit
-  types.PaginationResponse:
-    properties:
-      limit:
-        type: integer
-      offset:
-        type: integer
-      total:
-        type: integer
-    type: object
-  types.PauseMode:
-    enum:
-    - immediate
-    - scheduled
-    - period_end
-    type: string
-    x-enum-varnames:
-    - PauseModeImmediate
-    - PauseModeScheduled
-    - PauseModePeriodEnd
-  types.PauseStatus:
-    enum:
-    - none
-    - active
-    - scheduled
-    - completed
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - PauseStatusNone
-    - PauseStatusActive
-    - PauseStatusScheduled
-    - PauseStatusCompleted
-    - PauseStatusCancelled
-  types.PaymentAction:
-    properties:
-      type:
-        $ref: '#/definitions/types.PaymentActionType'
-      url:
-        type: string
-    type: object
-  types.PaymentActionType:
-    enum:
-    - checkout_url
-    - payment_link
-    type: string
-    x-enum-varnames:
-    - PaymentActionTypeCheckoutURL
-    - PaymentActionTypePaymentLink
-  types.PaymentBehavior:
-    enum:
-    - allow_incomplete
-    - default_incomplete
-    - error_if_incomplete
-    - default_active
-    type: string
-    x-enum-varnames:
-    - PaymentBehaviorAllowIncomplete
-    - PaymentBehaviorDefaultIncomplete
-    - PaymentBehaviorErrorIfIncomplete
-    - PaymentBehaviorDefaultActive
-  types.PaymentDestinationType:
-    enum:
-    - INVOICE
-    - CUSTOMER
-    type: string
-    x-enum-varnames:
-    - PaymentDestinationTypeInvoice
-    - PaymentDestinationTypeCustomer
-  types.PaymentGatewayType:
-    enum:
-    - stripe
-    - razorpay
-    - nomod
-    - moyasar
-    - paddle
-    - whop
-    type: string
-    x-enum-varnames:
-    - PaymentGatewayTypeStripe
-    - PaymentGatewayTypeRazorpay
-    - PaymentGatewayTypeNomod
-    - PaymentGatewayTypeMoyasar
-    - PaymentGatewayTypePaddle
-    - PaymentGatewayTypeWhop
-  types.PaymentMethodType:
-    enum:
-    - CARD
-    - ACH
-    - OFFLINE
-    - CREDITS
-    - PAYMENT_LINK
-    type: string
-    x-enum-varnames:
-    - PaymentMethodTypeCard
-    - PaymentMethodTypeACH
-    - PaymentMethodTypeOffline
-    - PaymentMethodTypeCredits
-    - PaymentMethodTypePaymentLink
-  types.PaymentStatus:
-    enum:
-    - INITIATED
-    - PENDING
-    - PROCESSING
-    - SUCCEEDED
-    - OVERPAID
-    - FAILED
-    - REFUNDED
-    - PARTIALLY_REFUNDED
-    - VOIDED
-    type: string
-    x-enum-varnames:
-    - PaymentStatusInitiated
-    - PaymentStatusPending
-    - PaymentStatusProcessing
-    - PaymentStatusSucceeded
-    - PaymentStatusOverpaid
-    - PaymentStatusFailed
-    - PaymentStatusRefunded
-    - PaymentStatusPartiallyRefunded
-    - PaymentStatusVoided
-  types.PaymentTerms:
-    enum:
-    - 15 NET
-    - 30 NET
-    - 45 NET
-    - 60 NET
-    - 75 NET
-    - 90 NET
-    type: string
-    x-enum-varnames:
-    - PaymentTerms15Net
-    - PaymentTerms30Net
-    - PaymentTerms45Net
-    - PaymentTerms60Net
-    - PaymentTerms75Net
-    - PaymentTerms90Net
-  types.PlanFilter:
-    properties:
-      end_time:
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      plan_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.PriceEntityType:
-    enum:
-    - PLAN
-    - SUBSCRIPTION
-    - ADDON
-    - PRICE
-    - COSTSHEET
-    type: string
-    x-enum-varnames:
-    - PRICE_ENTITY_TYPE_PLAN
-    - PRICE_ENTITY_TYPE_SUBSCRIPTION
-    - PRICE_ENTITY_TYPE_ADDON
-    - PRICE_ENTITY_TYPE_PRICE
-    - PRICE_ENTITY_TYPE_COSTSHEET
-  types.PriceFilter:
-    properties:
-      allow_expired_prices:
-        default: false
-        type: boolean
-      billing_periods:
-        items:
-          $ref: '#/definitions/types.BillingPeriod'
-        type: array
-      end_time:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.PriceEntityType'
-      expand:
-        type: string
-      filters:
-        description: DSL filters
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      meter_ids:
-        items:
-          type: string
-        type: array
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      parent_price_id:
-        type: string
-      plan_ids:
-        description: Price override filtering fields
-        items:
-          type: string
-        type: array
-      price_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        type: string
-      start_date_lt:
-        type: string
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_id:
-        type: string
-    type: object
-  types.PriceType:
-    enum:
-    - USAGE
-    - FIXED
-    type: string
-    x-enum-varnames:
-    - PRICE_TYPE_USAGE
-    - PRICE_TYPE_FIXED
-  types.PriceUnitFilter:
-    properties:
-      end_time:
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      price_unit_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.PriceUnitType:
-    enum:
-    - FIAT
-    - CUSTOM
-    type: string
-    x-enum-varnames:
-    - PRICE_UNIT_TYPE_FIAT
-    - PRICE_UNIT_TYPE_CUSTOM
-  types.ProrationBehavior:
-    enum:
-    - create_prorations
-    - none
-    type: string
-    x-enum-comments:
-      ProrationBehaviorCreateProrations: 'Default: Create credits/charges on invoice'
-      ProrationBehaviorNone: Calculate but don't apply (e.g., for previews)
-    x-enum-varnames:
-    - ProrationBehaviorCreateProrations
-    - ProrationBehaviorNone
-  types.QueryFilter:
-    properties:
-      expand:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
-  types.ReportingUnit:
-    properties:
-      conversion_rate:
-        description: 'Multiplier: reporting_unit_value = unit_value * conversion_rate;
-          must be > 0'
-        type: number
-      unit_plural:
-        description: Display unit label, plural (e.g. "seconds")
-        type: string
-      unit_singular:
-        description: Display unit label, singular (e.g. "second")
-        type: string
-    type: object
-  types.ResetUsage:
-    enum:
-    - BILLING_PERIOD
-    - NEVER
-    type: string
-    x-enum-varnames:
-    - ResetUsageBillingPeriod
-    - ResetUsageNever
-  types.ResumeMode:
-    enum:
-    - immediate
-    - scheduled
-    - auto
-    type: string
-    x-enum-varnames:
-    - ResumeModeImmediate
-    - ResumeModeScheduled
-    - ResumeModeAuto
-  types.RoundType:
-    enum:
-    - up
-    - down
-    type: string
-    x-enum-varnames:
-    - ROUND_UP
-    - ROUND_DOWN
-  types.S3CompressionType:
-    enum:
-    - none
-    - gzip
-    type: string
-    x-enum-varnames:
-    - S3CompressionTypeNone
-    - S3CompressionTypeGzip
-  types.S3EncryptionType:
-    enum:
-    - AES256
-    - aws:kms
-    - aws:kms:dsse
-    type: string
-    x-enum-varnames:
-    - S3EncryptionTypeAES256
-    - S3EncryptionTypeAwsKms
-    - S3EncryptionTypeAwsKmsDsse
-  types.S3ExportConfig:
-    properties:
-      bucket:
-        description: S3 bucket name
-        type: string
-      compression:
-        allOf:
-        - $ref: '#/definitions/types.S3CompressionType'
-        description: 'Compression type: "gzip", "none" (default: "none")'
-      encryption:
-        allOf:
-        - $ref: '#/definitions/types.S3EncryptionType'
-        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
-          "AES256")'
-      is_flexprice_managed:
-        description: If true, use Flexprice-managed S3 credentials instead of user-provided
-        type: boolean
-      key_prefix:
-        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
-        type: string
-      region:
-        description: AWS region (e.g., "us-west-2")
-        type: string
-    type: object
-  types.S3JobConfig:
-    properties:
-      bucket:
-        description: S3 bucket name
-        type: string
-      compression:
-        allOf:
-        - $ref: '#/definitions/types.S3CompressionType'
-        description: 'Compression type: "gzip", "none" (default: "none")'
-      encryption:
-        allOf:
-        - $ref: '#/definitions/types.S3EncryptionType'
-        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
-          "AES256")'
-      endpoint_url:
-        description: Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
-        type: string
-      export_metadata_fields:
-        description: Optional user-selected metadata columns
-        items:
-          $ref: '#/definitions/types.ExportMetadataField'
-        type: array
-      key_prefix:
-        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
-        type: string
-      region:
-        description: AWS region (e.g., "us-west-2")
-        type: string
-      use_path_style:
-        description: Use path-style addressing (required for MinIO)
-        type: boolean
-    type: object
-  types.ScheduleStatus:
-    enum:
-    - pending
-    - executing
-    - executed
-    - cancelled
-    - failed
-    type: string
-    x-enum-varnames:
-    - ScheduleStatusPending
-    - ScheduleStatusExecuting
-    - ScheduleStatusExecuted
-    - ScheduleStatusCancelled
-    - ScheduleStatusFailed
-  types.ScheduleType:
-    enum:
-    - immediate
-    - end_of_period
-    type: string
-    x-enum-varnames:
-    - ScheduleTypeImmediate
-    - ScheduleTypePeriodEnd
-  types.ScheduledTaskEntityType:
-    enum:
-    - events
-    - invoice
-    - credit_topups
-    - credit_usage
-    - usage_analytics
-    type: string
-    x-enum-varnames:
-    - ScheduledTaskEntityTypeEvents
-    - ScheduledTaskEntityTypeInvoice
-    - ScheduledTaskEntityTypeCreditTopups
-    - ScheduledTaskEntityTypeCreditUsage
-    - ScheduledTaskEntityTypeUsageAnalytics
-  types.ScheduledTaskInterval:
-    enum:
-    - 15MIN
-    - 30MIN
-    - custom
-    - hourly
-    - daily
-    type: string
-    x-enum-comments:
-      ScheduledTaskIntervalCustom: 10 minutes for testing
-    x-enum-varnames:
-    - ScheduledTaskIntervalEvery15Minutes
-    - ScheduledTaskIntervalEvery30Minutes
-    - ScheduledTaskIntervalCustom
-    - ScheduledTaskIntervalHourly
-    - ScheduledTaskIntervalDaily
-  types.SecretProvider:
-    enum:
-    - flexprice
-    - stripe
-    - s3
-    - hubspot
-    - razorpay
-    - chargebee
-    - quickbooks
-    - zoho_books
-    - nomod
-    - moyasar
-    - paddle
-    - whop
-    type: string
-    x-enum-comments:
-      SecretProviderS3: supports multiple connections per environment
-    x-enum-varnames:
-    - SecretProviderFlexPrice
-    - SecretProviderStripe
-    - SecretProviderS3
-    - SecretProviderHubSpot
-    - SecretProviderRazorpay
-    - SecretProviderChargebee
-    - SecretProviderQuickBooks
-    - SecretProviderZohoBooks
-    - SecretProviderNomod
-    - SecretProviderMoyasar
-    - SecretProviderPaddle
-    - SecretProviderWhop
-  types.SecretType:
-    enum:
-    - private_key
-    - publishable_key
-    - integration
-    type: string
-    x-enum-varnames:
-    - SecretTypePrivateKey
-    - SecretTypePublishableKey
-    - SecretTypeIntegration
-  types.SortCondition:
-    properties:
-      direction:
-        $ref: '#/definitions/types.SortDirection'
-      field:
-        type: string
-    type: object
-  types.SortDirection:
-    enum:
-    - asc
-    - desc
-    type: string
-    x-enum-varnames:
-    - SortDirectionAsc
-    - SortDirectionDesc
-  types.Status:
-    enum:
-    - published
-    - deleted
-    - archived
-    type: string
-    x-enum-varnames:
-    - StatusPublished
-    - StatusDeleted
-    - StatusArchived
-  types.SubscriptionChangeType:
-    enum:
-    - upgrade
-    - downgrade
-    - lateral
-    type: string
-    x-enum-varnames:
-    - SubscriptionChangeTypeUpgrade
-    - SubscriptionChangeTypeDowngrade
-    - SubscriptionChangeTypeLateral
-  types.SubscriptionFilter:
-    properties:
-      active_at:
-        description: ActiveAt filters subscriptions that are active at the given time
-        type: string
-      billing_cadence:
-        description: BillingCadence filters by billing cadence
-        items:
-          $ref: '#/definitions/types.BillingCadence'
-        type: array
-      billing_period:
-        description: BillingPeriod filters by billing period
-        items:
-          $ref: '#/definitions/types.BillingPeriod'
-        type: array
-      customer_id:
-        description: CustomerID filters by customer ID
-        type: string
-      customer_ids:
-        description: CustomerIDs filters by customer IDs
-        items:
-          type: string
-        type: array
-      effective_date_for_update:
-        description: |-
-          EffectiveDateForUpdate selects subscriptions that need a billing-period pass on or before this time:
-          current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
-          When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
-        type: string
-      end_time:
-        type: string
-      expand:
-        type: string
-      external_customer_id:
-        description: ExternalCustomerID filters by external customer ID
-        type: string
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      invoicing_customer_ids:
-        description: InvoicingCustomerIDs filters by invoicing customer ID
-        items:
-          type: string
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      parent_subscription_ids:
-        description: ParentSubscriptionIDs filters by parent subscription IDs
-        items:
-          type: string
-        type: array
-      plan_id:
-        description: PlanID filters by plan ID
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_ids:
-        items:
-          type: string
-        type: array
-      subscription_status:
-        description: SubscriptionStatus filters by subscription status
-        items:
-          $ref: '#/definitions/types.SubscriptionStatus'
-        type: array
-      subscription_type:
-        description: SubscriptionType filters by subscription type
-        items:
-          $ref: '#/definitions/types.SubscriptionType'
-        type: array
-      trial_end_due_lte:
-        description: |-
-          TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end <= trial_end_due_lte.
-          Use with subscription_status trialing for trial-end cron processing.
-        type: string
-      with_line_items:
-        description: WithLineItems includes line items in the response
-        type: boolean
-    type: object
-  types.SubscriptionLineItemEntityType:
-    enum:
-    - plan
-    - addon
-    - subscription
-    type: string
-    x-enum-varnames:
-    - SubscriptionLineItemEntityTypePlan
-    - SubscriptionLineItemEntityTypeAddon
-    - SubscriptionLineItemEntityTypeSubscription
-  types.SubscriptionLineItemFilter:
-    properties:
-      active_filter:
-        default: true
-        type: boolean
-      addon_association_ids:
-        items:
-          type: string
-        type: array
-      billing_periods:
-        items:
-          type: string
-        type: array
-      currencies:
-        items:
-          type: string
-        type: array
-      current_period_start:
-        type: string
-      customer_ids:
-        items:
-          type: string
-        type: array
-      end_time:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
-      expand:
-        type: string
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      meter_ids:
-        items:
-          type: string
-        type: array
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      price_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_ids:
-        items:
-          type: string
-        type: array
-      subscription_line_item_ids:
-        description: Specific filters
-        items:
-          type: string
-        type: array
-    type: object
-  types.SubscriptionScheduleChangeType:
-    enum:
-    - plan_change
-    - cancellation
-    type: string
-    x-enum-varnames:
-    - SubscriptionScheduleChangeTypePlanChange
-    - SubscriptionScheduleChangeTypeCancellation
-  types.SubscriptionStatus:
-    enum:
-    - active
-    - paused
-    - cancelled
-    - incomplete
-    - trialing
-    - draft
-    type: string
-    x-enum-varnames:
-    - SubscriptionStatusActive
-    - SubscriptionStatusPaused
-    - SubscriptionStatusCancelled
-    - SubscriptionStatusIncomplete
-    - SubscriptionStatusTrialing
-    - SubscriptionStatusDraft
-  types.SubscriptionType:
-    enum:
-    - standalone
-    - delegated_invoicing
-    - parent
-    - inherited
-    - grouped_invoicing
-    type: string
-    x-enum-varnames:
-    - SubscriptionTypeStandalone
-    - SubscriptionTypeDelegatedInvoicing
-    - SubscriptionTypeParent
-    - SubscriptionTypeInherited
-    - SubscriptionTypeGroupedInvoicing
-  types.SyncConfig:
-    properties:
-      customer:
-        $ref: '#/definitions/types.EntitySyncConfig'
-      deal:
-        allOf:
-        - $ref: '#/definitions/types.EntitySyncConfig'
-        description: CRM sync (HubSpot, Salesforce, etc.)
-      invoice:
-        $ref: '#/definitions/types.EntitySyncConfig'
-      invoice_sync_settings:
-        allOf:
-        - $ref: '#/definitions/types.InvoiceSyncSettings'
-        description: InvoiceSyncSettings controls line-item transformation during
-          outbound invoice sync
-      payment:
-        allOf:
-        - $ref: '#/definitions/types.EntitySyncConfig'
-        description: Payment sync (QuickBooks bidirectional)
-      plan:
-        allOf:
-        - $ref: '#/definitions/types.EntitySyncConfig'
-        description: Integration sync (Stripe, Razorpay, QuickBooks, etc.)
-      quote:
-        $ref: '#/definitions/types.EntitySyncConfig'
-      s3:
-        allOf:
-        - $ref: '#/definitions/types.S3ExportConfig'
-        description: S3 connection metadata (for Flexprice-managed S3 connections)
-      subscription:
-        $ref: '#/definitions/types.EntitySyncConfig'
-    type: object
-  types.TaskStatus:
-    enum:
-    - PENDING
-    - PROCESSING
-    - COMPLETED
-    - FAILED
-    type: string
-    x-enum-varnames:
-    - TaskStatusPending
-    - TaskStatusProcessing
-    - TaskStatusCompleted
-    - TaskStatusFailed
-  types.TaskType:
-    enum:
-    - IMPORT
-    - EXPORT
-    type: string
-    x-enum-varnames:
-    - TaskTypeImport
-    - TaskTypeExport
-  types.TaxRateEntityType:
-    enum:
-    - customer
-    - subscription
-    - invoice
-    - tenant
-    type: string
-    x-enum-varnames:
-    - TaxRateEntityTypeCustomer
-    - TaxRateEntityTypeSubscription
-    - TaxRateEntityTypeInvoice
-    - TaxRateEntityTypeTenant
-  types.TaxRateScope:
-    enum:
-    - INTERNAL
-    - EXTERNAL
-    - ONETIME
-    type: string
-    x-enum-varnames:
-    - TaxRateScopeInternal
-    - TaxRateScopeExternal
-    - TaxRateScopeOneTime
-  types.TaxRateStatus:
-    enum:
-    - ACTIVE
-    - INACTIVE
-    type: string
-    x-enum-varnames:
-    - TaxRateStatusActive
-    - TaxRateStatusInactive
-  types.TaxRateType:
-    enum:
-    - percentage
-    - fixed
-    type: string
-    x-enum-varnames:
-    - TaxRateTypePercentage
-    - TaxRateTypeFixed
-  types.TimeOfDayBucket:
-    properties:
-      commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
-      commitment_value:
-        type: string
-      end:
-        $ref: '#/definitions/types.Bucket'
-      id:
-        description: |-
-          ID is server-assigned. Stable for the lifetime of the line item;
-          invoice breakdown and analytics responses reference this ID.
-        type: string
-      overage_factor:
-        type: number
-      price_id:
-        description: |-
-          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
-          Immutable post-create; changing pricing requires a successor line item.
-        type: string
-      start:
-        $ref: '#/definitions/types.Bucket'
-      true_up_enabled:
-        type: boolean
-    type: object
-  types.TimeRangeFilter:
-    properties:
-      end_time:
-        type: string
-      start_time:
-        type: string
-    type: object
-  types.TransactionReason:
-    enum:
-    - INVOICE_PAYMENT
-    - FREE_CREDIT_GRANT
-    - SUBSCRIPTION_CREDIT_GRANT
-    - PURCHASED_CREDIT_INVOICED
-    - PURCHASED_CREDIT_DIRECT
-    - CREDIT_NOTE
-    - CREDIT_EXPIRED
-    - WALLET_TERMINATION
-    - MANUAL_BALANCE_DEBIT
-    - CREDIT_ADJUSTMENT
-    - INVOICE_VOID_REFUND
-    type: string
-    x-enum-varnames:
-    - TransactionReasonInvoicePayment
-    - TransactionReasonFreeCredit
-    - TransactionReasonSubscriptionCredit
-    - TransactionReasonPurchasedCreditInvoiced
-    - TransactionReasonPurchasedCreditDirect
-    - TransactionReasonCreditNote
-    - TransactionReasonCreditExpired
-    - TransactionReasonWalletTermination
-    - TransactionReasonManualBalanceDebit
-    - TransactionReasonCreditAdjustment
-    - TransactionReasonInvoiceVoidRefund
-  types.TransactionStatus:
-    enum:
-    - pending
-    - completed
-    - failed
-    type: string
-    x-enum-varnames:
-    - TransactionStatusPending
-    - TransactionStatusCompleted
-    - TransactionStatusFailed
-  types.TransactionType:
-    enum:
-    - credit
-    - debit
-    type: string
-    x-enum-varnames:
-    - TransactionTypeCredit
-    - TransactionTypeDebit
-  types.UserFilter:
-    properties:
-      end_time:
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      roles:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      type:
-        allOf:
-        - $ref: '#/definitions/types.UserType'
-        enum:
-        - user
-        - service_account
-      user_ids:
-        description: Specific filters for users
-        items:
-          type: string
-        type: array
-    type: object
-  types.UserType:
-    enum:
-    - user
-    - service_account
-    type: string
-    x-enum-varnames:
-    - UserTypeUser
-    - UserTypeServiceAccount
   types.Value:
     properties:
       array:
@@ -9922,306 +7961,6 @@ definitions:
       number:
         type: number
       string:
-        type: string
-    type: object
-  types.WalletConfig:
-    properties:
-      allowed_price_types:
-        description: |-
-          AllowedPriceTypes is a list of price types that are allowed for the wallet
-          nil means all price types are allowed
-        items:
-          $ref: '#/definitions/types.WalletConfigPriceType'
-        type: array
-    type: object
-  types.WalletConfigPriceType:
-    enum:
-    - ALL
-    - USAGE
-    - FIXED
-    type: string
-    x-enum-varnames:
-    - WalletConfigPriceTypeAll
-    - WalletConfigPriceTypeUsage
-    - WalletConfigPriceTypeFixed
-  types.WalletFilter:
-    properties:
-      alert_enabled:
-        type: boolean
-      expand:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        type: string
-      status:
-        $ref: '#/definitions/types.WalletStatus'
-      wallet_ids:
-        items:
-          type: string
-        type: array
-    type: object
-  types.WalletStatus:
-    enum:
-    - active
-    - frozen
-    - closed
-    type: string
-    x-enum-varnames:
-    - WalletStatusActive
-    - WalletStatusFrozen
-    - WalletStatusClosed
-  types.WalletTransactionFilter:
-    properties:
-      created_by:
-        type: string
-      credits_available_gt:
-        type: number
-      end_time:
-        type: string
-      expand:
-        type: string
-      expiry_date_after:
-        type: string
-      expiry_date_before:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      id:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      priority:
-        type: integer
-      reference_id:
-        type: string
-      reference_type:
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      transaction_reason:
-        $ref: '#/definitions/types.TransactionReason'
-      transaction_status:
-        $ref: '#/definitions/types.TransactionStatus'
-      type:
-        $ref: '#/definitions/types.TransactionType'
-    type: object
-  types.WalletTxReferenceType:
-    enum:
-    - PAYMENT
-    - EXTERNAL
-    - REQUEST
-    - INVOICE
-    type: string
-    x-enum-varnames:
-    - WalletTxReferenceTypePayment
-    - WalletTxReferenceTypeExternal
-    - WalletTxReferenceTypeRequest
-    - WalletTxReferenceTypeInvoice
-  types.WalletType:
-    enum:
-    - PRE_PAID
-    - POST_PAID
-    type: string
-    x-enum-varnames:
-    - WalletTypePrePaid
-    - WalletTypePostPaid
-  types.WebhookEventName:
-    enum:
-    - subscription.created
-    - subscription.draft.created
-    - subscription.activated
-    - subscription.updated
-    - subscription.paused
-    - subscription.cancelled
-    - subscription.resumed
-    - subscription.phase.created
-    - subscription.phase.updated
-    - subscription.phase.deleted
-    - feature.created
-    - feature.updated
-    - feature.deleted
-    - feature.wallet_balance.alert
-    - entitlement.created
-    - entitlement.updated
-    - entitlement.deleted
-    - wallet.created
-    - wallet.updated
-    - wallet.terminated
-    - wallet.transaction.created
-    - payment.created
-    - payment.updated
-    - payment.failed
-    - payment.success
-    - payment.pending
-    - customer.created
-    - customer.updated
-    - customer.deleted
-    - invoice.update.finalized
-    - invoice.update.payment
-    - invoice.update.voided
-    - invoice.update
-    - invoice.payment.overdue
-    - wallet.credit_balance.dropped
-    - wallet.credit_balance.recovered
-    - wallet.ongoing_balance.dropped
-    - wallet.ongoing_balance.recovered
-    - subscription.renewal.due
-    - invoice.communication.triggered
-    - credit_note.created
-    - credit_note.updated
-    - checkout.session.initiated
-    - checkout.session.completed
-    - checkout.session.failed
-    - checkout.session.expired
-    type: string
-    x-enum-varnames:
-    - WebhookEventSubscriptionCreated
-    - WebhookEventSubscriptionDraftCreated
-    - WebhookEventSubscriptionActivated
-    - WebhookEventSubscriptionUpdated
-    - WebhookEventSubscriptionPaused
-    - WebhookEventSubscriptionCancelled
-    - WebhookEventSubscriptionResumed
-    - WebhookEventSubscriptionPhaseCreated
-    - WebhookEventSubscriptionPhaseUpdated
-    - WebhookEventSubscriptionPhaseDeleted
-    - WebhookEventFeatureCreated
-    - WebhookEventFeatureUpdated
-    - WebhookEventFeatureDeleted
-    - WebhookEventFeatureWalletBalanceAlert
-    - WebhookEventEntitlementCreated
-    - WebhookEventEntitlementUpdated
-    - WebhookEventEntitlementDeleted
-    - WebhookEventWalletCreated
-    - WebhookEventWalletUpdated
-    - WebhookEventWalletTerminated
-    - WebhookEventWalletTransactionCreated
-    - WebhookEventPaymentCreated
-    - WebhookEventPaymentUpdated
-    - WebhookEventPaymentFailed
-    - WebhookEventPaymentSuccess
-    - WebhookEventPaymentPending
-    - WebhookEventCustomerCreated
-    - WebhookEventCustomerUpdated
-    - WebhookEventCustomerDeleted
-    - WebhookEventInvoiceUpdateFinalized
-    - WebhookEventInvoiceUpdatePayment
-    - WebhookEventInvoiceUpdateVoided
-    - WebhookEventInvoiceUpdate
-    - WebhookEventInvoicePaymentOverdue
-    - WebhookEventWalletCreditBalanceDropped
-    - WebhookEventWalletCreditBalanceRecovered
-    - WebhookEventWalletOngoingBalanceDropped
-    - WebhookEventWalletOngoingBalanceRecovered
-    - WebhookEventSubscriptionRenewalDue
-    - WebhookEventInvoiceCommunicationTriggered
-    - WebhookEventCreditNoteCreated
-    - WebhookEventCreditNoteUpdated
-    - WebhookEventCheckoutSessionInitiated
-    - WebhookEventCheckoutSessionCompleted
-    - WebhookEventCheckoutSessionFailed
-    - WebhookEventCheckoutSessionExpired
-  types.WindowSize:
-    enum:
-    - MINUTE
-    - 15MIN
-    - 30MIN
-    - HOUR
-    - 3HOUR
-    - 6HOUR
-    - 12HOUR
-    - DAY
-    - WEEK
-    - MONTH
-    type: string
-    x-enum-varnames:
-    - WindowSizeMinute
-    - WindowSize15Min
-    - WindowSize30Min
-    - WindowSizeHour
-    - WindowSize3Hour
-    - WindowSize6Hour
-    - WindowSize12Hour
-    - WindowSizeDay
-    - WindowSizeWeek
-    - WindowSizeMonth
-  types.WorkflowExecutionFilter:
-    properties:
-      end_time:
-        type: string
-      entity:
-        description: e.g. plan, invoice, subscription
-        type: string
-      entity_id:
-        description: e.g. plan_01ABC123
-        type: string
-      expand:
-        type: string
-      filters:
-        description: filters allows complex filtering based on multiple fields (same
-          as FeatureFilter)
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      task_queue:
-        type: string
-      workflow_id:
-        description: Workflow-specific filters
-        type: string
-      workflow_status:
-        description: e.g. Running, Completed, Failed
-        type: string
-      workflow_type:
         type: string
     type: object
   group.Group:
@@ -10800,6 +8539,1223 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.AddonAssociationEntityType:
+    enum:
+    - subscription
+    - plan
+    - addon
+    type: string
+    x-enum-varnames:
+    - AddonAssociationEntityTypeSubscription
+    - AddonAssociationEntityTypePlan
+    - AddonAssociationEntityTypeAddon
+  types.AddonCadence:
+    enum:
+    - onetime
+    - recurring
+    type: string
+    x-enum-varnames:
+    - AddonCadenceOnetime
+    - AddonCadenceRecurring
+  types.AddonFilter:
+    properties:
+      addon_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_keys:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.AddonStatus:
+    enum:
+    - active
+    - cancelled
+    - pending
+    type: string
+    x-enum-varnames:
+    - AddonStatusActive
+    - AddonStatusCancelled
+    - AddonStatusPending
+  types.AggregationType:
+    enum:
+    - COUNT
+    - SUM
+    - AVG
+    - COUNT_UNIQUE
+    - LATEST
+    - SUM_WITH_MULTIPLIER
+    - MAX
+    - WEIGHTED_SUM
+    type: string
+    x-enum-comments:
+      AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
+    x-enum-varnames:
+    - AggregationCount
+    - AggregationSum
+    - AggregationAvg
+    - AggregationCountUnique
+    - AggregationLatest
+    - AggregationSumWithMultiplier
+    - AggregationMax
+    - AggregationWeightedSum
+  types.AlertCondition:
+    enum:
+    - above
+    - below
+    type: string
+    x-enum-varnames:
+    - AlertConditionAbove
+    - AlertConditionBelow
+  types.AlertEntityType:
+    enum:
+    - wallet
+    - feature
+    - subscription
+    - subscription_line_item
+    - group
+    type: string
+    x-enum-varnames:
+    - AlertEntityTypeWallet
+    - AlertEntityTypeFeature
+    - AlertEntityTypeSubscription
+    - AlertEntityTypeSubscriptionLineItem
+    - AlertEntityTypeGroup
+  types.AlertInfo:
+    properties:
+      alert_settings:
+        $ref: '#/definitions/types.AlertSettings'
+      timestamp:
+        type: string
+      value_at_time:
+        type: string
+    type: object
+  types.AlertLogFilter:
+    properties:
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      customer_id:
+        type: string
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.AlertSettings:
+    properties:
+      alert_enabled:
+        type: boolean
+      critical:
+        $ref: '#/definitions/types.AlertThreshold'
+      info:
+        $ref: '#/definitions/types.AlertThreshold'
+      warning:
+        $ref: '#/definitions/types.AlertThreshold'
+    type: object
+  types.AlertSettingsFilter:
+    properties:
+      enabled:
+        type: boolean
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      parent_entity_id:
+        type: string
+      parent_entity_ids:
+        items:
+          type: string
+        type: array
+      parent_entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.AlertState:
+    enum:
+    - ok
+    - info
+    - warning
+    - in_alarm
+    type: string
+    x-enum-varnames:
+    - AlertStateOk
+    - AlertStateInfo
+    - AlertStateWarning
+    - AlertStateInAlarm
+  types.AlertThreshold:
+    properties:
+      condition:
+        $ref: '#/definitions/types.AlertCondition'
+      threshold:
+        type: string
+    type: object
+  types.AlertType:
+    enum:
+    - low_ongoing_balance
+    - low_credit_balance
+    - feature_wallet_balance
+    - subscription_spend
+    - subscription_line_item_spend
+    - subscription_group_spend
+    type: string
+    x-enum-varnames:
+    - AlertTypeLowOngoingBalance
+    - AlertTypeLowCreditBalance
+    - AlertTypeFeatureWalletBalance
+    - AlertTypeSubscriptionSpend
+    - AlertTypeSubscriptionLineItemSpend
+    - AlertTypeSubscriptionGroupSpend
+  types.ApplicationStatus:
+    enum:
+    - applied
+    - failed
+    - pending
+    - skipped
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ApplicationStatusApplied
+    - ApplicationStatusFailed
+    - ApplicationStatusPending
+    - ApplicationStatusSkipped
+    - ApplicationStatusCancelled
+  types.AutoTopup:
+    properties:
+      amount:
+        type: number
+      enabled:
+        type: boolean
+      invoicing:
+        type: boolean
+      threshold:
+        type: number
+    type: object
+  types.BillingCadence:
+    enum:
+    - RECURRING
+    type: string
+    x-enum-varnames:
+    - BILLING_CADENCE_RECURRING
+  types.BillingCycle:
+    enum:
+    - anniversary
+    - calendar
+    type: string
+    x-enum-varnames:
+    - BillingCycleAnniversary
+    - BillingCycleCalendar
+  types.BillingModel:
+    enum:
+    - FLAT_FEE
+    - PACKAGE
+    - TIERED
+    type: string
+    x-enum-varnames:
+    - BILLING_MODEL_FLAT_FEE
+    - BILLING_MODEL_PACKAGE
+    - BILLING_MODEL_TIERED
+  types.BillingPeriod:
+    enum:
+    - MONTHLY
+    - ANNUAL
+    - WEEKLY
+    - DAILY
+    - QUARTERLY
+    - HALF_YEARLY
+    - ONETIME
+    type: string
+    x-enum-varnames:
+    - BILLING_PERIOD_MONTHLY
+    - BILLING_PERIOD_ANNUAL
+    - BILLING_PERIOD_WEEKLY
+    - BILLING_PERIOD_DAILY
+    - BILLING_PERIOD_QUARTER
+    - BILLING_PERIOD_HALF_YEAR
+    - BILLING_PERIOD_ONETIME
+  types.BillingTier:
+    enum:
+    - VOLUME
+    - SLAB
+    type: string
+    x-enum-varnames:
+    - BILLING_TIER_VOLUME
+    - BILLING_TIER_SLAB
+  types.CancelImmediatelyInvoicePolicy:
+    enum:
+    - generate_invoice
+    - skip
+    type: string
+    x-enum-varnames:
+    - CancelImmediatelyInvoicePolicyGenerateInvoice
+    - CancelImmediatelyInvoicePolicySkip
+  types.CancellationType:
+    enum:
+    - immediate
+    - end_of_period
+    - scheduled_date
+    type: string
+    x-enum-varnames:
+    - CancellationTypeImmediate
+    - CancellationTypeEndOfPeriod
+    - CancellationTypeScheduledDate
+  types.CheckoutAction:
+    enum:
+    - create_subscription
+    type: string
+    x-enum-varnames:
+    - CheckoutActionCreateSubscription
+  types.CheckoutConfiguration:
+    properties:
+      create_subscription_params:
+        $ref: '#/definitions/types.CreateSubscriptionParams'
+    type: object
+  types.CheckoutPaymentProvider:
+    enum:
+    - razorpay
+    type: string
+    x-enum-varnames:
+    - CheckoutPaymentProviderRazorpay
+  types.CheckoutPaymentProviderConfig:
+    properties:
+      collection_method:
+        $ref: '#/definitions/types.CollectionMethod'
+      max_mandate_limit:
+        type: string
+      payment_method:
+        $ref: '#/definitions/types.PaymentMethodType'
+    type: object
+  types.CheckoutStatus:
+    enum:
+    - initiated
+    - pending
+    - completed
+    - failed
+    - expired
+    type: string
+    x-enum-varnames:
+    - CheckoutStatusInitiated
+    - CheckoutStatusPending
+    - CheckoutStatusCompleted
+    - CheckoutStatusFailed
+    - CheckoutStatusExpired
+  types.CollectionMethod:
+    enum:
+    - charge_automatically
+    - send_invoice
+    type: string
+    x-enum-varnames:
+    - CollectionMethodChargeAutomatically
+    - CollectionMethodSendInvoice
+  types.CommitmentInfo:
+    properties:
+      amount:
+        type: string
+      computed_commitment_utilized_amount:
+        type: string
+      computed_overage_amount:
+        type: string
+      computed_true_up_amount:
+        description: total_cost = computed_commitment_utilized_amount + computed_overage_amount
+          + computed_true_up_amount
+        type: string
+      duration:
+        $ref: '#/definitions/types.BillingPeriod'
+      is_windowed:
+        type: boolean
+      overage_factor:
+        type: string
+      quantity:
+        description: Only used for quantity-based commitments
+        type: string
+      true_up_enabled:
+        type: boolean
+      type:
+        $ref: '#/definitions/types.CommitmentType'
+    type: object
+  types.CommitmentType:
+    enum:
+    - amount
+    - quantity
+    type: string
+    x-enum-varnames:
+    - COMMITMENT_TYPE_AMOUNT
+    - COMMITMENT_TYPE_QUANTITY
+  types.CouponCadence:
+    enum:
+    - once
+    - repeated
+    - forever
+    type: string
+    x-enum-varnames:
+    - CouponCadenceOnce
+    - CouponCadenceRepeated
+    - CouponCadenceForever
+  types.CouponFilter:
+    properties:
+      coupon_codes:
+        items:
+          type: string
+        type: array
+      coupon_ids:
+        items:
+          type: string
+        type: array
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.CouponType:
+    enum:
+    - fixed
+    - percentage
+    type: string
+    x-enum-varnames:
+    - CouponTypeFixed
+    - CouponTypePercentage
+  types.CreateSubscriptionParams:
+    properties:
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      currency:
+        type: string
+      end_date:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      plan_id:
+        type: string
+      start_date:
+        type: string
+    type: object
+  types.CreateSubscriptionResult:
+    properties:
+      invoice_id:
+        type: string
+      payment_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
+  types.CreditBreakdown:
+    properties:
+      free:
+        type: string
+      purchased:
+        type: string
+    type: object
+  types.CreditGrantApplicationReason:
+    enum:
+    - first_time_recurring_credit_grant
+    - recurring_credit_grant
+    - onetime_credit_grant
+    type: string
+    x-enum-varnames:
+    - ApplicationReasonFirstTimeRecurringCreditGrant
+    - ApplicationReasonRecurringCreditGrant
+    - ApplicationReasonOnetimeCreditGrant
+  types.CreditGrantCadence:
+    enum:
+    - ONETIME
+    - RECURRING
+    type: string
+    x-enum-varnames:
+    - CreditGrantCadenceOneTime
+    - CreditGrantCadenceRecurring
+  types.CreditGrantExpiryDurationUnit:
+    enum:
+    - DAY
+    - WEEK
+    - MONTH
+    - YEAR
+    type: string
+    x-enum-varnames:
+    - CreditGrantExpiryDurationUnitDays
+    - CreditGrantExpiryDurationUnitWeeks
+    - CreditGrantExpiryDurationUnitMonths
+    - CreditGrantExpiryDurationUnitYears
+  types.CreditGrantExpiryType:
+    enum:
+    - NEVER
+    - DURATION
+    - BILLING_CYCLE
+    type: string
+    x-enum-varnames:
+    - CreditGrantExpiryTypeNever
+    - CreditGrantExpiryTypeDuration
+    - CreditGrantExpiryTypeBillingCycle
+  types.CreditGrantPeriod:
+    enum:
+    - DAILY
+    - WEEKLY
+    - MONTHLY
+    - ANNUAL
+    - QUARTERLY
+    - HALF_YEARLY
+    type: string
+    x-enum-varnames:
+    - CREDIT_GRANT_PERIOD_DAILY
+    - CREDIT_GRANT_PERIOD_WEEKLY
+    - CREDIT_GRANT_PERIOD_MONTHLY
+    - CREDIT_GRANT_PERIOD_ANNUAL
+    - CREDIT_GRANT_PERIOD_QUARTER
+    - CREDIT_GRANT_PERIOD_HALF_YEARLY
+  types.CreditGrantScope:
+    enum:
+    - PLAN
+    - SUBSCRIPTION
+    - ADDON
+    type: string
+    x-enum-varnames:
+    - CreditGrantScopePlan
+    - CreditGrantScopeSubscription
+    - CreditGrantScopeAddon
+  types.CreditNoteReason:
+    enum:
+    - DUPLICATE
+    - FRAUDULENT
+    - ORDER_CHANGE
+    - UNSATISFACTORY
+    - SERVICE_ISSUE
+    - BILLING_ERROR
+    - SUBSCRIPTION_CANCELLATION
+    type: string
+    x-enum-varnames:
+    - CreditNoteReasonDuplicate
+    - CreditNoteReasonFraudulent
+    - CreditNoteReasonOrderChange
+    - CreditNoteReasonUnsatisfactory
+    - CreditNoteReasonService
+    - CreditNoteReasonBillingError
+    - CreditNoteReasonSubscriptionCancellation
+  types.CreditNoteStatus:
+    enum:
+    - DRAFT
+    - FINALIZED
+    - VOIDED
+    type: string
+    x-enum-varnames:
+    - CreditNoteStatusDraft
+    - CreditNoteStatusFinalized
+    - CreditNoteStatusVoided
+  types.CreditNoteType:
+    enum:
+    - ADJUSTMENT
+    - REFUND
+    type: string
+    x-enum-varnames:
+    - CreditNoteTypeAdjustment
+    - CreditNoteTypeRefund
+  types.CustomerFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      email:
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      external_id:
+        type: string
+      external_ids:
+        items:
+          type: string
+        type: array
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.DataType:
+    enum:
+    - string
+    - number
+    - date
+    - array
+    type: string
+    x-enum-varnames:
+    - DataTypeString
+    - DataTypeNumber
+    - DataTypeDate
+    - DataTypeArray
+  types.DebugTrackerStatus:
+    enum:
+    - unprocessed
+    - not_found
+    - found
+    - error
+    - processing
+    - attributed
+    type: string
+    x-enum-varnames:
+    - DebugTrackerStatusUnprocessed
+    - DebugTrackerStatusNotFound
+    - DebugTrackerStatusFound
+    - DebugTrackerStatusError
+    - DebugTrackerStatusProcessing
+    - DebugTrackerStatusAttributed
+  types.EntitlementEntityType:
+    enum:
+    - PLAN
+    - SUBSCRIPTION
+    - ADDON
+    type: string
+    x-enum-varnames:
+    - ENTITLEMENT_ENTITY_TYPE_PLAN
+    - ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
+    - ENTITLEMENT_ENTITY_TYPE_ADDON
+  types.EntitlementFilter:
+    properties:
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.EntitlementEntityType'
+      expand:
+        type: string
+      feature_ids:
+        items:
+          type: string
+        type: array
+      feature_type:
+        $ref: '#/definitions/types.FeatureType'
+      filters:
+        description: Specific filters for entitlements
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      is_enabled:
+        type: boolean
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      plan_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.EntitlementUsageResetPeriod:
+    enum:
+    - MONTHLY
+    - ANNUAL
+    - WEEKLY
+    - DAILY
+    - QUARTERLY
+    - HALF_YEARLY
+    - NEVER
+    type: string
+    x-enum-varnames:
+    - ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY
+    - ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL
+    - ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY
+    - ENTITLEMENT_USAGE_RESET_PERIOD_DAILY
+    - ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER
+    - ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR
+    - ENTITLEMENT_USAGE_RESET_PERIOD_NEVER
+  types.EntitySyncConfig:
+    properties:
+      inbound:
+        description: Inbound from external provider to FlexPrice
+        type: boolean
+      outbound:
+        description: Outbound from FlexPrice to external provider
+        type: boolean
+    type: object
+  types.EntityType:
+    enum:
+    - EVENTS
+    - PRICES
+    - CUSTOMERS
+    - FEATURES
+    type: string
+    x-enum-varnames:
+    - EntityTypeEvents
+    - EntityTypePrices
+    - EntityTypeCustomers
+    - EntityTypeFeatures
+  types.EnvironmentType:
+    enum:
+    - development
+    - production
+    type: string
+    x-enum-varnames:
+    - EnvironmentDevelopment
+    - EnvironmentProduction
+  types.EventProcessingStatusType:
+    enum:
+    - processed
+    - processing
+    - failed
+    type: string
+    x-enum-varnames:
+    - EventProcessingStatusTypeProcessed
+    - EventProcessingStatusTypeProcessing
+    - EventProcessingStatusTypeFailed
+  types.ExportMetadataEntityType:
+    enum:
+    - customer
+    - wallet
+    type: string
+    x-enum-varnames:
+    - ExportMetadataEntityTypeCustomer
+    - ExportMetadataEntityTypeWallet
+  types.ExportMetadataField:
+    properties:
+      column_name:
+        description: CSV column header to be shown in the exported file
+        type: string
+      entity_type:
+        allOf:
+        - $ref: '#/definitions/types.ExportMetadataEntityType'
+        description: which entity's metadata to read from
+      field_key:
+        description: metadata key to look up
+        type: string
+    required:
+    - entity_type
+    - field_key
+    type: object
+  types.FailurePoint:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      failure_point_type:
+        $ref: '#/definitions/types.FailurePointType'
+    type: object
+  types.FailurePointType:
+    enum:
+    - customer_lookup
+    - meter_lookup
+    - price_lookup
+    - subscription_line_item_lookup
+    - attributed_to_customer
+    type: string
+    x-enum-varnames:
+    - FailurePointTypeCustomerLookup
+    - FailurePointTypeMeterLookup
+    - FailurePointTypePriceLookup
+    - FailurePointTypeSubscriptionLineItemLookup
+    - FailurePointTypeAttributedToCustomer
+  types.FeatureFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      feature_ids:
+        description: Feature specific filters
+        items:
+          type: string
+        type: array
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_key:
+        type: string
+      lookup_keys:
+        items:
+          type: string
+        type: array
+      meter_ids:
+        items:
+          type: string
+        type: array
+      name_contains:
+        type: string
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.FeatureType:
+    enum:
+    - metered
+    - boolean
+    - static
+    - config
+    type: string
+    x-enum-varnames:
+    - FeatureTypeMetered
+    - FeatureTypeBoolean
+    - FeatureTypeStatic
+    - FeatureTypeConfig
+  types.FileType:
+    enum:
+    - CSV
+    - JSON
+    type: string
+    x-enum-varnames:
+    - FileTypeCSV
+    - FileTypeJSON
+  types.FilterCondition:
+    properties:
+      data_type:
+        $ref: '#/definitions/types.DataType'
+      field:
+        type: string
+      operator:
+        $ref: '#/definitions/types.FilterOperatorType'
+      value:
+        $ref: '#/definitions/types.Value'
+    type: object
+  types.FilterOperatorType:
+    enum:
+    - eq
+    - contains
+    - not_contains
+    - gt
+    - lt
+    - gte
+    - in
+    - not_in
+    - before
+    - after
+    type: string
+    x-enum-varnames:
+    - EQUAL
+    - CONTAINS
+    - NOT_CONTAINS
+    - GREATER_THAN
+    - LESS_THAN
+    - GREATER_THAN_EQUAL
+    - IN
+    - NOT_IN
+    - BEFORE
+    - AFTER
+  types.GroupEntityType:
+    enum:
+    - price
+    - feature
+    type: string
+    x-enum-varnames:
+    - GroupEntityTypePrice
+    - GroupEntityTypeFeature
+  types.GroupFilter:
+    properties:
+      end_time:
+        type: string
+      entity_type:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      group_ids:
+        description: Group specific filters
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_key:
+        type: string
+      name:
+        type: string
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.IntegrationEntityType:
+    enum:
+    - customer
+    - plan
+    - invoice
+    - subscription
+    - payment
+    - credit_note
+    - addon
+    - item
+    - item_price
+    - price
+    - invoice_line_item
+    type: string
+    x-enum-varnames:
+    - IntegrationEntityTypeCustomer
+    - IntegrationEntityTypePlan
+    - IntegrationEntityTypeInvoice
+    - IntegrationEntityTypeSubscription
+    - IntegrationEntityTypePayment
+    - IntegrationEntityTypeCreditNote
+    - IntegrationEntityTypeAddon
+    - IntegrationEntityTypeItem
+    - IntegrationEntityTypeItemPrice
+    - IntegrationEntityTypePrice
+    - IntegrationEntityTypeInvoiceLineItem
+  types.InvoiceBillingReason:
+    enum:
+    - SUBSCRIPTION_CREATE
+    - SUBSCRIPTION_CYCLE
+    - SUBSCRIPTION_UPDATE
+    - SUBSCRIPTION_TRIAL_END
+    - SUBSCRIPTION_TRIAL_START
+    - PRORATION
+    - MANUAL
+    - AUTO_INVOICE_THRESHOLD
+    - WALLET_AUTO_TOPUP
+    type: string
+    x-enum-varnames:
+    - InvoiceBillingReasonSubscriptionCreate
+    - InvoiceBillingReasonSubscriptionCycle
+    - InvoiceBillingReasonSubscriptionUpdate
+    - InvoiceBillingReasonSubscriptionTrialEnd
+    - InvoiceBillingReasonSubscriptionTrialStart
+    - InvoiceBillingReasonProration
+    - InvoiceBillingReasonManual
+    - InvoiceBillingReasonAutoInvoiceThreshold
+    - InvoiceBillingReasonWalletAutoTopup
+  types.InvoiceCadence:
+    enum:
+    - ARREAR
+    - ADVANCE
+    type: string
+    x-enum-varnames:
+    - InvoiceCadenceArrear
+    - InvoiceCadenceAdvance
+  types.InvoiceFilter:
+    properties:
+      amount_due_gt:
+        description: |-
+          amount_due_gt filters invoices with a total amount due greater than the specified value
+          Useful for finding invoices above a certain threshold or identifying high-value invoices
+        type: number
+      amount_remaining_gt:
+        description: |-
+          amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
+          Useful for finding invoices that still have significant unpaid amounts
+        type: number
+      billing_reason:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceBillingReason'
+        description: BillingReason filters invoices by why they were generated
+      currency:
+        description: |-
+          currency filters invoices by their currency (ISO 4217 code, e.g. "usd", "eur").
+          Matches on the invoices.currency column exactly.
+        type: string
+      customer_id:
+        description: |-
+          customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
+          This is the ID returned by FlexPrice when creating or retrieving customers
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      external_customer_id:
+        description: |-
+          external_customer_id filters invoices for a customer using your system's customer identifier
+          This is the ID you provided when creating the customer in FlexPrice
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      invoice_ids:
+        description: |-
+          invoice_ids restricts results to invoices with the specified IDs
+          Use this to retrieve specific invoices when you know their exact identifiers
+        items:
+          type: string
+        type: array
+      invoice_status:
+        description: |-
+          invoice_status filters by the current state of invoices in their lifecycle
+          Multiple statuses can be specified to include invoices in any of the listed states
+        items:
+          $ref: '#/definitions/types.InvoiceStatus'
+        type: array
+      invoice_type:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceType'
+        description: |-
+          invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)
+          Use this to separate recurring charges from one-time fees or credit adjustments
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      payment_status:
+        description: |-
+          payment_status filters by the payment state of invoices
+          Multiple statuses can be specified to include invoices with any of the listed payment states
+        items:
+          $ref: '#/definitions/types.PaymentStatus'
+        type: array
+      period_end_gte:
+        description: period_end_gte filters invoices with period_end >= value
+        type: string
+      period_end_lte:
+        description: period_end_lte filters invoices with period_end <= value
+        type: string
+      period_start_gte:
+        description: period_start_gte filters invoices with period_start >= value
+        type: string
+      period_start_lte:
+        description: period_start_lte filters invoices with period_start <= value
+        type: string
+      skip_line_items:
+        description: SkipLineItems if true, will not include line items in the response
+        type: boolean
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_customer_id:
+        description: subscription_customer_id filters invoices by the subscription
+          owner's customer ID
+        items:
+          type: string
+        type: array
+      subscription_id:
+        description: |-
+          subscription_id filters invoices generated for a specific subscription
+          Only returns invoices that were created as part of the specified subscription's billing
+        type: string
+    type: object
+  types.InvoiceStatus:
+    enum:
+    - DRAFT
+    - FINALIZED
+    - VOIDED
+    - SKIPPED
+    type: string
+    x-enum-varnames:
+    - InvoiceStatusDraft
+    - InvoiceStatusFinalized
+    - InvoiceStatusVoided
+    - InvoiceStatusSkipped
+  types.InvoiceSyncSettings:
+    properties:
+      normalize_fixed_to:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: |-
+          NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
+          For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
+          qty=3, rate=$100. Empty string means no normalization (keep original).
+    type: object
+  types.InvoiceType:
+    enum:
+    - SUBSCRIPTION
+    - ONE_OFF
+    - CREDIT
+    type: string
+    x-enum-varnames:
+    - InvoiceTypeSubscription
+    - InvoiceTypeOneOff
+    - InvoiceTypeCredit
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -10813,12 +9769,1364 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.PaginationResponse:
+    properties:
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  types.PauseMode:
+    enum:
+    - immediate
+    - scheduled
+    - period_end
+    type: string
+    x-enum-varnames:
+    - PauseModeImmediate
+    - PauseModeScheduled
+    - PauseModePeriodEnd
+  types.PauseStatus:
+    enum:
+    - none
+    - active
+    - scheduled
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - PauseStatusNone
+    - PauseStatusActive
+    - PauseStatusScheduled
+    - PauseStatusCompleted
+    - PauseStatusCancelled
+  types.PaymentAction:
+    properties:
+      type:
+        $ref: '#/definitions/types.PaymentActionType'
+      url:
+        type: string
+    type: object
+  types.PaymentActionType:
+    enum:
+    - checkout_url
+    - payment_link
+    type: string
+    x-enum-varnames:
+    - PaymentActionTypeCheckoutURL
+    - PaymentActionTypePaymentLink
+  types.PaymentBehavior:
+    enum:
+    - allow_incomplete
+    - default_incomplete
+    - error_if_incomplete
+    - default_active
+    type: string
+    x-enum-varnames:
+    - PaymentBehaviorAllowIncomplete
+    - PaymentBehaviorDefaultIncomplete
+    - PaymentBehaviorErrorIfIncomplete
+    - PaymentBehaviorDefaultActive
+  types.PaymentDestinationType:
+    enum:
+    - INVOICE
+    - CUSTOMER
+    type: string
+    x-enum-varnames:
+    - PaymentDestinationTypeInvoice
+    - PaymentDestinationTypeCustomer
+  types.PaymentGatewayType:
+    enum:
+    - stripe
+    - razorpay
+    - nomod
+    - moyasar
+    - paddle
+    - whop
+    type: string
+    x-enum-varnames:
+    - PaymentGatewayTypeStripe
+    - PaymentGatewayTypeRazorpay
+    - PaymentGatewayTypeNomod
+    - PaymentGatewayTypeMoyasar
+    - PaymentGatewayTypePaddle
+    - PaymentGatewayTypeWhop
+  types.PaymentMethodType:
+    enum:
+    - CARD
+    - ACH
+    - OFFLINE
+    - CREDITS
+    - PAYMENT_LINK
+    - UPI
+    type: string
+    x-enum-varnames:
+    - PaymentMethodTypeCard
+    - PaymentMethodTypeACH
+    - PaymentMethodTypeOffline
+    - PaymentMethodTypeCredits
+    - PaymentMethodTypePaymentLink
+    - PaymentMethodTypeUPI
+  types.PaymentStatus:
+    enum:
+    - INITIATED
+    - PENDING
+    - PROCESSING
+    - SUCCEEDED
+    - OVERPAID
+    - FAILED
+    - REFUNDED
+    - PARTIALLY_REFUNDED
+    - VOIDED
+    type: string
+    x-enum-varnames:
+    - PaymentStatusInitiated
+    - PaymentStatusPending
+    - PaymentStatusProcessing
+    - PaymentStatusSucceeded
+    - PaymentStatusOverpaid
+    - PaymentStatusFailed
+    - PaymentStatusRefunded
+    - PaymentStatusPartiallyRefunded
+    - PaymentStatusVoided
+  types.PaymentTerms:
+    enum:
+    - 15 NET
+    - 30 NET
+    - 45 NET
+    - 60 NET
+    - 75 NET
+    - 90 NET
+    type: string
+    x-enum-varnames:
+    - PaymentTerms15Net
+    - PaymentTerms30Net
+    - PaymentTerms45Net
+    - PaymentTerms60Net
+    - PaymentTerms75Net
+    - PaymentTerms90Net
+  types.PlanFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      plan_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.PriceEntityType:
+    enum:
+    - PLAN
+    - SUBSCRIPTION
+    - ADDON
+    - PRICE
+    - COSTSHEET
+    type: string
+    x-enum-varnames:
+    - PRICE_ENTITY_TYPE_PLAN
+    - PRICE_ENTITY_TYPE_SUBSCRIPTION
+    - PRICE_ENTITY_TYPE_ADDON
+    - PRICE_ENTITY_TYPE_PRICE
+    - PRICE_ENTITY_TYPE_COSTSHEET
+  types.PriceFilter:
+    properties:
+      allow_expired_prices:
+        default: false
+        type: boolean
+      billing_periods:
+        items:
+          $ref: '#/definitions/types.BillingPeriod'
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.PriceEntityType'
+      expand:
+        type: string
+      filters:
+        description: DSL filters
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      parent_price_id:
+        type: string
+      plan_ids:
+        description: Price override filtering fields
+        items:
+          type: string
+        type: array
+      price_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        type: string
+      start_date_lt:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+    type: object
+  types.PriceType:
+    enum:
+    - USAGE
+    - FIXED
+    type: string
+    x-enum-varnames:
+    - PRICE_TYPE_USAGE
+    - PRICE_TYPE_FIXED
+  types.PriceUnitFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      price_unit_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.PriceUnitType:
+    enum:
+    - FIAT
+    - CUSTOM
+    type: string
+    x-enum-varnames:
+    - PRICE_UNIT_TYPE_FIAT
+    - PRICE_UNIT_TYPE_CUSTOM
+  types.ProrationBehavior:
+    enum:
+    - create_prorations
+    - none
+    type: string
+    x-enum-comments:
+      ProrationBehaviorCreateProrations: 'Default: Create credits/charges on invoice'
+      ProrationBehaviorNone: Calculate but don't apply (e.g., for previews)
+    x-enum-varnames:
+    - ProrationBehaviorCreateProrations
+    - ProrationBehaviorNone
+  types.QueryFilter:
+    properties:
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
+  types.RejectedEventReason:
+    enum:
+    - no_meter_for_event_name
+    - no_matching_meter
+    type: string
+    x-enum-varnames:
+    - RejectedEventReasonNoMeterForName
+    - RejectedEventReasonNoMatchingMeter
+  types.ReportingUnit:
+    properties:
+      conversion_rate:
+        description: 'Multiplier: reporting_unit_value = unit_value * conversion_rate;
+          must be > 0'
+        type: number
+      unit_plural:
+        description: Display unit label, plural (e.g. "seconds")
+        type: string
+      unit_singular:
+        description: Display unit label, singular (e.g. "second")
+        type: string
+    type: object
+  types.ResetUsage:
+    enum:
+    - BILLING_PERIOD
+    - NEVER
+    type: string
+    x-enum-varnames:
+    - ResetUsageBillingPeriod
+    - ResetUsageNever
+  types.ResumeMode:
+    enum:
+    - immediate
+    - scheduled
+    - auto
+    type: string
+    x-enum-varnames:
+    - ResumeModeImmediate
+    - ResumeModeScheduled
+    - ResumeModeAuto
+  types.RoundType:
+    enum:
+    - up
+    - down
+    type: string
+    x-enum-varnames:
+    - ROUND_UP
+    - ROUND_DOWN
+  types.S3CompressionType:
+    enum:
+    - none
+    - gzip
+    type: string
+    x-enum-varnames:
+    - S3CompressionTypeNone
+    - S3CompressionTypeGzip
+  types.S3EncryptionType:
+    enum:
+    - AES256
+    - aws:kms
+    - aws:kms:dsse
+    type: string
+    x-enum-varnames:
+    - S3EncryptionTypeAES256
+    - S3EncryptionTypeAwsKms
+    - S3EncryptionTypeAwsKmsDsse
+  types.S3ExportConfig:
+    properties:
+      bucket:
+        description: S3 bucket name
+        type: string
+      compression:
+        allOf:
+        - $ref: '#/definitions/types.S3CompressionType'
+        description: 'Compression type: "gzip", "none" (default: "none")'
+      encryption:
+        allOf:
+        - $ref: '#/definitions/types.S3EncryptionType'
+        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
+          "AES256")'
+      is_flexprice_managed:
+        description: If true, use Flexprice-managed S3 credentials instead of user-provided
+        type: boolean
+      key_prefix:
+        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
+        type: string
+      region:
+        description: AWS region (e.g., "us-west-2")
+        type: string
+    type: object
+  types.S3JobConfig:
+    properties:
+      bucket:
+        description: S3 bucket name
+        type: string
+      compression:
+        allOf:
+        - $ref: '#/definitions/types.S3CompressionType'
+        description: 'Compression type: "gzip", "none" (default: "none")'
+      encryption:
+        allOf:
+        - $ref: '#/definitions/types.S3EncryptionType'
+        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
+          "AES256")'
+      endpoint_url:
+        description: Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
+        type: string
+      export_metadata_fields:
+        description: Optional user-selected metadata columns
+        items:
+          $ref: '#/definitions/types.ExportMetadataField'
+        type: array
+      key_prefix:
+        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
+        type: string
+      region:
+        description: AWS region (e.g., "us-west-2")
+        type: string
+      use_path_style:
+        description: Use path-style addressing (required for MinIO)
+        type: boolean
+    type: object
+  types.ScheduleStatus:
+    enum:
+    - pending
+    - executing
+    - executed
+    - cancelled
+    - failed
+    type: string
+    x-enum-varnames:
+    - ScheduleStatusPending
+    - ScheduleStatusExecuting
+    - ScheduleStatusExecuted
+    - ScheduleStatusCancelled
+    - ScheduleStatusFailed
+  types.ScheduleType:
+    enum:
+    - immediate
+    - end_of_period
+    type: string
+    x-enum-varnames:
+    - ScheduleTypeImmediate
+    - ScheduleTypePeriodEnd
+  types.ScheduledTaskEntityType:
+    enum:
+    - events
+    - invoice
+    - credit_topups
+    - credit_usage
+    - usage_analytics
+    type: string
+    x-enum-varnames:
+    - ScheduledTaskEntityTypeEvents
+    - ScheduledTaskEntityTypeInvoice
+    - ScheduledTaskEntityTypeCreditTopups
+    - ScheduledTaskEntityTypeCreditUsage
+    - ScheduledTaskEntityTypeUsageAnalytics
+  types.ScheduledTaskInterval:
+    enum:
+    - 15MIN
+    - 30MIN
+    - custom
+    - hourly
+    - daily
+    type: string
+    x-enum-comments:
+      ScheduledTaskIntervalCustom: 10 minutes for testing
+    x-enum-varnames:
+    - ScheduledTaskIntervalEvery15Minutes
+    - ScheduledTaskIntervalEvery30Minutes
+    - ScheduledTaskIntervalCustom
+    - ScheduledTaskIntervalHourly
+    - ScheduledTaskIntervalDaily
+  types.SecretProvider:
+    enum:
+    - flexprice
+    - stripe
+    - s3
+    - hubspot
+    - razorpay
+    - chargebee
+    - quickbooks
+    - zoho_books
+    - nomod
+    - moyasar
+    - paddle
+    - whop
+    - tabs
+    - aws_marketplace
+    type: string
+    x-enum-comments:
+      SecretProviderS3: supports multiple connections per environment
+    x-enum-varnames:
+    - SecretProviderFlexPrice
+    - SecretProviderStripe
+    - SecretProviderS3
+    - SecretProviderHubSpot
+    - SecretProviderRazorpay
+    - SecretProviderChargebee
+    - SecretProviderQuickBooks
+    - SecretProviderZohoBooks
+    - SecretProviderNomod
+    - SecretProviderMoyasar
+    - SecretProviderPaddle
+    - SecretProviderWhop
+    - SecretProviderTabs
+    - SecretProviderAWSMarketplace
+  types.SecretType:
+    enum:
+    - private_key
+    - publishable_key
+    - integration
+    type: string
+    x-enum-varnames:
+    - SecretTypePrivateKey
+    - SecretTypePublishableKey
+    - SecretTypeIntegration
+  types.SortCondition:
+    properties:
+      direction:
+        $ref: '#/definitions/types.SortDirection'
+      field:
+        type: string
+    type: object
+  types.SortDirection:
+    enum:
+    - asc
+    - desc
+    type: string
+    x-enum-varnames:
+    - SortDirectionAsc
+    - SortDirectionDesc
+  types.Status:
+    enum:
+    - published
+    - deleted
+    - archived
+    type: string
+    x-enum-varnames:
+    - StatusPublished
+    - StatusDeleted
+    - StatusArchived
+  types.SubscriptionChangeType:
+    enum:
+    - upgrade
+    - downgrade
+    - lateral
+    type: string
+    x-enum-varnames:
+    - SubscriptionChangeTypeUpgrade
+    - SubscriptionChangeTypeDowngrade
+    - SubscriptionChangeTypeLateral
+  types.SubscriptionFilter:
+    properties:
+      active_at:
+        description: ActiveAt filters subscriptions that are active at the given time
+        type: string
+      billing_cadence:
+        description: BillingCadence filters by billing cadence
+        items:
+          $ref: '#/definitions/types.BillingCadence'
+        type: array
+      billing_period:
+        description: BillingPeriod filters by billing period
+        items:
+          $ref: '#/definitions/types.BillingPeriod'
+        type: array
+      customer_id:
+        description: CustomerID filters by customer ID
+        type: string
+      customer_ids:
+        description: CustomerIDs filters by customer IDs
+        items:
+          type: string
+        type: array
+      effective_date_for_update:
+        description: |-
+          EffectiveDateForUpdate selects subscriptions that need a billing-period pass on or before this time:
+          current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
+          When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
+        type: string
+      end_time:
+        type: string
+      expand:
+        type: string
+      external_customer_id:
+        description: ExternalCustomerID filters by external customer ID
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      invoicing_customer_ids:
+        description: InvoicingCustomerIDs filters by invoicing customer ID
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      parent_subscription_ids:
+        description: ParentSubscriptionIDs filters by parent subscription IDs
+        items:
+          type: string
+        type: array
+      plan_id:
+        description: PlanID filters by plan ID
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        items:
+          type: string
+        type: array
+      subscription_status:
+        description: SubscriptionStatus filters by subscription status
+        items:
+          $ref: '#/definitions/types.SubscriptionStatus'
+        type: array
+      subscription_type:
+        description: SubscriptionType filters by subscription type
+        items:
+          $ref: '#/definitions/types.SubscriptionType'
+        type: array
+      trial_end_due_lte:
+        description: |-
+          TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end <= trial_end_due_lte.
+          Use with subscription_status trialing for trial-end cron processing.
+        type: string
+      with_line_items:
+        description: WithLineItems includes line items in the response
+        type: boolean
+    type: object
+  types.SubscriptionLineItemEntityType:
+    enum:
+    - plan
+    - addon
+    - subscription
+    type: string
+    x-enum-varnames:
+    - SubscriptionLineItemEntityTypePlan
+    - SubscriptionLineItemEntityTypeAddon
+    - SubscriptionLineItemEntityTypeSubscription
+  types.SubscriptionLineItemFilter:
+    properties:
+      active_filter:
+        default: true
+        type: boolean
+      addon_association_ids:
+        items:
+          type: string
+        type: array
+      billing_periods:
+        items:
+          type: string
+        type: array
+      currencies:
+        items:
+          type: string
+        type: array
+      current_period_start:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      price_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        items:
+          type: string
+        type: array
+      subscription_line_item_ids:
+        description: Specific filters
+        items:
+          type: string
+        type: array
+    type: object
+  types.SubscriptionScheduleChangeType:
+    enum:
+    - plan_change
+    - cancellation
+    type: string
+    x-enum-varnames:
+    - SubscriptionScheduleChangeTypePlanChange
+    - SubscriptionScheduleChangeTypeCancellation
+  types.SubscriptionStatus:
+    enum:
+    - active
+    - paused
+    - cancelled
+    - incomplete
+    - trialing
+    - draft
+    type: string
+    x-enum-varnames:
+    - SubscriptionStatusActive
+    - SubscriptionStatusPaused
+    - SubscriptionStatusCancelled
+    - SubscriptionStatusIncomplete
+    - SubscriptionStatusTrialing
+    - SubscriptionStatusDraft
+  types.SubscriptionType:
+    enum:
+    - standalone
+    - delegated_invoicing
+    - parent
+    - inherited
+    - grouped_invoicing
+    type: string
+    x-enum-varnames:
+    - SubscriptionTypeStandalone
+    - SubscriptionTypeDelegatedInvoicing
+    - SubscriptionTypeParent
+    - SubscriptionTypeInherited
+    - SubscriptionTypeGroupedInvoicing
+  types.SyncConfig:
+    properties:
+      customer:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      deal:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: CRM sync (HubSpot, Salesforce, etc.)
+      invoice:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      invoice_sync_settings:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceSyncSettings'
+        description: InvoiceSyncSettings controls line-item transformation during
+          outbound invoice sync
+      payment:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Payment sync (QuickBooks bidirectional)
+      plan:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Integration sync (Stripe, Razorpay, QuickBooks, etc.)
+      quote:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      s3:
+        allOf:
+        - $ref: '#/definitions/types.S3ExportConfig'
+        description: S3 connection metadata (for Flexprice-managed S3 connections)
+      subscription:
+        $ref: '#/definitions/types.EntitySyncConfig'
+    type: object
+  types.TaskStatus:
+    enum:
+    - PENDING
+    - PROCESSING
+    - COMPLETED
+    - FAILED
+    type: string
+    x-enum-varnames:
+    - TaskStatusPending
+    - TaskStatusProcessing
+    - TaskStatusCompleted
+    - TaskStatusFailed
+  types.TaskType:
+    enum:
+    - IMPORT
+    - EXPORT
+    type: string
+    x-enum-varnames:
+    - TaskTypeImport
+    - TaskTypeExport
+  types.TaxRateEntityType:
+    enum:
+    - customer
+    - subscription
+    - invoice
+    - tenant
+    type: string
+    x-enum-varnames:
+    - TaxRateEntityTypeCustomer
+    - TaxRateEntityTypeSubscription
+    - TaxRateEntityTypeInvoice
+    - TaxRateEntityTypeTenant
+  types.TaxRateScope:
+    enum:
+    - INTERNAL
+    - EXTERNAL
+    - ONETIME
+    type: string
+    x-enum-varnames:
+    - TaxRateScopeInternal
+    - TaxRateScopeExternal
+    - TaxRateScopeOneTime
+  types.TaxRateStatus:
+    enum:
+    - ACTIVE
+    - INACTIVE
+    type: string
+    x-enum-varnames:
+    - TaxRateStatusActive
+    - TaxRateStatusInactive
+  types.TaxRateType:
+    enum:
+    - percentage
+    - fixed
+    type: string
+    x-enum-varnames:
+    - TaxRateTypePercentage
+    - TaxRateTypeFixed
+  types.TimeOfDayBucket:
+    properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      id:
+        description: |-
+          ID is server-assigned. Stable for the lifetime of the line item;
+          invoice breakdown and analytics responses reference this ID.
+        type: string
+      overage_factor:
+        type: number
+      price_id:
+        description: |-
+          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+          Immutable post-create; changing pricing requires a successor line item.
+        type: string
+      start:
+        $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
+    type: object
+  types.TimeRangeFilter:
+    properties:
+      end_time:
+        type: string
+      start_time:
+        type: string
+    type: object
+  types.TransactionReason:
+    enum:
+    - INVOICE_PAYMENT
+    - FREE_CREDIT_GRANT
+    - SUBSCRIPTION_CREDIT_GRANT
+    - PURCHASED_CREDIT_INVOICED
+    - PURCHASED_CREDIT_DIRECT
+    - CREDIT_NOTE
+    - CREDIT_EXPIRED
+    - WALLET_TERMINATION
+    - MANUAL_BALANCE_DEBIT
+    - CREDIT_ADJUSTMENT
+    - INVOICE_VOID_REFUND
+    - PURCHASED_CREDIT_BONUS
+    type: string
+    x-enum-varnames:
+    - TransactionReasonInvoicePayment
+    - TransactionReasonFreeCredit
+    - TransactionReasonSubscriptionCredit
+    - TransactionReasonPurchasedCreditInvoiced
+    - TransactionReasonPurchasedCreditDirect
+    - TransactionReasonCreditNote
+    - TransactionReasonCreditExpired
+    - TransactionReasonWalletTermination
+    - TransactionReasonManualBalanceDebit
+    - TransactionReasonCreditAdjustment
+    - TransactionReasonInvoiceVoidRefund
+    - TransactionReasonPurchasedCreditBonus
+  types.TransactionStatus:
+    enum:
+    - pending
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - TransactionStatusPending
+    - TransactionStatusCompleted
+    - TransactionStatusFailed
+  types.TransactionType:
+    enum:
+    - credit
+    - debit
+    type: string
+    x-enum-varnames:
+    - TransactionTypeCredit
+    - TransactionTypeDebit
+  types.UserFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      type:
+        allOf:
+        - $ref: '#/definitions/types.UserType'
+        enum:
+        - user
+        - service_account
+      user_ids:
+        description: Specific filters for users
+        items:
+          type: string
+        type: array
+    type: object
+  types.UserType:
+    enum:
+    - user
+    - service_account
+    type: string
+    x-enum-varnames:
+    - UserTypeUser
+    - UserTypeServiceAccount
+  types.WalletConfig:
+    properties:
+      allowed_price_types:
+        description: |-
+          AllowedPriceTypes is a list of price types that are allowed for the wallet
+          nil means all price types are allowed
+        items:
+          $ref: '#/definitions/types.WalletConfigPriceType'
+        type: array
+    type: object
+  types.WalletConfigPriceType:
+    enum:
+    - ALL
+    - USAGE
+    - FIXED
+    type: string
+    x-enum-varnames:
+    - WalletConfigPriceTypeAll
+    - WalletConfigPriceTypeUsage
+    - WalletConfigPriceTypeFixed
+  types.WalletFilter:
+    properties:
+      alert_enabled:
+        type: boolean
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.WalletStatus'
+      wallet_ids:
+        items:
+          type: string
+        type: array
+    type: object
+  types.WalletStatus:
+    enum:
+    - active
+    - frozen
+    - closed
+    type: string
+    x-enum-varnames:
+    - WalletStatusActive
+    - WalletStatusFrozen
+    - WalletStatusClosed
+  types.WalletTransactionFilter:
+    properties:
+      created_by:
+        type: string
+      credits_available_gt:
+        type: number
+      end_time:
+        type: string
+      expand:
+        type: string
+      expiry_date_after:
+        type: string
+      expiry_date_before:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      id:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      priority:
+        type: integer
+      reference_id:
+        type: string
+      reference_type:
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      transaction_reason:
+        $ref: '#/definitions/types.TransactionReason'
+      transaction_status:
+        $ref: '#/definitions/types.TransactionStatus'
+      type:
+        $ref: '#/definitions/types.TransactionType'
+    type: object
+  types.WalletTxReferenceType:
+    enum:
+    - PAYMENT
+    - EXTERNAL
+    - REQUEST
+    - INVOICE
+    type: string
+    x-enum-varnames:
+    - WalletTxReferenceTypePayment
+    - WalletTxReferenceTypeExternal
+    - WalletTxReferenceTypeRequest
+    - WalletTxReferenceTypeInvoice
+  types.WalletType:
+    enum:
+    - PRE_PAID
+    - POST_PAID
+    type: string
+    x-enum-varnames:
+    - WalletTypePrePaid
+    - WalletTypePostPaid
+  types.WebhookEventName:
+    enum:
+    - subscription.created
+    - subscription.draft.created
+    - subscription.activated
+    - subscription.updated
+    - subscription.paused
+    - subscription.cancelled
+    - subscription.resumed
+    - subscription.phase.created
+    - subscription.phase.updated
+    - subscription.phase.deleted
+    - feature.created
+    - feature.updated
+    - feature.deleted
+    - feature.wallet_balance.alert
+    - entitlement.created
+    - entitlement.updated
+    - entitlement.deleted
+    - wallet.created
+    - wallet.updated
+    - wallet.terminated
+    - wallet.transaction.created
+    - wallet.transaction.updated
+    - payment.created
+    - payment.updated
+    - payment.failed
+    - payment.success
+    - payment.pending
+    - customer.created
+    - customer.updated
+    - customer.deleted
+    - invoice.update.finalized
+    - invoice.update.payment
+    - invoice.update.voided
+    - invoice.update
+    - invoice.payment.overdue
+    - wallet.credit_balance.dropped
+    - wallet.credit_balance.recovered
+    - wallet.ongoing_balance.dropped
+    - wallet.ongoing_balance.recovered
+    - wallet.ongoing_balance.updated
+    - subscription.spend.threshold_reached
+    - subscription.spend.threshold_recovered
+    - subscription.line_item_spend.threshold_reached
+    - subscription.line_item_spend.threshold_recovered
+    - subscription.group_spend.threshold_reached
+    - subscription.group_spend.threshold_recovered
+    - subscription.renewal.due
+    - invoice.communication.triggered
+    - credit_note.created
+    - credit_note.updated
+    - checkout.session.initiated
+    - checkout.session.completed
+    - checkout.session.failed
+    - checkout.session.expired
+    - event.rejected
+    type: string
+    x-enum-varnames:
+    - WebhookEventSubscriptionCreated
+    - WebhookEventSubscriptionDraftCreated
+    - WebhookEventSubscriptionActivated
+    - WebhookEventSubscriptionUpdated
+    - WebhookEventSubscriptionPaused
+    - WebhookEventSubscriptionCancelled
+    - WebhookEventSubscriptionResumed
+    - WebhookEventSubscriptionPhaseCreated
+    - WebhookEventSubscriptionPhaseUpdated
+    - WebhookEventSubscriptionPhaseDeleted
+    - WebhookEventFeatureCreated
+    - WebhookEventFeatureUpdated
+    - WebhookEventFeatureDeleted
+    - WebhookEventFeatureWalletBalanceAlert
+    - WebhookEventEntitlementCreated
+    - WebhookEventEntitlementUpdated
+    - WebhookEventEntitlementDeleted
+    - WebhookEventWalletCreated
+    - WebhookEventWalletUpdated
+    - WebhookEventWalletTerminated
+    - WebhookEventWalletTransactionCreated
+    - WebhookEventWalletTransactionUpdated
+    - WebhookEventPaymentCreated
+    - WebhookEventPaymentUpdated
+    - WebhookEventPaymentFailed
+    - WebhookEventPaymentSuccess
+    - WebhookEventPaymentPending
+    - WebhookEventCustomerCreated
+    - WebhookEventCustomerUpdated
+    - WebhookEventCustomerDeleted
+    - WebhookEventInvoiceUpdateFinalized
+    - WebhookEventInvoiceUpdatePayment
+    - WebhookEventInvoiceUpdateVoided
+    - WebhookEventInvoiceUpdate
+    - WebhookEventInvoicePaymentOverdue
+    - WebhookEventWalletCreditBalanceDropped
+    - WebhookEventWalletCreditBalanceRecovered
+    - WebhookEventWalletOngoingBalanceDropped
+    - WebhookEventWalletOngoingBalanceRecovered
+    - WebhookEventWalletOngoingBalanceUpdated
+    - WebhookEventSubscriptionSpendThresholdReached
+    - WebhookEventSubscriptionSpendThresholdRecovered
+    - WebhookEventSubscriptionLineItemSpendThresholdReached
+    - WebhookEventSubscriptionLineItemSpendThresholdRecovered
+    - WebhookEventSubscriptionGroupSpendThresholdReached
+    - WebhookEventSubscriptionGroupSpendThresholdRecovered
+    - WebhookEventSubscriptionRenewalDue
+    - WebhookEventInvoiceCommunicationTriggered
+    - WebhookEventCreditNoteCreated
+    - WebhookEventCreditNoteUpdated
+    - WebhookEventCheckoutSessionInitiated
+    - WebhookEventCheckoutSessionCompleted
+    - WebhookEventCheckoutSessionFailed
+    - WebhookEventCheckoutSessionExpired
+    - WebhookEventEventRejected
+  types.WindowSize:
+    enum:
+    - MINUTE
+    - 15MIN
+    - 30MIN
+    - HOUR
+    - 3HOUR
+    - 6HOUR
+    - 12HOUR
+    - DAY
+    - WEEK
+    - MONTH
+    type: string
+    x-enum-varnames:
+    - WindowSizeMinute
+    - WindowSize15Min
+    - WindowSize30Min
+    - WindowSizeHour
+    - WindowSize3Hour
+    - WindowSize6Hour
+    - WindowSize12Hour
+    - WindowSizeDay
+    - WindowSizeWeek
+    - WindowSizeMonth
+  types.WorkflowExecutionFilter:
+    properties:
+      end_time:
+        type: string
+      entity:
+        description: e.g. plan, invoice, subscription
+        type: string
+      entity_id:
+        description: e.g. plan_01ABC123
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields (same
+          as FeatureFilter)
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      task_queue:
+        type: string
+      workflow_id:
+        description: Workflow-specific filters
+        type: string
+      workflow_status:
+        description: e.g. Running, Completed, Failed
+        type: string
+      workflow_type:
+        type: string
+    type: object
   webhookDto.AlertWebhookPayload:
     properties:
       alert_status:
-        type: string
+        $ref: '#/definitions/types.AlertState'
       alert_type:
-        type: string
+        $ref: '#/definitions/types.AlertType'
       customer:
         $ref: '#/definitions/CustomerResponse'
       event_type:
@@ -10827,6 +11135,13 @@ definitions:
         $ref: '#/definitions/FeatureResponse'
       wallet:
         $ref: '#/definitions/WalletResponse'
+    type: object
+  webhookDto.CheckoutSessionWebhookPayload:
+    properties:
+      checkout_session:
+        $ref: '#/definitions/CheckoutSessionResponse'
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
     type: object
   webhookDto.CommunicationWebhookPayload:
     properties:
@@ -10877,6 +11192,52 @@ definitions:
       payment:
         $ref: '#/definitions/PaymentResponse'
     type: object
+  webhookDto.RejectedEventData:
+    properties:
+      customer_id:
+        type: string
+      event_name:
+        type: string
+      external_customer_id:
+        type: string
+      id:
+        type: string
+      properties:
+        additionalProperties: true
+        type: object
+      source:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  webhookDto.RejectedEventWebhookPayload:
+    properties:
+      event:
+        $ref: '#/definitions/webhookDto.RejectedEventData'
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      reason:
+        $ref: '#/definitions/types.RejectedEventReason'
+    type: object
+  webhookDto.SpendAlertEvent:
+    properties:
+      alert_settings:
+        $ref: '#/definitions/types.AlertSettings'
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      current_spend:
+        type: string
+      group:
+        $ref: '#/definitions/GroupResponse'
+      subscription:
+        $ref: '#/definitions/SubscriptionResponse'
+      subscription_line_item:
+        $ref: '#/definitions/subscription.SubscriptionLineItem'
+      triggered_at:
+        type: string
+    type: object
   webhookDto.SubscriptionPhaseWebhookPayload:
     properties:
       event_type:
@@ -10890,6 +11251,15 @@ definitions:
         $ref: '#/definitions/types.WebhookEventName'
       subscription:
         $ref: '#/definitions/SubscriptionResponse'
+    type: object
+  webhookDto.TransactionUpdatedWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      updated_transaction:
+        $ref: '#/definitions/WalletTransactionResponse'
+      wallet:
+        $ref: '#/definitions/WalletResponse'
     type: object
   webhookDto.TransactionWebhookPayload:
     properties:
@@ -11066,6 +11436,41 @@ paths:
       summary: Update addon
       tags:
       - Addons
+  /addons/{id}/creditgrants:
+    get:
+      description: Use when listing credits attached to an addon (e.g. included prepaid
+        or promo credits).
+      operationId: getAddonCreditGrants
+      parameters:
+      - description: Addon ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCreditGrantsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get addon credit grants
+      tags:
+      - Credit Grants
   /addons/{id}/entitlements:
     get:
       description: Use when checking what features or limits an addon grants (e.g.
@@ -11201,6 +11606,184 @@ paths:
       summary: Query alert logs
       tags:
       - Alerts
+  /alerts/setting:
+    post:
+      consumes:
+      - application/json
+      description: Configure a subscription, line item, or group spend alert.
+      operationId: createAlertSettings
+      parameters:
+      - description: Alert settings
+        in: body
+        name: alert_settings
+        required: true
+        schema:
+          $ref: '#/definitions/CreateAlertSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/AlertSettingsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create alert settings
+      tags:
+      - AlertSettings
+  /alerts/setting/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete an alert setting.
+      operationId: deleteAlertSettings
+      parameters:
+      - description: Alert Settings ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete alert settings
+      tags:
+      - AlertSettings
+    get:
+      consumes:
+      - application/json
+      description: Fetch a single alert setting by id.
+      operationId: getAlertSettings
+      parameters:
+      - description: Alert Settings ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AlertSettingsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get alert settings
+      tags:
+      - AlertSettings
+    put:
+      consumes:
+      - application/json
+      description: Patch an alert setting's config; omitted fields keep their stored
+        value.
+      operationId: updateAlertSettings
+      parameters:
+      - description: Alert Settings ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Alert settings
+        in: body
+        name: alert_settings
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateAlertSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AlertSettingsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update alert settings
+      tags:
+      - AlertSettings
+  /alerts/setting/search:
+    post:
+      consumes:
+      - application/json
+      description: List or search alert settings. Returns a paginated list.
+      operationId: queryAlertSettings
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.AlertSettingsFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListAlertSettingsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query alert settings
+      tags:
+      - AlertSettings
+      x-scope: read
   /checkout/sessions:
     post:
       consumes:
@@ -14194,6 +14777,30 @@ paths:
       summary: Query invoices
       tags:
       - Invoices
+  /marketplace/agreements:
+    post:
+      consumes:
+      - application/json
+      description: Registers an AWS Marketplace buyer agreement against an existing
+        FlexPrice subscription, upserting plan/subscription/customer integration mappings
+        in one call.
+      parameters:
+      - description: Agreement registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RegisterMarketplaceAgreementRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/RegisterMarketplaceAgreementResponse'
+      summary: Register an AWS Marketplace agreement
+      tags:
+      - Marketplace
   /payments:
     get:
       consumes:
@@ -18010,6 +18617,7 @@ paths:
         - MANUAL_BALANCE_DEBIT
         - CREDIT_ADJUSTMENT
         - INVOICE_VOID_REFUND
+        - PURCHASED_CREDIT_BONUS
         in: query
         name: transaction_reason
         type: string
@@ -18025,6 +18633,7 @@ paths:
         - TransactionReasonManualBalanceDebit
         - TransactionReasonCreditAdjustment
         - TransactionReasonInvoiceVoidRefund
+        - TransactionReasonPurchasedCreditBonus
       - enum:
         - pending
         - completed
@@ -18138,6 +18747,70 @@ paths:
       summary: Query wallet transactions
       tags:
       - Wallets
+  /webhook-events/checkout.session.completed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when payment is confirmed; the subscription is now active
+        and the invoice is finalized. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.completed
+      tags:
+      - Webhook Events
+  /webhook-events/checkout.session.expired:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session times out without payment; draft
+        records are cleaned up. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.expired
+      tags:
+      - Webhook Events
+  /webhook-events/checkout.session.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when payment fails or the provider cancels the payment link.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.failed
+      tags:
+      - Webhook Events
+  /webhook-events/checkout.session.initiated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session is created and a payment URL is returned
+        to the customer. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.initiated
+      tags:
+      - Webhook Events
   /webhook-events/credit_note.created:
     post:
       consumes:
@@ -18258,6 +18931,24 @@ paths:
       summary: entitlement.updated
       tags:
       - Webhook Events
+  /webhook-events/event.rejected:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an ingested usage event produces no meter usage — either
+        no meter is registered for its event name, or meters exist for the name but
+        the event matched none of their filters. Throttled to at most once per configured
+        window per event name. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.RejectedEventWebhookPayload'
+      summary: event.rejected
+      tags:
+      - Webhook Events
   /webhook-events/feature.created:
     post:
       consumes:
@@ -18333,6 +19024,22 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
       summary: invoice.communication.triggered
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.create.drafted:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new invoice is created in draft state. Doc-only for
+        parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.create.drafted
       tags:
       - Webhook Events
   /webhook-events/invoice.payment.overdue:
@@ -18550,6 +19257,74 @@ paths:
       summary: subscription.draft.created
       tags:
       - Webhook Events
+  /webhook-events/subscription.group_spend.threshold_reached:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a feature group's total metered spend on a subscription
+        crosses an alert threshold (critical, warning, or info) for the current billing
+        period. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.group_spend.threshold_reached
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.group_spend.threshold_recovered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a feature group's total metered spend on a subscription
+        falls back below all configured alert thresholds for the current billing period.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.group_spend.threshold_recovered
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.line_item_spend.threshold_reached:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription line item's metered spend crosses an
+        alert threshold (critical, warning, or info) for the current billing period.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.line_item_spend.threshold_reached
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.line_item_spend.threshold_recovered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription line item's metered spend falls back
+        below all configured alert thresholds for the current billing period. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.line_item_spend.threshold_recovered
+      tags:
+      - Webhook Events
   /webhook-events/subscription.paused:
     post:
       consumes:
@@ -18639,6 +19414,40 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.resumed
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.spend.threshold_reached:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription's total metered spend crosses an alert
+        threshold (critical, warning, or info) for the current billing period. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.spend.threshold_reached
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.spend.threshold_recovered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription's total metered spend falls back below
+        all configured alert thresholds for the current billing period. Doc-only for
+        parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SpendAlertEvent'
+      summary: subscription.spend.threshold_recovered
       tags:
       - Webhook Events
   /webhook-events/subscription.updated:
@@ -18736,6 +19545,22 @@ paths:
       summary: wallet.ongoing_balance.recovered
       tags:
       - Webhook Events
+  /webhook-events/wallet.ongoing_balance.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet's ongoing (real-time) balance changes. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.ongoing_balance.updated
+      tags:
+      - Webhook Events
   /webhook-events/wallet.terminated:
     post:
       consumes:
@@ -18765,6 +19590,22 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.TransactionWebhookPayload'
       summary: wallet.transaction.created
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.transaction.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an existing wallet transaction is updated (e.g. pending
+        to completed). Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.TransactionUpdatedWebhookPayload'
+      summary: wallet.transaction.updated
       tags:
       - Webhook Events
   /webhook-events/wallet.updated:

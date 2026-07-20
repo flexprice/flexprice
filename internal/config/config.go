@@ -45,19 +45,15 @@ type Configuration struct {
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
 	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
 	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
 	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
-	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
-	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
-	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
-	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
-	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -121,6 +117,31 @@ type FlexpriceS3ExportsConfig struct {
 	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
 	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
+}
+
+// MarketplaceConfig groups Flexprice's own credentials for each marketplace it reports usage to.
+// AWS is the only one implemented today; Azure and GCP would be added as sibling fields.
+type MarketplaceConfig struct {
+	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+}
+
+// AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
+// role. sts:AssumeRole is an authenticated API: the tenant's trust policy names this principal, so
+// these credentials are what signs the AssumeRole request. They are unrelated to the tenant's
+// role_arn/external_id, which are the assume *target*, stored per-connection.
+//
+// These are set explicitly rather than resolved from the ambient AWS credential chain: the chain
+// ends at the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for seconds
+// before failing — turning connection creation into a hang on any non-EC2 host.
+//
+// SessionToken is only set when the credentials are temporary (an ASIA... key from STS/SSO). A
+// long-lived AKIA... IAM user key has no session token, and sending a non-empty one with it makes
+// AWS reject the request.
+type AWSMarketplaceConfig struct {
+	Region          string `mapstructure:"region" validate:"omitempty"`
+	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
+	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
+	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {
@@ -261,8 +282,9 @@ type OtelConfig struct {
 	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
 	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
 
-	Traces OtelTracesConfig `mapstructure:"traces"`
-	Logs   OtelLogsConfig   `mapstructure:"logs"`
+	Traces  OtelTracesConfig  `mapstructure:"traces"`
+	Logs    OtelLogsConfig    `mapstructure:"logs"`
+	Metrics OtelMetricsConfig `mapstructure:"metrics"`
 }
 
 // OtelTracesConfig configures OTLP span export.
@@ -280,6 +302,10 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
+	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
+	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
+	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
@@ -306,6 +332,25 @@ func (c OtelTracesConfig) MergedHeaders() map[string]string {
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
 func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// OtelMetricsConfig configures OTLP metric export (app-level DB/cache metrics).
+// Independent of Traces: metrics are always-on aggregate signal, cheap and
+// unsampled, so they carry steady-state monitoring while spans stay for debug.
+type OtelMetricsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
+	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelMetricsConfig) MergedHeaders() map[string]string {
 	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
 }
 
@@ -420,17 +465,6 @@ type EventProcessingConfig struct {
 	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 }
 
-type EventPostProcessingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_post_processing"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_events_post_processing"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_events_post_processing_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_events_post_processing_backfill"`
-}
-
 type EventProcessingLazyConfig struct {
 	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_lazy"`
@@ -447,37 +481,6 @@ type EventProcessingReplayConfig struct {
 	Topic         string `mapstructure:"topic" default:"v1_event_processing_replay"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
-}
-type FeatureUsageTrackingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled                bool   `mapstructure:"enabled" default:"true"`
-	Topic                  string `mapstructure:"topic" default:"events"`
-	RateLimit              int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup          string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
-	TopicBackfill          string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
-	RateLimitBackfill      int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
-	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
-	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
-	TopicDLQ               string `mapstructure:"topic_dlq" default:""`
-}
-
-type FeatureUsageTrackingLazyConfig struct {
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_lazy"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_realtime"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
-}
-
-type FeatureUsageTrackingReplayConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"v1_feature_tracking_service_replay"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_replay"`
 }
 
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
@@ -514,14 +517,6 @@ type MeterUsageTrackingLazyConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
 	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
-}
-
-// UsageBenchmarkConfig configures the usage benchmarking consumer
-type UsageBenchmarkConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"false"`
-	Topic         string `mapstructure:"topic" default:"staging_benchmarking"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_usage_benchmark_service"`
 }
 
 type WalletBalanceAlertConfig struct {
@@ -575,25 +570,14 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics    bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
-	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
-	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
-	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
-	EnableMeterUsageForBilling        bool   `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
-	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
+	EnableMeterUsageForBilling bool `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
 
-	// Per-tenant overrides for the meter-usage rollout. Resolution order:
+	// Per-tenant overrides for the meter-usage-for-billing rollout. Resolution order:
 	//   1. disabled_tenants — tenant force-disabled (highest priority)
 	//   2. enabled_tenants  — tenant force-enabled
 	//   3. global flag above — applies to everyone else
-	MeterUsageForPreviewInvoiceEnabledTenants  []string `mapstructure:"meter_usage_for_preview_invoice_enabled_tenants" validate:"omitempty"`
-	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
-	MeterUsageForBillingEnabledTenants         []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
-	MeterUsageForBillingDisabledTenants        []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
-	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
-	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
@@ -604,43 +588,6 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool 
 		c.EnableMeterUsageForBilling,
 		c.MeterUsageForBillingEnabledTenants,
 		c.MeterUsageForBillingDisabledTenants,
-	)
-}
-
-// IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
-// preview-invoice endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForPreviewInvoice(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForPreviewInvoice,
-		c.MeterUsageForPreviewInvoiceEnabledTenants,
-		c.MeterUsageForPreviewInvoiceDisabledTenants,
-	)
-}
-
-// IsMeterUsageEnabledForAnalytics resolves the meter-usage rollout for the
-// analytics endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForAnalytics,
-		c.MeterUsageForAnalyticsEnabledTenants,
-		c.MeterUsageForAnalyticsDisabledTenants,
-	)
-}
-
-// IsUsageBenchmarkEnabled resolves the usage-benchmark publish gate for a
-// specific tenant. Gates publishBenchmarkEvent in the wallet billing path so
-// the feature-usage / meter-usage comparison runs only for selected tenants.
-// See FeatureFlagConfig for the resolution order.
-func (c *FeatureFlagConfig) IsUsageBenchmarkEnabled(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableUsageBenchmark,
-		c.UsageBenchmarkEnabledTenants,
-		c.UsageBenchmarkDisabledTenants,
 	)
 }
 
