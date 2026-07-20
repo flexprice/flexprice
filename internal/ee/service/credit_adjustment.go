@@ -492,7 +492,10 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	for _, sub := range subs {
 		f := types.NewNoLimitInvoiceFilter()
 		f.SubscriptionID = sub.ID
-		f.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+		f.InvoiceStatus = []types.InvoiceStatus{
+			types.InvoiceStatusDraft,
+			types.InvoiceStatusFinalized,
+		}
 		f.Currency = tx.Currency // wallets are per-currency
 		invoices, err := s.InvoiceRepo.List(ctx, f)
 		if err != nil {
