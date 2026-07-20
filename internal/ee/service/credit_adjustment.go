@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -34,31 +35,21 @@ func NewCreditAdjustmentService(
 	}
 }
 
-// spreadPrepaidCreditsAcrossLineItems re-derives each usage line item's PrepaidCreditsApplied from the
-// invoice-level authority inv.TotalPrepaidCreditsApplied. It performs NO wallet movement. Usage line items
-// receive credit up to their ceiling (amount - line_discount - invoice_level_discount), in list order;
-// non-usage lines get zero. Returns the total actually placed on line items (may be less than the
-// authority when ceilings cannot absorb it all).
+// spreadPrepaidCreditsAcrossLineItems places TotalPrepaidCreditsApplied onto usage lines (capped per line).
+// Returns the total applied. No wallet movement.
 func spreadPrepaidCreditsAcrossLineItems(inv *invoice.Invoice) decimal.Decimal {
-	remaining := inv.TotalPrepaidCreditsApplied
-	if remaining.IsNegative() {
-		remaining = decimal.Zero
-	}
+	remaining := decimal.Max(decimal.Zero, inv.TotalPrepaidCreditsApplied)
 	totalApplied := decimal.Zero
-	for _, lineItem := range inv.LineItems {
-		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
-			lineItem.PrepaidCreditsApplied = decimal.Zero
-			continue
+	for _, li := range inv.LineItems {
+
+		if lo.FromPtr(li.PriceType) == string(types.PRICE_TYPE_USAGE) && remaining.IsPositive() {
+			ceiling := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
+
+			applied := decimal.Min(remaining, ceiling)
+			remaining = remaining.Sub(applied)
+			totalApplied = totalApplied.Add(applied)
+			li.PrepaidCreditsApplied = applied
 		}
-		ceiling := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
-		if ceiling.LessThanOrEqual(decimal.Zero) || remaining.LessThanOrEqual(decimal.Zero) {
-			lineItem.PrepaidCreditsApplied = decimal.Zero
-			continue
-		}
-		applied := decimal.Min(remaining, ceiling)
-		lineItem.PrepaidCreditsApplied = applied
-		remaining = remaining.Sub(applied)
-		totalApplied = totalApplied.Add(applied)
 	}
 	return totalApplied
 }
@@ -478,38 +469,61 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	if err != nil {
 		return consumed, err
 	}
-
+	if len(subs) == 0 {
+		return consumed, nil
+	}
+	eligibleSubIDs := make(map[string]bool, len(subs))
 	for _, sub := range subs {
-		f := types.NewNoLimitInvoiceFilter()
-		f.SubscriptionID = sub.ID
-		f.InvoiceStatus = []types.InvoiceStatus{
-			types.InvoiceStatusDraft,
+		eligibleSubIDs[sub.ID] = true
+	}
+
+	// Query directly for invoices that can actually absorb credit - draft, same currency as the
+	// wallet, and still owing something - instead of enumerating each subscription's invoices
+	// individually. Eligibility here is defined by invoice state, so this stays correct unchanged
+	// even if a future flow pre-creates draft invoices ahead of time.
+	invFilter := types.NewNoLimitInvoiceFilter()
+	invFilter.CustomerID = tx.CustomerID
+	invFilter.Currency = tx.Currency // wallets are per-currency
+	invFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	invFilter.AmountRemainingGt = lo.ToPtr(decimal.Zero)
+	invoices, err := s.InvoiceRepo.List(ctx, invFilter)
+	if err != nil {
+		return consumed, err
+	}
+
+	eligibleInvoices := make([]*invoice.Invoice, 0, len(invoices))
+	for _, inv := range invoices {
+		if inv.SubscriptionID != nil && eligibleSubIDs[*inv.SubscriptionID] {
+			eligibleInvoices = append(eligibleInvoices, inv)
 		}
-		f.Currency = tx.Currency // wallets are per-currency
-		invoices, err := s.InvoiceRepo.List(ctx, f)
+	}
+
+	// Most-recent period first.
+	sort.SliceStable(eligibleInvoices, func(i, j int) bool {
+		return lo.FromPtr(eligibleInvoices[i].PeriodStart).After(lo.FromPtr(eligibleInvoices[j].PeriodStart))
+	})
+
+	// Track the credit's remaining balance in memory across the pass instead of re-reading the
+	// transaction from the DB before every invoice. DebitWallet independently re-validates the real
+	// balance under its own wallet-level lock before every debit, so a stale local value can only
+	// ever make us request too much - which DebitWallet rejects, and that invoice is skipped like any
+	// other per-invoice failure - never a double-spend.
+	remaining := tx.CreditsAvailable
+	for _, inv := range eligibleInvoices {
+		if remaining.LessThanOrEqual(decimal.Zero) {
+			break
+		}
+
+		txSnapshot := *tx
+		txSnapshot.CreditsAvailable = remaining
+
+		applied, err := s.consumeExpiringCreditIntoInvoice(ctx, inv.ID, &txSnapshot)
 		if err != nil {
-			s.Logger.Error(ctx, "pre_expiry_list_invoices_failed", "subscription_id", sub.ID, "error", err)
-			continue
+			s.Logger.Error(ctx, "pre_expiry_apply_failed", "invoice_id", inv.ID, "transaction_id", tx.ID, "error", err)
+			continue // best-effort
 		}
-
-		for _, inv := range invoices {
-			// Re-read the tx: prior invoices in this pass may have drawn down the credit.
-			latestTx, err := s.WalletRepo.GetTransactionByID(ctx, tx.ID)
-			if err != nil {
-				s.Logger.Error(ctx, "pre_expiry_reread_transaction_failed", "transaction_id", tx.ID, "error", err)
-				continue // best-effort
-			}
-			if latestTx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
-				return consumed, nil
-			}
-
-			applied, err := s.consumeExpiringCreditIntoInvoice(ctx, inv.ID, latestTx)
-			if err != nil {
-				s.Logger.Error(ctx, "pre_expiry_apply_failed", "invoice_id", inv.ID, "transaction_id", tx.ID, "error", err)
-				continue // best-effort
-			}
-			consumed = consumed.Add(applied)
-		}
+		consumed = consumed.Add(applied)
+		remaining = remaining.Sub(applied)
 	}
 
 	return consumed, nil
@@ -541,8 +555,14 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 	// Standard recompute — usage naturally reflects "as of now". No period override. Runs OUTSIDE the
 	// transaction (it's expensive/ClickHouse-backed), matching ComputeInvoice's own established pattern
 	// of not holding a DB lock during the compute.
-	if _, err := invoiceService.ComputeInvoice(ctx, invoiceID, nil); err != nil {
+	skipped, err := invoiceService.ComputeInvoice(ctx, invoiceID, nil)
+	if err != nil {
 		return decimal.Zero, err
+	}
+	// A zero-usage recompute marks the invoice SKIPPED - nothing left to apply credit to, so there's no
+	// point fetching it just to discover that.
+	if skipped {
+		return decimal.Zero, nil
 	}
 
 	var newlyApplied decimal.Decimal
@@ -552,8 +572,8 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 		if err != nil {
 			return err
 		}
-		// A zero-usage recompute may mark the invoice SKIPPED, or another process may have finalized/
-		// voided it; only DRAFT invoices are eligible.
+		// Another process (finalize, a payment) may have changed this invoice's status between
+		// ComputeInvoice above and this point; only DRAFT invoices are eligible.
 		if lockedInv.InvoiceStatus != types.InvoiceStatusDraft {
 			return nil
 		}
