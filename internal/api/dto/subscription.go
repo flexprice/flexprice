@@ -737,6 +737,11 @@ type SubscriptionResponse struct {
 
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
+
+	// Entitlements is populated only when the caller adds "entitlements" to
+	// the search filter's expand string. Each entry is a feature with its
+	// aggregated entitlement info (same shape as CustomerEntitlementsResponse.Features).
+	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -1526,16 +1531,8 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil {
-		if r.Quantity.IsNegative() {
-			return ierr.NewError("quantity must be non-negative").
-				WithHint("Override quantity cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"quantity": r.Quantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Get original price - it must be available for validation

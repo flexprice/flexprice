@@ -231,6 +231,11 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 		return nil // non-retriable
 	}
 
+	// if force reprocess is true, then we need to process the event even if it has already been processed
+	if msg.Metadata.Get("force_reprocess") == "true" {
+		event.ForceReprocess = true
+	}
+
 	if err := s.processEvent(ctx, &event); err != nil {
 		s.Logger.Error(ctx, "failed to process event for meter usage tracking",
 			"error", err,
@@ -289,6 +294,7 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) (err error) {
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
+		!event.ForceReprocess &&
 		s.Config.MeterUsageTracking.RedisDeduplicationEnabled &&
 		s.ServiceParams.Locker != nil {
 		eventId := event.ID

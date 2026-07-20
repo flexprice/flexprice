@@ -309,7 +309,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) error {
+func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error {
 	client := r.client.Writer(ctx)
 
 	r.log.Debug(ctx, "incrementing coupon redemptions",
@@ -324,12 +324,27 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Coupon.Update().
+	updateQuery := client.Coupon.Update().
 		Where(
 			coupon.ID(id),
 			coupon.TenantID(types.GetTenantID(ctx)),
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
+		)
+
+	if maxRedemptions != nil {
+		// Atomic compare-and-swap: only increment if still under the limit at
+		// the moment of the UPDATE, not at the moment the caller looked up the
+		// coupon. maxRedemptions itself is immutable coupon config (set at
+		// creation, never changes), so the caller's earlier read of it is safe
+		// to reuse here — only total_redemptions changes, and that's re-checked
+		// fresh by the database in this WHERE clause, not against a stale read.
+		// This is what closes the race — concurrent requests each re-check
+		// total_redemptions in the same statement that performs the increment,
+		// so only one of N concurrent callers can win when at the limit.
+		updateQuery = updateQuery.Where(coupon.TotalRedemptionsLT(*maxRedemptions))
+	}
+
+	affected, err := updateQuery.
 		AddTotalRedemptions(1).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -349,6 +364,49 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 		return ierr.WithError(err).
 			WithHint("Failed to increment coupon redemptions").
 			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		// affected == 0 means either the coupon doesn't exist (or isn't in this
+		// tenant/environment), or the WHERE total_redemptions < maxRedemptions
+		// guard excluded it because a concurrent request already won the race.
+		// A plain Update().Save() doesn't distinguish these — unlike Query.Only
+		// or UpdateOneID, it simply reports 0 rows matched, not a not-found
+		// error. Disambiguate with one cheap existence check (only on this
+		// already-failed path, not the common-case success path).
+		exists, existErr := client.Coupon.Query().
+			Where(
+				coupon.ID(id),
+				coupon.TenantID(types.GetTenantID(ctx)),
+				coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).
+			Exist(ctx)
+		if existErr != nil {
+			SetSpanError(span, existErr)
+			return ierr.WithError(existErr).
+				WithHint("Failed to increment coupon redemptions").
+				Mark(ierr.ErrDatabase)
+		}
+		if !exists {
+			err := ierr.NewErrorf("Coupon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"coupon_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+			SetSpanError(span, err)
+			return err
+		}
+
+		// The WHERE clause excluded the row: another concurrent request won
+		// the race and already pushed total_redemptions to the limit.
+		err := ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]any{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
+		SetSpanError(span, err)
+		return err
 	}
 
 	SetSpanSuccess(span)

@@ -59,7 +59,6 @@ func (s *CustomerEntitlementsTestSuite) SetupTest() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            stores.AlertLogsRepo,
-		FeatureUsageRepo:         stores.FeatureUsageRepo,
 	})
 }
 

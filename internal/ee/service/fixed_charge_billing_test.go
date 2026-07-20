@@ -59,7 +59,6 @@ func (s *FixedChargeBillingSuite) SetupTest() {
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
 	})
 }
 

@@ -43,6 +43,10 @@ type UsageAnalyticsParams struct {
 	// - Subscription billing periods (e.g., customer signed up on 15th)
 	// - Custom business cycles (e.g., fiscal months starting on 5th)
 	BillingAnchor *time.Time
+	// ForceApplyCommitment mirrors MeterUsageDetailedAnalyticsParams.ForceApplyCommitment.
+	// Internal-only. Set by the CSV export pipeline to override the per-item
+	// commitment-skip that calculateCosts applies to fanned-out analytics.
+	ForceApplyCommitment bool
 }
 
 // DetailedUsageAnalytic represents detailed usage and cost data for analytics
@@ -105,17 +109,23 @@ type UsageAnalyticPoint struct {
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
-// UsageByFeatureResult represents aggregated usage data for a feature
-type UsageByFeatureResult struct {
-	SubLineItemID    string
-	FeatureID        string
-	MeterID          string
-	PriceID          string
-	SumTotal         decimal.Decimal `swaggertype:"string"`
-	MaxTotal         decimal.Decimal `swaggertype:"string"`
-	CountDistinctIDs uint64
-	CountUniqueQty   uint64
-	LatestQty        decimal.Decimal `swaggertype:"string"`
+// MaxBucketFeatureInfo describes a feature aggregated as MAX over bucketed windows.
+type MaxBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
+	GroupBy      []string
+}
+
+// SumBucketFeatureInfo describes a feature aggregated as SUM over bucketed windows.
+type SumBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
 }
 
 type UsageByCostSheetResult struct {

@@ -776,7 +776,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		// Build a descriptive line item for the delta charge.
 		qtyDelta := newItem.Quantity.Sub(oldItem.Quantity)
 		displayName := fmt.Sprintf("%s — Quantity Change Proration (%s – %s)",
-			oldItem.PlanDisplayName,
+			oldItem.DisplayName,
 			effectiveDate.Format("2 Jan 2006"),
 			periodEnd.Format("2 Jan 2006"))
 		priceID := oldItem.PriceID

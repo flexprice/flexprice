@@ -19,15 +19,14 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 	req interfaces.CheckoutProviderRequest,
 ) (*interfaces.CheckoutProviderResponse, error) {
 	r, err := a.Svc.CreatePaymentLink(ctx, &CreatePaymentLinkRequest{
-		InvoiceID:     req.InvoiceID,
-		CustomerID:    req.CustomerID,
-		Amount:        req.Amount,
-		Currency:      req.Currency,
-		SuccessURL:    req.SuccessURL,
-		CancelURL:     req.CancelURL,
-		Metadata:      req.Metadata,
-		EnvironmentID: req.EnvironmentID,
-		PaymentID:     req.PaymentID,
+		InvoiceID:  req.InvoiceID,
+		CustomerID: req.CustomerID,
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		Metadata:   req.Metadata,
+		PaymentID:  req.PaymentID,
 	}, a.CustomerSvc, a.InvoiceSvc)
 	if err != nil {
 		return nil, err

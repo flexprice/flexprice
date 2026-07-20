@@ -100,7 +100,6 @@ func (s *InvoiceVoidRecalculateSuite) setupService() {
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		AlertLogsRepo:                stores.AlertLogsRepo,
-		FeatureUsageRepo:             stores.FeatureUsageRepo,
 		ProrationCalculator:          s.GetCalculator(),
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
@@ -339,7 +338,6 @@ func (s *InvoiceVoidRecalculateSuite) walletsByCustomer() []*dto.WalletResponse 
 		InvoiceRepo:              s.invoiceRepo,
 		CustomerRepo:             s.GetStores().CustomerRepo,
 		FeatureRepo:              s.GetStores().FeatureRepo,
-		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
 		MeterRepo:                s.GetStores().MeterRepo,
 		PriceRepo:                s.GetStores().PriceRepo,
 		SettingsRepo:             s.GetStores().SettingsRepo,

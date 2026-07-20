@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/types/integrations"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
@@ -332,7 +333,13 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 
 	p, err := s.PaymentRepo.Get(ctx, id)
 	if err != nil {
-		return nil, err // Repository already using ierr
+		return nil, err
+	}
+
+	// Best-effort gateway sync for in-flight payments; errors are logged inside and suppressed here
+	p, err = s.syncPaymentStatusFromGateway(ctx, p)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to sync payment status from gateway", "payment_id", p.ID, "error", err)
 	}
 
 	response := dto.NewPaymentResponse(p)
@@ -341,7 +348,6 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 		if err != nil {
 			return nil, err
 		}
-
 		if invoice.InvoiceNumber != nil {
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
@@ -566,6 +572,161 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 	}
 
 	return count > 0, nil
+}
+
+// TODO: extract into a GatewayStatusSyncer when supporting more gateways or throttling
+func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *payment.Payment) (*payment.Payment, error) {
+	if p.PaymentStatus != types.PaymentStatusPending && p.PaymentStatus != types.PaymentStatusProcessing {
+		return p, nil
+	}
+	if p.PaymentGateway == nil {
+		return p, nil
+	}
+	if s.IntegrationFactory == nil {
+		return p, nil
+	}
+
+	gatewayPaymentID := lo.FromPtr(p.GatewayPaymentID)
+	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
+	gateway := types.PaymentGatewayType(*p.PaymentGateway)
+
+	var newStatus types.PaymentStatus
+	var err error
+	var backfillGatewayPaymentID string
+
+	if gatewayPaymentID != "" {
+		switch gateway {
+		case types.PaymentGatewayTypeStripe:
+			newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
+		case types.PaymentGatewayTypeRazorpay:
+			newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
+		case types.PaymentGatewayTypeMoyasar:
+			newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
+		default:
+			return p, nil
+		}
+	} else if gatewayTrackingID != "" {
+		switch gateway {
+		case types.PaymentGatewayTypeRazorpay:
+			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(ctx, gatewayTrackingID)
+		default:
+			return p, nil
+		}
+	}
+
+	if err != nil {
+		s.Logger.Error(ctx,
+			"failed to fetch payment status from gateway",
+			"payment_id", p.ID,
+			"gateway", gateway,
+			"gateway_payment_id", gatewayPaymentID,
+			"gateway_tracking_id", gatewayTrackingID,
+			"error", err,
+		)
+		return p, err
+	}
+
+	if newStatus == "" || newStatus == p.PaymentStatus {
+		return p, nil
+	}
+
+	s.Logger.Info(ctx, "gateway status differs from DB, applying transition",
+		"payment_id", p.ID,
+		"gateway", gateway,
+		"db_status", p.PaymentStatus,
+		"new_status", newStatus,
+	)
+
+	now := time.Now().UTC()
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus: lo.ToPtr(string(newStatus)),
+	}
+	if backfillGatewayPaymentID != "" {
+		updateReq.GatewayPaymentID = lo.ToPtr(backfillGatewayPaymentID)
+	}
+	switch newStatus {
+	case types.PaymentStatusSucceeded:
+		updateReq.SucceededAt = lo.ToPtr(now)
+	case types.PaymentStatusFailed:
+		updateReq.FailedAt = lo.ToPtr(now)
+	}
+
+	updatedPayment, err := s.UpdatePayment(ctx, p.ID, updateReq)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to update payment status from gateway sync",
+			"payment_id", p.ID, "new_status", newStatus, "error", err)
+		return p, err
+	}
+
+	if newStatus == types.PaymentStatusSucceeded && p.DestinationType == types.PaymentDestinationTypeInvoice {
+		invoiceSvc := NewInvoiceService(s.ServiceParams)
+		if err := invoiceSvc.ReconcilePaymentStatus(ctx, p.DestinationID, types.PaymentStatusSucceeded, &p.Amount); err != nil {
+			s.Logger.Error(ctx, "failed to reconcile invoice after gateway sync",
+				"payment_id", p.ID, "invoice_id", p.DestinationID, "error", err)
+		}
+	}
+
+	return updatedPayment.ToPayment(), err
+}
+
+func (s *paymentService) fetchStripePaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return "", err
+	}
+	resp, err := stripeIntegration.PaymentSvc.GetPaymentStatusByPaymentIntent(ctx, gatewayPaymentID, "")
+	if err != nil {
+		return "", err
+	}
+	return integrations.StripePaymentStatus(resp.Status).ToFlexpricePaymentStatus()
+}
+
+func (s *paymentService) fetchRazorpayPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return "", err
+	}
+	rawStatus, err := razorpayIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+	if err != nil {
+		return "", err
+	}
+	return integrations.RazorpayPaymentStatus(rawStatus).ToFlexpricePaymentStatus()
+}
+
+// fetchRazorpayPaymentLinkStatus reconciles a payment record against a Razorpay
+// payment link when the direct pay_xxx isn't known yet. When the link exposes a
+// captured pay_xxx it is returned as backfillGatewayPaymentID for the caller to persist.
+func (s *paymentService) fetchRazorpayPaymentLinkStatus(
+	ctx context.Context,
+	paymentLinkID string,
+) (types.PaymentStatus, string, error) {
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	linkStatus, err := razorpayIntegration.PaymentSvc.GetPaymentLinkStatus(ctx, paymentLinkID)
+	if err != nil {
+		return "", "", err
+	}
+
+	fpPaymentStatus, err := integrations.RazorpayPaymentLinkStatus(linkStatus.Status).ToFlexpricePaymentStatus()
+	if err != nil {
+		return "", "", err
+	}
+	return fpPaymentStatus, linkStatus.RazorpayPaymentID, nil
+}
+
+func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayPaymentID string) (types.PaymentStatus, error) {
+	moyasarIntegration, err := s.IntegrationFactory.GetMoyasarIntegration(ctx)
+	if err != nil {
+		return "", err
+	}
+	resp, err := moyasarIntegration.PaymentSvc.GetPaymentStatus(ctx, gatewayPaymentID)
+	if err != nil {
+		return "", err
+	}
+	return integrations.MoyasarPaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout

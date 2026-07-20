@@ -137,6 +137,18 @@ func (csu *CheckoutSessionUpdate) SetNillableConfiguration(tc *types.CheckoutCon
 	return csu
 }
 
+// SetPaymentProviderConfig sets the "payment_provider_config" field.
+func (csu *CheckoutSessionUpdate) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
+	csu.mutation.SetPaymentProviderConfig(tppc)
+	return csu
+}
+
+// ClearPaymentProviderConfig clears the value of the "payment_provider_config" field.
+func (csu *CheckoutSessionUpdate) ClearPaymentProviderConfig() *CheckoutSessionUpdate {
+	csu.mutation.ClearPaymentProviderConfig()
+	return csu
+}
+
 // SetResult sets the "result" field.
 func (csu *CheckoutSessionUpdate) SetResult(tr *types.CheckoutResult) *CheckoutSessionUpdate {
 	csu.mutation.SetResult(tr)
@@ -419,6 +431,12 @@ func (csu *CheckoutSessionUpdate) sqlSave(ctx context.Context) (n int, err error
 	if value, ok := csu.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
 	}
+	if value, ok := csu.mutation.PaymentProviderConfig(); ok {
+		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
+	}
+	if csu.mutation.PaymentProviderConfigCleared() {
+		_spec.ClearField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON)
+	}
 	if value, ok := csu.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)
 	}
@@ -610,6 +628,18 @@ func (csuo *CheckoutSessionUpdateOne) SetNillableConfiguration(tc *types.Checkou
 	if tc != nil {
 		csuo.SetConfiguration(*tc)
 	}
+	return csuo
+}
+
+// SetPaymentProviderConfig sets the "payment_provider_config" field.
+func (csuo *CheckoutSessionUpdateOne) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
+	csuo.mutation.SetPaymentProviderConfig(tppc)
+	return csuo
+}
+
+// ClearPaymentProviderConfig clears the value of the "payment_provider_config" field.
+func (csuo *CheckoutSessionUpdateOne) ClearPaymentProviderConfig() *CheckoutSessionUpdateOne {
+	csuo.mutation.ClearPaymentProviderConfig()
 	return csuo
 }
 
@@ -924,6 +954,12 @@ func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *Check
 	}
 	if value, ok := csuo.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
+	}
+	if value, ok := csuo.mutation.PaymentProviderConfig(); ok {
+		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
+	}
+	if csuo.mutation.PaymentProviderConfigCleared() {
+		_spec.ClearField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON)
 	}
 	if value, ok := csuo.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)

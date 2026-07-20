@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 
-	lg, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevelInfo}})
+	lg, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevel(cfg.LogLevel)}})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
@@ -101,12 +101,12 @@ func main() {
 	}()
 
 	if cfg.Checks["ANALYTICS_PROBE"].Enabled {
-		ap := checks_pkg.NewAnalyticsProbe(client, reg, runID)
+		ap := checks_pkg.NewAnalyticsProbe(client, reg, runID, lg)
 		runner.Add(ap, e2eprobe.NewTickerScheduler(ap, cfg.Checks["ANALYTICS_PROBE"].Interval))
 	}
 
 	if cfg.Checks["METER_AGGREGATION_PROBE"].Enabled {
-		mapr := checks_pkg.NewMeterAggregationProbe(client, reg, runID)
+		mapr := checks_pkg.NewMeterAggregationProbe(client, reg, runID, lg)
 		runner.Add(mapr, e2eprobe.NewTickerScheduler(mapr, cfg.Checks["METER_AGGREGATION_PROBE"].Interval))
 	}
 
@@ -149,14 +149,14 @@ func main() {
 	// because LOW_BALANCE_ALERT_PROBE reads SeenThresholds from it to verify
 	// webhook receipt. If neither the listener check nor the probe is enabled,
 	// no HTTP server is bound.
-	lwl := checks_pkg.NewLowWalletAlertListener(runID)
+	lwl := checks_pkg.NewLowWalletAlertListener(runID, lg)
 	if cfg.Checks["LOW_WALLET_ALERT_LISTENER"].Enabled || cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Enabled {
 		wl := e2eprobe.NewHTTPWebhookListener(cfg.ListenerPort)
 		runner.Add(lwl, e2eprobe.NewListenerScheduler(lwl, wl))
 	}
 
 	if cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Enabled {
-		lbap := checks_pkg.NewLowBalanceAlertProbe(client, reg, lwl, runID, checks_pkg.LowBalanceAlertOpts{})
+		lbap := checks_pkg.NewLowBalanceAlertProbe(client, reg, lwl, runID, lg, checks_pkg.LowBalanceAlertOpts{})
 		runner.Add(lbap, e2eprobe.NewTickerScheduler(lbap, cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Interval))
 	}
 

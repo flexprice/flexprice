@@ -4,12 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	coupon_domain "github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -89,7 +91,6 @@ func (s *CouponAssociationServiceSuite) newServiceParams() ServiceParams {
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
-		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	}
 }
@@ -252,4 +253,69 @@ func (s *CouponAssociationServiceSuite) TestListCouponAssociations_ExpandSubscri
 	}
 	s.True(subLevelItem)
 	s.True(lineItemLevelItem)
+}
+
+// TestApplyCouponsToSubscription_RedemptionLimitReached is the service-layer
+// regression test for the coupon redemption race-condition fix: it confirms
+// that when a coupon has already hit max_redemptions, applying it again
+// surfaces a validation-class error (4xx) rather than ErrInternal (which
+// would incorrectly surface as a 500). Goes through ApplyCouponsToSubscription
+// — the only caller of the unexported createCouponAssociation — since that's
+// the real path every coupon application takes; there's no route that calls
+// coupon-association creation directly.
+func (s *CouponAssociationServiceSuite) TestApplyCouponsToSubscription_RedemptionLimitReached() {
+	ctx := s.GetContext()
+
+	maxRedemptions := 1
+	pct := decimal.NewFromInt(15)
+	limitedCoupon := &coupon_domain.Coupon{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON),
+		Name:           "Limited Coupon",
+		Type:           types.CouponTypePercentage,
+		Cadence:        types.CouponCadenceOnce,
+		PercentageOff:  &pct,
+		MaxRedemptions: &maxRedemptions,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	limitedCoupon.Status = types.StatusPublished
+	s.NoError(s.GetStores().CouponRepo.Create(ctx, limitedCoupon))
+
+	firstCoupons := []dto.SubscriptionCouponRequest{
+		{CouponID: limitedCoupon.ID, StartDate: time.Now().UTC()},
+	}
+	err := s.service.ApplyCouponsToSubscription(ctx, s.testData.subscription, firstCoupons)
+	s.NoError(err, "first redemption should succeed under max_redemptions=1")
+
+	secondCoupons := []dto.SubscriptionCouponRequest{
+		{CouponID: limitedCoupon.ID, StartDate: time.Now().UTC()},
+	}
+	err = s.service.ApplyCouponsToSubscription(ctx, s.testData.subscription, secondCoupons)
+	s.Require().Error(err, "second redemption must be rejected — coupon already at max_redemptions")
+	s.True(ierr.IsValidation(err), "expected a validation-class error, not ErrInternal, got: %v", err)
+}
+
+// TestCreateCouponAssociation_NilCoupon is a defense-in-depth unit test for
+// the unexported createCouponAssociation: its only current caller
+// (ApplyCouponsToSubscription) already checks the error from its own
+// coupon Get() before reaching this method, so c can't be nil on that path
+// today — but createCouponAssociation dereferences c.MaxRedemptions
+// internally and should fail with a clear validation error instead of
+// panicking if a future caller (or an unexpected nil,nil from a repository)
+// ever passes a nil coupon.
+func (s *CouponAssociationServiceSuite) TestCreateCouponAssociation_NilCoupon() {
+	ctx := s.GetContext()
+
+	impl, ok := s.service.(*couponAssociationService)
+	s.Require().True(ok, "expected service to be *couponAssociationService")
+
+	req := dto.CreateCouponAssociationRequest{
+		CouponID:       "coupon_does_not_matter",
+		SubscriptionID: s.testData.subscription.ID,
+		StartDate:      time.Now().UTC(),
+	}
+
+	_, err := impl.createCouponAssociation(ctx, req, nil)
+	s.Require().Error(err, "nil coupon must be rejected, not panic")
+	s.True(ierr.IsValidation(err), "expected a validation-class error for nil coupon, got: %v", err)
 }

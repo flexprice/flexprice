@@ -16,7 +16,6 @@ type CreateStripePaymentLinkRequest struct {
 	CancelURL              string            `json:"cancel_url,omitempty"`
 	Metadata               map[string]string `json:"metadata,omitempty"`
 	SaveCardAndMakeDefault bool              `json:"save_card_and_make_default,omitempty"`
-	EnvironmentID          string            `json:"environment_id" validate:"required"`
 	PaymentID              string            `json:"payment_id" validate:"required"`
 }
 

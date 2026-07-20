@@ -36,12 +36,11 @@ type EventConsumptionService interface {
 
 type eventConsumptionService struct {
 	ServiceParams
-	pubSub                 pubsub.PubSub
-	lazyPubSub             pubsub.PubSub
-	replayPubSub           pubsub.PubSub
-	eventRepo              events.Repository
-	tracingService         *tracing.Service
-	eventPostProcessingSvc EventPostProcessingService
+	pubSub         pubsub.PubSub
+	lazyPubSub     pubsub.PubSub
+	replayPubSub   pubsub.PubSub
+	eventRepo      events.Repository
+	tracingService *tracing.Service
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -49,13 +48,11 @@ func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
 	tracingService *tracing.Service,
-	eventPostProcessingSvc EventPostProcessingService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{
-		ServiceParams:          params,
-		eventRepo:              eventRepo,
-		tracingService:         tracingService,
-		eventPostProcessingSvc: eventPostProcessingSvc,
+		ServiceParams:  params,
+		eventRepo:      eventRepo,
+		tracingService: tracingService,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -291,23 +288,6 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 			Mark(ierr.ErrSystem)
 	}
 
-	// Publish event to post-processing service
-	// Only for the tenants that are forced to v1
-	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
-		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Error(ctx, "failed to publish event to post-processing service",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-			)
-
-			// Return error for retry
-			return ierr.WithError(err).
-				WithHint("Failed to publish event for post-processing").
-				Mark(ierr.ErrSystem)
-		}
-	}
-
 	s.Logger.Debug(ctx, "successfully processed event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
@@ -376,19 +356,6 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 			"event_name", event.EventName,
 		)
 		return fmt.Errorf("failed to insert events: %w", err)
-	}
-
-	// Publish event to post-processing service
-	// Only for the tenants that are forced to v1
-	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
-		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Error(ctx, "failed to publish event to post-processing service",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-			)
-			return fmt.Errorf("failed to publish event for post-processing: %w", err)
-		}
 	}
 
 	s.Logger.Debug(ctx, "successfully processed raw event",

@@ -149,7 +149,13 @@ func (r *Router) AddNoPublishHandler(
 			tenantID := msg.Metadata.Get("tenant_id")
 			environmentID := msg.Metadata.Get("environment_id")
 
-			ctx, cancel := context.WithTimeout(msg.Context(), 600*time.Second)
+			// Detach from msg.Context() cancellation so a consumer-group rebalance
+			// or subscriber shutdown doesn't kill an in-flight handler mid-write.
+			// WithoutCancel keeps values (tracing span, writer pin, handler name)
+			// but strips cancellation, so the 600s below is a real floor, not just
+			// a ceiling under whichever cancels first. Safe because unacked messages
+			// are redelivered on the next session and handlers are idempotent.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(msg.Context()), 600*time.Second)
 			defer cancel()
 			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)

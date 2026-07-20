@@ -28,11 +28,17 @@ func (p *EntitlementAndUsageProbe) Kind() e2eprobe.Kind { return e2eprobe.KindPr
 
 func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
-	if len(seeds.PersistentCustomerIDs) == 0 || len(seeds.PersistentSubIDs) == 0 {
+	// Only iterate customers that receive ingest traffic; the canary has no
+	// entitlement usage to check.
+	customers := seeds.IngestCustomerIDs
+	if len(customers) == 0 {
+		customers = seeds.PersistentCustomerIDs
+	}
+	if len(customers) == 0 || len(seeds.PersistentSubIDs) == 0 {
 		return nil
 	}
 	idx := atomic.AddInt64(&p.cursor, 1)
-	customerExt := seeds.PersistentCustomerIDs[int(idx)%len(seeds.PersistentCustomerIDs)]
+	customerExt := customers[int(idx)%len(customers)]
 	subID := seeds.PersistentSubIDs[int(idx)%len(seeds.PersistentSubIDs)]
 
 	custResp, err := p.client.Customers().GetByExternalID(ctx, customerExt)

@@ -37,15 +37,14 @@ func NewPaymentService(
 
 // CreatePaymentLinkRequest represents a FlexPrice request to create a Nomod payment link
 type CreatePaymentLinkReq struct {
-	InvoiceID     string
-	CustomerID    string
-	Amount        decimal.Decimal
-	Currency      string
-	SuccessURL    string
-	FailureURL    string
-	Metadata      map[string]string
-	PaymentID     string
-	EnvironmentID string
+	InvoiceID  string
+	CustomerID string
+	Amount     decimal.Decimal
+	Currency   string
+	SuccessURL string
+	FailureURL string
+	Metadata   map[string]string
+	PaymentID  string
 }
 
 // CreatePaymentLinkResponse represents the response after creating a payment link

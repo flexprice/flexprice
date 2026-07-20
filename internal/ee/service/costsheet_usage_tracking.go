@@ -1516,12 +1516,13 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	// then re-cost using costsheet prices.
 	meterUsageService := NewMeterUsageService(s.ServiceParams)
 	analyticsParams := &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		MeterIDs:      meterIDs,
-		FeatureIDs:    req.FeatureIDs,
-		StartTime:     req.StartTime,
-		EndTime:       req.EndTime,
+		TenantID:        types.GetTenantID(ctx),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		MeterIDs:        meterIDs,
+		FeatureIDs:      req.FeatureIDs,
+		StartTime:       req.StartTime,
+		EndTime:         req.EndTime,
+		IncludeChildren: req.IncludeChildren,
 		// Group by meter_id so we get one row per meter (matches how the old
 		// costsheet_usage path keyed its results).
 		GroupBy: []string{"meter_id"},

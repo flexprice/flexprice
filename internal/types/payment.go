@@ -63,6 +63,7 @@ const (
 	PaymentMethodTypeOffline     PaymentMethodType = "OFFLINE"
 	PaymentMethodTypeCredits     PaymentMethodType = "CREDITS"
 	PaymentMethodTypePaymentLink PaymentMethodType = "PAYMENT_LINK"
+	PaymentMethodTypeUPI         PaymentMethodType = "UPI"
 )
 
 func (s PaymentMethodType) String() string {
@@ -76,6 +77,7 @@ func (s PaymentMethodType) Validate() error {
 		PaymentMethodTypeOffline,
 		PaymentMethodTypeCredits,
 		PaymentMethodTypePaymentLink,
+		PaymentMethodTypeUPI,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment method type").

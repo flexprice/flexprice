@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	"github.com/flexprice/flexprice/internal/logger"
 )
 
 const lowWalletAlertMaxAge = 5 * time.Minute
@@ -23,14 +24,15 @@ var walletAlertEventTypes = map[string]struct{}{
 }
 
 type LowWalletAlertListener struct {
-	runID string
+	runID  string
+	logger *logger.Logger
 
 	mu       sync.Mutex
 	lastSeen map[string]time.Time // key: "<wallet_id>:<alert_type>"
 }
 
-func NewLowWalletAlertListener(runID string) *LowWalletAlertListener {
-	return &LowWalletAlertListener{runID: runID, lastSeen: map[string]time.Time{}}
+func NewLowWalletAlertListener(runID string, lg *logger.Logger) *LowWalletAlertListener {
+	return &LowWalletAlertListener{runID: runID, logger: lg, lastSeen: map[string]time.Time{}}
 }
 
 func (l *LowWalletAlertListener) Name() string        { return "low-wallet-alert-listener" }
@@ -62,6 +64,11 @@ func (l *LowWalletAlertListener) Run(ctx context.Context) error {
 		"alert_state":     alertState,
 		"current_balance": currentBalance,
 	}
+
+	l.logDebug(ctx, "low-wallet-alert-listener: webhook received",
+		"event_type", eventType, "wallet_id", walletID,
+		"alert_type", alertType, "alert_state", alertState,
+		"current_balance", currentBalance, "run_id", l.runID)
 
 	if !ev.ReceivedAt.IsZero() && time.Since(ev.ReceivedAt) > lowWalletAlertMaxAge {
 		return e2eprobe.Errorf(attrs,
@@ -107,6 +114,16 @@ func (l *LowWalletAlertListener) SeenThresholds(walletID string) map[string]time
 		}
 	}
 	return out
+}
+
+// logDebug is a nil-safe wrapper so tests / stub call-sites without a logger
+// don't panic. Emits at Debug level; flip E2EPROBE_LOG_LEVEL=debug to see
+// every wallet-alert webhook arrival.
+func (l *LowWalletAlertListener) logDebug(ctx context.Context, msg string, kv ...any) {
+	if l.logger == nil {
+		return
+	}
+	l.logger.Debug(ctx, msg, kv...)
 }
 
 // nestedString reads payload[keys[0]][keys[1]]... as a string; returns "" if

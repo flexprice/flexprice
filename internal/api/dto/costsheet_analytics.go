@@ -28,6 +28,12 @@ type GetCostAnalyticsRequest struct {
 	// Pagination
 	Limit  int `json:"limit,omitempty"`
 	Offset int `json:"offset,omitempty"`
+
+	// IncludeChildren, when true and ExternalCustomerID belongs to a parent
+	// customer, aggregates every inherited-child customer's usage into the
+	// revenue and cost totals. Default (false) restricts the query to the
+	// customer's own usage — mirrors the meter-usage analytics contract.
+	IncludeChildren bool `json:"include_children,omitempty"`
 }
 
 // Validate validates the cost analytics request and sets defaults

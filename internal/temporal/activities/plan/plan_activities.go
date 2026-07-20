@@ -6,11 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
-	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/service"
-	eventsModels "github.com/flexprice/flexprice/internal/temporal/models/events"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -117,32 +115,3 @@ func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPri
 	return a.planService.SyncPlanPricesV2(ctx, input.PlanID)
 }
 
-// ReprocessEventsForPlanInput is the activity input (same shape as workflow input).
-type ReprocessEventsForPlanInput = eventsModels.ReprocessEventsForPlanWorkflowInput
-
-const ActivityReprocessEventsForPlan = "ReprocessEventsForPlan"
-
-// ReprocessEventsForPlan triggers event reprocessing for the given missing pairs (grouped by price, then per customer).
-func (a *PlanActivities) ReprocessEventsForPlan(ctx context.Context, input ReprocessEventsForPlanInput) error {
-	if err := input.Validate(); err != nil {
-		return err
-	}
-	if len(input.MissingPairs) == 0 {
-		return nil
-	}
-
-	ctx = types.SetTenantID(ctx, input.TenantID)
-	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
-	ctx = types.SetUserID(ctx, input.UserID)
-
-	pairs := make([]planpricesync.PlanLineItemCreationDelta, len(input.MissingPairs))
-	for i, p := range input.MissingPairs {
-		pairs[i] = planpricesync.PlanLineItemCreationDelta{
-			SubscriptionID: p.SubscriptionID,
-			PriceID:        p.PriceID,
-			CustomerID:     p.CustomerID,
-		}
-	}
-
-	return a.planService.ReprocessEventsForMissingPairs(ctx, pairs)
-}

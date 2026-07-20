@@ -15,14 +15,12 @@ type RevenueAnalyticsService = interfaces.RevenueAnalyticsService
 
 type revenueAnalyticsService struct {
 	ServiceParams
-	featureUsageTrackingService   FeatureUsageTrackingService
 	costsheetUsageTrackingService CostSheetUsageTrackingService
 }
 
-func NewRevenueAnalyticsService(params ServiceParams, featureUsageTrackingService FeatureUsageTrackingService, costsheetUsageTrackingService CostSheetUsageTrackingService) RevenueAnalyticsService {
+func NewRevenueAnalyticsService(params ServiceParams, costsheetUsageTrackingService CostSheetUsageTrackingService) RevenueAnalyticsService {
 	return &revenueAnalyticsService{
 		ServiceParams:                 params,
-		featureUsageTrackingService:   featureUsageTrackingService,
 		costsheetUsageTrackingService: costsheetUsageTrackingService,
 	}
 }
@@ -39,48 +37,40 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 1. Fetch cost analytics. Behind a feature flag we now compute cost from
-	// the meter_usage table instead of the legacy costsheet_usage table.
+	// 1. Fetch cost analytics from the meter_usage-backed costsheet path.
 	var costAnalytics *dto.GetCostAnalyticsResponse
 	var err error
-	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
-		costAnalytics, err = s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
-	} else {
-		costAnalytics, err = s.costsheetUsageTrackingService.GetCostSheetUsageAnalytics(ctx, req)
-	}
+	costAnalytics, err = s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
 	if err != nil {
 		s.Logger.Info(context.Background(), "failed to fetch cost analytics", "error", err)
 		costAnalytics = nil
 	}
 
-	// 2. Fetch revenue analytics from feature/meter usage tracking
+	// 2. Fetch revenue analytics from meter usage.
 	var revenueAnalytics *dto.GetUsageAnalyticsResponse
 	revenueReq := &dto.GetUsageAnalyticsRequest{
 		ExternalCustomerID: req.ExternalCustomerID,
 		FeatureIDs:         req.FeatureIDs,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
+		IncludeChildren:    req.IncludeChildren,
 	}
-	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
-		meterUsageService := NewMeterUsageService(s.ServiceParams)
-		revenueAnalytics, err = meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerID:  revenueReq.ExternalCustomerID,
-			ExternalCustomerIDs: revenueReq.ExternalCustomerIDs,
-			FeatureIDs:          revenueReq.FeatureIDs,
-			StartTime:           revenueReq.StartTime,
-			EndTime:             revenueReq.EndTime,
-			GroupBy:             revenueReq.GroupBy,
-			PropertyFilters:     revenueReq.PropertyFilters,
-			Sources:             revenueReq.Sources,
-			WindowSize:          revenueReq.WindowSize,
-			Expand:              revenueReq.Expand,
-			IncludeChildren:     revenueReq.IncludeChildren,
-		})
-	} else {
-		revenueAnalytics, err = s.featureUsageTrackingService.GetDetailedUsageAnalyticsV2(ctx, revenueReq)
-	}
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	revenueAnalytics, err = meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerID:  revenueReq.ExternalCustomerID,
+		ExternalCustomerIDs: revenueReq.ExternalCustomerIDs,
+		FeatureIDs:          revenueReq.FeatureIDs,
+		StartTime:           revenueReq.StartTime,
+		EndTime:             revenueReq.EndTime,
+		GroupBy:             revenueReq.GroupBy,
+		PropertyFilters:     revenueReq.PropertyFilters,
+		Sources:             revenueReq.Sources,
+		WindowSize:          revenueReq.WindowSize,
+		Expand:              revenueReq.Expand,
+		IncludeChildren:     revenueReq.IncludeChildren,
+	})
 	if err != nil {
 		s.Logger.Info(context.Background(), "failed to fetch revenue analytics", "error", err)
 		revenueAnalytics = nil

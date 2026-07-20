@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -9,6 +10,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
@@ -68,27 +71,54 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	}
 
 	req := interfaces.CheckoutProviderRequest{
-		InvoiceID:     *session.CheckoutInvoiceID,
-		CustomerID:    session.CustomerID,
-		Amount:        payResp.Amount,
-		Currency:      payResp.Currency,
-		PaymentID:     payResp.ID,
-		EnvironmentID: session.EnvironmentID,
-	}
-	if len(session.Metadata) > 0 {
-		req.Metadata = map[string]string(session.Metadata)
-	}
-	if session.SuccessURL != nil {
-		req.SuccessURL = *session.SuccessURL
-	}
-	if session.FailureURL != nil {
-		req.FailureURL = *session.FailureURL
-	}
-	if session.CancelURL != nil {
-		req.CancelURL = *session.CancelURL
+		InvoiceID:  *session.CheckoutInvoiceID,
+		CustomerID: session.CustomerID,
+		Amount:     payResp.Amount,
+		Currency:   payResp.Currency,
+		PaymentID:  payResp.ID,
+		SuccessURL: lo.FromPtr(session.SuccessURL),
+		FailureURL: lo.FromPtr(session.FailureURL),
+		CancelURL:  lo.FromPtr(session.CancelURL),
+		Metadata:   session.Metadata,
 	}
 
-	resp, err := provider.CreatePaymentLink(ctx, req)
+	cfg := lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig())
+
+	var resp *interfaces.CheckoutProviderResponse
+
+	var maxAmount *decimal.Decimal
+
+	switch cfg.CollectionMethod {
+
+	case types.CollectionMethodChargeAutomatically:
+		maxAmount, err = s.resolveMaxMandateLimit(ctx, cfg, req.Currency)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
+			InvoiceID:       req.InvoiceID,
+			CustomerID:      req.CustomerID,
+			PaymentID:       req.PaymentID,
+			Amount:          req.Amount,
+			Currency:        req.Currency,
+			MaxAmount:       maxAmount,
+			PreferredMethod: cfg.PaymentMethod,
+			SuccessURL:      req.SuccessURL,
+			CancelURL:       req.CancelURL,
+			Metadata:        req.Metadata,
+		})
+
+	case types.CollectionMethodSendInvoice:
+		resp, err = provider.CreatePaymentLink(ctx, req)
+
+	default:
+		return nil, ierr.NewError("unsupported collection method").
+			WithHint("Unsupported collection method").
+			WithReportableDetails(map[string]any{"collection_method": cfg.CollectionMethod}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +146,46 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		ExpiresAt:               resp.ExpiresAt,
 		ProviderMetadata:        resp.ProviderMetadata,
 	}, nil
+}
+
+// resolveMaxMandateLimit caps MaxMandateLimit against the tenant's
+// PaymentMandateLimits ceiling. UPI only — Card has no ceiling.
+func (s *checkoutSessionService) resolveMaxMandateLimit(
+	ctx context.Context,
+	cfg types.CheckoutPaymentProviderConfig,
+	currency string,
+) (*decimal.Decimal, error) {
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	limits, err := GetSetting[types.PaymentMandateLimits](settingsSvc, ctx, types.SettingKeyPaymentMandateLimits)
+	if err != nil {
+		return nil, err
+	}
+
+	return capMandateLimit(cfg.PaymentMethod, cfg.MaxMandateLimit, currency, limits), nil
+}
+
+func capMandateLimit(
+	method types.PaymentMethodType,
+	callerLimit *decimal.Decimal,
+	currency string,
+	limits types.PaymentMandateLimits,
+) *decimal.Decimal {
+	if method == "" {
+		method = types.PaymentMethodTypeUPI
+	}
+	if method != types.PaymentMethodTypeUPI {
+		return callerLimit
+	}
+
+	limit, ok := limits.MandateLimits[method]
+	if !ok || (limit.Currency != "" && !strings.EqualFold(limit.Currency, currency)) {
+		return callerLimit
+	}
+
+	if callerLimit == nil || callerLimit.GreaterThan(limit.MaxAmount) {
+		return &limit.MaxAmount
+	}
+	return callerLimit
 }
 
 func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {

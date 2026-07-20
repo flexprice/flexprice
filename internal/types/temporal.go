@@ -71,6 +71,7 @@ const (
 	TemporalHubSpotDealSyncWorkflow                    TemporalWorkflowType = "HubSpotDealSyncWorkflow"
 	TemporalHubSpotInvoiceSyncWorkflow                 TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
 	TemporalHubSpotQuoteSyncWorkflow                   TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
+	TemporalUsageAlertWorkflow                         TemporalWorkflowType = "UsageAlertWorkflow"
 	TemporalMoyasarInvoiceSyncWorkflow                 TemporalWorkflowType = "MoyasarInvoiceSyncWorkflow"
 	TemporalNomodCustomerSyncWorkflow                  TemporalWorkflowType = "NomodCustomerSyncWorkflow"
 	TemporalNomodInvoiceSyncWorkflow                   TemporalWorkflowType = "NomodInvoiceSyncWorkflow"
@@ -89,8 +90,6 @@ const (
 	TemporalRazorpayCustomerSyncWorkflow               TemporalWorkflowType = "RazorpayCustomerSyncWorkflow"
 	TemporalRazorpayInvoiceSyncWorkflow                TemporalWorkflowType = "RazorpayInvoiceSyncWorkflow"
 	TemporalRecalculateInvoiceWorkflow                 TemporalWorkflowType = "RecalculateInvoiceWorkflow"
-	TemporalReprocessEventsForPlanWorkflow             TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
-	TemporalReprocessEventsWorkflow                    TemporalWorkflowType = "ReprocessEventsWorkflow"
 	TemporalReprocessRawEventsWorkflow                 TemporalWorkflowType = "ReprocessRawEventsWorkflow"
 	TemporalScheduleDraftFinalizationWorkflow          TemporalWorkflowType = "ScheduleDraftFinalizationWorkflow"
 	TemporalScheduleSubscriptionBillingWorkflow        TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
@@ -123,6 +122,10 @@ var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 	TemporalScheduleDraftFinalizationWorkflow,
+	// ponytail: high-frequency (up to 1 run per customer per debounce window), excluded
+	// from tracking to avoid ballooning workflow_execution rows. Bring back into tracking
+	// if observability beyond Temporal UI is needed.
+	TemporalUsageAlertWorkflow,
 }
 
 // WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
@@ -158,6 +161,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalHubSpotDealSyncWorkflow,
 		TemporalHubSpotInvoiceSyncWorkflow,
 		TemporalHubSpotQuoteSyncWorkflow,
+		TemporalUsageAlertWorkflow,
 		TemporalMoyasarInvoiceSyncWorkflow,
 		TemporalNomodCustomerSyncWorkflow,
 		TemporalNomodInvoiceSyncWorkflow,
@@ -176,8 +180,6 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalRazorpayCustomerSyncWorkflow,
 		TemporalRazorpayInvoiceSyncWorkflow,
 		TemporalRecalculateInvoiceWorkflow,
-		TemporalReprocessEventsForPlanWorkflow,
-		TemporalReprocessEventsWorkflow,
 		TemporalReprocessRawEventsWorkflow,
 		TemporalScheduleDraftFinalizationWorkflow,
 		TemporalScheduleSubscriptionBillingWorkflow,
@@ -221,9 +223,9 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow:
 		return TemporalTaskQueueWorkflows
-	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
+	case TemporalReprocessRawEventsWorkflow:
 		return TemporalTaskQueueReprocessEvents
 	default:
 		return TemporalTaskQueueTask // Default fallback
@@ -301,12 +303,11 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalCustomerOnboardingWorkflow,
 			TemporalPrepareProcessedEventsWorkflow,
 			TemporalEnvironmentCloneWorkflow,
+			TemporalUsageAlertWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
-			TemporalReprocessEventsWorkflow,
 			TemporalReprocessRawEventsWorkflow,
-			TemporalReprocessEventsForPlanWorkflow,
 		}
 	case TemporalTaskQueueCron:
 		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	"github.com/flexprice/go-sdk/v2/models/types"
@@ -15,7 +16,7 @@ func TestMeterAggregationProbe_NoSeedsIsNoOp(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
 	// Empty registry — no seeds loaded.
-	p := NewMeterAggregationProbe(fc, reg, "run-1")
+	p := NewMeterAggregationProbe(fc, reg, "run-1", nil)
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("Run() with empty registry: %v", err)
 	}
@@ -42,7 +43,8 @@ func TestMeterAggregationProbe_SuccessWhenSumPositive(t *testing.T) {
 		MeterIDs:              map[string]string{eventName: "meter_001"},
 	})
 
-	p := NewMeterAggregationProbe(fc, reg, "run-1")
+	p := NewMeterAggregationProbe(fc, reg, "run-1", nil)
+	p.startedAt = time.Now().Add(-2 * meterAggLookback) // bypass startup grace
 	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("Run() with positive usage: %v", err)
 	}
@@ -65,7 +67,8 @@ func TestMeterAggregationProbe_FailsWhenSumZero(t *testing.T) {
 		MeterIDs:              map[string]string{eventName: "meter_001"},
 	})
 
-	p := NewMeterAggregationProbe(fc, reg, "run-1")
+	p := NewMeterAggregationProbe(fc, reg, "run-1", nil)
+	p.startedAt = time.Now().Add(-2 * meterAggLookback) // bypass startup grace
 	err := p.Run(context.Background())
 	if err == nil {
 		t.Fatal("expected error when sum is zero, got nil")

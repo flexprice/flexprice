@@ -75,12 +75,13 @@ func ValidateEntityType(entityType types.IntegrationEntityType) bool {
 // ValidateProviderType validates the provider type
 func ValidateProviderType(providerType string) bool {
 	validProviders := map[string]bool{
-		"stripe":     true,
-		"razorpay":   true,
-		"paypal":     true,
-		"quickbooks": true,
-		"zoho_books": true,
-		"paddle":     true,
+		"stripe":          true,
+		"razorpay":        true,
+		"paypal":          true,
+		"quickbooks":      true,
+		"zoho_books":      true,
+		"paddle":          true,
+		"aws_marketplace": true,
 	}
 	return validProviders[providerType]
 }

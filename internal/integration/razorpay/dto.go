@@ -69,15 +69,14 @@ type PaymentLinkResponse struct {
 
 // CreatePaymentLinkRequest represents FlexPrice request to create a Razorpay payment link
 type CreatePaymentLinkRequest struct {
-	InvoiceID     string
-	CustomerID    string
-	Amount        decimal.Decimal
-	Currency      string
-	SuccessURL    string // Callback URL - customer redirected here after payment completion or cancellation
-	CancelURL     string // Not used by Razorpay (only SuccessURL is used as callback_url)
-	Metadata      map[string]string
-	PaymentID     string
-	EnvironmentID string
+	InvoiceID  string
+	CustomerID string
+	Amount     decimal.Decimal
+	Currency   string
+	SuccessURL string // Callback URL - customer redirected here after payment completion or cancellation
+	CancelURL  string // Not used by Razorpay (only SuccessURL is used as callback_url)
+	Metadata   map[string]string
+	PaymentID  string
 }
 
 // RazorpayPaymentLinkResponse represents the response after creating a payment link

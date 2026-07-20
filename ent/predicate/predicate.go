@@ -105,6 +105,9 @@ type Price func(*sql.Selector)
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
 
+// Refund is the predicate function for refund builders.
+type Refund func(*sql.Selector)
+
 // ScheduledTask is the predicate function for scheduledtask builders.
 type ScheduledTask func(*sql.Selector)
 
@@ -146,6 +149,9 @@ type TaxRate func(*sql.Selector)
 
 // Tenant is the predicate function for tenant builders.
 type Tenant func(*sql.Selector)
+
+// UsageRecord is the predicate function for usagerecord builders.
+type UsageRecord func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

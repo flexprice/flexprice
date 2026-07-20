@@ -344,7 +344,12 @@ type SubscriptionFilter struct {
 	// SubscriptionType filters by subscription type
 	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
 
-	// WithLineItems includes line items in the response
+	// WithLineItems includes line items in the response.
+	//
+	// Deprecated: use expand="subscription_line_items" instead. Retained for
+	// backwards compatibility and for internal callers that need to force-disable
+	// line item loading (set to false). The service layer ORs this with the
+	// expand check before invoking the repository.
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
 }
 
@@ -655,7 +660,7 @@ func (f SubscriptionScheduleFilter) Validate() error {
 	return nil
 }
 
-// UsageSource indicates the caller context for GetFeatureUsageBySubscription.
+// UsageSource indicates the caller context for GetMeterUsageBySubscription.
 // When InvoiceCreation, queries use FINAL for correct ReplacingMergeTree deduplication.
 // When Analytics or empty, FINAL is omitted for performance.
 const (

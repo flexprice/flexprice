@@ -95,7 +95,9 @@ const (
 	PrefixWorkflowExecution        = "workflow_execution:v1:"
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
-	PrefixPriceSyncLock = "price_sync:plan:"
+	PrefixPriceSyncLock             = "price_sync:plan:"
+	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
+	PrefixTabsInvoiceSyncLock       = "tabs:invoice_sync:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

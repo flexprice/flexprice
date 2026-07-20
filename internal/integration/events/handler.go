@@ -66,6 +66,18 @@ func NewHandler(deps Deps) Handler {
 				msg.UUID,
 			)
 		},
+		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			// invoice.update is Tabs-only; other providers sync on invoice.update.finalized.
+			return DispatchTabsInvoiceVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
 		types.WebhookEventSubscriptionCreated: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
 			return DispatchSubscriptionVendorSync(
 				ctx,

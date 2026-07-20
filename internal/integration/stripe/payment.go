@@ -56,7 +56,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
 		"currency", req.Currency,
-		"environment_id", req.EnvironmentID,
 	)
 
 	// Get Stripe client and config
@@ -222,7 +221,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	metadata := map[string]string{
 		"flexprice_invoice_id": req.InvoiceID,
 		"customer_id":          req.CustomerID,
-		"environment_id":       req.EnvironmentID,
 		"payment_source":       "flexprice",
 		"payment_type":         "checkout",
 		"flexprice_payment_id": req.PaymentID,

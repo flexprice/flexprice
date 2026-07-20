@@ -29,6 +29,7 @@ type TabsClient interface {
 	CreateContract(ctx context.Context, req CreateContractRequest) (*CreateContractResponse, error)
 	ListInvoicesByContract(ctx context.Context, contractID, issueDate string) (*ListInvoicesResponse, error)
 	CreateObligation(ctx context.Context, contractID string, req CreateObligationRequest) (*CreateObligationResponse, error)
+	DeleteObligation(ctx context.Context, contractID, obligationID string) error
 	MarkContractProcessed(ctx context.Context, contractID string) error
 	GetJob(ctx context.Context, jobID string) (*JobResponse, error)
 	WaitForJob(ctx context.Context, jobID string) (*JobPayload, error)
@@ -195,6 +196,13 @@ func (c *Client) CreateObligation(ctx context.Context, contractID string, req Cr
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// DeleteObligation deletes an obligation on a Tabs contract. Tabs has no update endpoint for
+// obligations, so changing one (e.g. after a draft invoice recomputes) means delete + recreate.
+// The response body is a plain success message, so only the HTTP status matters.
+func (c *Client) DeleteObligation(ctx context.Context, contractID, obligationID string) error {
+	return c.doRequest(ctx, http.MethodDelete, "/v3/contracts/"+contractID+"/obligations/"+obligationID, nil, nil)
 }
 
 // MarkContractProcessed transitions a Tabs contract from NEW to PROCESSED. The response body is

@@ -301,28 +301,22 @@ func (s *customerPortalService) GetAnalytics(ctx context.Context, req dto.Portal
 	// Convert dashboard request to internal request with customer ID injected
 	internalReq := req.ToInternalRequest(externalCustomerID)
 
-	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
-		meterUsageService := NewMeterUsageService(s.ServiceParams)
-		return meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerID:  internalReq.ExternalCustomerID,
-			ExternalCustomerIDs: internalReq.ExternalCustomerIDs,
-			FeatureIDs:          internalReq.FeatureIDs,
-			StartTime:           internalReq.StartTime,
-			EndTime:             internalReq.EndTime,
-			GroupBy:             internalReq.GroupBy,
-			PropertyFilters:     internalReq.PropertyFilters,
-			Sources:             internalReq.Sources,
-			WindowSize:          internalReq.WindowSize,
-			Expand:              internalReq.Expand,
-			IncludeChildren:     internalReq.IncludeChildren,
-		})
-	}
-
-	// Use FeatureUsageTrackingService to get detailed usage analytics
-	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
-	return featureUsageTrackingService.GetDetailedUsageAnalyticsV2(ctx, internalReq)
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	return meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerID:  internalReq.ExternalCustomerID,
+		ExternalCustomerIDs: internalReq.ExternalCustomerIDs,
+		FeatureIDs:          internalReq.FeatureIDs,
+		StartTime:           internalReq.StartTime,
+		EndTime:             internalReq.EndTime,
+		GroupBy:             internalReq.GroupBy,
+		PropertyFilters:     internalReq.PropertyFilters,
+		Sources:             internalReq.Sources,
+		WindowSize:          internalReq.WindowSize,
+		Expand:              internalReq.Expand,
+		IncludeChildren:     internalReq.IncludeChildren,
+	})
 }
 
 // GetCostAnalytics returns cost analytics for the portal customer
