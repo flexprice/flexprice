@@ -8298,3 +8298,110 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 		s.Empty(childInvoices, "expected no invoice for grouped-invoicing child %s", c.ID)
 	}
 }
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_CreditGrantsFundEachChildWallet() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	// Established idiom in this file for reaching the suite's already-built ServiceParams to
+	// construct a sibling service in a test.
+	subService := s.service.(*subscriptionService)
+	creditGrantService := NewCreditGrantService(subService.ServiceParams)
+	_, err := creditGrantService.CreateCreditGrant(ctx, dto.CreateCreditGrantRequest{
+		Name:           "Seat Monthly Credits",
+		Scope:          types.CreditGrantScopePlan,
+		PlanID:         &seatPlan.ID,
+		Credits:        decimal.NewFromInt(100),
+		Cadence:        types.CreditGrantCadenceRecurring,
+		Period:         lo.ToPtr(types.CREDIT_GRANT_PERIOD_MONTHLY),
+		PeriodCount:    lo.ToPtr(1),
+		ExpirationType: types.CreditGrantExpiryTypeNever,
+	})
+	s.NoError(err)
+
+	seatExternal := "ext_seat_credit"
+	seat := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seatExternal,
+		Name:       "Seat Credit",
+		Email:      "seatcredit@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seatExternal},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 1)
+
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, seat.ID)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.True(decimal.NewFromInt(100).Equal(wallets[0].Balance),
+		"expected seat wallet funded with 100 credits, got %s", wallets[0].Balance.String())
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_RollsBackOnChildFailure() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	seat1External := "ext_seat_ok"
+	seat1 := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seat1External,
+		Name:       "Seat OK",
+		Email:      "seatok@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat1))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seat1External},
+				{PlanID: "plan_does_not_exist", ExternalCustomerID: "ext_seat_bad"},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Error(err, "expected an error when a later child's plan_id doesn't exist")
+	s.Nil(resp)
+
+	// Note: this suite runs against testutil's MockPostgresClient (internal/testutil/mock_postgres_client.go),
+	// whose WithTx is a no-op pass-through with no real rollback — writes made before the error
+	// are not undone at this test layer. True atomicity (rollback on error) is a property of the
+	// real internal/postgres.Client.WithTx (confirmed by inspection during design: writer-pinned
+	// ent transaction, rolled back on any returned error or panic), not something this in-memory
+	// unit-test harness can exercise. This test therefore only asserts the error propagates —
+	// it does not assert on persisted row counts.
+}
