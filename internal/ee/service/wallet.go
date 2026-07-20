@@ -2192,15 +2192,15 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	}
 
 	// Best-effort: apply expiring credit to draft invoices; failures must not block expiry.
+	originalAvailable := tx.CreditsAvailable
 	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
 	creditsConsumed, cerr := creditAdjustmentService.ConsumeExpiringCreditIntoInvoices(ctx, tx)
 	if cerr != nil {
 		s.Logger.Error(ctx, "pre_expiry_consume_failed", "transaction_id", tx.ID, "error", cerr)
 	}
 
-	tx.CreditsAvailable = tx.CreditsAvailable.Sub(creditsConsumed)
-
-	if tx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
+	remainingToExpire := originalAvailable.Sub(creditsConsumed)
+	if remainingToExpire.LessThanOrEqual(decimal.Zero) {
 		return &types.ExpireCreditsResult{Expired: false}, nil
 	}
 
@@ -2209,7 +2209,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 		WalletID:          tx.WalletID,
 		ParentCreditTxID:  tx.ID,
 		Type:              types.TransactionTypeDebit,
-		CreditAmount:      tx.CreditsAvailable,
+		CreditAmount:      remainingToExpire,
 		Description:       fmt.Sprintf("Credit expiry for transaction %s", tx.ID),
 		TransactionReason: types.TransactionReasonCreditExpired,
 		ReferenceType:     types.WalletTxReferenceTypeRequest,

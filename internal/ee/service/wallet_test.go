@@ -110,6 +110,9 @@ func (s *WalletServiceSuite) setupService() {
 		TaxAssociationRepo:           stores.TaxAssociationRepo,
 		TaxRateRepo:                  stores.TaxRateRepo,
 		TaxAppliedRepo:               stores.TaxAppliedRepo,
+		CouponRepo:                   stores.CouponRepo,
+		CouponAssociationRepo:        stores.CouponAssociationRepo,
+		CouponApplicationRepo:        stores.CouponApplicationRepo,
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
