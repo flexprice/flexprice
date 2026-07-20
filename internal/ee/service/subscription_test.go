@@ -8405,3 +8405,237 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	// unit-test harness can exercise. This test therefore only asserts the error propagates —
 	// it does not assert on persisted row counts.
 }
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_ChildInheritsParentStartDate confirms
+// a grouped-invoicing child always starts when the parent starts — start_date is not settable
+// per child (removed from GroupedInvoicingChildRequest by design). Uses a start date offset from
+// "now" so the assertion can't pass by coincidence.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_ChildInheritsParentStartDate() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	seatExternal := "ext_seat_start_date"
+	seat := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seatExternal,
+		Name:       "Seat Start Date",
+		Email:      "seatstartdate@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat))
+
+	futureStart := s.testData.now.Add(10 * 24 * time.Hour)
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(futureStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seatExternal},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(children, 1)
+	s.Equal(resp.StartDate.Unix(), children[0].StartDate.Unix(),
+		"grouped-invoicing child must start exactly when the parent starts")
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_SingleChild covers the minimal case
+// of exactly one seat, to make sure the mechanism isn't accidentally N>=2-only.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_SingleChild() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	seatExternal := "ext_seat_single"
+	seat := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seatExternal,
+		Name:       "Seat Single",
+		Email:      "seatsingle@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seatExternal},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Equal(types.SubscriptionTypeParent, resp.SubscriptionType)
+	s.NotNil(resp.LatestInvoice)
+	s.True(decimal.NewFromInt(100).Equal(resp.LatestInvoice.Total),
+		"expected consolidated invoice total 100 (parent 50 + 1 seat 50), got %s", resp.LatestInvoice.Total.String())
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_EmptySliceIsNoop confirms an explicit
+// empty (non-nil) slice behaves exactly like the field being unset: the subscription stays
+// standalone, no children are created.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_EmptySliceIsNoop() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Equal(types.SubscriptionTypeStandalone, resp.SubscriptionType)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Empty(children)
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_UnknownCustomerFails confirms a child
+// referencing an external_customer_id that doesn't resolve to any customer surfaces as an error
+// from CreateSubscription (a different failure mode than an invalid plan_id, covered by
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_RollsBackOnChildFailure).
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_UnknownCustomerFails() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: "ext_seat_does_not_exist"},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Error(err)
+	s.Nil(resp)
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_RejectsCombiningWithSubscriptionsIDsForGroupedInvoicing
+// confirms the DTO-level mutual-exclusivity guard is actually wired into the service call path
+// (not just unit-tested in isolation at the DTO layer).
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_RejectsCombiningWithSubscriptionsIDsForGroupedInvoicing() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: "ext_seat_x"},
+			},
+			SubscriptionsIDsForGroupedInvoicing: []string{"sub_some_existing_id"},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Error(err)
+	s.Nil(resp)
+	s.Contains(err.Error(), "grouped_invoicing_children_to_create")
+}
+
+// TestCreateSubscription_GroupedInvoicingChildrenToCreate_DelegatedInvoicingCustomer covers the
+// real-world motivating scenario: an org payer distinct from the parent subscription's own
+// customer. The consolidated invoice must bill the delegated invoicing customer, not the parent
+// subscription's own customer.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildrenToCreate_DelegatedInvoicingCustomer() {
+	ctx := s.GetContext()
+	seatPlan := s.setupSeatFeePlan()
+
+	payerExternal := "ext_payer_org"
+	payer := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: payerExternal,
+		Name:       "Payer Org",
+		Email:      "payer@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, payer))
+
+	seatExternal := "ext_seat_delegated"
+	seat := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: seatExternal,
+		Name:       "Seat Delegated",
+		Email:      "seatdelegated@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, seat))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             seatPlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			InvoicingCustomerExternalID: lo.ToPtr(payerExternal),
+			GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+				{PlanID: seatPlan.ID, ExternalCustomerID: seatExternal},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp.LatestInvoice)
+
+	// The consolidated invoice bills the delegated payer, not the parent's own customer.
+	s.Equal(payer.ID, resp.LatestInvoice.CustomerID)
+	s.True(decimal.NewFromInt(100).Equal(resp.LatestInvoice.Total),
+		"expected consolidated invoice total 100 (parent 50 + 1 seat 50), got %s", resp.LatestInvoice.Total.String())
+}

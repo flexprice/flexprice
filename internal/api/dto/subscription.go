@@ -351,11 +351,7 @@ type SubscriptionInheritanceConfig struct {
 	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
 	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
 
-	// GroupedInvoicingChildrenToCreate: seat specs to create as brand-new grouped_invoicing
-	// children of this parent, in the same request. Each child is created with its own opening
-	// invoice suppressed; its period-1 charges are folded into this parent's single opening
-	// invoice instead. Only valid for parent behavior; mutually exclusive with
-	// SubscriptionsIDsForGroupedInvoicing.
+	// grouped_invoicing_children_to_create creates new grouped_invoicing children under this parent
 	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
 }
 

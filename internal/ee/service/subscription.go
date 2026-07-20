@@ -59,8 +59,7 @@ func (s *subscriptionService) listSubscriptionLineItemsForUsageWindow(ctx contex
 	return s.SubscriptionLineItemRepo.List(ctx, filter)
 }
 
-// subscriptionCoreResult carries everything CreateSubscription's post-transaction block
-// (phase handling, HubSpot/Paddle sync, webhook publish) needs, out of createSubscriptionCore.
+// subscriptionCoreResult is the output of createSubscription for CreateSubscription post-commit work.
 type subscriptionCoreResult struct {
 	Sub         *subscription.Subscription
 	Invoice     *dto.InvoiceResponse
@@ -70,9 +69,7 @@ type subscriptionCoreResult struct {
 	Customer    *customer.Customer
 }
 
-// createSubscription validates the request and creates the subscription through invoice
-// generation. Caller must already be inside a transaction. Post-commit side effects (phases,
-// syncs, webhooks) stay in CreateSubscription.
+// createSubscription creates the subscription through invoice generation. Caller must be in a transaction.
 func (s *subscriptionService) createSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*subscriptionCoreResult, error) {
 	if req.BillingCycle == "" {
 		req.BillingCycle = types.BillingCycleAnniversary
@@ -444,10 +441,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
-	// Grouped-invoicing children created inline (SubscriptionType pre-set internally by
-	// createGroupedInvoicingChildren) skip their own opening invoice — their charges are
-	// folded into the parent's invoice via the existing Parent-type merge in
-	// PrepareSubscriptionInvoiceRequest.
+	// Grouped_invoicing children skip their opening invoice; charges land on the parent instead.
 	if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
 		sub.SubscriptionStatus != types.SubscriptionStatusTrialing &&
 		sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
