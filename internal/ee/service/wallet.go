@@ -2210,7 +2210,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	if tx.CreditsAvailable.LessThanOrEqual(decimal.Zero) {
 		// Fully consumed into invoices; nothing left to expire.
 		s.Logger.Info(ctx, "pre_expiry_fully_consumed", "transaction_id", tx.ID, "amount_consumed", consumed)
-		return &types.ExpireCreditsResult{Expired: false, AmountConsumedIntoInvoices: consumed}, nil
+		return &types.ExpireCreditsResult{Expired: false}, nil
 	}
 
 	// Create a debit operation for the remaining expired credits
@@ -2245,7 +2245,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 
 	s.Logger.Info(ctx, "pre_expiry_partially_consumed_remainder_expired",
 		"transaction_id", tx.ID, "amount_consumed", consumed, "amount_expired", tx.CreditsAvailable)
-	return &types.ExpireCreditsResult{Expired: true, AmountConsumedIntoInvoices: consumed}, nil
+	return &types.ExpireCreditsResult{Expired: true}, nil
 }
 
 func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, eventName types.WebhookEventName, walletID string) {

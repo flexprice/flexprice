@@ -40,8 +40,6 @@ func WalletCreditExpiryWorkflow(ctx workflow.Context, _ cronModels.WalletCreditE
 		"total", result.Total,
 		"succeeded", result.Succeeded,
 		"failed", result.Failed,
-		"credits_consumed_into_invoices", result.CreditsConsumedIntoInvoices,
-		"amount_consumed_into_invoices", result.AmountConsumedIntoInvoices,
 	)
 	return &result, nil
 }

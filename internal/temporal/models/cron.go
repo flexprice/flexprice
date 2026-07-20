@@ -2,8 +2,6 @@ package models
 
 import (
 	"time"
-
-	"github.com/shopspring/decimal"
 )
 
 // ===================== Credit Grant Processing =====================
@@ -35,11 +33,9 @@ type WalletCreditExpiryWorkflowInput struct{}
 
 // WalletCreditExpiryWorkflowResult captures outcome metrics.
 type WalletCreditExpiryWorkflowResult struct {
-	Total                       int             `json:"total"`
-	Succeeded                   int             `json:"succeeded"`
-	Failed                      int             `json:"failed"`
-	CreditsConsumedIntoInvoices int             `json:"credits_consumed_into_invoices"`
-	AmountConsumedIntoInvoices  decimal.Decimal `json:"amount_consumed_into_invoices"`
+	Total     int `json:"total"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
 }
 
 // SubscriptionBillingPeriodsWorkflowInput is the input for SubscriptionBillingPeriodsWorkflow.

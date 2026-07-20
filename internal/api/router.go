@@ -68,7 +68,6 @@ type Handlers struct {
 	CustomerPortal *v1.CustomerPortalHandler
 	// Cron jobs: optional HTTP /v1/cron/... manual triggers; same work is automated via Temporal server schedules (worker creates them on startup).
 	CronSubscription       *cron.SubscriptionHandler
-	CronWallet             *cron.WalletCronHandler
 	CronCreditGrant        *cron.CreditGrantCronHandler
 	CronInvoice            *cron.InvoiceHandler
 	CronKafkaLagMonitoring *cron.KafkaLagMonitoringHandler
@@ -678,10 +677,6 @@ func NewRouter(
 		subscriptionGroup.POST("/process-trial-end-due", write(types.EntityCron, types.ActionWrite), handlers.CronSubscription.ProcessTrialEndDue)
 		subscriptionGroup.POST("/process-auto-cancellation", write(types.EntityCron, types.ActionWrite), handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
 		subscriptionGroup.POST("/renewal-due-alerts", write(types.EntityCron, types.ActionWrite), handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
-	}
-	walletGroup := cron.Group("/wallets")
-	{
-		walletGroup.POST("/expire-credits", write(types.EntityCron, types.ActionWrite), handlers.CronWallet.ExpireCredits)
 	}
 	creditGrantGroup := cron.Group("/creditgrants")
 	{

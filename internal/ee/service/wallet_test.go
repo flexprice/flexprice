@@ -2521,8 +2521,6 @@ func (s *WalletServiceSuite) TestExpireCredits_ConsumeThenExpire() {
 	s.Require().NoError(err)
 
 	// 40 of the 100 was consumed by the invoice (its full ceiling); the remaining 60 was expired.
-	s.True(decimal.NewFromInt(40).Equal(res.AmountConsumedIntoInvoices),
-		"expected 40 consumed into invoices, got %s", res.AmountConsumedIntoInvoices.String())
 	s.True(res.Expired, "expected remaining credits to be expired")
 
 	reloadedInv := s.reloadInvoiceWithLineItemsForExpiry(inv.ID)
@@ -2549,8 +2547,6 @@ func (s *WalletServiceSuite) TestExpireCredits_FullyConsumedNoRemainderToExpire(
 	res, err := s.service.ExpireCredits(s.GetContext(), source.ID)
 	s.Require().NoError(err)
 
-	s.True(decimal.NewFromInt(50).Equal(res.AmountConsumedIntoInvoices),
-		"expected 50 consumed into invoices, got %s", res.AmountConsumedIntoInvoices.String())
 	s.False(res.Expired, "expected no remainder to expire")
 
 	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
