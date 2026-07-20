@@ -112,7 +112,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 	return handler, log
 }
 
-func TestHandleWhopWebhook_RejectsMissingSignature(t *testing.T) {
+func TestHandleWhopWebhook_RejectsMissingSignatureWhenSecretConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	handler, _ := setupWhopWebhookHandler(t, "test_webhook_secret")
@@ -138,13 +138,11 @@ func TestHandleWhopWebhook_RejectsMissingSignature(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
-	// Deliberate design: Whop webhooks always return 200 to avoid retry storms,
-	// even when rejected. The absence of a panic (see above) is what proves
-	// verification gated the processing path.
+	// Match Moyasar: always return 200 to avoid retry storms even when rejected.
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestHandleWhopWebhook_RejectsInvalidSignature(t *testing.T) {
+func TestHandleWhopWebhook_RejectsInvalidSignatureWhenSecretConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	handler, _ := setupWhopWebhookHandler(t, "test_webhook_secret")
@@ -188,6 +186,26 @@ func TestHandleWhopWebhook_AcceptsValidSignature(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/webhooks/whop/tenant_test/env_test", strings.NewReader(body))
 	req.Header.Set("X-Whop-Signature", validSig)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+// Match Moyasar: connections without webhook_secret keep working (process events,
+// no signature required). Uses no-op.event so nil service deps are never touched.
+func TestHandleWhopWebhook_AllowsWhenSecretNotConfigured(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	handler, _ := setupWhopWebhookHandler(t, "")
+
+	router := gin.New()
+	router.POST("/v1/webhooks/whop/:tenant_id/:environment_id", handler.HandleWhopWebhook)
+
+	body := `{"type":"no-op.event","data":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/webhooks/whop/tenant_test/env_test", strings.NewReader(body))
+	// deliberately no X-Whop-Signature — should still process when secret unset
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
