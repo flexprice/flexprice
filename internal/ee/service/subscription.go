@@ -440,14 +440,9 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	// Skip the opening invoice for draft/trialing subscriptions (trial conversion invoice is
-	// created at trial end) and for grouped-invoicing children created inline (SubscriptionType
-	// pre-set internally by createGroupedInvoicingChildren) — their charges are folded into the
-	// parent's invoice via the existing Parent-type merge in PrepareSubscriptionInvoiceRequest.
-	//
-	// Deliberately a skip-list, not an allow-list: any SubscriptionType/Status added in the
-	// future keeps getting invoiced by default, same as every existing type does today. Only add
-	// an entry here when that type/status must NOT get its own opening invoice.
+	// Skip: draft/trialing (trial conversion invoice is created at trial end), and
+	// grouped-invoicing children (their charges land on the parent's invoice instead).
+	// Skip-list, not allow-list, so future types/statuses keep getting invoiced by default.
 	skipOpeningInvoiceStatuses := []types.SubscriptionStatus{
 		types.SubscriptionStatusDraft,
 		types.SubscriptionStatusTrialing,
