@@ -590,7 +590,7 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 				resp, err := invoiceService.GetOrCreateDraftInvoiceForSubscription(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 				if err != nil {
 					s.Logger.Error(ctx, "pre_expiry_create_draft_failed", "subscription_id", sub.ID, "error", err)
-					continue // best-effort - also covers the create-race unique-violation case
+					continue // best-effort - not guaranteed by a DB constraint, see GetOrCreateDraftInvoiceForSubscription's doc comment
 				}
 				curInv = &resp.Invoice
 			}
