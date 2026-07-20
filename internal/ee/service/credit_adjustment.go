@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -490,7 +489,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 		f.SubscriptionID = sub.ID
 		f.InvoiceStatus = []types.InvoiceStatus{
 			types.InvoiceStatusDraft,
-			types.InvoiceStatusFinalized,
 		}
 		f.Currency = tx.Currency // wallets are per-currency
 		invoices, err := s.InvoiceRepo.List(ctx, f)
@@ -498,11 +496,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 			s.Logger.Error(ctx, "pre_expiry_list_invoices_failed", "subscription_id", sub.ID, "error", err)
 			continue
 		}
-
-		// Most-recent period first.
-		sort.SliceStable(invoices, func(i, j int) bool {
-			return lo.FromPtr(invoices[i].PeriodStart).After(lo.FromPtr(invoices[j].PeriodStart))
-		})
 
 		for _, inv := range invoices {
 			// Re-read the tx: prior invoices in this pass may have drawn down the credit.
@@ -558,11 +551,8 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 
 	var newlyApplied decimal.Decimal
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Row-lock the invoice and re-check its status under the lock, mirroring
-		// performFinalizeInvoiceActions (internal/ee/service/invoice.go) — another process (finalize, a
-		// payment, another recompute) could have changed this invoice between ComputeInvoice above and
-		// this point, and we must not blindly overwrite it.
-		lockedInv, err := s.InvoiceRepo.GetForUpdate(ctx, invoiceID)
+
+		lockedInv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 		if err != nil {
 			return err
 		}
