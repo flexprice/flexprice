@@ -5,12 +5,10 @@ on:
     branches:
       - main
     paths:
+      # Only run when the chart itself changes.
       - 'internal/ee/infrastructure/helm/flexprice/**'
-      - '.github/workflows/publish-helm-chart.yml'
     tags:
       - 'chart-v*'
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -124,28 +122,8 @@ jobs:
         run: |
           helm package internal/ee/infrastructure/helm/flexprice --version ${{ steps.chart-version.outputs.version }}
 
-      - name: Check if version already exists
-        id: version-check
-        if: ${{ steps.changed.outputs.publish == 'true' && github.event.inputs.force != 'true' }}
-        env:
-          CHART_NAME: ${{ steps.chart-name.outputs.name }}
-          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
-          OWNER: ${{ github.repository_owner }}
-          GHCR_HOST: ${{ env.GHCR_HOST }}
-          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
-        run: |
-          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
-          if helm show chart "oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}" --version "$CHART_VERSION" 2>/dev/null | grep -q "version: $CHART_VERSION"; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "::warning::Chart version $CHART_VERSION already exists in registry"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Chart version $CHART_VERSION does not exist, proceeding with publish"
-          fi
-        continue-on-error: true
-
       - name: Login to GHCR
-        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v') }}
+        if: ${{ steps.changed.outputs.publish == 'true' }}
         env:
           # PAT auth — see comment in publish-app-image.yml. Override the
           # username via vars.GHCR_USERNAME if the PAT owner differs from
@@ -156,8 +134,44 @@ jobs:
         run: |
           echo "$GH_TOKEN" | helm registry login "$GHCR_HOST" -u "$GH_USER" --password-stdin
 
+      - name: Check if version already exists
+        id: version-check
+        # Runs after login so the lookup is authenticated. Fails closed: only an
+        # explicit registry "not found" sets exists=false; any other lookup error
+        # (auth/network) fails the job rather than being treated as absence.
+        if: ${{ steps.changed.outputs.publish == 'true' && github.event.inputs.force != 'true' }}
+        env:
+          CHART_NAME: ${{ steps.chart-name.outputs.name }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
+        run: |
+          set -uo pipefail
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          REF="oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}"
+          set +e
+          OUT=$(helm show chart "$REF" --version "$CHART_VERSION" 2>&1)
+          RC=$?
+          set -e
+          if [ "$RC" -eq 0 ] && echo "$OUT" | grep -q "version: $CHART_VERSION"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Chart version $CHART_VERSION already exists in registry"
+          elif echo "$OUT" | grep -qiE 'not found|manifest unknown|no such|not exist'; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Chart version $CHART_VERSION does not exist, proceeding with publish"
+          else
+            echo "exists=unknown" >> "$GITHUB_OUTPUT"
+            echo "::error::Registry lookup for $REF@$CHART_VERSION failed (rc=$RC); refusing to publish. Output:"
+            echo "$OUT"
+            exit 1
+          fi
+
       - name: Push Helm Chart to GHCR
-        if: ${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        id: push
+        # force bypasses the existence check; otherwise require an explicit
+        # exists=false (a proven absence), never a failed/unknown lookup.
+        if: ${{ steps.changed.outputs.publish == 'true' && (github.event.inputs.force == 'true' || steps.version-check.outputs.exists == 'false') }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
@@ -173,7 +187,7 @@ jobs:
           echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
 
       - name: Verify Published Chart (GHCR)
-        if: ${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        if: ${{ steps.push.outcome == 'success' }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
@@ -194,6 +208,8 @@ jobs:
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
           EXISTS: ${{ steps.version-check.outputs.exists }}
           FORCE: ${{ github.event.inputs.force }}
+          PUBLISH: ${{ steps.changed.outputs.publish }}
+          PUSH_OUTCOME: ${{ steps.push.outcome }}
         run: |
           OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
           TARGET="oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}"
@@ -202,15 +218,19 @@ jobs:
           echo "- **Chart Name**: $CHART_NAME" >> $GITHUB_STEP_SUMMARY
           echo "- **Chart Version**: $CHART_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry**: $TARGET" >> $GITHUB_STEP_SUMMARY
-          if [ "$EXISTS" == "true" ] && [ "$FORCE" != "true" ]; then
-            echo "- **Status**: ⚠️ Version already exists (skipped)" >> $GITHUB_STEP_SUMMARY
-          elif [ "$EXISTS" != "true" ] || [ "$FORCE" == "true" ]; then
+          if [ "$PUBLISH" != "true" ]; then
+            echo "- **Status**: ℹ️ Chart version unchanged — nothing published" >> $GITHUB_STEP_SUMMARY
+          elif [ "$PUSH_OUTCOME" == "success" ]; then
             echo "- **Status**: ✅ Published successfully" >> $GITHUB_STEP_SUMMARY
             echo "- **Chart URL**: \`helm pull $TARGET --version $CHART_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          elif [ "$EXISTS" == "true" ] && [ "$FORCE" != "true" ]; then
+            echo "- **Status**: ⚠️ Version already exists (skipped)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: ❌ Publish did not complete — see failed steps above" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Chart Artifact
-        if: always()
+        if: ${{ steps.changed.outputs.publish == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: helm-chart-${{ steps.chart-version.outputs.version }}
