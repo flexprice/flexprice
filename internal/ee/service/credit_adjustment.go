@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -472,10 +471,6 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 	if len(subs) == 0 {
 		return consumed, nil
 	}
-	eligibleSubIDs := make(map[string]bool, len(subs))
-	for _, sub := range subs {
-		eligibleSubIDs[sub.ID] = true
-	}
 
 	// Query directly for invoices that can actually absorb credit - draft, same currency as the
 	// wallet, and still owing something - instead of enumerating each subscription's invoices
@@ -493,15 +488,8 @@ func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.
 
 	eligibleInvoices := make([]*invoice.Invoice, 0, len(invoices))
 	for _, inv := range invoices {
-		if inv.SubscriptionID != nil && eligibleSubIDs[*inv.SubscriptionID] {
-			eligibleInvoices = append(eligibleInvoices, inv)
-		}
+		eligibleInvoices = append(eligibleInvoices, inv)
 	}
-
-	// Most-recent period first.
-	sort.SliceStable(eligibleInvoices, func(i, j int) bool {
-		return lo.FromPtr(eligibleInvoices[i].PeriodStart).After(lo.FromPtr(eligibleInvoices[j].PeriodStart))
-	})
 
 	// Track the credit's remaining balance in memory across the pass instead of re-reading the
 	// transaction from the DB before every invoice. DebitWallet independently re-validates the real

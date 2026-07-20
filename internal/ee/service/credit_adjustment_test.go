@@ -424,19 +424,20 @@ func (s *CreditAdjustmentServiceSuite) createDraftSubInvoiceWithUsageLineItem(id
 
 	periodEnd := periodStart.Add(30 * 24 * time.Hour)
 	inv := &invoice.Invoice{
-		ID:             id,
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(subID),
-		Currency:       currency,
-		Subtotal:       amount,
-		Total:          amount,
-		AmountDue:      amount,
-		InvoiceType:    types.InvoiceTypeOneOff,
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		PeriodStart:    lo.ToPtr(periodStart),
-		PeriodEnd:      lo.ToPtr(periodEnd),
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
-		LineItems:      []*invoice.InvoiceLineItem{li},
+		ID:              id,
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subID),
+		Currency:        currency,
+		Subtotal:        amount,
+		Total:           amount,
+		AmountDue:       amount,
+		AmountRemaining: amount,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(periodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
 	}
 
 	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
@@ -1051,17 +1052,18 @@ func (s *CreditAdjustmentServiceSuite) TestConsumeExpiringCreditIntoInvoices_Bes
 		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
 	}
 	brokenInv := &invoice.Invoice{
-		ID:             "inv_broken",
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(sub.ID),
-		Currency:       "USD",
-		Subtotal:       decimal.NewFromInt(999),
-		Total:          decimal.NewFromInt(999),
-		AmountDue:      decimal.NewFromInt(999),
-		InvoiceType:    types.InvoiceTypeSubscription, // PeriodStart/PeriodEnd required, but left nil below
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
-		LineItems:      []*invoice.InvoiceLineItem{brokenLine},
+		ID:              "inv_broken",
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(sub.ID),
+		Currency:        "USD",
+		Subtotal:        decimal.NewFromInt(999),
+		Total:           decimal.NewFromInt(999),
+		AmountDue:       decimal.NewFromInt(999),
+		AmountRemaining: decimal.NewFromInt(999),
+		InvoiceType:     types.InvoiceTypeSubscription, // PeriodStart/PeriodEnd required, but left nil below
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{brokenLine},
 	}
 	s.Require().NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), brokenInv))
 
