@@ -465,6 +465,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	}
 
 	// 3. Take the lock — only for DB writes (line items, credits, coupons, taxes, status update).
+	var computed bool
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
@@ -479,6 +480,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			// Finalized/voided between our initial read and the lock — nothing to do.
 			return nil
 		}
+		computed = true
 
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {
@@ -536,7 +538,18 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 		return s.InvoiceRepo.Update(txCtx, inv)
 	})
-	return skipped, err
+	if err != nil {
+		return skipped, err
+	}
+
+	// Notify draft-stage listeners (currently just Tabs sync) that the invoice changed. Skip when
+	// nothing actually happened (concurrent finalize/void raced us) or when the invoice landed on
+	// SKIPPED — zero-amount invoices are never synced downstream, so there's nothing to notify.
+	if computed && !skipped {
+		s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, invoiceID)
+	}
+
+	return skipped, nil
 }
 
 // getInvoiceWithLineItems fetches an invoice and populates its LineItems from the dedicated repo.
