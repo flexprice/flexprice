@@ -70,12 +70,10 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 	filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
 
 	response := &dto.ExpiredCreditsResponse{
-		Items:                       make([]*dto.ExpiredCreditsResponseItem, 0),
-		Total:                       0,
-		Success:                     0,
-		Failed:                      0,
-		CreditsConsumedIntoInvoices: 0,
-		AmountConsumedIntoInvoices:  decimal.Zero,
+		Items:   make([]*dto.ExpiredCreditsResponseItem, 0),
+		Total:   0,
+		Success: 0,
+		Failed:  0,
 	}
 
 	for _, tenant := range tenants {
@@ -93,13 +91,11 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environment.ID)
 
 			tenantResponse := &dto.ExpiredCreditsResponseItem{
-				TenantID:                    tenant.ID,
-				EnvironmentID:               environment.ID,
-				Count:                       0,
-				Success:                     0,
-				Failed:                      0,
-				CreditsConsumedIntoInvoices: 0,
-				AmountConsumedIntoInvoices:  decimal.Zero,
+				TenantID:      tenant.ID,
+				EnvironmentID: environment.ID,
+				Count:         0,
+				Success:       0,
+				Failed:        0,
 			}
 
 			transactions, err := h.walletService.ListWalletTransactionsByFilter(ctx, filter)
@@ -109,32 +105,23 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 				return
 			}
 
-			h.logger.Debug(c.Request.Context(), "found expired credits", "count", len(transactions.Items))
-
 			for _, tx := range transactions.Items {
 				tenantResponse.Count++
 				response.Total++
 
-				ctx = context.WithValue(ctx, types.CtxUserID, tx.CreatedBy)
-				result, err := h.walletService.ExpireCredits(ctx, tx.ID)
-				if err != nil {
+				txCtx := context.WithValue(ctx, types.CtxUserID, tx.CreatedBy)
+				result, err := h.walletService.ExpireCredits(txCtx, tx.ID)
+
+				switch {
+				case err != nil:
 					h.logger.Error(c.Request.Context(), "failed to expire credits", "transaction_id", tx.ID, "error", err)
 					tenantResponse.Failed++
 					response.Failed++
-					continue
-				}
-				if result.AmountConsumedIntoInvoices.GreaterThan(decimal.Zero) {
-					tenantResponse.CreditsConsumedIntoInvoices++
-					tenantResponse.AmountConsumedIntoInvoices = tenantResponse.AmountConsumedIntoInvoices.Add(result.AmountConsumedIntoInvoices)
-					response.CreditsConsumedIntoInvoices++
-					response.AmountConsumedIntoInvoices = response.AmountConsumedIntoInvoices.Add(result.AmountConsumedIntoInvoices)
-				}
-				if result.Expired {
+				case result.Expired:
 					tenantResponse.Success++
 					response.Success++
-					amountExpired := tx.CreditsAvailable.Sub(result.AmountConsumedIntoInvoices)
 					h.logger.Info(c.Request.Context(), "expired credits successfully",
-						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", amountExpired)
+						"transaction_id", tx.ID, "wallet_id", tx.WalletID)
 				}
 			}
 

@@ -327,10 +327,6 @@ const (
 type ExpireCreditsResult struct {
 	// Expired is true if the remaining credits were expired.
 	Expired bool `json:"expired"`
-	// SkipReason is retained for compatibility; the consume-then-expire flow no longer skips.
-	SkipReason CreditExpirySkipReason `json:"skip_reason,omitempty"`
-	// AmountConsumedIntoInvoices is how much of the credit was applied to invoices before expiring the rest.
-	AmountConsumedIntoInvoices decimal.Decimal `json:"amount_consumed_into_invoices"`
 }
 
 // WalletFilter represents the filter options for wallets
