@@ -6,6 +6,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -291,7 +292,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
-	Checkout               *CheckoutParams                  `json:"checkout,omitempty"`
+	CheckoutParams         *CheckoutParams                  `json:"checkout_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -345,17 +346,10 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 }
 
 func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
-	if r.Checkout == nil {
+	if r.CheckoutParams == nil {
 		return nil
 	}
-	allowed := false
-	for _, t := range checkoutAllowedModifyTypes {
-		if r.Type == t {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+	if !lo.Contains(checkoutAllowedModifyTypes, r.Type) {
 		return ierr.NewError("checkout is not supported for this modification type").
 			WithHint("checkout is only allowed for quantity_change").
 			WithReportableDetails(map[string]any{
@@ -364,7 +358,7 @@ func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	return r.Checkout.Validate()
+	return r.CheckoutParams.Validate()
 }
 
 // ChangedLineItemAction describes how a subscription line item changed.

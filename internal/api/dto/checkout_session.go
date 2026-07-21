@@ -14,7 +14,7 @@ import (
 
 // PaymentParams groups payment-provider settings for checkout flows.
 type PaymentParams struct {
-	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required"`
+	PaymentProvider       types.CheckoutPaymentProvider        `json:"payment_provider" binding:"required" validate:"required"`
 	PaymentProviderConfig *types.CheckoutPaymentProviderConfig `json:"payment_provider_config,omitempty"`
 }
 
@@ -22,10 +22,8 @@ func (p *PaymentParams) Validate() error {
 	if p == nil {
 		return nil
 	}
-	if p.PaymentProvider == "" {
-		return ierr.NewError("payment_provider is required").
-			WithHint("Provide a payment_provider (e.g. razorpay)").
-			Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
 	}
 	if err := p.PaymentProvider.Validate(); err != nil {
 		return err

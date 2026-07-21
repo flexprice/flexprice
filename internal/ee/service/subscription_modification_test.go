@@ -1983,7 +1983,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Checkou
 				{ID: li.ID, Quantity: decimal.NewFromInt(2), EffectiveDate: &effectiveDate},
 			},
 		},
-		Checkout: s.checkoutParamsRazorpay(),
+		CheckoutParams: s.checkoutParamsRazorpay(),
 	}
 	resp, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().NoError(err)
@@ -2023,11 +2023,12 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Checkou
 				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 			},
 		},
-		Checkout: &dto.CheckoutParams{},
+		CheckoutParams: &dto.CheckoutParams{},
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().Error(err)
-	s.Contains(err.Error(), "payment_provider")
+	s.True(ierr.IsValidation(err), "expected validation error, got %v", err)
+	s.Contains(err.Error(), "PaymentProvider")
 
 	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(getErr)
@@ -2052,7 +2053,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PayFirs
 				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 			},
 		},
-		Checkout: s.checkoutParamsRazorpay(),
+		CheckoutParams: s.checkoutParamsRazorpay(),
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().Error(err)
