@@ -741,24 +741,7 @@ func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Deci
 // resolveBonusExpiry computes the bonus tx expiry from a matched slab (now + duration).
 // Returns nil when the slab omits the duration config (bonus never expires).
 func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time {
-	if slab.ExpirationDuration == nil || slab.ExpirationDurationUnit == nil {
-		return nil
-	}
-	duration := *slab.ExpirationDuration
-	var expiry time.Time
-	switch *slab.ExpirationDurationUnit {
-	case types.CreditGrantExpiryDurationUnitDays:
-		expiry = now.Add(time.Duration(duration) * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitWeeks:
-		expiry = now.Add(time.Duration(duration) * 7 * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitMonths:
-		expiry = now.AddDate(0, duration, 0)
-	case types.CreditGrantExpiryDurationUnitYears:
-		expiry = now.AddDate(duration, 0, 0)
-	default:
-		return nil
-	}
-	return &expiry
+	return types.ResolveCreditsExpiry(slab.ExpirationDuration, slab.ExpirationDurationUnit, now)
 }
 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {

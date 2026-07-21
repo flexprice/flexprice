@@ -264,30 +264,3 @@ func TestCreateWalletActionConfig_ToDTO(t *testing.T) {
 	})
 }
 
-func TestResolveInitialCreditsExpiry(t *testing.T) {
-	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	day := types.CreditGrantExpiryDurationUnitDays
-	week := types.CreditGrantExpiryDurationUnitWeeks
-	month := types.CreditGrantExpiryDurationUnitMonths
-	year := types.CreditGrantExpiryDurationUnitYears
-	n := 3
-
-	assert.Nil(t, resolveInitialCreditsExpiry(nil, &day, now))
-	assert.Nil(t, resolveInitialCreditsExpiry(&n, nil, now))
-
-	got := resolveInitialCreditsExpiry(&n, &day, now)
-	require.NotNil(t, got)
-	assert.Equal(t, now.Add(3*24*time.Hour), *got)
-
-	got = resolveInitialCreditsExpiry(&n, &week, now)
-	require.NotNil(t, got)
-	assert.Equal(t, now.Add(3*7*24*time.Hour), *got)
-
-	got = resolveInitialCreditsExpiry(&n, &month, now)
-	require.NotNil(t, got)
-	assert.Equal(t, now.AddDate(0, 3, 0), *got)
-
-	got = resolveInitialCreditsExpiry(&n, &year, now)
-	require.NotNil(t, got)
-	assert.Equal(t, now.AddDate(3, 0, 0), *got)
-}

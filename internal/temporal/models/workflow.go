@@ -358,32 +358,10 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 	}
 
 	if c.InitialCreditsToLoad.IsPositive() {
-		req.InitialCreditsExpiryDateUTC = resolveInitialCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, time.Now().UTC())
+		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, time.Now().UTC())
 	}
 
 	return req, nil
-}
-
-// resolveInitialCreditsExpiry computes expiry as now + duration (same rules as wallet bonus credit expiry).
-// Returns nil when duration config is omitted (credits never expire).
-func resolveInitialCreditsExpiry(duration *int, unit *types.CreditGrantExpiryDurationUnit, now time.Time) *time.Time {
-	if duration == nil || unit == nil {
-		return nil
-	}
-	var expiry time.Time
-	switch *unit {
-	case types.CreditGrantExpiryDurationUnitDays:
-		expiry = now.Add(time.Duration(*duration) * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitWeeks:
-		expiry = now.Add(time.Duration(*duration) * 7 * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitMonths:
-		expiry = now.AddDate(0, *duration, 0)
-	case types.CreditGrantExpiryDurationUnitYears:
-		expiry = now.AddDate(*duration, 0, 0)
-	default:
-		return nil
-	}
-	return &expiry
 }
 
 // CreateSubscriptionActionConfig represents configuration for creating a subscription action
