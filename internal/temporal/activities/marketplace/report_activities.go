@@ -546,7 +546,7 @@ func (a *ReportActivities) reportGCPRecord(
 	if !reportResult.Accepted {
 		a.logger.Error(envCtx, "marketplace usage report rejected by gcp, will retry next run",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
-			"error_code", reportResult.ErrorCode, "error_message", reportResult.ErrorMessage)
+			"error", "rejected_by_gcp", "error_code", reportResult.ErrorCode, "error_message", reportResult.ErrorMessage)
 		result.Failed++
 		return
 	}
