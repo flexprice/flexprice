@@ -34,7 +34,7 @@ func GenerateDevToken() error {
 	expiryHoursStr := os.Getenv("EXPIRY_HOURS")
 
 	if tenantID == "" {
-		return fmt.Errorf("TENANT_ID is required (pass -tenant-id flag or set TENANT_ID env var)")
+		return fmt.Errorf("TENANT_ID is required")
 	}
 	if userID == "" {
 		userID = types.DefaultUserID

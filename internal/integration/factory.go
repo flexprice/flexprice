@@ -703,9 +703,9 @@ func (f *Factory) GetTabsIntegration(ctx context.Context) (*TabsIntegration, err
 		f.customerRepo,
 		f.subscriptionRepo,
 		f.planRepo,
-		f.priceRepo,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
+		f.locker,
 		f.logger,
 	)
 

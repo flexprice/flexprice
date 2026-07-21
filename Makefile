@@ -92,6 +92,26 @@ run-server-local: run-server
 .PHONY: run
 run: run-server
 
+.PHONY: dev-token
+dev-token:
+	@tenant_id=''; \
+	while [ -z "$$tenant_id" ]; do \
+		printf 'Tenant ID: '; \
+		if ! IFS= read -r tenant_id; then \
+			printf '\nUnable to read tenant ID.\n'; \
+			exit 1; \
+		fi; \
+		if [ -z "$$tenant_id" ]; then \
+			echo 'Tenant ID is required.'; \
+		fi; \
+	done; \
+	printf 'Environment ID (optional): '; \
+	if ! IFS= read -r environment_id; then \
+		printf '\nUnable to read environment ID.\n'; \
+		exit 1; \
+	fi; \
+	go run ./scripts -cmd generate-dev-token -tenant-id "$$tenant_id" -environment-id "$$environment_id"
+
 # ---------------------------------------------------------------------------
 # Local development targets — load .env.local on top of .env so local Docker
 # infra overrides take effect without touching production config.
