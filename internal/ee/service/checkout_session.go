@@ -372,11 +372,7 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 
 	// Apply subscription taxes so AmountDue includes tax before payment link creation.
 	// FinalizeInvoice will recalculate taxes idempotently (safe if credits adjust the base).
-	inv, err := s.InvoiceRepo.Get(ctx, invResp.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := invSvc.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
+	if err := invSvc.RecalculateTaxesOnInvoice(ctx, &invResp.Invoice); err != nil {
 		return nil, nil, err
 	}
 
