@@ -2439,8 +2439,10 @@ var (
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "period_start", Type: field.TypeTime},
 		{Name: "period_end", Type: field.TypeTime},
-		{Name: "syncs", Type: field.TypeJSON, Nullable: true},
-		{Name: "all_providers_synced", Type: field.TypeBool, Default: false},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "synced", Type: field.TypeBool, Default: false},
+		{Name: "synced_at", Type: field.TypeTime, Nullable: true},
+		{Name: "marketplace_report_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 	}
 	// UsageRecordsTable holds the schema information for the "usage_records" table.
 	UsageRecordsTable = &schema.Table{
@@ -2449,9 +2451,9 @@ var (
 		PrimaryKey: []*schema.Column{UsageRecordsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "usagerecord_tenant_id_environment_id_all_providers_synced",
+				Name:    "usagerecord_tenant_id_environment_id_connection_id_synced",
 				Unique:  false,
-				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[18]},
+				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[17], UsageRecordsColumns[18]},
 			},
 		},
 	}

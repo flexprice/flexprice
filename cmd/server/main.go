@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
@@ -90,9 +91,9 @@ func main() {
 			// Security
 			security.NewEncryptionService,
 
-			// AWS Marketplace client (also used directly by internal/temporal/registration.go for
-			// the cron activities, which construct it manually rather than via this FX container)
+			// Marketplace clients
 			awsmarketplace.NewClient,
+			gcpmarketplace.NewClient,
 
 			// RBAC
 			rbac.NewRBACService,

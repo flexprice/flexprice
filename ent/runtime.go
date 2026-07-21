@@ -2470,10 +2470,10 @@ func init() {
 	usagerecordDescCurrency := usagerecordFields[7].Descriptor()
 	// usagerecord.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	usagerecord.CurrencyValidator = usagerecordDescCurrency.Validators[0].(func(string) error)
-	// usagerecordDescAllProvidersSynced is the schema descriptor for all_providers_synced field.
-	usagerecordDescAllProvidersSynced := usagerecordFields[11].Descriptor()
-	// usagerecord.DefaultAllProvidersSynced holds the default value on creation for the all_providers_synced field.
-	usagerecord.DefaultAllProvidersSynced = usagerecordDescAllProvidersSynced.Default.(bool)
+	// usagerecordDescSynced is the schema descriptor for synced field.
+	usagerecordDescSynced := usagerecordFields[11].Descriptor()
+	// usagerecord.DefaultSynced holds the default value on creation for the synced field.
+	usagerecord.DefaultSynced = usagerecordDescSynced.Default.(bool)
 	userMixin := schema.User{}.Mixin()
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0

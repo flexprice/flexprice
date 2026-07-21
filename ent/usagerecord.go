@@ -3,7 +3,6 @@
 package ent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -51,11 +50,15 @@ type UsageRecord struct {
 	PeriodStart time.Time `json:"period_start,omitempty"`
 	// PeriodEnd holds the value of the "period_end" field.
 	PeriodEnd time.Time `json:"period_end,omitempty"`
-	// Syncs holds the value of the "syncs" field.
-	Syncs map[string]interface{} `json:"syncs,omitempty"`
-	// AllProvidersSynced holds the value of the "all_providers_synced" field.
-	AllProvidersSynced bool `json:"all_providers_synced,omitempty"`
-	selectValues       sql.SelectValues
+	// ConnectionID holds the value of the "connection_id" field.
+	ConnectionID string `json:"connection_id,omitempty"`
+	// Synced holds the value of the "synced" field.
+	Synced bool `json:"synced,omitempty"`
+	// SyncedAt holds the value of the "synced_at" field.
+	SyncedAt *time.Time `json:"synced_at,omitempty"`
+	// MarketplaceReportID holds the value of the "marketplace_report_id" field.
+	MarketplaceReportID string `json:"marketplace_report_id,omitempty"`
+	selectValues        sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -63,15 +66,13 @@ func (*UsageRecord) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usagerecord.FieldSyncs:
-			values[i] = new([]byte)
 		case usagerecord.FieldQuantity, usagerecord.FieldAmount:
 			values[i] = new(decimal.Decimal)
-		case usagerecord.FieldAllProvidersSynced:
+		case usagerecord.FieldSynced:
 			values[i] = new(sql.NullBool)
-		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID, usagerecord.FieldCurrency:
+		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID, usagerecord.FieldCurrency, usagerecord.FieldConnectionID, usagerecord.FieldMarketplaceReportID:
 			values[i] = new(sql.NullString)
-		case usagerecord.FieldCreatedAt, usagerecord.FieldUpdatedAt, usagerecord.FieldPeriodStart, usagerecord.FieldPeriodEnd:
+		case usagerecord.FieldCreatedAt, usagerecord.FieldUpdatedAt, usagerecord.FieldPeriodStart, usagerecord.FieldPeriodEnd, usagerecord.FieldSyncedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -190,19 +191,30 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ur.PeriodEnd = value.Time
 			}
-		case usagerecord.FieldSyncs:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field syncs", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ur.Syncs); err != nil {
-					return fmt.Errorf("unmarshal field syncs: %w", err)
-				}
-			}
-		case usagerecord.FieldAllProvidersSynced:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field all_providers_synced", values[i])
+		case usagerecord.FieldConnectionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field connection_id", values[i])
 			} else if value.Valid {
-				ur.AllProvidersSynced = value.Bool
+				ur.ConnectionID = value.String
+			}
+		case usagerecord.FieldSynced:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field synced", values[i])
+			} else if value.Valid {
+				ur.Synced = value.Bool
+			}
+		case usagerecord.FieldSyncedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field synced_at", values[i])
+			} else if value.Valid {
+				ur.SyncedAt = new(time.Time)
+				*ur.SyncedAt = value.Time
+			}
+		case usagerecord.FieldMarketplaceReportID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field marketplace_report_id", values[i])
+			} else if value.Valid {
+				ur.MarketplaceReportID = value.String
 			}
 		default:
 			ur.selectValues.Set(columns[i], values[i])
@@ -288,11 +300,19 @@ func (ur *UsageRecord) String() string {
 	builder.WriteString("period_end=")
 	builder.WriteString(ur.PeriodEnd.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("syncs=")
-	builder.WriteString(fmt.Sprintf("%v", ur.Syncs))
+	builder.WriteString("connection_id=")
+	builder.WriteString(ur.ConnectionID)
 	builder.WriteString(", ")
-	builder.WriteString("all_providers_synced=")
-	builder.WriteString(fmt.Sprintf("%v", ur.AllProvidersSynced))
+	builder.WriteString("synced=")
+	builder.WriteString(fmt.Sprintf("%v", ur.Synced))
+	builder.WriteString(", ")
+	if v := ur.SyncedAt; v != nil {
+		builder.WriteString("synced_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("marketplace_report_id=")
+	builder.WriteString(ur.MarketplaceReportID)
 	builder.WriteByte(')')
 	return builder.String()
 }

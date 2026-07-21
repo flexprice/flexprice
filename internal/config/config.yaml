@@ -308,6 +308,12 @@ marketplace:
     secret_access_key: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SECRET_ACCESS_KEY env var
     # session_token only for temporary (ASIA...) keys; leave unset for a long-lived AKIA... key.
     session_token: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SESSION_TOKEN env var
+  # Not credentials — just the two values rendered into the GCP Marketplace WIF setup script we hand
+  # tenants. Authentication itself is ambient (the worker's own AWS IAM role); these only need to
+  # match that role so the script produces a WIF provider that trusts the right principal.
+  gcp:
+    flexprice_aws_account_id: "" # Set via FLEXPRICE_MARKETPLACE_GCP_FLEXPRICE_AWS_ACCOUNT_ID env var
+    flexprice_aws_role_name: "" # Set via FLEXPRICE_MARKETPLACE_GCP_FLEXPRICE_AWS_ROLE_NAME env var
 
 cache:
   enabled: false

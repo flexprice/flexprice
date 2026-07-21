@@ -189,22 +189,58 @@ func (urc *UsageRecordCreate) SetPeriodEnd(t time.Time) *UsageRecordCreate {
 	return urc
 }
 
-// SetSyncs sets the "syncs" field.
-func (urc *UsageRecordCreate) SetSyncs(m map[string]interface{}) *UsageRecordCreate {
-	urc.mutation.SetSyncs(m)
+// SetConnectionID sets the "connection_id" field.
+func (urc *UsageRecordCreate) SetConnectionID(s string) *UsageRecordCreate {
+	urc.mutation.SetConnectionID(s)
 	return urc
 }
 
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (urc *UsageRecordCreate) SetAllProvidersSynced(b bool) *UsageRecordCreate {
-	urc.mutation.SetAllProvidersSynced(b)
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (urc *UsageRecordCreate) SetNillableConnectionID(s *string) *UsageRecordCreate {
+	if s != nil {
+		urc.SetConnectionID(*s)
+	}
 	return urc
 }
 
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableAllProvidersSynced(b *bool) *UsageRecordCreate {
+// SetSynced sets the "synced" field.
+func (urc *UsageRecordCreate) SetSynced(b bool) *UsageRecordCreate {
+	urc.mutation.SetSynced(b)
+	return urc
+}
+
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (urc *UsageRecordCreate) SetNillableSynced(b *bool) *UsageRecordCreate {
 	if b != nil {
-		urc.SetAllProvidersSynced(*b)
+		urc.SetSynced(*b)
+	}
+	return urc
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (urc *UsageRecordCreate) SetSyncedAt(t time.Time) *UsageRecordCreate {
+	urc.mutation.SetSyncedAt(t)
+	return urc
+}
+
+// SetNillableSyncedAt sets the "synced_at" field if the given value is not nil.
+func (urc *UsageRecordCreate) SetNillableSyncedAt(t *time.Time) *UsageRecordCreate {
+	if t != nil {
+		urc.SetSyncedAt(*t)
+	}
+	return urc
+}
+
+// SetMarketplaceReportID sets the "marketplace_report_id" field.
+func (urc *UsageRecordCreate) SetMarketplaceReportID(s string) *UsageRecordCreate {
+	urc.mutation.SetMarketplaceReportID(s)
+	return urc
+}
+
+// SetNillableMarketplaceReportID sets the "marketplace_report_id" field if the given value is not nil.
+func (urc *UsageRecordCreate) SetNillableMarketplaceReportID(s *string) *UsageRecordCreate {
+	if s != nil {
+		urc.SetMarketplaceReportID(*s)
 	}
 	return urc
 }
@@ -274,9 +310,9 @@ func (urc *UsageRecordCreate) defaults() {
 		v := usagerecord.DefaultAmount
 		urc.mutation.SetAmount(v)
 	}
-	if _, ok := urc.mutation.AllProvidersSynced(); !ok {
-		v := usagerecord.DefaultAllProvidersSynced
-		urc.mutation.SetAllProvidersSynced(v)
+	if _, ok := urc.mutation.Synced(); !ok {
+		v := usagerecord.DefaultSynced
+		urc.mutation.SetSynced(v)
 	}
 }
 
@@ -343,8 +379,8 @@ func (urc *UsageRecordCreate) check() error {
 	if _, ok := urc.mutation.PeriodEnd(); !ok {
 		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "UsageRecord.period_end"`)}
 	}
-	if _, ok := urc.mutation.AllProvidersSynced(); !ok {
-		return &ValidationError{Name: "all_providers_synced", err: errors.New(`ent: missing required field "UsageRecord.all_providers_synced"`)}
+	if _, ok := urc.mutation.Synced(); !ok {
+		return &ValidationError{Name: "synced", err: errors.New(`ent: missing required field "UsageRecord.synced"`)}
 	}
 	return nil
 }
@@ -445,13 +481,21 @@ func (urc *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) 
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = value
 	}
-	if value, ok := urc.mutation.Syncs(); ok {
-		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
-		_node.Syncs = value
+	if value, ok := urc.mutation.ConnectionID(); ok {
+		_spec.SetField(usagerecord.FieldConnectionID, field.TypeString, value)
+		_node.ConnectionID = value
 	}
-	if value, ok := urc.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
-		_node.AllProvidersSynced = value
+	if value, ok := urc.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+		_node.Synced = value
+	}
+	if value, ok := urc.mutation.SyncedAt(); ok {
+		_spec.SetField(usagerecord.FieldSyncedAt, field.TypeTime, value)
+		_node.SyncedAt = &value
+	}
+	if value, ok := urc.mutation.MarketplaceReportID(); ok {
+		_spec.SetField(usagerecord.FieldMarketplaceReportID, field.TypeString, value)
+		_node.MarketplaceReportID = value
 	}
 	return _node, _spec
 }

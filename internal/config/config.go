@@ -119,10 +119,11 @@ type FlexpriceS3ExportsConfig struct {
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
 }
 
-// MarketplaceConfig groups Flexprice's own credentials for each marketplace it reports usage to.
-// AWS is the only one implemented today; Azure and GCP would be added as sibling fields.
+// MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports
+// usage to. Azure would be added as a further sibling field.
 type MarketplaceConfig struct {
 	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+	GCP GCPMarketplaceConfig `mapstructure:"gcp" validate:"omitempty"`
 }
 
 // AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
@@ -142,6 +143,22 @@ type AWSMarketplaceConfig struct {
 	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
 	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
 	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
+}
+
+// GCPMarketplaceConfig holds the two values Flexprice renders into the tenant-facing Workload
+// Identity Federation setup script (design doc FLE-981 §5.3, step 2's --account-id and
+// --attribute-condition). Unlike AWSMarketplaceConfig, these are not credentials: authenticating to
+// GCP happens ambiently, via the AWS identity attached to the worker process's own runtime
+// environment (the credentials JSON a tenant generates hard-codes a real EC2/ECS instance-metadata
+// endpoint for Google's client library to fetch that identity from — see the GCP client package
+// doc comment for the full explanation). This is a different identity from AWSMarketplaceConfig's
+// static caller credentials above (which sign AssumeRole calls for AWS Marketplace) — it names the
+// ambient instance role the worker actually runs as, purely so the WIF setup script we hand tenants
+// trusts the right principal. FlexpriceAWSAccountID/RoleName only need to be *correct*, i.e. matching
+// that role.
+type GCPMarketplaceConfig struct {
+	FlexpriceAWSAccountID string `mapstructure:"flexprice_aws_account_id" validate:"omitempty"`
+	FlexpriceAWSRoleName  string `mapstructure:"flexprice_aws_role_name" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {

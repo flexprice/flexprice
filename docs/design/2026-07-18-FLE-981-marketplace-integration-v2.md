@@ -266,7 +266,7 @@ and dollar amount — and how it's allowed to make these calls in the first plac
 
 ## 3. Where the identifiers come from: onboarding a buyer
 
-The report calls above need `ProductCode`/`service_name`, the buyer identifiers, and the metric name.
+The report calls above need `ProductCode`/`service_name`, the marketplace identifiers, and the metric name.
 None of those originate in Flexprice — they come from the marketplace when a buyer subscribes, flow
 through the tenant, and get registered with us. This section traces that.
 
@@ -438,7 +438,7 @@ subscription / customer), `entity_id` (the Flexprice id), `provider_type` (`aws_
 and a `status` (the standard published/archived soft-delete flag).
 
 These three rows are exactly what the usage report (Section 2) reads back at report time: the plan
-mapping supplies the product and metric, the subscription mapping supplies the buyer identifier (GCP's
+mapping supplies the product and metric, the subscription mapping supplies the agreement identifier (GCP's
 `consumerId` / AWS's `LicenseArn`), and — for AWS only — the customer mapping supplies the AWS account
 number.
 
@@ -871,7 +871,7 @@ Section 10).
 
 **Logging rules for both crons.** Log at entry and exit of each stage — connection load, decrypt, auth,
 mapping resolve, payload build, marketplace call, result write — at `error` / `debug` / `info` only (no
-`warn`). Never log a secret or buyer identifier: no `role_arn`, `external_id`, `customer_aws_account_id`,
+`warn`). Never log a secret, buyer account identifier, or agreement identifier: no `role_arn`, `external_id`, `customer_aws_account_id`,
 `account_id`, WIF JSON, or `usageReportingId`. Do log the safe correlators: `connection_id`,
 `subscription_id`, `usage_record_id`, the period bounds, the amount in cents, and the marketplace's
 status/error code. (The AWS `AssumeRole` path already redacts the raw SDK error, since its text can

@@ -201,29 +201,77 @@ func (uru *UsageRecordUpdate) SetNillablePeriodEnd(t *time.Time) *UsageRecordUpd
 	return uru
 }
 
-// SetSyncs sets the "syncs" field.
-func (uru *UsageRecordUpdate) SetSyncs(m map[string]interface{}) *UsageRecordUpdate {
-	uru.mutation.SetSyncs(m)
+// SetConnectionID sets the "connection_id" field.
+func (uru *UsageRecordUpdate) SetConnectionID(s string) *UsageRecordUpdate {
+	uru.mutation.SetConnectionID(s)
 	return uru
 }
 
-// ClearSyncs clears the value of the "syncs" field.
-func (uru *UsageRecordUpdate) ClearSyncs() *UsageRecordUpdate {
-	uru.mutation.ClearSyncs()
-	return uru
-}
-
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (uru *UsageRecordUpdate) SetAllProvidersSynced(b bool) *UsageRecordUpdate {
-	uru.mutation.SetAllProvidersSynced(b)
-	return uru
-}
-
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableAllProvidersSynced(b *bool) *UsageRecordUpdate {
-	if b != nil {
-		uru.SetAllProvidersSynced(*b)
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableConnectionID(s *string) *UsageRecordUpdate {
+	if s != nil {
+		uru.SetConnectionID(*s)
 	}
+	return uru
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (uru *UsageRecordUpdate) ClearConnectionID() *UsageRecordUpdate {
+	uru.mutation.ClearConnectionID()
+	return uru
+}
+
+// SetSynced sets the "synced" field.
+func (uru *UsageRecordUpdate) SetSynced(b bool) *UsageRecordUpdate {
+	uru.mutation.SetSynced(b)
+	return uru
+}
+
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableSynced(b *bool) *UsageRecordUpdate {
+	if b != nil {
+		uru.SetSynced(*b)
+	}
+	return uru
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (uru *UsageRecordUpdate) SetSyncedAt(t time.Time) *UsageRecordUpdate {
+	uru.mutation.SetSyncedAt(t)
+	return uru
+}
+
+// SetNillableSyncedAt sets the "synced_at" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableSyncedAt(t *time.Time) *UsageRecordUpdate {
+	if t != nil {
+		uru.SetSyncedAt(*t)
+	}
+	return uru
+}
+
+// ClearSyncedAt clears the value of the "synced_at" field.
+func (uru *UsageRecordUpdate) ClearSyncedAt() *UsageRecordUpdate {
+	uru.mutation.ClearSyncedAt()
+	return uru
+}
+
+// SetMarketplaceReportID sets the "marketplace_report_id" field.
+func (uru *UsageRecordUpdate) SetMarketplaceReportID(s string) *UsageRecordUpdate {
+	uru.mutation.SetMarketplaceReportID(s)
+	return uru
+}
+
+// SetNillableMarketplaceReportID sets the "marketplace_report_id" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableMarketplaceReportID(s *string) *UsageRecordUpdate {
+	if s != nil {
+		uru.SetMarketplaceReportID(*s)
+	}
+	return uru
+}
+
+// ClearMarketplaceReportID clears the value of the "marketplace_report_id" field.
+func (uru *UsageRecordUpdate) ClearMarketplaceReportID() *UsageRecordUpdate {
+	uru.mutation.ClearMarketplaceReportID()
 	return uru
 }
 
@@ -353,14 +401,26 @@ func (uru *UsageRecordUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := uru.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := uru.mutation.Syncs(); ok {
-		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
+	if value, ok := uru.mutation.ConnectionID(); ok {
+		_spec.SetField(usagerecord.FieldConnectionID, field.TypeString, value)
 	}
-	if uru.mutation.SyncsCleared() {
-		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
+	if uru.mutation.ConnectionIDCleared() {
+		_spec.ClearField(usagerecord.FieldConnectionID, field.TypeString)
 	}
-	if value, ok := uru.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
+	if value, ok := uru.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+	}
+	if value, ok := uru.mutation.SyncedAt(); ok {
+		_spec.SetField(usagerecord.FieldSyncedAt, field.TypeTime, value)
+	}
+	if uru.mutation.SyncedAtCleared() {
+		_spec.ClearField(usagerecord.FieldSyncedAt, field.TypeTime)
+	}
+	if value, ok := uru.mutation.MarketplaceReportID(); ok {
+		_spec.SetField(usagerecord.FieldMarketplaceReportID, field.TypeString, value)
+	}
+	if uru.mutation.MarketplaceReportIDCleared() {
+		_spec.ClearField(usagerecord.FieldMarketplaceReportID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, uru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -554,29 +614,77 @@ func (uruo *UsageRecordUpdateOne) SetNillablePeriodEnd(t *time.Time) *UsageRecor
 	return uruo
 }
 
-// SetSyncs sets the "syncs" field.
-func (uruo *UsageRecordUpdateOne) SetSyncs(m map[string]interface{}) *UsageRecordUpdateOne {
-	uruo.mutation.SetSyncs(m)
+// SetConnectionID sets the "connection_id" field.
+func (uruo *UsageRecordUpdateOne) SetConnectionID(s string) *UsageRecordUpdateOne {
+	uruo.mutation.SetConnectionID(s)
 	return uruo
 }
 
-// ClearSyncs clears the value of the "syncs" field.
-func (uruo *UsageRecordUpdateOne) ClearSyncs() *UsageRecordUpdateOne {
-	uruo.mutation.ClearSyncs()
-	return uruo
-}
-
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (uruo *UsageRecordUpdateOne) SetAllProvidersSynced(b bool) *UsageRecordUpdateOne {
-	uruo.mutation.SetAllProvidersSynced(b)
-	return uruo
-}
-
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableAllProvidersSynced(b *bool) *UsageRecordUpdateOne {
-	if b != nil {
-		uruo.SetAllProvidersSynced(*b)
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableConnectionID(s *string) *UsageRecordUpdateOne {
+	if s != nil {
+		uruo.SetConnectionID(*s)
 	}
+	return uruo
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (uruo *UsageRecordUpdateOne) ClearConnectionID() *UsageRecordUpdateOne {
+	uruo.mutation.ClearConnectionID()
+	return uruo
+}
+
+// SetSynced sets the "synced" field.
+func (uruo *UsageRecordUpdateOne) SetSynced(b bool) *UsageRecordUpdateOne {
+	uruo.mutation.SetSynced(b)
+	return uruo
+}
+
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableSynced(b *bool) *UsageRecordUpdateOne {
+	if b != nil {
+		uruo.SetSynced(*b)
+	}
+	return uruo
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (uruo *UsageRecordUpdateOne) SetSyncedAt(t time.Time) *UsageRecordUpdateOne {
+	uruo.mutation.SetSyncedAt(t)
+	return uruo
+}
+
+// SetNillableSyncedAt sets the "synced_at" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableSyncedAt(t *time.Time) *UsageRecordUpdateOne {
+	if t != nil {
+		uruo.SetSyncedAt(*t)
+	}
+	return uruo
+}
+
+// ClearSyncedAt clears the value of the "synced_at" field.
+func (uruo *UsageRecordUpdateOne) ClearSyncedAt() *UsageRecordUpdateOne {
+	uruo.mutation.ClearSyncedAt()
+	return uruo
+}
+
+// SetMarketplaceReportID sets the "marketplace_report_id" field.
+func (uruo *UsageRecordUpdateOne) SetMarketplaceReportID(s string) *UsageRecordUpdateOne {
+	uruo.mutation.SetMarketplaceReportID(s)
+	return uruo
+}
+
+// SetNillableMarketplaceReportID sets the "marketplace_report_id" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableMarketplaceReportID(s *string) *UsageRecordUpdateOne {
+	if s != nil {
+		uruo.SetMarketplaceReportID(*s)
+	}
+	return uruo
+}
+
+// ClearMarketplaceReportID clears the value of the "marketplace_report_id" field.
+func (uruo *UsageRecordUpdateOne) ClearMarketplaceReportID() *UsageRecordUpdateOne {
+	uruo.mutation.ClearMarketplaceReportID()
 	return uruo
 }
 
@@ -736,14 +844,26 @@ func (uruo *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageReco
 	if value, ok := uruo.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := uruo.mutation.Syncs(); ok {
-		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
+	if value, ok := uruo.mutation.ConnectionID(); ok {
+		_spec.SetField(usagerecord.FieldConnectionID, field.TypeString, value)
 	}
-	if uruo.mutation.SyncsCleared() {
-		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
+	if uruo.mutation.ConnectionIDCleared() {
+		_spec.ClearField(usagerecord.FieldConnectionID, field.TypeString)
 	}
-	if value, ok := uruo.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
+	if value, ok := uruo.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+	}
+	if value, ok := uruo.mutation.SyncedAt(); ok {
+		_spec.SetField(usagerecord.FieldSyncedAt, field.TypeTime, value)
+	}
+	if uruo.mutation.SyncedAtCleared() {
+		_spec.ClearField(usagerecord.FieldSyncedAt, field.TypeTime)
+	}
+	if value, ok := uruo.mutation.MarketplaceReportID(); ok {
+		_spec.SetField(usagerecord.FieldMarketplaceReportID, field.TypeString, value)
+	}
+	if uruo.mutation.MarketplaceReportIDCleared() {
+		_spec.ClearField(usagerecord.FieldMarketplaceReportID, field.TypeString)
 	}
 	_node = &UsageRecord{config: uruo.config}
 	_spec.Assign = _node.assignValues

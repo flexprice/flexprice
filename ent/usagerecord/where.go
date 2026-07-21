@@ -145,9 +145,24 @@ func PeriodEnd(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
-// AllProvidersSynced applies equality check predicate on the "all_providers_synced" field. It's identical to AllProvidersSyncedEQ.
-func AllProvidersSynced(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
+// ConnectionID applies equality check predicate on the "connection_id" field. It's identical to ConnectionIDEQ.
+func ConnectionID(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldConnectionID, v))
+}
+
+// Synced applies equality check predicate on the "synced" field. It's identical to SyncedEQ.
+func Synced(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
+}
+
+// SyncedAt applies equality check predicate on the "synced_at" field. It's identical to SyncedAtEQ.
+func SyncedAt(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSyncedAt, v))
+}
+
+// MarketplaceReportID applies equality check predicate on the "marketplace_report_id" field. It's identical to MarketplaceReportIDEQ.
+func MarketplaceReportID(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldMarketplaceReportID, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1080,24 +1095,214 @@ func PeriodEndLTE(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldLTE(FieldPeriodEnd, v))
 }
 
-// SyncsIsNil applies the IsNil predicate on the "syncs" field.
-func SyncsIsNil() predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldIsNull(FieldSyncs))
+// ConnectionIDEQ applies the EQ predicate on the "connection_id" field.
+func ConnectionIDEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldConnectionID, v))
 }
 
-// SyncsNotNil applies the NotNil predicate on the "syncs" field.
-func SyncsNotNil() predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldNotNull(FieldSyncs))
+// ConnectionIDNEQ applies the NEQ predicate on the "connection_id" field.
+func ConnectionIDNEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldConnectionID, v))
 }
 
-// AllProvidersSyncedEQ applies the EQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
+// ConnectionIDIn applies the In predicate on the "connection_id" field.
+func ConnectionIDIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIn(FieldConnectionID, vs...))
 }
 
-// AllProvidersSyncedNEQ applies the NEQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedNEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldNEQ(FieldAllProvidersSynced, v))
+// ConnectionIDNotIn applies the NotIn predicate on the "connection_id" field.
+func ConnectionIDNotIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDGT applies the GT predicate on the "connection_id" field.
+func ConnectionIDGT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGT(FieldConnectionID, v))
+}
+
+// ConnectionIDGTE applies the GTE predicate on the "connection_id" field.
+func ConnectionIDGTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGTE(FieldConnectionID, v))
+}
+
+// ConnectionIDLT applies the LT predicate on the "connection_id" field.
+func ConnectionIDLT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLT(FieldConnectionID, v))
+}
+
+// ConnectionIDLTE applies the LTE predicate on the "connection_id" field.
+func ConnectionIDLTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLTE(FieldConnectionID, v))
+}
+
+// ConnectionIDContains applies the Contains predicate on the "connection_id" field.
+func ConnectionIDContains(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContains(FieldConnectionID, v))
+}
+
+// ConnectionIDHasPrefix applies the HasPrefix predicate on the "connection_id" field.
+func ConnectionIDHasPrefix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasPrefix(FieldConnectionID, v))
+}
+
+// ConnectionIDHasSuffix applies the HasSuffix predicate on the "connection_id" field.
+func ConnectionIDHasSuffix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasSuffix(FieldConnectionID, v))
+}
+
+// ConnectionIDIsNil applies the IsNil predicate on the "connection_id" field.
+func ConnectionIDIsNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIsNull(FieldConnectionID))
+}
+
+// ConnectionIDNotNil applies the NotNil predicate on the "connection_id" field.
+func ConnectionIDNotNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotNull(FieldConnectionID))
+}
+
+// ConnectionIDEqualFold applies the EqualFold predicate on the "connection_id" field.
+func ConnectionIDEqualFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEqualFold(FieldConnectionID, v))
+}
+
+// ConnectionIDContainsFold applies the ContainsFold predicate on the "connection_id" field.
+func ConnectionIDContainsFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContainsFold(FieldConnectionID, v))
+}
+
+// SyncedEQ applies the EQ predicate on the "synced" field.
+func SyncedEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
+}
+
+// SyncedNEQ applies the NEQ predicate on the "synced" field.
+func SyncedNEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldSynced, v))
+}
+
+// SyncedAtEQ applies the EQ predicate on the "synced_at" field.
+func SyncedAtEQ(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSyncedAt, v))
+}
+
+// SyncedAtNEQ applies the NEQ predicate on the "synced_at" field.
+func SyncedAtNEQ(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldSyncedAt, v))
+}
+
+// SyncedAtIn applies the In predicate on the "synced_at" field.
+func SyncedAtIn(vs ...time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIn(FieldSyncedAt, vs...))
+}
+
+// SyncedAtNotIn applies the NotIn predicate on the "synced_at" field.
+func SyncedAtNotIn(vs ...time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotIn(FieldSyncedAt, vs...))
+}
+
+// SyncedAtGT applies the GT predicate on the "synced_at" field.
+func SyncedAtGT(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGT(FieldSyncedAt, v))
+}
+
+// SyncedAtGTE applies the GTE predicate on the "synced_at" field.
+func SyncedAtGTE(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGTE(FieldSyncedAt, v))
+}
+
+// SyncedAtLT applies the LT predicate on the "synced_at" field.
+func SyncedAtLT(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLT(FieldSyncedAt, v))
+}
+
+// SyncedAtLTE applies the LTE predicate on the "synced_at" field.
+func SyncedAtLTE(v time.Time) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLTE(FieldSyncedAt, v))
+}
+
+// SyncedAtIsNil applies the IsNil predicate on the "synced_at" field.
+func SyncedAtIsNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIsNull(FieldSyncedAt))
+}
+
+// SyncedAtNotNil applies the NotNil predicate on the "synced_at" field.
+func SyncedAtNotNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotNull(FieldSyncedAt))
+}
+
+// MarketplaceReportIDEQ applies the EQ predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDNEQ applies the NEQ predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDNEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDIn applies the In predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIn(FieldMarketplaceReportID, vs...))
+}
+
+// MarketplaceReportIDNotIn applies the NotIn predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDNotIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotIn(FieldMarketplaceReportID, vs...))
+}
+
+// MarketplaceReportIDGT applies the GT predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDGT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGT(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDGTE applies the GTE predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDGTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGTE(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDLT applies the LT predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDLT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLT(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDLTE applies the LTE predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDLTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLTE(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDContains applies the Contains predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDContains(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContains(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDHasPrefix applies the HasPrefix predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDHasPrefix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasPrefix(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDHasSuffix applies the HasSuffix predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDHasSuffix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasSuffix(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDIsNil applies the IsNil predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDIsNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIsNull(FieldMarketplaceReportID))
+}
+
+// MarketplaceReportIDNotNil applies the NotNil predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDNotNil() predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotNull(FieldMarketplaceReportID))
+}
+
+// MarketplaceReportIDEqualFold applies the EqualFold predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDEqualFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEqualFold(FieldMarketplaceReportID, v))
+}
+
+// MarketplaceReportIDContainsFold applies the ContainsFold predicate on the "marketplace_report_id" field.
+func MarketplaceReportIDContainsFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContainsFold(FieldMarketplaceReportID, v))
 }
 
 // And groups predicates with the AND operator between them.

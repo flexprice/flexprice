@@ -72039,31 +72039,33 @@ func (m *TenantMutation) ResetEdge(name string) error {
 // UsageRecordMutation represents an operation that mutates the UsageRecord nodes in the graph.
 type UsageRecordMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *string
-	tenant_id            *string
-	status               *string
-	created_at           *time.Time
-	updated_at           *time.Time
-	created_by           *string
-	updated_by           *string
-	environment_id       *string
-	customer_id          *string
-	customer_external_id *string
-	subscription_id      *string
-	plan_id              *string
-	quantity             *decimal.Decimal
-	amount               *decimal.Decimal
-	currency             *string
-	period_start         *time.Time
-	period_end           *time.Time
-	syncs                *map[string]interface{}
-	all_providers_synced *bool
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*UsageRecord, error)
-	predicates           []predicate.UsageRecord
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	customer_id           *string
+	customer_external_id  *string
+	subscription_id       *string
+	plan_id               *string
+	quantity              *decimal.Decimal
+	amount                *decimal.Decimal
+	currency              *string
+	period_start          *time.Time
+	period_end            *time.Time
+	connection_id         *string
+	synced                *bool
+	synced_at             *time.Time
+	marketplace_report_id *string
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*UsageRecord, error)
+	predicates            []predicate.UsageRecord
 }
 
 var _ ent.Mutation = (*UsageRecordMutation)(nil)
@@ -72798,89 +72800,187 @@ func (m *UsageRecordMutation) ResetPeriodEnd() {
 	m.period_end = nil
 }
 
-// SetSyncs sets the "syncs" field.
-func (m *UsageRecordMutation) SetSyncs(value map[string]interface{}) {
-	m.syncs = &value
+// SetConnectionID sets the "connection_id" field.
+func (m *UsageRecordMutation) SetConnectionID(s string) {
+	m.connection_id = &s
 }
 
-// Syncs returns the value of the "syncs" field in the mutation.
-func (m *UsageRecordMutation) Syncs() (r map[string]interface{}, exists bool) {
-	v := m.syncs
+// ConnectionID returns the value of the "connection_id" field in the mutation.
+func (m *UsageRecordMutation) ConnectionID() (r string, exists bool) {
+	v := m.connection_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSyncs returns the old "syncs" field's value of the UsageRecord entity.
+// OldConnectionID returns the old "connection_id" field's value of the UsageRecord entity.
 // If the UsageRecord object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageRecordMutation) OldSyncs(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *UsageRecordMutation) OldConnectionID(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSyncs is only allowed on UpdateOne operations")
+		return v, errors.New("OldConnectionID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSyncs requires an ID field in the mutation")
+		return v, errors.New("OldConnectionID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSyncs: %w", err)
+		return v, fmt.Errorf("querying old value for OldConnectionID: %w", err)
 	}
-	return oldValue.Syncs, nil
+	return oldValue.ConnectionID, nil
 }
 
-// ClearSyncs clears the value of the "syncs" field.
-func (m *UsageRecordMutation) ClearSyncs() {
-	m.syncs = nil
-	m.clearedFields[usagerecord.FieldSyncs] = struct{}{}
+// ClearConnectionID clears the value of the "connection_id" field.
+func (m *UsageRecordMutation) ClearConnectionID() {
+	m.connection_id = nil
+	m.clearedFields[usagerecord.FieldConnectionID] = struct{}{}
 }
 
-// SyncsCleared returns if the "syncs" field was cleared in this mutation.
-func (m *UsageRecordMutation) SyncsCleared() bool {
-	_, ok := m.clearedFields[usagerecord.FieldSyncs]
+// ConnectionIDCleared returns if the "connection_id" field was cleared in this mutation.
+func (m *UsageRecordMutation) ConnectionIDCleared() bool {
+	_, ok := m.clearedFields[usagerecord.FieldConnectionID]
 	return ok
 }
 
-// ResetSyncs resets all changes to the "syncs" field.
-func (m *UsageRecordMutation) ResetSyncs() {
-	m.syncs = nil
-	delete(m.clearedFields, usagerecord.FieldSyncs)
+// ResetConnectionID resets all changes to the "connection_id" field.
+func (m *UsageRecordMutation) ResetConnectionID() {
+	m.connection_id = nil
+	delete(m.clearedFields, usagerecord.FieldConnectionID)
 }
 
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (m *UsageRecordMutation) SetAllProvidersSynced(b bool) {
-	m.all_providers_synced = &b
+// SetSynced sets the "synced" field.
+func (m *UsageRecordMutation) SetSynced(b bool) {
+	m.synced = &b
 }
 
-// AllProvidersSynced returns the value of the "all_providers_synced" field in the mutation.
-func (m *UsageRecordMutation) AllProvidersSynced() (r bool, exists bool) {
-	v := m.all_providers_synced
+// Synced returns the value of the "synced" field in the mutation.
+func (m *UsageRecordMutation) Synced() (r bool, exists bool) {
+	v := m.synced
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAllProvidersSynced returns the old "all_providers_synced" field's value of the UsageRecord entity.
+// OldSynced returns the old "synced" field's value of the UsageRecord entity.
 // If the UsageRecord object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageRecordMutation) OldAllProvidersSynced(ctx context.Context) (v bool, err error) {
+func (m *UsageRecordMutation) OldSynced(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAllProvidersSynced is only allowed on UpdateOne operations")
+		return v, errors.New("OldSynced is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAllProvidersSynced requires an ID field in the mutation")
+		return v, errors.New("OldSynced requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAllProvidersSynced: %w", err)
+		return v, fmt.Errorf("querying old value for OldSynced: %w", err)
 	}
-	return oldValue.AllProvidersSynced, nil
+	return oldValue.Synced, nil
 }
 
-// ResetAllProvidersSynced resets all changes to the "all_providers_synced" field.
-func (m *UsageRecordMutation) ResetAllProvidersSynced() {
-	m.all_providers_synced = nil
+// ResetSynced resets all changes to the "synced" field.
+func (m *UsageRecordMutation) ResetSynced() {
+	m.synced = nil
+}
+
+// SetSyncedAt sets the "synced_at" field.
+func (m *UsageRecordMutation) SetSyncedAt(t time.Time) {
+	m.synced_at = &t
+}
+
+// SyncedAt returns the value of the "synced_at" field in the mutation.
+func (m *UsageRecordMutation) SyncedAt() (r time.Time, exists bool) {
+	v := m.synced_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncedAt returns the old "synced_at" field's value of the UsageRecord entity.
+// If the UsageRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageRecordMutation) OldSyncedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedAt: %w", err)
+	}
+	return oldValue.SyncedAt, nil
+}
+
+// ClearSyncedAt clears the value of the "synced_at" field.
+func (m *UsageRecordMutation) ClearSyncedAt() {
+	m.synced_at = nil
+	m.clearedFields[usagerecord.FieldSyncedAt] = struct{}{}
+}
+
+// SyncedAtCleared returns if the "synced_at" field was cleared in this mutation.
+func (m *UsageRecordMutation) SyncedAtCleared() bool {
+	_, ok := m.clearedFields[usagerecord.FieldSyncedAt]
+	return ok
+}
+
+// ResetSyncedAt resets all changes to the "synced_at" field.
+func (m *UsageRecordMutation) ResetSyncedAt() {
+	m.synced_at = nil
+	delete(m.clearedFields, usagerecord.FieldSyncedAt)
+}
+
+// SetMarketplaceReportID sets the "marketplace_report_id" field.
+func (m *UsageRecordMutation) SetMarketplaceReportID(s string) {
+	m.marketplace_report_id = &s
+}
+
+// MarketplaceReportID returns the value of the "marketplace_report_id" field in the mutation.
+func (m *UsageRecordMutation) MarketplaceReportID() (r string, exists bool) {
+	v := m.marketplace_report_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMarketplaceReportID returns the old "marketplace_report_id" field's value of the UsageRecord entity.
+// If the UsageRecord object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageRecordMutation) OldMarketplaceReportID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMarketplaceReportID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMarketplaceReportID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMarketplaceReportID: %w", err)
+	}
+	return oldValue.MarketplaceReportID, nil
+}
+
+// ClearMarketplaceReportID clears the value of the "marketplace_report_id" field.
+func (m *UsageRecordMutation) ClearMarketplaceReportID() {
+	m.marketplace_report_id = nil
+	m.clearedFields[usagerecord.FieldMarketplaceReportID] = struct{}{}
+}
+
+// MarketplaceReportIDCleared returns if the "marketplace_report_id" field was cleared in this mutation.
+func (m *UsageRecordMutation) MarketplaceReportIDCleared() bool {
+	_, ok := m.clearedFields[usagerecord.FieldMarketplaceReportID]
+	return ok
+}
+
+// ResetMarketplaceReportID resets all changes to the "marketplace_report_id" field.
+func (m *UsageRecordMutation) ResetMarketplaceReportID() {
+	m.marketplace_report_id = nil
+	delete(m.clearedFields, usagerecord.FieldMarketplaceReportID)
 }
 
 // Where appends a list predicates to the UsageRecordMutation builder.
@@ -72917,7 +73017,7 @@ func (m *UsageRecordMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageRecordMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, usagerecord.FieldTenantID)
 	}
@@ -72966,11 +73066,17 @@ func (m *UsageRecordMutation) Fields() []string {
 	if m.period_end != nil {
 		fields = append(fields, usagerecord.FieldPeriodEnd)
 	}
-	if m.syncs != nil {
-		fields = append(fields, usagerecord.FieldSyncs)
+	if m.connection_id != nil {
+		fields = append(fields, usagerecord.FieldConnectionID)
 	}
-	if m.all_providers_synced != nil {
-		fields = append(fields, usagerecord.FieldAllProvidersSynced)
+	if m.synced != nil {
+		fields = append(fields, usagerecord.FieldSynced)
+	}
+	if m.synced_at != nil {
+		fields = append(fields, usagerecord.FieldSyncedAt)
+	}
+	if m.marketplace_report_id != nil {
+		fields = append(fields, usagerecord.FieldMarketplaceReportID)
 	}
 	return fields
 }
@@ -73012,10 +73118,14 @@ func (m *UsageRecordMutation) Field(name string) (ent.Value, bool) {
 		return m.PeriodStart()
 	case usagerecord.FieldPeriodEnd:
 		return m.PeriodEnd()
-	case usagerecord.FieldSyncs:
-		return m.Syncs()
-	case usagerecord.FieldAllProvidersSynced:
-		return m.AllProvidersSynced()
+	case usagerecord.FieldConnectionID:
+		return m.ConnectionID()
+	case usagerecord.FieldSynced:
+		return m.Synced()
+	case usagerecord.FieldSyncedAt:
+		return m.SyncedAt()
+	case usagerecord.FieldMarketplaceReportID:
+		return m.MarketplaceReportID()
 	}
 	return nil, false
 }
@@ -73057,10 +73167,14 @@ func (m *UsageRecordMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPeriodStart(ctx)
 	case usagerecord.FieldPeriodEnd:
 		return m.OldPeriodEnd(ctx)
-	case usagerecord.FieldSyncs:
-		return m.OldSyncs(ctx)
-	case usagerecord.FieldAllProvidersSynced:
-		return m.OldAllProvidersSynced(ctx)
+	case usagerecord.FieldConnectionID:
+		return m.OldConnectionID(ctx)
+	case usagerecord.FieldSynced:
+		return m.OldSynced(ctx)
+	case usagerecord.FieldSyncedAt:
+		return m.OldSyncedAt(ctx)
+	case usagerecord.FieldMarketplaceReportID:
+		return m.OldMarketplaceReportID(ctx)
 	}
 	return nil, fmt.Errorf("unknown UsageRecord field %s", name)
 }
@@ -73182,19 +73296,33 @@ func (m *UsageRecordMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPeriodEnd(v)
 		return nil
-	case usagerecord.FieldSyncs:
-		v, ok := value.(map[string]interface{})
+	case usagerecord.FieldConnectionID:
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSyncs(v)
+		m.SetConnectionID(v)
 		return nil
-	case usagerecord.FieldAllProvidersSynced:
+	case usagerecord.FieldSynced:
 		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAllProvidersSynced(v)
+		m.SetSynced(v)
+		return nil
+	case usagerecord.FieldSyncedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedAt(v)
+		return nil
+	case usagerecord.FieldMarketplaceReportID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMarketplaceReportID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UsageRecord field %s", name)
@@ -73238,8 +73366,14 @@ func (m *UsageRecordMutation) ClearedFields() []string {
 	if m.FieldCleared(usagerecord.FieldCustomerExternalID) {
 		fields = append(fields, usagerecord.FieldCustomerExternalID)
 	}
-	if m.FieldCleared(usagerecord.FieldSyncs) {
-		fields = append(fields, usagerecord.FieldSyncs)
+	if m.FieldCleared(usagerecord.FieldConnectionID) {
+		fields = append(fields, usagerecord.FieldConnectionID)
+	}
+	if m.FieldCleared(usagerecord.FieldSyncedAt) {
+		fields = append(fields, usagerecord.FieldSyncedAt)
+	}
+	if m.FieldCleared(usagerecord.FieldMarketplaceReportID) {
+		fields = append(fields, usagerecord.FieldMarketplaceReportID)
 	}
 	return fields
 }
@@ -73267,8 +73401,14 @@ func (m *UsageRecordMutation) ClearField(name string) error {
 	case usagerecord.FieldCustomerExternalID:
 		m.ClearCustomerExternalID()
 		return nil
-	case usagerecord.FieldSyncs:
-		m.ClearSyncs()
+	case usagerecord.FieldConnectionID:
+		m.ClearConnectionID()
+		return nil
+	case usagerecord.FieldSyncedAt:
+		m.ClearSyncedAt()
+		return nil
+	case usagerecord.FieldMarketplaceReportID:
+		m.ClearMarketplaceReportID()
 		return nil
 	}
 	return fmt.Errorf("unknown UsageRecord nullable field %s", name)
@@ -73326,11 +73466,17 @@ func (m *UsageRecordMutation) ResetField(name string) error {
 	case usagerecord.FieldPeriodEnd:
 		m.ResetPeriodEnd()
 		return nil
-	case usagerecord.FieldSyncs:
-		m.ResetSyncs()
+	case usagerecord.FieldConnectionID:
+		m.ResetConnectionID()
 		return nil
-	case usagerecord.FieldAllProvidersSynced:
-		m.ResetAllProvidersSynced()
+	case usagerecord.FieldSynced:
+		m.ResetSynced()
+		return nil
+	case usagerecord.FieldSyncedAt:
+		m.ResetSyncedAt()
+		return nil
+	case usagerecord.FieldMarketplaceReportID:
+		m.ResetMarketplaceReportID()
 		return nil
 	}
 	return fmt.Errorf("unknown UsageRecord field %s", name)

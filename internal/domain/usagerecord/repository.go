@@ -16,10 +16,12 @@ type Repository interface {
 	// subscription was already processed by an earlier attempt.
 	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error)
 
-	// ListUnsynced returns the tenant/environment's usage records that are not yet fully synced.
-	ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*UsageRecord, error)
+	// ListUnsyncedByConnection returns one connection's usage records that have not yet been reported.
+	ListUnsyncedByConnection(ctx context.Context, tenantID, environmentID, connectionID string) ([]*UsageRecord, error)
 
-	// UpdateSyncResult records a marketplace's sync outcome on a usage record and sets whether the
-	// record is now synced to every marketplace.
-	UpdateSyncResult(ctx context.Context, id string, marketplace Marketplace, entry MarketplaceSyncEntry, allProvidersSynced bool) error
+	// MarkSynced records that a usage record was successfully reported: sets synced=true, stamps
+	// synced_at, and stores the marketplace's report identifier (AWS's MeteringRecordId, or GCP's
+	// operationId — which is always the record's own id, since GCP's services.report returns no
+	// per-record receipt of its own).
+	MarkSynced(ctx context.Context, id string, marketplaceReportID string) error
 }

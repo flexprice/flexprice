@@ -62,11 +62,12 @@ func (s *InMemoryUsageRecordStore) ExistsForPeriod(ctx context.Context, subscrip
 	return len(items) > 0, nil
 }
 
-func (s *InMemoryUsageRecordStore) ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*usagerecord.UsageRecord, error) {
+func (s *InMemoryUsageRecordStore) ListUnsyncedByConnection(ctx context.Context, tenantID, environmentID, connectionID string) ([]*usagerecord.UsageRecord, error) {
 	filterFn := func(_ context.Context, r *usagerecord.UsageRecord, _ interface{}) bool {
 		return r.TenantID == tenantID &&
 			r.EnvironmentID == environmentID &&
-			!r.AllProvidersSynced &&
+			r.ConnectionID == connectionID &&
+			!r.Synced &&
 			r.Status == types.StatusPublished
 	}
 	items, err := s.store.List(ctx, nil, filterFn, nil)
@@ -80,25 +81,18 @@ func (s *InMemoryUsageRecordStore) ListUnsynced(ctx context.Context, tenantID, e
 	return result, nil
 }
 
-func (s *InMemoryUsageRecordStore) UpdateSyncResult(
-	ctx context.Context,
-	id string,
-	marketplace usagerecord.Marketplace,
-	entry usagerecord.MarketplaceSyncEntry,
-	allProvidersSynced bool,
-) error {
+func (s *InMemoryUsageRecordStore) MarkSynced(ctx context.Context, id string, marketplaceReportID string) error {
 	existing, err := s.store.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	updated := copyUsageRecord(existing)
-	if updated.Syncs == nil {
-		updated.Syncs = make(map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry)
-	}
-	updated.Syncs[marketplace] = entry
-	updated.AllProvidersSynced = allProvidersSynced
-	updated.UpdatedAt = time.Now().UTC()
+	updated.Synced = true
+	syncedAt := time.Now().UTC()
+	updated.SyncedAt = &syncedAt
+	updated.MarketplaceReportID = marketplaceReportID
+	updated.UpdatedAt = syncedAt
 
 	return s.store.Update(ctx, id, updated)
 }
@@ -111,24 +105,27 @@ func copyUsageRecord(r *usagerecord.UsageRecord) *usagerecord.UsageRecord {
 	if r == nil {
 		return nil
 	}
-	syncs := make(map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry, len(r.Syncs))
-	for k, v := range r.Syncs {
-		syncs[k] = v
+	var syncedAt *time.Time
+	if r.SyncedAt != nil {
+		t := *r.SyncedAt
+		syncedAt = &t
 	}
 	return &usagerecord.UsageRecord{
-		ID:                 r.ID,
-		CustomerID:         r.CustomerID,
-		CustomerExternalID: r.CustomerExternalID,
-		SubscriptionID:     r.SubscriptionID,
-		PlanID:             r.PlanID,
-		Quantity:           r.Quantity,
-		Amount:             r.Amount,
-		Currency:           r.Currency,
-		PeriodStart:        r.PeriodStart,
-		PeriodEnd:          r.PeriodEnd,
-		Syncs:              syncs,
-		AllProvidersSynced: r.AllProvidersSynced,
-		EnvironmentID:      r.EnvironmentID,
+		ID:                  r.ID,
+		CustomerID:          r.CustomerID,
+		CustomerExternalID:  r.CustomerExternalID,
+		SubscriptionID:      r.SubscriptionID,
+		PlanID:              r.PlanID,
+		Quantity:            r.Quantity,
+		Amount:              r.Amount,
+		Currency:            r.Currency,
+		PeriodStart:         r.PeriodStart,
+		PeriodEnd:           r.PeriodEnd,
+		ConnectionID:        r.ConnectionID,
+		Synced:              r.Synced,
+		SyncedAt:            syncedAt,
+		MarketplaceReportID: r.MarketplaceReportID,
+		EnvironmentID:       r.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  r.TenantID,
 			Status:    r.Status,

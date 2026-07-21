@@ -62,8 +62,10 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 		SetCurrency(rec.Currency).
 		SetPeriodStart(rec.PeriodStart).
 		SetPeriodEnd(rec.PeriodEnd).
-		SetSyncs(domainUsageRecord.SyncsToMap(rec.Syncs)).
-		SetAllProvidersSynced(rec.AllProvidersSynced).
+		SetConnectionID(rec.ConnectionID).
+		SetSynced(rec.Synced).
+		SetNillableSyncedAt(rec.SyncedAt).
+		SetMarketplaceReportID(rec.MarketplaceReportID).
 		SetStatus(string(rec.Status)).
 		SetCreatedAt(rec.CreatedAt).
 		SetUpdatedAt(rec.UpdatedAt).
@@ -125,12 +127,13 @@ func (r *usageRecordRepository) ExistsForPeriod(ctx context.Context, subscriptio
 	return exists, nil
 }
 
-func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*domainUsageRecord.UsageRecord, error) {
+func (r *usageRecordRepository) ListUnsyncedByConnection(ctx context.Context, tenantID, environmentID, connectionID string) ([]*domainUsageRecord.UsageRecord, error) {
 	client := r.client.Reader(ctx)
 
-	span := StartRepositorySpan(ctx, "usage_record", "list_unsynced", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "usage_record", "list_unsynced_by_connection", map[string]interface{}{
 		"tenant_id":      tenantID,
 		"environment_id": environmentID,
+		"connection_id":  connectionID,
 	})
 	defer FinishSpan(span)
 
@@ -138,7 +141,8 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 		Where(
 			usagerecord.TenantID(tenantID),
 			usagerecord.EnvironmentID(environmentID),
-			usagerecord.AllProvidersSynced(false),
+			usagerecord.ConnectionID(connectionID),
+			usagerecord.Synced(false),
 			usagerecord.StatusEQ(string(types.StatusPublished)),
 		).
 		All(ctx)
@@ -154,86 +158,40 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 	return domainUsageRecord.FromEntList(records), nil
 }
 
-// maxSyncResultRetries bounds the optimistic-locking retry loop in UpdateSyncResult. Syncs holds
-// one entry per marketplace and today only AWS reports, so real contention on a single row is rare;
-// this only guards against genuinely concurrent writers (e.g. an overlapping manual run) rather than
-// expected load.
-const maxSyncResultRetries = 5
-
-// UpdateSyncResult merges a marketplace's sync outcome into the record's Syncs map. This is a
-// read-modify-write on a JSON column, so it uses optimistic locking (UpdatedAtEQ as the version
-// check) with a bounded retry: if another writer updated the row between the read and the write,
-// the row count comes back 0, and the read+merge+write is retried against the new row instead of
-// silently overwriting the other writer's change and losing it.
-func (r *usageRecordRepository) UpdateSyncResult(
-	ctx context.Context,
-	id string,
-	marketplace domainUsageRecord.Marketplace,
-	entry domainUsageRecord.MarketplaceSyncEntry,
-	allProvidersSynced bool,
-) error {
+// MarkSynced flips synced=true on a single flat write. Unlike the old JSON-map merge this replaces,
+// this needs no optimistic-locking retry loop: each row is only ever written by the one reporting
+// run that owns it, so there is no concurrent-writer/lost-update risk to guard against.
+func (r *usageRecordRepository) MarkSynced(ctx context.Context, id string, marketplaceReportID string) error {
 	client := r.client.Writer(ctx)
 
-	span := StartRepositorySpan(ctx, "usage_record", "update_sync_result", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "usage_record", "mark_synced", map[string]interface{}{
 		"usage_record_id": id,
-		"marketplace":     marketplace,
 	})
 	defer FinishSpan(span)
 
-	for attempt := 0; attempt < maxSyncResultRetries; attempt++ {
-		existing, err := client.UsageRecord.Query().
-			Where(
-				usagerecord.ID(id),
-				usagerecord.TenantID(types.GetTenantID(ctx)),
-				usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
-			).
-			Only(ctx)
-		if err != nil {
-			SetSpanError(span, err)
-			if ent.IsNotFound(err) {
-				return ierr.WithError(err).
-					WithHintf("Usage record with ID %s was not found", id).
-					Mark(ierr.ErrNotFound)
-			}
-			return ierr.WithError(err).
-				WithHint("Failed to get usage record for sync update").
-				Mark(ierr.ErrDatabase)
-		}
+	affected, err := client.UsageRecord.Update().
+		Where(
+			usagerecord.ID(id),
+			usagerecord.TenantID(types.GetTenantID(ctx)),
+			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		SetSynced(true).
+		SetSyncedAt(time.Now().UTC()).
+		SetMarketplaceReportID(marketplaceReportID).
+		Save(ctx)
 
-		syncs := domainUsageRecord.FromEnt(existing).Syncs
-		if syncs == nil {
-			syncs = make(map[domainUsageRecord.Marketplace]domainUsageRecord.MarketplaceSyncEntry)
-		}
-		syncs[marketplace] = entry
-
-		affected, err := client.UsageRecord.Update().
-			Where(
-				usagerecord.ID(id),
-				usagerecord.TenantID(types.GetTenantID(ctx)),
-				usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
-				usagerecord.UpdatedAtEQ(existing.UpdatedAt),
-			).
-			SetSyncs(domainUsageRecord.SyncsToMap(syncs)).
-			SetAllProvidersSynced(allProvidersSynced).
-			SetUpdatedAt(time.Now().UTC()).
-			Save(ctx)
-
-		if err != nil {
-			SetSpanError(span, err)
-			return ierr.WithError(err).
-				WithHint("Failed to update usage record sync result").
-				Mark(ierr.ErrDatabase)
-		}
-		if affected == 0 {
-			// The row changed between the read and the write; retry against the new version.
-			continue
-		}
-
-		SetSpanSuccess(span)
-		return nil
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to mark usage record as synced").
+			Mark(ierr.ErrDatabase)
+	}
+	if affected == 0 {
+		return ierr.NewErrorf("usage record %s was not found", id).
+			WithHintf("Usage record with ID %s was not found", id).
+			Mark(ierr.ErrNotFound)
 	}
 
-	return ierr.NewErrorf("usage record %s was concurrently modified too many times", id).
-		WithHint("Another process kept updating this usage record's sync status. It will be retried on the next run.").
-		Mark(ierr.ErrVersionConflict)
+	SetSpanSuccess(span)
+	return nil
 }

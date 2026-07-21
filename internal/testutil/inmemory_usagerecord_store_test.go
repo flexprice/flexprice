@@ -29,7 +29,8 @@ func TestInMemoryUsageRecordStore(t *testing.T) {
 		Currency:       "usd",
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
-		Syncs:          map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry{},
+		ConnectionID:   "conn_1",
+		Synced:         false,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 
@@ -48,24 +49,22 @@ func TestInMemoryUsageRecordStore(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, notExists)
 
-	// ListUnsynced
-	unsynced, err := store.ListUnsynced(ctx, "tenant_1", "env_1")
+	// ListUnsyncedByConnection
+	unsynced, err := store.ListUnsyncedByConnection(ctx, "tenant_1", "env_1", "conn_1")
 	require.NoError(t, err)
 	require.Len(t, unsynced, 1)
 	require.Equal(t, "ur_1", unsynced[0].ID)
 
-	// UpdateSyncResult
-	err = store.UpdateSyncResult(ctx, "ur_1", usagerecord.MarketplaceAWS, usagerecord.MarketplaceSyncEntry{
-		ConnectionID: "conn_1",
-	}, true)
+	// MarkSynced
+	err = store.MarkSynced(ctx, "ur_1", "marketplace-report-1")
 	require.NoError(t, err)
 
-	unsynced, err = store.ListUnsynced(ctx, "tenant_1", "env_1")
+	unsynced, err = store.ListUnsyncedByConnection(ctx, "tenant_1", "env_1", "conn_1")
 	require.NoError(t, err)
 	require.Len(t, unsynced, 0, "record should no longer be unsynced")
 
 	store.Clear()
-	unsynced, err = store.ListUnsynced(ctx, "tenant_1", "env_1")
+	unsynced, err = store.ListUnsyncedByConnection(ctx, "tenant_1", "env_1", "conn_1")
 	require.NoError(t, err)
 	require.Len(t, unsynced, 0)
 }

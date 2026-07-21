@@ -46,10 +46,14 @@ const (
 	FieldPeriodStart = "period_start"
 	// FieldPeriodEnd holds the string denoting the period_end field in the database.
 	FieldPeriodEnd = "period_end"
-	// FieldSyncs holds the string denoting the syncs field in the database.
-	FieldSyncs = "syncs"
-	// FieldAllProvidersSynced holds the string denoting the all_providers_synced field in the database.
-	FieldAllProvidersSynced = "all_providers_synced"
+	// FieldConnectionID holds the string denoting the connection_id field in the database.
+	FieldConnectionID = "connection_id"
+	// FieldSynced holds the string denoting the synced field in the database.
+	FieldSynced = "synced"
+	// FieldSyncedAt holds the string denoting the synced_at field in the database.
+	FieldSyncedAt = "synced_at"
+	// FieldMarketplaceReportID holds the string denoting the marketplace_report_id field in the database.
+	FieldMarketplaceReportID = "marketplace_report_id"
 	// Table holds the table name of the usagerecord in the database.
 	Table = "usage_records"
 )
@@ -73,8 +77,10 @@ var Columns = []string{
 	FieldCurrency,
 	FieldPeriodStart,
 	FieldPeriodEnd,
-	FieldSyncs,
-	FieldAllProvidersSynced,
+	FieldConnectionID,
+	FieldSynced,
+	FieldSyncedAt,
+	FieldMarketplaceReportID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -112,8 +118,8 @@ var (
 	DefaultAmount decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
-	// DefaultAllProvidersSynced holds the default value on creation for the "all_providers_synced" field.
-	DefaultAllProvidersSynced bool
+	// DefaultSynced holds the default value on creation for the "synced" field.
+	DefaultSynced bool
 )
 
 // OrderOption defines the ordering options for the UsageRecord queries.
@@ -204,7 +210,22 @@ func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
-// ByAllProvidersSynced orders the results by the all_providers_synced field.
-func ByAllProvidersSynced(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAllProvidersSynced, opts...).ToFunc()
+// ByConnectionID orders the results by the connection_id field.
+func ByConnectionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConnectionID, opts...).ToFunc()
+}
+
+// BySynced orders the results by the synced field.
+func BySynced(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSynced, opts...).ToFunc()
+}
+
+// BySyncedAt orders the results by the synced_at field.
+func BySyncedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSyncedAt, opts...).ToFunc()
+}
+
+// ByMarketplaceReportID orders the results by the marketplace_report_id field.
+func ByMarketplaceReportID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMarketplaceReportID, opts...).ToFunc()
 }
