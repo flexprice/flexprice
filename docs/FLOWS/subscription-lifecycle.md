@@ -12,7 +12,7 @@
 2. **Entitlement derivation** aligns feature access snapshots against plan + addon overlays (`EntitlementService` synergy).
 3. **Trial / paused / resumed** nuances encoded in specialized types (`types/pause_mode.go`, subscription schema mixins).
 4. **Renewal ticks** orchestrated primarily through Temporal workflows & schedules — HTTP cron endpoints exist but are secondary helpers.
-5. **Amendments** route through layered services (change vs modification vs schedules) emphasizing non-breaking migration of billing anchors.
+5. **Amendments** route through layered services (change vs modification vs schedules) emphasizing non-breaking migration of billing anchors. Mid-cycle ops use `POST /subscriptions/:id/modify/{preview,execute}` (`SubscriptionModificationService`), including `type: end_date` to extend a fixed-term subscription (and matching line items / credit grants) without recreate.
 6. **Cancellation & dunning semantics** interplay with alerting (`alert_logs`) and wallets where credits applied.
 
 Dominant hotspot: **`internal/ee/service/subscription.go`** (multi-thousand-line orchestrator—see hotspots doc).

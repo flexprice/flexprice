@@ -117,7 +117,7 @@ func (s *InMemorySubscriptionScheduleStore) GetPendingBySubscriptionAndType(ctx 
 	defer s.mu.RUnlock()
 	schedules, exists := s.schedulesBySubscription[subscriptionID]
 	if !exists {
-		return nil, ierr.NewError("subscription schedule not found").Mark(ierr.ErrNotFound)
+		return nil, nil // No pending schedule found is not an error (matches Ent repo)
 	}
 
 	for _, schedule := range schedules {
@@ -127,7 +127,7 @@ func (s *InMemorySubscriptionScheduleStore) GetPendingBySubscriptionAndType(ctx 
 		}
 	}
 
-	return nil, ierr.NewError("subscription schedule not found").Mark(ierr.ErrNotFound)
+	return nil, nil // No pending schedule found is not an error (matches Ent repo)
 }
 
 // List retrieves schedules with filters

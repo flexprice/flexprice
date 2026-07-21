@@ -29,7 +29,7 @@ func NewSubscriptionModificationHandler(
 
 // @Summary Execute subscription modification
 // @ID executeSubscriptionModify
-// @Description Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax).
+// @Description Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or end date).
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -71,7 +71,7 @@ func (h *SubscriptionModificationHandler) Execute(c *gin.Context) {
 
 // @Summary Preview subscription modification
 // @ID previewSubscriptionModify
-// @Description Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax) without committing changes.
+// @Description Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or end date) without committing changes.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
