@@ -2242,12 +2242,15 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"unique_plan_count", len(uniquePlanIDs),
 		"plan_ids", uniquePlanIDs)
 
-	// Get plans in bulk. Skip when there are no subscription plan IDs to look up —
-	// otherwise the repo's `if len(PlanIDs) > 0` guard would treat the empty slice as
-	// "no filter" and load every plan in the tenant/env unpaginated.
-	if len(uniquePlanIDs) > 0 {
+	// Get plans in bulk. Drop empty plan IDs (subs with plan_id="" still land as an ""
+	// key in planIDMap above) and skip the fetch entirely when none remain — otherwise
+	// the repo's `if len(PlanIDs) > 0` guard would treat an empty slice as "no filter"
+	// and load every plan in the tenant/env unpaginated. A `[""]` slice would instead
+	// fire a wasted `WHERE id IN ('')` query.
+	validPlanIDs := lo.Compact(uniquePlanIDs)
+	if len(validPlanIDs) > 0 {
 		planFilter := types.NewNoLimitPlanFilter()
-		planFilter.PlanIDs = uniquePlanIDs
+		planFilter.PlanIDs = validPlanIDs
 		if filter != nil && filter.Expand != nil {
 			s.Logger.Debug(ctx, "passing expand filters to plan service", "expand", filter.Expand)
 			planFilter.Expand = filter.Expand // pass on the filters to next layer
@@ -2258,7 +2261,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 			s.Logger.Error(ctx, "failed to get plans from plan service",
 				"error", err,
 				"plan_filter", planFilter,
-				"plan_ids", uniquePlanIDs)
+				"plan_ids", validPlanIDs)
 			return nil, err
 		}
 
@@ -2288,21 +2291,23 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 			"unique_customer_count", len(uniqueCustomerIDs),
 			"customer_ids", uniqueCustomerIDs)
 
-		// Get customers in bulk. Skip when there are no subscription customer IDs — the
-		// customer repo's `if len(CustomerIDs) > 0` guard would otherwise treat the empty
-		// slice as "no filter" and, combined with NewNoLimitCustomerFilter, load every
-		// customer in the tenant/env (the ~20s stall on empty-subs pages with millions of customers).
-		if len(uniqueCustomerIDs) > 0 {
+		// Get customers in bulk. Drop empty customer IDs (subs with customer_id="" still
+		// land as an "" key in customerIDMap above) and skip the fetch entirely when none
+		// remain — the customer repo's `if len(CustomerIDs) > 0` guard would otherwise
+		// treat an empty slice as "no filter" and, combined with NewNoLimitCustomerFilter,
+		// load every customer in the tenant/env.
+		validCustomerIDs := lo.Compact(uniqueCustomerIDs)
+		if len(validCustomerIDs) > 0 {
 			customerService := NewCustomerService(s.ServiceParams)
 			customerFilter := types.NewNoLimitCustomerFilter()
-			customerFilter.CustomerIDs = uniqueCustomerIDs
+			customerFilter.CustomerIDs = validCustomerIDs
 
 			customerResponse, err := customerService.GetCustomers(ctx, customerFilter)
 			if err != nil {
 				s.Logger.Error(ctx, "failed to get customers from customer service",
 					"error", err,
 					"customer_filter", customerFilter,
-					"customer_ids", uniqueCustomerIDs)
+					"customer_ids", validCustomerIDs)
 				return nil, err
 			}
 
