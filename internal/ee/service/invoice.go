@@ -74,6 +74,10 @@ type InvoiceService interface {
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
+
+	// RecalculateTaxesOnInvoice applies subscription auto-apply taxes and updates
+	// total_tax / total / amount_due. Idempotent via tax-applied records.
+	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) error
 }
 
 type invoiceService struct {

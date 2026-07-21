@@ -370,7 +370,17 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
-	// Re-fetch after compute so invoice amounts are populated on the returned struct.
+	// Apply subscription taxes so AmountDue includes tax before payment link creation.
+	// FinalizeInvoice will recalculate taxes idempotently (safe if credits adjust the base).
+	inv, err := s.InvoiceRepo.Get(ctx, invResp.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := invSvc.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
+		return nil, nil, err
+	}
+
+	// Re-fetch after compute + tax so invoice amounts are populated on the returned struct.
 	invResp, err = invSvc.GetInvoice(ctx, invResp.ID)
 	if err != nil {
 		return nil, nil, err

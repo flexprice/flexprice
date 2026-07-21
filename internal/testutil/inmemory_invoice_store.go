@@ -88,6 +88,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
+		TotalTax:                   inv.TotalTax,
 		TotalDiscount:              inv.TotalDiscount,
 		AmountRemaining:            inv.AmountRemaining,
 		AdjustmentAmount:           inv.AdjustmentAmount,
