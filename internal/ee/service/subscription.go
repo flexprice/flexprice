@@ -2228,6 +2228,14 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		),
 	}
 
+	// Nothing else to do when the page is empty — every expansion below (plans,
+	// customers, line-item meters, entitlements) iterates over subscriptions.
+	// Skip the whole block so the endpoint returns immediately for the "no subs
+	// yet" tenant case.
+	if len(subscriptions) == 0 {
+		return response, nil
+	}
+
 	// Collect unique plan IDs
 	planIDMap := make(map[string]*dto.PlanResponse, 0)
 	for _, sub := range subscriptions {
@@ -7166,6 +7174,14 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 // resolveExternalCustomersForInheritance resolves published customers by external ID and validates
 // they may receive an inherited subscription (same rules as subscription create).
 func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
+	// Drop empty strings and short-circuit on empty input. Without this, the customer
+	// repo's `if len(ExternalIDs) > 0` guard treats an empty slice as "no filter" and,
+	// combined with NewNoLimitCustomerFilter, loads every customer in the tenant/env.
+	externalIDs = lo.Compact(externalIDs)
+	if len(externalIDs) == 0 {
+		return nil, nil
+	}
+
 	// Step 1: fetch all subscription IDs belonging to the parent customer.
 	// These are used to distinguish "already under this parent" (allowed) from
 	// "under a different parent" (blocked).

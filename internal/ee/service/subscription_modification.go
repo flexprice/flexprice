@@ -1079,6 +1079,14 @@ func (s *subscriptionModificationService) previewQuantityChangeProration(
 // resolveExternalCustomersForInheritance resolves published customers by external ID and validates
 // they may receive an inherited subscription.
 func (s *subscriptionModificationService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
+	// Drop empty strings and short-circuit on empty input. Without this, the customer
+	// repo's `if len(ExternalIDs) > 0` guard treats an empty slice as "no filter" and,
+	// combined with NewNoLimitCustomerFilter, loads every customer in the tenant/env.
+	externalIDs = lo.Compact(externalIDs)
+	if len(externalIDs) == 0 {
+		return nil, nil
+	}
+
 	// Step 1: fetch all subscription IDs belonging to the parent customer.
 	// These are used to distinguish "already under this parent" (allowed) from
 	// "under a different parent" (blocked).
@@ -1272,6 +1280,13 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 // Unlike resolveExternalCustomersForInheritance, this does not require StatusPublished
 // since we are removing (not adding) children.
 func (s *subscriptionModificationService) resolveCustomersByExternalIDs(ctx context.Context, externalIDs []string) ([]string, error) {
+	// Drop empty strings and short-circuit on empty input — see the note on
+	// resolveExternalCustomersForInheritance above.
+	externalIDs = lo.Compact(externalIDs)
+	if len(externalIDs) == 0 {
+		return nil, nil
+	}
+
 	childFilter := types.NewNoLimitCustomerFilter()
 	childFilter.ExternalIDs = externalIDs
 	childFilter.Status = lo.ToPtr(types.StatusPublished)

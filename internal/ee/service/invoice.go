@@ -854,6 +854,19 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		return nil, err
 	}
 
+	// Skip the whole expansion block when the page is empty. Everything below
+	// iterates over invoices; nothing to do if there aren't any.
+	if len(invoices) == 0 {
+		return &dto.ListInvoicesResponse{
+			Items: []*dto.InvoiceResponse{},
+			Pagination: types.PaginationResponse{
+				Total:  count,
+				Limit:  filter.GetLimit(),
+				Offset: filter.GetOffset(),
+			},
+		}, nil
+	}
+
 	customerMap := make(map[string]*customer.Customer)
 	items := make([]*dto.InvoiceResponse, len(invoices))
 	for i, inv := range invoices {
@@ -861,24 +874,32 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		customerMap[inv.CustomerID] = nil
 	}
 
-	customerFilter := types.NewNoLimitCustomerFilter()
-	customerFilter.CustomerIDs = lo.Keys(customerMap)
-	customers, err := s.CustomerRepo.List(ctx, customerFilter)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, cust := range customers {
-		customerMap[cust.ID] = cust
-	}
-
-	// Get customer information for each invoice
-	for _, inv := range items {
-		customer, ok := customerMap[inv.CustomerID]
-		if !ok {
-			continue
+	// Fetch customers for expansion. Drop empty IDs and skip when none remain —
+	// the customer repo treats an empty `CustomerIDs` slice as "no filter" and,
+	// combined with NewNoLimitCustomerFilter, would load every customer in the
+	// tenant/env. On customers with zero invoices this used to stream millions
+	// of rows per wallet balance compute (`include_real_time_balance=true`).
+	validCustomerIDs := lo.Compact(lo.Keys(customerMap))
+	if len(validCustomerIDs) > 0 {
+		customerFilter := types.NewNoLimitCustomerFilter()
+		customerFilter.CustomerIDs = validCustomerIDs
+		customers, err := s.CustomerRepo.List(ctx, customerFilter)
+		if err != nil {
+			return nil, err
 		}
-		inv.WithCustomer(&dto.CustomerResponse{Customer: customer})
+
+		for _, cust := range customers {
+			customerMap[cust.ID] = cust
+		}
+
+		// Get customer information for each invoice
+		for _, inv := range items {
+			customer, ok := customerMap[inv.CustomerID]
+			if !ok || customer == nil {
+				continue
+			}
+			inv.WithCustomer(&dto.CustomerResponse{Customer: customer})
+		}
 	}
 
 	return &dto.ListInvoicesResponse{
