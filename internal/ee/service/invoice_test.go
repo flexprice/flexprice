@@ -554,6 +554,24 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 	}
 }
 
+// TestGetOrCreateDraftInvoiceForSubscription_CreatesWhenMissingThenReturnsExisting proves the
+// get-or-create semantics: the first call creates a Draft invoice for the subscription's current
+// period (SUBSCRIPTION_CYCLE), and a second call for the same period returns the SAME invoice rather
+// than creating a duplicate.
+func (s *InvoiceServiceSuite) TestGetOrCreateDraftInvoiceForSubscription_CreatesWhenMissingThenReturnsExisting() {
+	sub := s.testData.subscription
+
+	first, err := s.service.GetOrCreateDraftInvoiceForSubscription(s.GetContext(), sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(first.ID)
+	s.Equal(types.InvoiceStatusDraft, first.InvoiceStatus)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), first.BillingReason) // BillingReason is a plain string field on invoice.Invoice
+
+	second, err := s.service.GetOrCreateDraftInvoiceForSubscription(s.GetContext(), sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	s.Require().NoError(err)
+	s.Equal(first.ID, second.ID, "second call must return the same invoice, not create a duplicate")
+}
+
 func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 	// Create a draft invoice first with line items
 	draftInvoice := &invoice.Invoice{
@@ -2239,5 +2257,349 @@ func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem 
 		EnvironmentID:         "env_test",
 		PrepaidCreditsApplied: decimal.Zero,
 		LineItemDiscount:      decimal.Zero,
+	}
+}
+
+// setupRecomputeCreditFixture builds a self-contained active subscription with one FIXED-charge
+// line item ($50, arrear) and one USAGE line item ($5/event flat fee, arrear, count aggregation),
+// billed over a fixed Jan 2025 period so results are deterministic. numUsageEvents events are
+// inserted for the usage meter (each contributing $5 to the usage line's Amount). Returns the
+// subscription and the (periodStart, periodEnd) window used.
+//
+// A real subscription with only a FIXED line item can never end up with a non-zero
+// TotalPrepaidCreditsApplied in practice: spreadPrepaidCreditsAcrossLineItems only ever spreads
+// credit onto USAGE-type line items (see credit_adjustment.go), so this fixture always includes a
+// USAGE line item too - the FIXED line item exists only to keep the invoice's Subtotal positive
+// (avoiding ComputeInvoice's "Subtotal.IsZero() -> Skipped" short-circuit) even when usage drops
+// to zero, which is needed for the zero-ceiling edge case below.
+func (s *InvoiceServiceSuite) setupRecomputeCreditFixture(id string, numUsageEvents int) (*subscription.Subscription, time.Time, time.Time) {
+	ctx := s.GetContext()
+	periodStart, periodEnd := fixedPeriod()
+
+	meterID := "meter_recompute_" + id
+	planID := "plan_recompute_" + id
+	fixedPriceID := "price_recompute_fixed_" + id
+	usagePriceID := "price_recompute_usage_" + id
+	subID := "sub_recompute_" + id
+
+	usageMeter := &meter.Meter{
+		ID:        meterID,
+		Name:      "Recompute Credit Usage " + id,
+		EventName: "recompute_credit_usage_event_" + id,
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationCount,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, usageMeter))
+
+	pl := &plan.Plan{
+		ID:        planID,
+		Name:      "Recompute Credit Plan " + id,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	fixedPrice := &price.Price{
+		ID:                 fixedPriceID,
+		Amount:             decimal.NewFromInt(50),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, fixedPrice))
+
+	usagePrice := &price.Price{
+		ID:                 usagePriceID,
+		Amount:             decimal.NewFromInt(5),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            usageMeter.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	sub := &subscription.Subscription{
+		ID:                 subID,
+		PlanID:             pl.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		Timezone:           "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	fixedLI := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            fixedPrice.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Flat Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	usageLI := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            usagePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            usageMeter.ID,
+		DisplayName:        "Usage",
+		Quantity:           decimal.Zero,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{fixedLI, usageLI}))
+
+	for i := 0; i < numUsageEvents; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           sub.TenantID,
+			EventName:          usageMeter.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			Timestamp:          periodStart.Add(time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.eventRepo.InsertEvent(ctx, event))
+	}
+
+	return sub, periodStart, periodEnd
+}
+
+// createRecomputeDraftInvoice creates a bare draft Subscription-type invoice for the given
+// subscription/period, with no line items yet - ComputeInvoice populates them.
+func (s *InvoiceServiceSuite) createRecomputeDraftInvoice(sub *subscription.Subscription, periodStart, periodEnd time.Time) *invoice.Invoice {
+	ctx := s.GetContext()
+	draft := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: &sub.ID,
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		PaymentStatus:  types.PaymentStatusPending,
+		Currency:       sub.Currency,
+		PeriodStart:    &periodStart,
+		PeriodEnd:      &periodEnd,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+	return draft
+}
+
+// TestComputeInvoice_SubscriptionRecompute_HonorsPreservedPrepaidCreditAuthority proves the fix for
+// the gap found in the final holistic review of the pre-expiry credit consumption feature:
+// ComputeInvoice's Subscription-invoice branch used to always recompute Total/AmountDue from
+// Subtotal/TotalDiscount alone, ignoring any pre-existing inv.TotalPrepaidCreditsApplied authority
+// (e.g. set moments earlier by pre-expiry credit consumption on this same draft invoice). A
+// recompute in between - outside this feature's own call chain, e.g. a support tool or the
+// /invoices/{id}/compute endpoint - would silently revert Total/AmountDue to the un-credited
+// amount even though the authority (and the underlying wallet debit) remained correct.
+func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_HonorsPreservedPrepaidCreditAuthority() {
+	ctx := s.GetContext()
+	sub, periodStart, periodEnd := s.setupRecomputeCreditFixture("honor", 10) // usage line = 10 * $5 = $50
+	draft := s.createRecomputeDraftInvoice(sub, periodStart, periodEnd)
+
+	// First real compute: establishes Subtotal ($50 fixed + $50 usage = $100) from actual
+	// subscription/usage data, with no credits involved yet.
+	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	computed, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+	s.Require().True(computed.Subtotal.Equal(decimal.NewFromInt(100)), "expected subtotal 100, got %s", computed.Subtotal)
+	s.True(computed.TotalPrepaidCreditsApplied.IsZero())
+	s.True(computed.Total.Equal(computed.Subtotal))
+
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, draft.ID)
+	s.NoError(err)
+	s.Require().Len(lineItems, 2)
+
+	var usageLine *invoice.InvoiceLineItem
+	for _, li := range lineItems {
+		if li.PriceType != nil && *li.PriceType == string(types.PRICE_TYPE_USAGE) {
+			usageLine = li
+		}
+	}
+	s.Require().NotNil(usageLine)
+	s.Require().True(usageLine.Amount.Equal(decimal.NewFromInt(50)))
+
+	// Simulate a completed pre-expiry credit consumption: a positive authority already recorded on
+	// the invoice and spread onto its usage line item ($20 out of a $50 usage ceiling - well within
+	// it, no capping expected).
+	creditApplied := decimal.NewFromInt(20)
+	usageLine.PrepaidCreditsApplied = creditApplied
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Update(ctx, usageLine))
+
+	computed.TotalPrepaidCreditsApplied = creditApplied
+	computed.Total = computed.Subtotal.Sub(computed.TotalDiscount).Sub(creditApplied)
+	computed.AmountDue = computed.Total
+	computed.AmountRemaining = computed.Total.Sub(computed.AmountPaid)
+	s.NoError(s.invoiceRepo.Update(ctx, computed))
+
+	// Recompute again - simulating an unrelated recompute trigger (support tool, /compute endpoint,
+	// another pre-expiry pass, etc.) that is NOT part of the pre-expiry consumption's own call chain.
+	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	reloaded, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+
+	// (a) The preserved authority survives the recompute.
+	s.True(reloaded.TotalPrepaidCreditsApplied.Equal(creditApplied),
+		"expected preserved authority %s, got %s", creditApplied, reloaded.TotalPrepaidCreditsApplied)
+
+	// (b) Total/AmountDue correctly net out the preserved credit - NOT the un-credited amount.
+	expectedTotal := reloaded.Subtotal.Sub(reloaded.TotalDiscount).Sub(creditApplied)
+	s.True(reloaded.Total.Equal(expectedTotal), "expected total %s, got %s", expectedTotal, reloaded.Total)
+	s.True(reloaded.AmountDue.Equal(expectedTotal), "expected amount due %s, got %s", expectedTotal, reloaded.AmountDue)
+	s.False(reloaded.Total.Equal(reloaded.Subtotal), "Total must not have reverted to the un-credited Subtotal")
+
+	// (c) The line item's PrepaidCreditsApplied was correctly re-persisted, not left at 0 from
+	// reconcileLineItems' reset.
+	reloadedLineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, draft.ID)
+	s.NoError(err)
+	sumApplied := decimal.Zero
+	for _, li := range reloadedLineItems {
+		sumApplied = sumApplied.Add(li.PrepaidCreditsApplied)
+	}
+	s.True(sumApplied.Equal(creditApplied), "expected line items to sum to preserved authority %s, got %s", creditApplied, sumApplied)
+}
+
+// TestComputeInvoice_SubscriptionRecompute_ZeroAuthorityUnaffected is the common-case regression
+// check: the overwhelming majority of subscription invoice recomputes have
+// TotalPrepaidCreditsApplied == 0 (never pre-expiry-consumed), and must behave exactly as before -
+// Total/AmountDue reflect only Subtotal - TotalDiscount.
+func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroAuthorityUnaffected() {
+	ctx := s.GetContext()
+	sub, periodStart, periodEnd := s.setupRecomputeCreditFixture("zero", 4) // usage line = 4 * $5 = $20
+	draft := s.createRecomputeDraftInvoice(sub, periodStart, periodEnd)
+
+	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	first, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+	s.Require().True(first.Subtotal.Equal(decimal.NewFromInt(70)), "expected subtotal 70, got %s", first.Subtotal) // $50 fixed + $20 usage
+	s.True(first.Total.Equal(first.Subtotal))
+	s.True(first.AmountDue.Equal(first.Subtotal))
+
+	// Recompute again with no authority ever set - a no-op for Total/AmountDue.
+	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	second, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+	s.True(second.TotalPrepaidCreditsApplied.IsZero())
+	s.True(second.Total.Equal(second.Subtotal))
+	s.True(second.AmountDue.Equal(second.Subtotal))
+}
+
+// TestComputeInvoice_SubscriptionRecompute_ZeroCeilingCapsAuthorityToZero covers the edge case
+// where the usage ceiling backing a preserved authority has fully shrunk to zero by the time of
+// the recompute (e.g. usage that was present when the authority was set has since been
+// reclassified/removed). spreadPrepaidCreditsAcrossLineItems must zero every line's
+// PrepaidCreditsApplied (only USAGE lines are ever eligible, and their ceiling is now zero), so
+// the re-derived effectiveApplied - and therefore the persisted TotalPrepaidCreditsApplied - must
+// come out to 0, netting Total back up to the full un-discounted Subtotal (here: just the FIXED
+// charge, which keeps Subtotal positive so the invoice isn't marked Skipped).
+func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroCeilingCapsAuthorityToZero() {
+	ctx := s.GetContext()
+	sub, periodStart, periodEnd := s.setupRecomputeCreditFixture("zeroceiling", 10) // usage line = 10 * $5 = $50
+	draft := s.createRecomputeDraftInvoice(sub, periodStart, periodEnd)
+
+	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	computed, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+	s.Require().True(computed.Subtotal.Equal(decimal.NewFromInt(100)), "expected subtotal 100, got %s", computed.Subtotal)
+
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, draft.ID)
+	s.NoError(err)
+	var usageLine *invoice.InvoiceLineItem
+	for _, li := range lineItems {
+		if li.PriceType != nil && *li.PriceType == string(types.PRICE_TYPE_USAGE) {
+			usageLine = li
+		}
+	}
+	s.Require().NotNil(usageLine)
+
+	// Simulate a preserved authority of $20 (well within the current $50 usage ceiling)...
+	creditApplied := decimal.NewFromInt(20)
+	usageLine.PrepaidCreditsApplied = creditApplied
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Update(ctx, usageLine))
+	computed.TotalPrepaidCreditsApplied = creditApplied
+	computed.Total = computed.Subtotal.Sub(creditApplied)
+	computed.AmountDue = computed.Total
+	computed.AmountRemaining = computed.Total.Sub(computed.AmountPaid)
+	s.NoError(s.invoiceRepo.Update(ctx, computed))
+
+	// ...then the usage that backed that ceiling disappears entirely before the next recompute
+	// (e.g. events reclassified/corrected), while the FIXED charge remains - so Subtotal stays
+	// positive ($50) and the invoice is not short-circuited into Skipped.
+	s.eventRepo.Clear()
+
+	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	s.NoError(err)
+	s.False(skipped)
+
+	reloaded, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.NoError(err)
+	s.Require().True(reloaded.Subtotal.Equal(decimal.NewFromInt(50)), "expected subtotal to drop to the fixed-only 50, got %s", reloaded.Subtotal)
+
+	// The stale authority must NOT be trusted directly - it must be re-derived from what actually
+	// fits (zero), not left at the stale $20.
+	s.True(reloaded.TotalPrepaidCreditsApplied.IsZero(),
+		"expected authority to be capped to 0 once its usage ceiling vanished, got %s", reloaded.TotalPrepaidCreditsApplied)
+	s.True(reloaded.Total.Equal(reloaded.Subtotal),
+		"expected Total to net back up to the full un-discounted Subtotal %s, got %s", reloaded.Subtotal, reloaded.Total)
+	s.True(reloaded.AmountDue.Equal(reloaded.Subtotal))
+
+	reloadedLineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, draft.ID)
+	s.NoError(err)
+	for _, li := range reloadedLineItems {
+		s.True(li.PrepaidCreditsApplied.IsZero(), "expected line %s PrepaidCreditsApplied to be zeroed, got %s", li.ID, li.PrepaidCreditsApplied)
 	}
 }

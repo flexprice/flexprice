@@ -92,6 +92,7 @@ func (s *WalletServiceSuite) setupService() {
 		MeterRepo:                    stores.MeterRepo,
 		CustomerRepo:                 stores.CustomerRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
+		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
 		FeatureRepo:                  stores.FeatureRepo,
 		AddonAssociationRepo:         stores.AddonAssociationRepo,
@@ -103,9 +104,15 @@ func (s *WalletServiceSuite) setupService() {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
+		AddonRepo:                    stores.AddonRepo,
+		CreditGrantRepo:              stores.CreditGrantRepo,
+		Locker:                       s.GetLocker(),
 		TaxAssociationRepo:           stores.TaxAssociationRepo,
 		TaxRateRepo:                  stores.TaxRateRepo,
 		TaxAppliedRepo:               stores.TaxAppliedRepo,
+		CouponRepo:                   stores.CouponRepo,
+		CouponAssociationRepo:        stores.CouponAssociationRepo,
+		CouponApplicationRepo:        stores.CouponApplicationRepo,
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
@@ -120,6 +127,7 @@ func (s *WalletServiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		CouponRepo:               stores.CouponRepo,
@@ -2371,6 +2379,188 @@ func (s *WalletServiceSuite) TestGetCreditsAvailableBreakdown() {
 }
 
 // ---------------------------------------------------------------------------
+// ExpireCredits consume-then-expire
+// ---------------------------------------------------------------------------
+
+// createActiveStandaloneSubscriptionForExpiry creates and persists a minimal active standalone
+// subscription for the suite's test customer. ConsumeExpiringCreditIntoInvoices (invoked internally by
+// ExpireCredits) filters draft invoices by active standalone/parent subscriptions, so these tests need a
+// real, persisted subscription.
+func (s *WalletServiceSuite) createActiveStandaloneSubscriptionForExpiry(id, currency string) *subscription.Subscription {
+	now := s.GetNow()
+	sub := &subscription.Subscription{
+		ID:                 id,
+		CustomerID:         s.testData.customer.ID,
+		Currency:           currency,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		StartDate:          now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+	return sub
+}
+
+// createDraftSubInvoiceWithUsageLineItemForExpiry creates a DB-backed draft invoice tied to a real
+// subscription, with a single usage line item of the given amount. Uses InvoiceType OneOff (not
+// Subscription) with req=nil on the ComputeInvoice call ConsumeExpiringCreditIntoInvoices exercises: for a
+// OneOff invoice, ComputeInvoice's nil-request path does not touch line items or recompute totals from
+// usage, so the manually-seeded line item and Subtotal survive untouched.
+func (s *WalletServiceSuite) createDraftSubInvoiceWithUsageLineItemForExpiry(id, currency string, amount decimal.Decimal, subID string, periodStart time.Time) *invoice.Invoice {
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        id,
+		CustomerID:       s.testData.customer.ID,
+		Amount:           amount,
+		Currency:         currency,
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	periodEnd := periodStart.Add(30 * 24 * time.Hour)
+	inv := &invoice.Invoice{
+		ID:              id,
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subID),
+		Currency:        currency,
+		Subtotal:        amount,
+		Total:           amount,
+		AmountDue:       amount,
+		AmountRemaining: amount, // required: ConsumeExpiringCreditIntoInvoices filters AmountRemainingGt=0
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(periodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
+	}
+
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+	return inv
+}
+
+// reloadInvoiceWithLineItemsForExpiry reloads an invoice and its line items from the repos.
+func (s *WalletServiceSuite) reloadInvoiceWithLineItemsForExpiry(id string) *invoice.Invoice {
+	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), id)
+	s.NoError(err)
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), id)
+	s.NoError(err)
+	inv.LineItems = lineItems
+	return inv
+}
+
+// createWalletForExpiry creates a zero-balance prepaid wallet for the suite's test customer.
+func (s *WalletServiceSuite) createWalletForExpiry(id, currency string) *wallet.Wallet {
+	w := &wallet.Wallet{
+		ID:             id,
+		CustomerID:     s.testData.customer.ID,
+		Currency:       currency,
+		Balance:        decimal.Zero,
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "Test Wallet " + id,
+		Description:    "Test wallet",
+		ConversionRate: decimal.NewFromInt(1),
+		EnvironmentID:  "env_test",
+		WalletType:     types.WalletTypePrePaid,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), w))
+	return w
+}
+
+// createWalletCreditForExpiry directly creates a wallet credit transaction via the repository,
+// bypassing WalletOperation.Validate() (which unconditionally rejects a past ExpiryDate). Updates the
+// wallet's Balance/CreditBalance to match (all test wallets here use conversion rate 1).
+func (s *WalletServiceSuite) createWalletCreditForExpiry(walletID string, amount decimal.Decimal, expiryDate *time.Time) *wallet.Transaction {
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), walletID)
+	s.Require().NoError(err)
+
+	tx := &wallet.Transaction{
+		ID:                  s.GetUUID(),
+		WalletID:            walletID,
+		CustomerID:          w.CustomerID,
+		Type:                types.TransactionTypeCredit,
+		Amount:              amount,
+		CreditAmount:        amount,
+		TxStatus:            types.TransactionStatusCompleted,
+		TransactionReason:   types.TransactionReasonFreeCredit,
+		ExpiryDate:          expiryDate,
+		CreditBalanceBefore: w.CreditBalance,
+		CreditBalanceAfter:  w.CreditBalance.Add(amount),
+		CreditsAvailable:    amount,
+		Currency:            w.Currency,
+		EnvironmentID:       "env_test",
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), tx))
+
+	newCreditBalance := w.CreditBalance.Add(amount)
+	newBalance := w.Balance.Add(amount) // conversion rate is 1 for all test wallets
+	s.Require().NoError(s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), walletID, newBalance, newCreditBalance))
+
+	return tx
+}
+
+// ExpireCredits must consume as much of the expiring credit as the customer's active-subscription draft
+// invoice can absorb, THEN expire whatever remains - not just skip when a subscription/invoice exists
+// (the old behavior).
+func (s *WalletServiceSuite) TestExpireCredits_ConsumeThenExpire() {
+	sub := s.createActiveStandaloneSubscriptionForExpiry("sub_expire_consume", "USD")
+	inv := s.createDraftSubInvoiceWithUsageLineItemForExpiry(
+		"inv_expire_consume", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow().Add(-24*time.Hour))
+
+	w := s.createWalletForExpiry("wallet_expire_consume", "USD")
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCreditForExpiry(w.ID, decimal.NewFromInt(100), &pastExpiry)
+
+	res, err := s.service.ExpireCredits(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+
+	// 40 of the 100 was consumed by the invoice (its full ceiling); the remaining 60 was expired.
+	s.True(res.Expired, "expected remaining credits to be expired")
+
+	reloadedInv := s.reloadInvoiceWithLineItemsForExpiry(inv.ID)
+	s.True(decimal.NewFromInt(40).Equal(reloadedInv.TotalPrepaidCreditsApplied),
+		"invoice TotalPrepaidCreditsApplied = %s, want 40", reloadedInv.TotalPrepaidCreditsApplied.String())
+
+	reloadedWallet, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(decimal.Zero.Equal(reloadedWallet.Balance),
+		"expected wallet balance to be 0 (40 consumed + 60 expired = 100 drawn down), got %s", reloadedWallet.Balance.String())
+}
+
+// A credit fully consumed into invoices (no remainder) should report Expired=false since there's nothing
+// left to expire - the debit-based "expire" step is skipped entirely.
+func (s *WalletServiceSuite) TestExpireCredits_FullyConsumedNoRemainderToExpire() {
+	sub := s.createActiveStandaloneSubscriptionForExpiry("sub_expire_full", "USD")
+	s.createDraftSubInvoiceWithUsageLineItemForExpiry(
+		"inv_expire_full", "USD", decimal.NewFromInt(75), sub.ID, s.GetNow().Add(-24*time.Hour))
+
+	w := s.createWalletForExpiry("wallet_expire_full", "USD")
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCreditForExpiry(w.ID, decimal.NewFromInt(50), &pastExpiry)
+
+	res, err := s.service.ExpireCredits(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+
+	s.False(res.Expired, "expected no remainder to expire")
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(reloadedSource.CreditsAvailable.IsZero(),
+		"expected the credit transaction to be fully drawn down by consumption alone, got %s available",
+		reloadedSource.CreditsAvailable.String())
+}
+
+// ---------------------------------------------------------------------------
 // WalletAutoTopupInvoiceSuite
 // ---------------------------------------------------------------------------
 
@@ -2421,6 +2611,7 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
@@ -2660,6 +2851,7 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,

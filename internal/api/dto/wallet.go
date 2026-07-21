@@ -441,22 +441,18 @@ type WalletBalanceResponse struct {
 }
 
 type ExpiredCreditsResponseItem struct {
-	TenantID                       string `json:"tenant_id"`
-	EnvironmentID                  string `json:"environment_id"`
-	Count                          int    `json:"count"`
-	Success                        int    `json:"success"`
-	Failed                         int    `json:"failed"`
-	SkippedDueToActiveSubscription int    `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int    `json:"skipped_due_to_active_invoice"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	Count         int    `json:"count"`
+	Success       int    `json:"success"`
+	Failed        int    `json:"failed"`
 }
 
 type ExpiredCreditsResponse struct {
-	Items                          []*ExpiredCreditsResponseItem `json:"items"`
-	Total                          int                           `json:"total"`
-	Success                        int                           `json:"success"`
-	Failed                         int                           `json:"failed"`
-	SkippedDueToActiveSubscription int                           `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int                           `json:"skipped_due_to_active_invoice"`
+	Items   []*ExpiredCreditsResponseItem `json:"items"`
+	Total   int                           `json:"total"`
+	Success int                           `json:"success"`
+	Failed  int                           `json:"failed"`
 }
 
 type GetCustomerWalletsRequest struct {

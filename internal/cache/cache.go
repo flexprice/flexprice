@@ -98,6 +98,8 @@ const (
 	PrefixPriceSyncLock             = "price_sync:plan:"
 	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
 	PrefixTabsInvoiceSyncLock       = "tabs:invoice_sync:"
+	// PrefixPrepaidCreditApplyLock serializes prepaid-credit application to one invoice.
+	PrefixPrepaidCreditApplyLock = "prepaid_credit_apply:invoice:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

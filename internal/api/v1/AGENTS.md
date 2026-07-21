@@ -25,7 +25,6 @@ Gin HTTP handlers: deserialize requests, validate input, call service layer, ser
 |---|---|---|
 | `ComputeInvoice` | `POST /invoices/:id/compute` | Triggers compute; async via workflow |
 | `RecalculateInvoice` | `POST /invoices/:id/recalculate` | Voids + recreates; starts Temporal workflow |
-| `RecalculateInvoiceV2` | `POST /invoices/:id/recalculate/v2` | Newer recalculate path |
 | `FinalizeInvoice` | `POST /invoices/:id}/finalize` | `@x-scope "delete"` (irreversible) |
 | `GetPreviewInvoice` | `POST /invoices/preview` | Read-only; `@x-scope "read"` override |
 | `TriggerFinalizeDraftInvoiceWorkflow` | `POST /invoices/finalize-drafts` | Batch finalize; admin only |

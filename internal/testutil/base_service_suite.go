@@ -137,6 +137,10 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 		Secrets: config.SecretsConfig{
 			EncryptionKey: "test-encryption-key-for-unit-tests-only",
 		},
+		FeatureFlag: config.FeatureFlagConfig{
+			// Enable pre-expiry credit consumption for all test tenants.
+			EnablePreExpiryCreditConsumption: true,
+		},
 	}
 	var err error
 	s.config = cfg
