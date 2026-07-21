@@ -519,7 +519,7 @@ func (s *subscriptionModificationService) calculateProration(
 		result, err := prorationSvc.CalculateProration(ctx, proration.ProrationParams{
 			SubscriptionID:     sub.ID,
 			LineItemID:         oldItem.ID,
-			PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
+			PlanPayInAdvance:   oldItem.InvoiceCadence == types.InvoiceCadenceAdvance,
 			CurrentPeriodStart: sub.CurrentPeriodStart,
 			CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
 			Action:             types.ProrationActionQuantityChange,
@@ -558,7 +558,8 @@ func (s *subscriptionModificationService) calculateProration(
 // ─────────────────────────────────────────────
 
 // applyQuantityChange ends old line items and creates replacements inside one
-// transaction. New LI UUIDs are generated at apply time. No invoices, payments, or wallets.
+// transaction (reuses an ambient tx when present). New LI UUIDs are generated at
+// apply time. No invoices, payments, or wallets.
 // Idempotent: if a line item is already ended at effective_date, that mod is skipped
 // (safe for duplicate checkout-complete webhooks).
 func (s *subscriptionModificationService) applyQuantityChange(
@@ -611,35 +612,42 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					Mark(ierr.ErrValidation)
 			}
 
-			lineItem.EndDate = effectiveDate
-			if err := sp.SubscriptionLineItemRepo.Update(txCtx, lineItem); err != nil {
+			// Preserve a finite original window on the replacement; open-ended stays open-ended.
+			newItemEndDate := time.Time{}
+			if !lineItem.EndDate.IsZero() {
+				newItemEndDate = lineItem.EndDate
+			}
+
+			endedItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
+				WithEndDate(effectiveDate).
+				Build()
+			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to end existing line item").
 					Mark(ierr.ErrDatabase)
 			}
 
 			// Copy from the ended line item, then override identity / window / quantity.
-			// Clear EndDate so the replacement is open-ended (or later clipped via newEndDate in response only).
-			newItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
+			newItem := subscription.NewSubscriptionLineItemBuilder(endedItem).
 				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)).
 				WithQuantity(mod.getQuantity()).
 				WithStartDate(effectiveDate).
-				WithEndDate(time.Time{}).
+				WithEndDate(newItemEndDate).
 				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
 				Build()
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
 			}
 
-			oldStart := lineItem.StartDate
+			oldStart := endedItem.StartDate
 			endDate := effectiveDate
 			startDate := effectiveDate
 			newEndDate := mod.getNewEndDate()
 			changedLineItems = append(changedLineItems,
 				dto.ChangedLineItem{
-					ID:           lineItem.ID,
-					PriceID:      lineItem.PriceID,
-					Quantity:     lineItem.Quantity,
+					ID:           endedItem.ID,
+					PriceID:      endedItem.PriceID,
+					Quantity:     endedItem.Quantity,
 					StartDate:    &oldStart,
 					EndDate:      &endDate,
 					ChangeAction: dto.ChangedLineItemActionEnded,
@@ -669,38 +677,69 @@ func (s *subscriptionModificationService) applyQuantityChange(
 // ─────────────────────────────────────────────
 
 // settlePayLater applies the request (C) then settles each proration item (charge or wallet credit).
+// LI apply and invoice/wallet DB writes share one transaction so a settlement failure
+// rolls back seat changes. AttemptPayment runs after commit (external side effects).
 func (s *subscriptionModificationService) settlePayLater(
 	ctx context.Context,
 	request *quantityChangeRequest,
 	prorationResult *quantityChangeProration,
 ) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
-	changedLineItems, err := s.applyQuantityChange(ctx, request)
+	sp := s.serviceParams
+	var changedLineItems []dto.ChangedLineItem
+	changedInvoices := make([]dto.ChangedInvoice, 0)
+
+	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		var err error
+		changedLineItems, err = s.applyQuantityChange(txCtx, request)
+		if err != nil {
+			return err
+		}
+
+		sub := request.GetSubscription()
+		for _, item := range prorationResult.getItems() {
+			if item == nil {
+				continue
+			}
+			netAmount := item.getNetAmount()
+			if netAmount.IsZero() {
+				continue
+			}
+
+			var inv *dto.ChangedInvoice
+			if netAmount.GreaterThan(decimal.Zero) {
+				inv, err = s.createProrationChargeInvoice(txCtx, sub, item, false)
+			} else {
+				inv, err = s.issueProrationWalletCredit(txCtx, sub, item)
+			}
+			if err != nil {
+				return err
+			}
+			if inv != nil {
+				changedInvoices = append(changedInvoices, *inv)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sub := request.GetSubscription()
-	changedInvoices := make([]dto.ChangedInvoice, 0)
-	for _, item := range prorationResult.getItems() {
-		if item == nil {
-			continue
-		}
-		netAmount := item.getNetAmount()
-		if netAmount.IsZero() {
+	// Best-effort collection after LI + invoice rows are committed together.
+	invoiceSvc := NewInvoiceService(sp)
+	for i := range changedInvoices {
+		ci := &changedInvoices[i]
+		if ci.Action != dto.ChangedInvoiceActionCreated || ci.ID == "" {
 			continue
 		}
 
-		var inv *dto.ChangedInvoice
-		if netAmount.GreaterThan(decimal.Zero) {
-			inv, err = s.createProrationChargeInvoice(ctx, sub, item, false)
-		} else {
-			inv, err = s.issueProrationWalletCredit(ctx, sub, item)
+		if payErr := invoiceSvc.AttemptPayment(ctx, ci.ID); payErr != nil {
+			sp.Logger.Info(ctx, "failed to attempt payment for delta proration invoice",
+				"error", payErr, "invoice_id", ci.ID)
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-		if inv != nil {
-			changedInvoices = append(changedInvoices, *inv)
+		
+		if latest, fetchErr := invoiceSvc.GetInvoice(ctx, ci.ID); fetchErr == nil {
+			ci.Invoice = latest
+			ci.Status = dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus)
 		}
 	}
 
@@ -797,7 +836,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 		return nil, err
 	}
 
-	checkoutSvc := &checkoutSessionService{ServiceParams: sp}
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.serviceParams}
 
 	// Fulfill: payment + provider link. On failure, best-effort cleanup.
 	if err := s.fulfillModifySubscriptionCheckout(ctx, checkoutSvc, session, &draftInvoice.Invoice); err != nil {
@@ -982,7 +1021,8 @@ func buildAggregatedProrationChargeInvoiceRequest(
 }
 
 // createProrationChargeInvoice creates a ONE_OFF proration charge for one B item.
-// draft=false: finalize + AttemptPayment (pay-later). draft=true: leave DRAFT (pay-first).
+// draft=false: create + finalize (pay-later DB write; caller runs AttemptPayment after commit).
+// draft=true: leave DRAFT (unused by current pay-first aggregated draft path).
 func (s *subscriptionModificationService) createProrationChargeInvoice(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -1038,18 +1078,12 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 		sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
 		return nil, err
 	}
-	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-		sp.Logger.Info(ctx, "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
-	}
-	latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
-	if fetchErr != nil {
-		latest = inv
-	}
+	
 	return &dto.ChangedInvoice{
-		ID:      latest.ID,
+		ID:      inv.ID,
 		Action:  dto.ChangedInvoiceActionCreated,
-		Status:  dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus),
-		Invoice: latest,
+		Status:  dto.ChangedInvoiceStatusFromPaymentStatus(inv.PaymentStatus),
+		Invoice: inv,
 	}, nil
 }
 

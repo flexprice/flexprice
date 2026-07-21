@@ -1032,6 +1032,51 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Version
 	s.True(newQty.Equal(newLI.Quantity), "new line item should have updated quantity")
 }
 
+// TestExecuteQuantityChange_PreservesFiniteEndDate verifies that a replacement line item
+// keeps the source item's finite EndDate (not cleared to open-ended).
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PreservesFiniteEndDate() {
+	ctx := s.GetContext()
+	periodStart := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 1, 0)
+	lineEnd := periodStart.Add(20 * 24 * time.Hour)
+	effectiveDate := periodStart.Add(10 * 24 * time.Hour)
+
+	cust := s.createCustomer("ext-qty-finite-end")
+	sub := s.createActiveSub(cust.ID)
+	s.setSubPeriod(sub.ID, periodStart, periodEnd)
+
+	li := s.createFixedLineItem(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceArrear)
+	stored, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(err)
+	stored.StartDate = periodStart
+	stored.EndDate = lineEnd
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+	resp, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(8), EffectiveDate: &effectiveDate},
+			},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var newLIID string
+	for _, cli := range resp.ChangedResources.LineItems {
+		if cli.ChangeAction == dto.ChangedLineItemActionCreated {
+			newLIID = cli.ID
+		}
+	}
+	s.Require().NotEmpty(newLIID)
+
+	newLI, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, newLIID)
+	s.Require().NoError(err)
+	s.True(newLI.EndDate.Equal(lineEnd), "replacement must keep original finite EndDate; got %v want %v", newLI.EndDate, lineEnd)
+	s.True(newLI.StartDate.Equal(effectiveDate))
+}
+
 // TestExecuteQuantityChange_WrongSubscriptionRejected verifies that providing a line item
 // from a different subscription returns an error.
 func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_WrongSubscriptionRejected() {
