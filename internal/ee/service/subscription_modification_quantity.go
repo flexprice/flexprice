@@ -16,54 +16,54 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// quantityChangePlan is the validated, ready-to-apply intent for a quantity change.
-// Built by buildQuantityChangePlan (read-only). No line-item or money side effects.
-type quantityChangePlan struct {
+// quantityChangeRequest is the validated, ready-to-apply intent for a quantity change.
+// Built by buildQuantityChangeRequest (read-only). No line-item or money side effects.
+type quantityChangeRequest struct {
 	subscriptionID string
 	subscription   *subscription.Subscription
 	modifications  []*quantityChangeLineItemMod
 }
 
-func NewQuantityChangePlan(subscriptionID string, sub *subscription.Subscription, mods []*quantityChangeLineItemMod) *quantityChangePlan {
+func NewQuantityChangeRequest(subscriptionID string, sub *subscription.Subscription, mods []*quantityChangeLineItemMod) *quantityChangeRequest {
 	if mods == nil {
 		mods = []*quantityChangeLineItemMod{}
 	}
-	return &quantityChangePlan{
+	return &quantityChangeRequest{
 		subscriptionID: subscriptionID,
 		subscription:   sub,
 		modifications:  mods,
 	}
 }
 
-func (p *quantityChangePlan) GetSubscriptionID() string {
-	if p == nil {
+func (r *quantityChangeRequest) GetSubscriptionID() string {
+	if r == nil {
 		return ""
 	}
-	return p.subscriptionID
+	return r.subscriptionID
 }
 
-func (p *quantityChangePlan) GetSubscription() *subscription.Subscription {
-	if p == nil {
+func (r *quantityChangeRequest) GetSubscription() *subscription.Subscription {
+	if r == nil {
 		return nil
 	}
-	return p.subscription
+	return r.subscription
 }
 
-func (p *quantityChangePlan) GetModifications() []*quantityChangeLineItemMod {
-	if p == nil {
+func (r *quantityChangeRequest) GetModifications() []*quantityChangeLineItemMod {
+	if r == nil {
 		return nil
 	}
-	return p.modifications
+	return r.modifications
 }
 
-// planFromModifySubscriptionParams rebuilds an apply plan from checkout configuration.
+// requestFromModifySubscriptionParams rebuilds an apply request from checkout configuration.
 // Used on payment success — does not recompute proration. Revalidates that the
 // subscription and line items are still safe to apply; already-applied LIs
 // (ended at effective_date) are allowed through for idempotent complete.
-func (s *subscriptionModificationService) planFromModifySubscriptionParams(
+func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 	ctx context.Context,
 	params *types.ModifySubscriptionParams,
-) (*quantityChangePlan, error) {
+) (*quantityChangeRequest, error) {
 	if err := params.Validate(); err != nil {
 		return nil, err
 	}
@@ -144,16 +144,16 @@ func (s *subscriptionModificationService) planFromModifySubscriptionParams(
 		))
 	}
 
-	return NewQuantityChangePlan(params.SubscriptionID, sub, mods), nil
+	return NewQuantityChangeRequest(params.SubscriptionID, sub, mods), nil
 }
 
-// toModifySubscriptionParams maps the validated plan into checkout configuration
+// toModifySubscriptionParams maps the validated request into checkout configuration
 // for payment-gated apply on webhook complete.
-func (p *quantityChangePlan) toModifySubscriptionParams() *types.ModifySubscriptionParams {
-	if p == nil {
+func (r *quantityChangeRequest) toModifySubscriptionParams() *types.ModifySubscriptionParams {
+	if r == nil {
 		return nil
 	}
-	mods := p.GetModifications()
+	mods := r.GetModifications()
 	lineMods := make([]types.ModifySubscriptionLineItem, 0, len(mods))
 	for _, m := range mods {
 		if m == nil {
@@ -168,20 +168,20 @@ func (p *quantityChangePlan) toModifySubscriptionParams() *types.ModifySubscript
 		})
 	}
 	return &types.ModifySubscriptionParams{
-		SubscriptionID:        p.GetSubscriptionID(),
+		SubscriptionID:        r.GetSubscriptionID(),
 		LineItemModifications: lineMods,
 	}
 }
 
 // previewChangedLineItems returns placeholder changed_resources line items
 // (preview-ended / preview-created). Real ids exist only after apply.
-func (p *quantityChangePlan) previewChangedLineItems() []dto.ChangedLineItem {
-	if p == nil {
+func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem {
+	if r == nil {
 		return nil
 	}
 
-	out := make([]dto.ChangedLineItem, 0, len(p.modifications)*2)
-	for _, m := range p.modifications {
+	out := make([]dto.ChangedLineItem, 0, len(r.modifications)*2)
+	for _, m := range r.modifications {
 		if m == nil {
 			continue
 		}
@@ -276,13 +276,13 @@ func (m *quantityChangeLineItemMod) getNewEndDate() time.Time {
 	return m.newEndDate
 }
 
-// buildQuantityChangePlan loads the subscription and validates each requested
+// buildQuantityChangeRequest loads the subscription and validates each requested
 // line-item change. It performs no writes. No-op quantity changes are skipped.
-func (s *subscriptionModificationService) buildQuantityChangePlan(
+func (s *subscriptionModificationService) buildQuantityChangeRequest(
 	ctx context.Context,
 	subscriptionID string,
 	params *dto.SubModifyQuantityChangeRequest,
-) (*quantityChangePlan, error) {
+) (*quantityChangeRequest, error) {
 	sp := s.serviceParams
 
 	if params == nil {
@@ -380,14 +380,14 @@ func (s *subscriptionModificationService) buildQuantityChangePlan(
 		))
 	}
 
-	return NewQuantityChangePlan(subscriptionID, sub, mods), nil
+	return NewQuantityChangeRequest(subscriptionID, sub, mods), nil
 }
 
 // ─────────────────────────────────────────────
 // Module B — proration calculation (no money writes)
 // ─────────────────────────────────────────────
 
-// quantityChangeProration is the calc-only money outcome for a quantityChangePlan.
+// quantityChangeProration is the calc-only money outcome for a quantityChangeRequest.
 type quantityChangeProration struct {
 	items     []*quantityChangeProrationItem
 	netCharge decimal.Decimal
@@ -470,20 +470,20 @@ func (i *quantityChangeProrationItem) getPrice() *dto.PriceResponse {
 	return i.price
 }
 
-// calculateProrationForPlan computes proration amounts for ADVANCE mods on the plan.
+// calculateProration computes proration amounts for ADVANCE mods on the request.
 // It does not create invoices, attempt payment, or issue wallet credits.
-func (s *subscriptionModificationService) calculateProrationForPlan(
+func (s *subscriptionModificationService) calculateProration(
 	ctx context.Context,
-	plan *quantityChangePlan,
+	request *quantityChangeRequest,
 ) (*quantityChangeProration, error) {
-	if plan == nil {
+	if request == nil {
 		return newQuantityChangeProration(nil, decimal.Zero, decimal.Zero), nil
 	}
 
 	sp := s.serviceParams
-	sub := plan.GetSubscription()
+	sub := request.GetSubscription()
 	if sub == nil {
-		return nil, ierr.NewError("quantity change plan has no subscription").
+		return nil, ierr.NewError("quantity change request has no subscription").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -499,7 +499,7 @@ func (s *subscriptionModificationService) calculateProrationForPlan(
 	netCharge := decimal.Zero
 	netCredit := decimal.Zero
 
-	for _, mod := range plan.GetModifications() {
+	for _, mod := range request.GetModifications() {
 		if mod == nil {
 			continue
 		}
@@ -554,24 +554,24 @@ func (s *subscriptionModificationService) calculateProrationForPlan(
 }
 
 // ─────────────────────────────────────────────
-// Module C — apply plan (line-item writes only)
+// Module C — apply request (line-item writes only)
 // ─────────────────────────────────────────────
 
-// applyQuantityChangePlan ends old line items and creates replacements inside one
+// applyQuantityChange ends old line items and creates replacements inside one
 // transaction. New LI UUIDs are generated at apply time. No invoices, payments, or wallets.
 // Idempotent: if a line item is already ended at effective_date, that mod is skipped
 // (safe for duplicate checkout-complete webhooks).
-func (s *subscriptionModificationService) applyQuantityChangePlan(
+func (s *subscriptionModificationService) applyQuantityChange(
 	ctx context.Context,
-	plan *quantityChangePlan,
+	request *quantityChangeRequest,
 ) ([]dto.ChangedLineItem, error) {
-	if plan == nil {
-		return nil, ierr.NewError("quantity change plan is required").
+	if request == nil {
+		return nil, ierr.NewError("quantity change request is required").
 			Mark(ierr.ErrValidation)
 	}
 
 	sp := s.serviceParams
-	mods := plan.GetModifications()
+	mods := request.GetModifications()
 	if len(mods) == 0 {
 		return []dto.ChangedLineItem{}, nil
 	}
@@ -594,7 +594,7 @@ func (s *subscriptionModificationService) applyQuantityChangePlan(
 			}
 
 			// Already applied: EndDate was set to effective_date on a prior complete.
-			// Pre-apply finite LIs have EndDate after effective_date (validated at plan build).
+			// Pre-apply finite LIs have EndDate after effective_date (validated at request build).
 			if !lineItem.EndDate.IsZero() && !lineItem.EndDate.After(effectiveDate) {
 				if lineItem.EndDate.Equal(effectiveDate) {
 					sp.Logger.Debug(txCtx, "skipping quantity change apply: already applied",
@@ -604,9 +604,9 @@ func (s *subscriptionModificationService) applyQuantityChangePlan(
 				return ierr.NewError("line item already ended before effective_date").
 					WithHint("Cannot apply quantity change to a line item that ended before the effective date").
 					WithReportableDetails(map[string]any{
-						"line_item_id":    lineItemID,
-						"line_item_end":   lineItem.EndDate,
-						"effective_date":  effectiveDate,
+						"line_item_id":   lineItemID,
+						"line_item_end":  lineItem.EndDate,
+						"effective_date": effectiveDate,
 					}).
 					Mark(ierr.ErrValidation)
 			}
@@ -668,18 +668,18 @@ func (s *subscriptionModificationService) applyQuantityChangePlan(
 // Module D1 — money settlement helpers (pay-later)
 // ─────────────────────────────────────────────
 
-// settlePayLater applies the plan (C) then settles each proration item (charge or wallet credit).
+// settlePayLater applies the request (C) then settles each proration item (charge or wallet credit).
 func (s *subscriptionModificationService) settlePayLater(
 	ctx context.Context,
-	plan *quantityChangePlan,
+	request *quantityChangeRequest,
 	prorationResult *quantityChangeProration,
 ) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
-	changedLineItems, err := s.applyQuantityChangePlan(ctx, plan)
+	changedLineItems, err := s.applyQuantityChange(ctx, request)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sub := plan.GetSubscription()
+	sub := request.GetSubscription()
 	changedInvoices := make([]dto.ChangedInvoice, 0)
 	for _, item := range prorationResult.getItems() {
 		if item == nil {
@@ -711,34 +711,34 @@ func (s *subscriptionModificationService) settlePayLater(
 // Module D3 — pay-first settlement (no LI apply)
 // ─────────────────────────────────────────────
 
-// settlePayFirst persists the plan on a checkout session, locks the batch net
+// settlePayFirst persists the request on a checkout session, locks the batch net
 // (charges − credits) on one DRAFT ONE_OFF, and returns a payment link.
 // Line items are applied on payment success — do not also issue wallet credits
 // for downgrade LIs already netted into that invoice.
 func (s *subscriptionModificationService) settlePayFirst(
 	ctx context.Context,
-	plan *quantityChangePlan,
+	request *quantityChangeRequest,
 	prorationResult *quantityChangeProration,
 	checkout *dto.CheckoutParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	if plan == nil || prorationResult == nil || checkout == nil {
-		return nil, ierr.NewError("pay-first settlement requires plan, proration, and checkout").
+	if request == nil || prorationResult == nil || checkout == nil {
+		return nil, ierr.NewError("pay-first settlement requires request, proration, and checkout").
 			Mark(ierr.ErrValidation)
 	}
 
 	sp := s.serviceParams
-	sub := plan.GetSubscription()
+	sub := request.GetSubscription()
 	if sub == nil {
-		return nil, ierr.NewError("quantity change plan has no subscription").
+		return nil, ierr.NewError("quantity change request has no subscription").
 			Mark(ierr.ErrValidation)
 	}
 
-	modifyParams := plan.toModifySubscriptionParams()
+	modifyParams := request.toModifySubscriptionParams()
 	if err := modifyParams.Validate(); err != nil {
 		return nil, err
 	}
 
-	if err := s.guardPendingModifyCheckout(ctx, sub.CustomerID, plan.GetSubscriptionID()); err != nil {
+	if err := s.guardPendingModifyCheckout(ctx, sub.CustomerID, request.GetSubscriptionID()); err != nil {
 		return nil, err
 	}
 
@@ -815,7 +815,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 	checkoutSvc.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
 
 	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, plan.GetSubscriptionID())
+	subResp, err := subSvc.GetSubscription(ctx, request.GetSubscriptionID())
 	if err != nil {
 		return nil, err
 	}
@@ -830,7 +830,7 @@ func (s *subscriptionModificationService) settlePayFirst(
 	return &dto.SubscriptionModifyResponse{
 		Subscription: subResp,
 		ChangedResources: dto.ChangedResources{
-			LineItems: plan.previewChangedLineItems(),
+			LineItems: request.previewChangedLineItems(),
 			Invoices: []dto.ChangedInvoice{
 				{
 					ID:      latestInv.ID,

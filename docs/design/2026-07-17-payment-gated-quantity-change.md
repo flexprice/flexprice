@@ -83,12 +83,12 @@ Implemented in `internal/ee/service/subscription_modification_quantity.go` (orch
 
 | Module | Function(s)                          | Role                                                                                                             |
 | ------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **A**  | `buildQuantityChangePlan`            | Validate + build `quantityChangePlan` (read-only). Persistable via `toModifySubscriptionParams()`.               |
-| **B**  | `calculateProrationForPlan`          | Per-ADVANCE-item proration; `GetNetCharge` / `GetNetCredit` / `GetNetAmount`. No money writes.                   |
-| **C**  | `applyQuantityChangePlan`            | LI close-and-replace in one tx; new UUID at apply time. Idempotent if already ended at `effective_date`.         |
+| **A**  | `buildQuantityChangeRequest`            | Validate + build `quantityChangeRequest` (read-only). Persistable via `toModifySubscriptionParams()`.               |
+| **B**  | `calculateProrationForRequest`          | Per-ADVANCE-item proration; `GetNetCharge` / `GetNetCredit` / `GetNetAmount`. No money writes.                   |
+| **C**  | `applyQuantityChangeRequest`            | LI close-and-replace in one tx; new UUID at apply time. Idempotent if already ended at `effective_date`.         |
 | **D1** | `settlePayLater`                     | C, then **per item**: charge → ONE_OFF + AttemptPayment; credit → wallet top-up.                                 |
 | **D3** | `settlePayFirst`                     | Concurrent guard → DRAFT (net) → session + payment link. **No C.**                                               |
-| **D4** | `completeModifySubscriptionCheckout` | Hydrate plan from config → C → finalize DRAFT + reconcile payment → `subscription.updated`. No proration recalc. |
+| **D4** | `completeModifySubscriptionCheckout` | Hydrate request from config → C → finalize DRAFT + reconcile payment → `subscription.updated`. No proration recalc. |
 
 
 Shared by paths:
@@ -99,7 +99,7 @@ Shared by paths:
 | Preview           | A + B → placeholders / synthetic invoices |
 | Pay-later execute | A + B → D1 (C inside)                     |
 | Pay-first execute | A + B → D3                                |
-| Webhook complete  | D4 (rebuild A-shaped plan → C)            |
+| Webhook complete  | D4 (rebuild A-shaped request → C)            |
 
 
 ### 2.3 Where the intent lives
@@ -135,7 +135,7 @@ modify/execute (checkout present, net > 0)
 Razorpay webhook (payment_link.paid / payment.captured)
   → CompleteCheckoutSession
   → completeModifySubscriptionCheckout:
-       planFromModifySubscriptionParams → applyQuantityChangePlan (C)
+       requestFromModifySubscriptionParams → applyQuantityChangeRequest (C)
        finalize existing draft + mark payment SUCCEEDED + reconcile
        — do NOT recompute proration; do NOT also issue wallet credits
          for downgrade LIs already netted into the draft
@@ -276,7 +276,7 @@ Parallel to `CreateSubscriptionParams` in `internal/types/checkout_configuration
 | `line_item_modifications[].effective_date` | Optional; omit = now at execute time, stored for apply |
 
 
-**Why not store the full in-memory** `quantityChangePlan`**?** The plan holds live `*Subscription` / `*SubscriptionLineItem` pointers. Config stores **minimal intent**; complete hydrates via `planFromModifySubscriptionParams` then runs C. Money stays on the DRAFT, not in config.
+**Why not store the full in-memory** `quantityChangeRequest`**?** The request holds live `*Subscription` / `*SubscriptionLineItem` pointers. Config stores **minimal intent**; complete hydrates via `requestFromModifySubscriptionParams` then runs C. Money stays on the DRAFT, not in config.
 
 **Webhook apply (per modification):** load `line_item_id` → if already ended at `effective_date`, skip (idempotent) → else set `end_date = effective_date` → create new LI (new id) via line-item builder, `quantity` + `start_date = effective_date`. Finalize + reconcile session invoice — **no proration recalculation**.
 

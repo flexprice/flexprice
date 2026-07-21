@@ -1862,10 +1862,10 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsInheritedSub(
 	s.Contains(err.Error(), "inherited subscription")
 }
 
-// TestCompleteModifySubscriptionCheckout_AppliesPlanAndFinalizes covers D4:
-// payment success rebuilds the plan from checkout config, applies LIs, finalizes
+// TestCompleteModifySubscriptionCheckout_AppliesRequestAndFinalizes covers D4:
+// payment success rebuilds the request from checkout config, applies LIs, finalizes
 // the existing DRAFT invoice, and marks the session completed. No proration recalc.
-func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_AppliesPlanAndFinalizes() {
+func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_AppliesRequestAndFinalizes() {
 	ctx := s.GetContext()
 	periodStart := s.GetNow()
 	effectiveDate := periodStart.AddDate(0, 0, 15)
@@ -1877,18 +1877,18 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
 
 	modSvc := s.service.(*subscriptionModificationService)
-	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
 		LineItems: []dto.LineItemQuantityChange{
 			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 		},
 	})
 	s.Require().NoError(err)
 
-	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	proration, err := modSvc.calculateProration(ctx, request)
 	s.Require().NoError(err)
 	s.Require().True(proration.GetNetAmount().GreaterThan(decimal.Zero))
 
-	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, request.GetSubscription(), proration)
 	s.Require().NoError(err)
 	s.Require().NotNil(draftInv)
 
@@ -1907,7 +1907,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
-			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+			ModifySubscriptionParams: request.toModifySubscriptionParams(),
 		}),
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
@@ -2082,7 +2082,7 @@ func (s *SubscriptionModificationServiceSuite) TestCreateAggregatedProrationDraf
 	downLI := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(10), types.InvoiceCadenceAdvance, downPrice.ID)
 
 	modSvc := s.service.(*subscriptionModificationService)
-	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
 		LineItems: []dto.LineItemQuantityChange{
 			{ID: upLI.ID, Quantity: decimal.NewFromInt(5), EffectiveDate: &effectiveDate},
 			{ID: downLI.ID, Quantity: decimal.NewFromInt(8), EffectiveDate: &effectiveDate},
@@ -2090,13 +2090,13 @@ func (s *SubscriptionModificationServiceSuite) TestCreateAggregatedProrationDraf
 	})
 	s.Require().NoError(err)
 
-	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	proration, err := modSvc.calculateProration(ctx, request)
 	s.Require().NoError(err)
 	s.True(proration.GetNetCharge().GreaterThan(decimal.Zero))
 	s.True(proration.GetNetCredit().GreaterThan(decimal.Zero))
 	s.True(proration.GetNetAmount().GreaterThan(decimal.Zero), "upgrade should dominate so net > 0")
 
-	draft, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	draft, err := modSvc.createAggregatedProrationDraftInvoice(ctx, request.GetSubscription(), proration)
 	s.Require().NoError(err)
 	s.Require().NotNil(draft)
 	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
@@ -2134,15 +2134,15 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
 
 	modSvc := s.service.(*subscriptionModificationService)
-	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
 		LineItems: []dto.LineItemQuantityChange{
 			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 		},
 	})
 	s.Require().NoError(err)
-	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	proration, err := modSvc.calculateProration(ctx, request)
 	s.Require().NoError(err)
-	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, request.GetSubscription(), proration)
 	s.Require().NoError(err)
 
 	params := s.buildServiceParams()
@@ -2160,7 +2160,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
-			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+			ModifySubscriptionParams: request.toModifySubscriptionParams(),
 		}),
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
@@ -2183,10 +2183,10 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	}
 	s.Equal(1, openCount, "exactly one open LI after first complete")
 
-	// Re-apply the same plan — must not create another open LI.
-	rebuilt, err := modSvc.planFromModifySubscriptionParams(ctx, plan.toModifySubscriptionParams())
+	// Re-apply the same request — must not create another open LI.
+	rebuilt, err := modSvc.requestFromModifySubscriptionParams(ctx, request.toModifySubscriptionParams())
 	s.Require().NoError(err)
-	_, err = modSvc.applyQuantityChangePlan(ctx, rebuilt)
+	_, err = modSvc.applyQuantityChange(ctx, rebuilt)
 	s.Require().NoError(err)
 
 	_, afterSecond, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
@@ -2211,15 +2211,15 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
 
 	modSvc := s.service.(*subscriptionModificationService)
-	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
 		LineItems: []dto.LineItemQuantityChange{
 			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 		},
 	})
 	s.Require().NoError(err)
-	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	proration, err := modSvc.calculateProration(ctx, request)
 	s.Require().NoError(err)
-	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, plan.GetSubscription(), proration)
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, request.GetSubscription(), proration)
 	s.Require().NoError(err)
 
 	params := s.buildServiceParams()
@@ -2237,7 +2237,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
-			ModifySubscriptionParams: plan.toModifySubscriptionParams(),
+			ModifySubscriptionParams: request.toModifySubscriptionParams(),
 		}),
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
@@ -2282,20 +2282,20 @@ func (s *SubscriptionModificationServiceSuite) TestSettlePayFirst_ArchivesDraftW
 	s.seedPendingModifyCheckout(cust.ID, otherSubID, &idempKey)
 
 	modSvc := s.service.(*subscriptionModificationService)
-	plan, err := modSvc.buildQuantityChangePlan(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
 		LineItems: []dto.LineItemQuantityChange{
 			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 		},
 	})
 	s.Require().NoError(err)
-	proration, err := modSvc.calculateProrationForPlan(ctx, plan)
+	proration, err := modSvc.calculateProration(ctx, request)
 	s.Require().NoError(err)
 	s.Require().True(proration.GetNetAmount().GreaterThan(decimal.Zero))
 
 	checkout := s.checkoutParamsRazorpay()
 	checkout.IdempotencyKey = &idempKey
 
-	_, err = modSvc.settlePayFirst(ctx, plan, proration, checkout)
+	_, err = modSvc.settlePayFirst(ctx, request, proration, checkout)
 	s.Require().Error(err)
 	s.True(ierr.IsAlreadyExists(err), "expected session create AlreadyExists, got %v", err)
 

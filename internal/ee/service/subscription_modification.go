@@ -305,7 +305,7 @@ func (s *subscriptionModificationService) previewInheritance(
 
 // ─────────────────────────────────────────────
 // Sub-feature 2: Quantity Change
-// Plan (A) + proration (B) + apply/settle in subscription_modification_quantity.go.
+// Request (A) + proration (B) + apply/settle in subscription_modification_quantity.go.
 // ─────────────────────────────────────────────
 
 func (s *subscriptionModificationService) executeQuantityChange(
@@ -316,12 +316,12 @@ func (s *subscriptionModificationService) executeQuantityChange(
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	plan, err := s.buildQuantityChangePlan(ctx, subscriptionID, params)
+	quantityChangeReq, err := s.buildQuantityChangeRequest(ctx, subscriptionID, params)
 	if err != nil {
 		return nil, err
 	}
 
-	prorationResult, err := s.calculateProrationForPlan(ctx, plan)
+	prorationResult, err := s.calculateProration(ctx, quantityChangeReq)
 	if err != nil {
 		return nil, err
 	}
@@ -333,12 +333,12 @@ func (s *subscriptionModificationService) executeQuantityChange(
 			return nil, err
 		}
 		if prorationResult.GetNetAmount().GreaterThan(decimal.Zero) {
-			return s.settlePayFirst(ctx, plan, prorationResult, checkout)
+			return s.settlePayFirst(ctx, quantityChangeReq, prorationResult, checkout)
 		}
 		// checkout + net credit/zero → immediate path (ignore checkout)
 	}
 
-	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, plan, prorationResult)
+	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
 	if err != nil {
 		return nil, err
 	}
@@ -367,18 +367,18 @@ func (s *subscriptionModificationService) previewQuantityChange(
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	plan, err := s.buildQuantityChangePlan(ctx, subscriptionID, params)
+	quantityChangeReq, err := s.buildQuantityChangeRequest(ctx, subscriptionID, params)
 	if err != nil {
 		return nil, err
 	}
 
-	prorationResult, err := s.calculateProrationForPlan(ctx, plan)
+	prorationResult, err := s.calculateProration(ctx, quantityChangeReq)
 	if err != nil {
 		return nil, err
 	}
 
-	changedLineItems := plan.previewChangedLineItems()
-	changedInvoices, err := s.toPreviewChangedInvoices(ctx, plan.GetSubscription(), prorationResult)
+	changedLineItems := quantityChangeReq.previewChangedLineItems()
+	changedInvoices, err := s.toPreviewChangedInvoices(ctx, quantityChangeReq.GetSubscription(), prorationResult)
 	if err != nil {
 		return nil, err
 	}

@@ -202,7 +202,7 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 	}
 }
 
-// completeModifySubscriptionCheckout applies the saved quantity-change plan (C), then
+// completeModifySubscriptionCheckout applies the saved quantity-change request (C), then
 // finalizes the existing DRAFT proration invoice and reconciles payment.
 // Does not recompute proration — amount is locked on the draft from pay-first execute.
 func (s *checkoutSessionService) completeModifySubscriptionCheckout(
@@ -232,11 +232,11 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	paymentID := *session.CheckoutPaymentID
 
 	modSvc := &subscriptionModificationService{serviceParams: s.ServiceParams}
-	plan, err := modSvc.planFromModifySubscriptionParams(ctx, params)
+	quantityChangeReq, err := modSvc.requestFromModifySubscriptionParams(ctx, params)
 	if err != nil {
 		return err
 	}
-	if _, err := modSvc.applyQuantityChangePlan(ctx, plan); err != nil {
+	if _, err := modSvc.applyQuantityChange(ctx, quantityChangeReq); err != nil {
 		return err
 	}
 
