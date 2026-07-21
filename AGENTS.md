@@ -659,3 +659,8 @@ cold consumer without failing the run. The suite pins the Go SDK (`go-sdk/v2`, l
 currently `v2.1.20`), whose `go >= 1.25.10` requirement bumps the suite's `go` directive;
 the base toolchain on the box is older, so Go auto-downloads the required `1.25.x` toolchain
 (cached after the first build) — do not force `GOTOOLCHAIN=local`.
+
+## Coding style guide
+
+1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
+2. When updating entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
