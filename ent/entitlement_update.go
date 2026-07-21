@@ -326,20 +326,6 @@ func (eu *EntitlementUpdate) ClearConfigValue() *EntitlementUpdate {
 	return eu
 }
 
-// SetGrantType sets the "grant_type" field.
-func (eu *EntitlementUpdate) SetGrantType(tgt types.EntitlementGrantType) *EntitlementUpdate {
-	eu.mutation.SetGrantType(tgt)
-	return eu
-}
-
-// SetNillableGrantType sets the "grant_type" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantType(tgt *types.EntitlementGrantType) *EntitlementUpdate {
-	if tgt != nil {
-		eu.SetGrantType(*tgt)
-	}
-	return eu
-}
-
 // SetGrantMeasure sets the "grant_measure" field.
 func (eu *EntitlementUpdate) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdate {
 	eu.mutation.SetGrantMeasure(tgm)
@@ -428,15 +414,15 @@ func (eu *EntitlementUpdate) ClearGrantQuota() *EntitlementUpdate {
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (eu *EntitlementUpdate) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementUpdate {
-	eu.mutation.SetAggregationMode(tgam)
+func (eu *EntitlementUpdate) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdate {
+	eu.mutation.SetAggregationMode(tam)
 	return eu
 }
 
 // SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementUpdate {
-	if tgam != nil {
-		eu.SetAggregationMode(*tgam)
+func (eu *EntitlementUpdate) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdate {
+	if tam != nil {
+		eu.SetAggregationMode(*tam)
 	}
 	return eu
 }
@@ -502,11 +488,6 @@ func (eu *EntitlementUpdate) check() error {
 	if v, ok := eu.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
-		}
-	}
-	if v, ok := eu.mutation.GrantType(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "grant_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_type": %w`, err)}
 		}
 	}
 	if v, ok := eu.mutation.GrantMeasure(); ok {
@@ -631,9 +612,6 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
-	}
-	if value, ok := eu.mutation.GrantType(); ok {
-		_spec.SetField(entitlement.FieldGrantType, field.TypeString, value)
 	}
 	if value, ok := eu.mutation.GrantMeasure(); ok {
 		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
@@ -981,20 +959,6 @@ func (euo *EntitlementUpdateOne) ClearConfigValue() *EntitlementUpdateOne {
 	return euo
 }
 
-// SetGrantType sets the "grant_type" field.
-func (euo *EntitlementUpdateOne) SetGrantType(tgt types.EntitlementGrantType) *EntitlementUpdateOne {
-	euo.mutation.SetGrantType(tgt)
-	return euo
-}
-
-// SetNillableGrantType sets the "grant_type" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantType(tgt *types.EntitlementGrantType) *EntitlementUpdateOne {
-	if tgt != nil {
-		euo.SetGrantType(*tgt)
-	}
-	return euo
-}
-
 // SetGrantMeasure sets the "grant_measure" field.
 func (euo *EntitlementUpdateOne) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdateOne {
 	euo.mutation.SetGrantMeasure(tgm)
@@ -1083,15 +1047,15 @@ func (euo *EntitlementUpdateOne) ClearGrantQuota() *EntitlementUpdateOne {
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (euo *EntitlementUpdateOne) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementUpdateOne {
-	euo.mutation.SetAggregationMode(tgam)
+func (euo *EntitlementUpdateOne) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	euo.mutation.SetAggregationMode(tam)
 	return euo
 }
 
 // SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementUpdateOne {
-	if tgam != nil {
-		euo.SetAggregationMode(*tgam)
+func (euo *EntitlementUpdateOne) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	if tam != nil {
+		euo.SetAggregationMode(*tam)
 	}
 	return euo
 }
@@ -1170,11 +1134,6 @@ func (euo *EntitlementUpdateOne) check() error {
 	if v, ok := euo.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
-		}
-	}
-	if v, ok := euo.mutation.GrantType(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "grant_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_type": %w`, err)}
 		}
 	}
 	if v, ok := euo.mutation.GrantMeasure(); ok {
@@ -1316,9 +1275,6 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
-	}
-	if value, ok := euo.mutation.GrantType(); ok {
-		_spec.SetField(entitlement.FieldGrantType, field.TypeString, value)
 	}
 	if value, ok := euo.mutation.GrantMeasure(); ok {
 		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)

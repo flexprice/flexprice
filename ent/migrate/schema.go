@@ -871,7 +871,6 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "config_value", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "grant_type", Type: field.TypeString, Default: "none", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "grant_measure", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "grant_duration_value", Type: field.TypeInt, Nullable: true},
 		{Name: "grant_duration_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(10)"}},
@@ -887,7 +886,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[28]},
+				Columns:    []*schema.Column{EntitlementsColumns[27]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

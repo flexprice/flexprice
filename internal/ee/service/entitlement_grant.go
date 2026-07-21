@@ -13,6 +13,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // EntitlementGrantService owns the lifecycle of entitlement_grants rows.
@@ -106,9 +107,16 @@ func (s *entitlementGrantService) listActiveSubscriptions(
 	return s.SubRepo.List(ctx, filter)
 }
 
-// openMissingGrants walks (subscription, EC) pairs and INSERTs a new grant for
-// each time_boxed EC without an existing live grant. Returns the freshly-opened
-// rows so the caller can append them to the live set.
+// openMissingGrants opens the grants each subscription's grant-config ECs call
+// for, honoring the aggregation mode per feature:
+//   - parallel: one grant per EC — each EC is its own independent bucket.
+//   - additive: ONE grant per feature with quota = Σ EC quotas, opened on the
+//     lowest-ID ("primary") EC's slot. One bucket downstream means evaluation,
+//     exhaustion alerts, and billing overage all treat the group as a single
+//     pool with no extra machinery.
+//
+// EC-set or mode changes mid-window take effect when the live grant expires —
+// grant quota is immutable for the life of the grant.
 func (s *entitlementGrantService) openMissingGrants(
 	ctx context.Context,
 	subs []*subscription.Subscription,
@@ -118,14 +126,54 @@ func (s *entitlementGrantService) openMissingGrants(
 ) ([]*entitlementgrant.EntitlementGrant, error) {
 	opened := make([]*entitlementgrant.EntitlementGrant, 0)
 	for _, sub := range subs {
+		byFeature := make(map[string][]*entitlement.Entitlement)
+		featureOrder := make([]string, 0)
 		for _, ec := range ecsBySub[sub.ID] {
-			if !ec.IsTimeBoxed() {
+			if !ec.HasGrantConfig() {
 				continue
 			}
-			if _, ok := liveByConfigID[ec.ID]; ok {
+			if _, ok := byFeature[ec.FeatureID]; !ok {
+				featureOrder = append(featureOrder, ec.FeatureID)
+			}
+			byFeature[ec.FeatureID] = append(byFeature[ec.FeatureID], ec)
+		}
+
+		for _, featureID := range featureOrder {
+			group := byFeature[featureID]
+
+			parallel := lo.SomeBy(group, func(ec *entitlement.Entitlement) bool {
+				return ec.AggregationMode == types.EntitlementAggregationModeParallel
+			})
+			if parallel {
+				for _, ec := range group {
+					if _, ok := liveByConfigID[ec.ID]; ok {
+						continue
+					}
+					g, err := s.openOneGrant(ctx, sub, ec, at, lo.FromPtr(ec.GrantQuota))
+					if err != nil {
+						return nil, err
+					}
+					if g == nil {
+						continue
+					}
+					opened = append(opened, g)
+					liveByConfigID[ec.ID] = g
+				}
 				continue
 			}
-			g, err := s.openOneGrant(ctx, sub, ec, at)
+
+			primary := group[0]
+			total := decimal.Zero
+			for _, ec := range group {
+				if ec.ID < primary.ID {
+					primary = ec
+				}
+				total = total.Add(lo.FromPtr(ec.GrantQuota))
+			}
+			if _, ok := liveByConfigID[primary.ID]; ok {
+				continue
+			}
+			g, err := s.openOneGrant(ctx, sub, primary, at, total)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +181,7 @@ func (s *entitlementGrantService) openMissingGrants(
 				continue
 			}
 			opened = append(opened, g)
-			liveByConfigID[ec.ID] = g
+			liveByConfigID[primary.ID] = g
 		}
 	}
 	return opened, nil
@@ -146,6 +194,7 @@ func (s *entitlementGrantService) openOneGrant(
 	sub *subscription.Subscription,
 	ec *entitlement.Entitlement,
 	at time.Time,
+	quota decimal.Decimal,
 ) (*entitlementgrant.EntitlementGrant, error) {
 	dur, err := ec.GrantDuration()
 	if err != nil {
@@ -178,7 +227,7 @@ func (s *entitlementGrantService) openOneGrant(
 		ScopeEntityType:     types.EntitlementGrantScopeFeature,
 		ScopeEntityID:       ec.FeatureID,
 		Measure:             ec.GrantMeasure,
-		Quota:               lo.FromPtr(ec.GrantQuota),
+		Quota:               quota,
 		ValidFrom:           validFrom,
 		ValidTo:             validTo,
 		GrantStatus:         types.EntitlementGrantStatusActive,
@@ -253,7 +302,7 @@ func latestOf(a, b time.Time) time.Time {
 }
 
 // validateEntitlementGrantShape enforces context-dependent grant-config rules
-// that need the meter (and its prices). Returns nil for grant_type=none.
+// that need the meter, its prices, and sibling ECs. No-op without a grant config.
 //
 // Rejection rationale (see docs/design/2026-07-08-FLE-959-Entitlements-Revamp.md §7.1):
 //   - MAX aggregation tracks a peak, not additive consumption. A time-boxed
@@ -266,25 +315,25 @@ func latestOf(a, b time.Time) time.Time {
 //     cycle quantity. A grant only knows its own window's qty, so it can't
 //     price against the right tier. Blocked here so admins get a clean error
 //     at EC-write time rather than a silent mispricing at billing time.
+//   - Cross-EC coherence: all grant ECs on one feature must share the
+//     aggregation mode and measure (billing folds per feature and can't mix),
+//     and additive groups must share duration (their quotas sum into one window).
 func (s *entitlementService) validateEntitlementGrantShape(
 	ctx context.Context,
 	e *entitlement.Entitlement,
 	m *meter.Meter,
 ) error {
-	if e == nil {
-		return nil
-	}
-	if e.GrantType == "" || e.GrantType == types.EntitlementGrantTypeNone {
+	if e == nil || !e.HasGrantConfig() {
 		return nil
 	}
 
 	if m == nil {
-		return ierr.NewError("meter is required to validate time-boxed entitlement grants").
+		return ierr.NewError("meter is required to validate grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}
 
 	if m.Aggregation.Type == types.AggregationMax {
-		return ierr.NewError("time-boxed grants are not supported for MAX meters").
+		return ierr.NewError("grant-based entitlements are not supported for MAX meters").
 			WithReportableDetails(map[string]interface{}{
 				"meter_id":         m.ID,
 				"aggregation_type": m.Aggregation.Type,
@@ -292,12 +341,16 @@ func (s *entitlementService) validateEntitlementGrantShape(
 			Mark(ierr.ErrValidation)
 	}
 	if m.Aggregation.BucketSize != "" {
-		return ierr.NewError("time-boxed grants are not supported for bucketed meters").
+		return ierr.NewError("grant-based entitlements are not supported for bucketed meters").
 			WithReportableDetails(map[string]interface{}{
 				"meter_id":    m.ID,
 				"bucket_size": m.Aggregation.BucketSize,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.validateGrantSiblingCoherence(ctx, e); err != nil {
+		return err
 	}
 
 	if e.GrantMeasure != types.EntitlementGrantMeasureAmount {
@@ -327,4 +380,67 @@ func (s *entitlementService) validateEntitlementGrantShape(
 		}
 	}
 	return nil
+}
+
+// validateGrantSiblingCoherence keeps all grant ECs on a feature mutually
+// consistent: one aggregation mode, one measure, and for additive groups one
+// duration (their quotas sum into a single window).
+func (s *entitlementService) validateGrantSiblingCoherence(ctx context.Context, e *entitlement.Entitlement) error {
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.FeatureIDs = []string{e.FeatureID}
+	filter.HasGrantConfig = lo.ToPtr(true)
+	siblings, err := s.EntitlementRepo.List(ctx, filter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithReportableDetails(map[string]interface{}{"feature_id": e.FeatureID}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	mode := defaultedMode(e.AggregationMode)
+	for _, sib := range siblings {
+		if sib.ID == e.ID {
+			continue
+		}
+		if defaultedMode(sib.AggregationMode) != mode {
+			return ierr.NewError("aggregation_mode must match the other entitlements on this feature").
+				WithHint("A feature's entitlements are either all additive or all parallel").
+				WithReportableDetails(map[string]interface{}{
+					"feature_id":     e.FeatureID,
+					"entitlement_id": sib.ID,
+					"existing_mode":  defaultedMode(sib.AggregationMode),
+					"requested_mode": mode,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if sib.GrantMeasure != e.GrantMeasure {
+			return ierr.NewError("grant_measure must match the other entitlements on this feature").
+				WithReportableDetails(map[string]interface{}{
+					"feature_id":       e.FeatureID,
+					"entitlement_id":   sib.ID,
+					"existing_measure": sib.GrantMeasure,
+					"requested":        e.GrantMeasure,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if mode == types.EntitlementAggregationModeAdditive {
+			if lo.FromPtr(sib.GrantDurationValue) != lo.FromPtr(e.GrantDurationValue) ||
+				sib.GrantDurationUnit != e.GrantDurationUnit {
+				return ierr.NewError("additive entitlements on one feature must share grant_duration").
+					WithHint("Additive quotas sum into one window; use parallel for independent windows").
+					WithReportableDetails(map[string]interface{}{
+						"feature_id":     e.FeatureID,
+						"entitlement_id": sib.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+	return nil
+}
+
+func defaultedMode(m types.EntitlementAggregationMode) types.EntitlementAggregationMode {
+	if m == "" {
+		return types.EntitlementAggregationModeAdditive
+	}
+	return m
 }

@@ -2126,16 +2126,12 @@ func (s *billingService) applyProrationToLineItem(
 }
 
 // aggregateMeteredEntitlementsForBilling merges the entitlements that target the
-// same metered feature. Two aggregation modes:
+// same metered feature.
 //
-//   - additive (default): UsageLimit sums across contributors — one bucket the
-//     UI can render as a single quota.
-//   - parallel: each contributor keeps its own bucket. UsageLimit is still
-//     reported as the sum for legacy display, but Buckets carries the per-EC
-//     view so the caller can render independent quotas.
-//
-// Buckets is also emitted (regardless of mode) whenever any contributor is a
-// time-boxed grant so amount-based and grant-duration information isn't lost.
+//   - additive (default): one merged view — UsageLimit and grant quotas sum
+//     into a single bucket.
+//   - parallel: each contributor keeps its own bucket, exposed via Buckets;
+//     UsageLimit still reports the sum for legacy display.
 func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlement) *dto.AggregatedEntitlement {
 	hasUnlimitedEntitlement := false
 	isSoftLimit := false
@@ -2143,19 +2139,15 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	var usageResetPeriod types.EntitlementUsageResetPeriod
 	resetPeriodCounts := make(map[types.EntitlementUsageResetPeriod]int)
 
-	aggregationMode := types.EntitlementGrantAggregationModeAdditive
-	hasGrantConfig := false
+	aggregationMode := types.EntitlementAggregationModeAdditive
 
 	for _, e := range entitlements {
 		if !e.IsEnabled {
 			continue
 		}
 
-		if e.AggregationMode == types.EntitlementGrantAggregationModeParallel {
-			aggregationMode = types.EntitlementGrantAggregationModeParallel
-		}
-		if e.GrantType == types.EntitlementGrantTypeTimeBoxed {
-			hasGrantConfig = true
+		if e.AggregationMode == types.EntitlementAggregationModeParallel {
+			aggregationMode = types.EntitlementAggregationModeParallel
 		}
 
 		if e.UsageLimit == nil {
@@ -2195,7 +2187,7 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 		AggregationMode:  aggregationMode,
 	}
 
-	if aggregationMode == types.EntitlementGrantAggregationModeParallel || hasGrantConfig {
+	if aggregationMode == types.EntitlementAggregationModeParallel {
 		out.Buckets = make([]*dto.AggregatedEntitlementBucket, 0, len(entitlements))
 		for _, e := range entitlements {
 			if !e.IsEnabled {
@@ -2205,7 +2197,6 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 				EntitlementID:      e.ID,
 				SourceEntityID:     e.EntityID,
 				UsageLimit:         e.UsageLimit,
-				GrantType:          e.GrantType,
 				GrantMeasure:       e.GrantMeasure,
 				GrantQuota:         e.GrantQuota,
 				GrantDurationValue: e.GrantDurationValue,
@@ -2379,7 +2370,6 @@ func (s *billingService) AggregateEntitlements(params *dto.AggregateEntitlements
 				IsSoftLimit:        entResp.IsSoftLimit,
 				StaticValue:        entResp.StaticValue,
 				ConfigValue:        entResp.ConfigValue,
-				GrantType:          entResp.GrantType,
 				GrantMeasure:       entResp.GrantMeasure,
 				GrantDurationValue: entResp.GrantDurationValue,
 				GrantDurationUnit:  entResp.GrantDurationUnit,

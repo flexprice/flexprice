@@ -675,19 +675,13 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		existing.ConfigValue = req.ConfigValue
 	}
 
-	// Grant fields. Each pointer is "unset = leave alone". Passing GrantType=NONE
-	// explicitly clears the grant config (see entitlement.validateGrantConfig).
-	if req.GrantType != nil {
-		existing.GrantType = *req.GrantType
-		// When switching back to NONE, clear the rest so the coherence check
-		// passes cleanly.
-		if existing.GrantType == types.EntitlementGrantTypeNone {
-			existing.GrantMeasure = ""
-			existing.GrantDurationValue = nil
-			existing.GrantDurationUnit = ""
-			existing.GrantQuota = nil
-			existing.AggregationMode = types.EntitlementGrantAggregationModeAdditive
-		}
+	// Grant fields: nil = leave alone; ClearGrantConfig wipes the whole config.
+	if req.ClearGrantConfig != nil && *req.ClearGrantConfig {
+		existing.GrantMeasure = ""
+		existing.GrantDurationValue = nil
+		existing.GrantDurationUnit = ""
+		existing.GrantQuota = nil
+		existing.AggregationMode = types.EntitlementAggregationModeAdditive
 	}
 	if req.GrantMeasure != nil {
 		existing.GrantMeasure = *req.GrantMeasure
@@ -709,7 +703,7 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	if existing.GrantType != "" && existing.GrantType != types.EntitlementGrantTypeNone && existing.FeatureType == types.FeatureTypeMetered {
+	if existing.HasGrantConfig() && existing.FeatureType == types.FeatureTypeMetered {
 		featureRow, err := s.FeatureRepo.Get(ctx, existing.FeatureID)
 		if err != nil {
 			return nil, err

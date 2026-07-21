@@ -185,7 +185,7 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_AcceptsFlatPriceAmountLane
 
 	resp, err := s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureAmount, 5, decimal.NewFromInt(10)))
 	s.NoError(err)
-	s.Equal(types.EntitlementGrantTypeTimeBoxed, resp.Entitlement.GrantType)
+	s.True(resp.Entitlement.HasGrantConfig())
 	s.Equal(types.EntitlementGrantMeasureAmount, resp.Entitlement.GrantMeasure)
 }
 
@@ -207,7 +207,7 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_NoneStillWorks() {
 	}
 	resp, err := s.entService.CreateEntitlement(s.GetContext(), req)
 	s.NoError(err)
-	s.Equal(types.EntitlementGrantTypeNone, resp.Entitlement.GrantType)
+	s.False(resp.Entitlement.HasGrantConfig())
 }
 
 // -----------------------------------------------------------------------------
@@ -361,7 +361,6 @@ func (s *EntitlementGrantSuite) grantCreateRequest(
 		EntityType:         types.ENTITLEMENT_ENTITY_TYPE_PLAN,
 		EntityID:           planID,
 		IsEnabled:          true,
-		GrantType:          types.EntitlementGrantTypeTimeBoxed,
 		GrantMeasure:       measure,
 		GrantDurationValue: lo.ToPtr(durationValue),
 		GrantDurationUnit:  types.EntitlementGrantDurationUnitHour,
@@ -432,7 +431,6 @@ func (s *EntitlementGrantSuite) newTimeBoxedEC(id, featureID string, durationVal
 		FeatureID:          featureID,
 		FeatureType:        types.FeatureTypeMetered,
 		IsEnabled:          true,
-		GrantType:          types.EntitlementGrantTypeTimeBoxed,
 		GrantMeasure:       types.EntitlementGrantMeasureQuantity,
 		GrantDurationValue: &durationValue,
 		GrantDurationUnit:  unit,
@@ -519,7 +517,7 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_ParallelECs_OneGrantEach() {
 
 	for i, quota := range []int64{100, 200} {
 		req := s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(quota))
-		req.AggregationMode = types.EntitlementGrantAggregationModeParallel
+		req.AggregationMode = types.EntitlementAggregationModeParallel
 		_, err := s.entService.CreateEntitlement(s.GetContext(), req)
 		s.Require().NoError(err, "creating parallel EC %d", i)
 	}
@@ -533,6 +531,67 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_ParallelECs_OneGrantEach() {
 	s.NotEqual(grants[0].EntitlementConfigID, grants[1].EntitlementConfigID)
 	quotas := []int64{grants[0].Quota.IntPart(), grants[1].Quota.IntPart()}
 	s.ElementsMatch([]int64{100, 200}, quotas)
+}
+
+func (s *EntitlementGrantSuite) TestEnsureGrants_AdditiveECs_OneSummedGrant() {
+	// Two additive ECs on the same feature merge into ONE grant with the summed
+	// quota, opened on the lowest-ID EC's slot — downstream evaluation, alerts,
+	// and billing then treat the group as a single pool.
+	m := s.simpleMeter("meter-add")
+	f := s.simpleFeature("feat-add", m.ID)
+	p := s.simplePlan("plan-add")
+
+	for i, quota := range []int64{100, 200} {
+		req := s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(quota))
+		_, err := s.entService.CreateEntitlement(s.GetContext(), req)
+		s.Require().NoError(err, "creating additive EC %d", i)
+	}
+
+	cust := s.simpleCustomer("cust-add")
+	sub := s.simpleSubscription("sub-add", cust.ID, p.ID)
+
+	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1, "additive group must open a single summed grant")
+	s.True(grants[0].Quota.Equal(decimal.NewFromInt(300)),
+		"summed quota expected 300, got %s", grants[0].Quota)
+
+	// Idempotency across the group: second call returns the same single grant.
+	again, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(20*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(again, 1)
+	s.Equal(grants[0].ID, again[0].ID)
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsMixedModesOnFeature() {
+	// One mode per feature: an additive EC exists → creating a parallel EC on
+	// the same feature must fail.
+	m := s.simpleMeter("meter-mix")
+	f := s.simpleFeature("feat-mix", m.ID)
+	p := s.simplePlan("plan-mix")
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(100)))
+	s.Require().NoError(err)
+
+	req := s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(50))
+	req.AggregationMode = types.EntitlementAggregationModeParallel
+	_, err = s.entService.CreateEntitlement(s.GetContext(), req)
+	s.Error(err)
+	s.Contains(err.Error(), "aggregation_mode")
+}
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsAdditiveDurationMismatch() {
+	// Additive quotas sum into one window, so durations must match.
+	m := s.simpleMeter("meter-durmix")
+	f := s.simpleFeature("feat-durmix", m.ID)
+	p := s.simplePlan("plan-durmix")
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(100)))
+	s.Require().NoError(err)
+
+	_, err = s.entService.CreateEntitlement(s.GetContext(), s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 10, decimal.NewFromInt(50)))
+	s.Error(err)
+	s.Contains(err.Error(), "grant_duration")
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_AnchorsToPreviousValidTo() {
@@ -616,7 +675,6 @@ func TestEntitlementValidate_GrantConfig(t *testing.T) {
 		}
 	}
 	withGrant := func(e *entitlement.Entitlement) {
-		e.GrantType = types.EntitlementGrantTypeTimeBoxed
 		e.GrantMeasure = types.EntitlementGrantMeasureQuantity
 		e.GrantDurationValue = lo.ToPtr(5)
 		e.GrantDurationUnit = types.EntitlementGrantDurationUnitHour
@@ -628,33 +686,33 @@ func TestEntitlementValidate_GrantConfig(t *testing.T) {
 		wantErr bool
 	}{
 		{"legacy default passes", func(e *entitlement.Entitlement) {}, false},
-		{"parallel without time_boxed rejected", func(e *entitlement.Entitlement) {
-			e.AggregationMode = types.EntitlementGrantAggregationModeParallel
+		{"parallel without grant config rejected", func(e *entitlement.Entitlement) {
+			e.AggregationMode = types.EntitlementAggregationModeParallel
 		}, true},
-		{"grant fields without time_boxed rejected", func(e *entitlement.Entitlement) {
+		{"partial config (quota only) rejected", func(e *entitlement.Entitlement) {
 			e.GrantQuota = lo.ToPtr(decimal.NewFromInt(10))
 		}, true},
-		{"time_boxed missing measure rejected", func(e *entitlement.Entitlement) {
+		{"missing measure rejected", func(e *entitlement.Entitlement) {
 			withGrant(e)
 			e.GrantMeasure = ""
 		}, true},
-		{"time_boxed missing duration rejected", func(e *entitlement.Entitlement) {
+		{"missing duration rejected", func(e *entitlement.Entitlement) {
 			withGrant(e)
 			e.GrantDurationValue = nil
 		}, true},
-		{"time_boxed non-positive quota rejected", func(e *entitlement.Entitlement) {
+		{"non-positive quota rejected", func(e *entitlement.Entitlement) {
 			withGrant(e)
 			e.GrantQuota = lo.ToPtr(decimal.Zero)
 		}, true},
-		{"time_boxed on static feature rejected", func(e *entitlement.Entitlement) {
+		{"grant on static feature rejected", func(e *entitlement.Entitlement) {
 			withGrant(e)
 			e.FeatureType = types.FeatureTypeStatic
 			e.StaticValue = "on"
 		}, true},
-		{"valid time_boxed passes", withGrant, false},
-		{"valid parallel time_boxed passes", func(e *entitlement.Entitlement) {
+		{"valid grant config passes", withGrant, false},
+		{"valid parallel grant config passes", func(e *entitlement.Entitlement) {
 			withGrant(e)
-			e.AggregationMode = types.EntitlementGrantAggregationModeParallel
+			e.AggregationMode = types.EntitlementAggregationModeParallel
 		}, false},
 	}
 	for _, tc := range cases {
@@ -685,11 +743,11 @@ func TestAggregateMeteredEntitlements_AdditiveSums(t *testing.T) {
 	if agg.UsageLimit == nil || *agg.UsageLimit != 350 {
 		t.Fatalf("additive must sum limits, got %v", agg.UsageLimit)
 	}
-	if agg.AggregationMode != types.EntitlementGrantAggregationModeAdditive {
+	if agg.AggregationMode != types.EntitlementAggregationModeAdditive {
 		t.Fatalf("mode should default to additive, got %s", agg.AggregationMode)
 	}
 	if agg.Buckets != nil {
-		t.Fatalf("no buckets expected for plain additive entitlements")
+		t.Fatalf("no buckets expected for additive entitlements")
 	}
 }
 
@@ -708,21 +766,19 @@ func TestAggregateMeteredEntitlements_ParallelEmitsBuckets(t *testing.T) {
 	ents := []*entitlement.Entitlement{
 		{
 			ID: "e1", EntityID: "plan_1", IsEnabled: true,
-			GrantType:       types.EntitlementGrantTypeTimeBoxed,
 			GrantMeasure:    types.EntitlementGrantMeasureQuantity,
 			GrantQuota:      lo.ToPtr(decimal.NewFromInt(100)),
-			AggregationMode: types.EntitlementGrantAggregationModeParallel,
+			AggregationMode: types.EntitlementAggregationModeParallel,
 		},
 		{
 			ID: "e2", EntityID: "addon_1", IsEnabled: true,
-			GrantType:       types.EntitlementGrantTypeTimeBoxed,
 			GrantMeasure:    types.EntitlementGrantMeasureQuantity,
 			GrantQuota:      lo.ToPtr(decimal.NewFromInt(50)),
-			AggregationMode: types.EntitlementGrantAggregationModeParallel,
+			AggregationMode: types.EntitlementAggregationModeParallel,
 		},
 	}
 	agg := aggregateMeteredEntitlementsForBilling(ents)
-	if agg.AggregationMode != types.EntitlementGrantAggregationModeParallel {
+	if agg.AggregationMode != types.EntitlementAggregationModeParallel {
 		t.Fatalf("mode must surface parallel, got %s", agg.AggregationMode)
 	}
 	if len(agg.Buckets) != 2 {
@@ -734,24 +790,21 @@ func TestAggregateMeteredEntitlements_ParallelEmitsBuckets(t *testing.T) {
 	}
 }
 
-func TestAggregateMeteredEntitlements_GrantConfigEmitsBucketsEvenWhenAdditive(t *testing.T) {
+func TestAggregateMeteredEntitlements_AdditiveGrantConfig_NoBuckets(t *testing.T) {
+	// Additive grant entitlements merge into one bucket — no per-EC breakdown.
 	ents := []*entitlement.Entitlement{
 		{
 			ID: "e1", IsEnabled: true,
-			GrantType:    types.EntitlementGrantTypeTimeBoxed,
 			GrantMeasure: types.EntitlementGrantMeasureAmount,
 			GrantQuota:   lo.ToPtr(decimal.NewFromFloat(9.99)),
 		},
 	}
 	agg := aggregateMeteredEntitlementsForBilling(ents)
-	if len(agg.Buckets) != 1 {
-		t.Fatalf("time-boxed EC must emit its bucket, got %d", len(agg.Buckets))
+	if agg.Buckets != nil {
+		t.Fatalf("additive grant entitlements must not emit buckets, got %d", len(agg.Buckets))
 	}
-	if agg.Buckets[0].GrantMeasure != types.EntitlementGrantMeasureAmount {
-		t.Fatalf("bucket must carry the amount measure")
-	}
-	if !agg.Buckets[0].GrantQuota.Equal(decimal.NewFromFloat(9.99)) {
-		t.Fatalf("bucket must carry the decimal quota for amount grants")
+	if agg.AggregationMode != types.EntitlementAggregationModeAdditive {
+		t.Fatalf("mode should be additive, got %s", agg.AggregationMode)
 	}
 }
 

@@ -23646,13 +23646,12 @@ type EntitlementMutation struct {
 	start_date              *time.Time
 	end_date                *time.Time
 	config_value            *map[string]interface{}
-	grant_type              *types.EntitlementGrantType
 	grant_measure           *types.EntitlementGrantMeasure
 	grant_duration_value    *int
 	addgrant_duration_value *int
 	grant_duration_unit     *types.EntitlementGrantDurationUnit
 	grant_quota             *decimal.Decimal
-	aggregation_mode        *types.EntitlementGrantAggregationMode
+	aggregation_mode        *types.EntitlementAggregationMode
 	clearedFields           map[string]struct{}
 	done                    bool
 	oldValue                func(context.Context) (*Entitlement, error)
@@ -24716,42 +24715,6 @@ func (m *EntitlementMutation) ResetConfigValue() {
 	delete(m.clearedFields, entitlement.FieldConfigValue)
 }
 
-// SetGrantType sets the "grant_type" field.
-func (m *EntitlementMutation) SetGrantType(tgt types.EntitlementGrantType) {
-	m.grant_type = &tgt
-}
-
-// GrantType returns the value of the "grant_type" field in the mutation.
-func (m *EntitlementMutation) GrantType() (r types.EntitlementGrantType, exists bool) {
-	v := m.grant_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldGrantType returns the old "grant_type" field's value of the Entitlement entity.
-// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldGrantType(ctx context.Context) (v types.EntitlementGrantType, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldGrantType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldGrantType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldGrantType: %w", err)
-	}
-	return oldValue.GrantType, nil
-}
-
-// ResetGrantType resets all changes to the "grant_type" field.
-func (m *EntitlementMutation) ResetGrantType() {
-	m.grant_type = nil
-}
-
 // SetGrantMeasure sets the "grant_measure" field.
 func (m *EntitlementMutation) SetGrantMeasure(tgm types.EntitlementGrantMeasure) {
 	m.grant_measure = &tgm
@@ -24970,12 +24933,12 @@ func (m *EntitlementMutation) ResetGrantQuota() {
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (m *EntitlementMutation) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) {
-	m.aggregation_mode = &tgam
+func (m *EntitlementMutation) SetAggregationMode(tam types.EntitlementAggregationMode) {
+	m.aggregation_mode = &tam
 }
 
 // AggregationMode returns the value of the "aggregation_mode" field in the mutation.
-func (m *EntitlementMutation) AggregationMode() (r types.EntitlementGrantAggregationMode, exists bool) {
+func (m *EntitlementMutation) AggregationMode() (r types.EntitlementAggregationMode, exists bool) {
 	v := m.aggregation_mode
 	if v == nil {
 		return
@@ -24986,7 +24949,7 @@ func (m *EntitlementMutation) AggregationMode() (r types.EntitlementGrantAggrega
 // OldAggregationMode returns the old "aggregation_mode" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldAggregationMode(ctx context.Context) (v types.EntitlementGrantAggregationMode, err error) {
+func (m *EntitlementMutation) OldAggregationMode(ctx context.Context) (v types.EntitlementAggregationMode, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAggregationMode is only allowed on UpdateOne operations")
 	}
@@ -25039,7 +25002,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -25102,9 +25065,6 @@ func (m *EntitlementMutation) Fields() []string {
 	}
 	if m.config_value != nil {
 		fields = append(fields, entitlement.FieldConfigValue)
-	}
-	if m.grant_type != nil {
-		fields = append(fields, entitlement.FieldGrantType)
 	}
 	if m.grant_measure != nil {
 		fields = append(fields, entitlement.FieldGrantMeasure)
@@ -25171,8 +25131,6 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.EndDate()
 	case entitlement.FieldConfigValue:
 		return m.ConfigValue()
-	case entitlement.FieldGrantType:
-		return m.GrantType()
 	case entitlement.FieldGrantMeasure:
 		return m.GrantMeasure()
 	case entitlement.FieldGrantDurationValue:
@@ -25234,8 +25192,6 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldEndDate(ctx)
 	case entitlement.FieldConfigValue:
 		return m.OldConfigValue(ctx)
-	case entitlement.FieldGrantType:
-		return m.OldGrantType(ctx)
 	case entitlement.FieldGrantMeasure:
 		return m.OldGrantMeasure(ctx)
 	case entitlement.FieldGrantDurationValue:
@@ -25402,13 +25358,6 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConfigValue(v)
 		return nil
-	case entitlement.FieldGrantType:
-		v, ok := value.(types.EntitlementGrantType)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetGrantType(v)
-		return nil
 	case entitlement.FieldGrantMeasure:
 		v, ok := value.(types.EntitlementGrantMeasure)
 		if !ok {
@@ -25438,7 +25387,7 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		m.SetGrantQuota(v)
 		return nil
 	case entitlement.FieldAggregationMode:
-		v, ok := value.(types.EntitlementGrantAggregationMode)
+		v, ok := value.(types.EntitlementAggregationMode)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -25693,9 +25642,6 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldConfigValue:
 		m.ResetConfigValue()
-		return nil
-	case entitlement.FieldGrantType:
-		m.ResetGrantType()
 		return nil
 	case entitlement.FieldGrantMeasure:
 		m.ResetGrantMeasure()

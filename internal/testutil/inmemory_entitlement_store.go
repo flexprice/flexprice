@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // InMemoryEntitlementStore implements entitlement.Repository
@@ -82,14 +81,8 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 		return false
 	}
 
-	if len(f.GrantTypes) > 0 {
-		effective := e.GrantType
-		if effective == "" {
-			effective = types.EntitlementGrantTypeNone
-		}
-		if !lo.Contains(f.GrantTypes, effective) {
-			return false
-		}
+	if f.HasGrantConfig != nil && e.HasGrantConfig() != *f.HasGrantConfig {
+		return false
 	}
 
 	// Filter by time range

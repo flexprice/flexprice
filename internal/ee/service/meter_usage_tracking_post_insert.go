@@ -161,12 +161,12 @@ func (s *meterUsageTrackingService) computeUsageAlertGate(ctx context.Context, c
 			return true
 		}
 
-		// Time-boxed entitlement grants are opened/refreshed by the same
-		// workflow, so a tenant with any time-boxed EC must schedule for every
+		// Entitlement grants are opened/refreshed by the same workflow, so a
+		// tenant with any grant-based entitlement must schedule for every
 		// customer with active subs. Tenant-level check on purpose: resolving
-		// which plans/addons carry the EC per customer costs more than letting
-		// EnsureGrants no-op for customers whose subs don't carry one.
-		hasGrantConfigs, err := s.tenantHasTimeBoxedEntitlements(ctx)
+		// which plans/addons carry the entitlement per customer costs more than
+		// letting EnsureGrants no-op for customers whose subs don't carry one.
+		hasGrantConfigs, err := s.tenantHasGrantEntitlements(ctx)
 		if err != nil {
 			s.Logger.Error(ctx, "usage alert gate: entitlement lookup failed, scheduling anyway",
 				"error", err, "customer_id", cust.ID)
@@ -186,9 +186,9 @@ func (s *meterUsageTrackingService) computeUsageAlertGate(ctx context.Context, c
 	return needsWallet
 }
 
-func (s *meterUsageTrackingService) tenantHasTimeBoxedEntitlements(ctx context.Context) (bool, error) {
+func (s *meterUsageTrackingService) tenantHasGrantEntitlements(ctx context.Context) (bool, error) {
 	filter := types.NewNoLimitEntitlementFilter()
-	filter.GrantTypes = []types.EntitlementGrantType{types.EntitlementGrantTypeTimeBoxed}
+	filter.HasGrantConfig = lo.ToPtr(true)
 	filter.IsEnabled = lo.ToPtr(true)
 	n, err := s.EntitlementRepo.Count(ctx, filter)
 	if err != nil {

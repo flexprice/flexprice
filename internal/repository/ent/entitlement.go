@@ -33,18 +33,10 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache
 	}
 }
 
-// defaultedGrantType maps zero-value to `none` so ent's SetGrantType doesn't
-// emit an empty string. Same for aggregation_mode below.
-func defaultedGrantType(g types.EntitlementGrantType) types.EntitlementGrantType {
-	if g == "" {
-		return types.EntitlementGrantTypeNone
-	}
-	return g
-}
-
-func defaultedAggregationMode(m types.EntitlementGrantAggregationMode) types.EntitlementGrantAggregationMode {
+// defaultedAggregationMode maps zero-value to `additive` so ent doesn't emit an empty string.
+func defaultedAggregationMode(m types.EntitlementAggregationMode) types.EntitlementAggregationMode {
 	if m == "" {
-		return types.EntitlementGrantAggregationModeAdditive
+		return types.EntitlementAggregationModeAdditive
 	}
 	return m
 }
@@ -87,7 +79,6 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
 		SetEnvironmentID(e.EnvironmentID).
-		SetGrantType(defaultedGrantType(e.GrantType)).
 		SetGrantMeasure(e.GrantMeasure).
 		SetNillableGrantDurationValue(e.GrantDurationValue).
 		SetGrantDurationUnit(e.GrantDurationUnit).
@@ -321,12 +312,20 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetGrantType(defaultedGrantType(e.GrantType)).
 		SetGrantMeasure(e.GrantMeasure).
-		SetNillableGrantDurationValue(e.GrantDurationValue).
 		SetGrantDurationUnit(e.GrantDurationUnit).
-		SetNillableGrantQuota(e.GrantQuota).
 		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
+	// SetNillable* with nil is a no-op, so clearing a grant config needs explicit Clear.
+	if e.GrantDurationValue != nil {
+		updateQuery = updateQuery.SetGrantDurationValue(*e.GrantDurationValue)
+	} else {
+		updateQuery = updateQuery.ClearGrantDurationValue()
+	}
+	if e.GrantQuota != nil {
+		updateQuery = updateQuery.SetGrantQuota(*e.GrantQuota)
+	} else {
+		updateQuery = updateQuery.ClearGrantQuota()
+	}
 	if e.ConfigValue != nil {
 		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -437,7 +436,6 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetCreatedBy(e.CreatedBy).
 			SetUpdatedBy(e.UpdatedBy).
 			SetEnvironmentID(e.EnvironmentID).
-			SetGrantType(defaultedGrantType(e.GrantType)).
 			SetGrantMeasure(e.GrantMeasure).
 			SetNillableGrantDurationValue(e.GrantDurationValue).
 			SetGrantDurationUnit(e.GrantDurationUnit).
@@ -675,8 +673,12 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		query = query.Where(entitlement.IsEnabled(*f.IsEnabled))
 	}
 
-	if len(f.GrantTypes) > 0 {
-		query = query.Where(entitlement.GrantTypeIn(f.GrantTypes...))
+	if f.HasGrantConfig != nil {
+		if *f.HasGrantConfig {
+			query = query.Where(entitlement.GrantQuotaNotNil())
+		} else {
+			query = query.Where(entitlement.GrantQuotaIsNil())
+		}
 	}
 
 	// Apply time range filters if specified

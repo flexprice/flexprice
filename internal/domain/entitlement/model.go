@@ -30,27 +30,29 @@ type Entitlement struct {
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 
-	// Grant config; only meaningful when GrantType == time_boxed.
-	GrantType          types.EntitlementGrantType            `json:"grant_type,omitempty"`
-	GrantMeasure       types.EntitlementGrantMeasure         `json:"grant_measure,omitempty"`
-	GrantDurationValue *int                                  `json:"grant_duration_value,omitempty"`
-	GrantDurationUnit  types.EntitlementGrantDurationUnit    `json:"grant_duration_unit,omitempty"`
-	GrantQuota         *decimal.Decimal                      `json:"grant_quota,omitempty"`
-	AggregationMode    types.EntitlementGrantAggregationMode `json:"aggregation_mode,omitempty"`
+	// Grant config; all-or-nothing set (see validateGrantConfig). Presence of a
+	// grant config turns the entitlement into a time-boxed bucket source.
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty"`
+	AggregationMode    types.EntitlementAggregationMode   `json:"aggregation_mode,omitempty"`
 
 	types.BaseModel
 }
 
-func (e *Entitlement) IsTimeBoxed() bool {
+// HasGrantConfig reports whether this entitlement carries a grant config and
+// therefore rolls into entitlement_grants.
+func (e *Entitlement) HasGrantConfig() bool {
 	if e == nil {
 		return false
 	}
-	return e.GrantType == types.EntitlementGrantTypeTimeBoxed
+	return e.GrantQuota != nil || e.GrantDurationValue != nil || e.GrantMeasure != "" || e.GrantDurationUnit != ""
 }
 
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
 	if e == nil || e.GrantDurationValue == nil {
-		return 0, ierr.NewError("grant_duration_value is required for time-boxed grants").
+		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}
 	return types.EntitlementGrantDurationOf(*e.GrantDurationValue, e.GrantDurationUnit)
@@ -157,39 +159,25 @@ func (e *Entitlement) Validate() error {
 	return nil
 }
 
-// validateGrantConfig enforces coherence between GrantType and the grant fields.
-// Meter-shape and pricing-shape checks live in the service layer.
+// validateGrantConfig enforces coherence on the grant fields: either none are
+// set (legacy entitlement) or the full measure/duration/quota set is present on
+// a metered feature. Meter-shape and pricing-shape checks live in the service layer.
 func (e *Entitlement) validateGrantConfig() error {
-	if e.GrantType != "" {
-		if err := e.GrantType.Validate(); err != nil {
-			return err
-		}
-	}
 	if err := e.AggregationMode.Validate(); err != nil {
 		return err
 	}
 
-	grantType := e.GrantType
-	if grantType == "" {
-		grantType = types.EntitlementGrantTypeNone
-	}
-
-	if grantType == types.EntitlementGrantTypeNone {
-		if e.GrantMeasure != "" || e.GrantDurationValue != nil || e.GrantDurationUnit != "" || e.GrantQuota != nil {
-			return ierr.NewError("grant fields must be empty when grant_type is none").
-				WithHint("Set grant_type=time_boxed to opt in, or clear grant_measure/duration/quota").
-				Mark(ierr.ErrValidation)
-		}
-		if e.AggregationMode == types.EntitlementGrantAggregationModeParallel {
-			return ierr.NewError("aggregation_mode=parallel requires grant_type=time_boxed").
-				WithHint("Parallel buckets only exist for time-boxed grants; legacy entitlements always aggregate additively").
+	if !e.HasGrantConfig() {
+		if e.AggregationMode == types.EntitlementAggregationModeParallel {
+			return ierr.NewError("aggregation_mode=parallel requires a grant config").
+				WithHint("Parallel buckets only exist for grant-based entitlements; legacy entitlements always aggregate additively").
 				Mark(ierr.ErrValidation)
 		}
 		return nil
 	}
 
 	if e.FeatureType != types.FeatureTypeMetered {
-		return ierr.NewError("time-boxed grants require a metered feature").
+		return ierr.NewError("grant config requires a metered feature").
 			WithReportableDetails(map[string]interface{}{"feature_type": e.FeatureType}).
 			Mark(ierr.ErrValidation)
 	}
@@ -198,7 +186,7 @@ func (e *Entitlement) validateGrantConfig() error {
 		return err
 	}
 	if e.GrantMeasure == "" {
-		return ierr.NewError("grant_measure is required for time-boxed grants").
+		return ierr.NewError("grant_measure is required for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -219,7 +207,7 @@ func (e *Entitlement) validateGrantConfig() error {
 	}
 
 	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
-		return ierr.NewError("grant_quota must be positive for time-boxed grants").
+		return ierr.NewError("grant_quota must be positive for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -249,7 +237,6 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		ParentEntitlementID: e.ParentEntitlementID,
 		StartDate:           e.StartDate,
 		EndDate:             e.EndDate,
-		GrantType:           e.GrantType,
 		GrantMeasure:        e.GrantMeasure,
 		GrantDurationValue:  e.GrantDurationValue,
 		GrantDurationUnit:   e.GrantDurationUnit,

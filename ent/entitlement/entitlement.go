@@ -56,8 +56,6 @@ const (
 	FieldEndDate = "end_date"
 	// FieldConfigValue holds the string denoting the config_value field in the database.
 	FieldConfigValue = "config_value"
-	// FieldGrantType holds the string denoting the grant_type field in the database.
-	FieldGrantType = "grant_type"
 	// FieldGrantMeasure holds the string denoting the grant_measure field in the database.
 	FieldGrantMeasure = "grant_measure"
 	// FieldGrantDurationValue holds the string denoting the grant_duration_value field in the database.
@@ -96,7 +94,6 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldConfigValue,
-	FieldGrantType,
 	FieldGrantMeasure,
 	FieldGrantDurationValue,
 	FieldGrantDurationUnit,
@@ -150,10 +147,8 @@ var (
 	DefaultIsSoftLimit bool
 	// DefaultDisplayOrder holds the default value on creation for the "display_order" field.
 	DefaultDisplayOrder int
-	// DefaultGrantType holds the default value on creation for the "grant_type" field.
-	DefaultGrantType types.EntitlementGrantType
 	// DefaultAggregationMode holds the default value on creation for the "aggregation_mode" field.
-	DefaultAggregationMode types.EntitlementGrantAggregationMode
+	DefaultAggregationMode types.EntitlementAggregationMode
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -264,11 +259,6 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
-}
-
-// ByGrantType orders the results by the grant_type field.
-func ByGrantType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldGrantType, opts...).ToFunc()
 }
 
 // ByGrantMeasure orders the results by the grant_measure field.

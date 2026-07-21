@@ -93,12 +93,7 @@ func (Entitlement) Fields() []ent.Field {
 			Optional().
 			SchemaType(map[string]string{"postgres": "jsonb"}),
 
-		// Grant config; a grant_type='time_boxed' row is instantiated into entitlement_grants.
-		field.String("grant_type").
-			SchemaType(map[string]string{"postgres": "varchar(20)"}).
-			Default(string(types.EntitlementGrantTypeNone)).
-			GoType(types.EntitlementGrantType("")),
-
+		// Grant config; a row with grant fields set is instantiated into entitlement_grants.
 		field.String("grant_measure").
 			SchemaType(map[string]string{"postgres": "varchar(20)"}).
 			Optional().
@@ -120,8 +115,8 @@ func (Entitlement) Fields() []ent.Field {
 
 		field.String("aggregation_mode").
 			SchemaType(map[string]string{"postgres": "varchar(20)"}).
-			Default(string(types.EntitlementGrantAggregationModeAdditive)).
-			GoType(types.EntitlementGrantAggregationMode("")),
+			Default(string(types.EntitlementAggregationModeAdditive)).
+			GoType(types.EntitlementAggregationMode("")),
 	}
 }
 

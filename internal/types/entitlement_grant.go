@@ -7,33 +7,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// EntitlementGrantType picks the grant cadence on an entitlement.
-type EntitlementGrantType string
-
-const (
-	EntitlementGrantTypeNone      EntitlementGrantType = "none"
-	EntitlementGrantTypeTimeBoxed EntitlementGrantType = "time_boxed"
-)
-
-func (t EntitlementGrantType) Validate() error {
-	if t == "" {
-		return nil
-	}
-	allowed := []EntitlementGrantType{
-		EntitlementGrantTypeNone,
-		EntitlementGrantTypeTimeBoxed,
-	}
-	if !lo.Contains(allowed, t) {
-		return ierr.NewError("invalid entitlement grant type").
-			WithHint("grant_type must be one of none or time_boxed").
-			WithReportableDetails(map[string]interface{}{"grant_type": t}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-func (t EntitlementGrantType) String() string { return string(t) }
-
 // EntitlementGrantMeasure selects the counter a grant tracks: raw quantity or priced amount.
 type EntitlementGrantMeasure string
 
@@ -61,25 +34,26 @@ func (m EntitlementGrantMeasure) Validate() error {
 
 func (m EntitlementGrantMeasure) String() string { return string(m) }
 
-// EntitlementGrantAggregationMode picks how multiple entitlements on the same
-// feature combine: `additive` sums quotas; `parallel` gives each its own bucket.
-type EntitlementGrantAggregationMode string
+// EntitlementAggregationMode picks how multiple entitlements on the same
+// feature combine: `additive` sums quotas into one bucket; `parallel` gives
+// each entitlement its own independent bucket.
+type EntitlementAggregationMode string
 
 const (
-	EntitlementGrantAggregationModeAdditive EntitlementGrantAggregationMode = "additive"
-	EntitlementGrantAggregationModeParallel EntitlementGrantAggregationMode = "parallel"
+	EntitlementAggregationModeAdditive EntitlementAggregationMode = "additive"
+	EntitlementAggregationModeParallel EntitlementAggregationMode = "parallel"
 )
 
-func (m EntitlementGrantAggregationMode) Validate() error {
+func (m EntitlementAggregationMode) Validate() error {
 	if m == "" {
 		return nil
 	}
-	allowed := []EntitlementGrantAggregationMode{
-		EntitlementGrantAggregationModeAdditive,
-		EntitlementGrantAggregationModeParallel,
+	allowed := []EntitlementAggregationMode{
+		EntitlementAggregationModeAdditive,
+		EntitlementAggregationModeParallel,
 	}
 	if !lo.Contains(allowed, m) {
-		return ierr.NewError("invalid entitlement grant aggregation mode").
+		return ierr.NewError("invalid entitlement aggregation mode").
 			WithHint("aggregation_mode must be additive or parallel").
 			WithReportableDetails(map[string]interface{}{"aggregation_mode": m}).
 			Mark(ierr.ErrValidation)
@@ -87,7 +61,7 @@ func (m EntitlementGrantAggregationMode) Validate() error {
 	return nil
 }
 
-func (m EntitlementGrantAggregationMode) String() string { return string(m) }
+func (m EntitlementAggregationMode) String() string { return string(m) }
 
 // EntitlementGrantScopeEntityType identifies what a grant meters.
 // Only `feature` is written today; `subscription` and `group` are reserved.

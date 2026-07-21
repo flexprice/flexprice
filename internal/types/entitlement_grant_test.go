@@ -7,25 +7,20 @@ import (
 	"github.com/samber/lo"
 )
 
-func TestEntitlementGrantType_Validate(t *testing.T) {
+func TestEntitlementAggregationMode_Validate(t *testing.T) {
 	cases := []struct {
-		name    string
-		input   EntitlementGrantType
+		input   EntitlementAggregationMode
 		wantErr bool
 	}{
-		{"empty allowed", "", false},
-		{"none", EntitlementGrantTypeNone, false},
-		{"time_boxed", EntitlementGrantTypeTimeBoxed, false},
-		{"unknown rejected", "recurring", true},
-		{"upper rejected — enum values are lowercase", "TIME_BOXED", true},
+		{"", false},
+		{EntitlementAggregationModeAdditive, false},
+		{EntitlementAggregationModeParallel, false},
+		{"combined", true},
 	}
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.input.Validate()
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("wantErr=%v got err=%v", tc.wantErr, err)
-			}
-		})
+		if got := tc.input.Validate(); (got != nil) != tc.wantErr {
+			t.Fatalf("Validate(%q) wantErr=%v got=%v", tc.input, tc.wantErr, got)
+		}
 	}
 }
 

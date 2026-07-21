@@ -284,20 +284,6 @@ func (ec *EntitlementCreate) SetConfigValue(m map[string]interface{}) *Entitleme
 	return ec
 }
 
-// SetGrantType sets the "grant_type" field.
-func (ec *EntitlementCreate) SetGrantType(tgt types.EntitlementGrantType) *EntitlementCreate {
-	ec.mutation.SetGrantType(tgt)
-	return ec
-}
-
-// SetNillableGrantType sets the "grant_type" field if the given value is not nil.
-func (ec *EntitlementCreate) SetNillableGrantType(tgt *types.EntitlementGrantType) *EntitlementCreate {
-	if tgt != nil {
-		ec.SetGrantType(*tgt)
-	}
-	return ec
-}
-
 // SetGrantMeasure sets the "grant_measure" field.
 func (ec *EntitlementCreate) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementCreate {
 	ec.mutation.SetGrantMeasure(tgm)
@@ -355,15 +341,15 @@ func (ec *EntitlementCreate) SetNillableGrantQuota(d *decimal.Decimal) *Entitlem
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (ec *EntitlementCreate) SetAggregationMode(tgam types.EntitlementGrantAggregationMode) *EntitlementCreate {
-	ec.mutation.SetAggregationMode(tgam)
+func (ec *EntitlementCreate) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementCreate {
+	ec.mutation.SetAggregationMode(tam)
 	return ec
 }
 
 // SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
-func (ec *EntitlementCreate) SetNillableAggregationMode(tgam *types.EntitlementGrantAggregationMode) *EntitlementCreate {
-	if tgam != nil {
-		ec.SetAggregationMode(*tgam)
+func (ec *EntitlementCreate) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementCreate {
+	if tam != nil {
+		ec.SetAggregationMode(*tam)
 	}
 	return ec
 }
@@ -441,10 +427,6 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultDisplayOrder
 		ec.mutation.SetDisplayOrder(v)
 	}
-	if _, ok := ec.mutation.GrantType(); !ok {
-		v := entitlement.DefaultGrantType
-		ec.mutation.SetGrantType(v)
-	}
 	if _, ok := ec.mutation.AggregationMode(); !ok {
 		v := entitlement.DefaultAggregationMode
 		ec.mutation.SetAggregationMode(v)
@@ -504,14 +486,6 @@ func (ec *EntitlementCreate) check() error {
 	}
 	if _, ok := ec.mutation.DisplayOrder(); !ok {
 		return &ValidationError{Name: "display_order", err: errors.New(`ent: missing required field "Entitlement.display_order"`)}
-	}
-	if _, ok := ec.mutation.GrantType(); !ok {
-		return &ValidationError{Name: "grant_type", err: errors.New(`ent: missing required field "Entitlement.grant_type"`)}
-	}
-	if v, ok := ec.mutation.GrantType(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "grant_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_type": %w`, err)}
-		}
 	}
 	if v, ok := ec.mutation.GrantMeasure(); ok {
 		if err := v.Validate(); err != nil {
@@ -654,10 +628,6 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.ConfigValue(); ok {
 		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
 		_node.ConfigValue = value
-	}
-	if value, ok := ec.mutation.GrantType(); ok {
-		_spec.SetField(entitlement.FieldGrantType, field.TypeString, value)
-		_node.GrantType = value
 	}
 	if value, ok := ec.mutation.GrantMeasure(); ok {
 		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)

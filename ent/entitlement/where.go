@@ -169,12 +169,6 @@ func EndDate(v time.Time) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldEndDate, v))
 }
 
-// GrantType applies equality check predicate on the "grant_type" field. It's identical to GrantTypeEQ.
-func GrantType(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldEQ(FieldGrantType, vc))
-}
-
 // GrantMeasure applies equality check predicate on the "grant_measure" field. It's identical to GrantMeasureEQ.
 func GrantMeasure(v types.EntitlementGrantMeasure) predicate.Entitlement {
 	vc := string(v)
@@ -198,7 +192,7 @@ func GrantQuota(v decimal.Decimal) predicate.Entitlement {
 }
 
 // AggregationMode applies equality check predicate on the "aggregation_mode" field. It's identical to AggregationModeEQ.
-func AggregationMode(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationMode(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldEQ(FieldAggregationMode, vc))
 }
@@ -1420,90 +1414,6 @@ func ConfigValueNotNil() predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldNotNull(FieldConfigValue))
 }
 
-// GrantTypeEQ applies the EQ predicate on the "grant_type" field.
-func GrantTypeEQ(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldEQ(FieldGrantType, vc))
-}
-
-// GrantTypeNEQ applies the NEQ predicate on the "grant_type" field.
-func GrantTypeNEQ(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldNEQ(FieldGrantType, vc))
-}
-
-// GrantTypeIn applies the In predicate on the "grant_type" field.
-func GrantTypeIn(vs ...types.EntitlementGrantType) predicate.Entitlement {
-	v := make([]any, len(vs))
-	for i := range v {
-		v[i] = string(vs[i])
-	}
-	return predicate.Entitlement(sql.FieldIn(FieldGrantType, v...))
-}
-
-// GrantTypeNotIn applies the NotIn predicate on the "grant_type" field.
-func GrantTypeNotIn(vs ...types.EntitlementGrantType) predicate.Entitlement {
-	v := make([]any, len(vs))
-	for i := range v {
-		v[i] = string(vs[i])
-	}
-	return predicate.Entitlement(sql.FieldNotIn(FieldGrantType, v...))
-}
-
-// GrantTypeGT applies the GT predicate on the "grant_type" field.
-func GrantTypeGT(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldGT(FieldGrantType, vc))
-}
-
-// GrantTypeGTE applies the GTE predicate on the "grant_type" field.
-func GrantTypeGTE(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldGTE(FieldGrantType, vc))
-}
-
-// GrantTypeLT applies the LT predicate on the "grant_type" field.
-func GrantTypeLT(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldLT(FieldGrantType, vc))
-}
-
-// GrantTypeLTE applies the LTE predicate on the "grant_type" field.
-func GrantTypeLTE(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldLTE(FieldGrantType, vc))
-}
-
-// GrantTypeContains applies the Contains predicate on the "grant_type" field.
-func GrantTypeContains(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldContains(FieldGrantType, vc))
-}
-
-// GrantTypeHasPrefix applies the HasPrefix predicate on the "grant_type" field.
-func GrantTypeHasPrefix(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldHasPrefix(FieldGrantType, vc))
-}
-
-// GrantTypeHasSuffix applies the HasSuffix predicate on the "grant_type" field.
-func GrantTypeHasSuffix(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldHasSuffix(FieldGrantType, vc))
-}
-
-// GrantTypeEqualFold applies the EqualFold predicate on the "grant_type" field.
-func GrantTypeEqualFold(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldEqualFold(FieldGrantType, vc))
-}
-
-// GrantTypeContainsFold applies the ContainsFold predicate on the "grant_type" field.
-func GrantTypeContainsFold(v types.EntitlementGrantType) predicate.Entitlement {
-	vc := string(v)
-	return predicate.Entitlement(sql.FieldContainsFold(FieldGrantType, vc))
-}
-
 // GrantMeasureEQ applies the EQ predicate on the "grant_measure" field.
 func GrantMeasureEQ(v types.EntitlementGrantMeasure) predicate.Entitlement {
 	vc := string(v)
@@ -1793,19 +1703,19 @@ func GrantQuotaNotNil() predicate.Entitlement {
 }
 
 // AggregationModeEQ applies the EQ predicate on the "aggregation_mode" field.
-func AggregationModeEQ(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeEQ(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldEQ(FieldAggregationMode, vc))
 }
 
 // AggregationModeNEQ applies the NEQ predicate on the "aggregation_mode" field.
-func AggregationModeNEQ(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeNEQ(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldNEQ(FieldAggregationMode, vc))
 }
 
 // AggregationModeIn applies the In predicate on the "aggregation_mode" field.
-func AggregationModeIn(vs ...types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeIn(vs ...types.EntitlementAggregationMode) predicate.Entitlement {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -1814,7 +1724,7 @@ func AggregationModeIn(vs ...types.EntitlementGrantAggregationMode) predicate.En
 }
 
 // AggregationModeNotIn applies the NotIn predicate on the "aggregation_mode" field.
-func AggregationModeNotIn(vs ...types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeNotIn(vs ...types.EntitlementAggregationMode) predicate.Entitlement {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -1823,55 +1733,55 @@ func AggregationModeNotIn(vs ...types.EntitlementGrantAggregationMode) predicate
 }
 
 // AggregationModeGT applies the GT predicate on the "aggregation_mode" field.
-func AggregationModeGT(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeGT(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldGT(FieldAggregationMode, vc))
 }
 
 // AggregationModeGTE applies the GTE predicate on the "aggregation_mode" field.
-func AggregationModeGTE(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeGTE(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldGTE(FieldAggregationMode, vc))
 }
 
 // AggregationModeLT applies the LT predicate on the "aggregation_mode" field.
-func AggregationModeLT(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeLT(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldLT(FieldAggregationMode, vc))
 }
 
 // AggregationModeLTE applies the LTE predicate on the "aggregation_mode" field.
-func AggregationModeLTE(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeLTE(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldLTE(FieldAggregationMode, vc))
 }
 
 // AggregationModeContains applies the Contains predicate on the "aggregation_mode" field.
-func AggregationModeContains(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeContains(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldContains(FieldAggregationMode, vc))
 }
 
 // AggregationModeHasPrefix applies the HasPrefix predicate on the "aggregation_mode" field.
-func AggregationModeHasPrefix(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeHasPrefix(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldHasPrefix(FieldAggregationMode, vc))
 }
 
 // AggregationModeHasSuffix applies the HasSuffix predicate on the "aggregation_mode" field.
-func AggregationModeHasSuffix(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeHasSuffix(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldHasSuffix(FieldAggregationMode, vc))
 }
 
 // AggregationModeEqualFold applies the EqualFold predicate on the "aggregation_mode" field.
-func AggregationModeEqualFold(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeEqualFold(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldEqualFold(FieldAggregationMode, vc))
 }
 
 // AggregationModeContainsFold applies the ContainsFold predicate on the "aggregation_mode" field.
-func AggregationModeContainsFold(v types.EntitlementGrantAggregationMode) predicate.Entitlement {
+func AggregationModeContainsFold(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldContainsFold(FieldAggregationMode, vc))
 }

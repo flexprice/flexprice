@@ -62,8 +62,6 @@ type Entitlement struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// ConfigValue holds the value of the "config_value" field.
 	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
-	// GrantType holds the value of the "grant_type" field.
-	GrantType types.EntitlementGrantType `json:"grant_type,omitempty"`
 	// GrantMeasure holds the value of the "grant_measure" field.
 	GrantMeasure types.EntitlementGrantMeasure `json:"grant_measure,omitempty"`
 	// GrantDurationValue holds the value of the "grant_duration_value" field.
@@ -73,7 +71,7 @@ type Entitlement struct {
 	// GrantQuota holds the value of the "grant_quota" field.
 	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
 	// AggregationMode holds the value of the "aggregation_mode" field.
-	AggregationMode    types.EntitlementGrantAggregationMode `json:"aggregation_mode,omitempty"`
+	AggregationMode    types.EntitlementAggregationMode `json:"aggregation_mode,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -91,7 +89,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantType, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldAggregationMode:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldAggregationMode:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -250,12 +248,6 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field config_value: %w", err)
 				}
 			}
-		case entitlement.FieldGrantType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field grant_type", values[i])
-			} else if value.Valid {
-				e.GrantType = types.EntitlementGrantType(value.String)
-			}
 		case entitlement.FieldGrantMeasure:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_measure", values[i])
@@ -286,7 +278,7 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field aggregation_mode", values[i])
 			} else if value.Valid {
-				e.AggregationMode = types.EntitlementGrantAggregationMode(value.String)
+				e.AggregationMode = types.EntitlementAggregationMode(value.String)
 			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -401,9 +393,6 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("config_value=")
 	builder.WriteString(fmt.Sprintf("%v", e.ConfigValue))
-	builder.WriteString(", ")
-	builder.WriteString("grant_type=")
-	builder.WriteString(fmt.Sprintf("%v", e.GrantType))
 	builder.WriteString(", ")
 	builder.WriteString("grant_measure=")
 	builder.WriteString(fmt.Sprintf("%v", e.GrantMeasure))
