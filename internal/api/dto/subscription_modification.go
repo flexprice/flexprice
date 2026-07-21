@@ -292,7 +292,7 @@ type ExecuteSubscriptionModifyRequest struct {
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
 	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
-	CheckoutParams         *CheckoutParams                  `json:"checkout_params,omitempty"`
+	Checkout               *CheckoutParams                  `json:"checkout,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -346,7 +346,7 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 }
 
 func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
-	if r.CheckoutParams == nil {
+	if r.Checkout == nil {
 		return nil
 	}
 	if !lo.Contains(checkoutAllowedModifyTypes, r.Type) {
@@ -358,7 +358,7 @@ func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	return r.CheckoutParams.Validate()
+	return r.Checkout.Validate()
 }
 
 // ChangedLineItemAction describes how a subscription line item changed.

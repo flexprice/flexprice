@@ -1983,7 +1983,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Checkou
 				{ID: li.ID, Quantity: decimal.NewFromInt(2), EffectiveDate: &effectiveDate},
 			},
 		},
-		CheckoutParams: s.checkoutParamsRazorpay(),
+		Checkout: s.checkoutParamsRazorpay(),
 	}
 	resp, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().NoError(err)
@@ -2023,7 +2023,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Checkou
 				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 			},
 		},
-		CheckoutParams: &dto.CheckoutParams{},
+		Checkout: &dto.CheckoutParams{},
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().Error(err)
@@ -2053,7 +2053,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PayFirs
 				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
 			},
 		},
-		CheckoutParams: s.checkoutParamsRazorpay(),
+		Checkout: s.checkoutParamsRazorpay(),
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
 	s.Require().Error(err)

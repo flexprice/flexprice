@@ -49,7 +49,7 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeInheritance:
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
-		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams, req.CheckoutParams)
+		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:

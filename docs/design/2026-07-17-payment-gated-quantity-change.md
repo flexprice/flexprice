@@ -12,7 +12,7 @@ Related: [Seat-Based Pricing](https://docs.flexprice.io/docs/subscriptions/seat-
 
 For B2B2C, a seat increase that produces a **proration charge** must only take effect **after** checkout payment succeeds — same gate as hosted checkout for `create_subscription`.
 
-**Goal (achieved):** opt-in pay-first path for quantity changes when the batch **net** (charges − credits) > 0; zero behavior change for existing pay-later modify when `checkout_params` is omitted; reuse checkout sessions as the short-lived payment vehicle (no new pending-operations table).
+**Goal (achieved):** opt-in pay-first path for quantity changes when the batch **net** (charges − credits) > 0; zero behavior change for existing pay-later modify when `checkout` is omitted; reuse checkout sessions as the short-lived payment vehicle (no new pending-operations table).
 
 ---
 
@@ -25,8 +25,8 @@ For B2B2C, a seat increase that produces a **proration charge** must only take e
 ### 2.1 API surface (backward compatible)
 
 - `modify/preview` — dry-run (A + B only; no writes).
-- `modify/execute` — default pay-later when `checkout_params` is omitted.
-- Opt-in: optional `checkout_params` object (`CheckoutParams`) on the execute request. Presence means “collect payment before applying” when net charge > 0.
+- `modify/execute` — default pay-later when `checkout` is omitted.
+- Opt-in: optional `checkout` object (`CheckoutParams`) on the execute request. Presence means “collect payment before applying” when net charge > 0.
 - Checkout is **allowlisted** to `quantity_change` only (`checkoutAllowedModifyTypes`).
 - `POST /checkout/sessions` **rejects** `action: modify_subscription` — sessions are created only via modify/execute.
 
@@ -38,7 +38,7 @@ For B2B2C, a seat increase that produces a **proration charge** must only take e
       { "id": "subs_line_old", "quantity": "15", "effective_date": "2026-07-20T04:00:00Z" }
     ]
   },
-  "checkout_params": {
+  "checkout": {
     "payment_provider": "razorpay",
     "success_url": "https://app.example.com/ok",
     "failure_url": "https://app.example.com/fail",
@@ -69,9 +69,9 @@ Not taken from full create-session request: `customer_external_id` (from sub), `
 
 | Condition                                        | Behavior                                                                |
 | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| No `checkout_params`                                    | Pay-later: apply LIs, then per-item charge invoice and/or wallet credit |
-| `checkout_params` + **net** (charges − credits) **> 0** | Pay-first: no LI mutation; session + one DRAFT for net + payment link   |
-| `checkout_params` + net **≤ 0** (credit / zero)         | Immediate path (ignore checkout_params)                                 |
+| No `checkout`                                    | Pay-later: apply LIs, then per-item charge invoice and/or wallet credit |
+| `checkout` + **net** (charges − credits) **> 0** | Pay-first: no LI mutation; session + one DRAFT for net + payment link   |
+| `checkout` + net **≤ 0** (credit / zero)         | Immediate path (ignore checkout)                                        |
 
 
 Mixed LI upgrades and downgrades in one request are **netted** for pay-first (not rejected). The DRAFT invoice keeps per-LI charge and credit line items; `amount_due` is their sum.
@@ -155,7 +155,7 @@ Redirect / new tab to `checkout_session.payment_action.url` → return on succes
 ### 2.7 Pay-later vs pay-first money (important)
 
 
-|             | Pay-later (`checkout_params` omitted)  | Pay-first (net > 0)                                         |
+|             | Pay-later (`checkout` omitted)         | Pay-first (net > 0)                                         |
 | ----------- | -------------------------------------- | ----------------------------------------------------------- |
 | LI apply    | Immediate (C before money)             | Deferred until payment success                              |
 | Charges     | **One ONE_OFF per** upgrade LI         | **One** aggregated DRAFT                                    |
@@ -349,9 +349,9 @@ Parallel to `CreateSubscriptionParams` in `internal/types/checkout_configuration
 
 | #   | Scenario                                 | Handling                                                           |
 | --- | ---------------------------------------- | ------------------------------------------------------------------ |
-| 1   | Execute without `checkout_params`               | Pay-later: apply LIs + per-item invoice/credit                     |
-| 2   | `checkout_params` + net (charges − credits) > 0 | Session + one DRAFT for net; LIs deferred; mixed LI up/down netted |
-| 3   | `checkout_params` + net credit / zero           | Immediate path (no session); ignore checkout_params                |
+| 1   | Execute without `checkout`               | Pay-later: apply LIs + per-item invoice/credit                     |
+| 2   | `checkout` + net (charges − credits) > 0 | Session + one DRAFT for net; LIs deferred; mixed LI up/down netted |
+| 3   | `checkout` + net credit / zero           | Immediate path (no session); ignore checkout                       |
 | 4   | Second pay-first while session pending   | Rejected (concurrent guard)                                        |
 | 5   | Payment succeeds                         | C from config; finalize/reconcile existing invoice                 |
 | 6   | Link cancel / expire / cron              | Cleanup; seats unchanged                                           |
