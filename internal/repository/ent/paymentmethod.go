@@ -362,7 +362,7 @@ func (o PaymentMethodQueryOptions) ApplyEnvironmentFilter(ctx context.Context, q
 
 func (o PaymentMethodQueryOptions) ApplyStatusFilter(query PaymentMethodQuery, status string) PaymentMethodQuery {
 	if status == "" {
-		return query.Where(entpaymentmethod.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entpaymentmethod.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entpaymentmethod.Status(status))
 }

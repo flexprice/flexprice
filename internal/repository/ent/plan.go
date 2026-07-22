@@ -400,7 +400,7 @@ func (o PlanQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Plan
 
 func (o PlanQueryOptions) ApplyStatusFilter(query PlanQuery, status string) PlanQuery {
 	if status == "" {
-		return query.Where(plan.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(plan.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(plan.Status(status))
 }

@@ -603,7 +603,7 @@ func (o ConnectionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 
 func (o ConnectionQueryOptions) ApplyStatusFilter(query ConnectionQuery, status string) ConnectionQuery {
 	if status == "" {
-		return query.Where(connection.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(connection.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(connection.Status(status))
 }

@@ -575,7 +575,7 @@ func (o PriceQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Pri
 
 func (o PriceQueryOptions) ApplyStatusFilter(query PriceQuery, status string) PriceQuery {
 	if status == "" {
-		return query.Where(price.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(price.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(price.Status(status))
 }

@@ -36,7 +36,7 @@ func (o CouponAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 
 func (o CouponAssociationQueryOptions) ApplyStatusFilter(query CouponAssociationQuery, status string) CouponAssociationQuery {
 	if status == "" {
-		return query.Where(couponassociation.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(couponassociation.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(couponassociation.Status(status))
 }
