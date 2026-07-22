@@ -62,6 +62,6 @@ func TestTopUpWalletRequest_ValidateCheckout(t *testing.T) {
 		}
 		err := req.Validate()
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "payment_provider")
+		require.Contains(t, err.Error(), "PaymentProvider")
 	})
 }
