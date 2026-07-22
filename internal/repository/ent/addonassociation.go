@@ -390,7 +390,7 @@ func (o AddonAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context
 
 func (o AddonAssociationQueryOptions) ApplyStatusFilter(query AddonAssociationQuery, status string) AddonAssociationQuery {
 	if status == "" {
-		return query.Where(addonassociation.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(addonassociation.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(addonassociation.Status(status))
 }

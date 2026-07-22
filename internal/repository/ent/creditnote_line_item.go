@@ -410,7 +410,7 @@ func (o CreditNoteLineItemQueryOptions) ApplyEnvironmentFilter(ctx context.Conte
 
 func (o CreditNoteLineItemQueryOptions) ApplyStatusFilter(query CreditNoteLineItemQuery, status string) CreditNoteLineItemQuery {
 	if status == "" {
-		return query.Where(creditnotelineitem.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditnotelineitem.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(creditnotelineitem.Status(status))
 }

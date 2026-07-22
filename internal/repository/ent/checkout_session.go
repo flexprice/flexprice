@@ -374,7 +374,7 @@ func (o CheckoutSessionQueryOptions) ApplyEnvironmentFilter(ctx context.Context,
 
 func (o CheckoutSessionQueryOptions) ApplyStatusFilter(query CheckoutSessionQuery, status string) CheckoutSessionQuery {
 	if status == "" {
-		return query.Where(entCheckout.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entCheckout.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entCheckout.StatusEQ(status))
 }

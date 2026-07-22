@@ -318,7 +318,7 @@ func (o GroupQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Gro
 
 func (o GroupQueryOptions) ApplyStatusFilter(query GroupQuery, status string) GroupQuery {
 	if status == "" {
-		return query.Where(group.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(group.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(group.Status(status))
 }
