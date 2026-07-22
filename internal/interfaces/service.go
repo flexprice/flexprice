@@ -223,6 +223,19 @@ type CheckoutSessionService interface {
 	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
 	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
 	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
+	// CheckIfAnyCheckoutSessionPending rejects when an initiated/pending session already
+	// exists for the same customer + action and matchesPending returns true.
+	CheckIfAnyCheckoutSessionPending(
+		ctx context.Context,
+		customerID string,
+		action types.CheckoutAction,
+		matchesPending func(cfg *types.CheckoutConfiguration) bool,
+		conflict dto.PendingCheckoutConflict,
+	) error
+	// StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
+	// fulfills payment + provider link, and publishes checkout.session.initiated.
+	// Caller must have already run CheckIfAnyCheckoutSessionPending (before creating the draft).
+	StartPayFirstCheckoutSession(ctx context.Context, req *dto.PayFirstCheckoutRequest) (*dto.CheckoutSessionResponse, error)
 }
 
 type ServiceDependencies struct {
