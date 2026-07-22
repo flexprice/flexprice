@@ -2145,12 +2145,12 @@ func (s *meterUsageService) ConvertToBillingCharges(
 			Quantity:               quantity.InexactFloat64(),
 			FilterValues:           make(price.JSONBFilters),
 			MeterID:                lu.MeterID,
-			MeterDisplayName:       lu.Meter.Name,
 			Price:                  lu.Price,
 			BucketedUsageResult:    lu.BucketedResult,
 		}
 
 		if lu.Meter != nil {
+			charge.MeterDisplayName = lu.Meter.Name
 			for _, filter := range lu.Meter.Filters {
 				charge.FilterValues[filter.Key] = filter.Values
 			}
