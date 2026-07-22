@@ -575,6 +575,13 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if err := conn.EncryptedSecretData.AWSMarketplace.Validate(); err != nil {
 			return nil, err
 		}
+		// Region selects the AWS Marketplace Metering Service regional endpoint BatchMeterUsage
+		// targets at report time. It must match the region AWS enabled SaaS metering for this product.
+		if conn.SyncConfig == nil || conn.SyncConfig.AWSMarketplace == nil || conn.SyncConfig.AWSMarketplace.Region == "" {
+			return nil, ierr.NewError("aws_marketplace connection requires region").
+				WithHint("sync_config.aws_marketplace.region is required").
+				Mark(ierr.ErrValidation)
+		}
 		// Bounded so a slow/unreachable AWS credential chain (e.g. the SDK falling through to an
 		// unreachable EC2 instance-metadata endpoint when Flexprice's own AWS credentials aren't
 		// configured via env vars) can't hang this request indefinitely — there's no other timeout

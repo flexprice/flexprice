@@ -321,18 +321,15 @@ func (a *ReportActivities) authAWSConnection(ctx context.Context, conn *connecti
 		return awssdk.Credentials{}, "", nil, err
 	}
 
-	// The region is saved on the connection at creation time; it selects the AWS Marketplace
-	// Metering endpoint and is required.
-	region := ""
-	if meta, ok := conn.Metadata["aws_marketplace"].(map[string]interface{}); ok {
-		region, _ = meta["region"].(string)
-	}
-	if region == "" {
-		err := ierr.NewError("connection has no region in metadata").Mark(ierr.ErrValidation)
+	// The region is saved on the connection at creation time (sync_config.aws_marketplace.region,
+	// same home as S3's bucket/region); it selects the AWS Marketplace Metering endpoint and is required.
+	if conn.SyncConfig == nil || conn.SyncConfig.AWSMarketplace == nil || conn.SyncConfig.AWSMarketplace.Region == "" {
+		err := ierr.NewError("connection has no region in sync_config").Mark(ierr.ErrValidation)
 		a.logger.Error(ctx, "marketplace usage report failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "read_connection")
 		return awssdk.Credentials{}, "", nil, err
 	}
+	region := conn.SyncConfig.AWSMarketplace.Region
 
 	roleArn, err := a.encryptionService.Decrypt(conn.EncryptedSecretData.AWSMarketplace.RoleArn)
 	if err != nil {
