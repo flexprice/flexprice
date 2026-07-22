@@ -33,6 +33,31 @@ func TestCreateWalletActionConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid prepaid wallet type",
+			cfg: CreateWalletActionConfig{
+				Currency:   "USD",
+				WalletType: types.WalletTypePrePaid,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid postpaid wallet type",
+			cfg: CreateWalletActionConfig{
+				Currency:   "USD",
+				WalletType: types.WalletTypePostPaid,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid wallet type",
+			cfg: CreateWalletActionConfig{
+				Currency:   "USD",
+				WalletType: types.WalletType("INVALID"),
+			},
+			wantErr: true,
+			errMsg:  "invalid wallet type",
+		},
+		{
 			name: "valid credits without expiry",
 			cfg: CreateWalletActionConfig{
 				Currency:             "USD",
@@ -254,6 +279,31 @@ func TestCreateWalletActionConfig_ToDTO(t *testing.T) {
 		req := out.(*dto.CreateWalletRequest)
 		assert.True(t, req.ConversionRate.Equal(decimal.NewFromInt(1)))
 		assert.Equal(t, "EUR", req.Currency)
+	})
+
+	t.Run("maps wallet type to DTO", func(t *testing.T) {
+		cfg := CreateWalletActionConfig{
+			Currency:   "USD",
+			WalletType: types.WalletTypePostPaid,
+		}
+
+		out, err := cfg.ToDTO(params)
+		require.NoError(t, err)
+
+		req := out.(*dto.CreateWalletRequest)
+		assert.Equal(t, types.WalletTypePostPaid, req.WalletType)
+	})
+
+	t.Run("empty wallet type leaves DTO empty for CreateWallet default", func(t *testing.T) {
+		cfg := CreateWalletActionConfig{
+			Currency: "USD",
+		}
+
+		out, err := cfg.ToDTO(params)
+		require.NoError(t, err)
+
+		req := out.(*dto.CreateWalletRequest)
+		assert.Equal(t, types.WalletType(""), req.WalletType)
 	})
 
 	t.Run("invalid params type", func(t *testing.T) {

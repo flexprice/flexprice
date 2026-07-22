@@ -603,7 +603,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 				req.BonusCreditsToAdd = lo.ToPtr(resolveBonusCredits(slab, req.CreditsToAdd))
 				// Slab expiry only kicks in if the caller didn't pin an explicit expiry.
 				if req.BonusCreditsExpiryDateUTC == nil {
-					req.BonusCreditsExpiryDateUTC = resolveBonusExpiry(slab, time.Now().UTC())
+					req.BonusCreditsExpiryDateUTC = types.ResolveCreditsExpiry(slab.ExpirationDuration, slab.ExpirationDurationUnit, time.Now().UTC())
 				}
 			}
 		}
@@ -736,12 +736,6 @@ func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Deci
 	default:
 		return decimal.Zero
 	}
-}
-
-// resolveBonusExpiry computes the bonus tx expiry from a matched slab (now + duration).
-// Returns nil when the slab omits the duration config (bonus never expires).
-func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time {
-	return types.ResolveCreditsExpiry(slab.ExpirationDuration, slab.ExpirationDurationUnit, now)
 }
 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {

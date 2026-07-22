@@ -288,6 +288,7 @@ type CreateWalletActionConfig struct {
 	Action                               WorkflowAction                       `json:"action"` // Type discriminator - automatically set to "create_wallet"
 	Currency                             string                               `json:"currency" binding:"required"`
 	ConversionRate                       decimal.Decimal                      `json:"conversion_rate" default:"1"`
+	WalletType                           types.WalletType                     `json:"wallet_type,omitempty"`
 	InitialCreditsToLoad                 decimal.Decimal                      `json:"initial_credits_to_load,omitempty"`
 	InitialCreditsExpirationDuration     *int                                 `json:"initial_credits_expiration_duration,omitempty"`
 	InitialCreditsExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"initial_credits_expiration_duration_unit,omitempty"`
@@ -301,6 +302,9 @@ func (c *CreateWalletActionConfig) Validate() error {
 		return ierr.NewError("currency is required for create_wallet action").
 			WithHint("Please provide a currency").
 			Mark(ierr.ErrValidation)
+	}
+	if err := c.WalletType.Validate(); err != nil {
+		return err
 	}
 	if c.InitialCreditsToLoad.IsNegative() {
 		return ierr.NewError("initial_credits_to_load cannot be negative").
@@ -354,6 +358,7 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 		CustomerID:           actionParams.CustomerID,
 		Currency:             c.Currency,
 		ConversionRate:       conversionRate,
+		WalletType:           c.WalletType,
 		InitialCreditsToLoad: c.InitialCreditsToLoad,
 	}
 
