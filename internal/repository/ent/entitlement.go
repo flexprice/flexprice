@@ -573,7 +573,7 @@ func (o EntitlementQueryOptions) ApplyEnvironmentFilter(ctx context.Context, que
 
 func (o EntitlementQueryOptions) ApplyStatusFilter(query EntitlementQuery, status string) EntitlementQuery {
 	if status == "" {
-		return query.Where(entitlement.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entitlement.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entitlement.Status(status))
 }
