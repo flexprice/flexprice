@@ -509,21 +509,21 @@ func (s *SubscriptionModificationServiceSuite) TestProrationChargeIdempotencyKey
 	t1 := time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC)
 	t2 := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
 
-	k1 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{{lineItemID: "li_a", effectiveDate: t1}})
-	k1Again := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{{lineItemID: "li_a", effectiveDate: t1}})
-	k2 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{{lineItemID: "li_b", effectiveDate: t1}})
+	k1 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_a", t1)})
+	k1Again := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_a", t1)})
+	k2 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_b", t1)})
 	s.Equal(k1, k1Again)
 	s.NotEqual(k1, k2)
 	s.True(strings.HasPrefix(k1, "proration_charge-"))
 	s.LessOrEqual(len(k1), 100)
 
 	batchAB := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{
-		{lineItemID: "li_a", effectiveDate: t1},
-		{lineItemID: "li_b", effectiveDate: t2},
+		newProrationChargeKeyPart("li_a", t1),
+		newProrationChargeKeyPart("li_b", t2),
 	})
 	batchBA := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{
-		{lineItemID: "li_b", effectiveDate: t2},
-		{lineItemID: "li_a", effectiveDate: t1},
+		newProrationChargeKeyPart("li_b", t2),
+		newProrationChargeKeyPart("li_a", t1),
 	})
 	s.Equal(batchAB, batchBA, "batch fingerprint must be order-independent")
 	s.NotEqual(k1, batchAB)

@@ -98,7 +98,7 @@ erDiagram
         string billing_reason "SUBSCRIPTION_UPDATE"
         datetime period_start "effective_date for charges"
         datetime period_end "CurrentPeriodEnd"
-        string idempotency_key UK "explicit for charges; auto for cycle"
+        string idempotency_key "tenant+env UK when published and not voided; explicit for charges"
         int billing_sequence "from billing_sequences"
         string invoice_status
     }
