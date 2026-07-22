@@ -92,7 +92,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 // Such transactions have no linked invoice — the subscription is activated by the
 // subscription.activated webhook instead.
 func (h *Handler) isSubscriptionBootstrapTransaction(ctx context.Context, customData map[string]any, paddleTransactionID string) bool {
-	if customData == nil || h.subscriptionRepo == nil {
+	if customData == nil {
 		return false
 	}
 
