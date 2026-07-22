@@ -285,9 +285,13 @@ func (c *CreateCustomerActionConfig) ToDTO(params interface{}) (interface{}, err
 
 // CreateWalletActionConfig represents configuration for creating a wallet action
 type CreateWalletActionConfig struct {
-	Action         WorkflowAction  `json:"action"` // Type discriminator - automatically set to "create_wallet"
-	Currency       string          `json:"currency" binding:"required"`
-	ConversionRate decimal.Decimal `json:"conversion_rate" default:"1"`
+	Action                               WorkflowAction                       `json:"action"` // Type discriminator - automatically set to "create_wallet"
+	Currency                             string                               `json:"currency" binding:"required"`
+	ConversionRate                       decimal.Decimal                      `json:"conversion_rate" default:"1"`
+	WalletType                           types.WalletType                     `json:"wallet_type,omitempty"`
+	InitialCreditsToLoad                 decimal.Decimal                      `json:"initial_credits_to_load,omitempty"`
+	InitialCreditsExpirationDuration     *int                                 `json:"initial_credits_expiration_duration,omitempty"`
+	InitialCreditsExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"initial_credits_expiration_duration_unit,omitempty"`
 }
 
 func (c *CreateWalletActionConfig) Validate() error {
@@ -298,6 +302,34 @@ func (c *CreateWalletActionConfig) Validate() error {
 		return ierr.NewError("currency is required for create_wallet action").
 			WithHint("Please provide a currency").
 			Mark(ierr.ErrValidation)
+	}
+	if err := c.WalletType.Validate(); err != nil {
+		return err
+	}
+	if c.InitialCreditsToLoad.IsNegative() {
+		return ierr.NewError("initial_credits_to_load cannot be negative").
+			WithHint("Provide zero or a positive credit amount").
+			Mark(ierr.ErrValidation)
+	}
+	if (c.InitialCreditsExpirationDuration == nil) != (c.InitialCreditsExpirationDurationUnit == nil) {
+		return ierr.NewError("expiration_duration and expiration_duration_unit must be set together").
+			WithHint("Provide both fields, or neither (credits never expire)").
+			Mark(ierr.ErrValidation)
+	}
+	if c.InitialCreditsExpirationDuration != nil {
+		if !c.InitialCreditsToLoad.IsPositive() {
+			return ierr.NewError("expiration_duration requires initial_credits_to_load > 0").
+				WithHint("Set initial_credits_to_load when configuring credit expiry").
+				Mark(ierr.ErrValidation)
+		}
+		if *c.InitialCreditsExpirationDuration <= 0 {
+			return ierr.NewError("expiration_duration must be greater than 0").
+				WithHint("Duration must be a positive integer").
+				Mark(ierr.ErrValidation)
+		}
+		if err := c.InitialCreditsExpirationDurationUnit.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -322,11 +354,19 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 		conversionRate = decimal.NewFromInt(1)
 	}
 
-	return &dto.CreateWalletRequest{
-		CustomerID:     actionParams.CustomerID,
-		Currency:       c.Currency,
-		ConversionRate: conversionRate,
-	}, nil
+	req := &dto.CreateWalletRequest{
+		CustomerID:           actionParams.CustomerID,
+		Currency:             c.Currency,
+		ConversionRate:       conversionRate,
+		WalletType:           c.WalletType,
+		InitialCreditsToLoad: c.InitialCreditsToLoad,
+	}
+
+	if c.InitialCreditsToLoad.IsPositive() {
+		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, time.Now().UTC())
+	}
+
+	return req, nil
 }
 
 // CreateSubscriptionActionConfig represents configuration for creating a subscription action
