@@ -5,14 +5,17 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
 // UsageRecord holds the schema for the usage_records table. Each row is one usage snapshot for a
 // subscription over a reporting window, produced by the marketplace snapshot cron and consumed by
-// the marketplace reporting cron. A row reports to exactly one marketplace — the one identified by
-// connection_id — since a subscription is only ever sold through one marketplace; there is no
-// fan-out to support here (design doc FLE-981 §6).
+// the marketplace reporting cron. A row is provider-agnostic at creation: it does not pin any one
+// connection, so the same subscription's usage can be reported to every marketplace it's mapped to
+// (AWS and GCP simultaneously, for example) without a second snapshot row. Per-destination outcomes
+// are tracked in syncs, keyed by connection_id; synced is true only once every connection currently
+// relevant to this record has a syncs entry (design doc FLE-981 §6).
 type UsageRecord struct {
 	ent.Schema
 }
@@ -82,40 +85,28 @@ func (UsageRecord) Fields() []ent.Field {
 
 		field.Time("period_end"),
 
-		// ConnectionID pins which marketplace connection this row reports through, stamped by the
-		// snapshot cron. It is what the reporting cron uses to decrypt the right secret and pick the
-		// right provider — the row itself carries no separate provider_type field, since the
-		// connection's is authoritative and the reporting cron loads the connection anyway.
-		field.String("connection_id").
-			SchemaType(map[string]string{
-				"postgres": "varchar(50)",
-			}).
-			Optional(),
-
-		// Synced is the single retry signal: false means "still needs reporting," and the reporting
-		// cron picks it up again on its next run. There is no separate failure state — a rejected
-		// report is logged and simply left synced=false.
+		// Synced is the single retry signal: false means "still needs reporting to at least one
+		// relevant connection," and the reporting cron picks it up again on its next run. It is set
+		// true only once every connection currently relevant to this record has a syncs entry.
 		field.Bool("synced").
 			Default(false),
 
-		field.Time("synced_at").
+		// Syncs records one entry per connection this record has been successfully reported to,
+		// keyed by connection_id. The reporting cron builds this map in memory and writes it back
+		// whole (records are reported sequentially, so there are no concurrent writers to a row).
+		field.JSON("syncs", map[string]types.UsageRecordSyncEntry{}).
 			Optional().
-			Nillable(),
-
-		// MarketplaceReportID is AWS's MeteringRecordId, or GCP's operationId (which is always this
-		// row's own id, since GCP's services.report returns no per-record receipt of its own).
-		field.String("marketplace_report_id").
+			Default(map[string]types.UsageRecordSyncEntry{}).
 			SchemaType(map[string]string{
-				"postgres": "varchar(255)",
-			}).
-			Optional(),
+				"postgres": "jsonb",
+			}),
 	}
 }
 
 // Indexes of the UsageRecord.
 func (UsageRecord) Indexes() []ent.Index {
 	return []ent.Index{
-		// The reporting cron's hot query: unsynced rows for one connection.
-		index.Fields("tenant_id", "environment_id", "connection_id", "synced"),
+		// The reporting cron's hot query: this tenant's unsynced rows.
+		index.Fields("tenant_id", "environment_id", "synced"),
 	}
 }

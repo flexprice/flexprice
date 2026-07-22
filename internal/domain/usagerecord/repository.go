@@ -3,6 +3,8 @@ package usagerecord
 import (
 	"context"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Repository provides persistence for usage records.
@@ -16,12 +18,12 @@ type Repository interface {
 	// subscription was already processed by an earlier attempt.
 	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error)
 
-	// ListUnsyncedByConnection returns one connection's usage records that have not yet been reported.
-	ListUnsyncedByConnection(ctx context.Context, tenantID, environmentID, connectionID string) ([]*UsageRecord, error)
+	// ListUnsynced returns this tenant/environment's usage records that are not yet fully synced
+	// (synced=false) — not scoped to any one connection, since a record can be relevant to several.
+	ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*UsageRecord, error)
 
-	// MarkSynced records that a usage record was successfully reported: sets synced=true, stamps
-	// synced_at, and stores the marketplace's report identifier (AWS's MeteringRecordId, or GCP's
-	// operationId — which is always the record's own id, since GCP's services.report returns no
-	// per-record receipt of its own).
-	MarkSynced(ctx context.Context, id string, marketplaceReportID string) error
+	// MarkSynced writes the record's syncs map (one entry per connection it's been reported to) and
+	// the synced flag, which the caller sets true once every connection relevant to this record has
+	// an entry. The reporting cron builds the map in memory and calls this once per record.
+	MarkSynced(ctx context.Context, id string, syncs map[string]types.UsageRecordSyncEntry, synced bool) error
 }

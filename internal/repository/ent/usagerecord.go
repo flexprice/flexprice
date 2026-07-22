@@ -14,10 +14,6 @@ import (
 )
 
 // usageRecordRepository implements domainUsageRecord.Repository against the Ent client.
-//
-// NOTE: this file references the generated ent.UsageRecord / ent/usagerecord client, which does
-// not exist until `make generate-ent` is run against ent/schema/usagerecord.go. It intentionally
-// will not compile until then — see ent/schema/usagerecord.go and the FLE-981 design doc.
 type usageRecordRepository struct {
 	client postgres.IClient
 	log    *logger.Logger
@@ -49,6 +45,9 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 	if rec.EnvironmentID == "" {
 		rec.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+	if rec.Syncs == nil {
+		rec.Syncs = map[string]types.UsageRecordSyncEntry{}
+	}
 
 	created, err := client.UsageRecord.Create().
 		SetID(rec.ID).
@@ -62,10 +61,8 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 		SetCurrency(rec.Currency).
 		SetPeriodStart(rec.PeriodStart).
 		SetPeriodEnd(rec.PeriodEnd).
-		SetConnectionID(rec.ConnectionID).
 		SetSynced(rec.Synced).
-		SetNillableSyncedAt(rec.SyncedAt).
-		SetMarketplaceReportID(rec.MarketplaceReportID).
+		SetSyncs(rec.Syncs).
 		SetStatus(string(rec.Status)).
 		SetCreatedAt(rec.CreatedAt).
 		SetUpdatedAt(rec.UpdatedAt).
@@ -127,13 +124,12 @@ func (r *usageRecordRepository) ExistsForPeriod(ctx context.Context, subscriptio
 	return exists, nil
 }
 
-func (r *usageRecordRepository) ListUnsyncedByConnection(ctx context.Context, tenantID, environmentID, connectionID string) ([]*domainUsageRecord.UsageRecord, error) {
+func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*domainUsageRecord.UsageRecord, error) {
 	client := r.client.Reader(ctx)
 
-	span := StartRepositorySpan(ctx, "usage_record", "list_unsynced_by_connection", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "usage_record", "list_unsynced", map[string]interface{}{
 		"tenant_id":      tenantID,
 		"environment_id": environmentID,
-		"connection_id":  connectionID,
 	})
 	defer FinishSpan(span)
 
@@ -141,7 +137,6 @@ func (r *usageRecordRepository) ListUnsyncedByConnection(ctx context.Context, te
 		Where(
 			usagerecord.TenantID(tenantID),
 			usagerecord.EnvironmentID(environmentID),
-			usagerecord.ConnectionID(connectionID),
 			usagerecord.Synced(false),
 			usagerecord.StatusEQ(string(types.StatusPublished)),
 		).
@@ -158,10 +153,10 @@ func (r *usageRecordRepository) ListUnsyncedByConnection(ctx context.Context, te
 	return domainUsageRecord.FromEntList(records), nil
 }
 
-// MarkSynced flips synced=true on a single flat write. Unlike the old JSON-map merge this replaces,
-// this needs no optimistic-locking retry loop: each row is only ever written by the one reporting
-// run that owns it, so there is no concurrent-writer/lost-update risk to guard against.
-func (r *usageRecordRepository) MarkSynced(ctx context.Context, id string, marketplaceReportID string) error {
+// MarkSynced writes the record's syncs map and the synced flag. Plain read-modify-write is safe:
+// the reporting cron processes records sequentially and Temporal's SKIP overlap policy stops two
+// runs touching the same rows at once, so there are no concurrent writers to race.
+func (r *usageRecordRepository) MarkSynced(ctx context.Context, id string, syncs map[string]types.UsageRecordSyncEntry, synced bool) error {
 	client := r.client.Writer(ctx)
 
 	span := StartRepositorySpan(ctx, "usage_record", "mark_synced", map[string]interface{}{
@@ -169,17 +164,19 @@ func (r *usageRecordRepository) MarkSynced(ctx context.Context, id string, marke
 	})
 	defer FinishSpan(span)
 
+	if syncs == nil {
+		syncs = map[string]types.UsageRecordSyncEntry{}
+	}
+
 	affected, err := client.UsageRecord.Update().
 		Where(
 			usagerecord.ID(id),
 			usagerecord.TenantID(types.GetTenantID(ctx)),
 			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetSynced(true).
-		SetSyncedAt(time.Now().UTC()).
-		SetMarketplaceReportID(marketplaceReportID).
+		SetSyncs(syncs).
+		SetSynced(synced).
 		Save(ctx)
-
 	if err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).

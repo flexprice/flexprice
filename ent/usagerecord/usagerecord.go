@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -46,14 +47,10 @@ const (
 	FieldPeriodStart = "period_start"
 	// FieldPeriodEnd holds the string denoting the period_end field in the database.
 	FieldPeriodEnd = "period_end"
-	// FieldConnectionID holds the string denoting the connection_id field in the database.
-	FieldConnectionID = "connection_id"
 	// FieldSynced holds the string denoting the synced field in the database.
 	FieldSynced = "synced"
-	// FieldSyncedAt holds the string denoting the synced_at field in the database.
-	FieldSyncedAt = "synced_at"
-	// FieldMarketplaceReportID holds the string denoting the marketplace_report_id field in the database.
-	FieldMarketplaceReportID = "marketplace_report_id"
+	// FieldSyncs holds the string denoting the syncs field in the database.
+	FieldSyncs = "syncs"
 	// Table holds the table name of the usagerecord in the database.
 	Table = "usage_records"
 )
@@ -77,10 +74,8 @@ var Columns = []string{
 	FieldCurrency,
 	FieldPeriodStart,
 	FieldPeriodEnd,
-	FieldConnectionID,
 	FieldSynced,
-	FieldSyncedAt,
-	FieldMarketplaceReportID,
+	FieldSyncs,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -120,6 +115,8 @@ var (
 	CurrencyValidator func(string) error
 	// DefaultSynced holds the default value on creation for the "synced" field.
 	DefaultSynced bool
+	// DefaultSyncs holds the default value on creation for the "syncs" field.
+	DefaultSyncs map[string]types.UsageRecordSyncEntry
 )
 
 // OrderOption defines the ordering options for the UsageRecord queries.
@@ -210,22 +207,7 @@ func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
-// ByConnectionID orders the results by the connection_id field.
-func ByConnectionID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldConnectionID, opts...).ToFunc()
-}
-
 // BySynced orders the results by the synced field.
 func BySynced(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSynced, opts...).ToFunc()
-}
-
-// BySyncedAt orders the results by the synced_at field.
-func BySyncedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSyncedAt, opts...).ToFunc()
-}
-
-// ByMarketplaceReportID orders the results by the marketplace_report_id field.
-func ByMarketplaceReportID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMarketplaceReportID, opts...).ToFunc()
 }

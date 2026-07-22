@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/usagerecord"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -189,20 +190,6 @@ func (urc *UsageRecordCreate) SetPeriodEnd(t time.Time) *UsageRecordCreate {
 	return urc
 }
 
-// SetConnectionID sets the "connection_id" field.
-func (urc *UsageRecordCreate) SetConnectionID(s string) *UsageRecordCreate {
-	urc.mutation.SetConnectionID(s)
-	return urc
-}
-
-// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableConnectionID(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetConnectionID(*s)
-	}
-	return urc
-}
-
 // SetSynced sets the "synced" field.
 func (urc *UsageRecordCreate) SetSynced(b bool) *UsageRecordCreate {
 	urc.mutation.SetSynced(b)
@@ -217,31 +204,9 @@ func (urc *UsageRecordCreate) SetNillableSynced(b *bool) *UsageRecordCreate {
 	return urc
 }
 
-// SetSyncedAt sets the "synced_at" field.
-func (urc *UsageRecordCreate) SetSyncedAt(t time.Time) *UsageRecordCreate {
-	urc.mutation.SetSyncedAt(t)
-	return urc
-}
-
-// SetNillableSyncedAt sets the "synced_at" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableSyncedAt(t *time.Time) *UsageRecordCreate {
-	if t != nil {
-		urc.SetSyncedAt(*t)
-	}
-	return urc
-}
-
-// SetMarketplaceReportID sets the "marketplace_report_id" field.
-func (urc *UsageRecordCreate) SetMarketplaceReportID(s string) *UsageRecordCreate {
-	urc.mutation.SetMarketplaceReportID(s)
-	return urc
-}
-
-// SetNillableMarketplaceReportID sets the "marketplace_report_id" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableMarketplaceReportID(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetMarketplaceReportID(*s)
-	}
+// SetSyncs sets the "syncs" field.
+func (urc *UsageRecordCreate) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordCreate {
+	urc.mutation.SetSyncs(mrse)
 	return urc
 }
 
@@ -313,6 +278,10 @@ func (urc *UsageRecordCreate) defaults() {
 	if _, ok := urc.mutation.Synced(); !ok {
 		v := usagerecord.DefaultSynced
 		urc.mutation.SetSynced(v)
+	}
+	if _, ok := urc.mutation.Syncs(); !ok {
+		v := usagerecord.DefaultSyncs
+		urc.mutation.SetSyncs(v)
 	}
 }
 
@@ -481,21 +450,13 @@ func (urc *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) 
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = value
 	}
-	if value, ok := urc.mutation.ConnectionID(); ok {
-		_spec.SetField(usagerecord.FieldConnectionID, field.TypeString, value)
-		_node.ConnectionID = value
-	}
 	if value, ok := urc.mutation.Synced(); ok {
 		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
 		_node.Synced = value
 	}
-	if value, ok := urc.mutation.SyncedAt(); ok {
-		_spec.SetField(usagerecord.FieldSyncedAt, field.TypeTime, value)
-		_node.SyncedAt = &value
-	}
-	if value, ok := urc.mutation.MarketplaceReportID(); ok {
-		_spec.SetField(usagerecord.FieldMarketplaceReportID, field.TypeString, value)
-		_node.MarketplaceReportID = value
+	if value, ok := urc.mutation.Syncs(); ok {
+		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
+		_node.Syncs = value
 	}
 	return _node, _spec
 }

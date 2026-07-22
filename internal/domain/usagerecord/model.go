@@ -9,27 +9,25 @@ import (
 )
 
 // UsageRecord is one usage snapshot for a subscription over a reporting window (table
-// usage_records), written by the marketplace snapshot cron and reported by the marketplace reporting
-// cron. ConnectionID pins which marketplace connection — and therefore which provider — this row
-// reports through; a subscription only ever belongs to one marketplace, so there is no fan-out to
-// track here. Synced is the single retry signal: false means the reporting cron will pick this row
-// up again on its next run. Failure detail is never persisted on the row — only logged.
+// usage_records), written by the marketplace snapshot cron and reported by the marketplace
+// reporting cron. It is provider-agnostic: Syncs tracks one outcome per connection this record has
+// been reported to, keyed by connection_id, so the same subscription's usage can reach every
+// marketplace it's mapped to. Synced is true only once every connection currently relevant to this
+// record has a Syncs entry. Failure detail is never persisted on the row — only logged.
 type UsageRecord struct {
-	ID                  string          `db:"id" json:"id"`
-	CustomerID          string          `db:"customer_id" json:"customer_id"`
-	CustomerExternalID  string          `db:"customer_external_id" json:"customer_external_id"`
-	SubscriptionID      string          `db:"subscription_id" json:"subscription_id"`
-	PlanID              string          `db:"plan_id" json:"plan_id"`
-	Quantity            decimal.Decimal `db:"quantity" json:"quantity"`
-	Amount              decimal.Decimal `db:"amount" json:"amount"`
-	Currency            string          `db:"currency" json:"currency"`
-	PeriodStart         time.Time       `db:"period_start" json:"period_start"`
-	PeriodEnd           time.Time       `db:"period_end" json:"period_end"`
-	ConnectionID        string          `db:"connection_id" json:"connection_id"`
-	Synced              bool            `db:"synced" json:"synced"`
-	SyncedAt            *time.Time      `db:"synced_at" json:"synced_at,omitempty"`
-	MarketplaceReportID string          `db:"marketplace_report_id" json:"marketplace_report_id,omitempty"`
-	EnvironmentID       string          `db:"environment_id" json:"environment_id"`
+	ID                 string                                `db:"id" json:"id"`
+	CustomerID         string                                `db:"customer_id" json:"customer_id"`
+	CustomerExternalID string                                `db:"customer_external_id" json:"customer_external_id"`
+	SubscriptionID     string                                `db:"subscription_id" json:"subscription_id"`
+	PlanID             string                                `db:"plan_id" json:"plan_id"`
+	Quantity           decimal.Decimal                       `db:"quantity" json:"quantity"`
+	Amount             decimal.Decimal                       `db:"amount" json:"amount"`
+	Currency           string                                `db:"currency" json:"currency"`
+	PeriodStart        time.Time                             `db:"period_start" json:"period_start"`
+	PeriodEnd          time.Time                             `db:"period_end" json:"period_end"`
+	Synced             bool                                  `db:"synced" json:"synced"`
+	Syncs              map[string]types.UsageRecordSyncEntry `db:"syncs" json:"syncs"`
+	EnvironmentID      string                                `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -38,22 +36,24 @@ func FromEnt(e *ent.UsageRecord) *UsageRecord {
 	if e == nil {
 		return nil
 	}
+	syncs := e.Syncs
+	if syncs == nil {
+		syncs = map[string]types.UsageRecordSyncEntry{}
+	}
 	return &UsageRecord{
-		ID:                  e.ID,
-		CustomerID:          e.CustomerID,
-		CustomerExternalID:  e.CustomerExternalID,
-		SubscriptionID:      e.SubscriptionID,
-		PlanID:              e.PlanID,
-		Quantity:            e.Quantity,
-		Amount:              e.Amount,
-		Currency:            e.Currency,
-		PeriodStart:         e.PeriodStart,
-		PeriodEnd:           e.PeriodEnd,
-		ConnectionID:        e.ConnectionID,
-		Synced:              e.Synced,
-		SyncedAt:            e.SyncedAt,
-		MarketplaceReportID: e.MarketplaceReportID,
-		EnvironmentID:       e.EnvironmentID,
+		ID:                 e.ID,
+		CustomerID:         e.CustomerID,
+		CustomerExternalID: e.CustomerExternalID,
+		SubscriptionID:     e.SubscriptionID,
+		PlanID:             e.PlanID,
+		Quantity:           e.Quantity,
+		Amount:             e.Amount,
+		Currency:           e.Currency,
+		PeriodStart:        e.PeriodStart,
+		PeriodEnd:          e.PeriodEnd,
+		Synced:             e.Synced,
+		Syncs:              syncs,
+		EnvironmentID:      e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
