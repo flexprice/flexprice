@@ -2840,6 +2840,30 @@ func (s *WalletAutoTopupDirectSuite) TestDirect_NoCooldown_BurstsUntilAboveThres
 	s.GreaterOrEqual(s.countCompletedAutoTopupTxns(), 5, "expected multiple direct auto-topup credits without cooloff")
 }
 
+func (s *WalletAutoTopupDirectSuite) TestUpdateWallet_CooldownZeroClears() {
+	ctx := s.GetContext()
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	updated, err := s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Cooldown: &types.Duration{Value: 0, Unit: types.DurationUnitSecond},
+		},
+	})
+	s.NoError(err)
+	s.Require().NotNil(updated.AutoTopup)
+	s.Nil(updated.AutoTopup.Cooldown, "value 0 must clear persisted cooldown")
+
+	// Omit cooldown on a later update must leave it cleared (not resurrect).
+	updated, err = s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Enabled: lo.ToPtr(true),
+		},
+	})
+	s.NoError(err)
+	s.Nil(updated.AutoTopup.Cooldown, "omitting cooldown must not restore a cleared cooldown")
+}
+
 func (s *WalletAutoTopupDirectSuite) TestDirect_WithCooldown_OneShotPerWindow() {
 	ctx := s.GetContext()
 	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}

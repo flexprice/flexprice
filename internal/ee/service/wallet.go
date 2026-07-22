@@ -1556,7 +1556,12 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 			current.Invoicing = req.AutoTopup.Invoicing
 		}
 		if req.AutoTopup.Cooldown != nil {
-			current.Cooldown = req.AutoTopup.Cooldown
+			// value == 0 clears; omit/null leaves unchanged (partial update).
+			if req.AutoTopup.Cooldown.IsClearSentinel() {
+				current.Cooldown = nil
+			} else {
+				current.Cooldown = req.AutoTopup.Cooldown
+			}
 		}
 		existing.AutoTopup = current
 	}

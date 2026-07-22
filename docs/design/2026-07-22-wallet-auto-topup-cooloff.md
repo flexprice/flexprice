@@ -129,7 +129,7 @@ erDiagram
 | `threshold` | yes | Trigger when ongoing balance ≤ this |
 | `amount` | yes | Credits/currency amount per auto-topup |
 | `invoicing` | yes | `true` → pending txn + invoice; `false` → direct credit |
-| `cooldown` | no | Omit = no cooloff. `unit`: `SECOND` \| `MINUTE` \| `HOUR` \| `DAY` |
+| `cooldown` | no | Omit = no cooloff. `unit`: `SECOND` \| `MINUTE` \| `HOUR` \| `DAY`. On **update**: omit/null = leave unchanged; `{ "value": 0, "unit": "<any>" }` = clear cooloff |
 
 ### 3.2 How rows relate for guards
 

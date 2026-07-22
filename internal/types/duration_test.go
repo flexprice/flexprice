@@ -48,3 +48,10 @@ func TestDuration_IsSet(t *testing.T) {
 	assert.False(t, (&Duration{Value: 1}).IsSet())
 	assert.True(t, (&Duration{Value: 1, Unit: DurationUnitMinute}).IsSet())
 }
+
+func TestDuration_IsClearSentinel(t *testing.T) {
+	assert.False(t, (*Duration)(nil).IsClearSentinel())
+	assert.True(t, (&Duration{Value: 0, Unit: DurationUnitSecond}).IsClearSentinel())
+	assert.True(t, (&Duration{Value: 0}).IsClearSentinel())
+	assert.False(t, (&Duration{Value: 1, Unit: DurationUnitMinute}).IsClearSentinel())
+}
