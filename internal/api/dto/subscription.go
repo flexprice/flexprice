@@ -325,6 +325,13 @@ func (r *SubscriptionCouponInput) Validate() error {
 	return nil
 }
 
+// GroupedInvoicingChildRequest creates one grouped_invoicing child under the parent in the same request.
+// Billing period, cycle, anchor, currency, and start_date are inherited from the parent.
+type GroupedInvoicingChildRequest struct {
+	PlanID             string `json:"plan_id" validate:"required"`
+	ExternalCustomerID string `json:"external_customer_id" validate:"required"`
+}
+
 // SubscriptionInheritanceConfig groups all hierarchy and invoicing-routing fields for
 // subscription creation.
 type SubscriptionInheritanceConfig struct {
@@ -343,6 +350,9 @@ type SubscriptionInheritanceConfig struct {
 	// SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
 	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
 	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
+
+	// grouped_invoicing_children_to_create creates new grouped_invoicing children under this parent
+	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
 }
 
 // Validate enforces mutual-exclusivity constraints between inheritance fields.
@@ -383,6 +393,21 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either grouped invoicing conversion or inherited child creation, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Grouped invoicing inline-child creation cannot be combined with existing-subscription conversion.
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && len(c.SubscriptionsIDsForGroupedInvoicing) > 0 {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with subscriptions_ids_for_grouped_invoicing").
+			WithHint("Use either inline child creation or existing-subscription conversion, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Inline children require creating a parent, not attaching under an existing parent.
+	// InvoicingCustomerExternalID is allowed (delegated payer for seat fees).
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with parent_subscription_id").
+			WithHint("grouped_invoicing_children_to_create can only be used when creating a parent subscription").
 			Mark(ierr.ErrValidation)
 	}
 

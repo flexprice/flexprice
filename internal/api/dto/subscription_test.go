@@ -191,3 +191,85 @@ func TestCreateSubscriptionRequestValidate_AutoInvoiceThreshold(t *testing.T) {
 		}
 	})
 }
+
+func TestSubscriptionInheritanceConfig_Validate_GroupedInvoicingChildrenToCreate(t *testing.T) {
+	t.Run("rejects combining with subscriptions_ids_for_grouped_invoicing", func(t *testing.T) {
+		c := &SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+				{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+			},
+			SubscriptionsIDsForGroupedInvoicing: []string{"sub_existing_1"},
+		}
+
+		err := c.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(err.Error(), "grouped_invoicing_children_to_create") {
+			t.Fatalf("expected error to mention grouped_invoicing_children_to_create, got: %v", err)
+		}
+	})
+
+	t.Run("passes with only grouped_invoicing_children_to_create set", func(t *testing.T) {
+		c := &SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+				{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+			},
+		}
+
+		err := c.Validate()
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("nil config still passes", func(t *testing.T) {
+		var c *SubscriptionInheritanceConfig
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error for nil config, got: %v", err)
+		}
+	})
+}
+
+func TestCreateSubscriptionRequestValidate_GroupedInvoicingChildrenToCreate_RequiredFields(t *testing.T) {
+	t.Run("rejects a child missing plan_id", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		req.Inheritance = &SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+				{ExternalCustomerID: "ext_seat_1"},
+			},
+		}
+
+		err := req.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+	})
+
+	t.Run("rejects a child missing external_customer_id", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		req.Inheritance = &SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+				{PlanID: "plan_seat"},
+			},
+		}
+
+		err := req.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+	})
+
+	t.Run("passes with both fields set", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		req.Inheritance = &SubscriptionInheritanceConfig{
+			GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+				{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+			},
+		}
+
+		if err := req.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+}

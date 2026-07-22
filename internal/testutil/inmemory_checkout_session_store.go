@@ -79,6 +79,18 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 			return false
 		}
 	}
+	if len(filter.Actions) > 0 {
+		found := false
+		for _, a := range filter.Actions {
+			if session.Action == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
 	return true
 }
 
