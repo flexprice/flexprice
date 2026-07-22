@@ -148,6 +148,24 @@ type CreateCheckoutPaymentRequest struct {
 	Gateway types.PaymentGatewayType
 }
 
+// PayFirstCheckoutRequest is the shared settlement input for payment-gated flows.
+// Callers create domain intent + DRAFT invoice after CheckIfAnyCheckoutSessionPending;
+// StartPayFirstCheckoutSession owns session create, fulfill, cleanup, and initiated webhook.
+type PayFirstCheckoutRequest struct {
+	CustomerID    string
+	Action        types.CheckoutAction
+	Configuration types.CheckoutConfiguration
+	DraftInvoice  *invoice.Invoice
+	Checkout      *CheckoutParams
+}
+
+// PendingCheckoutConflict describes the AlreadyExists error when a pending session matches.
+type PendingCheckoutConflict struct {
+	Message string
+	Hint    string
+	Details map[string]any
+}
+
 // CheckoutSessionResponse is the API response for a single checkout session.
 type CheckoutSessionResponse struct {
 	*domainCheckout.CheckoutSession

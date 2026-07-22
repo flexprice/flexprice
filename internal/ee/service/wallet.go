@@ -624,11 +624,11 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 
 	// Handle purchased credits with invoice (pay-later / auto-complete, or pay-first checkout).
 	if req.TransactionReason == types.TransactionReasonPurchasedCreditInvoiced {
-		checkoutSvc := &checkoutSessionService{ServiceParams: s.ServiceParams}
+		checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
 
 		// Opt-in checkout: force pending + DRAFT so credits apply only after payment.
 		if req.Checkout != nil {
-			if err := checkoutSvc.checkIfAnyCheckoutPending(
+			if err := checkoutSvc.CheckIfAnyCheckoutSessionPending(
 				ctx,
 				w.CustomerID,
 				types.CheckoutActionWalletTopup,
@@ -637,10 +637,10 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 						cfg.WalletTopupParams != nil &&
 						cfg.WalletTopupParams.WalletID == walletID
 				},
-				pendingCheckoutConflict{
-					message: "a pending checkout session already exists for this wallet",
-					hint:    "Complete or cancel the existing checkout before starting another payment-gated top-up",
-					details: map[string]any{"wallet_id": walletID},
+				dto.PendingCheckoutConflict{
+					Message: "a pending checkout session already exists for this wallet",
+					Hint:    "Complete or cancel the existing checkout before starting another payment-gated top-up",
+					Details: map[string]any{"wallet_id": walletID},
 				},
 			); err != nil {
 				return nil, err
@@ -689,17 +689,17 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 				return nil, err
 			}
 
-			sessionResp, err := checkoutSvc.startPayFirstCheckout(ctx, &payFirstCheckoutRequest{
-				customerID: w.CustomerID,
-				action:     types.CheckoutActionWalletTopup,
-				configuration: types.CheckoutConfiguration{
+			sessionResp, err := checkoutSvc.StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+				CustomerID: w.CustomerID,
+				Action:     types.CheckoutActionWalletTopup,
+				Configuration: types.CheckoutConfiguration{
 					WalletTopupParams: &types.WalletTopupParams{
 						WalletID:            walletID,
 						WalletTransactionID: walletTransactionID,
 					},
 				},
-				draftInvoice: &draftInvoice.Invoice,
-				checkout:     req.Checkout,
+				DraftInvoice: &draftInvoice.Invoice,
+				Checkout:     req.Checkout,
 			})
 			if err != nil {
 				return nil, err

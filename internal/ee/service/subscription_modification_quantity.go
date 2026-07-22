@@ -776,8 +776,8 @@ func (s *subscriptionModificationService) settlePayFirst(
 	}
 
 	subscriptionID := plan.GetSubscriptionID()
-	checkoutSvc := &checkoutSessionService{ServiceParams: sp}
-	if err := checkoutSvc.checkIfAnyCheckoutPending(
+	checkoutSvc := NewCheckoutSessionService(sp)
+	if err := checkoutSvc.CheckIfAnyCheckoutSessionPending(
 		ctx,
 		sub.CustomerID,
 		types.CheckoutActionModifySubscription,
@@ -786,10 +786,10 @@ func (s *subscriptionModificationService) settlePayFirst(
 				cfg.ModifySubscriptionParams != nil &&
 				cfg.ModifySubscriptionParams.SubscriptionID == subscriptionID
 		},
-		pendingCheckoutConflict{
-			message: "a pending checkout session already exists for this subscription",
-			hint:    "Complete or cancel the existing checkout before starting another payment-gated modification",
-			details: map[string]any{"subscription_id": subscriptionID},
+		dto.PendingCheckoutConflict{
+			Message: "a pending checkout session already exists for this subscription",
+			Hint:    "Complete or cancel the existing checkout before starting another payment-gated modification",
+			Details: map[string]any{"subscription_id": subscriptionID},
 		},
 	); err != nil {
 		return nil, err
@@ -800,14 +800,14 @@ func (s *subscriptionModificationService) settlePayFirst(
 		return nil, err
 	}
 
-	sessionResp, err := checkoutSvc.startPayFirstCheckout(ctx, &payFirstCheckoutRequest{
-		customerID: sub.CustomerID,
-		action:     types.CheckoutActionModifySubscription,
-		configuration: types.CheckoutConfiguration{
+	sessionResp, err := checkoutSvc.StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+		CustomerID: sub.CustomerID,
+		Action:     types.CheckoutActionModifySubscription,
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: modifyParams,
 		},
-		draftInvoice: &draftInvoice.Invoice,
-		checkout:     checkout,
+		DraftInvoice: &draftInvoice.Invoice,
+		Checkout:     checkout,
 	})
 	if err != nil {
 		return nil, err
