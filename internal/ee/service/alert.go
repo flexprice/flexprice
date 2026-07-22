@@ -27,12 +27,9 @@ type AlertService interface {
 	GetAlertSettings(ctx context.Context, id string) (*dto.AlertSettingsResponse, error)
 	ListAlertSettings(ctx context.Context, filter *types.AlertSettingsFilter) (*dto.ListAlertSettingsResponse, error)
 
-	// EvaluateSpendAlertsForCustomer fetches active subs with alert configs,
-	// pulls per-subscription usage + charges, and logs alerts for every
-	// threshold that fires (subscription / line item / group). Self-contained;
-	// one call drives everything. meterIDs and periodStart are optional filters
-	// used by the sync per-event caller (nil for the Temporal-driven path).
-	EvaluateSpendAlertsForCustomer(ctx context.Context, cust *customer.Customer, meterIDs []string, periodStart *time.Time) error
+	// EvaluateSpendAlertsForCustomer evaluates subscription-level spend alerts
+	// for the customer's active subscriptions (line-item/group scopes dropped).
+	EvaluateSpendAlertsForCustomer(ctx context.Context, cust *customer.Customer) error
 
 	// EvaluateSpendAndEntitlementAlertsForCustomer is the FLE-959 fused entry
 	// point called by the debounced Temporal activity. It runs spend
@@ -56,10 +53,8 @@ type AlertService interface {
 	EvaluateWalletAlertsForCustomer(ctx context.Context, cust *customer.Customer, autoTopupIdempotencySeed string) error
 
 	// EvaluateSpendBreachForEvent is the sync per-event entry used by the meter
-	// usage post-insert side effect when the debouncer is off. Delegates to
-	// EvaluateSpendAlertsForCustomer with meterIDs + event.Timestamp filters so
-	// the exact same code runs on both sync and Temporal-driven paths.
-	EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer, meterIDs []string)
+	// usage post-insert side effect when the debouncer is off.
+	EvaluateSpendBreachForEvent(ctx context.Context, event *events.Event, cust *customer.Customer)
 }
 
 type alertService struct {

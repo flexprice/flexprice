@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -138,8 +139,24 @@ func (s *entitlementGrantService) openMissingGrants(
 			byFeature[ec.FeatureID] = append(byFeature[ec.FeatureID], ec)
 		}
 
+		// TODO: review this logic.
+		// only open grants if duration is less than subscription cycle.
 		for _, featureID := range featureOrder {
 			group := byFeature[featureID]
+
+			// Amount-measure grants pin the flat unit price at open time so a
+			// price change mid-window can't retroactively reprice consumed usage.
+			// Nil pin = evaluator falls back to a live price lookup.
+			var unitPrice *decimal.Decimal
+			if group[0].GrantMeasure == types.EntitlementGrantMeasureAmount {
+				up, err := s.resolveFlatUnitPrice(ctx, featureID)
+				if err != nil {
+					s.Logger.Error(ctx, "failed to resolve unit price for amount grant, opening unpinned",
+						"feature_id", featureID, "error", err)
+				} else {
+					unitPrice = up
+				}
+			}
 
 			parallel := lo.SomeBy(group, func(ec *entitlement.Entitlement) bool {
 				return ec.AggregationMode == types.EntitlementAggregationModeParallel
@@ -149,7 +166,7 @@ func (s *entitlementGrantService) openMissingGrants(
 					if _, ok := liveByConfigID[ec.ID]; ok {
 						continue
 					}
-					g, err := s.openOneGrant(ctx, sub, ec, at, lo.FromPtr(ec.GrantQuota))
+					g, err := s.openOneGrant(ctx, sub, ec, at, lo.FromPtr(ec.GrantQuota), unitPrice)
 					if err != nil {
 						return nil, err
 					}
@@ -173,7 +190,7 @@ func (s *entitlementGrantService) openMissingGrants(
 			if _, ok := liveByConfigID[primary.ID]; ok {
 				continue
 			}
-			g, err := s.openOneGrant(ctx, sub, primary, at, total)
+			g, err := s.openOneGrant(ctx, sub, primary, at, total, unitPrice)
 			if err != nil {
 				return nil, err
 			}
@@ -187,6 +204,49 @@ func (s *entitlementGrantService) openMissingGrants(
 	return opened, nil
 }
 
+// resolveFlatUnitPrice returns the flat per-unit price for the feature's meter.
+func (s *entitlementGrantService) resolveFlatUnitPrice(ctx context.Context, featureID string) (*decimal.Decimal, error) {
+	f, err := s.FeatureRepo.Get(ctx, featureID)
+	if err != nil {
+		return nil, err
+	}
+	if f.MeterID == "" {
+		return nil, ierr.NewError("feature has no meter").
+			WithReportableDetails(map[string]interface{}{"feature_id": featureID}).
+			Mark(ierr.ErrValidation)
+	}
+	priceFilter := types.NewNoLimitPriceFilter()
+	priceFilter.MeterIDs = []string{f.MeterID}
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+	p, ok := selectFlatUnitPrice(prices)
+	if !ok {
+		return nil, ierr.NewError("no flat price found for meter").
+			WithReportableDetails(map[string]interface{}{"feature_id": featureID, "meter_id": f.MeterID}).
+			Mark(ierr.ErrNotFound)
+	}
+	return lo.ToPtr(p.Amount), nil
+}
+
+// selectFlatUnitPrice picks the highest-sequence flat price from the slice.
+func selectFlatUnitPrice(prices []*price.Price) (*price.Price, bool) {
+	flatPrices := lo.Filter(prices, func(p *price.Price, _ int) bool {
+		return p.BillingModel == types.BILLING_MODEL_FLAT_FEE
+	})
+	if len(flatPrices) == 0 {
+		return nil, false
+	}
+	best := flatPrices[0]
+	for _, p := range flatPrices[1:] {
+		if p.Sequence > best.Sequence {
+			best = p
+		}
+	}
+	return best, true
+}
+
 // openOneGrant expires the stale slot and inserts a new grant. On INSERT conflict
 // it re-reads the winner. Returns (nil, nil) when the window is < 1 hour.
 func (s *entitlementGrantService) openOneGrant(
@@ -195,6 +255,7 @@ func (s *entitlementGrantService) openOneGrant(
 	ec *entitlement.Entitlement,
 	at time.Time,
 	quota decimal.Decimal,
+	unitPrice *decimal.Decimal,
 ) (*entitlementgrant.EntitlementGrant, error) {
 	dur, err := ec.GrantDuration()
 	if err != nil {
@@ -228,6 +289,7 @@ func (s *entitlementGrantService) openOneGrant(
 		ScopeEntityID:       ec.FeatureID,
 		Measure:             ec.GrantMeasure,
 		Quota:               quota,
+		UnitPrice:           unitPrice,
 		ValidFrom:           validFrom,
 		ValidTo:             validTo,
 		GrantStatus:         types.EntitlementGrantStatusActive,

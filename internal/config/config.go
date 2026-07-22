@@ -54,6 +54,7 @@ type Configuration struct {
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -498,12 +499,24 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
 
-	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
-	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
-	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
-	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
-	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
+// UsageAlertsConfig controls the usage-driven alert pipeline end to end:
+// meter-usage post-insert schedules a debounced per-customer Temporal workflow
+// which evaluates spend, entitlement-grant, and wallet alerts.
+type UsageAlertsConfig struct {
+	// Enabled routes post-insert alerting through the debounced Temporal
+	// workflow instead of the Kafka wallet-alert path and inline spend-breach check.
+	Enabled bool `mapstructure:"enabled" default:"false"`
+	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
+	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
+	// ActivityStaleAfter bounds how long an alert activity may wait in the task
+	// queue (Temporal ScheduleToStartTimeout). Activities older than this are
+	// re-enqueued so fresher customers evaluate first.
+	ActivityStaleAfter time.Duration `mapstructure:"activity_stale_after" default:"1h"`
+	// StaleRescheduleDelay is the pause before re-enqueueing a stale activity.
+	StaleRescheduleDelay time.Duration `mapstructure:"stale_reschedule_delay" default:"30s"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

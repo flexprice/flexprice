@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -17,6 +19,13 @@ type UsageAlertWorkflowInput struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
 	CustomerID    string `json:"customer_id"`
+
+	// ActivityStaleAfter caps queue wait per activity (ScheduleToStartTimeout).
+	// Zero disables staleness handling. Stamped from config by the scheduler so
+	// workflow code stays deterministic.
+	ActivityStaleAfter time.Duration `json:"activity_stale_after,omitempty"`
+	// StaleRescheduleDelay is the pause before re-enqueueing a stale activity.
+	StaleRescheduleDelay time.Duration `json:"stale_reschedule_delay,omitempty"`
 }
 
 func (i UsageAlertWorkflowInput) Validate() error {

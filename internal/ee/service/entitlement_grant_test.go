@@ -276,6 +276,28 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_IgnoresNoneEC() {
 	s.Empty(grants, "type=none EC should not open a grant")
 }
 
+func (s *EntitlementGrantSuite) TestEnsureGrants_AmountGrantPinsUnitPrice() {
+	// The flat unit price at open time is stored on the grant so mid-window
+	// price changes never retroactively reprice consumed usage.
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureAmount)
+
+	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1)
+	s.Require().NotNil(grants[0].UnitPrice, "amount grant must pin the unit price at open")
+	s.True(grants[0].UnitPrice.Equal(decimal.NewFromFloat(0.02)),
+		"pinned unit price must match the flat price, got %s", grants[0].UnitPrice)
+}
+
+func (s *EntitlementGrantSuite) TestEnsureGrants_QuantityGrantHasNoUnitPrice() {
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1)
+	s.Nil(grants[0].UnitPrice, "quantity grants don't pin a price")
+}
+
 func (s *EntitlementGrantSuite) TestEnsureGrants_SkipsWhenCustomerHasNoSubs() {
 	cust := s.simpleCustomer("cust-no-sub")
 	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, time.Now())

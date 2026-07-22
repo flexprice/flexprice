@@ -11,7 +11,7 @@ import (
 )
 
 // EntitlementGrant is a time-boxed usage bucket instantiated from an entitlement
-// row with grant_type=TIME_BOXED. Lifecycle: active → exhausted → expired.
+// carrying a grant config. Lifecycle: active → exhausted → expired.
 type EntitlementGrant struct {
 	ent.Schema
 }
@@ -82,6 +82,16 @@ func (EntitlementGrant) Fields() []ent.Field {
 			}).
 			Immutable(),
 
+		// Flat per-unit price pinned at open time for amount-measure grants, so a
+		// price change mid-window can't retroactively reprice consumed usage.
+		field.Other("unit_price", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		field.Other("usage", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
@@ -109,8 +119,8 @@ func (EntitlementGrant) Fields() []ent.Field {
 
 func (EntitlementGrant) Indexes() []ent.Index {
 	return []ent.Index{
-		// One live grant per (config, customer). Expired/superseded rows free the slot.
-		index.Fields("entitlement_config_id", "customer_id").
+		// One live grant per (tenant, env, config, customer). Expired/superseded rows free the slot.
+		index.Fields("tenant_id", "environment_id", "entitlement_config_id", "customer_id").
 			Unique().
 			Annotations(entsql.IndexWhere("((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))")),
 

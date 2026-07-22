@@ -43,6 +43,8 @@ const (
 	FieldMeasure = "measure"
 	// FieldQuota holds the string denoting the quota field in the database.
 	FieldQuota = "quota"
+	// FieldUnitPrice holds the string denoting the unit_price field in the database.
+	FieldUnitPrice = "unit_price"
 	// FieldUsage holds the string denoting the usage field in the database.
 	FieldUsage = "usage"
 	// FieldValidFrom holds the string denoting the valid_from field in the database.
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldScopeEntityID,
 	FieldMeasure,
 	FieldQuota,
+	FieldUnitPrice,
 	FieldUsage,
 	FieldValidFrom,
 	FieldValidTo,
@@ -198,6 +201,11 @@ func ByMeasure(opts ...sql.OrderTermOption) OrderOption {
 // ByQuota orders the results by the quota field.
 func ByQuota(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuota, opts...).ToFunc()
+}
+
+// ByUnitPrice orders the results by the unit_price field.
+func ByUnitPrice(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUnitPrice, opts...).ToFunc()
 }
 
 // ByUsage orders the results by the usage field.

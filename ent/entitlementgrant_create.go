@@ -162,6 +162,20 @@ func (egc *EntitlementGrantCreate) SetQuota(d decimal.Decimal) *EntitlementGrant
 	return egc
 }
 
+// SetUnitPrice sets the "unit_price" field.
+func (egc *EntitlementGrantCreate) SetUnitPrice(d decimal.Decimal) *EntitlementGrantCreate {
+	egc.mutation.SetUnitPrice(d)
+	return egc
+}
+
+// SetNillableUnitPrice sets the "unit_price" field if the given value is not nil.
+func (egc *EntitlementGrantCreate) SetNillableUnitPrice(d *decimal.Decimal) *EntitlementGrantCreate {
+	if d != nil {
+		egc.SetUnitPrice(*d)
+	}
+	return egc
+}
+
 // SetUsage sets the "usage" field.
 func (egc *EntitlementGrantCreate) SetUsage(d decimal.Decimal) *EntitlementGrantCreate {
 	egc.mutation.SetUsage(d)
@@ -464,6 +478,10 @@ func (egc *EntitlementGrantCreate) createSpec() (*EntitlementGrant, *sqlgraph.Cr
 	if value, ok := egc.mutation.Quota(); ok {
 		_spec.SetField(entitlementgrant.FieldQuota, field.TypeOther, value)
 		_node.Quota = value
+	}
+	if value, ok := egc.mutation.UnitPrice(); ok {
+		_spec.SetField(entitlementgrant.FieldUnitPrice, field.TypeOther, value)
+		_node.UnitPrice = &value
 	}
 	if value, ok := egc.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)

@@ -47,6 +47,8 @@ type EntitlementGrant struct {
 	Measure types.EntitlementGrantMeasure `json:"measure,omitempty"`
 	// Quota holds the value of the "quota" field.
 	Quota decimal.Decimal `json:"quota,omitempty"`
+	// UnitPrice holds the value of the "unit_price" field.
+	UnitPrice *decimal.Decimal `json:"unit_price,omitempty"`
 	// Usage holds the value of the "usage" field.
 	Usage decimal.Decimal `json:"usage,omitempty"`
 	// ValidFrom holds the value of the "valid_from" field.
@@ -65,6 +67,8 @@ func (*EntitlementGrant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case entitlementgrant.FieldUnitPrice:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case entitlementgrant.FieldQuota, entitlementgrant.FieldUsage:
 			values[i] = new(decimal.Decimal)
 		case entitlementgrant.FieldID, entitlementgrant.FieldTenantID, entitlementgrant.FieldStatus, entitlementgrant.FieldCreatedBy, entitlementgrant.FieldUpdatedBy, entitlementgrant.FieldEnvironmentID, entitlementgrant.FieldEntitlementConfigID, entitlementgrant.FieldCustomerID, entitlementgrant.FieldSubscriptionID, entitlementgrant.FieldScopeEntityType, entitlementgrant.FieldScopeEntityID, entitlementgrant.FieldMeasure, entitlementgrant.FieldGrantStatus:
@@ -176,6 +180,13 @@ func (eg *EntitlementGrant) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				eg.Quota = *value
 			}
+		case entitlementgrant.FieldUnitPrice:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field unit_price", values[i])
+			} else if value.Valid {
+				eg.UnitPrice = new(decimal.Decimal)
+				*eg.UnitPrice = *value.S.(*decimal.Decimal)
+			}
 		case entitlementgrant.FieldUsage:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field usage", values[i])
@@ -284,6 +295,11 @@ func (eg *EntitlementGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("quota=")
 	builder.WriteString(fmt.Sprintf("%v", eg.Quota))
+	builder.WriteString(", ")
+	if v := eg.UnitPrice; v != nil {
+		builder.WriteString("unit_price=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("usage=")
 	builder.WriteString(fmt.Sprintf("%v", eg.Usage))

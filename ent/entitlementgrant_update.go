@@ -200,6 +200,9 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if egu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
+	if egu.mutation.UnitPriceCleared() {
+		_spec.ClearField(entitlementgrant.FieldUnitPrice, field.TypeOther)
+	}
 	if value, ok := egu.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
@@ -434,6 +437,9 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 	}
 	if eguo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
+	}
+	if eguo.mutation.UnitPriceCleared() {
+		_spec.ClearField(entitlementgrant.FieldUnitPrice, field.TypeOther)
 	}
 	if value, ok := eguo.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)

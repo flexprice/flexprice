@@ -912,11 +912,11 @@ func init() {
 	// entitlementgrant.MeasureValidator is a validator for the "measure" field. It is called by the builders before save.
 	entitlementgrant.MeasureValidator = entitlementgrantDescMeasure.Validators[0].(func(string) error)
 	// entitlementgrantDescUsage is the schema descriptor for usage field.
-	entitlementgrantDescUsage := entitlementgrantFields[8].Descriptor()
+	entitlementgrantDescUsage := entitlementgrantFields[9].Descriptor()
 	// entitlementgrant.DefaultUsage holds the default value on creation for the usage field.
 	entitlementgrant.DefaultUsage = entitlementgrantDescUsage.Default.(decimal.Decimal)
 	// entitlementgrantDescGrantStatus is the schema descriptor for grant_status field.
-	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
+	entitlementgrantDescGrantStatus := entitlementgrantFields[12].Descriptor()
 	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
 	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()

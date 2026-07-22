@@ -942,6 +942,7 @@ var (
 		{Name: "scope_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "measure", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "quota", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "unit_price", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "usage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "valid_from", Type: field.TypeTime},
 		{Name: "valid_to", Type: field.TypeTime},
@@ -955,9 +956,9 @@ var (
 		PrimaryKey: []*schema.Column{EntitlementGrantsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "entitlementgrant_entitlement_config_id_customer_id",
+				Name:    "entitlementgrant_tenant_id_environment_id_entitlement_config_id_customer_id",
 				Unique:  true,
-				Columns: []*schema.Column{EntitlementGrantsColumns[8], EntitlementGrantsColumns[9]},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))",
 				},
@@ -973,7 +974,7 @@ var (
 			{
 				Name:    "entitlementgrant_tenant_id_environment_id_customer_id_scope_entity_type_scope_entity_id_valid_from_valid_to",
 				Unique:  false,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[11], EntitlementGrantsColumns[12], EntitlementGrantsColumns[16], EntitlementGrantsColumns[17]},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[11], EntitlementGrantsColumns[12], EntitlementGrantsColumns[17], EntitlementGrantsColumns[18]},
 			},
 		},
 	}

@@ -25730,6 +25730,7 @@ type EntitlementGrantMutation struct {
 	scope_entity_id       *string
 	measure               *types.EntitlementGrantMeasure
 	quota                 *decimal.Decimal
+	unit_price            *decimal.Decimal
 	usage                 *decimal.Decimal
 	valid_from            *time.Time
 	valid_to              *time.Time
@@ -26388,6 +26389,55 @@ func (m *EntitlementGrantMutation) ResetQuota() {
 	m.quota = nil
 }
 
+// SetUnitPrice sets the "unit_price" field.
+func (m *EntitlementGrantMutation) SetUnitPrice(d decimal.Decimal) {
+	m.unit_price = &d
+}
+
+// UnitPrice returns the value of the "unit_price" field in the mutation.
+func (m *EntitlementGrantMutation) UnitPrice() (r decimal.Decimal, exists bool) {
+	v := m.unit_price
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUnitPrice returns the old "unit_price" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldUnitPrice(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUnitPrice is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUnitPrice requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUnitPrice: %w", err)
+	}
+	return oldValue.UnitPrice, nil
+}
+
+// ClearUnitPrice clears the value of the "unit_price" field.
+func (m *EntitlementGrantMutation) ClearUnitPrice() {
+	m.unit_price = nil
+	m.clearedFields[entitlementgrant.FieldUnitPrice] = struct{}{}
+}
+
+// UnitPriceCleared returns if the "unit_price" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) UnitPriceCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldUnitPrice]
+	return ok
+}
+
+// ResetUnitPrice resets all changes to the "unit_price" field.
+func (m *EntitlementGrantMutation) ResetUnitPrice() {
+	m.unit_price = nil
+	delete(m.clearedFields, entitlementgrant.FieldUnitPrice)
+}
+
 // SetUsage sets the "usage" field.
 func (m *EntitlementGrantMutation) SetUsage(d decimal.Decimal) {
 	m.usage = &d
@@ -26615,7 +26665,7 @@ func (m *EntitlementGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementGrantMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlementgrant.FieldTenantID)
 	}
@@ -26657,6 +26707,9 @@ func (m *EntitlementGrantMutation) Fields() []string {
 	}
 	if m.quota != nil {
 		fields = append(fields, entitlementgrant.FieldQuota)
+	}
+	if m.unit_price != nil {
+		fields = append(fields, entitlementgrant.FieldUnitPrice)
 	}
 	if m.usage != nil {
 		fields = append(fields, entitlementgrant.FieldUsage)
@@ -26709,6 +26762,8 @@ func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Measure()
 	case entitlementgrant.FieldQuota:
 		return m.Quota()
+	case entitlementgrant.FieldUnitPrice:
+		return m.UnitPrice()
 	case entitlementgrant.FieldUsage:
 		return m.Usage()
 	case entitlementgrant.FieldValidFrom:
@@ -26756,6 +26811,8 @@ func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (e
 		return m.OldMeasure(ctx)
 	case entitlementgrant.FieldQuota:
 		return m.OldQuota(ctx)
+	case entitlementgrant.FieldUnitPrice:
+		return m.OldUnitPrice(ctx)
 	case entitlementgrant.FieldUsage:
 		return m.OldUsage(ctx)
 	case entitlementgrant.FieldValidFrom:
@@ -26873,6 +26930,13 @@ func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetQuota(v)
 		return nil
+	case entitlementgrant.FieldUnitPrice:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUnitPrice(v)
+		return nil
 	case entitlementgrant.FieldUsage:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
@@ -26947,6 +27011,9 @@ func (m *EntitlementGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlementgrant.FieldEnvironmentID) {
 		fields = append(fields, entitlementgrant.FieldEnvironmentID)
 	}
+	if m.FieldCleared(entitlementgrant.FieldUnitPrice) {
+		fields = append(fields, entitlementgrant.FieldUnitPrice)
+	}
 	if m.FieldCleared(entitlementgrant.FieldLastComputedAt) {
 		fields = append(fields, entitlementgrant.FieldLastComputedAt)
 	}
@@ -26972,6 +27039,9 @@ func (m *EntitlementGrantMutation) ClearField(name string) error {
 		return nil
 	case entitlementgrant.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case entitlementgrant.FieldUnitPrice:
+		m.ClearUnitPrice()
 		return nil
 	case entitlementgrant.FieldLastComputedAt:
 		m.ClearLastComputedAt()
@@ -27025,6 +27095,9 @@ func (m *EntitlementGrantMutation) ResetField(name string) error {
 		return nil
 	case entitlementgrant.FieldQuota:
 		m.ResetQuota()
+		return nil
+	case entitlementgrant.FieldUnitPrice:
+		m.ResetUnitPrice()
 		return nil
 	case entitlementgrant.FieldUsage:
 		m.ResetUsage()
