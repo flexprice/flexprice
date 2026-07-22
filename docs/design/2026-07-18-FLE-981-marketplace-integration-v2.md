@@ -1027,3 +1027,150 @@ today. Grouping a connection's records per window would cut round-trips; deferre
 - Managing customer entitlements (Pub/Sub formats, approve/reject): [https://docs.cloud.google.com/marketplace/docs/partners/integrated-saas/manage-entitlements](https://docs.cloud.google.com/marketplace/docs/partners/integrated-saas/manage-entitlements)
 - AWS side, for parity: `marketplace-aws-batchUsageReport.md`
 
+---
+
+
+
+## 12. Deviations from this design (implemented 2026-07-22)
+
+Everything above is the design as approved. This section records where the shipped implementation
+diverged from it, and why. Nothing above has been edited to match — read Sections 6 and 7 for the
+original reasoning, and this section for what actually changed and the concrete reason it changed.
+
+### 12.1 `usage_records` is provider-agnostic again — Section 6's flat-fields decision is reversed
+
+Section 6 explicitly removed an earlier `syncs` JSONB map in favor of flat `connection_id` /
+`synced_at` / `marketplace_report_id`, reasoning that "a subscription is sold through exactly one
+marketplace, so metering it to two would double-bill the buyer." That assumption turned out to be
+false in practice: nothing anywhere in the system — not the entity mapping table, not the connection
+model, not registration — actually prevents the same subscription from being registered against both
+an AWS connection and a GCP connection at once. A tenant can and did do exactly this.
+
+Under the flat-`connection_id` schema, that scenario silently loses data. The snapshot cron's
+idempotency check is `ExistsForPeriod(subscription_id, period_start, period_end)` — no `connection_id`
+in that key. So: the AWS connection's pass snapshots the subscription and writes a row stamped
+`connection_id = conn_aws`; the GCP connection's pass, snapshotting the same subscription for the same
+window, finds a row already exists for `(subscription_id, period_start, period_end)` and skips —
+silently. The subscription's usage never reaches GCP at all, with no error, no log line, nothing to
+notice by. This is not a hypothetical; it reproduced with a real tenant connection to both
+marketplaces.
+
+**The fix:** `usage_records` goes back to being provider-agnostic, the way pre-v2 apparently had it,
+but keyed and shaped differently this time:
+
+| Field | v2 (approved) | Now | Reason |
+|---|---|---|---|
+| `connection_id` | flat string, stamped at snapshot time | **removed** | a row no longer belongs to one connection |
+| `synced` | bool | **kept**, same meaning | still the single "does this row need any more work" signal |
+| `synced_at` | timestamp | **removed** | moved into the per-connection map entry (see `syncs` below) |
+| `marketplace_report_id` | string | **removed** | moved into the per-connection map entry |
+| `syncs` | *(did not exist in v2)* | **added**: `map[string]SyncEntry`, keyed by `connection_id` | tracks per-destination outcome, so one row can be reported to N connections independently |
+
+```go
+type SyncEntry struct {
+    Marketplace SecretProvider `json:"marketplace"` // aws_marketplace | gcp_marketplace
+    ReportingID string         `json:"reporting_id"` // AWS MeteringRecordId | GCP operationId
+    SyncedAt    time.Time      `json:"synced_at"`
+}
+```
+
+`synced` is now true only once every connection *currently relevant* to that row (i.e. with a
+published mapping for that row's subscription) has an entry in `syncs`. A record with one relevant
+connection behaves exactly as v2 described; a record with two behaves as fan-out, and the first
+connection's success doesn't mark the row done — no false "success" on either marketplace.
+
+Index: v2's `(tenant_id, environment_id, connection_id, synced)`, minus `connection_id` since it's
+gone: `(tenant_id, environment_id, synced)`.
+
+`entity_integration_mapping` did not need to change — it was already generic enough to hold a
+subscription mapped under two different `provider_type`s simultaneously. The bug was entirely in
+`usage_records` assuming the opposite.
+
+### 12.2 Snapshot cron (Section 7.1) — no `connection_id` stamp, otherwise unchanged
+
+Only change: `snapshotSubscription` no longer takes or writes a `connection_id`. The existing
+`ExistsForPeriod` uniqueness check on `(subscription_id, period_start, period_end)` is exactly what
+now makes this correct instead of lossy — a second connection's pass over the same subscription still
+finds the row already exists and skips, but that's now the *right* behavior (one shared row, not a
+silently dropped second report), not the bug described in 12.1. Everything else in Section 7.1 —
+the window computation, the per-connection customer/subscription mapping scoping, the idempotency
+check itself — is unchanged.
+
+### 12.3 Reporting cron (Section 7.2) — regrouped by tenant, not by connection, to support fan-out
+
+Section 7.2's pseudocode groups unreported records by `connection_id` and authenticates once per
+group. With `connection_id` gone from the row, that grouping is no longer possible at the query level
+— relevance is now a property of `(record, connection)` pairs, computed at report time, not stored on
+the record. The cron now:
+
+```text
+for each tenant/environment with >= 1 published marketplace connection:
+    prepare every published connection once: decrypt secret, authenticate (AssumeRole | WifSession),
+    load its plan/subscription mappings
+
+    records = ListUnsynced(tenant_id, environment_id)   # no connection_id filter — can't have one
+
+    for each record:
+        relevant = [connections whose mappings include record.subscription_id]
+        if relevant is empty: skip (no live connection maps to this subscription right now)
+        for each connection in relevant:
+            if record.syncs[connection.id] already present: skip (reported here on an earlier run)
+            report to it; on success, record.syncs[connection.id] = {marketplace, reporting_id, synced_at}
+        synced = every connection in relevant now has a syncs entry
+        MarkSynced(record.id, record.syncs, synced)   # one write per record, not per connection
+```
+
+Same per-row skip rules as v2 (non-USD, non-positive amount), same response-handling semantics per
+provider (AWS `Status`, GCP `reportErrors`) — those are unchanged from Sections 2 and 7.2. What
+changed is purely the grouping and the write shape: one `MarkSynced(id, syncs_map, synced_bool)` call
+per record instead of v2's per-record `synced/synced_at/marketplace_report_id` flat write.
+
+**Considered and rejected:** merging `syncs` at the SQL level (`syncs || jsonb_build_object(...)`) to
+guard against two connections' writes to the same row racing each other. Rejected as unnecessary
+complexity — records are reported sequentially within one activity run, and the schedule already has
+`SCHEDULE_OVERLAP_POLICY_SKIP` set (`internal/temporal/service/schedules.go`), so two runs never
+touch the same rows concurrently either. A plain read-modify-write via the ent client is sufficient.
+
+**Logging.** Same rules as Section 7.2 (log at each stage, never a secret or buyer identifier), with
+one addition: a per-connection success now also gets its own `info` log line (`"marketplace usage
+record synced"`, tagged with `connection_id` and `marketplace`), since a single record can now succeed
+against one connection and fail against another in the same run — the old "succeeded/failed" per-row
+outcome wasn't granular enough to debug that case.
+
+### 12.4 AWS Marketplace region moved from `metadata` to `sync_config`, and made required
+
+Section 5.4's example connection JSON shows the region living in the connection's free-form
+`metadata` bag: `"metadata": { "aws_marketplace": { "region": "us-east-1" } }`. Two problems found
+after that shipped: nothing validated it was present — a connection could be created with no region
+at all, and the gap surfaced only when the reporting cron tried to call `BatchMeterUsage`, hours
+later — and `metadata` has no typed/validated convention anywhere in the codebase for any provider,
+unlike `sync_config`, which already holds exactly this kind of value for the S3 connection type
+(`sync_config.s3.{bucket,region}`, validated via `S3ExportConfig.Validate()`).
+
+Region's actual purpose — selecting the regional `BatchMeterUsage` endpoint a report is sent to — is
+structurally identical to what S3's `bucket`/`region` do (destination/endpoint config for an outbound
+call), not to `role_arn`/`external_id` (authentication material). So it now lives at
+`sync_config.aws_marketplace.region`, with the same validated-config pattern as S3:
+
+```go
+type AWSMarketplaceSyncConfig struct {
+    Region string `json:"region"`
+}
+```
+
+wired into `SyncConfig.Validate()` exactly like `S3ExportConfig`, and required (not just
+validated-if-present) at `POST /v1/connections` time for `aws_marketplace` connections — a missing
+region now fails connection creation immediately, with the AWS role/trust-policy verification, rather
+than surfacing as a report failure three hours later. (AWS enables Marketplace metering in
+`us-east-1` for every SaaS product by default per AWS's own docs — a tenant only ever needs a
+different value if they specifically requested one from AWS Marketplace.)
+
+### 12.5 Minor implementation-detail deviations from Section 7.3
+
+- `gcpmarketplace.Client.WifSession` returns `*servicecontrol.Service` directly, not the abstract
+`Session` interface sketched in 7.3 — there was no second implementation needing the abstraction, so
+the concrete Google API client type is used as-is.
+- `ReportResult` carries the caller's `OperationID` (echoed back), so `reportGCPRecord` reads it from
+the result rather than re-deriving `= rec.ID` a second time at the write site — same value, one
+source of truth for it.
+
