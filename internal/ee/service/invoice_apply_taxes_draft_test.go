@@ -108,7 +108,7 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_WithSubscriptionTax(
 
 	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
 	s.Require().NoError(err)
-	err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	_, err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
 	s.Require().NoError(err)
 
 	got, err := s.invoiceRepo.Get(ctx, inv.ID)
@@ -128,7 +128,7 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_NoTaxUnchanged() {
 
 	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
 	s.Require().NoError(err)
-	err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	_, err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
 	s.Require().NoError(err)
 
 	got, err := s.invoiceRepo.Get(ctx, inv.ID)
@@ -149,12 +149,9 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_FinalizeNoDoubleTax(
 
 	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
 	s.Require().NoError(err)
-	err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	updated, err := s.service.RecalculateTaxesOnInvoice(ctx, fresh)
 	s.Require().NoError(err)
-
-	afterApply, err := s.invoiceRepo.Get(ctx, inv.ID)
-	s.Require().NoError(err)
-	taxAfterApply := afterApply.TotalTax
+	taxAfterApply := updated.TotalTax
 	s.True(decimal.NewFromInt(10).Equal(taxAfterApply), "expected tax 10 after apply, got %s", taxAfterApply)
 
 	err = s.service.FinalizeInvoice(ctx, inv.ID)

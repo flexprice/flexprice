@@ -736,7 +736,7 @@ func (s *subscriptionModificationService) settlePayLater(
 			sp.Logger.Info(ctx, "failed to attempt payment for delta proration invoice",
 				"error", payErr, "invoice_id", ci.ID)
 		}
-		
+
 		if latest, fetchErr := invoiceSvc.GetInvoice(ctx, ci.ID); fetchErr == nil {
 			ci.Invoice = latest
 			ci.Status = dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus)
@@ -972,7 +972,7 @@ func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
 		return nil, err
 	}
 	computeReq := req.ToComputeRequest()
-	skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	_, skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
 	if err != nil {
 		return nil, err
 	}
@@ -1051,7 +1051,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 			return nil, err
 		}
 		computeReq := req.ToComputeRequest()
-		skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+		_, skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1078,7 +1078,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 		sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
 		return nil, err
 	}
-	
+
 	return &dto.ChangedInvoice{
 		ID:      inv.ID,
 		Action:  dto.ChangedInvoiceActionCreated,
