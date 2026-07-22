@@ -43,7 +43,7 @@ type InvoiceService interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
-	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
+	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
@@ -77,7 +77,7 @@ type InvoiceService interface {
 
 	// RecalculateTaxesOnInvoice applies subscription auto-apply taxes and updates
 	// total_tax / total / amount_due. Idempotent via tax-applied records.
-	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) error
+	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error)
 }
 
 type invoiceService struct {
@@ -313,17 +313,13 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 
 	// Compute to assign invoice number and apply coupons/taxes
 	computeReq := req.ToComputeRequest()
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, &computeReq)
+	inv, skipped, err := s.ComputeInvoice(ctx, draft.ID, &computeReq)
 	if err != nil {
 		return nil, err
 	}
 
 	// If invoice was skipped (zero-dollar), return it without further processing
 	if skipped {
-		inv, err := s.InvoiceRepo.Get(ctx, draft.ID)
-		if err != nil {
-			return nil, err
-		}
 		return dto.NewInvoiceResponse(inv), nil
 	}
 
@@ -340,7 +336,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	// Get the updated invoice
-	inv, err := s.InvoiceRepo.Get(ctx, draft.ID)
+	inv, err = s.InvoiceRepo.Get(ctx, draft.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -382,28 +378,28 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 //
 // Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
 // OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
-func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error) {
+func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 
 	// Early return for finalized/voided — no lock needed, these are immutable.
 	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusSkipped {
-		return false, nil
+		return inv, false, nil
 	}
 
 	// check if the sub is of type inherited and if so, skip computation
 	if inv.SubscriptionID != nil {
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		if sub.SubscriptionType == types.SubscriptionTypeInherited ||
 			sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
-			return true, nil
+			return inv, true, nil
 		}
 	}
 
@@ -413,7 +409,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		// Subscription: compute line items from billing service
 		if inv.PeriodStart == nil || inv.PeriodEnd == nil {
-			return false, ierr.NewError("subscription invoice missing period dates").
+			return nil, false, ierr.NewError("subscription invoice missing period dates").
 				WithHint("PeriodStart and PeriodEnd are required for subscription invoices").
 				WithReportableDetails(map[string]interface{}{
 					"invoice_id": inv.ID,
@@ -422,7 +418,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		refPoint := types.ReferencePointPeriodEnd
 		switch types.InvoiceBillingReason(inv.BillingReason) {
@@ -453,7 +449,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, params)
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		// Trial start invoices preview the first period's charges at $0. Amounts are
 		// computed normally so line item structure is accurate, then forced to zero.
@@ -470,10 +466,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 	// 3. Take the lock — only for DB writes (line items, credits, coupons, taxes, status update).
 	var computed bool
+	var skipped bool
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
-		if err != nil {
-			return err
+		var lockErr error
+		inv, lockErr = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+		if lockErr != nil {
+			return lockErr
 		}
 
 		// Re-check status under lock: allow SKIPPED invoices to be re-computed
@@ -543,7 +541,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return s.InvoiceRepo.Update(txCtx, inv)
 	})
 	if err != nil {
-		return skipped, err
+		return nil, skipped, err
 	}
 
 	// Notify draft-stage listeners (currently just Tabs sync) that the invoice changed. Skip when
@@ -553,7 +551,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, invoiceID)
 	}
 
-	return skipped, nil
+	return inv, skipped, nil
 }
 
 // getInvoiceWithLineItems fetches an invoice and populates its LineItems from the dedicated repo.
@@ -989,7 +987,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 				}
 
 				// Recalculate taxes with credits factored in
-				if err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
+				if _, err := s.RecalculateTaxesOnInvoice(txCtx, lockedInv); err != nil {
 					return err
 				}
 			}
@@ -1946,7 +1944,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
 		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
 	}
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
+	_, skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2205,16 +2203,10 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		// Without this, uncomputed drafts have zero AmountRemaining and would be skipped,
 		// understating pending charges and overstating available wallet balance.
 		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.LastComputedAt == nil {
-			_, computeErr := s.ComputeInvoice(ctx, inv.ID, nil)
+			computedInv, _, computeErr := s.ComputeInvoice(ctx, inv.ID, nil)
 			if computeErr != nil {
 				s.Logger.Error(ctx, "failed to compute draft invoice for wallet balance",
 					"invoice_id", inv.ID, "error", computeErr)
-				continue
-			}
-			// Re-fetch to get computed amounts (use repo directly to avoid
-			// dependency on InvoiceLineItemRepo which may not be injected in tests)
-			computedInv, fetchErr := s.InvoiceRepo.Get(ctx, inv.ID)
-			if fetchErr != nil {
 				continue
 			}
 			inv = dto.NewInvoiceResponse(computedInv)
@@ -2989,7 +2981,7 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	}
 
 	// Apply taxes after amount recalculation
-	if err := s.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
+	if _, err := s.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
 		return err
 	}
 
@@ -3267,7 +3259,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		}
 
 		// STEP 7: Apply taxes after recalculation
-		if err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
+		if _, err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
 			return err
 		}
 
@@ -3402,11 +3394,11 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 	return s.GetInvoice(ctx, newInv.ID)
 }
 
-// RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice
-func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) error {
+// RecalculateTaxesOnInvoice recalculates taxes on an invoice if it's a subscription invoice.
+func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
 	// Only apply taxes to subscription invoices
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
-		return nil
+		return inv, nil
 	}
 
 	// Create a minimal request for tax preparation
@@ -3415,7 +3407,7 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 
 	// Apply taxes to invoice
 	if err := s.applyTaxesToInvoice(ctx, inv, req); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Update the invoice in the database
@@ -3425,10 +3417,10 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 			"invoice_id", inv.ID,
 			"total_tax", inv.TotalTax,
 			"new_total", inv.Total)
-		return err
+		return nil, err
 	}
 
-	return nil
+	return inv, nil
 }
 
 // applyTaxesToInvoice applies taxes to an invoice.

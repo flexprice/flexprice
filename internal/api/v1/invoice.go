@@ -202,7 +202,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 
 		if syncMode {
 			// Synchronous: execute workflow and wait for result
-			skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
+			_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
 			if err != nil {
 				h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 				c.Error(err)
@@ -255,7 +255,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 		reqPtr = &body
 	}
 
-	skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
+	_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 		c.Error(err)
