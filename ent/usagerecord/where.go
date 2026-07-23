@@ -145,9 +145,9 @@ func PeriodEnd(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
-// AllProvidersSynced applies equality check predicate on the "all_providers_synced" field. It's identical to AllProvidersSyncedEQ.
-func AllProvidersSynced(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
+// Synced applies equality check predicate on the "synced" field. It's identical to SyncedEQ.
+func Synced(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1080,6 +1080,16 @@ func PeriodEndLTE(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldLTE(FieldPeriodEnd, v))
 }
 
+// SyncedEQ applies the EQ predicate on the "synced" field.
+func SyncedEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
+}
+
+// SyncedNEQ applies the NEQ predicate on the "synced" field.
+func SyncedNEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldSynced, v))
+}
+
 // SyncsIsNil applies the IsNil predicate on the "syncs" field.
 func SyncsIsNil() predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldIsNull(FieldSyncs))
@@ -1088,16 +1098,6 @@ func SyncsIsNil() predicate.UsageRecord {
 // SyncsNotNil applies the NotNil predicate on the "syncs" field.
 func SyncsNotNil() predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldNotNull(FieldSyncs))
-}
-
-// AllProvidersSyncedEQ applies the EQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
-}
-
-// AllProvidersSyncedNEQ applies the NEQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedNEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldNEQ(FieldAllProvidersSynced, v))
 }
 
 // And groups predicates with the AND operator between them.

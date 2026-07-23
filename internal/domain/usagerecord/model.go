@@ -8,46 +8,26 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Marketplace identifies a marketplace a UsageRecord may be synced to. This is a separate,
-// narrower enum from entity_integration_mapping.provider_type ("aws_marketplace") — it is only
-// ever used as a key in UsageRecord.Syncs.
-type Marketplace string
-
-const (
-	MarketplaceAWS   Marketplace = "aws"
-	MarketplaceAzure Marketplace = "azure"
-	MarketplaceGCP   Marketplace = "gcp"
-)
-
-// MarketplaceSyncEntry is one marketplace's sync outcome for a usage record. Stored as a value
-// in the record's Syncs map, keyed by Marketplace. Presence + a non-nil SyncedAt IS the
-// "already synced" signal — there is no separate status field. An entry that's absent (or
-// present with SyncedAt nil) means "not yet successfully synced," and Cron B retries it on
-// every run. Failure detail is never persisted on the row — only logged — so this struct only
-// ever represents a SUCCESS.
-type MarketplaceSyncEntry struct {
-	ConnectionID        string     `json:"connection_id"`
-	SyncedAt            *time.Time `json:"synced_at,omitempty"`
-	MarketplaceReportID string     `json:"marketplace_report_id,omitempty"` // AWS: MeteringRecordId
-}
-
 // UsageRecord is one usage snapshot for a subscription over a reporting window (table
-// usage_records). Syncs holds one entry per marketplace the record has been successfully reported to
-// A record is fully synced once every connected marketplace has an entry in the Syncs map.
+// usage_records), written by the marketplace snapshot cron and reported by the marketplace
+// reporting cron. It is provider-agnostic: Syncs tracks one outcome per connection this record has
+// been reported to, keyed by connection_id, so the same subscription's usage can reach every
+// marketplace it's mapped to. Synced is true only once every connection currently relevant to this
+// record has a Syncs entry. Failure detail is never persisted on the row — only logged.
 type UsageRecord struct {
-	ID                 string                               `db:"id" json:"id"`
-	CustomerID         string                               `db:"customer_id" json:"customer_id"`
-	CustomerExternalID string                               `db:"customer_external_id" json:"customer_external_id"`
-	SubscriptionID     string                               `db:"subscription_id" json:"subscription_id"`
-	PlanID             string                               `db:"plan_id" json:"plan_id"`
-	Quantity           decimal.Decimal                      `db:"quantity" json:"quantity"`
-	Amount             decimal.Decimal                      `db:"amount" json:"amount"`
-	Currency           string                               `db:"currency" json:"currency"`
-	PeriodStart        time.Time                            `db:"period_start" json:"period_start"`
-	PeriodEnd          time.Time                            `db:"period_end" json:"period_end"`
-	Syncs              map[Marketplace]MarketplaceSyncEntry `db:"syncs" json:"syncs"`
-	AllProvidersSynced bool                                 `db:"all_providers_synced" json:"all_providers_synced"`
-	EnvironmentID      string                               `db:"environment_id" json:"environment_id"`
+	ID                 string                                `db:"id" json:"id"`
+	CustomerID         string                                `db:"customer_id" json:"customer_id"`
+	CustomerExternalID string                                `db:"customer_external_id" json:"customer_external_id"`
+	SubscriptionID     string                                `db:"subscription_id" json:"subscription_id"`
+	PlanID             string                                `db:"plan_id" json:"plan_id"`
+	Quantity           decimal.Decimal                       `db:"quantity" json:"quantity"`
+	Amount             decimal.Decimal                       `db:"amount" json:"amount"`
+	Currency           string                                `db:"currency" json:"currency"`
+	PeriodStart        time.Time                             `db:"period_start" json:"period_start"`
+	PeriodEnd          time.Time                             `db:"period_end" json:"period_end"`
+	Synced             bool                                  `db:"synced" json:"synced"`
+	Syncs              map[string]types.UsageRecordSyncEntry `db:"syncs" json:"syncs"`
+	EnvironmentID      string                                `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -55,6 +35,10 @@ type UsageRecord struct {
 func FromEnt(e *ent.UsageRecord) *UsageRecord {
 	if e == nil {
 		return nil
+	}
+	syncs := e.Syncs
+	if syncs == nil {
+		syncs = map[string]types.UsageRecordSyncEntry{}
 	}
 	return &UsageRecord{
 		ID:                 e.ID,
@@ -67,8 +51,8 @@ func FromEnt(e *ent.UsageRecord) *UsageRecord {
 		Currency:           e.Currency,
 		PeriodStart:        e.PeriodStart,
 		PeriodEnd:          e.PeriodEnd,
-		Syncs:              syncsFromMap(e.Syncs),
-		AllProvidersSynced: e.AllProvidersSynced,
+		Synced:             e.Synced,
+		Syncs:              syncs,
 		EnvironmentID:      e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
@@ -86,56 +70,6 @@ func FromEntList(list []*ent.UsageRecord) []*UsageRecord {
 	result := make([]*UsageRecord, len(list))
 	for i, e := range list {
 		result[i] = FromEnt(e)
-	}
-	return result
-}
-
-// syncsFromMap converts the generic JSON map stored by Ent into the typed Syncs map. Values are
-// re-marshaled/unmarshaled through JSON since Ent hands back map[string]interface{}.
-func syncsFromMap(raw map[string]interface{}) map[Marketplace]MarketplaceSyncEntry {
-	if raw == nil {
-		return nil
-	}
-	result := make(map[Marketplace]MarketplaceSyncEntry, len(raw))
-	for k, v := range raw {
-		entryMap, ok := v.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		entry := MarketplaceSyncEntry{}
-		if connID, ok := entryMap["connection_id"].(string); ok {
-			entry.ConnectionID = connID
-		}
-		if reportID, ok := entryMap["marketplace_report_id"].(string); ok {
-			entry.MarketplaceReportID = reportID
-		}
-		if syncedAtRaw, ok := entryMap["synced_at"].(string); ok && syncedAtRaw != "" {
-			if t, err := time.Parse(time.RFC3339, syncedAtRaw); err == nil {
-				entry.SyncedAt = &t
-			}
-		}
-		result[Marketplace(k)] = entry
-	}
-	return result
-}
-
-// SyncsToMap converts the typed Syncs map into the generic JSON map Ent stores.
-func SyncsToMap(syncs map[Marketplace]MarketplaceSyncEntry) map[string]interface{} {
-	if syncs == nil {
-		return map[string]interface{}{}
-	}
-	result := make(map[string]interface{}, len(syncs))
-	for k, v := range syncs {
-		entry := map[string]interface{}{
-			"connection_id": v.ConnectionID,
-		}
-		if v.MarketplaceReportID != "" {
-			entry["marketplace_report_id"] = v.MarketplaceReportID
-		}
-		if v.SyncedAt != nil {
-			entry["synced_at"] = v.SyncedAt.Format(time.RFC3339)
-		}
-		result[string(k)] = entry
 	}
 	return result
 }

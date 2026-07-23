@@ -29,7 +29,7 @@ func TestInMemoryUsageRecordStore(t *testing.T) {
 		Currency:       "usd",
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
-		Syncs:          map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry{},
+		Synced:         false,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 
@@ -48,21 +48,38 @@ func TestInMemoryUsageRecordStore(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, notExists)
 
-	// ListUnsynced
+	// ListUnsynced — record has no syncs entries yet, so it's provider-agnostic and unsynced
 	unsynced, err := store.ListUnsynced(ctx, "tenant_1", "env_1")
 	require.NoError(t, err)
 	require.Len(t, unsynced, 1)
 	require.Equal(t, "ur_1", unsynced[0].ID)
 
-	// UpdateSyncResult
-	err = store.UpdateSyncResult(ctx, "ur_1", usagerecord.MarketplaceAWS, usagerecord.MarketplaceSyncEntry{
-		ConnectionID: "conn_1",
+	// Reported to one of two relevant connections — synced stays false, still in the unsynced list
+	err = store.MarkSynced(ctx, "ur_1", map[string]types.UsageRecordSyncEntry{
+		"conn_aws": {Marketplace: types.SecretProviderAWSMarketplace, ReportingID: "aws-report-1", SyncedAt: time.Now().UTC()},
+	}, false)
+	require.NoError(t, err)
+
+	unsynced, err = store.ListUnsynced(ctx, "tenant_1", "env_1")
+	require.NoError(t, err)
+	require.Len(t, unsynced, 1, "still relevant to a second connection, so still unsynced")
+	require.Contains(t, unsynced[0].Syncs, "conn_aws")
+
+	// Reported to the second connection too — now fully synced, drops out of the unsynced list
+	err = store.MarkSynced(ctx, "ur_1", map[string]types.UsageRecordSyncEntry{
+		"conn_aws": {Marketplace: types.SecretProviderAWSMarketplace, ReportingID: "aws-report-1", SyncedAt: time.Now().UTC()},
+		"conn_gcp": {Marketplace: types.SecretProviderGCPMarketplace, ReportingID: "gcp-report-1", SyncedAt: time.Now().UTC()},
 	}, true)
 	require.NoError(t, err)
 
 	unsynced, err = store.ListUnsynced(ctx, "tenant_1", "env_1")
 	require.NoError(t, err)
 	require.Len(t, unsynced, 0, "record should no longer be unsynced")
+
+	stored, err := store.store.Get(ctx, "ur_1")
+	require.NoError(t, err)
+	require.Contains(t, stored.Syncs, "conn_aws")
+	require.Contains(t, stored.Syncs, "conn_gcp")
 
 	store.Clear()
 	unsynced, err = store.ListUnsynced(ctx, "tenant_1", "env_1")

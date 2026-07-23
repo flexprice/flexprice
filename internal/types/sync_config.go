@@ -17,8 +17,34 @@ type SyncConfig struct {
 	Quote *EntitySyncConfig `json:"quote,omitempty"`
 	// S3 connection metadata (for Flexprice-managed S3 connections)
 	S3 *S3ExportConfig `json:"s3,omitempty"`
+	// AWSMarketplace connection metadata
+	AWSMarketplace *AWSMarketplaceSyncConfig `json:"aws_marketplace,omitempty"`
 	// InvoiceSyncSettings controls line-item transformation during outbound invoice sync
 	InvoiceSyncSettings *InvoiceSyncSettings `json:"invoice_sync_settings,omitempty"`
+}
+
+// AWSMarketplaceSyncConfig holds AWS Marketplace connection config that isn't a secret. Region
+// selects the AWS Marketplace Metering Service regional endpoint BatchMeterUsage targets at report
+// time (internal/temporal/activities/marketplace/report_activities.go) — it must match the region
+// AWS enabled SaaS metering for this product in (almost always us-east-1, the default AWS assigns
+// unless the seller specifically requested another region), so it's tenant-specific and can't be
+// hardcoded. Lives here, not in EncryptedSecretData, for the same reason S3's bucket/region does:
+// it's destination/endpoint config for an outbound call, not authentication material.
+type AWSMarketplaceSyncConfig struct {
+	Region string `json:"region"`
+}
+
+// Validate validates the AWS Marketplace sync config
+func (a *AWSMarketplaceSyncConfig) Validate() error {
+	if a == nil {
+		return nil
+	}
+	if a.Region == "" {
+		return ierr.NewError("region is required").
+			WithHint("AWS Marketplace region is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // EntitySyncConfig defines sync direction for an entity
@@ -107,6 +133,13 @@ func (s *SyncConfig) Validate() error {
 	// Validate S3 export config if present
 	if s.S3 != nil {
 		if err := s.S3.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate AWS Marketplace config if present
+	if s.AWSMarketplace != nil {
+		if err := s.AWSMarketplace.Validate(); err != nil {
 			return err
 		}
 	}

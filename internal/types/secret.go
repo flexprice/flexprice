@@ -44,6 +44,7 @@ const (
 	SecretProviderWhop           SecretProvider = "whop"
 	SecretProviderTabs           SecretProvider = "tabs"
 	SecretProviderAWSMarketplace SecretProvider = "aws_marketplace"
+	SecretProviderGCPMarketplace SecretProvider = "gcp_marketplace"
 )
 
 func (p SecretProvider) Validate() error {
@@ -62,6 +63,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderWhop,
 		SecretProviderTabs,
 		SecretProviderAWSMarketplace,
+		SecretProviderGCPMarketplace,
 	}
 	if !lo.Contains(allowedSecretProviders, p) {
 		return ierr.NewError("invalid secret provider").

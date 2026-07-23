@@ -17,12 +17,24 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
+// marketplaceProviderTypes are the marketplace SecretProviders both crons iterate. Adding a further
+// marketplace (Azure) means adding its constant here — nothing else about either cron's loop shape
+// changes, since both were already written to process "every published marketplace connection,"
+// not an AWS-specific list.
+var marketplaceProviderTypes = []types.SecretProvider{
+	types.SecretProviderAWSMarketplace,
+	types.SecretProviderGCPMarketplace,
+}
+
 // SnapshotActivities creates the usage records that will later be reported to a marketplace. For
-// every published aws_marketplace connection it computes each mapped subscription's usage for the
-// reporting window, using the same commitment- and overage-aware computation as real invoicing,
-// and writes one usage record per subscription in the subscription's own billing currency —
-// marketplace-mandated currency conversion (e.g. AWS requires USD) happens per-marketplace at
-// report time, not here, since this table is shared across marketplaces.
+// every published marketplace connection (AWS or GCP) it computes each mapped subscription's usage
+// for the reporting window, using the same commitment- and overage-aware computation as real
+// invoicing, and writes one usage record per subscription in the subscription's own billing currency
+// — marketplace-mandated currency conversion (both AWS and GCP require USD) happens per-marketplace
+// at report time, not here. A record is provider-agnostic: it does not pin a connection_id, so if a
+// subscription is mapped to more than one marketplace, the unique index on (subscription_id,
+// period_start, period_end) collapses every connection's attempt into the same one row — the
+// reporting cron fans that single row out to every relevant connection itself.
 type SnapshotActivities struct {
 	subscriptionService          service.SubscriptionService
 	billingService               service.BillingService
@@ -58,7 +70,7 @@ func NewSnapshotActivities(
 
 // MarketplaceUsageSnapshotActivity is the activity entrypoint. The reporting window
 // (PeriodStart/PeriodEnd) is computed by the workflow and passed in unchanged. It processes every
-// tenant/environment that has a published aws_marketplace connection.
+// tenant/environment that has a published marketplace connection, AWS or GCP.
 func (a *SnapshotActivities) MarketplaceUsageSnapshotActivity(
 	ctx context.Context,
 	input temporalModels.MarketplaceUsageSnapshotActivityInput,
@@ -68,15 +80,18 @@ func (a *SnapshotActivities) MarketplaceUsageSnapshotActivity(
 
 	result := &temporalModels.MarketplaceUsageSnapshotWorkflowResult{}
 
-	conns, err := a.connectionRepo.ListPublishedByProvider(ctx, types.SecretProviderAWSMarketplace)
-	if err != nil {
-		a.logger.Error(ctx, "marketplace usage snapshot failed", "error", err, "stage", "list_connections")
-		return nil, err
-	}
+	for _, providerType := range marketplaceProviderTypes {
+		conns, err := a.connectionRepo.ListPublishedByProvider(ctx, providerType)
+		if err != nil {
+			a.logger.Error(ctx, "marketplace usage snapshot failed", "provider_type", providerType, "error", err, "stage", "list_connections")
+			continue
+		}
 
-	for _, conn := range conns {
-		envCtx := context.WithValue(context.WithValue(ctx, types.CtxTenantID, conn.TenantID), types.CtxEnvironmentID, conn.EnvironmentID)
-		a.snapshotConnectionUsage(envCtx, conn.TenantID, conn.EnvironmentID, input, result)
+		for _, conn := range conns {
+			ctx := types.SetTenantID(ctx, conn.TenantID)
+			ctx = types.SetEnvironmentID(ctx, conn.EnvironmentID)
+			a.processConnection(ctx, conn, input, result)
+		}
 	}
 
 	log.Info("Completed MarketplaceUsageSnapshotActivity",
@@ -84,25 +99,31 @@ func (a *SnapshotActivities) MarketplaceUsageSnapshotActivity(
 	return result, nil
 }
 
-// snapshotConnectionUsage writes a usage record for each of the connection's mapped subscriptions.
-// It resolves the connection's mapped customers first, then snapshots each mapped subscription that
-// belongs to one of them.
-func (a *SnapshotActivities) snapshotConnectionUsage(
-	envCtx context.Context,
-	tenantID, environmentID string,
+// processConnection writes a usage record for each of the connection's mapped subscriptions. It
+// resolves the connection's mapped customers first, then snapshots each mapped subscription that
+// belongs to one of them. Subscriptions are scoped to this connection's own provider_type — not "any
+// marketplace" — but the resulting row itself is provider-agnostic: if the same subscription is also
+// mapped to a different connection, that connection's own pass over this loop resolves to the same
+// (subscription_id, period_start, period_end) and is absorbed by the ExistsForPeriod check in
+// snapshotSubscription below, rather than writing a second row or losing the second connection's usage.
+func (a *SnapshotActivities) processConnection(
+	ctx context.Context,
+	conn *connection.Connection,
 	input temporalModels.MarketplaceUsageSnapshotActivityInput,
 	result *temporalModels.MarketplaceUsageSnapshotWorkflowResult,
 ) {
-	providerType := string(types.SecretProviderAWSMarketplace)
+	tenantID := conn.TenantID
+	environmentID := conn.EnvironmentID
+	providerType := string(conn.ProviderType)
 
-	customerMappings, err := a.entityIntegrationMappingRepo.List(envCtx, &types.EntityIntegrationMappingFilter{
+	customerMappings, err := a.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{providerType},
 	})
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
-			"tenant_id", tenantID, "environment_id", environmentID, "error", err, "stage", "list_customer_mappings")
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
+			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "list_customer_mappings")
 		return
 	}
 	mappedCustomerIDs := make(map[string]bool, len(customerMappings))
@@ -113,41 +134,41 @@ func (a *SnapshotActivities) snapshotConnectionUsage(
 		return
 	}
 
-	subscriptionMappings, err := a.entityIntegrationMappingRepo.List(envCtx, &types.EntityIntegrationMappingFilter{
+	subscriptionMappings, err := a.entityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{providerType},
 	})
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
-			"tenant_id", tenantID, "environment_id", environmentID, "error", err, "stage", "list_subscription_mappings")
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
+			"tenant_id", tenantID, "environment_id", environmentID, "connection_id", conn.ID, "error", err, "stage", "list_subscription_mappings")
 		return
 	}
 
 	for _, subMapping := range subscriptionMappings {
-		a.snapshotSubscription(envCtx, tenantID, environmentID, subMapping.EntityID, mappedCustomerIDs, input, result)
+		a.snapshotSubscription(ctx, tenantID, environmentID, subMapping.EntityID, mappedCustomerIDs, input, result)
 	}
 }
 
 // snapshotSubscription computes one subscription's usage for the window and writes a usage record.
 func (a *SnapshotActivities) snapshotSubscription(
-	envCtx context.Context,
+	ctx context.Context,
 	tenantID, environmentID, subscriptionID string,
 	mappedCustomerIDs map[string]bool,
 	input temporalModels.MarketplaceUsageSnapshotActivityInput,
 	result *temporalModels.MarketplaceUsageSnapshotWorkflowResult,
 ) {
 	// CalculateMeterUsageCharges iterates sub.LineItems to drive its per-line-item recalculation
-	sub, _, err := a.subscriptionRepo.GetWithLineItems(envCtx, subscriptionID)
+	sub, _, err := a.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", subscriptionID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "get_subscription")
 		result.Failed++
 		return
 	}
 
-	// Only report subscriptions whose customer also has an aws_marketplace mapping.
+	// Only report subscriptions whose customer also has a marketplace mapping for this connection's provider.
 	if !mappedCustomerIDs[sub.CustomerID] {
 		return
 	}
@@ -158,9 +179,9 @@ func (a *SnapshotActivities) snapshotSubscription(
 	// Temporal attempt for this exact activity call already wrote it (activity retries re-run the
 	// whole loop, including subscriptions a prior attempt already finished). Skip re-computing and
 	// re-inserting it — this is what makes the activity safe to retry.
-	alreadyExists, err := a.usageRecordRepo.ExistsForPeriod(envCtx, sub.ID, input.PeriodStart, input.PeriodEnd)
+	alreadyExists, err := a.usageRecordRepo.ExistsForPeriod(ctx, sub.ID, input.PeriodStart, input.PeriodEnd)
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "check_existing")
 		result.Failed++
@@ -171,14 +192,14 @@ func (a *SnapshotActivities) snapshotSubscription(
 		return
 	}
 
-	usageResp, err := a.subscriptionService.GetMeterUsageBySubscription(envCtx, &dto.GetUsageBySubscriptionRequest{
+	usageResp, err := a.subscriptionService.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      input.PeriodStart,
 		EndTime:        input.PeriodEnd,
 		Source:         string(types.UsageSourceInvoiceCreation),
 	})
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "get_meter_usage")
 		result.Failed++
@@ -186,10 +207,10 @@ func (a *SnapshotActivities) snapshotSubscription(
 	}
 
 	_, totalAmount, err := a.billingService.CalculateMeterUsageCharges(
-		envCtx, sub, usageResp, input.PeriodStart, input.PeriodEnd, types.UsageSourceInvoiceCreation,
+		ctx, sub, usageResp, input.PeriodStart, input.PeriodEnd, types.UsageSourceInvoiceCreation,
 	)
 	if err != nil {
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "calculate_charges")
 		result.Failed++
@@ -198,9 +219,9 @@ func (a *SnapshotActivities) snapshotSubscription(
 
 	// UsageRecord stores the subscription's native currency as the source of truth — this table is
 	// shared across marketplaces (AWS/Azure/GCP), so any marketplace-mandated currency conversion
-	// (AWS requires USD; Azure/GCP may not) happens per-marketplace at report time, not here.
+	// (AWS and GCP both require USD) happens per-marketplace at report time, not here.
 	customerExternalID := ""
-	if cust, custErr := a.customerRepo.Get(envCtx, sub.CustomerID); custErr == nil && cust != nil {
+	if cust, custErr := a.customerRepo.Get(ctx, sub.CustomerID); custErr == nil && cust != nil {
 		customerExternalID = cust.ExternalID
 	}
 
@@ -214,13 +235,12 @@ func (a *SnapshotActivities) snapshotSubscription(
 		Currency:           usageResp.Currency,
 		PeriodStart:        input.PeriodStart,
 		PeriodEnd:          input.PeriodEnd,
-		Syncs:              map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry{},
-		AllProvidersSynced: false,
+		Synced:             false,
 		EnvironmentID:      environmentID,
-		BaseModel:          types.GetDefaultBaseModel(envCtx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 
-	if err := a.usageRecordRepo.Create(envCtx, rec); err != nil {
+	if err := a.usageRecordRepo.Create(ctx, rec); err != nil {
 		// The ExistsForPeriod check above is a fast pre-check, not the source of truth — the unique
 		// index on (subscription_id, period_start, period_end) is. A concurrent execution can still
 		// win the race between the check and this insert; that shows up here as ErrAlreadyExists,
@@ -229,7 +249,7 @@ func (a *SnapshotActivities) snapshotSubscription(
 			result.Succeeded++
 			return
 		}
-		a.logger.Error(envCtx, "marketplace usage snapshot failed",
+		a.logger.Error(ctx, "marketplace usage snapshot failed",
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", sub.ID, "customer_id", sub.CustomerID,
 			"period_start", input.PeriodStart, "period_end", input.PeriodEnd, "error", err, "stage", "create_usage_record")
 		result.Failed++

@@ -50,6 +50,39 @@ func (e IntegrationEntityType) Validate() error {
 	return nil
 }
 
+type IntegrationProviderType string
+
+// Provider types
+const (
+	IntegrationProviderTypeStripe         IntegrationProviderType = "stripe"
+	IntegrationProviderTypeRazorpay       IntegrationProviderType = "razorpay"
+	IntegrationProviderTypePaypal         IntegrationProviderType = "paypal"
+	IntegrationProviderTypeQuickBooks     IntegrationProviderType = "quickbooks"
+	IntegrationProviderTypeZohoBooks      IntegrationProviderType = "zoho_books"
+	IntegrationProviderTypePaddle         IntegrationProviderType = "paddle"
+	IntegrationProviderTypeAWSMarketplace IntegrationProviderType = "aws_marketplace"
+	IntegrationProviderTypeGCPMarketplace IntegrationProviderType = "gcp_marketplace"
+)
+
+func (p IntegrationProviderType) Validate() error {
+	allowed := []IntegrationProviderType{
+		IntegrationProviderTypeStripe,
+		IntegrationProviderTypeRazorpay,
+		IntegrationProviderTypePaypal,
+		IntegrationProviderTypeQuickBooks,
+		IntegrationProviderTypeZohoBooks,
+		IntegrationProviderTypePaddle,
+		IntegrationProviderTypeAWSMarketplace,
+		IntegrationProviderTypeGCPMarketplace,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid provider type").
+			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books, paddle, aws_marketplace, gcp_marketplace").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // EntityIntegrationMappingFilter represents filters for entity integration mapping queries
 type EntityIntegrationMappingFilter struct {
 	*QueryFilter
@@ -104,22 +137,10 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 		}
 	}
 
-	// Validate provider types if provided (keep in sync with domain entityintegrationmapping.ValidateProviderType)
-	if len(f.ProviderTypes) > 0 {
-		validProviderTypes := map[string]bool{
-			"stripe":     true,
-			"razorpay":   true,
-			"paypal":     true,
-			"quickbooks": true,
-			"zoho_books": true,
-			"paddle":     true,
-		}
-		for _, pt := range f.ProviderTypes {
-			if !validProviderTypes[pt] {
-				return ierr.NewError("invalid provider_type").
-					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books, paddle").
-					Mark(ierr.ErrValidation)
-			}
+	// Validate provider types if provided
+	for _, pt := range f.ProviderTypes {
+		if err := IntegrationProviderType(pt).Validate(); err != nil {
+			return err
 		}
 	}
 
