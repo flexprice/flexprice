@@ -118,6 +118,28 @@ type InvoiceResponse struct {
 	InvoiceNumber string          `json:"invoice_number"`
 	Status        string          `json:"status,omitempty"`
 	Total         decimal.Decimal `json:"total,omitempty"`
+	CustomerID    string          `json:"customer_id,omitempty"`
+	Balance       decimal.Decimal `json:"balance,omitempty"`
+}
+
+// CustomerPaymentInvoiceApply links a recorded Zoho customer payment to an invoice it settles.
+type CustomerPaymentInvoiceApply struct {
+	InvoiceID     string          `json:"invoice_id"`
+	AmountApplied decimal.Decimal `json:"amount_applied"`
+}
+
+// CustomerPaymentCreateRequest is the body for POST /books/v3/customerpayments.
+type CustomerPaymentCreateRequest struct {
+	CustomerID  string                        `json:"customer_id"`
+	PaymentMode string                        `json:"payment_mode"`
+	Amount      decimal.Decimal               `json:"amount"`
+	Date        string                        `json:"date"`
+	Invoices    []CustomerPaymentInvoiceApply `json:"invoices"`
+}
+
+// CustomerPaymentResponse is the response from POST /books/v3/customerpayments.
+type CustomerPaymentResponse struct {
+	PaymentID string `json:"payment_id"`
 }
 
 type ZohoInvoiceSyncRequest struct {
