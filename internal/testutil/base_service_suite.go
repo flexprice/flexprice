@@ -330,6 +330,12 @@ func (s *BaseServiceTestSuite) GetContext() context.Context {
 	return s.ctx
 }
 
+// WithEnvironment scopes the suite context to an environment, for suites whose
+// code paths require both tenant and environment ids (call from SetupTest).
+func (s *BaseServiceTestSuite) WithEnvironment(environmentID string) {
+	s.ctx = context.WithValue(s.ctx, types.CtxEnvironmentID, environmentID)
+}
+
 // GetConfig returns the test configuration
 func (s *BaseServiceTestSuite) GetConfig() *config.Configuration {
 	return s.config

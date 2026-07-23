@@ -145,6 +145,7 @@ func (r *MeterUsageRepository) GetEarliestUsageTimestamp(ctx context.Context, pa
 		SELECT min(timestamp) AS earliest, count() AS event_count
 		FROM meter_usage
 		WHERE %s
+		SETTINGS max_memory_usage = 96636764160
 	`, where)
 
 	var earliest time.Time

@@ -209,25 +209,56 @@ Subscription-level only (line-item and group scopes were dropped). Enabled sub-s
 
 No per-slot queries, no status writes. A shared **meta bundle** (features, meters, lazily-memoized external customer ids) is built once and reused by both grant opening and the evaluator's refresh loop; a pass that yields no grants returns nil meta and the evaluator skips entirely.
 
+```mermaid
+flowchart TD
+    Start["EnsureGrantsForSubscriptions(cust, subs, at)"] --> ECs["GetSubscriptionEntitlements per sub → ecsBySub"]
+
+    ECs --> R1["Read 1 · LatestWindowEndBySlot<br/>max(valid_to) per (config, sub) slot<br/>= occupancy + covered-until bound"]
+    R1 --> R2["Read 2 · ListOpenOrUnfinalized<br/>full rows: open at eval time OR last_computed_at &lt; valid_to"]
+
+    R2 --> Split{"per row"}
+    Split -->|"valid_to &gt; at"| Live["live"]
+    Split -->|"closed, snapshot predates close"| Fin["finalize<br/>(owes one final usage refresh)"]
+
+    R2 --> Meta["buildGrantEvalMeta<br/>features + meters: one List each<br/>external ids: lazy per sub"]
+
+    Meta --> Open["openMissingGrants<br/>per sub → openableGrantECsByFeature"]
+    Open --> Cand["grantCandidatesForFeature<br/>additive → one summed candidate on the primary EC<br/>parallel → one candidate per EC"]
+    Cand --> Occ{"slot's latest<br/>valid_to &gt; at?"}
+    Occ -->|"yes — window still open"| Skip["skip candidate"]
+    Occ -->|"no — slot free"| Win["computeGrantWindow<br/>coveredUntil = max(last window end, cycle_start)<br/>firstUncoveredAt = min(timestamp) in [coveredUntil, min(at, cycle_end))"]
+    Win -->|"no uncovered usage"| Skip
+    Win -->|"window (boundary: backdate to last full duration / stretch to cycle_end)"| Ins["INSERT grant<br/>unique (slot, valid_from) = race arbiter"]
+    Ins -->|"conflict"| ReRead["FindLastBySlot → return the winner"]
+    Ins -->|"ok"| Opened["opened"]
+    ReRead --> Opened
+
+    Live --> Out{"out = live ∪ opened ∪ finalize"}
+    Opened --> Out
+    Fin --> Out
+    Out -->|"empty"| Nil["return (nil, nil)<br/>evaluator skips"]
+    Out -->|"else"| Ret["return (grants, meta)<br/>evaluator refreshes usage per grant → UpdateSnapshot<br/>(last_computed_at ≥ valid_to marks closed rows finalized)"]
+```
+
 For each subscription, resolve its entitlements (`GetSubscriptionEntitlements` — plan + addon + sub overrides), keep those with a grant config, then per feature:
 
 - Skip ECs whose `grant_duration >= cycle length` — a grant spanning the whole cycle is just the cycle quota, which legacy `usage_limit + usage_reset_period` already expresses. Avoids redundant rows and evaluation.
 - **parallel** → one grant per EC without an open window.
 - **additive** → ONE grant for the group with `quota = Σ quotas`, opened on the lowest-ID ("primary") EC's slot. One bucket downstream means evaluation, alerts, and billing treat the group as a single pool with no extra machinery.
 
-Grant opening (`openOneGrant`): compute the window and INSERT — nothing else. The unique `(slot, valid_from)` index is the race arbiter: `valid_from` is deterministic (same frontier + same events ⇒ same anchor), so a losing racer collides and re-reads the winner (`FindLastBySlot`).
+Grant opening (`openOneGrant`): compute the window and INSERT — nothing else. The unique `(slot, valid_from)` index is the race arbiter: `valid_from` is deterministic (same covered-until bound + same events ⇒ same start), so a losing racer collides and re-reads the winner (`FindLastBySlot`).
 
-**Window math (`computeGrantWindow`) — windows are usage-anchored.** Every window opens at the earliest event not covered by any grant on the slot, so no event ever falls outside a window and idle periods open no windows at all:
+**Window math (`computeGrantWindow`) — windows are usage-anchored.** Every window opens at the first usage event past the covered range, so no event ever falls outside a window and idle periods open no windows at all:
 
-- **Coverage frontier** = `max(prev.valid_to, cycle_start)` from the slot's latest grant (no grant, or one from an earlier cycle → `cycle_start`; last usage in the previous cycle followed by first usage in the new one is a normal idle gap, not an error).
-- **Anchor** = `min(timestamp)` of `meter_usage` in `[frontier, min(now, cycle_end))` for the grant's meter + external customer IDs (`GetEarliestUsageTimestamp`). The `cycle_end` clamp keeps next-cycle events out before the subscription object rolls; an empty range simply finds nothing. **No uncovered usage → no grant opens** (lazy opening — the next tick re-checks with the same frontier, so an event still in the ingest pipeline is picked up later).
-- `valid_from = anchor` — exact: an event at 2:00 evaluated at 2:07 opens a window starting 2:00. Idle gaps between windows are legal by construction (no events there). When the full duration no longer fits (`cycle_end − anchor < duration`), the start **backdates** to `max(frontier, cycle_end − duration)` — the final window is the cycle's last `duration`, frontier-clamped. Backdating is free: `[frontier, anchor)` is event-free by definition of the anchor.
-- `valid_to = valid_from + duration`; when the remainder to `cycle_end` would be sub-minimum the window **stretches to `cycle_end`** — cap and trailing-stub absorption in one rule (absorption also keeps the frontier out of the final hour, which is what guarantees backdated windows are ≥ 1h even when the frontier clamps them). Every instantiated window is ≥ 1h, enforced by domain `Validate`.
+- **`coveredUntil`** = `max(prev.valid_to, cycle_start)` from the slot's latest grant — everything before it is covered by past windows (no grant, or one from an earlier cycle → `cycle_start`; last usage in the previous cycle followed by first usage in the new one is a normal idle gap, not an error).
+- **`firstUncoveredAt`** = `min(timestamp)` of `meter_usage` in `[coveredUntil, min(now, cycle_end))` for the grant's meter + external customer IDs (`GetEarliestUsageTimestamp`). The `cycle_end` clamp keeps next-cycle events out before the subscription object rolls; an empty range simply finds nothing. **No uncovered usage → no grant opens** (lazy opening — the next tick re-checks with the same covered-until bound, so an event still in the ingest pipeline is picked up later).
+- `valid_from = firstUncoveredAt` — exact: an event at 2:00 evaluated at 2:07 opens a window starting 2:00. Idle gaps between windows are legal by construction (no events there). When the full duration no longer fits (`cycle_end − firstUncoveredAt < duration`), the start **backdates** to `max(coveredUntil, cycle_end − duration)` — the final window is the cycle's last `duration`, clamped at the covered range. Backdating is free: `[coveredUntil, firstUncoveredAt)` is event-free by definition.
+- `valid_to = valid_from + duration`; when the remainder to `cycle_end` would be sub-minimum the window **stretches to `cycle_end`** — cap and trailing-stub absorption in one rule (absorption also keeps `coveredUntil` out of the final hour, which is what guarantees backdated windows are ≥ 1h even when clamped). Every instantiated window is ≥ 1h, enforced by domain `Validate`.
 - Catch-up after delayed evaluation walks one usage-anchored window per tick; usage recompute from CH keeps late accounting idempotent.
 
 Grants are immutable for their lifetime; EC/mode/quota changes take effect from the next window.
 
-**Accepted best-effort edges:** a backdated event landing inside an old idle gap *between* windows is lost (the covered set is a union of windows, not a single frontier); a lone final event with no successors is only covered once a later event triggers a tick.
+**Accepted best-effort edges:** a backdated event landing inside an old idle gap *between* windows is lost (the covered set is a union of windows, not a single bound); a lone final event with no successors is only covered once a later event triggers a tick.
 
 ### 5.3 Usage refresh + exhaustion
 

@@ -71,6 +71,12 @@ func TestEntitlementGrantDurationOf(t *testing.T) {
 		{"zero value rejected", 0, EntitlementGrantDurationUnitHour, 0, true},
 		{"negative value rejected", -1, EntitlementGrantDurationUnitHour, 0, true},
 		{"unknown unit rejected", 3, "month", 0, true},
+		// int64-nanosecond overflow boundaries: max hour 2562047, day 106751, week 15250.
+		{"max days accepted", 106751, EntitlementGrantDurationUnitDay, 106751 * 24 * time.Hour, false},
+		{"overflowing days rejected", 106752, EntitlementGrantDurationUnitDay, 0, true},
+		{"max weeks accepted", 15250, EntitlementGrantDurationUnitWeek, 15250 * 7 * 24 * time.Hour, false},
+		{"overflowing weeks rejected", 15251, EntitlementGrantDurationUnitWeek, 0, true},
+		{"overflowing hours rejected", 2562048, EntitlementGrantDurationUnitHour, 0, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -141,7 +147,7 @@ func TestEntitlementGrantFilter_WithFeatureIDs_IsSugarForScope(t *testing.T) {
 	if f.ScopeEntityType == nil || *f.ScopeEntityType != EntitlementGrantScopeFeature {
 		t.Fatalf("WithFeatureIDs should pin scope_entity_type=feature; got %v", f.ScopeEntityType)
 	}
-	if len(f.ScopeEntityIDs) != 2 {
-		t.Fatalf("expected 2 scope entity ids, got %d", len(f.ScopeEntityIDs))
+	if len(f.ScopeEntityIDs) != 2 || f.ScopeEntityIDs[0] != "feat_a" || f.ScopeEntityIDs[1] != "feat_b" {
+		t.Fatalf("expected scope entity ids [feat_a feat_b], got %v", f.ScopeEntityIDs)
 	}
 }

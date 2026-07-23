@@ -134,7 +134,7 @@ func (r *entitlementGrantRepository) Update(ctx context.Context, g *domainGrant.
 
 	updated, err := r.client.Writer(ctx).EntitlementGrant.UpdateOneID(g.ID).
 		Where(
-			entitlementgrant.TenantID(g.TenantID),
+			entitlementgrant.TenantID(types.GetTenantID(ctx)),
 			entitlementgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetUsage(g.Usage).

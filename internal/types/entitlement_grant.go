@@ -1,6 +1,7 @@
 package types
 
 import (
+	"math"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -129,19 +130,32 @@ func EntitlementGrantDurationOf(value int, unit EntitlementGrantDurationUnit) (t
 			WithHint("Provide a positive integer for grant_duration_value").
 			Mark(ierr.ErrValidation)
 	}
+	var unitDur time.Duration
 	switch unit {
 	case EntitlementGrantDurationUnitHour:
-		return time.Duration(value) * time.Hour, nil
+		unitDur = time.Hour
 	case EntitlementGrantDurationUnitDay:
-		return time.Duration(value) * 24 * time.Hour, nil
+		unitDur = 24 * time.Hour
 	case EntitlementGrantDurationUnitWeek:
-		return time.Duration(value) * 7 * 24 * time.Hour, nil
+		unitDur = 7 * 24 * time.Hour
 	default:
 		return 0, ierr.NewError("invalid entitlement grant duration unit").
 			WithHint("grant_duration_unit must be hour, day, or week").
 			WithReportableDetails(map[string]interface{}{"grant_duration_unit": unit}).
 			Mark(ierr.ErrValidation)
 	}
+	// value is user input; silent int64 overflow would wrap to a negative
+	// duration and corrupt window math downstream.
+	if int64(value) > math.MaxInt64/int64(unitDur) {
+		return 0, ierr.NewError("grant_duration_value is too large").
+			WithHint("Reduce grant_duration_value; the resulting duration exceeds the supported range").
+			WithReportableDetails(map[string]interface{}{
+				"grant_duration_value": value,
+				"grant_duration_unit":  unit,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return time.Duration(value) * unitDur, nil
 }
 
 // EntitlementGrantMinDuration is the minimum grant window; shorter trails are skipped.

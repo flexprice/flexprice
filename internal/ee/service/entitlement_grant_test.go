@@ -42,6 +42,8 @@ func TestEntitlementGrantSuite(t *testing.T) {
 
 func (s *EntitlementGrantSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	// The grant path requires full tenant+env scoping on usage queries.
+	s.WithEnvironment("env_grant_test")
 	s.meterStore = testutil.NewInMemoryMeterStore()
 
 	params := s.buildServiceParams()

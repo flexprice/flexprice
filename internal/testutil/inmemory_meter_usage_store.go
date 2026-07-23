@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -310,6 +311,13 @@ func distinctUniqueHashCount(records []*events.MeterUsage) int {
 // ---------------------------------------------------------------------------
 
 func (s *InMemoryMeterUsageStore) GetEarliestUsageTimestamp(_ context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	// An empty scope silently matches every tenant here but matches nothing in
+	// real ClickHouse (BuildWhereClause always binds tenant/env) — either way
+	// the request is malformed, so fail loudly and let tests catch it.
+	if params == nil || params.TenantID == "" || params.EnvironmentID == "" {
+		return nil, ierr.NewError("tenant_id and environment_id are required").Mark(ierr.ErrValidation)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
