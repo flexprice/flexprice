@@ -77,13 +77,13 @@ type MeterFilter struct {
 
 // MeterAggregation defines the aggregation configuration for a meter
 type MeterAggregation struct {
-	Type       types.AggregationType `json:"type"`
-	Field      string                `json:"field,omitempty"`
+	Type  types.AggregationType `json:"type"`
+	Field string                `json:"field,omitempty"`
 	// Expression is an optional CEL expression to compute per-event quantity from event.properties.
 	// When set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel).
-	Expression string                `json:"expression,omitempty"`
-	Multiplier *decimal.Decimal      `json:"multiplier,omitempty"`
-	BucketSize types.WindowSize      `json:"bucket_size,omitempty"`
+	Expression string           `json:"expression,omitempty"`
+	Multiplier *decimal.Decimal `json:"multiplier,omitempty"`
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
 	// GroupBy is the property name in event.properties to group by before aggregating.
 	// Currently only supported for MAX aggregation with bucket_size.
 	// When set, aggregation is applied per unique value of this property within each bucket,

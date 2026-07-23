@@ -484,7 +484,10 @@ func (o FeatureQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query F
 
 func (o FeatureQueryOptions) ApplyStatusFilter(query FeatureQuery, status string) FeatureQuery {
 	if status == "" {
-		return query.Where(feature.StatusEQ(string(types.StatusPublished)))
+		return query.Where(feature.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(feature.Status(status))
 }
