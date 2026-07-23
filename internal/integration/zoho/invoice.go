@@ -17,6 +17,10 @@ import (
 
 type ZohoInvoiceService interface {
 	SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceSyncRequest) (*ZohoInvoiceSyncResponse, error)
+	// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
+	// outstanding balance, bringing it to Paid. No-op if the invoice was never synced to
+	// Zoho, or if Zoho's balance is already zero.
+	MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error
 }
 
 type InvoiceService struct {
