@@ -602,6 +602,10 @@ type UpdateSubscriptionRequest struct {
 
 	// ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send "" to clear.
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+
+	// Metadata is a free-form key-value bag for custom administrative fields (CRM IDs, channel tags, contractual refs).
+	// Omit to leave existing metadata untouched; send {} explicitly to clear.
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
