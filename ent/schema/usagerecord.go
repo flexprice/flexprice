@@ -108,5 +108,7 @@ func (UsageRecord) Indexes() []ent.Index {
 	return []ent.Index{
 		// The reporting cron's hot query: this tenant's unsynced rows.
 		index.Fields("tenant_id", "environment_id", "synced"),
+		// The snapshot cron's idempotency guarantee.
+		index.Fields("tenant_id", "environment_id", "subscription_id", "period_start", "period_end", "status").Unique(),
 	}
 }
