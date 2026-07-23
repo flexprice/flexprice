@@ -449,7 +449,10 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 
 	selectedActions, found := workflowConfig.ResolveOnboardingActions(onboardingWorkflowName)
 	if onboardingWorkflowName != "" && !found {
-		s.Logger.Error(ctx, "onboarding workflow name not found in custom_workflows, falling back to default actions",
+		err := ierr.NewError("onboarding workflow name not found in custom_workflows").
+			Mark(ierr.ErrNotFound)
+		s.Logger.Error(ctx, err.Error(),
+			"error", err,
 			"customer_id", customer.ID,
 			"onboarding_workflow_name", onboardingWorkflowName)
 	}
