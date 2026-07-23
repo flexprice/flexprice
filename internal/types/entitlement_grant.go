@@ -147,15 +147,14 @@ func EntitlementGrantDurationOf(value int, unit EntitlementGrantDurationUnit) (t
 // EntitlementGrantMinDuration is the minimum grant window; shorter trails are skipped.
 const EntitlementGrantMinDuration = time.Hour
 
-// EntitlementGrantStatus tracks a grant's lifecycle. `active` and `exhausted`
-// are live and block a new grant on the same slot; `expired` and `superseded` free it.
+// EntitlementGrantStatus tracks quota state: `active` until usage crosses
+// quota, then `exhausted`. Expiry is not a status — it is derived from
+// `valid_to <= now`, so closed grants are never written back.
 type EntitlementGrantStatus string
 
 const (
-	EntitlementGrantStatusActive     EntitlementGrantStatus = "active"
-	EntitlementGrantStatusExhausted  EntitlementGrantStatus = "exhausted"
-	EntitlementGrantStatusExpired    EntitlementGrantStatus = "expired"
-	EntitlementGrantStatusSuperseded EntitlementGrantStatus = "superseded"
+	EntitlementGrantStatusActive    EntitlementGrantStatus = "active"
+	EntitlementGrantStatusExhausted EntitlementGrantStatus = "exhausted"
 )
 
 func (s EntitlementGrantStatus) Validate() error {
@@ -165,12 +164,10 @@ func (s EntitlementGrantStatus) Validate() error {
 	allowed := []EntitlementGrantStatus{
 		EntitlementGrantStatusActive,
 		EntitlementGrantStatusExhausted,
-		EntitlementGrantStatusExpired,
-		EntitlementGrantStatusSuperseded,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid entitlement grant status").
-			WithHint("status must be active, exhausted, expired, or superseded").
+			WithHint("status must be active or exhausted").
 			WithReportableDetails(map[string]interface{}{"status": s}).
 			Mark(ierr.ErrValidation)
 	}
@@ -178,25 +175,6 @@ func (s EntitlementGrantStatus) Validate() error {
 }
 
 func (s EntitlementGrantStatus) String() string { return string(s) }
-
-// IsLive reports whether the grant still occupies the slot on its EC.
-func (s EntitlementGrantStatus) IsLive() bool {
-	return s == EntitlementGrantStatusActive || s == EntitlementGrantStatusExhausted
-}
-
-// LiveEntitlementGrantStatuses is the IN (...) form of IsLive.
-var LiveEntitlementGrantStatuses = []EntitlementGrantStatus{
-	EntitlementGrantStatusActive,
-	EntitlementGrantStatusExhausted,
-}
-
-// CycleOverlapEntitlementGrantStatuses is the billing-path status set: includes
-// expired so overage from grants closed mid-cycle still counts.
-var CycleOverlapEntitlementGrantStatuses = []EntitlementGrantStatus{
-	EntitlementGrantStatusActive,
-	EntitlementGrantStatusExhausted,
-	EntitlementGrantStatusExpired,
-}
 
 // EntitlementGrantFilter is the query surface for grant List/Count.
 type EntitlementGrantFilter struct {
@@ -297,17 +275,15 @@ func (f *EntitlementGrantFilter) WithStatuses(statuses ...EntitlementGrantStatus
 	return f
 }
 
-// WithLiveOnly is the alert-path filter: live grants still in window at `at`.
+// WithLiveOnly is the alert-path filter: grants whose window contains `at`.
 func (f *EntitlementGrantFilter) WithLiveOnly(at time.Time) *EntitlementGrantFilter {
-	f.Statuses = append(f.Statuses, LiveEntitlementGrantStatuses...)
 	f.ValidAtOrAfter = &at
 	return f
 }
 
 // WithCycleOverlap is the billing-path filter: any grant overlapping
-// [cycleStart, cycleEnd), including already-expired ones.
+// [cycleStart, cycleEnd), including already-closed windows.
 func (f *EntitlementGrantFilter) WithCycleOverlap(cycleStart, cycleEnd time.Time) *EntitlementGrantFilter {
-	f.Statuses = append(f.Statuses, CycleOverlapEntitlementGrantStatuses...)
 	f.ValidFromBefore = &cycleEnd
 	f.ValidToAfter = &cycleStart
 	return f

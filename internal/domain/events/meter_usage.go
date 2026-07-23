@@ -169,6 +169,11 @@ type MeterUsageRepository interface {
 	// for the given customer(s) and time range. Used to skip meters with zero usage.
 	GetDistinctMeterIDs(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
 
+	// GetEarliestUsageTimestamp returns the earliest event timestamp matching the
+	// params' filters within [StartTime, EndTime), or nil when no events match.
+	// Used to anchor entitlement grant windows at the first uncovered usage.
+	GetEarliestUsageTimestamp(ctx context.Context, params *MeterUsageQueryParams) (*time.Time, error)
+
 	// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data
 	GetDetailedAnalytics(ctx context.Context, params *MeterUsageDetailedAnalyticsParams) ([]*MeterUsageDetailedResult, error)
 

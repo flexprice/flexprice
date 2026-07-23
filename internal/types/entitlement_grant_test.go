@@ -3,8 +3,6 @@ package types
 import (
 	"testing"
 	"time"
-
-	"github.com/samber/lo"
 )
 
 func TestEntitlementAggregationMode_Validate(t *testing.T) {
@@ -93,17 +91,16 @@ func TestEntitlementGrantDurationOf(t *testing.T) {
 	}
 }
 
-func TestEntitlementGrantStatus_IsLive(t *testing.T) {
-	live := []EntitlementGrantStatus{EntitlementGrantStatusActive, EntitlementGrantStatusExhausted}
-	notLive := []EntitlementGrantStatus{EntitlementGrantStatusExpired, EntitlementGrantStatusSuperseded, ""}
-	for _, s := range live {
-		if !s.IsLive() {
-			t.Fatalf("%q should be live", s)
+func TestEntitlementGrantStatus_Validate(t *testing.T) {
+	for _, s := range []EntitlementGrantStatus{EntitlementGrantStatusActive, EntitlementGrantStatusExhausted, ""} {
+		if err := s.Validate(); err != nil {
+			t.Fatalf("%q should validate, got %v", s, err)
 		}
 	}
-	for _, s := range notLive {
-		if s.IsLive() {
-			t.Fatalf("%q should not be live", s)
+	// Expiry is derived from valid_to, never stored — 'expired' is not a status.
+	for _, s := range []EntitlementGrantStatus{"expired", "superseded", "bogus"} {
+		if err := s.Validate(); err == nil {
+			t.Fatalf("%q should be rejected", s)
 		}
 	}
 }
@@ -112,10 +109,9 @@ func TestEntitlementGrantFilter_WithLiveOnly(t *testing.T) {
 	at := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
 	f := NewNoLimitEntitlementGrantFilter().WithLiveOnly(at)
 
-	// Sanity: the shorthand covers both statuses and pins ValidAtOrAfter to `at`.
-	if !lo.Contains(f.Statuses, EntitlementGrantStatusActive) ||
-		!lo.Contains(f.Statuses, EntitlementGrantStatusExhausted) {
-		t.Fatalf("WithLiveOnly should include active + exhausted, got %v", f.Statuses)
+	// Liveness is purely time-based: window contains `at`, no status predicate.
+	if len(f.Statuses) != 0 {
+		t.Fatalf("WithLiveOnly should not filter on status, got %v", f.Statuses)
 	}
 	if f.ValidAtOrAfter == nil || !f.ValidAtOrAfter.Equal(at) {
 		t.Fatalf("ValidAtOrAfter mismatch: want %v got %v", at, f.ValidAtOrAfter)
@@ -127,12 +123,10 @@ func TestEntitlementGrantFilter_WithCycleOverlap(t *testing.T) {
 	end := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	f := NewNoLimitEntitlementGrantFilter().WithCycleOverlap(start, end)
 
-	// Billing path must include expired grants — a grant that lived + died
-	// inside a cycle still contributes overage.
-	for _, want := range CycleOverlapEntitlementGrantStatuses {
-		if !lo.Contains(f.Statuses, want) {
-			t.Fatalf("WithCycleOverlap missing status %q; got %v", want, f.Statuses)
-		}
+	// Billing path is status-free: a grant that lived + died inside a cycle
+	// still contributes overage.
+	if len(f.Statuses) != 0 {
+		t.Fatalf("WithCycleOverlap should not filter on status, got %v", f.Statuses)
 	}
 	if f.ValidFromBefore == nil || !f.ValidFromBefore.Equal(end) {
 		t.Fatalf("ValidFromBefore mismatch")

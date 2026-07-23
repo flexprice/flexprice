@@ -216,14 +216,16 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_NoneStillWorks() {
 // M3 · EnsureGrants
 // -----------------------------------------------------------------------------
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_OpensGrantWhenNoneExists() {
+func (s *EntitlementGrantSuite) TestEnsureGrants_OpensGrantAnchoredAtFirstUsage() {
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
-	_ = f
+
+	eventAt := sub.CurrentPeriodStart.Add(20 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", eventAt, 1)
 
 	at := sub.CurrentPeriodStart.Add(30 * time.Minute)
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
 	s.NoError(err)
-	s.Len(grants, 1, "one time_boxed EC should open exactly one grant")
+	s.Require().Len(grants, 1, "one grant EC with usage should open exactly one grant")
 
 	g := grants[0]
 	s.Equal(cust.ID, g.CustomerID)
@@ -231,26 +233,37 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_OpensGrantWhenNoneExists() {
 	s.Equal(types.EntitlementGrantScopeFeature, g.ScopeEntityType)
 	s.Equal(f.ID, g.ScopeEntityID)
 	s.Equal(types.EntitlementGrantStatusActive, g.GrantStatus)
-	s.True(g.ValidTo.After(g.ValidFrom))
-	s.True(g.ValidTo.Sub(g.ValidFrom) >= time.Hour, "min 1h window")
-	s.True(!g.ValidTo.After(sub.CurrentPeriodEnd), "cycle-boundary cap")
+	s.True(g.ValidFrom.Equal(eventAt), "window must anchor at the first usage event")
+	s.True(g.ValidTo.Equal(eventAt.Add(5 * time.Hour)))
+	s.NotNil(meta)
+}
+
+func (s *EntitlementGrantSuite) TestEnsureGrants_NoUncoveredUsage_NoGrant() {
+	// No usage on the feature's meter → no grant rows at all (lazy opening).
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(30*time.Minute))
+	s.NoError(err)
+	s.Empty(grants, "idle features must not open grants")
+	s.Nil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_ReturnsExistingLiveGrantUnchanged() {
 	// Second call at the same tick must not duplicate — partial unique index
 	// on the slot + explicit "already live" bypass in the service.
-	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
-	_ = f
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(20*time.Minute), 1)
 
 	at := sub.CurrentPeriodStart.Add(30 * time.Minute)
-	first, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
+	first, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
 	s.NoError(err)
 	s.Len(first, 1)
 
-	second, err := s.grantService.EnsureGrants(s.GetContext(), cust, at.Add(5*time.Minute))
+	second, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at.Add(5*time.Minute))
 	s.NoError(err)
 	s.Len(second, 1)
 	s.Equal(first[0].ID, second[0].ID, "second EnsureGrants should return the same live grant")
+	s.NotNil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_IgnoresNoneEC() {
@@ -273,9 +286,10 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_IgnoresNoneEC() {
 	cust := s.simpleCustomer("cust-legacy-ec")
 	sub := s.simpleSubscription("sub-legacy-ec", cust.ID, plan.ID)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
 	s.NoError(err)
 	s.Empty(grants, "type=none EC should not open a grant")
+	s.Nil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_DurationAtOrOverCycle_NoGrant() {
@@ -292,78 +306,217 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_DurationAtOrOverCycle_NoGrant()
 	cust := s.simpleCustomer("cust-cyclelen")
 	sub := s.simpleSubscription("sub-cyclelen", cust.ID, p.ID)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
 	s.Require().NoError(err)
 	s.Empty(grants, "duration >= cycle length must not open a grant")
+	s.Nil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_SkipsWhenCustomerHasNoSubs() {
 	cust := s.simpleCustomer("cust-no-sub")
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, time.Now())
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, time.Now())
 	s.NoError(err)
 	s.Empty(grants)
+	s.Nil(meta)
 }
 
 // -----------------------------------------------------------------------------
-// M3 · computeGrantWindow (unit — no repo needed)
+// computeGrantWindow — usage-anchored window math
 // -----------------------------------------------------------------------------
 
-func (s *EntitlementGrantSuite) TestComputeGrantWindow_CycleBoundaryCap() {
-	// A 24h grant with only 6h left in the cycle must truncate at cycle_end.
-	svc := s.grantService.(*entitlementGrantService)
+// windowFixture is the row set the usage-anchored window math reads: a real
+// meter + feature + customer (for external-ID resolution) on a 30-day cycle.
+type windowFixture struct {
+	sub                  *subscription.Subscription
+	ec                   *entitlement.Entitlement
+	meterID, extID       string
+	cycleStart, cycleEnd time.Time
+}
+
+func (s *EntitlementGrantSuite) newWindowFixture(tag string, durHours int) windowFixture {
 	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	cycleEnd := cycleStart.Add(30 * 24 * time.Hour)
-	at := cycleEnd.Add(-6 * time.Hour)
-
+	m := s.simpleMeter("meter-" + tag)
+	f := s.simpleFeature("feat-"+tag, m.ID)
+	cust := s.simpleCustomer("cust-" + tag)
 	sub := &subscription.Subscription{
-		ID:                 "sub-cap",
+		ID:                 "sub-" + tag,
+		CustomerID:         cust.ID,
 		CurrentPeriodStart: cycleStart,
 		CurrentPeriodEnd:   cycleEnd,
 	}
-	ec := s.newTimeBoxedEC("ec-cap", "feat-cap", 24, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(100))
-
-	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), ec, sub, at, 24*time.Hour)
-	s.NoError(err)
-	s.True(ok)
-	s.WithinDuration(cycleEnd, to, time.Second, "valid_to should be capped at cycle_end")
-	grace := s.GetConfig().UsageAlerts.ScheduleDelay
-	s.WithinDuration(at.Add(-grace), from, time.Second,
-		"fresh slots start schedule_delay back to absorb ingestion delay")
+	ec := s.newTimeBoxedEC("ec-"+tag, f.ID, durHours, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(100))
+	return windowFixture{sub: sub, ec: ec, meterID: m.ID, extID: cust.ExternalID, cycleStart: cycleStart, cycleEnd: cycleEnd}
 }
 
-func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubHourWindowIsSkipped() {
-	// 30 minutes left in the cycle for a 5h grant duration → returns ok=false
-	// so the workflow leaves the slot empty until the next cycle.
-	svc := s.grantService.(*entitlementGrantService)
-	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
-	cycleEnd := cycleStart.Add(30 * 24 * time.Hour)
-	at := cycleEnd.Add(-30 * time.Minute)
-
-	sub := &subscription.Subscription{CurrentPeriodStart: cycleStart, CurrentPeriodEnd: cycleEnd}
-	ec := s.newTimeBoxedEC("ec-short", "feat-short", 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
-
-	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), ec, sub, at, 5*time.Hour)
-	s.NoError(err)
-	s.False(ok, "sub-1-hour trailing window must be skipped")
+func (s *EntitlementGrantSuite) seedWindowPrevGrant(fx windowFixture, id string, validFrom, validTo time.Time) {
+	prev := &entitlementgrant.EntitlementGrant{
+		ID:                  id,
+		EntitlementConfigID: fx.ec.ID,
+		CustomerID:          fx.sub.CustomerID,
+		SubscriptionID:      fx.sub.ID,
+		ScopeEntityType:     types.EntitlementGrantScopeFeature,
+		ScopeEntityID:       fx.ec.FeatureID,
+		Measure:             types.EntitlementGrantMeasureQuantity,
+		Quota:               decimal.NewFromInt(100),
+		ValidFrom:           validFrom,
+		ValidTo:             validTo,
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		LastComputedAt:      &validTo, // already finalized
+		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), prev)
+	s.Require().NoError(err)
 }
 
-func (s *EntitlementGrantSuite) TestComputeGrantWindow_FreshSlotStartsScheduleDelayBack() {
-	// A fresh slot (no prior grant) starts exactly schedule_delay before `at` —
-	// the debounce window bounds how old the triggering event can be, so
-	// already-ingested events always land inside the first window.
+// windowArgs resolves the inputs computeGrantWindow receives from the batched
+// EnsureGrants pass: the shared meta and the slot's latest window end.
+func (s *EntitlementGrantSuite) windowArgs(fx windowFixture) (*grantEvalMeta, time.Time) {
 	svc := s.grantService.(*entitlementGrantService)
-	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
-	cycleEnd := cycleStart.Add(30 * 24 * time.Hour)
-	at := cycleStart.Add(5 * time.Hour)
+	meta, err := svc.buildGrantEvalMeta(s.GetContext(),
+		[]*subscription.Subscription{fx.sub},
+		map[string][]*entitlement.Entitlement{fx.sub.ID: {fx.ec}},
+		nil,
+		NewSubscriptionService(svc.ServiceParams))
+	s.Require().NoError(err)
+	prev, err := s.GetStores().EntitlementGrantRepo.FindLastBySlot(s.GetContext(), fx.ec.ID, fx.sub.CustomerID, fx.sub.ID)
+	s.Require().NoError(err)
+	var lastEnd time.Time
+	if prev != nil {
+		lastEnd = prev.ValidTo
+	}
+	return meta, lastEnd
+}
 
-	sub := &subscription.Subscription{CurrentPeriodStart: cycleStart, CurrentPeriodEnd: cycleEnd}
-	ec := s.newTimeBoxedEC("ec-fresh", "feat-fresh", 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_AnchorsAtExactEventTime() {
+	// The 2:00/2:07 case: event at T, evaluation at T+7m → window starts
+	// exactly at T, not at a delay-derived approximation.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("exact", 5)
+	eventAt := fx.cycleStart.Add(2 * time.Hour)
+	at := eventAt.Add(7 * time.Minute)
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
 
-	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), ec, sub, at, 5*time.Hour)
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, at, 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
-	grace := s.GetConfig().UsageAlerts.ScheduleDelay
-	s.WithinDuration(at.Add(-grace), from, time.Second)
+	s.True(from.Equal(eventAt), "window must anchor at the first uncovered event: got %s want %s", from, eventAt)
+	s.True(to.Equal(eventAt.Add(5 * time.Hour)))
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_NoUncoveredUsage_NoGrant() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("idle", 5)
+
+	meta, last := s.windowArgs(fx)
+	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(2*time.Hour), 5*time.Hour)
+	s.NoError(err)
+	s.False(ok, "no uncovered usage must open no grant")
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_IdleGapHop() {
+	// Previous window ended at P; no usage for 35 minutes; usage resumes at
+	// P+35m → the next window anchors at P+35m, not P. Idle time opens nothing.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("gap", 5)
+	prevEnd := fx.cycleStart.Add(10 * time.Hour)
+	s.seedWindowPrevGrant(fx, "eg-gap-prev", prevEnd.Add(-5*time.Hour), prevEnd)
+
+	resumeAt := prevEnd.Add(35 * time.Minute)
+	s.seedMeterUsage(fx.extID, fx.meterID, resumeAt, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, resumeAt.Add(5*time.Minute), 5*time.Hour)
+	s.NoError(err)
+	s.True(ok)
+	s.True(from.Equal(resumeAt), "window must hop the idle gap to the first uncovered event: got %s want %s", from, resumeAt)
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_CycleBoundaryCap() {
+	// A 24h duration anchored 6h before cycle_end: the full duration doesn't
+	// fit, so the window becomes the cycle's last 24h — backdated start (safe:
+	// [frontier, anchor) is event-free), capped end.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("cap", 24)
+	eventAt := fx.cycleEnd.Add(-6 * time.Hour)
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(10*time.Minute), 24*time.Hour)
+	s.NoError(err)
+	s.True(ok)
+	s.True(from.Equal(fx.cycleEnd.Add(-24*time.Hour)), "start must backdate to cycle_end-24h: got %s", from)
+	s.True(to.Equal(fx.cycleEnd), "valid_to must cap at cycle_end")
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_TrailingStubAbsorbed() {
+	// A window whose remainder to cycle_end would be sub-minimum stretches to
+	// cycle_end — a stub can't stand alone and skipping it would orphan events.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("stub", 5)
+	prevEnd := fx.cycleEnd.Add(-5*time.Hour - 30*time.Minute)
+	s.seedWindowPrevGrant(fx, "eg-stub-prev", prevEnd.Add(-5*time.Hour), prevEnd)
+
+	eventAt := prevEnd.Add(10 * time.Minute) // 5h window from here would leave a 20m stub
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, eventAt.Add(10*time.Minute), 5*time.Hour)
+	s.NoError(err)
+	s.True(ok)
+	s.True(from.Equal(eventAt))
+	s.True(to.Equal(fx.cycleEnd), "final window must absorb the sub-minimum stub: got %s want %s", to, fx.cycleEnd)
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_ForcedTailBackdatedToFullDuration() {
+	// First uncovered event inside the cycle's final stretch: the window
+	// backdates its start to cycle_end − duration, covering the anchoring
+	// event with a full-length window ending at cycle_end.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("tail", 5)
+	eventAt := fx.cycleEnd.Add(-30 * time.Minute)
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
+	s.NoError(err)
+	s.True(ok, "tail window must open, backdated to the full duration")
+	s.True(from.Equal(fx.cycleEnd.Add(-5*time.Hour)), "start must backdate to cycle_end-duration: got %s", from)
+	s.True(to.Equal(fx.cycleEnd))
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_FlushWithCycleEnd_NothingToOpen() {
+	// Previous window already ends at cycle_end and the cycle hasn't rolled:
+	// there is nothing left to cover, so no grant opens until rollover.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("flush", 5)
+	s.seedWindowPrevGrant(fx, "eg-flush-prev", fx.cycleEnd.Add(-5*time.Hour), fx.cycleEnd)
+
+	meta, last := s.windowArgs(fx)
+	_, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleEnd.Add(-10*time.Minute), 5*time.Hour)
+	s.NoError(err)
+	s.False(ok)
+}
+
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_PrevCycleHistory_AnchorsAtFirstNewCycleUsage() {
+	// A slot whose last grant ended in an earlier cycle anchors at the first
+	// usage of the NEW cycle — coverage continues across rollover without
+	// opening windows over idle time.
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("roll", 5)
+	s.seedWindowPrevGrant(fx, "eg-roll-prev", fx.cycleStart.Add(-6*time.Hour), fx.cycleStart.Add(-1*time.Hour))
+
+	firstNewCycleEvent := fx.cycleStart.Add(40 * time.Minute)
+	s.seedMeterUsage(fx.extID, fx.meterID, firstNewCycleEvent, 1)
+
+	meta, last := s.windowArgs(fx)
+	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), fx.ec, fx.sub, meta, last, fx.cycleStart.Add(3*time.Hour), 5*time.Hour)
+	s.NoError(err)
+	s.True(ok)
+	s.True(from.Equal(firstNewCycleEvent),
+		"prior-cycle history must anchor at the new cycle's first usage: got %s", from)
 }
 
 // -----------------------------------------------------------------------------
@@ -491,18 +644,19 @@ func (s *EntitlementGrantSuite) setupCustomerSubWithGrantEC(
 // EnsureGrants · slot lifecycle
 // -----------------------------------------------------------------------------
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_StaleLiveSlotExpiredAndReopened() {
+func (s *EntitlementGrantSuite) TestEnsureGrants_ClosedSlotReopensAndFinalizesOld() {
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 
-	// Find the EC opened by setup so the stale grant lands on its slot.
+	// Find the EC opened by setup so the closed grant lands on its slot.
 	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
 	s.Require().NoError(err)
 	s.Require().Len(ecs, 1)
 	ecID := ecs[0].ID
 
 	at := sub.CurrentPeriodStart.Add(10 * time.Hour)
-	stale := &entitlementgrant.EntitlementGrant{
-		ID:                  "eg-stale",
+	closedTo := at.Add(-1 * time.Hour) // window closed an hour ago
+	closed := &entitlementgrant.EntitlementGrant{
+		ID:                  "eg-closed",
 		EntitlementConfigID: ecID,
 		CustomerID:          cust.ID,
 		SubscriptionID:      sub.ID,
@@ -511,22 +665,71 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_StaleLiveSlotExpiredAndReopened
 		Measure:             types.EntitlementGrantMeasureQuantity,
 		Quota:               decimal.NewFromInt(100),
 		ValidFrom:           sub.CurrentPeriodStart,
-		ValidTo:             at.Add(-1 * time.Hour), // window closed an hour ago
+		ValidTo:             closedTo,
 		GrantStatus:         types.EntitlementGrantStatusActive,
 		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
 		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
-	_, err = s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), stale)
+	_, err = s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), closed)
 	s.Require().NoError(err)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
-	s.Require().NoError(err)
-	s.Require().Len(grants, 1)
-	s.NotEqual("eg-stale", grants[0].ID, "a fresh grant must open on the freed slot")
+	// Usage after the closed window is what triggers the fresh open.
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", at.Add(-30*time.Minute), 1)
 
-	old, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), "eg-stale")
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
 	s.Require().NoError(err)
-	s.Equal(types.EntitlementGrantStatusExpired, old.GrantStatus, "stale live grant must flip to expired")
+	s.Require().Len(grants, 2, "fresh grant plus the closed one needing its final refresh")
+	s.NotNil(meta)
+
+	fresh, found := lo.Find(grants, func(g *entitlementgrant.EntitlementGrant) bool { return g.ID != "eg-closed" })
+	s.Require().True(found, "a fresh grant must open on the freed slot")
+	s.True(fresh.ValidTo.After(at))
+
+	// The closed grant is returned (last_computed_at predates valid_to) so the
+	// evaluator gives it one final usage refresh; no status write happens.
+	_, found = lo.Find(grants, func(g *entitlementgrant.EntitlementGrant) bool { return g.ID == "eg-closed" })
+	s.Require().True(found, "the closed grant must be returned for its final refresh")
+
+	// Once the snapshot covers the full window, the grant drops out of the set.
+	closed.LastComputedAt = &at
+	s.Require().NoError(s.GetStores().EntitlementGrantRepo.UpdateSnapshot(s.GetContext(), closed))
+	again, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at.Add(time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(again, 1, "finalized grants must not re-enter the set")
+	s.Equal(fresh.ID, again[0].ID)
+	s.NotNil(meta)
+}
+
+func (s *EntitlementGrantSuite) TestOpenOneGrant_LostRaceReReadsWinner() {
+	// valid_from is deterministic, so a racer that read the slot before the
+	// winner inserted computes the same window, collides on the unique
+	// (slot, valid_from) index, and must return the winner's row.
+	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
+	s.Require().NoError(err)
+	s.Require().Len(ecs, 1)
+
+	eventAt := sub.CurrentPeriodStart.Add(20 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", eventAt, 1)
+
+	at := eventAt.Add(10 * time.Minute)
+	winners, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
+	s.Require().NoError(err)
+	s.Require().Len(winners, 1)
+	s.NotNil(meta)
+
+	// Racer: stale read said the slot was empty (last=nil).
+	svc := s.grantService.(*entitlementGrantService)
+	meta, err = svc.buildGrantEvalMeta(s.GetContext(),
+		[]*subscription.Subscription{sub},
+		map[string][]*entitlement.Entitlement{sub.ID: {ecs[0]}},
+		nil, NewSubscriptionService(svc.ServiceParams))
+	s.Require().NoError(err)
+
+	got, err := svc.openOneGrant(s.GetContext(), sub, ecs[0], time.Time{}, meta, at, decimal.NewFromInt(100))
+	s.Require().NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(winners[0].ID, got.ID, "loser must re-read the winner, not insert a duplicate")
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_ParallelECs_OneGrantEach() {
@@ -545,13 +748,15 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_ParallelECs_OneGrantEach() {
 
 	cust := s.simpleCustomer("cust-par")
 	sub := s.simpleSubscription("sub-par", cust.ID, p.ID)
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart.Add(5*time.Minute), 1)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
 	s.Require().NoError(err)
 	s.Require().Len(grants, 2, "each parallel EC opens its own grant")
 	s.NotEqual(grants[0].EntitlementConfigID, grants[1].EntitlementConfigID)
 	quotas := []int64{grants[0].Quota.IntPart(), grants[1].Quota.IntPart()}
 	s.ElementsMatch([]int64{100, 200}, quotas)
+	s.NotNil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_AdditiveECs_OneSummedGrant() {
@@ -570,18 +775,21 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_AdditiveECs_OneSummedGrant() {
 
 	cust := s.simpleCustomer("cust-add")
 	sub := s.simpleSubscription("sub-add", cust.ID, p.ID)
+	s.seedMeterUsage(cust.ExternalID, m.ID, sub.CurrentPeriodStart.Add(5*time.Minute), 1)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1, "additive group must open a single summed grant")
 	s.True(grants[0].Quota.Equal(decimal.NewFromInt(300)),
 		"summed quota expected 300, got %s", grants[0].Quota)
+	s.NotNil(meta)
 
 	// Idempotency across the group: second call returns the same single grant.
-	again, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(20*time.Minute))
+	again, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(20*time.Minute))
 	s.Require().NoError(err)
 	s.Require().Len(again, 1)
 	s.Equal(grants[0].ID, again[0].ID)
+	s.NotNil(meta)
 }
 
 func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsMixedModesOnFeature() {
@@ -641,15 +849,17 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsAdditiveDurationMis
 	s.Contains(err.Error(), "grant_duration")
 }
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_AnchorsToPreviousValidTo() {
+func (s *EntitlementGrantSuite) TestEnsureGrants_IdleGapHop() {
+	// Previous window ended, then 35 minutes of silence, then usage resumed —
+	// the next window opens at the resume timestamp, not at the previous
+	// valid_to, so idle time never occupies window budget.
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 
 	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
 	s.Require().NoError(err)
 	s.Require().Len(ecs, 1)
 
-	at := sub.CurrentPeriodStart.Add(10 * time.Hour)
-	prevEnd := at.Add(-2 * time.Minute)
+	prevEnd := sub.CurrentPeriodStart.Add(5 * time.Hour)
 	prev := &entitlementgrant.EntitlementGrant{
 		ID:                  "eg-prev",
 		EntitlementConfigID: ecs[0].ID,
@@ -661,24 +871,28 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_AnchorsToPreviousValidTo() {
 		Quota:               decimal.NewFromInt(100),
 		ValidFrom:           prevEnd.Add(-5 * time.Hour),
 		ValidTo:             prevEnd,
-		GrantStatus:         types.EntitlementGrantStatusExpired,
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		LastComputedAt:      &prevEnd, // already finalized
 		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
 		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
 	_, err = s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), prev)
 	s.Require().NoError(err)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
+	resumeAt := prevEnd.Add(35 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", resumeAt, 1)
+
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, resumeAt.Add(5*time.Minute))
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
-	s.True(grants[0].ValidFrom.Equal(prevEnd),
-		"new window must butt against previous valid_to: got %s want %s", grants[0].ValidFrom, prevEnd)
+	s.True(grants[0].ValidFrom.Equal(resumeAt),
+		"new window must anchor at the first uncovered event: got %s want %s", grants[0].ValidFrom, resumeAt)
+	s.NotNil(meta)
 }
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_ContinuityAfterDelayedEvaluation() {
-	// Evaluation was down for an hour: the new window must butt-joint the
-	// previous valid_to exactly, so every event in the gap belongs to exactly
-	// one window (usage recompute from CH keeps late accounting correct).
+func (s *EntitlementGrantSuite) TestEnsureGrants_DelayedEvaluationCoversGapUsage() {
+	// Evaluation was down for an hour; usage during the outage anchors the
+	// next window exactly, so nothing is lost even under delayed execution.
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 
 	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
@@ -698,18 +912,23 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_ContinuityAfterDelayedEvaluatio
 		Quota:               decimal.NewFromInt(100),
 		ValidFrom:           prevEnd.Add(-5 * time.Hour),
 		ValidTo:             prevEnd,
-		GrantStatus:         types.EntitlementGrantStatusExpired,
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		LastComputedAt:      &prevEnd, // already finalized
 		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
 		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
 	_, err = s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), prev)
 	s.Require().NoError(err)
 
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
+	gapEvent := prevEnd.Add(5 * time.Minute) // arrived while evaluation was down
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", gapEvent, 1)
+
+	grants, meta, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
-	s.True(grants[0].ValidFrom.Equal(prevEnd),
-		"new window must butt-joint previous valid_to with no gap: got %s want %s", grants[0].ValidFrom, prevEnd)
+	s.True(grants[0].ValidFrom.Equal(gapEvent),
+		"gap usage must anchor the next window: got %s want %s", grants[0].ValidFrom, gapEvent)
+	s.NotNil(meta)
 }
 
 // -----------------------------------------------------------------------------
@@ -873,7 +1092,7 @@ func TestAggregateMeteredEntitlements_DisabledSkipped(t *testing.T) {
 // loadEntitlementGrantsByMeterID · scope handling
 // -----------------------------------------------------------------------------
 
-func (s *EntitlementGrantSuite) seedLoaderGrant(id string, sub *subscription.Subscription, scope types.EntitlementGrantScopeEntityType, scopeID string, status types.EntitlementGrantStatus) {
+func (s *EntitlementGrantSuite) seedLoaderGrant(id string, sub *subscription.Subscription, scope types.EntitlementGrantScopeEntityType, scopeID string) {
 	g := &entitlementgrant.EntitlementGrant{
 		ID:                  id,
 		EntitlementConfigID: "ec_" + id,
@@ -885,7 +1104,7 @@ func (s *EntitlementGrantSuite) seedLoaderGrant(id string, sub *subscription.Sub
 		Quota:               decimal.NewFromInt(100),
 		ValidFrom:           sub.CurrentPeriodStart,
 		ValidTo:             sub.CurrentPeriodStart.Add(5 * time.Hour),
-		GrantStatus:         status,
+		GrantStatus:         types.EntitlementGrantStatusActive,
 		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
 		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
@@ -913,8 +1132,8 @@ func (s *EntitlementGrantSuite) loaderBillingService() *billingService {
 func (s *EntitlementGrantSuite) TestLoader_FeatureGrantsBucketedByMeter() {
 	cust := s.simpleCustomer("cust-loader")
 	sub := s.simpleSubscription("sub-loader", cust.ID, "plan-loader")
-	s.seedLoaderGrant("eg_f1", sub, types.EntitlementGrantScopeFeature, "feat_1", types.EntitlementGrantStatusActive)
-	s.seedLoaderGrant("eg_f2", sub, types.EntitlementGrantScopeFeature, "feat_2", types.EntitlementGrantStatusActive)
+	s.seedLoaderGrant("eg_f1", sub, types.EntitlementGrantScopeFeature, "feat_1")
+	s.seedLoaderGrant("eg_f2", sub, types.EntitlementGrantScopeFeature, "feat_2")
 
 	features := []*dto.AggregatedFeature{
 		s.aggFeature("feat_1", "meter_1", ""),
@@ -935,8 +1154,8 @@ func (s *EntitlementGrantSuite) TestLoader_GroupAndSubGrantsNotFoldedPerMeter() 
 	// loader must exclude them.
 	cust := s.simpleCustomer("cust-loader-grp")
 	sub := s.simpleSubscription("sub-loader-grp", cust.ID, "plan-loader-grp")
-	s.seedLoaderGrant("eg_group", sub, types.EntitlementGrantScopeGroup, "group_1", types.EntitlementGrantStatusActive)
-	s.seedLoaderGrant("eg_sub", sub, types.EntitlementGrantScopeSubscription, sub.ID, types.EntitlementGrantStatusActive)
+	s.seedLoaderGrant("eg_group", sub, types.EntitlementGrantScopeGroup, "group_1")
+	s.seedLoaderGrant("eg_sub", sub, types.EntitlementGrantScopeSubscription, sub.ID)
 
 	features := []*dto.AggregatedFeature{
 		s.aggFeature("feat_1", "meter_1", "group_1"),
@@ -948,17 +1167,18 @@ func (s *EntitlementGrantSuite) TestLoader_GroupAndSubGrantsNotFoldedPerMeter() 
 	s.Empty(out, "non-feature scopes must not be folded per meter")
 }
 
-func (s *EntitlementGrantSuite) TestLoader_ExpiredGrantInCycleStillLoaded() {
-	// Billing must see grants that expired mid-cycle — their overage still bills.
+func (s *EntitlementGrantSuite) TestLoader_ClosedGrantInCycleStillLoaded() {
+	// Billing must see grants whose window closed mid-cycle — their overage
+	// still bills. The loader is status-free; overlap is purely time-based.
 	cust := s.simpleCustomer("cust-loader-exp")
 	sub := s.simpleSubscription("sub-loader-exp", cust.ID, "plan-loader-exp")
-	s.seedLoaderGrant("eg_expired", sub, types.EntitlementGrantScopeFeature, "feat_1", types.EntitlementGrantStatusExpired)
+	s.seedLoaderGrant("eg_closed", sub, types.EntitlementGrantScopeFeature, "feat_1")
 
 	features := []*dto.AggregatedFeature{s.aggFeature("feat_1", "meter_1", "")}
 	out, err := s.loaderBillingService().loadEntitlementGrantsByMeterID(
 		s.GetContext(), sub, features, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	s.Require().NoError(err)
-	s.Require().Len(out["meter_1"], 1, "expired-in-cycle grants must still fold into billing")
+	s.Require().Len(out["meter_1"], 1, "closed-in-cycle grants must still fold into billing")
 }
 
 // -----------------------------------------------------------------------------
@@ -989,18 +1209,21 @@ func (s *EntitlementGrantSuite) TestEvaluate_OverQuota_FlipsExhaustedAndFiresAle
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 	_ = f
 
+	// Quota is 100 (setupCustomerSubWithGrantEC); push 110 units, then open the
+	// grant — the window anchors at the first event and covers both.
+	first := sub.CurrentPeriodStart.Add(30 * time.Minute)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first, 60)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", first.Add(15*time.Minute), 50)
+
 	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 	g := grants[0]
-
-	// Quota is 100 (setupCustomerSubWithGrantEC); push 110 units inside the window.
-	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(30*time.Minute), 60)
-	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(45*time.Minute), 50)
+	s.True(g.ValidFrom.Equal(first))
 
 	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), cust, []*subscription.Subscription{sub}, []*entitlementgrant.EntitlementGrant{g}, at))
+		s.GetContext(), cust, meta, []*entitlementgrant.EntitlementGrant{g}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
@@ -1019,16 +1242,16 @@ func (s *EntitlementGrantSuite) TestEvaluate_UnderQuota_StaysActiveNoAlert() {
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 	_ = f
 
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", sub.CurrentPeriodStart.Add(30*time.Minute), 40)
+
 	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(s.GetContext(), cust, []*subscription.Subscription{sub}, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
 	g := grants[0]
 
-	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(30*time.Minute), 40)
-
 	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
-		s.GetContext(), cust, []*subscription.Subscription{sub}, []*entitlementgrant.EntitlementGrant{g}, at))
+		s.GetContext(), cust, meta, []*entitlementgrant.EntitlementGrant{g}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)

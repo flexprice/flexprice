@@ -101,7 +101,7 @@ func (s *billingService) adjustMeterUsageGrants(
 			s.Logger.Error(ctx, "entitlement grant overage: amount lane rejected, skipping grants",
 				"meter_id", item.MeterID,
 				"line_item_id", item.ID,
-				"reason", guardErr.Error(),
+				"error", guardErr,
 			)
 			return adjustMeterUsageGrantsResult{}, false
 		}

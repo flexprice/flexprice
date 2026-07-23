@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
@@ -206,11 +205,11 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	}
 
 	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-	grants, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
+	grants, meta, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
 	if err != nil {
 		return err
 	}
-	grantErr := s.evaluateEntitlementGrantsForCustomer(ctx, cust, subs, grants, at)
+	grantErr := s.evaluateEntitlementGrantsForCustomer(ctx, cust, meta, grants, at)
 	if grantErr != nil {
 		s.Logger.Error(ctx, "fused evaluator: grant evaluation returned error", "error", grantErr, "customer_id", cust.ID)
 	}
@@ -219,17 +218,18 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 }
 
 // evaluateEntitlementGrantsForCustomer refreshes usage and fires alerts for
-// each live grant. Alert-log dedup makes it safe under Temporal retries.
-// subs is the caller's already-fetched active-subscription set; grants whose
+// each returned grant (open windows plus closed ones getting their final
+// refresh). Alert-log dedup makes it safe under Temporal retries. meta is the
+// lookup bundle built during EnsureGrantsForSubscriptions; grants whose
 // subscription is not in it (e.g. cancelled mid-window) are skipped.
 func (s *alertService) evaluateEntitlementGrantsForCustomer(
 	ctx context.Context,
 	cust *customer.Customer,
-	subs []*subscription.Subscription,
+	meta *grantEvalMeta,
 	grants []*entitlementgrant.EntitlementGrant,
 	at time.Time,
 ) error {
-	if len(grants) == 0 {
+	if len(grants) == 0 || meta == nil {
 		return nil
 	}
 
@@ -248,15 +248,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		return nil
 	}
 
-	meta, err := s.loadEntitlementGrantMeta(ctx, subs, featureGrants)
-	if err != nil {
-		return err
-	}
-
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
-	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
-
-	extIDsBySub := make(map[string][]string, len(meta.subsByID))
 
 	for _, g := range featureGrants {
 		f, ok := meta.featureByID[g.ScopeEntityID]
@@ -275,15 +267,11 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
-		extIDs, ok := extIDsBySub[sub.ID]
-		if !ok {
-			extIDs, err = subscriptionSvc.ExternalCustomerIDsForSubscription(ctx, sub)
-			if err != nil {
-				s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
-					"grant_id", g.ID, "subscription_id", sub.ID, "error", err)
-				continue
-			}
-			extIDsBySub[sub.ID] = extIDs
+		extIDs, err := meta.externalIDs(ctx, sub)
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
+				"grant_id", g.ID, "subscription_id", sub.ID, "error", err)
+			continue
 		}
 
 		usage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
@@ -298,64 +286,20 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 				"grant_id", g.ID, "error", err)
 		}
 
-		// snapshot entitlement grant usage
-		g.Usage = usage
-		g.LastComputedAt = &at
+		// Snapshot the refreshed usage; last_computed_at >= valid_to marks a
+		// closed window as finalized so it never re-enters the refresh set.
+		builder := entitlementgrant.NewEntitlementGrantBuilder(g).
+			WithUsage(usage).
+			WithLastComputedAt(&at)
 		if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
-			g.GrantStatus = types.EntitlementGrantStatusExhausted
+			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
 		}
-		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, g); err != nil {
+		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
 				"grant_id", g.ID, "error", err)
 		}
 	}
 	return nil
-}
-
-// entitlementGrantEvalMeta is the per-tick lookup bundle for the grant loop.
-type entitlementGrantEvalMeta struct {
-	subsByID    map[string]*subscription.Subscription
-	featureByID map[string]*feature.Feature
-	meterByID   map[string]*meter.Meter
-}
-
-func (s *alertService) loadEntitlementGrantMeta(
-	ctx context.Context,
-	subs []*subscription.Subscription,
-	grants []*entitlementgrant.EntitlementGrant,
-) (*entitlementGrantEvalMeta, error) {
-	subsByID := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
-
-	featureIDs := lo.Uniq(lo.Map(grants, func(g *entitlementgrant.EntitlementGrant, _ int) string {
-		return g.ScopeEntityID
-	}))
-	featureFilter := types.NewNoLimitFeatureFilter()
-	featureFilter.FeatureIDs = featureIDs
-	features, err := s.FeatureRepo.List(ctx, featureFilter)
-	if err != nil {
-		return nil, err
-	}
-	featureByID := lo.KeyBy(features, func(f *feature.Feature) string { return f.ID })
-
-	meterIDs := lo.Uniq(lo.FilterMap(features, func(f *feature.Feature, _ int) (string, bool) {
-		return f.MeterID, f.MeterID != ""
-	}))
-	var meters []*meter.Meter
-	if len(meterIDs) > 0 {
-		meterFilter := types.NewNoLimitMeterFilter()
-		meterFilter.MeterIDs = meterIDs
-		meters, err = s.MeterRepo.List(ctx, meterFilter)
-		if err != nil {
-			return nil, err
-		}
-	}
-	meterByID := lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID })
-
-	return &entitlementGrantEvalMeta{
-		subsByID:    subsByID,
-		featureByID: featureByID,
-		meterByID:   meterByID,
-	}, nil
 }
 
 // refreshEntitlementGrantUsage refreshes the grant's consumed usage over

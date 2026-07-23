@@ -81,16 +81,15 @@ func TestValidate_WindowShape(t *testing.T) {
 	}
 
 	g = baseGrant()
-	// 30-minute window fails the 1-hour minimum.
 	g.ValidTo = g.ValidFrom.Add(30 * time.Minute)
 	if err := g.Validate(); err == nil {
-		t.Fatalf("sub-1-hour window should be rejected")
+		t.Fatalf("sub-1h window must be rejected")
 	}
 
 	g = baseGrant()
 	g.ValidTo = g.ValidFrom.Add(time.Hour)
 	if err := g.Validate(); err != nil {
-		t.Fatalf("1-hour window is the legal boundary, got %v", err)
+		t.Fatalf("exactly-1h window should validate, got %v", err)
 	}
 }
 
@@ -151,24 +150,29 @@ func TestIsFeatureScoped_AndFeatureID(t *testing.T) {
 	}
 }
 
-func TestIsLive_MatchesStatusEnum(t *testing.T) {
-	g := baseGrant()
-	for _, s := range []types.EntitlementGrantStatus{
-		types.EntitlementGrantStatusActive,
-		types.EntitlementGrantStatusExhausted,
-	} {
-		g.GrantStatus = s
-		if !g.IsLive() {
-			t.Fatalf("%q should be live", s)
-		}
+func TestBuilder_CopiesAndUpdates(t *testing.T) {
+	orig := baseGrant()
+	at := orig.ValidTo.Add(time.Minute)
+
+	updated := NewEntitlementGrantBuilder(orig).
+		WithUsage(decimal.NewFromInt(150)).
+		WithGrantStatus(types.EntitlementGrantStatusExhausted).
+		WithLastComputedAt(&at).
+		Build()
+
+	if !updated.Usage.Equal(decimal.NewFromInt(150)) ||
+		updated.GrantStatus != types.EntitlementGrantStatusExhausted ||
+		updated.LastComputedAt == nil || !updated.LastComputedAt.Equal(at) {
+		t.Fatalf("builder did not apply updates: %+v", updated)
 	}
-	for _, s := range []types.EntitlementGrantStatus{
-		types.EntitlementGrantStatusExpired,
-		types.EntitlementGrantStatusSuperseded,
-	} {
-		g.GrantStatus = s
-		if g.IsLive() {
-			t.Fatalf("%q should not be live", s)
-		}
+	if !orig.Usage.IsZero() || orig.GrantStatus != types.EntitlementGrantStatusActive || orig.LastComputedAt != nil {
+		t.Fatalf("builder must not mutate the original: %+v", orig)
+	}
+	if updated.ID != orig.ID || !updated.ValidFrom.Equal(orig.ValidFrom) {
+		t.Fatalf("builder must carry over untouched fields")
+	}
+
+	if NewEntitlementGrantBuilder(nil).WithID("eg_x").Build().ID != "eg_x" {
+		t.Fatalf("nil-seeded builder should construct from scratch")
 	}
 }

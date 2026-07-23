@@ -955,25 +955,14 @@ var (
 		PrimaryKey: []*schema.Column{EntitlementGrantsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "entitlementgrant_tenant_id_environment_id_entitlement_config_id_customer_id",
+				Name:    "entitlementgrant_tenant_id_environment_id_entitlement_config_id_customer_id_subscription_id_valid_from",
 				Unique:  true,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))",
-				},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9], EntitlementGrantsColumns[10], EntitlementGrantsColumns[16]},
 			},
 			{
-				Name:    "entitlementgrant_tenant_id_environment_id_customer_id",
+				Name:    "entitlementgrant_tenant_id_environment_id_customer_id_valid_to_entitlement_config_id_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))",
-				},
-			},
-			{
-				Name:    "entitlementgrant_tenant_id_environment_id_customer_id_scope_entity_type_scope_entity_id_valid_from_valid_to",
-				Unique:  false,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[11], EntitlementGrantsColumns[12], EntitlementGrantsColumns[16], EntitlementGrantsColumns[17]},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[17], EntitlementGrantsColumns[8], EntitlementGrantsColumns[10]},
 			},
 		},
 	}

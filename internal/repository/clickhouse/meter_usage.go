@@ -132,6 +132,35 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 	return r.executeScalarQuery(ctx, query, args, params)
 }
 
+// GetEarliestUsageTimestamp returns the earliest event timestamp matching the
+// params' filters within [StartTime, EndTime), or nil when no events match.
+// No FINAL: ReplacingMergeTree duplicates share the timestamp, so min() is unaffected.
+func (r *MeterUsageRepository) GetEarliestUsageTimestamp(ctx context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	where, args := r.qb.BuildWhereClause(params)
+	query := fmt.Sprintf(`
+		SELECT min(timestamp) AS earliest, count() AS event_count
+		FROM meter_usage
+		WHERE %s
+	`, where)
+
+	var earliest time.Time
+	var eventCount uint64
+	if err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&earliest, &eventCount); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query earliest meter usage timestamp").
+			Mark(ierr.ErrDatabase)
+	}
+	if eventCount == 0 {
+		return nil, nil
+	}
+	earliest = earliest.UTC()
+	return &earliest, nil
+}
+
 // GetUsageMultiMeter queries aggregated usage for multiple meters, grouped by meter_id
 func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
 	if params == nil || len(params.MeterIDs) == 0 {

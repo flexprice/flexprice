@@ -309,6 +309,23 @@ func distinctUniqueHashCount(records []*events.MeterUsage) int {
 // GetUsage / GetUsageMultiMeter
 // ---------------------------------------------------------------------------
 
+func (s *InMemoryMeterUsageStore) GetEarliestUsageTimestamp(_ context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var earliest *time.Time
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		if earliest == nil || r.Timestamp.Before(*earliest) {
+			ts := r.Timestamp
+			earliest = &ts
+		}
+	}
+	return earliest, nil
+}
+
 func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

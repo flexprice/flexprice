@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -84,10 +86,12 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetSpanError(span, err)
 		if ent.IsConstraintError(err) {
 			return nil, ierr.WithError(err).
-				WithHint("A live grant already exists for this (entitlement_config, customer)").
+				WithHint("A grant with this window start already exists for the slot").
 				WithReportableDetails(map[string]interface{}{
 					"entitlement_config_id": g.EntitlementConfigID,
 					"customer_id":           g.CustomerID,
+					"subscription_id":       g.SubscriptionID,
+					"valid_from":            g.ValidFrom,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
@@ -215,57 +219,105 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 	return nil
 }
 
-func (r *entitlementGrantRepository) ExpireLiveByConfigAndCustomer(
+func (r *entitlementGrantRepository) LatestWindowEndBySlot(
 	ctx context.Context,
-	entitlementConfigID string,
 	customerID string,
-	at time.Time,
-) (int, error) {
-	span := StartRepositorySpan(ctx, "entitlement_grant", "expire_live", map[string]interface{}{
-		"entitlement_config_id": entitlementConfigID,
-		"customer_id":           customerID,
+	validToAfter time.Time,
+) ([]domainGrant.SlotWindowEnd, error) {
+	span := StartRepositorySpan(ctx, "entitlement_grant", "latest_window_end_by_slot", map[string]interface{}{
+		"customer_id": customerID,
+		"tenant_id":   types.GetTenantID(ctx),
 	})
 	defer FinishSpan(span)
 
-	n, err := r.client.Writer(ctx).EntitlementGrant.Update().
+	var rows []struct {
+		EntitlementConfigID string    `json:"entitlement_config_id"`
+		SubscriptionID      string    `json:"subscription_id"`
+		ValidTo             time.Time `json:"valid_to"`
+	}
+	err := r.scoped(ctx).
 		Where(
-			entitlementgrant.TenantID(types.GetTenantID(ctx)),
-			entitlementgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entitlementgrant.EntitlementConfigID(entitlementConfigID),
 			entitlementgrant.CustomerID(customerID),
-			entitlementgrant.GrantStatusIn(types.LiveEntitlementGrantStatuses...),
-			entitlementgrant.ValidToLTE(at),
+			entitlementgrant.ValidToGT(validToAfter),
 		).
-		SetGrantStatus(types.EntitlementGrantStatusExpired).
-		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
-
+		GroupBy(entitlementgrant.FieldEntitlementConfigID, entitlementgrant.FieldSubscriptionID).
+		Aggregate(ent.As(ent.Max(entitlementgrant.FieldValidTo), "valid_to")).
+		Scan(ctx, &rows)
 	if err != nil {
 		SetSpanError(span, err)
-		return 0, ierr.WithError(err).
-			WithHint("Failed to expire stale entitlement grants").
+		return nil, ierr.WithError(err).
+			WithHint("Failed to aggregate latest grant window per slot").
 			Mark(ierr.ErrDatabase)
 	}
-	return n, nil
+
+	out := make([]domainGrant.SlotWindowEnd, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domainGrant.SlotWindowEnd{
+			EntitlementConfigID: row.EntitlementConfigID,
+			SubscriptionID:      row.SubscriptionID,
+			ValidTo:             row.ValidTo,
+		})
+	}
+	return out, nil
 }
 
-func (r *entitlementGrantRepository) FindLastByConfigAndCustomer(
+func (r *entitlementGrantRepository) ListOpenOrUnfinalized(
+	ctx context.Context,
+	customerID string,
+	at time.Time,
+	validToAfter time.Time,
+) ([]*domainGrant.EntitlementGrant, error) {
+	span := StartRepositorySpan(ctx, "entitlement_grant", "list_open_or_unfinalized", map[string]interface{}{
+		"customer_id": customerID,
+		"tenant_id":   types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.scoped(ctx).
+		Where(
+			entitlementgrant.CustomerID(customerID),
+			entitlementgrant.ValidToGT(validToAfter),
+			entitlementgrant.Or(
+				entitlementgrant.ValidToGT(at),
+				entitlementgrant.LastComputedAtIsNil(),
+				func(s *sql.Selector) {
+					s.Where(sql.ColumnsLT(s.C(entitlementgrant.FieldLastComputedAt), s.C(entitlementgrant.FieldValidTo)))
+				},
+			),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list open or unfinalized entitlement grants").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainGrant.FromEntList(rows), nil
+}
+
+func (r *entitlementGrantRepository) FindLastBySlot(
 	ctx context.Context,
 	entitlementConfigID string,
 	customerID string,
+	subscriptionID string,
 ) (*domainGrant.EntitlementGrant, error) {
 	span := StartRepositorySpan(ctx, "entitlement_grant", "find_last", map[string]interface{}{
 		"entitlement_config_id": entitlementConfigID,
 		"customer_id":           customerID,
+		"subscription_id":       subscriptionID,
 	})
 	defer FinishSpan(span)
 
+	// Windows on a slot are sequential, so valid_from ordering == valid_to ordering
+	// and valid_from is the unique index's last column, making this
+	// a backward index scan with no sort no matter how much history the slot has.
 	row, err := r.scoped(ctx).
 		Where(
 			entitlementgrant.EntitlementConfigID(entitlementConfigID),
 			entitlementgrant.CustomerID(customerID),
+			entitlementgrant.SubscriptionID(subscriptionID),
 		).
-		Order(ent.Desc(entitlementgrant.FieldValidTo)).
+		Order(ent.Desc(entitlementgrant.FieldValidFrom)).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -274,36 +326,6 @@ func (r *entitlementGrantRepository) FindLastByConfigAndCustomer(
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to look up last entitlement grant for slot").
-			Mark(ierr.ErrDatabase)
-	}
-	return domainGrant.FromEnt(row), nil
-}
-
-func (r *entitlementGrantRepository) FindLiveByConfigAndCustomer(
-	ctx context.Context,
-	entitlementConfigID string,
-	customerID string,
-) (*domainGrant.EntitlementGrant, error) {
-	span := StartRepositorySpan(ctx, "entitlement_grant", "find_live", map[string]interface{}{
-		"entitlement_config_id": entitlementConfigID,
-		"customer_id":           customerID,
-	})
-	defer FinishSpan(span)
-
-	row, err := r.scoped(ctx).
-		Where(
-			entitlementgrant.EntitlementConfigID(entitlementConfigID),
-			entitlementgrant.CustomerID(customerID),
-			entitlementgrant.GrantStatusIn(types.LiveEntitlementGrantStatuses...),
-		).
-		First(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, nil
-		}
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to look up live entitlement grant for slot").
 			Mark(ierr.ErrDatabase)
 	}
 	return domainGrant.FromEnt(row), nil

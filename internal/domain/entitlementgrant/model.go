@@ -47,20 +47,24 @@ func (g *EntitlementGrant) FeatureID() string {
 
 // Window returns the half-open [valid_from, valid_to) grant window.
 func (g *EntitlementGrant) Window() (time.Time, time.Time) {
+	if g == nil {
+		return time.Time{}, time.Time{}
+	}
 	return g.ValidFrom, g.ValidTo
 }
 
-// IsLive reports whether the grant occupies the (config, customer) slot.
-func (g *EntitlementGrant) IsLive() bool {
-	return g.GrantStatus.IsLive()
-}
-
 func (g *EntitlementGrant) IsExhausted() bool {
+	if g == nil {
+		return false
+	}
 	return g.Usage.GreaterThanOrEqual(g.Quota)
 }
 
 // Overage is the non-negative excess of usage over quota.
 func (g *EntitlementGrant) Overage() decimal.Decimal {
+	if g == nil {
+		return decimal.Zero
+	}
 	over := g.Usage.Sub(g.Quota)
 	if over.IsNegative() {
 		return decimal.Zero

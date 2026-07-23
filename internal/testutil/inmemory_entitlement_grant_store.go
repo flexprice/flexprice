@@ -115,22 +115,23 @@ func (s *InMemoryEntitlementGrantStore) Create(ctx context.Context, g *entitleme
 	if g.EnvironmentID == "" {
 		g.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
-	// Mirrors the partial unique index: reject a second live grant on the same slot.
-	if g.GrantStatus.IsLive() {
-		existing, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, other *entitlementgrant.EntitlementGrant, _ interface{}) bool {
-			return other != nil &&
-				other.EntitlementConfigID == g.EntitlementConfigID &&
-				other.CustomerID == g.CustomerID &&
-				other.GrantStatus.IsLive()
-		}, entitlementGrantSortFn)
-		if err == nil && len(existing) > 0 {
-			return nil, errors.NewError("live entitlement grant already exists for this slot").
-				WithReportableDetails(map[string]interface{}{
-					"entitlement_config_id": g.EntitlementConfigID,
-					"customer_id":           g.CustomerID,
-				}).
-				Mark(errors.ErrAlreadyExists)
-		}
+	// Mirrors the unique (slot, valid_from) index — the INSERT race arbiter.
+	existing, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, other *entitlementgrant.EntitlementGrant, _ interface{}) bool {
+		return other != nil &&
+			other.EntitlementConfigID == g.EntitlementConfigID &&
+			other.CustomerID == g.CustomerID &&
+			other.SubscriptionID == g.SubscriptionID &&
+			other.ValidFrom.Equal(g.ValidFrom)
+	}, entitlementGrantSortFn)
+	if err == nil && len(existing) > 0 {
+		return nil, errors.NewError("grant with this window start already exists for the slot").
+			WithReportableDetails(map[string]interface{}{
+				"entitlement_config_id": g.EntitlementConfigID,
+				"customer_id":           g.CustomerID,
+				"subscription_id":       g.SubscriptionID,
+				"valid_from":            g.ValidFrom,
+			}).
+			Mark(errors.ErrAlreadyExists)
 	}
 	if err := s.InMemoryStore.Create(ctx, g.ID, g); err != nil {
 		return nil, errors.WithError(err).
@@ -215,65 +216,57 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 	return s.InMemoryStore.Update(ctx, g.ID, existing)
 }
 
-// ExpireLiveByConfigAndCustomer mirrors the ent repo's targeted UPDATE:
-// transitions live rows on the given slot whose window has closed to
-// expired. Returns the number of rows touched.
-func (s *InMemoryEntitlementGrantStore) ExpireLiveByConfigAndCustomer(
+func (s *InMemoryEntitlementGrantStore) LatestWindowEndBySlot(
 	ctx context.Context,
-	entitlementConfigID string,
 	customerID string,
-	at time.Time,
-) (int, error) {
+	validToAfter time.Time,
+) ([]entitlementgrant.SlotWindowEnd, error) {
 	matches, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, g *entitlementgrant.EntitlementGrant, _ interface{}) bool {
-		return g != nil &&
-			g.EntitlementConfigID == entitlementConfigID &&
-			g.CustomerID == customerID &&
-			g.GrantStatus.IsLive() &&
-			!g.ValidTo.After(at)
+		return g != nil && g.CustomerID == customerID && g.ValidTo.After(validToAfter)
 	}, entitlementGrantSortFn)
-	if err != nil {
-		return 0, err
-	}
-	for _, g := range matches {
-		g.GrantStatus = types.EntitlementGrantStatusExpired
-		g.UpdatedAt = time.Now().UTC()
-		if err := s.InMemoryStore.Update(ctx, g.ID, g); err != nil {
-			return 0, err
-		}
-	}
-	return len(matches), nil
-}
-
-func (s *InMemoryEntitlementGrantStore) FindLastByConfigAndCustomer(
-	ctx context.Context,
-	entitlementConfigID string,
-	customerID string,
-) (*entitlementgrant.EntitlementGrant, error) {
-	matches, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, g *entitlementgrant.EntitlementGrant, _ interface{}) bool {
-		return g != nil &&
-			g.EntitlementConfigID == entitlementConfigID &&
-			g.CustomerID == customerID
-	}, entitlementGrantSortFn) // newest valid_to first
 	if err != nil {
 		return nil, err
 	}
-	if len(matches) == 0 {
-		return nil, nil
+	latest := map[string]entitlementgrant.SlotWindowEnd{}
+	for _, g := range matches {
+		key := g.EntitlementConfigID + "/" + g.SubscriptionID
+		if cur, ok := latest[key]; !ok || g.ValidTo.After(cur.ValidTo) {
+			latest[key] = entitlementgrant.SlotWindowEnd{
+				EntitlementConfigID: g.EntitlementConfigID,
+				SubscriptionID:      g.SubscriptionID,
+				ValidTo:             g.ValidTo,
+			}
+		}
 	}
-	return matches[0], nil
+	return lo.Values(latest), nil
 }
 
-func (s *InMemoryEntitlementGrantStore) FindLiveByConfigAndCustomer(
+func (s *InMemoryEntitlementGrantStore) ListOpenOrUnfinalized(
+	ctx context.Context,
+	customerID string,
+	at time.Time,
+	validToAfter time.Time,
+) ([]*entitlementgrant.EntitlementGrant, error) {
+	return s.InMemoryStore.List(ctx, nil, func(cctx context.Context, g *entitlementgrant.EntitlementGrant, _ interface{}) bool {
+		return g != nil &&
+			g.CustomerID == customerID &&
+			g.ValidTo.After(validToAfter) &&
+			(g.ValidTo.After(at) || g.LastComputedAt == nil || g.LastComputedAt.Before(g.ValidTo))
+	}, entitlementGrantSortFn)
+}
+
+func (s *InMemoryEntitlementGrantStore) FindLastBySlot(
 	ctx context.Context,
 	entitlementConfigID string,
 	customerID string,
+	subscriptionID string,
 ) (*entitlementgrant.EntitlementGrant, error) {
 	matches, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, g *entitlementgrant.EntitlementGrant, _ interface{}) bool {
 		return g != nil &&
 			g.EntitlementConfigID == entitlementConfigID &&
 			g.CustomerID == customerID &&
-			g.GrantStatus.IsLive()
-	}, entitlementGrantSortFn)
+			g.SubscriptionID == subscriptionID
+	}, entitlementGrantSortFn) // newest valid_to first
 	if err != nil {
 		return nil, err
 	}

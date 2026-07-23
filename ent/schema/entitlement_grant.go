@@ -2,7 +2,6 @@ package schema
 
 import (
 	"entgo.io/ent"
-	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -107,18 +106,22 @@ func (EntitlementGrant) Fields() []ent.Field {
 	}
 }
 
+// Two indexes serve every production read; snapshot writes (usage,
+// grant_status, last_computed_at) touch no indexed column, so updates stay
+// HOT and the indexes don't churn as the table grows.
 func (EntitlementGrant) Indexes() []ent.Index {
 	return []ent.Index{
-		// One live grant per (tenant, env, config, customer). Expired/superseded rows free the slot.
-		index.Fields("tenant_id", "environment_id", "entitlement_config_id", "customer_id").
-			Unique().
-			Annotations(entsql.IndexWhere("((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))")),
+		// Serves the INSERT race (valid_from is deterministic under
+		// usage-anchored windows, so two workers opening the same slot collide
+		// here) and FindLastBySlot (5-col equality prefix + ORDER BY valid_from
+		// DESC LIMIT 1 — no sort, regardless of slot history size).
+		index.Fields("tenant_id", "environment_id", "entitlement_config_id", "customer_id", "subscription_id", "valid_from").
+			Unique(),
 
-		// Alert-path hot lookup: live grants by customer.
-		index.Fields("tenant_id", "environment_id", "customer_id").
-			Annotations(entsql.IndexWhere("((grant_status)::text = ANY (ARRAY['active'::text, 'exhausted'::text]))")),
-
-		// Billing-path lookup: grants overlapping a cycle window, any status.
-		index.Fields("tenant_id", "environment_id", "customer_id", "scope_entity_type", "scope_entity_id", "valid_from", "valid_to"),
+		// Serves the per-tick reads and the billing overlap query: equality on
+		// (tenant, env, customer) + range on valid_to bounds every scan to the
+		// current cycle. Trailing config/sub let the slot-frontier GROUP BY and
+		// the billing subscription filter resolve in-index (both immutable).
+		index.Fields("tenant_id", "environment_id", "customer_id", "valid_to", "entitlement_config_id", "subscription_id"),
 	}
 }
