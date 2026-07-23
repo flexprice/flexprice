@@ -188,9 +188,11 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	childCustomerIDs := make([]string, 0)
 	lineItemIDToChildCustomer := make(map[string]string)
 	for _, li := range flexInvoice.LineItems {
-		if li == nil || li.Amount.IsZero() {
+		// skip line items that are not syncable
+		if li == nil || li.Amount.IsZero() || li.PriceID == nil {
 			continue
 		}
+
 		inputs = append(inputs, ItemSyncInput{
 			PriceID: lo.FromPtr(li.PriceID),
 			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),
