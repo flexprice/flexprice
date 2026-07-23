@@ -640,6 +640,11 @@ type CancelSubscriptionRequest struct {
 
 	// SkipProrationWalletCredit skips TopUpWalletForProratedCharge when the same proration is settled on the new subscription's opening invoice (immediate plan change).
 	SkipProrationWalletCredit bool `json:"-"`
+
+	// SkipAutoDowngrade suppresses the free-tier auto-downgrade (FLE-973) when the caller
+	// immediately creates a replacement subscription (e.g. a plan change), so the customer
+	// isn't left with a stray free subscription alongside the replacement.
+	SkipAutoDowngrade bool `json:"-"`
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
