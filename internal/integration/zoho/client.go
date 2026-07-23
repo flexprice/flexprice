@@ -24,6 +24,10 @@ type ZohoClient interface {
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
+	// GetInvoice fetches a Zoho Books invoice by ID (used to read the live balance/customer_id before mark-paid).
+	GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error)
+	// CreateCustomerPayment records a payment against one or more Zoho Books invoices.
+	CreateCustomerPayment(ctx context.Context, req *CustomerPaymentCreateRequest) (*CustomerPaymentResponse, error)
 	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
 	SearchItemByName(ctx context.Context, name string) (*ItemResponse, error)
 	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
@@ -124,6 +128,27 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		return nil, err
 	}
 	return &resp.Invoice, nil
+}
+
+func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error) {
+	var resp struct {
+		Invoice InvoiceResponse `json:"invoice"`
+	}
+	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Invoice, nil
+}
+
+func (c *Client) CreateCustomerPayment(ctx context.Context, req *CustomerPaymentCreateRequest) (*CustomerPaymentResponse, error) {
+	var resp struct {
+		Payment CustomerPaymentResponse `json:"payment"`
+	}
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/customerpayments", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Payment, nil
 }
 
 func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error) {
