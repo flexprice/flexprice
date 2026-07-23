@@ -334,7 +334,11 @@ func (o MeterQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Met
 
 func (o MeterQueryOptions) ApplyStatusFilter(query MeterQuery, status string) MeterQuery {
 	if status == "" {
-		return query.Where(meter.StatusEQ(string(types.StatusPublished)))
+		// Billing and other List callers need archived meters (historical line items).
+		return query.Where(meter.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(meter.Status(status))
 }

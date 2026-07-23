@@ -1375,6 +1375,14 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{MetersColumns[1], MetersColumns[7]},
 			},
+			{
+				Name:    "idx_meter_tenant_env_status",
+				Unique:  false,
+				Columns: []*schema.Column{MetersColumns[1], MetersColumns[7], MetersColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = ANY (ARRAY['published'::text, 'archived'::text]))",
+				},
+			},
 		},
 	}
 	// PaymentsColumns holds the columns for the "payments" table.

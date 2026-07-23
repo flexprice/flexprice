@@ -203,6 +203,43 @@ func (s *MeterServiceSuite) TestGetAllMeters() {
 	}
 }
 
+// TestListIncludesArchivedMeters ensures empty-status List returns published+archived
+// (billing looks up meters by ID without an explicit status) and excludes deleted.
+func (s *MeterServiceSuite) TestListIncludesArchivedMeters() {
+	seed := func(name string, status types.Status) *meter.Meter {
+		m := meter.NewMeter(name, types.GetTenantID(s.ctx), "test-user")
+		m.EventName = "api_request"
+		m.Aggregation = meter.Aggregation{Type: types.AggregationCount}
+		m.Filters = []meter.Filter{}
+		m.ResetUsage = types.ResetUsageBillingPeriod
+		m.BaseModel = types.GetDefaultBaseModel(s.ctx)
+		m.Status = status
+		s.NoError(s.store.CreateMeter(s.ctx, m))
+		return m
+	}
+
+	published := seed("Published Meter", types.StatusPublished)
+	archived := seed("Archived Meter", types.StatusArchived)
+	deleted := seed("Deleted Meter", types.StatusDeleted)
+
+	filter := types.NewNoLimitMeterFilter()
+	filter.MeterIDs = []string{published.ID, archived.ID, deleted.ID}
+
+	got, err := s.store.List(s.ctx, filter)
+	s.NoError(err)
+
+	ids := make(map[string]types.Status, len(got))
+	for _, m := range got {
+		ids[m.ID] = m.Status
+	}
+
+	s.Equal(types.StatusPublished, ids[published.ID])
+	s.Equal(types.StatusArchived, ids[archived.ID])
+	_, hasDeleted := ids[deleted.ID]
+	s.False(hasDeleted, "deleted meters must not appear in default List")
+	s.Len(got, 2)
+}
+
 // Helper function to sort meters by Name
 func sortMetersByName(meters []*meter.Meter) {
 	sort.Slice(meters, func(i, j int) bool {
