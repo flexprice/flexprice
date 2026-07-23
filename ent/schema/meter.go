@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -60,6 +61,11 @@ func (Meter) Fields() []ent.Field {
 func (Meter) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id"),
+		index.Fields("tenant_id", "environment_id", "status").
+			StorageKey("idx_meter_tenant_env_status").
+			Annotations(entsql.IndexWhere(
+				"((status)::text = ANY (ARRAY['published'::text, 'archived'::text]))",
+			)),
 	}
 }
 

@@ -334,7 +334,10 @@ func (o MeterQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Met
 
 func (o MeterQueryOptions) ApplyStatusFilter(query MeterQuery, status string) MeterQuery {
 	if status == "" {
-		return query.Where(meter.StatusEQ(string(types.StatusPublished)))
+		return query.Where(meter.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(meter.Status(status))
 }
