@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -108,5 +109,9 @@ func (UsageRecord) Indexes() []ent.Index {
 	return []ent.Index{
 		// The reporting cron's hot query: this tenant's unsynced rows.
 		index.Fields("tenant_id", "environment_id", "synced"),
+		// The snapshot cron's idempotency guarantee.
+		index.Fields("tenant_id", "environment_id", "subscription_id", "period_start", "period_end").
+			Unique().
+			Annotations(entsql.IndexWhere("status = 'published'")),
 	}
 }
