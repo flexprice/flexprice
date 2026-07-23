@@ -17,6 +17,10 @@ import (
 
 type ZohoInvoiceService interface {
 	SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceSyncRequest) (*ZohoInvoiceSyncResponse, error)
+	// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
+	// outstanding balance, bringing it to Paid. No-op if the invoice was never synced to
+	// Zoho, or if Zoho's balance is already zero.
+	MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error
 }
 
 type InvoiceService struct {
@@ -163,6 +167,63 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		Total:         zohoInv.Total,
 		Currency:      flexInvoice.Currency,
 	}, nil
+}
+
+// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
+// outstanding balance, bringing it to Paid.
+//
+// Zoho's invoice total is intentionally tax-inclusive (items are synced as taxable —
+// see buildLineItems/EnsureItemsMapped) while FlexPrice's invoice.Total is not, so the
+// two totals routinely differ. Rather than track how much FlexPrice has separately
+// pushed to Zoho, this reads Zoho's own live balance and pays it off in full: a zero
+// balance means Zoho already considers the invoice settled (whether from a prior call
+// here, or from the existing inbound "Zoho invoice paid" webhook), so this is a no-op.
+func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error {
+	filter := types.NewEntityIntegrationMappingFilter()
+	filter.EntityType = types.IntegrationEntityTypeInvoice
+	filter.EntityID = flexpriceInvoiceID
+	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	mappings, err := s.mappingRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if len(mappings) == 0 {
+		s.logger.Info(ctx, "no Zoho mapping for invoice, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID)
+		return nil
+	}
+	zohoInvoiceID := mappings[0].ProviderEntityID
+
+	zohoInv, err := s.client.GetInvoice(ctx, zohoInvoiceID)
+	if err != nil {
+		return err
+	}
+	if zohoInv == nil || !zohoInv.Balance.IsPositive() {
+		s.logger.Info(ctx, "Zoho invoice already has zero balance, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID,
+			"zoho_invoice_id", zohoInvoiceID)
+		return nil
+	}
+
+	_, err = s.client.CreateCustomerPayment(ctx, &CustomerPaymentCreateRequest{
+		CustomerID:  zohoInv.CustomerID,
+		PaymentMode: "other",
+		Amount:      zohoInv.Balance,
+		Date:        time.Now().UTC().Format("2006-01-02"),
+		Invoices: []CustomerPaymentInvoiceApply{
+			{InvoiceID: zohoInvoiceID, AmountApplied: zohoInv.Balance},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info(ctx, "marked Zoho invoice as paid",
+		"invoice_id", flexpriceInvoiceID,
+		"zoho_invoice_id", zohoInvoiceID,
+		"amount", zohoInv.Balance.String())
+	return nil
 }
 
 // writeZohoInvoiceMetadata stores the Zoho Books invoice id on the FlexPrice invoice metadata.

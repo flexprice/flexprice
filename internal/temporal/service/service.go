@@ -493,6 +493,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.WhopInvoiceMarkPaidWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalZohoBooksInvoiceMarkPaidWorkflow:
+		if input, ok := params.(models.ZohoBooksInvoiceMarkPaidWorkflowInput); ok {
+			return input.InvoiceID
+		}
 
 	// Vendor customer sync workflows — deterministic IDs prevent duplicate concurrent syncs.
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -632,6 +636,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildWhopInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
 	case types.TemporalZohoBooksInvoiceSyncWorkflow:
 		return s.buildZohoBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalZohoBooksInvoiceMarkPaidWorkflow:
+		return s.buildZohoBooksInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
 	case types.TemporalTabsInvoiceSyncWorkflow:
 		return s.buildTabsInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -1050,6 +1056,24 @@ func (s *temporalService) buildZohoBooksInvoiceSyncInput(_ context.Context, tena
 
 	return nil, errors.NewError("invalid input for Zoho Books invoice sync workflow").
 		WithHint("Provide ZohoBooksInvoiceSyncWorkflowInput with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildZohoBooksInvoiceMarkPaidInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ZohoBooksInvoiceMarkPaidWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.ZohoBooksInvoiceMarkPaidWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Zoho Books mark-paid workflow").
+		WithHint("Provide ZohoBooksInvoiceMarkPaidWorkflowInput with invoice_id").
 		Mark(errors.ErrValidation)
 }
 

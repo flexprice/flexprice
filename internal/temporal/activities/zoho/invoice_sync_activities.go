@@ -41,3 +41,18 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 	})
 	return err
 }
+
+func (a *InvoiceSyncActivities) MarkZohoBooksInvoicePaid(ctx context.Context, input models.ZohoBooksInvoiceMarkPaidWorkflowInput) error {
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	zohoIntegration, err := a.integrationFactory.GetZohoBooksIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", "ConnectionNotFound", err)
+		}
+		return err
+	}
+
+	return zohoIntegration.InvoiceSvc.MarkInvoicePaidInZoho(ctx, input.InvoiceID)
+}
