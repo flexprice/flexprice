@@ -737,9 +737,10 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			"error", err)
 	}
 
-	// Invoice is fully paid — dispatch Whop mark-paid directly if a mapping exists.
+	// Invoice is fully paid — dispatch Whop and Zoho mark-paid directly if a mapping exists.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		p.dispatchWhopMarkPaid(ctx, invoice.ID)
+		p.dispatchZohoMarkPaid(ctx, invoice.ID)
 	}
 
 	return nil
@@ -788,6 +789,23 @@ func (p *paymentProcessor) dispatchWhopMarkPaid(ctx context.Context, invoiceID s
 	}
 	if _, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalWhopInvoiceMarkPaidWorkflow, input); err != nil {
 		p.Logger.Error(ctx, "failed to start Whop mark-paid workflow", "error", err, "invoice_id", invoiceID)
+	}
+}
+
+func (p *paymentProcessor) dispatchZohoMarkPaid(ctx context.Context, invoiceID string) {
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		p.Logger.Info(ctx, "temporal service unavailable, skipping Zoho mark-paid", "invoice_id", invoiceID)
+		return
+	}
+
+	input := temporalmodels.ZohoBooksInvoiceMarkPaidWorkflowInput{
+		InvoiceID:     invoiceID,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+	}
+	if _, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalZohoBooksInvoiceMarkPaidWorkflow, input); err != nil {
+		p.Logger.Error(ctx, "failed to start Zoho mark-paid workflow", "error", err, "invoice_id", invoiceID)
 	}
 }
 
