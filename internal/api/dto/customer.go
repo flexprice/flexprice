@@ -66,7 +66,7 @@ type CreateCustomerRequest struct {
 	// Default: false
 	SkipOnboardingWorkflow bool `json:"skip_onboarding_workflow,omitempty"`
 
-	// onboarding_workflow_name is given if a custom onboarding workflow isto be triggered for this customer
+	// onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer
 	OnboardingWorkflowName string `json:"onboarding_workflow_name,omitempty"`
 
 	// tax_rate_overrides contains tax rate configurations to be linked to this customer

@@ -172,12 +172,15 @@ func (c *WorkflowConfig) ResolveOnboardingActions(onboardingWorkflowName string)
 	if c == nil {
 		return nil, false
 	}
+
 	if onboardingWorkflowName == "" {
 		return c.Actions, true
 	}
+
 	if custom, ok := c.CustomWorkflows[onboardingWorkflowName]; ok {
 		return custom, true
 	}
+	
 	return c.Actions, false
 }
 

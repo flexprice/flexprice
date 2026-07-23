@@ -451,8 +451,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	if onboardingWorkflowName != "" && !found {
 		s.Logger.Error(ctx, "onboarding workflow name not found in custom_workflows, falling back to default actions",
 			"customer_id", customer.ID,
-			"onboarding_workflow_name", onboardingWorkflowName,
-			"available_custom_workflows", lo.Keys(workflowConfig.CustomWorkflows))
+			"onboarding_workflow_name", onboardingWorkflowName)
 	}
 
 	// If there are no actions to run, return
@@ -478,8 +477,8 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		"action_count", len(selectedActions))
 
 	// Resolve selected actions into the workflow input; Temporal still runs WorkflowConfig.Actions
-	resolvedConfig := *workflowConfig
-	resolvedConfig.Actions = selectedActions
+	updatedConfig := *workflowConfig
+	updatedConfig.Actions = selectedActions
 
 	input := &workflowModels.CustomerOnboardingWorkflowInput{
 		CustomerID:         customer.ID,
@@ -487,7 +486,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		TenantID:           tenantID,
 		EnvironmentID:      envID,
 		UserID:             userID,
-		WorkflowConfig:     resolvedConfig,
+		WorkflowConfig:     updatedConfig,
 	}
 
 	// Validate input
