@@ -54,16 +54,17 @@ type WorkflowActionParams struct {
 
 // WorkflowConfig represents a workflow configuration
 type WorkflowConfig struct {
-	WorkflowType WorkflowType           `json:"workflow_type" binding:"required"`
-	Actions      []WorkflowActionConfig `json:"actions" binding:"required"`
+	WorkflowType    WorkflowType                      `json:"workflow_type" binding:"required"`
+	Actions         []WorkflowActionConfig            `json:"actions" binding:"required"`
+	CustomWorkflows map[string][]WorkflowActionConfig `json:"custom_workflows,omitempty"`
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to handle interface types
 func (c *WorkflowConfig) UnmarshalJSON(data []byte) error {
-	// First, unmarshal into a temporary struct to get the raw data
 	var temp struct {
-		WorkflowType WorkflowType      `json:"workflow_type"`
-		Actions      []json.RawMessage `json:"actions"`
+		WorkflowType    WorkflowType                 `json:"workflow_type"`
+		Actions         []json.RawMessage            `json:"actions"`
+		CustomWorkflows map[string][]json.RawMessage `json:"custom_workflows,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -73,92 +74,27 @@ func (c *WorkflowConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	c.WorkflowType = temp.WorkflowType
-	c.Actions = make([]WorkflowActionConfig, 0, len(temp.Actions))
 
-	// Unmarshal each action based on its "action" field
-	for _, actionData := range temp.Actions {
-		// Convert json.RawMessage to map[string]interface{}
-		var actionMap map[string]interface{}
-		if err := json.Unmarshal(actionData, &actionMap); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to unmarshal action data to map").
-				Mark(ierr.ErrValidation)
+	actions, err := unmarshalWorkflowActions(temp.Actions)
+	if err != nil {
+		return err
+	}
+	c.Actions = actions
+
+	if len(temp.CustomWorkflows) > 0 {
+		c.CustomWorkflows = make(map[string][]WorkflowActionConfig, len(temp.CustomWorkflows))
+		for name, rawActions := range temp.CustomWorkflows {
+			customActions, err := unmarshalWorkflowActions(rawActions)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHintf("Failed to unmarshal custom_workflows[%s]", name).
+					WithReportableDetails(map[string]any{
+						"custom_workflow_name": name,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			c.CustomWorkflows[name] = customActions
 		}
-
-		// Get action type from map
-		actionTypeStr, ok := actionMap["action"].(string)
-		if !ok {
-			return ierr.NewError("action field is required and must be a string").
-				WithHint("Please provide a valid action type").
-				Mark(ierr.ErrValidation)
-		}
-		actionType := WorkflowAction(actionTypeStr)
-
-		// Use utils.ToStruct to unmarshal into the appropriate concrete type
-		var action WorkflowActionConfig
-		switch actionType {
-		case WorkflowActionCreateCustomer:
-			customerAction, err := utils.ToStruct[CreateCustomerActionConfig](actionMap)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHintf("Failed to convert create_customer action: %v", err).
-					Mark(ierr.ErrValidation)
-			}
-			action = &customerAction
-
-		case WorkflowActionCreateWallet:
-			walletAction, err := utils.ToStruct[CreateWalletActionConfig](actionMap)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHintf("Failed to convert create_wallet action: %v", err).
-					Mark(ierr.ErrValidation)
-			}
-			action = &walletAction
-
-		case WorkflowActionCreateSubscription:
-			subAction, err := utils.ToStruct[CreateSubscriptionActionConfig](actionMap)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHintf("Failed to convert create_subscription action: %v", err).
-					Mark(ierr.ErrValidation)
-			}
-			action = &subAction
-
-		case WorkflowActionCreateFeatureAndPrice:
-			featureAction, err := utils.ToStruct[CreateFeatureAndPriceActionConfig](actionMap)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHintf("Failed to convert create_feature_and_price action: %v", err).
-					Mark(ierr.ErrValidation)
-			}
-			action = &featureAction
-
-		case WorkflowActionRolloutToSubscriptions:
-			rolloutAction, err := utils.ToStruct[RolloutToSubscriptionsActionConfig](actionMap)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHintf("Failed to convert rollout_to_subscriptions action: %v", err).
-					Mark(ierr.ErrValidation)
-			}
-			action = &rolloutAction
-
-		default:
-			return ierr.NewErrorf("unknown action type: %s", actionType).
-				WithHint("Please provide a valid action type").
-				WithReportableDetails(map[string]any{
-					"action": actionType,
-					"allowed": []WorkflowAction{
-						WorkflowActionCreateCustomer,
-						WorkflowActionCreateWallet,
-						WorkflowActionCreateSubscription,
-						WorkflowActionCreateFeatureAndPrice,
-						WorkflowActionRolloutToSubscriptions,
-					},
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		c.Actions = append(c.Actions, action)
 	}
 
 	return nil
@@ -170,33 +106,36 @@ func (c *WorkflowConfig) MarshalJSON() ([]byte, error) {
 		return json.Marshal(nil)
 	}
 
-	// Initialize actionsData with proper capacity, handling nil Actions slice
-	actionsLen := 0
-	if c.Actions != nil {
-		actionsLen = len(c.Actions)
+	actionsData, err := marshalWorkflowActions(c.Actions)
+	if err != nil {
+		return nil, err
 	}
-	actionsData := make([]json.RawMessage, 0, actionsLen)
 
-	// Only iterate if Actions is not nil
-	if c.Actions != nil {
-		for _, action := range c.Actions {
-			actionJSON, err := json.Marshal(action)
+	var customWorkflowsData map[string][]json.RawMessage
+	if len(c.CustomWorkflows) > 0 {
+		customWorkflowsData = make(map[string][]json.RawMessage, len(c.CustomWorkflows))
+		for name, actions := range c.CustomWorkflows {
+			rawActions, err := marshalWorkflowActions(actions)
 			if err != nil {
 				return nil, ierr.WithError(err).
-					WithHint("Failed to marshal action to JSON").
+					WithHintf("Failed to marshal custom_workflows[%s]", name).
+					WithReportableDetails(map[string]any{
+						"custom_workflow_name": name,
+					}).
 					Mark(ierr.ErrValidation)
 			}
-			actionsData = append(actionsData, actionJSON)
+			customWorkflowsData[name] = rawActions
 		}
 	}
 
-	// Create the final structure
 	result := struct {
-		WorkflowType WorkflowType      `json:"workflow_type"`
-		Actions      []json.RawMessage `json:"actions"`
+		WorkflowType    WorkflowType                 `json:"workflow_type"`
+		Actions         []json.RawMessage            `json:"actions"`
+		CustomWorkflows map[string][]json.RawMessage `json:"custom_workflows,omitempty"`
 	}{
-		WorkflowType: c.WorkflowType,
-		Actions:      actionsData,
+		WorkflowType:    c.WorkflowType,
+		Actions:         actionsData,
+		CustomWorkflows: customWorkflowsData,
 	}
 
 	return json.Marshal(result)
@@ -207,15 +146,164 @@ func (c WorkflowConfig) Validate() error {
 		return err
 	}
 
-	// Validate each action
-	for _, action := range c.Actions {
+	if err := validateWorkflowActions(c.Actions); err != nil {
+		return err
+	}
+
+	for name, actions := range c.CustomWorkflows {
+		if err := validateWorkflowActions(actions); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Invalid custom_workflows[%s]", name).
+				WithReportableDetails(map[string]any{
+					"custom_workflow_name": name,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// ResolveOnboardingActions returns the action list to run for customer onboarding.
+// If onboardingWorkflowName is empty, the default Actions are used.
+// If a name is provided and found in CustomWorkflows, that list is used.
+// If a name is provided but missing, found=false and the default Actions are returned.
+func (c *WorkflowConfig) ResolveOnboardingActions(onboardingWorkflowName string) (actions []WorkflowActionConfig, found bool) {
+	if c == nil {
+		return nil, false
+	}
+	if onboardingWorkflowName == "" {
+		return c.Actions, true
+	}
+	if custom, ok := c.CustomWorkflows[onboardingWorkflowName]; ok {
+		return custom, true
+	}
+	return c.Actions, false
+}
+
+func unmarshalWorkflowActions(rawActions []json.RawMessage) ([]WorkflowActionConfig, error) {
+	actions := make([]WorkflowActionConfig, 0, len(rawActions))
+	for _, actionData := range rawActions {
+		action, err := unmarshalWorkflowAction(actionData)
+		if err != nil {
+			return nil, err
+		}
+		actions = append(actions, action)
+	}
+	return actions, nil
+}
+
+func unmarshalWorkflowAction(actionData json.RawMessage) (WorkflowActionConfig, error) {
+	var actionMap map[string]interface{}
+	if err := json.Unmarshal(actionData, &actionMap); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to unmarshal action data to map").
+			Mark(ierr.ErrValidation)
+	}
+
+	actionTypeStr, ok := actionMap["action"].(string)
+	if !ok {
+		return nil, ierr.NewError("action field is required and must be a string").
+			WithHint("Please provide a valid action type").
+			Mark(ierr.ErrValidation)
+	}
+	actionType := WorkflowAction(actionTypeStr)
+
+	switch actionType {
+	case WorkflowActionCreateCustomer:
+		customerAction, err := utils.ToStruct[CreateCustomerActionConfig](actionMap)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to convert create_customer action: %v", err).
+				Mark(ierr.ErrValidation)
+		}
+		return &customerAction, nil
+
+	case WorkflowActionCreateWallet:
+		walletAction, err := utils.ToStruct[CreateWalletActionConfig](actionMap)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to convert create_wallet action: %v", err).
+				Mark(ierr.ErrValidation)
+		}
+		return &walletAction, nil
+
+	case WorkflowActionCreateSubscription:
+		subAction, err := utils.ToStruct[CreateSubscriptionActionConfig](actionMap)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to convert create_subscription action: %v", err).
+				Mark(ierr.ErrValidation)
+		}
+		return &subAction, nil
+
+	case WorkflowActionCreateFeatureAndPrice:
+		featureAction, err := utils.ToStruct[CreateFeatureAndPriceActionConfig](actionMap)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to convert create_feature_and_price action: %v", err).
+				Mark(ierr.ErrValidation)
+		}
+		return &featureAction, nil
+
+	case WorkflowActionRolloutToSubscriptions:
+		rolloutAction, err := utils.ToStruct[RolloutToSubscriptionsActionConfig](actionMap)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHintf("Failed to convert rollout_to_subscriptions action: %v", err).
+				Mark(ierr.ErrValidation)
+		}
+		return &rolloutAction, nil
+
+	default:
+		return nil, ierr.NewErrorf("unknown action type: %s", actionType).
+			WithHint("Please provide a valid action type").
+			WithReportableDetails(map[string]any{
+				"action": actionType,
+				"allowed": []WorkflowAction{
+					WorkflowActionCreateCustomer,
+					WorkflowActionCreateWallet,
+					WorkflowActionCreateSubscription,
+					WorkflowActionCreateFeatureAndPrice,
+					WorkflowActionRolloutToSubscriptions,
+				},
+			}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func marshalWorkflowActions(actions []WorkflowActionConfig) ([]json.RawMessage, error) {
+	actionsLen := 0
+	if actions != nil {
+		actionsLen = len(actions)
+	}
+	actionsData := make([]json.RawMessage, 0, actionsLen)
+
+	if actions == nil {
+		return actionsData, nil
+	}
+
+	for _, action := range actions {
+		actionJSON, err := json.Marshal(action)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to marshal action to JSON").
+				Mark(ierr.ErrValidation)
+		}
+		actionsData = append(actionsData, actionJSON)
+	}
+	return actionsData, nil
+}
+
+func validateWorkflowActions(actions []WorkflowActionConfig) error {
+	for _, action := range actions {
 		if err := action.Validate(); err != nil {
 			return err
 		}
 	}
 
 	// Enforce that create_customer action must be first if present
-	for i, action := range c.Actions {
+	for i, action := range actions {
 		if action.GetAction() == WorkflowActionCreateCustomer {
 			if i != 0 {
 				return ierr.NewError("create_customer action must be the first action in the workflow").
@@ -226,7 +314,6 @@ func (c WorkflowConfig) Validate() error {
 					}).
 					Mark(ierr.ErrValidation)
 			}
-			// Only one create_customer action is allowed
 			break
 		}
 	}

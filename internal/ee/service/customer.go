@@ -94,7 +94,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// Check if we should skip the customer onboarding workflow
 	// This flag is used when a customer is created via a workflow to prevent infinite loops
 	if !req.SkipOnboardingWorkflow {
-		if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
+		if err := s.handleCustomerOnboarding(ctx, cust, req.OnboardingWorkflowName); err != nil {
 			s.Logger.Error(ctx, "failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 		}
 	} else {
@@ -428,8 +428,10 @@ func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context
 	return subscriptionService.GetUpcomingCreditGrantApplications(ctx, req)
 }
 
-func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer) error {
-	s.Logger.Info(ctx, "handling customer onboarding", "customer_id", customer.ID)
+func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer, onboardingWorkflowName string) error {
+	s.Logger.Info(ctx, "handling customer onboarding",
+		"customer_id", customer.ID,
+		"onboarding_workflow_name", onboardingWorkflowName)
 
 	// Get customer onboarding workflow config
 	settingsService := &settingsService{
@@ -445,9 +447,19 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		return nil
 	}
 
-	// If there are no actions, return
-	if len(workflowConfig.Actions) == 0 {
-		s.Logger.Info(ctx, "no actions found for customer onboarding", "customer_id", customer.ID)
+	selectedActions, found := workflowConfig.ResolveOnboardingActions(onboardingWorkflowName)
+	if onboardingWorkflowName != "" && !found {
+		s.Logger.Error(ctx, "onboarding workflow name not found in custom_workflows, falling back to default actions",
+			"customer_id", customer.ID,
+			"onboarding_workflow_name", onboardingWorkflowName,
+			"available_custom_workflows", lo.Keys(workflowConfig.CustomWorkflows))
+	}
+
+	// If there are no actions to run, return
+	if len(selectedActions) == 0 {
+		s.Logger.Info(ctx, "no actions found for customer onboarding",
+			"customer_id", customer.ID,
+			"onboarding_workflow_name", onboardingWorkflowName)
 		return nil
 	}
 
@@ -461,17 +473,21 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		"tenant_id", tenantID,
 		"environment_id", envID,
 		"user_id", userID,
-		"action_count", len(workflowConfig.Actions))
+		"onboarding_workflow_name", onboardingWorkflowName,
+		"using_custom_workflow", onboardingWorkflowName != "" && found,
+		"action_count", len(selectedActions))
 
-	// Prepare workflow input with all necessary IDs
-	// Pass both CustomerID and ExternalCustomerID so the workflow can skip create_customer when customer exists
+	// Resolve selected actions into the workflow input; Temporal still runs WorkflowConfig.Actions
+	resolvedConfig := *workflowConfig
+	resolvedConfig.Actions = selectedActions
+
 	input := &workflowModels.CustomerOnboardingWorkflowInput{
 		CustomerID:         customer.ID,
 		ExternalCustomerID: customer.ExternalID,
 		TenantID:           tenantID,
 		EnvironmentID:      envID,
 		UserID:             userID,
-		WorkflowConfig:     *workflowConfig,
+		WorkflowConfig:     resolvedConfig,
 	}
 
 	// Validate input
