@@ -5,41 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"time"
 
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/tracing"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
 )
-
-// subscriptionCacheTTL bounds how long a tenant's Svix endpoint subscription
-// map is trusted before we re-list. 1m matches typical UI-driven change latency.
-const subscriptionCacheTTL = 1 * time.Minute
-
-// subscriptionCachePrefix namespaces the cache entries for endpoint subscriptions.
-const subscriptionCachePrefix = "svix_subs:v1:"
-
-// appSubscriptions is the cached result of listing an app's endpoints.
-// subscribeAll=true when at least one endpoint has no filterTypes (Svix treats
-// an empty filterTypes list as "receive every event type").
-type appSubscriptions struct {
-	subscribeAll bool
-	types        map[string]struct{}
-}
-
-func (s *appSubscriptions) has(eventType string) bool {
-	if s == nil {
-		return false
-	}
-	if s.subscribeAll {
-		return true
-	}
-	_, ok := s.types[eventType]
-	return ok
-}
 
 // Client wraps the Svix SDK client
 type Client struct {
@@ -143,77 +115,6 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (url
 	}
 
 	return dashboard.Url, dashboard.Token, nil
-}
-
-// IsEventSubscribed returns true if the tenant's Svix application has at least
-// one endpoint subscribed to eventType. An endpoint without filterTypes counts
-// as subscribed to every event. Results are cached per app for
-// subscriptionCacheTTL. When Svix is disabled the check is a no-op (returns
-// true) so callers keep their existing behaviour.
-//
-// Fail-open on transient list errors: callers should not silently drop webhooks
-// because Svix's control-plane is momentarily unhappy — the message send itself
-// will retry via the caller's existing error path.
-func (c *Client) IsEventSubscribed(ctx context.Context, applicationID, eventType string) (bool, error) {
-	if !c.enabled || c.client == nil {
-		return true, nil
-	}
-
-	cacheKey := subscriptionCachePrefix + applicationID
-	cacheClient := cache.GetInMemoryCache()
-	if cacheClient != nil {
-		if cached, found := cacheClient.ForceCacheGet(ctx, cacheKey); found {
-			if subs, ok := cached.(*appSubscriptions); ok {
-				return subs.has(eventType), nil
-			}
-		}
-	}
-
-	subs, err := c.listSubscribedEvents(ctx, applicationID)
-	if err != nil {
-		return true, err
-	}
-
-	if cacheClient != nil {
-		cacheClient.ForceCacheSet(ctx, cacheKey, subs, subscriptionCacheTTL)
-	}
-	return subs.has(eventType), nil
-}
-
-// listSubscribedEvents walks every endpoint on the app and folds their
-// filterTypes into a single appSubscriptions. ponytail: no pagination limit
-// guard; add a page cap if a tenant ever fans out past a few thousand endpoints.
-func (c *Client) listSubscribedEvents(ctx context.Context, applicationID string) (*appSubscriptions, error) {
-	subs := &appSubscriptions{types: map[string]struct{}{}}
-	var iterator *string
-	for {
-		page, err := c.client.Endpoint.List(ctx, applicationID, &svix.EndpointListOptions{
-			Iterator: iterator,
-		})
-		if err != nil {
-			if err.Error() == "application not found" {
-				return subs, nil
-			}
-			return nil, fmt.Errorf("failed to list endpoints: %w", err)
-		}
-		for _, ep := range page.Data {
-			if ep.Disabled != nil && *ep.Disabled {
-				continue
-			}
-			if len(ep.FilterTypes) == 0 {
-				subs.subscribeAll = true
-				continue
-			}
-			for _, t := range ep.FilterTypes {
-				subs.types[t] = struct{}{}
-			}
-		}
-		if page.Done || page.Iterator == nil || *page.Iterator == "" {
-			break
-		}
-		iterator = page.Iterator
-	}
-	return subs, nil
 }
 
 // SendMessage sends a webhook message to the given application.
