@@ -245,6 +245,33 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 		return err
 	}
 
+	subscribed, subErr := h.svixClient.IsEventSubscribed(ctx, appID, event.EventName)
+	if subErr != nil {
+		// Fail-open: if we can't confirm subscription state, fall through to send.
+		h.logger.Info(ctx, "svix subscription lookup failed, sending anyway",
+			"error", subErr,
+			"event_name", event.EventName,
+			"tenant_id", event.TenantID,
+		)
+	} else if !subscribed {
+		h.logger.Debug(ctx, "svix skipping unsubscribed event",
+			"event_name", event.EventName,
+			"tenant_id", event.TenantID,
+			"environment_id", event.EnvironmentID,
+		)
+		if h.systemEventRepo != nil && event.ID != "" {
+			if err := h.systemEventRepo.OnDelivered(ctx, event.ID, nil); err != nil {
+				h.logger.Info(ctx, "system_events OnDelivered failed for unsubscribed event",
+					"error", err,
+					"event_id", event.ID,
+					"event_name", event.EventName,
+				)
+				return err
+			}
+		}
+		return nil
+	}
+
 	builder, err := h.factory.GetBuilder(event.EventName)
 	if err != nil {
 		return err
