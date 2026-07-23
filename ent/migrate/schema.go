@@ -2454,9 +2454,12 @@ var (
 				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[17]},
 			},
 			{
-				Name:    "usagerecord_tenant_id_environment_id_subscription_id_period_start_period_end_status",
+				Name:    "usagerecord_tenant_id_environment_id_subscription_id_period_start_period_end",
 				Unique:  true,
-				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[10], UsageRecordsColumns[15], UsageRecordsColumns[16], UsageRecordsColumns[2]},
+				Columns: []*schema.Column{UsageRecordsColumns[1], UsageRecordsColumns[7], UsageRecordsColumns[10], UsageRecordsColumns[15], UsageRecordsColumns[16]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}
