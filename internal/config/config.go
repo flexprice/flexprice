@@ -511,12 +511,11 @@ type UsageAlertsConfig struct {
 	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
 	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
 	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
-	// ActivityStaleAfter bounds how long an alert activity may wait in the task
-	// queue (Temporal ScheduleToStartTimeout). Activities older than this are
-	// re-enqueued so fresher customers evaluate first.
-	ActivityStaleAfter time.Duration `mapstructure:"activity_stale_after" default:"1h"`
-	// StaleRescheduleDelay is the pause before re-enqueueing a stale activity.
-	StaleRescheduleDelay time.Duration `mapstructure:"stale_reschedule_delay" default:"30s"`
+	// StaleAfter bounds staleness on both queues: a workflow run firing more
+	// than this past its intended time yields once (ContinueAsNew) to the back
+	// of the queue so fresher customers evaluate first, and each activity's
+	// ScheduleToStartTimeout is set to the same value.
+	StaleAfter time.Duration `mapstructure:"stale_after" default:"1h"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

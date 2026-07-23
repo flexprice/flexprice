@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -70,6 +71,7 @@ func (s *EntitlementGrantSuite) buildServiceParams() ServiceParams {
 		SettingsRepo:             stores.SettingsRepo,
 		AddonRepo:                stores.AddonRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	}
 }
@@ -276,26 +278,23 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_IgnoresNoneEC() {
 	s.Empty(grants, "type=none EC should not open a grant")
 }
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_AmountGrantPinsUnitPrice() {
-	// The flat unit price at open time is stored on the grant so mid-window
-	// price changes never retroactively reprice consumed usage.
-	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureAmount)
+func (s *EntitlementGrantSuite) TestEnsureGrants_DurationAtOrOverCycle_NoGrant() {
+	// A grant spanning the whole cycle is just the cycle quota — that's what
+	// legacy usage_limit + usage_reset_period expresses. No grant rows opened.
+	m := s.simpleMeter("meter-cyclelen")
+	f := s.simpleFeature("feat-cyclelen", m.ID)
+	p := s.simplePlan("plan-cyclelen")
+	// simpleSubscription runs a 30-day cycle; 30 days of hours == cycle length.
+	_, err := s.entService.CreateEntitlement(s.GetContext(),
+		s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 24*30, decimal.NewFromInt(100)))
+	s.Require().NoError(err)
+
+	cust := s.simpleCustomer("cust-cyclelen")
+	sub := s.simpleSubscription("sub-cyclelen", cust.ID, p.ID)
 
 	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
 	s.Require().NoError(err)
-	s.Require().Len(grants, 1)
-	s.Require().NotNil(grants[0].UnitPrice, "amount grant must pin the unit price at open")
-	s.True(grants[0].UnitPrice.Equal(decimal.NewFromFloat(0.02)),
-		"pinned unit price must match the flat price, got %s", grants[0].UnitPrice)
-}
-
-func (s *EntitlementGrantSuite) TestEnsureGrants_QuantityGrantHasNoUnitPrice() {
-	_, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
-
-	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
-	s.Require().NoError(err)
-	s.Require().Len(grants, 1)
-	s.Nil(grants[0].UnitPrice, "quantity grants don't pin a price")
+	s.Empty(grants, "duration >= cycle length must not open a grant")
 }
 
 func (s *EntitlementGrantSuite) TestEnsureGrants_SkipsWhenCustomerHasNoSubs() {
@@ -327,7 +326,9 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_CycleBoundaryCap() {
 	s.NoError(err)
 	s.True(ok)
 	s.WithinDuration(cycleEnd, to, time.Second, "valid_to should be capped at cycle_end")
-	s.WithinDuration(at, from, time.Minute, "valid_from should anchor near `at`")
+	grace := s.GetConfig().UsageAlerts.ScheduleDelay
+	s.WithinDuration(at.Add(-grace), from, time.Second,
+		"fresh slots start schedule_delay back to absorb ingestion delay")
 }
 
 func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubHourWindowIsSkipped() {
@@ -346,25 +347,23 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubHourWindowIsSkipped() 
 	s.False(ok, "sub-1-hour trailing window must be skipped")
 }
 
-func (s *EntitlementGrantSuite) TestComputeGrantWindow_DriftCap() {
-	// If `at` is far past cycle_start with no prior grant, valid_from lands
-	// at `max(at, cycle_start)` — not far in the past (which would credit
-	// unpriced historical usage).
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_FreshSlotStartsScheduleDelayBack() {
+	// A fresh slot (no prior grant) starts exactly schedule_delay before `at` —
+	// the debounce window bounds how old the triggering event can be, so
+	// already-ingested events always land inside the first window.
 	svc := s.grantService.(*entitlementGrantService)
 	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	cycleEnd := cycleStart.Add(30 * 24 * time.Hour)
 	at := cycleStart.Add(5 * time.Hour)
 
 	sub := &subscription.Subscription{CurrentPeriodStart: cycleStart, CurrentPeriodEnd: cycleEnd}
-	ec := s.newTimeBoxedEC("ec-drift", "feat-drift", 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
+	ec := s.newTimeBoxedEC("ec-fresh", "feat-fresh", 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
 
 	from, _, ok, err := svc.computeGrantWindow(s.GetContext(), ec, sub, at, 5*time.Hour)
 	s.NoError(err)
 	s.True(ok)
-	// The drift cap kicks in only when valid_from is < at-5min. Here we have
-	// no prior grant, so valid_from starts at max(at, cycle_start) = at, well
-	// after the 5min drift threshold. Verify it's not far in the past.
-	s.False(from.Before(at.Add(-6*time.Minute)), "valid_from must not drift more than 5min behind `at`")
+	grace := s.GetConfig().UsageAlerts.ScheduleDelay
+	s.WithinDuration(at.Add(-grace), from, time.Second)
 }
 
 // -----------------------------------------------------------------------------
@@ -602,6 +601,32 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsMixedModesOnFeature
 	s.Contains(err.Error(), "aggregation_mode")
 }
 
+func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsMeasureMismatchOnFeature() {
+	// One measure per feature: billing folds per feature and can't mix
+	// quantity and amount lanes.
+	m := s.simpleMeter("meter-measuremix")
+	f := s.simpleFeature("feat-measuremix", m.ID)
+	p := s.simplePlan("plan-measuremix")
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), &price.Price{
+		ID:           "price-measuremix",
+		Amount:       decimal.NewFromFloat(0.01),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		MeterID:      m.ID,
+		BaseModel:    types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	_, err := s.entService.CreateEntitlement(s.GetContext(),
+		s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureQuantity, 5, decimal.NewFromInt(100)))
+	s.Require().NoError(err)
+
+	_, err = s.entService.CreateEntitlement(s.GetContext(),
+		s.grantCreateRequest(f.ID, p.ID, types.EntitlementGrantMeasureAmount, 5, decimal.NewFromInt(50)))
+	s.Error(err)
+	s.Contains(err.Error(), "grant_measure")
+}
+
 func (s *EntitlementGrantSuite) TestCreateEntitlement_RejectsAdditiveDurationMismatch() {
 	// Additive quotas sum into one window, so durations must match.
 	m := s.simpleMeter("meter-durmix")
@@ -624,7 +649,7 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_AnchorsToPreviousValidTo() {
 	s.Require().Len(ecs, 1)
 
 	at := sub.CurrentPeriodStart.Add(10 * time.Hour)
-	prevEnd := at.Add(-2 * time.Minute) // inside the 5-minute drift guard
+	prevEnd := at.Add(-2 * time.Minute)
 	prev := &entitlementgrant.EntitlementGrant{
 		ID:                  "eg-prev",
 		EntitlementConfigID: ecs[0].ID,
@@ -650,7 +675,10 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_AnchorsToPreviousValidTo() {
 		"new window must butt against previous valid_to: got %s want %s", grants[0].ValidFrom, prevEnd)
 }
 
-func (s *EntitlementGrantSuite) TestEnsureGrants_DriftGuardClampsOldAnchor() {
+func (s *EntitlementGrantSuite) TestEnsureGrants_ContinuityAfterDelayedEvaluation() {
+	// Evaluation was down for an hour: the new window must butt-joint the
+	// previous valid_to exactly, so every event in the gap belongs to exactly
+	// one window (usage recompute from CH keeps late accounting correct).
 	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
 
 	ecs, err := s.GetStores().EntitlementRepo.List(s.GetContext(), types.NewNoLimitEntitlementFilter())
@@ -658,7 +686,7 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_DriftGuardClampsOldAnchor() {
 	s.Require().Len(ecs, 1)
 
 	at := sub.CurrentPeriodStart.Add(10 * time.Hour)
-	prevEnd := at.Add(-1 * time.Hour) // stale anchor far beyond the drift guard
+	prevEnd := at.Add(-1 * time.Hour) // window closed an hour before evaluation caught up
 	prev := &entitlementgrant.EntitlementGrant{
 		ID:                  "eg-prev-old",
 		EntitlementConfigID: ecs[0].ID,
@@ -680,8 +708,8 @@ func (s *EntitlementGrantSuite) TestEnsureGrants_DriftGuardClampsOldAnchor() {
 	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, at)
 	s.Require().NoError(err)
 	s.Require().Len(grants, 1)
-	s.WithinDuration(at.Add(-5*time.Minute), grants[0].ValidFrom, 2*time.Second,
-		"valid_from must clamp to at-5min, not the hour-old anchor")
+	s.True(grants[0].ValidFrom.Equal(prevEnd),
+		"new window must butt-joint previous valid_to with no gap: got %s want %s", grants[0].ValidFrom, prevEnd)
 }
 
 // -----------------------------------------------------------------------------
@@ -934,56 +962,82 @@ func (s *EntitlementGrantSuite) TestLoader_ExpiredGrantInCycleStillLoaded() {
 }
 
 // -----------------------------------------------------------------------------
-// snapshotEntitlementGrant · exhaustion flip
+// End-to-end grant evaluation: usage refresh → snapshot → exhaustion alert
 // -----------------------------------------------------------------------------
 
-func (s *EntitlementGrantSuite) snapshotAlertService() *alertService {
-	return &alertService{ServiceParams: ServiceParams{
-		Logger:               s.GetLogger(),
-		EntitlementGrantRepo: s.GetStores().EntitlementGrantRepo,
-	}}
+func (s *EntitlementGrantSuite) evalAlertService() *alertService {
+	return &alertService{ServiceParams: s.buildServiceParams()}
 }
 
-func (s *EntitlementGrantSuite) seedSnapshotGrant(id string, quota int64) *entitlementgrant.EntitlementGrant {
-	g := &entitlementgrant.EntitlementGrant{
-		ID:                  id,
-		EntitlementConfigID: "ec_" + id,
-		CustomerID:          "cust_snap",
-		SubscriptionID:      "sub_snap",
-		ScopeEntityType:     types.EntitlementGrantScopeFeature,
-		ScopeEntityID:       "feat_snap",
-		Measure:             types.EntitlementGrantMeasureQuantity,
-		Quota:               decimal.NewFromInt(quota),
-		ValidFrom:           time.Now().Add(-time.Hour),
-		ValidTo:             time.Now().Add(4 * time.Hour),
-		GrantStatus:         types.EntitlementGrantStatusActive,
-		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
-		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+func (s *EntitlementGrantSuite) seedMeterUsage(extCustomerID, meterID string, at time.Time, qty int64) {
+	rec := &events.MeterUsage{
+		Event: events.Event{
+			ID:                 types.GenerateUUIDWithPrefix("ev"),
+			TenantID:           types.GetTenantID(s.GetContext()),
+			EnvironmentID:      types.GetEnvironmentID(s.GetContext()),
+			ExternalCustomerID: extCustomerID,
+			EventName:          "api_call",
+			Timestamp:          at,
+		},
+		MeterID:  meterID,
+		QtyTotal: decimal.NewFromInt(qty),
 	}
-	created, err := s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), g)
-	s.Require().NoError(err)
-	return created
+	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(s.GetContext(), []*events.MeterUsage{rec}))
 }
 
-func (s *EntitlementGrantSuite) TestSnapshot_UnderQuotaStaysActive() {
-	g := s.seedSnapshotGrant("eg_under", 100)
-	at := time.Now().UTC()
-	s.Require().NoError(s.snapshotAlertService().snapshotEntitlementGrant(s.GetContext(), g, decimal.NewFromInt(40), at))
+func (s *EntitlementGrantSuite) TestEvaluate_OverQuota_FlipsExhaustedAndFiresAlert() {
+	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+	_ = f
+
+	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1)
+	g := grants[0]
+
+	// Quota is 100 (setupCustomerSubWithGrantEC); push 110 units inside the window.
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(30*time.Minute), 60)
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(45*time.Minute), 50)
+
+	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
+		s.GetContext(), cust, []*subscription.Subscription{sub}, []*entitlementgrant.EntitlementGrant{g}, at))
 
 	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
 	s.Require().NoError(err)
-	s.Equal(types.EntitlementGrantStatusActive, stored.GrantStatus)
-	s.True(stored.Usage.Equal(decimal.NewFromInt(40)))
-	s.NotNil(stored.LastComputedAt)
-}
-
-func (s *EntitlementGrantSuite) TestSnapshot_AtQuotaFlipsExhausted() {
-	g := s.seedSnapshotGrant("eg_at", 100)
-	s.Require().NoError(s.snapshotAlertService().snapshotEntitlementGrant(s.GetContext(), g, decimal.NewFromInt(100), time.Now().UTC()))
-
-	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
-	s.Require().NoError(err)
+	s.True(stored.Usage.Equal(decimal.NewFromInt(110)), "usage snapshot expected 110, got %s", stored.Usage)
 	s.Equal(types.EntitlementGrantStatusExhausted, stored.GrantStatus)
+	s.Require().NotNil(stored.LastComputedAt)
+
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(s.GetContext(), types.AlertEntityTypeEntitlementGrant, g.ID, 10)
+	s.Require().NoError(err)
+	s.Require().Len(logs, 1, "exhaustion must write exactly one alert log")
+	s.Equal(types.AlertStateInAlarm, logs[0].AlertStatus)
+	s.Equal(types.AlertTypeEntitlementGrantExhausted, logs[0].AlertType)
+}
+
+func (s *EntitlementGrantSuite) TestEvaluate_UnderQuota_StaysActiveNoAlert() {
+	f, sub, cust := s.setupCustomerSubWithGrantEC(types.EntitlementGrantMeasureQuantity)
+	_ = f
+
+	at := sub.CurrentPeriodStart.Add(2 * time.Hour)
+	grants, err := s.grantService.EnsureGrants(s.GetContext(), cust, sub.CurrentPeriodStart.Add(10*time.Minute))
+	s.Require().NoError(err)
+	s.Require().Len(grants, 1)
+	g := grants[0]
+
+	s.seedMeterUsage(cust.ExternalID, "meter-quantity", g.ValidFrom.Add(30*time.Minute), 40)
+
+	s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(
+		s.GetContext(), cust, []*subscription.Subscription{sub}, []*entitlementgrant.EntitlementGrant{g}, at))
+
+	stored, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), g.ID)
+	s.Require().NoError(err)
+	s.True(stored.Usage.Equal(decimal.NewFromInt(40)))
+	s.Equal(types.EntitlementGrantStatusActive, stored.GrantStatus)
+
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(s.GetContext(), types.AlertEntityTypeEntitlementGrant, g.ID, 10)
+	s.Require().NoError(err)
+	s.Empty(logs, "under-quota grants must not alert")
 }
 
 // -----------------------------------------------------------------------------

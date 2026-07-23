@@ -20,12 +20,19 @@ type UsageAlertWorkflowInput struct {
 	EnvironmentID string `json:"environment_id"`
 	CustomerID    string `json:"customer_id"`
 
-	// ActivityStaleAfter caps queue wait per activity (ScheduleToStartTimeout).
-	// Zero disables staleness handling. Stamped from config by the scheduler so
-	// workflow code stays deterministic.
-	ActivityStaleAfter time.Duration `json:"activity_stale_after,omitempty"`
-	// StaleRescheduleDelay is the pause before re-enqueueing a stale activity.
-	StaleRescheduleDelay time.Duration `json:"stale_reschedule_delay,omitempty"`
+	// ScheduledFor is the intended fire time (schedule time + StartDelay),
+	// stamped by the scheduler. The workflow compares it against workflow.Now
+	// to detect runs that sat in a backlogged workflow task queue.
+	ScheduledFor time.Time `json:"scheduled_for,omitempty"`
+	// StaleAfter is the staleness bound: a run firing more than this past
+	// ScheduledFor yields once via ContinueAsNew; also each activity's
+	// ScheduleToStartTimeout. Zero disables staleness handling. Stamped from
+	// config by the scheduler so workflow code stays deterministic.
+	StaleAfter time.Duration `json:"stale_after,omitempty"`
+	// AlreadyRescheduled marks a run created by the staleness re-schedule — at
+	// most one re-schedule per chain, so a sustained backlog can't livelock on
+	// ContinueAsNew.
+	AlreadyRescheduled bool `json:"already_rescheduled,omitempty"`
 }
 
 func (i UsageAlertWorkflowInput) Validate() error {

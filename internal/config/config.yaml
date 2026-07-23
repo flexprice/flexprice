@@ -363,8 +363,7 @@ meter_usage_tracking_lazy:
 usage_alerts:
   enabled: false # meter usage pushes the debounce workflow
   schedule_delay: "5m30s" # workflow StartDelay AND Redis schedule-throttle lock TTL
-  activity_stale_after: "1h" # activities queued longer than this are re-enqueued (ScheduleToStartTimeout)
-  stale_reschedule_delay: "30s" # pause before re-enqueueing a stale activity
+  stale_after: "1h" # workflow runs firing later than this yield (ContinueAsNew); also activity ScheduleToStartTimeout
 
 costsheet_usage_tracking:
   enabled: false

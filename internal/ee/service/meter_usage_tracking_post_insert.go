@@ -89,8 +89,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		lock, err := s.Locker.AcquireLock(ctx, throttleKey, delay)
 		if err != nil {
 			// Fail open: a duplicate StartWorkflow is absorbed by AlreadyStarted.
-			s.Logger.Error(ctx, "failed to acquire usage alert schedule lock, scheduling anyway",
-				"error", err, "customer_id", cust.ID)
+			s.Logger.Error(ctx, "failed to acquire usage alert schedule lock, scheduling anyway", "error", err, "customer_id", cust.ID)
 		} else if !lock.AcquiredSuccessfully() {
 			return // already scheduled within this window
 		} else {
@@ -114,11 +113,11 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		StartDelay: delay,
 	}
 	input := workflowModels.UsageAlertWorkflowInput{
-		TenantID:             tenantID,
-		EnvironmentID:        envID,
-		CustomerID:           cust.ID,
-		ActivityStaleAfter:   s.Config.UsageAlerts.ActivityStaleAfter,
-		StaleRescheduleDelay: s.Config.UsageAlerts.StaleRescheduleDelay,
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+		CustomerID:    cust.ID,
+		ScheduledFor:  time.Now().UTC().Add(delay),
+		StaleAfter:    s.Config.UsageAlerts.StaleAfter,
 	}
 
 	if _, err := temporalSvc.StartWorkflow(ctx, options, types.TemporalUsageAlertWorkflow, input); err != nil {
@@ -133,8 +132,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		// Release the throttle lock so a later event in the window can retry the schedule.
 		if throttleLock != nil {
 			if releaseErr := throttleLock.Release(ctx); releaseErr != nil {
-				s.Logger.Error(ctx, "failed to release usage alert schedule lock",
-					"error", releaseErr, "customer_id", cust.ID)
+				s.Logger.Error(ctx, "failed to release usage alert schedule lock", "error", releaseErr, "customer_id", cust.ID)
 			}
 		}
 		s.Logger.Error(ctx, "failed to schedule usage alert workflow",

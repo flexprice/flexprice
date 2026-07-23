@@ -82,16 +82,6 @@ func (EntitlementGrant) Fields() []ent.Field {
 			}).
 			Immutable(),
 
-		// Flat per-unit price pinned at open time for amount-measure grants, so a
-		// price change mid-window can't retroactively reprice consumed usage.
-		field.Other("unit_price", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(25,15)",
-			}).
-			Optional().
-			Nillable().
-			Immutable(),
-
 		field.Other("usage", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",

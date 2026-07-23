@@ -21,9 +21,7 @@ type EntitlementGrant struct {
 	ScopeEntityID       string                                `json:"scope_entity_id"`
 	Measure             types.EntitlementGrantMeasure         `json:"measure"`
 	Quota               decimal.Decimal                       `json:"quota"`
-	// UnitPrice is the flat per-unit price pinned at open time (amount measure only).
-	UnitPrice *decimal.Decimal `json:"unit_price,omitempty"`
-	Usage     decimal.Decimal  `json:"usage"`
+	Usage               decimal.Decimal                       `json:"usage"`
 	ValidFrom           time.Time                             `json:"valid_from"`
 	ValidTo             time.Time                             `json:"valid_to"`
 	GrantStatus         types.EntitlementGrantStatus          `json:"grant_status"`
@@ -148,7 +146,6 @@ func FromEnt(e *ent.EntitlementGrant) *EntitlementGrant {
 		ScopeEntityID:       e.ScopeEntityID,
 		Measure:             e.Measure,
 		Quota:               e.Quota,
-		UnitPrice:           e.UnitPrice,
 		Usage:               e.Usage,
 		ValidFrom:           e.ValidFrom,
 		ValidTo:             e.ValidTo,

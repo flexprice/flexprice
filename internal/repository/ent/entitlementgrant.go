@@ -66,7 +66,6 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetScopeEntityID(g.ScopeEntityID).
 		SetMeasure(g.Measure).
 		SetQuota(g.Quota).
-		SetNillableUnitPrice(g.UnitPrice).
 		SetUsage(g.Usage).
 		SetValidFrom(g.ValidFrom).
 		SetValidTo(g.ValidTo).

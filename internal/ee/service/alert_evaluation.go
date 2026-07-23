@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -11,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -20,20 +20,29 @@ import (
 
 // EvaluateSpendAlertsForCustomer evaluates subscription-level spend alerts for
 // the customer's active subscriptions. Line-item and group scopes were
-// deliberately dropped — only subscription totals fire alerts. Config lookup
-// happens before any usage query so customers without alert settings cost two
-// indexed reads and nothing else.
+// deliberately dropped — only subscription totals fire alerts.
 func (s *alertService) EvaluateSpendAlertsForCustomer(ctx context.Context, cust *customer.Customer) error {
-	subFilter := types.NewNoLimitSubscriptionFilter()
-	subFilter.CustomerID = cust.ID
-	subFilter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-	}
-	subs, err := s.SubRepo.List(ctx, subFilter)
+	subs, err := s.listActiveSubscriptions(ctx, cust.ID)
 	if err != nil {
 		return err
 	}
+	return s.evaluateSpendAlertsForSubscriptions(ctx, cust, subs)
+}
+
+func (s *alertService) listActiveSubscriptions(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.CustomerID = customerID
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+	return s.SubRepo.List(ctx, filter)
+}
+
+// evaluateSpendAlertsForSubscriptions is the data-fed core: config lookup
+// happens before any usage query, so customers without alert settings cost one
+// indexed read and nothing else.
+func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, cust *customer.Customer, subs []*subscription.Subscription) error {
 	if len(subs) == 0 {
 		return nil
 	}
@@ -170,7 +179,10 @@ func (s *alertService) EvaluateSpendBreachForEvent(ctx context.Context, event *e
 }
 
 // EvaluateSpendAndEntitlementAlertsForCustomer runs spend alerts and grant
-// evaluation in one activity. Idempotent under Temporal retries.
+// evaluation in one activity, sharing a single active-subscriptions fetch.
+// The two halves are independent — one failing must not block the other — so
+// both run and their errors join for the Temporal retry decision.
+// Idempotent under Temporal retries.
 func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	ctx context.Context,
 	cust *customer.Customer,
@@ -180,34 +192,40 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	}
 	at := time.Now().UTC()
 
-	spendErr := s.EvaluateSpendAlertsForCustomer(ctx, cust)
+	subs, err := s.listActiveSubscriptions(ctx, cust.ID)
+	if err != nil {
+		return err
+	}
+	if len(subs) == 0 {
+		return nil
+	}
+
+	spendErr := s.evaluateSpendAlertsForSubscriptions(ctx, cust, subs)
 	if spendErr != nil {
 		s.Logger.Error(ctx, "fused evaluator: spend alerts returned error", "error", spendErr, "customer_id", cust.ID)
 	}
 
 	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-	grants, err := grantSvc.EnsureGrants(ctx, cust, at)
+	grants, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
 	if err != nil {
-		if spendErr != nil {
-			return spendErr
-		}
 		return err
+	}
+	grantErr := s.evaluateEntitlementGrantsForCustomer(ctx, cust, subs, grants, at)
+	if grantErr != nil {
+		s.Logger.Error(ctx, "fused evaluator: grant evaluation returned error", "error", grantErr, "customer_id", cust.ID)
 	}
 
-	if err := s.evaluateEntitlementGrantsForCustomer(ctx, cust, grants, at); err != nil {
-		if spendErr != nil {
-			return spendErr
-		}
-		return err
-	}
-	return spendErr
+	return errors.Join(spendErr, grantErr)
 }
 
 // evaluateEntitlementGrantsForCustomer refreshes usage and fires alerts for
 // each live grant. Alert-log dedup makes it safe under Temporal retries.
+// subs is the caller's already-fetched active-subscription set; grants whose
+// subscription is not in it (e.g. cancelled mid-window) are skipped.
 func (s *alertService) evaluateEntitlementGrantsForCustomer(
 	ctx context.Context,
 	cust *customer.Customer,
+	subs []*subscription.Subscription,
 	grants []*entitlementgrant.EntitlementGrant,
 	at time.Time,
 ) error {
@@ -230,14 +248,13 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		return nil
 	}
 
-	meta, err := s.loadEntitlementGrantMeta(ctx, featureGrants)
+	meta, err := s.loadEntitlementGrantMeta(ctx, subs, featureGrants)
 	if err != nil {
 		return err
 	}
 
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
 	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
-	priceSvc := NewPriceService(s.ServiceParams)
 
 	extIDsBySub := make(map[string][]string, len(meta.subsByID))
 
@@ -269,7 +286,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			extIDsBySub[sub.ID] = extIDs
 		}
 
-		usage, err := s.refreshEntitlementGrantUsage(ctx, g, m, extIDs, priceSvc, meta.pricesByMeter, at)
+		usage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
 		if err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: usage refresh failed",
 				"grant_id", g.ID, "error", err)
@@ -281,7 +298,13 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 				"grant_id", g.ID, "error", err)
 		}
 
-		if err := s.snapshotEntitlementGrant(ctx, g, usage, at); err != nil {
+		// snapshot entitlement grant usage
+		g.Usage = usage
+		g.LastComputedAt = &at
+		if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
+			g.GrantStatus = types.EntitlementGrantStatusExhausted
+		}
+		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, g); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
 				"grant_id", g.ID, "error", err)
 		}
@@ -291,27 +314,17 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 
 // entitlementGrantEvalMeta is the per-tick lookup bundle for the grant loop.
 type entitlementGrantEvalMeta struct {
-	subsByID      map[string]*subscription.Subscription
-	featureByID   map[string]*feature.Feature
-	meterByID     map[string]*meter.Meter
-	pricesByMeter map[string][]*price.Price
+	subsByID    map[string]*subscription.Subscription
+	featureByID map[string]*feature.Feature
+	meterByID   map[string]*meter.Meter
 }
 
 func (s *alertService) loadEntitlementGrantMeta(
 	ctx context.Context,
+	subs []*subscription.Subscription,
 	grants []*entitlementgrant.EntitlementGrant,
 ) (*entitlementGrantEvalMeta, error) {
-	subIDs := lo.Uniq(lo.Map(grants, func(g *entitlementgrant.EntitlementGrant, _ int) string {
-		return g.SubscriptionID
-	}))
-	subs := make(map[string]*subscription.Subscription, len(subIDs))
-	for _, id := range subIDs {
-		sub, err := s.SubRepo.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		subs[id] = sub
-	}
+	subsByID := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
 
 	featureIDs := lo.Uniq(lo.Map(grants, func(g *entitlementgrant.EntitlementGrant, _ int) string {
 		return g.ScopeEntityID
@@ -338,36 +351,27 @@ func (s *alertService) loadEntitlementGrantMeta(
 	}
 	meterByID := lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID })
 
-	pricesByMeter := make(map[string][]*price.Price)
-	if len(meterIDs) > 0 {
-		priceFilter := types.NewNoLimitPriceFilter()
-		priceFilter.MeterIDs = meterIDs
-		prices, err := s.PriceRepo.List(ctx, priceFilter)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range prices {
-			pricesByMeter[p.MeterID] = append(pricesByMeter[p.MeterID], p)
-		}
-	}
-
 	return &entitlementGrantEvalMeta{
-		subsByID:      subs,
-		featureByID:   featureByID,
-		meterByID:     meterByID,
-		pricesByMeter: pricesByMeter,
+		subsByID:    subsByID,
+		featureByID: featureByID,
+		meterByID:   meterByID,
 	}, nil
 }
 
-// refreshEntitlementGrantUsage sums usage over [valid_from, min(at, valid_to))
-// and, for amount lane, multiplies by the flat unit price.
+// refreshEntitlementGrantUsage refreshes the grant's consumed usage over
+// [valid_from, min(at, valid_to)).
+//
+//   - quantity measure: one raw meter-usage query over the window.
+//   - amount measure: rides the billing path (GetSubscriptionMeterUsageWithSub +
+//     ConvertToBillingCharges), which splits the window into per-line-item date
+//     ranges — a mid-window price change produces a new line-item segment, so
+//     each segment is priced at its own price. No price pinning required.
 func (s *alertService) refreshEntitlementGrantUsage(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	m *meter.Meter,
+	sub *subscription.Subscription,
 	extCustomerIDs []string,
-	priceSvc PriceService,
-	pricesByMeter map[string][]*price.Price,
 	at time.Time,
 ) (decimal.Decimal, error) {
 	end := at
@@ -378,41 +382,50 @@ func (s *alertService) refreshEntitlementGrantUsage(
 		return decimal.Zero, nil
 	}
 
-	result, err := s.MeterUsageRepo.GetUsage(ctx, &events.MeterUsageQueryParams{
-		TenantID:            g.TenantID,
-		EnvironmentID:       g.EnvironmentID,
-		ExternalCustomerIDs: extCustomerIDs,
-		MeterID:             m.ID,
-		StartTime:           g.ValidFrom,
-		EndTime:             end,
-		AggregationType:     m.Aggregation.Type,
-		UseFinal:            true,
+	if g.Measure == types.EntitlementGrantMeasureQuantity {
+		req := &dto.GrantWindowUsageRequest{
+			TenantID:            g.TenantID,
+			EnvironmentID:       g.EnvironmentID,
+			ExternalCustomerIDs: extCustomerIDs,
+			MeterID:             m.ID,
+			AggregationType:     m.Aggregation.Type,
+			StartTime:           g.ValidFrom,
+			EndTime:             end,
+		}
+		result, err := s.MeterUsageRepo.GetUsage(ctx, req.ToParams())
+		if err != nil {
+			return decimal.Zero, err
+		}
+		return result.TotalValue, nil
+	}
+
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	subUsage, err := meterUsageSvc.GetSubscriptionMeterUsageWithSub(ctx, sub, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  sub.ID,
+		StartTime:       g.ValidFrom,
+		EndTime:         end,
+		UseFinal:        true,
+		IncludeChildren: true,
 	})
 	if err != nil {
 		return decimal.Zero, err
 	}
-	qty := result.TotalValue
 
-	if g.Measure == types.EntitlementGrantMeasureQuantity {
-		return qty, nil
+	// The returned totalCost spans every meter on the subscription; the grant
+	// only owns its meter, so filter charges down to m.ID (a meter can carry
+	// several charges when price segments split the window).
+	charges, _, err := meterUsageSvc.ConvertToBillingCharges(ctx, subUsage)
+	if err != nil {
+		return decimal.Zero, err
 	}
 
-	// Amount lane: use the unit price pinned at open time so mid-window price
-	// changes never retroactively reprice consumed usage; a price change takes
-	// effect from the next grant window.
-	if g.UnitPrice != nil {
-		return qty.Mul(*g.UnitPrice), nil
+	total := decimal.Zero
+	for _, c := range charges {
+		if c != nil && c.MeterID == m.ID {
+			total = total.Add(decimal.NewFromFloat(c.Amount))
+		}
 	}
-
-	// Unpinned grant (price resolution failed at open) — live lookup fallback.
-	unitPrice, ok := selectFlatUnitPrice(pricesByMeter[m.ID])
-	if !ok {
-		s.Logger.Error(ctx, "entitlement grant evaluation: amount lane could not resolve flat unit price",
-			"grant_id", g.ID, "meter_id", m.ID)
-		return decimal.Zero, nil
-	}
-	amount := priceSvc.CalculateCost(ctx, unitPrice, qty)
-	return amount, nil
+	return total, nil
 }
 
 // transitionEntitlementGrantAlert emits an alert-log row on state change.
@@ -428,8 +441,8 @@ func (s *alertService) transitionEntitlementGrantAlert(
 		return nil
 	}
 	ratio := usage.Div(g.Quota)
-	state := entitlementGrantStateFromRatio(ratio)
-	if state == types.AlertStateOk {
+	if ratio.LessThan(decimal.NewFromInt(1)) {
+		// not exhausted yet, AlertStateOk
 		return nil
 	}
 
@@ -442,33 +455,10 @@ func (s *alertService) transitionEntitlementGrantAlert(
 		ParentEntityID:   &g.SubscriptionID,
 		CustomerID:       &custID,
 		AlertType:        types.AlertTypeEntitlementGrantExhausted,
-		AlertStatus:      state,
+		AlertStatus:      types.AlertStateInAlarm,
 		AlertInfo: types.AlertInfo{
 			ValueAtTime: ratio,
 			Timestamp:   at,
 		},
 	})
-}
-
-// snapshotEntitlementGrant writes usage and flips active→exhausted on crossing.
-func (s *alertService) snapshotEntitlementGrant(
-	ctx context.Context,
-	g *entitlementgrant.EntitlementGrant,
-	usage decimal.Decimal,
-	at time.Time,
-) error {
-	g.Usage = usage
-	g.LastComputedAt = &at
-	if usage.GreaterThanOrEqual(g.Quota) && g.GrantStatus == types.EntitlementGrantStatusActive {
-		g.GrantStatus = types.EntitlementGrantStatusExhausted
-	}
-	return s.EntitlementGrantRepo.UpdateSnapshot(ctx, g)
-}
-
-// entitlementGrantStateFromRatio fires only on exhaustion (ratio >= 1).
-func entitlementGrantStateFromRatio(ratio decimal.Decimal) types.AlertState {
-	if ratio.GreaterThanOrEqual(decimal.NewFromInt(1)) {
-		return types.AlertStateInAlarm
-	}
-	return types.AlertStateOk
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -19,10 +18,14 @@ import (
 
 // EntitlementGrantService owns the lifecycle of entitlement_grants rows.
 type EntitlementGrantService interface {
-	// EnsureGrants opens a live grant per time-boxed entitlement config on the
+	// EnsureGrants opens a live grant per grant-config entitlement on the
 	// customer's active subscriptions, expires stale rows, and returns the
 	// hydrated live set. Idempotent per (config, customer) slot.
 	EnsureGrants(ctx context.Context, cust *customer.Customer, at time.Time) ([]*entitlementgrant.EntitlementGrant, error)
+
+	// EnsureGrantsForSubscriptions is the data-fed variant: the caller supplies
+	// the customer's active subscriptions so no extra DB fetch happens for them.
+	EnsureGrantsForSubscriptions(ctx context.Context, cust *customer.Customer, subs []*subscription.Subscription, at time.Time) ([]*entitlementgrant.EntitlementGrant, error)
 }
 
 type entitlementGrantService struct {
@@ -45,10 +48,21 @@ func (s *entitlementGrantService) EnsureGrants(
 	if cust == nil {
 		return nil, ierr.NewError("customer is required").Mark(ierr.ErrValidation)
 	}
-
 	subs, err := s.listActiveSubscriptions(ctx, cust.ID, at)
 	if err != nil {
 		return nil, err
+	}
+	return s.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
+}
+
+func (s *entitlementGrantService) EnsureGrantsForSubscriptions(
+	ctx context.Context,
+	cust *customer.Customer,
+	subs []*subscription.Subscription,
+	at time.Time,
+) ([]*entitlementgrant.EntitlementGrant, error) {
+	if cust == nil {
+		return nil, ierr.NewError("customer is required").Mark(ierr.ErrValidation)
 	}
 	if len(subs) == 0 {
 		return nil, nil
@@ -108,16 +122,16 @@ func (s *entitlementGrantService) listActiveSubscriptions(
 	return s.SubRepo.List(ctx, filter)
 }
 
-// openMissingGrants opens the grants each subscription's grant-config ECs call
-// for, honoring the aggregation mode per feature:
-//   - parallel: one grant per EC — each EC is its own independent bucket.
-//   - additive: ONE grant per feature with quota = Σ EC quotas, opened on the
-//     lowest-ID ("primary") EC's slot. One bucket downstream means evaluation,
-//     exhaustion alerts, and billing overage all treat the group as a single
-//     pool with no extra machinery.
-//
-// EC-set or mode changes mid-window take effect when the live grant expires —
-// grant quota is immutable for the life of the grant.
+// grantCandidate is one grant to open: the EC whose slot it occupies and the
+// quota it carries (the EC's own quota for parallel, the group sum for additive).
+type grantCandidate struct {
+	ec    *entitlement.Entitlement
+	quota decimal.Decimal
+}
+
+// openMissingGrants opens missing grants per feature: parallel = one grant per
+// EC; additive = one grant on the primary EC with quota = Σ quotas. Grants are
+// immutable, so config changes take effect when the live grant expires.
 func (s *entitlementGrantService) openMissingGrants(
 	ctx context.Context,
 	subs []*subscription.Subscription,
@@ -127,124 +141,96 @@ func (s *entitlementGrantService) openMissingGrants(
 ) ([]*entitlementgrant.EntitlementGrant, error) {
 	opened := make([]*entitlementgrant.EntitlementGrant, 0)
 	for _, sub := range subs {
-		byFeature := make(map[string][]*entitlement.Entitlement)
-		featureOrder := make([]string, 0)
-		for _, ec := range ecsBySub[sub.ID] {
-			if !ec.HasGrantConfig() {
-				continue
-			}
-			if _, ok := byFeature[ec.FeatureID]; !ok {
-				featureOrder = append(featureOrder, ec.FeatureID)
-			}
-			byFeature[ec.FeatureID] = append(byFeature[ec.FeatureID], ec)
-		}
-
-		// TODO: review this logic.
-		// only open grants if duration is less than subscription cycle.
-		for _, featureID := range featureOrder {
-			group := byFeature[featureID]
-
-			// Amount-measure grants pin the flat unit price at open time so a
-			// price change mid-window can't retroactively reprice consumed usage.
-			// Nil pin = evaluator falls back to a live price lookup.
-			var unitPrice *decimal.Decimal
-			if group[0].GrantMeasure == types.EntitlementGrantMeasureAmount {
-				up, err := s.resolveFlatUnitPrice(ctx, featureID)
+		for _, group := range s.eligibleGrantGroups(ctx, sub, ecsBySub[sub.ID]) {
+			for _, candidate := range grantCandidatesForGroup(group) {
+				g, err := s.openIfSlotFree(ctx, sub, candidate, liveByConfigID, at)
 				if err != nil {
-					s.Logger.Error(ctx, "failed to resolve unit price for amount grant, opening unpinned",
-						"feature_id", featureID, "error", err)
-				} else {
-					unitPrice = up
+					return nil, err
 				}
-			}
-
-			parallel := lo.SomeBy(group, func(ec *entitlement.Entitlement) bool {
-				return ec.AggregationMode == types.EntitlementAggregationModeParallel
-			})
-			if parallel {
-				for _, ec := range group {
-					if _, ok := liveByConfigID[ec.ID]; ok {
-						continue
-					}
-					g, err := s.openOneGrant(ctx, sub, ec, at, lo.FromPtr(ec.GrantQuota), unitPrice)
-					if err != nil {
-						return nil, err
-					}
-					if g == nil {
-						continue
-					}
+				if g != nil {
 					opened = append(opened, g)
-					liveByConfigID[ec.ID] = g
 				}
-				continue
 			}
-
-			primary := group[0]
-			total := decimal.Zero
-			for _, ec := range group {
-				if ec.ID < primary.ID {
-					primary = ec
-				}
-				total = total.Add(lo.FromPtr(ec.GrantQuota))
-			}
-			if _, ok := liveByConfigID[primary.ID]; ok {
-				continue
-			}
-			g, err := s.openOneGrant(ctx, sub, primary, at, total, unitPrice)
-			if err != nil {
-				return nil, err
-			}
-			if g == nil {
-				continue
-			}
-			opened = append(opened, g)
-			liveByConfigID[primary.ID] = g
 		}
 	}
 	return opened, nil
 }
 
-// resolveFlatUnitPrice returns the flat per-unit price for the feature's meter.
-func (s *entitlementGrantService) resolveFlatUnitPrice(ctx context.Context, featureID string) (*decimal.Decimal, error) {
-	f, err := s.FeatureRepo.Get(ctx, featureID)
-	if err != nil {
-		return nil, err
+// eligibleGrantGroups groups the sub's openable grant ECs by feature, skipping
+// invalid durations and durations >= cycle length — a cycle-long grant is just
+// the cycle quota, which usage_reset_period already expresses.
+func (s *entitlementGrantService) eligibleGrantGroups(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	ecs []*entitlement.Entitlement,
+) map[string][]*entitlement.Entitlement {
+	cycleLen := sub.CurrentPeriodEnd.Sub(sub.CurrentPeriodStart)
+
+	byFeature := make(map[string][]*entitlement.Entitlement)
+	for _, ec := range ecs {
+		if !ec.HasGrantConfig() {
+			continue
+		}
+		dur, err := ec.GrantDuration()
+		if err != nil {
+			s.Logger.Error(ctx, "invalid grant duration on entitlement, skipping",
+				"entitlement_id", ec.ID, "error", err)
+			continue
+		}
+		if dur >= cycleLen {
+			s.Logger.Debug(ctx, "grant duration >= subscription cycle, skipping grant open",
+				"entitlement_id", ec.ID,
+				"subscription_id", sub.ID,
+				"grant_duration", dur.String(),
+				"cycle_length", cycleLen.String())
+			continue
+		}
+		byFeature[ec.FeatureID] = append(byFeature[ec.FeatureID], ec)
 	}
-	if f.MeterID == "" {
-		return nil, ierr.NewError("feature has no meter").
-			WithReportableDetails(map[string]interface{}{"feature_id": featureID}).
-			Mark(ierr.ErrValidation)
-	}
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.MeterIDs = []string{f.MeterID}
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
-	if err != nil {
-		return nil, err
-	}
-	p, ok := selectFlatUnitPrice(prices)
-	if !ok {
-		return nil, ierr.NewError("no flat price found for meter").
-			WithReportableDetails(map[string]interface{}{"feature_id": featureID, "meter_id": f.MeterID}).
-			Mark(ierr.ErrNotFound)
-	}
-	return lo.ToPtr(p.Amount), nil
+	return byFeature
 }
 
-// selectFlatUnitPrice picks the highest-sequence flat price from the slice.
-func selectFlatUnitPrice(prices []*price.Price) (*price.Price, bool) {
-	flatPrices := lo.Filter(prices, func(p *price.Price, _ int) bool {
-		return p.BillingModel == types.BILLING_MODEL_FLAT_FEE
+// grantCandidatesForGroup: parallel → one candidate per EC; additive → one
+// candidate on the primary (lowest-ID) EC with the summed quota.
+func grantCandidatesForGroup(group []*entitlement.Entitlement) []grantCandidate {
+	parallel := lo.SomeBy(group, func(ec *entitlement.Entitlement) bool {
+		return ec.AggregationMode == types.EntitlementAggregationModeParallel
 	})
-	if len(flatPrices) == 0 {
-		return nil, false
+	if parallel {
+		return lo.Map(group, func(ec *entitlement.Entitlement, _ int) grantCandidate {
+			return grantCandidate{ec: ec, quota: lo.FromPtr(ec.GrantQuota)}
+		})
 	}
-	best := flatPrices[0]
-	for _, p := range flatPrices[1:] {
-		if p.Sequence > best.Sequence {
-			best = p
+
+	primary := group[0]
+	total := decimal.Zero
+	for _, ec := range group {
+		if ec.ID < primary.ID {
+			primary = ec
 		}
+		total = total.Add(lo.FromPtr(ec.GrantQuota))
 	}
-	return best, true
+	return []grantCandidate{{ec: primary, quota: total}}
+}
+
+// openIfSlotFree opens the candidate's grant unless its slot already holds a
+// live one; a freshly opened grant claims the slot in liveByConfigID.
+func (s *entitlementGrantService) openIfSlotFree(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	candidate grantCandidate,
+	liveByConfigID map[string]*entitlementgrant.EntitlementGrant,
+	at time.Time,
+) (*entitlementgrant.EntitlementGrant, error) {
+	if _, ok := liveByConfigID[candidate.ec.ID]; ok {
+		return nil, nil
+	}
+	g, err := s.openOneGrant(ctx, sub, candidate.ec, at, candidate.quota)
+	if err != nil || g == nil {
+		return nil, err
+	}
+	liveByConfigID[candidate.ec.ID] = g
+	return g, nil
 }
 
 // openOneGrant expires the stale slot and inserts a new grant. On INSERT conflict
@@ -255,7 +241,6 @@ func (s *entitlementGrantService) openOneGrant(
 	ec *entitlement.Entitlement,
 	at time.Time,
 	quota decimal.Decimal,
-	unitPrice *decimal.Decimal,
 ) (*entitlementgrant.EntitlementGrant, error) {
 	dur, err := ec.GrantDuration()
 	if err != nil {
@@ -289,7 +274,6 @@ func (s *entitlementGrantService) openOneGrant(
 		ScopeEntityID:       ec.FeatureID,
 		Measure:             ec.GrantMeasure,
 		Quota:               quota,
-		UnitPrice:           unitPrice,
 		ValidFrom:           validFrom,
 		ValidTo:             validTo,
 		GrantStatus:         types.EntitlementGrantStatusActive,
@@ -315,9 +299,11 @@ func (s *entitlementGrantService) openOneGrant(
 	return winner, nil
 }
 
-// computeGrantWindow derives [valid_from, valid_to) for a new grant:
-// anchor on previous valid_to inside the cycle, drift-guard 5min, cap to cycle_end.
-// Returns ok=false if the window would be under 1 hour.
+// computeGrantWindow derives [valid_from, valid_to): butt-joints the previous
+// grant's valid_to when one exists in this cycle (no coverage gap; CH recompute
+// keeps late catch-up idempotent). Fresh slots start schedule_delay back — the
+// debounce window is exactly how old the triggering event can be, so ingested
+// events always land inside the first window. Capped at cycle end; ok=false under 1h.
 func (s *entitlementGrantService) computeGrantWindow(
 	ctx context.Context,
 	ec *entitlement.Entitlement,
@@ -328,7 +314,7 @@ func (s *entitlementGrantService) computeGrantWindow(
 	cycleStart := sub.CurrentPeriodStart
 	cycleEnd := sub.CurrentPeriodEnd
 
-	validFrom := latestOf(at, cycleStart)
+	validFrom := latestOf(at.Add(-s.Config.UsageAlerts.ScheduleDelay), cycleStart)
 	last, err := s.EntitlementGrantRepo.FindLastByConfigAndCustomer(ctx, ec.ID, sub.CustomerID)
 	if err != nil {
 		return time.Time{}, time.Time{}, false, err
@@ -337,15 +323,8 @@ func (s *entitlementGrantService) computeGrantWindow(
 		validFrom = last.ValidTo
 	}
 
-	// Drift guard: stale triggers can't credit unpriced historical usage.
-	driftCap := at.Add(-5 * time.Minute)
-	if validFrom.Before(driftCap) {
-		validFrom = driftCap
-	}
-
 	// Cycle-boundary cap: grants never straddle two cycles.
-	proposedValidTo := validFrom.Add(dur)
-	validTo := proposedValidTo
+	validTo := validFrom.Add(dur)
 	if validTo.After(cycleEnd) {
 		validTo = cycleEnd
 	}
@@ -363,23 +342,12 @@ func latestOf(a, b time.Time) time.Time {
 	return b
 }
 
-// validateEntitlementGrantShape enforces context-dependent grant-config rules
-// that need the meter, its prices, and sibling ECs. No-op without a grant config.
-//
-// Rejection rationale (see docs/design/2026-07-08-FLE-959-Entitlements-Revamp.md §7.1):
-//   - MAX aggregation tracks a peak, not additive consumption. A time-boxed
-//     grant models "you get N units in this window" — the peak metric can't be
-//     decremented against a quota without breaking semantics.
-//   - Bucketed meters (bucket_size set) aggregate per bucket independently. A
-//     grant window slicing across bucket boundaries would produce ambiguous
-//     quota accounting.
-//   - Tiered pricing on the amount lane: tier boundaries walk with cumulative
-//     cycle quantity. A grant only knows its own window's qty, so it can't
-//     price against the right tier. Blocked here so admins get a clean error
-//     at EC-write time rather than a silent mispricing at billing time.
-//   - Cross-EC coherence: all grant ECs on one feature must share the
-//     aggregation mode and measure (billing folds per feature and can't mix),
-//     and additive groups must share duration (their quotas sum into one window).
+// validateEntitlementGrantShape enforces grant-config rules that need the
+// meter, its prices, and sibling ECs. No-op without a grant config. Rejections:
+//   - MAX meters: a peak can't be decremented against a per-window quota.
+//   - Bucketed meters: a grant window slices buckets ambiguously.
+//   - Tiered prices on amount lane: tiers walk with cumulative cycle qty, not a window.
+//   - Sibling coherence: one mode + one measure per feature; additive shares duration.
 func (s *entitlementService) validateEntitlementGrantShape(
 	ctx context.Context,
 	e *entitlement.Entitlement,

@@ -138,11 +138,6 @@ func Quota(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldQuota, v))
 }
 
-// UnitPrice applies equality check predicate on the "unit_price" field. It's identical to UnitPriceEQ.
-func UnitPrice(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldUnitPrice, v))
-}
-
 // Usage applies equality check predicate on the "usage" field. It's identical to UsageEQ.
 func Usage(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldUsage, v))
@@ -1070,56 +1065,6 @@ func QuotaLT(v decimal.Decimal) predicate.EntitlementGrant {
 // QuotaLTE applies the LTE predicate on the "quota" field.
 func QuotaLTE(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldLTE(FieldQuota, v))
-}
-
-// UnitPriceEQ applies the EQ predicate on the "unit_price" field.
-func UnitPriceEQ(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldEQ(FieldUnitPrice, v))
-}
-
-// UnitPriceNEQ applies the NEQ predicate on the "unit_price" field.
-func UnitPriceNEQ(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNEQ(FieldUnitPrice, v))
-}
-
-// UnitPriceIn applies the In predicate on the "unit_price" field.
-func UnitPriceIn(vs ...decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIn(FieldUnitPrice, vs...))
-}
-
-// UnitPriceNotIn applies the NotIn predicate on the "unit_price" field.
-func UnitPriceNotIn(vs ...decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotIn(FieldUnitPrice, vs...))
-}
-
-// UnitPriceGT applies the GT predicate on the "unit_price" field.
-func UnitPriceGT(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGT(FieldUnitPrice, v))
-}
-
-// UnitPriceGTE applies the GTE predicate on the "unit_price" field.
-func UnitPriceGTE(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldGTE(FieldUnitPrice, v))
-}
-
-// UnitPriceLT applies the LT predicate on the "unit_price" field.
-func UnitPriceLT(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLT(FieldUnitPrice, v))
-}
-
-// UnitPriceLTE applies the LTE predicate on the "unit_price" field.
-func UnitPriceLTE(v decimal.Decimal) predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldLTE(FieldUnitPrice, v))
-}
-
-// UnitPriceIsNil applies the IsNil predicate on the "unit_price" field.
-func UnitPriceIsNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldIsNull(FieldUnitPrice))
-}
-
-// UnitPriceNotNil applies the NotNil predicate on the "unit_price" field.
-func UnitPriceNotNil() predicate.EntitlementGrant {
-	return predicate.EntitlementGrant(sql.FieldNotNull(FieldUnitPrice))
 }
 
 // UsageEQ applies the EQ predicate on the "usage" field.
