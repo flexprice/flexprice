@@ -3,14 +3,14 @@ package svix
 import "testing"
 
 func TestAppSubscriptions_Has(t *testing.T) {
-	all := &appSubscriptions{subscribeAll: true}
+	all := newAppSubscriptions()
+	all.addEndpoint(nil) // empty filterTypes = subscribe to every event
 	if !all.has("anything.happened") {
-		t.Fatalf("subscribeAll must match every event type")
+		t.Fatalf("empty filterTypes must match every event type")
 	}
 
-	filtered := &appSubscriptions{types: map[string]struct{}{
-		"invoice.created": {},
-	}}
+	filtered := newAppSubscriptions()
+	filtered.addEndpoint([]string{"invoice.created"})
 	if !filtered.has("invoice.created") {
 		t.Fatalf("filtered set must match listed type")
 	}
@@ -22,4 +22,5 @@ func TestAppSubscriptions_Has(t *testing.T) {
 	if nilSubs.has("x") {
 		t.Fatalf("nil subscriptions must not match")
 	}
+	nilSubs.addEndpoint([]string{"x"}) // must not panic
 }
