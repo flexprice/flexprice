@@ -27,18 +27,27 @@ const (
 	modeSentinelReplicaRead redisMode = "sentinel-replica-read"
 )
 
-// resolveRedisMode maps config to a topology (Sentinel > Cluster > Standalone).
-// Pure function so precedence is unit-testable without a live Redis.
-func resolveRedisMode(c config.RedisConfig) redisMode {
+// resolveRedisMode maps config to a topology (Sentinel > Cluster > Standalone)
+// and validates Sentinel coherence: master name and addresses must be set
+// together, else HA is silently lost (addrs dropped) or go-redis defaults to a
+// phantom localhost sentinel. Pure (no I/O) so both precedence and the guards
+// are unit-testable without a live Redis.
+func resolveRedisMode(c config.RedisConfig) (redisMode, error) {
+	hasMaster := c.SentinelMasterName != ""
+	hasAddrs := len(c.SentinelAddrs) > 0
 	switch {
-	case c.SentinelMasterName != "" && c.RouteReadsToReplicas:
-		return modeSentinelReplicaRead
-	case c.SentinelMasterName != "":
-		return modeSentinel
+	case hasMaster && !hasAddrs:
+		return "", fmt.Errorf("redis: FLEXPRICE_REDIS_SENTINEL_MASTER_NAME is set but no sentinel addresses provided (FLEXPRICE_REDIS_SENTINEL_ADDRS)")
+	case hasAddrs && !hasMaster:
+		return "", fmt.Errorf("redis: sentinel addresses are set but FLEXPRICE_REDIS_SENTINEL_MASTER_NAME is empty — set the master name to enable Sentinel mode, or clear the addresses")
+	case hasMaster && c.RouteReadsToReplicas:
+		return modeSentinelReplicaRead, nil
+	case hasMaster:
+		return modeSentinel, nil
 	case c.ClusterMode:
-		return modeCluster
+		return modeCluster, nil
 	default:
-		return modeStandalone
+		return modeStandalone, nil
 	}
 }
 
@@ -66,15 +75,14 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 	}
 
 	var rdb redis.UniversalClient
-	mode := resolveRedisMode(config.Redis)
+	mode, err := resolveRedisMode(config.Redis)
+	if err != nil {
+		return nil, err
+	}
 	switch mode {
 	case modeSentinel, modeSentinelReplicaRead:
 		// Addrs are the sentinel endpoints; go-redis (via Failover()) discovers
-		// the master/replicas. Guard empty addrs: go-redis would otherwise default
-		// to 127.0.0.1:26379 and connect to a phantom local sentinel.
-		if len(config.Redis.SentinelAddrs) == 0 {
-			return nil, fmt.Errorf("redis sentinel mode requires at least one sentinel address (FLEXPRICE_REDIS_SENTINEL_ADDRS)")
-		}
+		// the master/replicas. resolveRedisMode has already ensured they're set.
 		opts.Addrs = config.Redis.SentinelAddrs
 		opts.MasterName = config.Redis.SentinelMasterName
 		opts.SentinelUsername = config.Redis.SentinelUsername
