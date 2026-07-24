@@ -27,9 +27,8 @@ const (
 	modeSentinelReplicaRead redisMode = "sentinel-replica-read"
 )
 
-// resolveRedisMode maps config to a topology. Sentinel takes precedence over
-// ClusterMode; RouteReadsToReplicas only applies within Sentinel. Pure function
-// (no I/O) so the precedence rules are unit-testable without a live Redis.
+// resolveRedisMode maps config to a topology (Sentinel > Cluster > Standalone).
+// Pure function so precedence is unit-testable without a live Redis.
 func resolveRedisMode(c config.RedisConfig) redisMode {
 	switch {
 	case c.SentinelMasterName != "" && c.RouteReadsToReplicas:
@@ -43,18 +42,8 @@ func resolveRedisMode(c config.RedisConfig) redisMode {
 	}
 }
 
-// NewClient creates a new Redis client in one of three mutually exclusive modes,
-// selected by RedisConfig:
-//
-//   - Sentinel   — SentinelMasterName set: HA with automatic failover. go-redis
-//     resolves the current master via the sentinel quorum and re-resolves on
-//     failover. Set RouteReadsToReplicas to spread reads across replicas (read
-//     scaling, not sharding). Ignores Host/Port/ClusterMode.
-//   - Cluster    — ClusterMode=true: Redis Cluster (e.g. ElastiCache cluster mode
-//     enabled), data sharded across masters.
-//   - Standalone — otherwise: single node (single ElastiCache node, in-cluster redis).
-//
-// Sentinel takes precedence over ClusterMode when both are set.
+// NewClient creates a Redis client in one of three modes (see resolveRedisMode):
+// Sentinel (HA/automatic failover), Cluster (sharded), or Standalone (single node).
 func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.Redis.Timeout)
 	defer cancel()
@@ -80,13 +69,10 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 	mode := resolveRedisMode(config.Redis)
 	switch mode {
 	case modeSentinel, modeSentinelReplicaRead:
-		// Sentinel: Addrs are the SENTINEL endpoints; go-redis (via Failover())
-		// maps them to SentinelAddrs and discovers the master/replicas itself.
-		// Password above still authenticates to the data nodes; SentinelUsername/
-		// SentinelPassword authenticate to the sentinels.
+		// Addrs are the sentinel endpoints; go-redis (via Failover()) discovers
+		// the master/replicas. Guard empty addrs: go-redis would otherwise default
+		// to 127.0.0.1:26379 and connect to a phantom local sentinel.
 		if len(config.Redis.SentinelAddrs) == 0 {
-			// go-redis silently defaults an empty Addrs to 127.0.0.1:26379, which
-			// would connect to a phantom local sentinel instead of failing. Fail loud.
 			return nil, fmt.Errorf("redis sentinel mode requires at least one sentinel address (FLEXPRICE_REDIS_SENTINEL_ADDRS)")
 		}
 		opts.Addrs = config.Redis.SentinelAddrs
@@ -94,10 +80,8 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 		opts.SentinelUsername = config.Redis.SentinelUsername
 		opts.SentinelPassword = config.Redis.SentinelPassword
 		if mode == modeSentinelReplicaRead {
-			// FailoverCluster client with RouteByLatency: read-only commands go to
-			// the lowest-latency node among the master AND its replicas (writes
-			// always go to the master). This distributes reads for scaling; it is
-			// NOT data sharding — every node holds the full dataset.
+			// RouteByLatency: reads go to the lowest-latency node among
+			// master+replicas, writes to master. Read scaling, not sharding.
 			opts.RouteByLatency = true
 			rdb = redis.NewFailoverClusterClient(opts.Failover())
 		} else {

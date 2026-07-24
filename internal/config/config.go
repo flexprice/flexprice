@@ -678,29 +678,17 @@ type RedisConfig struct {
 	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
 
-	// Sentinel (Redis high-availability / automatic failover for self-hosted
-	// standalone Redis). When SentinelMasterName is non-empty the client runs in
-	// Sentinel mode and IGNORES Host/Port/ClusterMode: it resolves the current
-	// master (and replicas) through the sentinel quorum and re-resolves
-	// automatically on failover.
-	//
-	// SentinelAddrs must list the sentinel endpoints ("host:port"), NOT the Redis
-	// master. Password (above) still authenticates to the Redis data nodes;
-	// SentinelUsername/SentinelPassword authenticate to the sentinels themselves.
-	// Env overrides: FLEXPRICE_REDIS_SENTINEL_MASTER_NAME,
-	// FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated),
-	// FLEXPRICE_REDIS_SENTINEL_USERNAME, FLEXPRICE_REDIS_SENTINEL_PASSWORD.
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
+	// auths the data nodes; SentinelUsername/Password auth the sentinels.
 	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
 	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
 	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
 	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
 
-	// RouteReadsToReplicas (Sentinel only) routes read-only commands to the
-	// lowest-latency node among the master AND its replicas via go-redis's
-	// FailoverCluster client (RouteByLatency); writes always go to the master.
-	// This distributes reads for scaling — it is NOT data sharding (every node
-	// holds the full dataset). Reads served from a replica may be slightly stale
-	// (async replication). Env override: FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS.
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
 	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 

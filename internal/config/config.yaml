@@ -440,15 +440,12 @@ redis:
   # was always *redis.ClusterClient). Set to false when targeting a single-node
   # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
   cluster_mode: true
-  # Redis Sentinel (HA / automatic failover for self-hosted standalone Redis).
-  # Leave sentinel_master_name empty to disable — standalone/cluster mode is used.
-  # When set, host/port/cluster_mode are IGNORED and the client resolves the
-  # master through the sentinel quorum, re-resolving automatically on failover.
+  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
   sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
-  sentinel_addrs: [] # sentinel endpoints host:port (NOT the redis master); FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
-  sentinel_username: "" # sentinel ACL username, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
-  sentinel_password: "" # password to auth to the sentinels, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
-  route_reads_to_replicas: false # route reads to lowest-latency node among master+replicas (sentinel only; NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
+  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
+  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
+  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
+  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
