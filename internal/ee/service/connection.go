@@ -359,11 +359,20 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 		if err != nil {
 			return types.ConnectionMetadata{}, err
 		}
-		encryptedMetadata.Whop = &types.WhopConnectionMetadata{
+		whopMeta := &types.WhopConnectionMetadata{
 			APIKey:    encryptedAPIKey,
 			CompanyID: encryptedCompanyID,
 			ProductID: encryptedSecretData.Whop.ProductID, // not sensitive, stored plain
 		}
+		// Encrypt webhook secret if provided
+		if encryptedSecretData.Whop.WebhookSecret != "" {
+			encryptedWebhookSecret, encErr := s.encryptionService.Encrypt(encryptedSecretData.Whop.WebhookSecret)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			whopMeta.WebhookSecret = encryptedWebhookSecret
+		}
+		encryptedMetadata.Whop = whopMeta
 
 	case types.SecretProviderTabs:
 		if encryptedSecretData.Tabs == nil {
@@ -804,6 +813,13 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		}
 	}
 
+	// Accept flat encrypted_secret_data (create-style keys) for providers that support
+	// partial secret updates below.
+	if req.EncryptedSecretData == nil && len(req.FlatEncryptedSecretData) > 0 {
+		structured := dto.ConvertFlatMetadataToStructured(req.FlatEncryptedSecretData, conn.ProviderType)
+		req.EncryptedSecretData = &structured
+	}
+
 	// Zoho Books: merge webhook_secret only (plaintext from API → encrypted at rest)
 	if req.EncryptedSecretData != nil && req.EncryptedSecretData.ZohoBooks != nil && req.EncryptedSecretData.ZohoBooks.WebhookSecret != "" {
 		if conn.ProviderType != types.SecretProviderZohoBooks {
@@ -820,6 +836,24 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 			return nil, encErr
 		}
 		conn.EncryptedSecretData.ZohoBooks.WebhookSecret = encWS
+	}
+
+	// Whop: merge webhook_secret only (plaintext from API → encrypted at rest)
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Whop != nil && req.EncryptedSecretData.Whop.WebhookSecret != "" {
+		if conn.ProviderType != types.SecretProviderWhop {
+			return nil, ierr.NewError("webhook_secret update is only valid for whop connections").
+				Mark(ierr.ErrValidation)
+		}
+		if conn.EncryptedSecretData.Whop == nil {
+			return nil, ierr.NewError("Whop connection metadata is missing").
+				Mark(ierr.ErrValidation)
+		}
+		encWS, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Whop.WebhookSecret)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt Whop webhook secret", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
 	}
 
 	conn.UpdatedAt = time.Now()

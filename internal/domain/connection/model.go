@@ -234,6 +234,9 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		if productID, ok := metadata["product_id"].(string); ok {
 			whopMetadata.ProductID = productID
 		}
+		if webhookSecret, ok := metadata["webhook_secret"].(string); ok {
+			whopMetadata.WebhookSecret = webhookSecret
+		}
 		return types.ConnectionMetadata{
 			Whop: whopMetadata,
 		}

@@ -2,6 +2,9 @@ package whop
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,6 +32,7 @@ type WhopClient interface {
 	CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error)
 	MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error
 	GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error)
+	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error
 }
 
 // Client handles Whop API client setup and configuration
@@ -118,11 +122,57 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 		return nil, ierr.NewError("failed to decrypt Whop company ID").Mark(ierr.ErrInternal)
 	}
 
+	var webhookSecret string
+	if w.WebhookSecret != "" {
+		webhookSecret, err = c.encryptionService.Decrypt(w.WebhookSecret)
+		if err != nil {
+			c.logger.Error(context.Background(), "failed to decrypt Whop webhook secret", "connection_id", conn.ID, "error", err)
+			// Don't fail - webhook secret is optional for non-webhook flows
+			webhookSecret = ""
+		}
+	}
+
 	return &WhopConfig{
-		APIKey:    apiKey,
-		CompanyID: companyID,
-		ProductID: w.ProductID,
+		APIKey:        apiKey,
+		CompanyID:     companyID,
+		ProductID:     w.ProductID,
+		WebhookSecret: webhookSecret,
 	}, nil
+}
+
+// VerifyWebhookSignature verifies the X-Whop-Signature header against the raw payload
+// using HMAC-SHA256, per Whop's webhook signing scheme.
+func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
+	if signature == "" {
+		return ierr.NewError("missing X-Whop-Signature header").
+			WithHint("Whop webhooks must include a signature header").
+			Mark(ierr.ErrValidation)
+	}
+
+	config, err := c.GetWhopConfig(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load Whop config for webhook verification").
+			Mark(ierr.ErrInternal)
+	}
+
+	if config.WebhookSecret == "" {
+		return ierr.NewError("webhook_secret not configured in Whop connection").
+			WithHint("Set webhook_secret in the Whop connection encrypted_secret_data").
+			Mark(ierr.ErrValidation)
+	}
+
+	mac := hmac.New(sha256.New, []byte(config.WebhookSecret))
+	mac.Write(payload)
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+
+	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+		return ierr.NewError("webhook signature mismatch").
+			WithHint("Request may have been tampered with or webhook_secret is incorrect").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 // HasWhopConnection checks if the tenant has a Whop connection available

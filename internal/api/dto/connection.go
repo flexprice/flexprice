@@ -285,6 +285,9 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 		if v, ok := flatMetadata["product_id"].(string); ok {
 			whopMetadata.ProductID = v
 		}
+		if v, ok := flatMetadata["webhook_secret"].(string); ok {
+			whopMetadata.WebhookSecret = v
+		}
 		return types.ConnectionMetadata{
 			Whop: whopMetadata,
 		}
