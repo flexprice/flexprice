@@ -2493,6 +2493,41 @@ func (s *WalletAutoTopupInvoiceSuite) countAutoTopupInvoices() int {
 	return len(invoices)
 }
 
+func (s *WalletAutoTopupInvoiceSuite) countAutoTopupWalletTxns(status *types.TransactionStatus) int {
+	ctx := s.GetContext()
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	if status != nil {
+		filter.TransactionStatus = status
+	}
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	count := 0
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			if status == nil || tx.TxStatus == *status {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func (s *WalletAutoTopupInvoiceSuite) completePendingAutoTopupWalletTxns() {
+	ctx := s.GetContext()
+	pending := types.TransactionStatusPending
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	filter.TransactionStatus = &pending
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			s.NoError(s.GetStores().WalletRepo.UpdateTransactionStatus(ctx, tx.ID, types.TransactionStatusCompleted))
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Test 1 – no invoices exist → hasPendingAutoTopupInvoice returns false.
 // ---------------------------------------------------------------------------
@@ -2579,12 +2614,14 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 	ctx := s.GetContext()
 	balance := decimal.NewFromInt(3) // below threshold of 5
 
-	// First trigger – creates one pending invoice.
+	// First trigger – creates one pending invoice + pending wallet txn.
 	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+	pending := types.TransactionStatusPending
+	s.Equal(1, s.countAutoTopupWalletTxns(&pending), "expected 1 pending auto-topup wallet txn")
 
-	// Fetch the invoice and mark it as paid.
+	// Fetch the invoice and mark it as paid; complete the wallet txn (mirrors reconcile).
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = s.customer.ID
 	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
@@ -2594,12 +2631,256 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 
 	invoices[0].PaymentStatus = types.PaymentStatusSucceeded
 	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, invoices[0]))
+	s.completePendingAutoTopupWalletTxns()
 
-	// Second trigger – guard no longer blocks because invoice is paid.
-	// Re-read wallet to get fresh state (balance still low since no actual credit was added).
+	// Second trigger – invoice + pending-txn guards cleared; no cooloff configured.
 	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(2, s.countAutoTopupInvoices(), "expected 2 auto-topup invoices after payment cleared the guard")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_PendingWalletTxnBlocksEvenWithoutInvoice() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3)
+
+	// Seed a pending auto-topup wallet txn without an invoice row.
+	pendingTx := &wallet.Transaction{
+		ID:                "txn_pending_autotopup",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, pendingTx))
+
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices(), "pending wallet txn alone must block a new auto-topup invoice")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_CooldownBlocksAfterCompletedTxn() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3)
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	completed := &wallet.Transaction{
+		ID:                "txn_completed_autotopup",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusCompleted,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, completed))
+
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices(), "cooloff after completed auto-topup must block a new invoice")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestGetLastAutoTopupTransactionForWallet_IgnoresManualPending() {
+	ctx := s.GetContext()
+	manual := &wallet.Transaction{
+		ID:                "txn_manual_pending",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, manual))
+
+	last, err := s.GetStores().WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.Nil(last, "manual pending txn without auto_topup metadata must not match")
+}
+
+// ---------------------------------------------------------------------------
+// WalletAutoTopupDirectSuite – direct (non-invoiced) cooloff / burst behavior
+// ---------------------------------------------------------------------------
+
+type WalletAutoTopupDirectSuite struct {
+	testutil.BaseServiceTestSuite
+	service  WalletService
+	customer *customer.Customer
+	wallet   *wallet.Wallet
+}
+
+func TestWalletAutoTopupDirect(t *testing.T) {
+	suite.Run(t, new(WalletAutoTopupDirectSuite))
+}
+
+func (s *WalletAutoTopupDirectSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
+	s.service = NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		TaxAssociationRepo:       stores.TaxAssociationRepo,
+		TaxRateRepo:              stores.TaxRateRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
+	})
+
+	ctx := s.GetContext()
+	s.customer = &customer.Customer{
+		ID:         "cust_autotopup_direct",
+		ExternalID: "ext_cust_autotopup_direct",
+		Name:       "AutoTopup Direct Customer",
+		Email:      "autotopup-direct@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(stores.CustomerRepo.Create(ctx, s.customer))
+
+	threshold := decimal.NewFromInt(50)
+	amount := decimal.NewFromInt(10)
+	enabled := true
+	invoicing := false
+	s.wallet = &wallet.Wallet{
+		ID:                  "wallet_autotopup_direct",
+		CustomerID:          s.customer.ID,
+		Currency:            "usd",
+		WalletType:          types.WalletTypePrePaid,
+		WalletStatus:        types.WalletStatusActive,
+		Balance:             decimal.NewFromInt(5),
+		CreditBalance:       decimal.NewFromInt(5),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		AutoTopup: &types.AutoTopup{
+			Enabled:   &enabled,
+			Threshold: &threshold,
+			Amount:    &amount,
+			Invoicing: &invoicing,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(stores.WalletRepo.CreateWallet(ctx, s.wallet))
+}
+
+func (s *WalletAutoTopupDirectSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
+func (s *WalletAutoTopupDirectSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *WalletAutoTopupDirectSuite) svc() *walletService {
+	return s.service.(*walletService)
+}
+
+func (s *WalletAutoTopupDirectSuite) countCompletedAutoTopupTxns() int {
+	ctx := s.GetContext()
+	completed := types.TransactionStatusCompleted
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	filter.TransactionStatus = &completed
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	count := 0
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *WalletAutoTopupDirectSuite) TestDirect_NoCooldown_BurstsUntilAboveThreshold() {
+	ctx := s.GetContext()
+	// balance 5, threshold 50, amount 10 → nested re-eval should credit until > 50
+	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
+		Logger:        s.GetLogger(),
+		AlertLogsRepo: s.GetStores().AlertLogsRepo,
+		SettingsRepo:  s.GetStores().SettingsRepo,
+	}), "")
+	s.NoError(err)
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.True(w.CreditBalance.GreaterThan(decimal.NewFromInt(50)),
+		"expected burst to push balance above threshold, got %s", w.CreditBalance)
+	s.GreaterOrEqual(s.countCompletedAutoTopupTxns(), 5, "expected multiple direct auto-topup credits without cooloff")
+}
+
+func (s *WalletAutoTopupDirectSuite) TestUpdateWallet_CooldownZeroClears() {
+	ctx := s.GetContext()
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	updated, err := s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Cooldown: &types.Duration{Value: 0, Unit: types.DurationUnitSecond},
+		},
+	})
+	s.NoError(err)
+	s.Require().NotNil(updated.AutoTopup)
+	s.Nil(updated.AutoTopup.Cooldown, "value 0 must clear persisted cooldown")
+
+	// Omit cooldown on a later update must leave it cleared (not resurrect).
+	updated, err = s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Enabled: lo.ToPtr(true),
+		},
+	})
+	s.NoError(err)
+	s.Nil(updated.AutoTopup.Cooldown, "omitting cooldown must not restore a cleared cooldown")
+}
+
+func (s *WalletAutoTopupDirectSuite) TestDirect_WithCooldown_OneShotPerWindow() {
+	ctx := s.GetContext()
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
+		Logger:        s.GetLogger(),
+		AlertLogsRepo: s.GetStores().AlertLogsRepo,
+		SettingsRepo:  s.GetStores().SettingsRepo,
+	}), "")
+	s.NoError(err)
+
+	s.Equal(1, s.countCompletedAutoTopupTxns(), "cooloff must suppress direct-mode burst to a single top-up")
+	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.True(w.CreditBalance.Equal(decimal.NewFromInt(15)),
+		"expected balance 5+10=15 after one top-up, got %s", w.CreditBalance)
 }
 
 // ---------------------------------------------------------------------------
