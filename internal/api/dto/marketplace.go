@@ -6,27 +6,27 @@ import (
 	"github.com/samber/lo"
 )
 
-// allowedMarketplaceProviders are the SecretProvider values this endpoint accepts. Adding a further
-// marketplace (Azure) means adding its SecretProvider constant in internal/types/secret.go, listing
-// it here, and adding its own request block below — nothing else about this validation changes.
+// allowedMarketplaceProviders are the SecretProvider values this endpoint accepts.
 var allowedMarketplaceProviders = []types.SecretProvider{
 	types.SecretProviderAWSMarketplace,
 	types.SecretProviderGCPMarketplace,
+	types.SecretProviderAzureMarketplace,
 }
 
 // RegisterMarketplaceAgreementRequest is the request body for POST /v1/marketplace/agreements, sent
-// once per buyer purchase to link a Flexprice subscription to its marketplace agreement (AWS) or
-// entitlement (GCP). Exactly one of AWS/GCP must be set, matching Provider — this keeps
-// provider-specific fields from coexisting as one large bag of optional fields, and adding a further
-// marketplace later means a new block, not a redesign of this one.
+// once per buyer purchase to link a Flexprice subscription to its marketplace agreement (AWS),
+// entitlement (GCP) or subscription (Azure). Exactly one of AWS/GCP/Azure must be set, matching
+// Provider — this keeps provider-specific fields from coexisting as one large bag of optional
+// fields, and adding a further marketplace later means a new block, not a redesign of this one.
 type RegisterMarketplaceAgreementRequest struct {
-	Provider       types.SecretProvider `json:"provider" validate:"required"` // "aws_marketplace" | "gcp_marketplace"
+	Provider       types.SecretProvider `json:"provider" validate:"required"` // "aws_marketplace" | "gcp_marketplace" | "azure_marketplace"
 	SubscriptionID string               `json:"subscription_id" validate:"required"`
 	CustomerID     string               `json:"customer_id" validate:"required"`
 	PlanID         string               `json:"plan_id" validate:"required"`
 
-	AWS *AWSMarketplaceAgreement `json:"aws,omitempty"` // required iff Provider == aws_marketplace
-	GCP *GCPMarketplaceAgreement `json:"gcp,omitempty"` // required iff Provider == gcp_marketplace
+	AWS   *AWSMarketplaceAgreement   `json:"aws,omitempty"`   // required iff Provider == aws_marketplace
+	GCP   *GCPMarketplaceAgreement   `json:"gcp,omitempty"`   // required iff Provider == gcp_marketplace
+	Azure *AzureMarketplaceAgreement `json:"azure,omitempty"` // required iff Provider == azure_marketplace
 }
 
 // AWSMarketplaceAgreement carries the AWS-specific identifiers a tenant resolved via ResolveCustomer
@@ -71,6 +71,37 @@ type GCPMarketplaceAgreement struct {
 	AccountID        string `json:"account_id" validate:"required"`         // writes the customer mapping; not read in the report payload
 }
 
+// AzureMarketplaceAgreement carries the Azure-specific identifiers a tenant read off the Resolve
+// response or the Subscribe webhook before calling this endpoint.
+type AzureMarketplaceAgreement struct {
+	PlanID               string `json:"plan_id" validate:"required"`                // -> batchUsageEvent's planId; Azure's plan id, distinct from the request's top-level PlanID
+	Dimension            string `json:"dimension" validate:"required"`              // -> batchUsageEvent's dimension (always "usage_fee" in the cents model)
+	ResourceID           string `json:"resource_id" validate:"required"`            // -> batchUsageEvent's resourceId; the Azure SaaS subscription id
+	BeneficiaryAccountID string `json:"beneficiary_account_id" validate:"required"` // writes the customer mapping; not read in the report payload
+}
+
+// Validate checks the request shape only; subscription existence and uniqueness are validated in
+// the service layer.
+func (a *AzureMarketplaceAgreement) Validate() error {
+	if a.PlanID == "" {
+		return ierr.NewError("azure.plan_id is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.Dimension == "" {
+		return ierr.NewError("azure.dimension is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.ResourceID == "" {
+		return ierr.NewError("azure.resource_id is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.BeneficiaryAccountID == "" {
+		return ierr.NewError("azure.beneficiary_account_id is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // Validate checks the request shape only; subscription existence and uniqueness are validated in
 // the service layer.
 func (g *GCPMarketplaceAgreement) Validate() error {
@@ -97,12 +128,12 @@ func (g *GCPMarketplaceAgreement) Validate() error {
 func (r *RegisterMarketplaceAgreementRequest) Validate() error {
 	if r.Provider == "" {
 		return ierr.NewError("provider is required").
-			WithHint("provider is required (\"aws_marketplace\" or \"gcp_marketplace\")").
+			WithHint("provider is required (\"aws_marketplace\", \"gcp_marketplace\" or \"azure_marketplace\")").
 			Mark(ierr.ErrValidation)
 	}
 	if !lo.Contains(allowedMarketplaceProviders, r.Provider) {
 		return ierr.NewErrorf("unsupported marketplace provider %q", r.Provider).
-			WithHint("provider must be one of: aws_marketplace, gcp_marketplace").
+			WithHint("provider must be one of: aws_marketplace, gcp_marketplace, azure_marketplace").
 			Mark(ierr.ErrValidation)
 	}
 	if r.SubscriptionID == "" {
@@ -125,9 +156,9 @@ func (r *RegisterMarketplaceAgreementRequest) Validate() error {
 				WithHint("\"aws\" block is required when provider is \"aws_marketplace\"").
 				Mark(ierr.ErrValidation)
 		}
-		if r.GCP != nil {
-			return ierr.NewError("gcp must not be set").
-				WithHint("\"gcp\" block must not be set when provider is \"aws_marketplace\"").
+		if r.GCP != nil || r.Azure != nil {
+			return ierr.NewError("only aws must be set").
+				WithHint("only the \"aws\" block may be set when provider is \"aws_marketplace\"").
 				Mark(ierr.ErrValidation)
 		}
 		return r.AWS.Validate()
@@ -137,12 +168,24 @@ func (r *RegisterMarketplaceAgreementRequest) Validate() error {
 				WithHint("\"gcp\" block is required when provider is \"gcp_marketplace\"").
 				Mark(ierr.ErrValidation)
 		}
-		if r.AWS != nil {
-			return ierr.NewError("aws must not be set").
-				WithHint("\"aws\" block must not be set when provider is \"gcp_marketplace\"").
+		if r.AWS != nil || r.Azure != nil {
+			return ierr.NewError("only gcp must be set").
+				WithHint("only the \"gcp\" block may be set when provider is \"gcp_marketplace\"").
 				Mark(ierr.ErrValidation)
 		}
 		return r.GCP.Validate()
+	case types.SecretProviderAzureMarketplace:
+		if r.Azure == nil {
+			return ierr.NewError("azure is required").
+				WithHint("\"azure\" block is required when provider is \"azure_marketplace\"").
+				Mark(ierr.ErrValidation)
+		}
+		if r.AWS != nil || r.GCP != nil {
+			return ierr.NewError("only azure must be set").
+				WithHint("only the \"azure\" block may be set when provider is \"azure_marketplace\"").
+				Mark(ierr.ErrValidation)
+		}
+		return r.Azure.Validate()
 	}
 	return nil
 }

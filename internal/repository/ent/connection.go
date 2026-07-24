@@ -408,6 +408,14 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 				"credentials_json": encryptedSecretData.GCPMarketplace.CredentialsJSON,
 			}
 		}
+	case types.SecretProviderAzureMarketplace:
+		if encryptedSecretData.AzureMarketplace != nil {
+			return map[string]interface{}{
+				"tenant_id":     encryptedSecretData.AzureMarketplace.TenantID,
+				"client_id":     encryptedSecretData.AzureMarketplace.ClientID,
+				"client_secret": encryptedSecretData.AzureMarketplace.ClientSecret,
+			}
+		}
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks != nil {
 			result := map[string]interface{}{

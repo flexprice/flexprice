@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
@@ -282,6 +283,7 @@ func RegisterWorkflowsAndActivities(
 	billingService := service.NewBillingService(params)
 	awsMarketplaceClient := awsmarketplace.NewClient(params.Config, params.Logger)
 	gcpMarketplaceClient := gcpmarketplace.NewClient(params.Config, params.Logger)
+	azureMarketplaceClient := azuremarketplace.NewClient(params.Logger)
 	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(
 		subscriptionService,
 		billingService,
@@ -299,6 +301,7 @@ func RegisterWorkflowsAndActivities(
 		params.EncryptionService,
 		awsMarketplaceClient,
 		gcpMarketplaceClient,
+		azureMarketplaceClient,
 		params.Logger,
 	)
 

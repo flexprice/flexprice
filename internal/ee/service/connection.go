@@ -7,8 +7,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
-	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -31,18 +29,17 @@ type ConnectionService interface {
 
 type connectionService struct {
 	ServiceParams
-	encryptionService    security.EncryptionService
-	awsMarketplaceClient awsmarketplace.Client
-	gcpMarketplaceClient gcpmarketplace.Client
+	encryptionService security.EncryptionService
 }
 
 // NewConnectionService creates a new connection service
-func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService, awsMarketplaceClient awsmarketplace.Client, gcpMarketplaceClient gcpmarketplace.Client) ConnectionService {
+func NewConnectionService(
+	params ServiceParams,
+	encryptionService security.EncryptionService,
+) ConnectionService {
 	return &connectionService{
-		ServiceParams:        params,
-		encryptionService:    encryptionService,
-		awsMarketplaceClient: awsMarketplaceClient,
-		gcpMarketplaceClient: gcpMarketplaceClient,
+		ServiceParams:     params,
+		encryptionService: encryptionService,
 	}
 }
 
@@ -415,6 +412,31 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			CredentialsJSON: encryptedCredentialsJSON,
 		}
 
+	case types.SecretProviderAzureMarketplace:
+		if encryptedSecretData.AzureMarketplace == nil {
+			s.Logger.Info(context.Background(), "Azure Marketplace metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Azure Marketplace metadata is required").
+				WithHint("Azure Marketplace connection requires encrypted_secret_data with tenant_id, client_id and client_secret").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedTenantID, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.TenantID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedClientID, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.ClientID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedClientSecret, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.ClientSecret)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.AzureMarketplace = &types.AzureMarketplaceConnectionSecrets{
+			TenantID:     encryptedTenantID,
+			ClientID:     encryptedClientID,
+			ClientSecret: encryptedClientSecret,
+		}
+
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
 			s.Logger.Info(context.Background(), "Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
@@ -582,12 +604,16 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 				WithHint("sync_config.aws_marketplace.region is required").
 				Mark(ierr.ErrValidation)
 		}
+		awsIntegration, err := s.IntegrationFactory.GetAWSMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
 		// Bounded so a slow/unreachable AWS credential chain (e.g. the SDK falling through to an
 		// unreachable EC2 instance-metadata endpoint when Flexprice's own AWS credentials aren't
 		// configured via env vars) can't hang this request indefinitely — there's no other timeout
 		// anywhere in this path otherwise.
 		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		_, err := s.awsMarketplaceClient.AssumeRole(
+		_, err = awsIntegration.Client.AssumeRole(
 			verifyCtx,
 			conn.EncryptedSecretData.AWSMarketplace.RoleArn,
 			conn.EncryptedSecretData.AWSMarketplace.ExternalID,
@@ -619,12 +645,46 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if err := conn.EncryptedSecretData.GCPMarketplace.Validate(); err != nil {
 			return nil, err
 		}
+		gcpIntegration, err := s.IntegrationFactory.GetGCPMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
 		// Bounded for the same reason the AWS verification above is: a slow/unreachable credential
 		// chain must not hang this request indefinitely.
 		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		_, err := s.gcpMarketplaceClient.WifSession(
+		_, err = gcpIntegration.Client.WifSession(
 			verifyCtx,
 			conn.EncryptedSecretData.GCPMarketplace.CredentialsJSON,
+		)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Azure Marketplace: verify the tenant's Entra app credentials actually work before the
+	// connection is ever persisted. A client_credentials token request is the whole check — whether
+	// this app is also the one registered on the tenant's own offer's Technical Configuration page is
+	// the tenant's responsibility to get right, not something Flexprice checks at connection time.
+	if conn.ProviderType == types.SecretProviderAzureMarketplace {
+		if conn.EncryptedSecretData.AzureMarketplace == nil {
+			return nil, ierr.NewError("azure_marketplace connection requires tenant_id, client_id and client_secret").
+				WithHint("encrypted_secret_data.azure_marketplace with tenant_id, client_id and client_secret is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.AzureMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		azureIntegration, err := s.IntegrationFactory.GetAzureMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err = azureIntegration.Client.GetToken(
+			verifyCtx,
+			conn.EncryptedSecretData.AzureMarketplace.TenantID,
+			conn.EncryptedSecretData.AzureMarketplace.ClientID,
+			conn.EncryptedSecretData.AzureMarketplace.ClientSecret,
 		)
 		cancel()
 		if err != nil {
