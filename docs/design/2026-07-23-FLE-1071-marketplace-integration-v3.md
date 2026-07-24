@@ -702,7 +702,7 @@ connection at that point.
 |---|---|---|---|
 | Row skipped: non-USD | `debug` | `skipping marketplace usage record, currency not usd` | `subscription_id`, `usage_record_id`, `currency` |
 | Row skipped: negative amount (investigate) | `error` | `marketplace usage record has negative amount` | `subscription_id`, `usage_record_id`, `amount` |
-| Zero-amount row skipped on Azure only (§11.6) | `info` | `marketplace usage record skipped: zero amount not supported by azure` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id` |
+| Zero-quantity row skipped on Azure only (§11.6) | `info` | `marketplace usage record skipped: zero quantity not supported by azure` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `amount` |
 | Row reported successfully | `info` | `marketplace usage record synced` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `reporting_id` |
 | AWS: buyer not subscribed to this product | `error` | `marketplace usage report rejected by aws: customer not subscribed, will retry next run` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount` |
 | AWS: conflicts with a different record on file | `error` | `marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount`, `period_end` |
@@ -728,7 +728,7 @@ level=error msg="marketplace usage report rejected by gcp, will retry next run" 
 ```
 
 To answer "did this record get reported", grep `usage_record_id=<id>`: `marketplace usage record
-synced` means it landed and was accepted; `marketplace usage record skipped: zero amount not supported
+synced` means it landed and was accepted; `marketplace usage record skipped: zero quantity not supported
 by azure` means that connection is resolved but nothing was ever posted there (check the row's `syncs`
 map for that connection's `skipped: true` to confirm — never assume it was billed); any other line for
 that id means it was sent (or attempted) and rejected or unknown, and is retried next run. The new
@@ -848,6 +848,14 @@ one's own docs:
   the shipped client already sends `Int64Value: 0` with no guard. Sent like any other value.
 - **Azure** rejects it: `InvalidQuantity` — *"The quantity passed is lower or equal to 0"* (§2.4). Never
   sent.
+
+The Azure skip is checked on the **reported quantity in cents**, not on the raw decimal amount. Amount
+is converted to an integer number of cents before sending (§2.1), and a positive but sub-cent amount
+(for example $0.004) rounds down to zero cents. Gating the skip on `amount == 0` would let such a row
+through, get it rejected by Azure as `InvalidQuantity`, and retry it forever — the same rounding
+happens on every attempt, so it never succeeds and never gets a `Skipped` entry. Gating on
+`cents <= 0` (negatives are already filtered upstream) catches both the true-zero and the
+rounds-to-zero cases before anything is sent.
 
 For Azure the connection still needs resolving, or a fan-out row with an Azure connection could never
 reach `synced = true` even after AWS/GCP succeed. It gets a `SyncEntry` with `Skipped: true`,

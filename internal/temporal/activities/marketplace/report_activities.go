@@ -336,7 +336,8 @@ func (a *ReportActivities) isEligibleForReport(ctx context.Context, rec *usagere
 	}
 	if rec.Amount.IsNegative() {
 		a.logger.Error(ctx, "marketplace usage record has negative amount",
-			"subscription_id", rec.SubscriptionID, "usage_record_id", rec.ID, "amount", rec.Amount)
+			"subscription_id", rec.SubscriptionID, "usage_record_id", rec.ID, "amount", rec.Amount,
+			"error", "negative_amount")
 		return false
 	}
 	return true
@@ -752,9 +753,9 @@ func (a *ReportActivities) authAzureConnection(ctx context.Context, conn *connec
 }
 
 // reportAzureRecord reports a single usage record to Azure and returns the sync entry to persist on
-// success. A zero amount is never sent — Azure documents a quantity of zero as invalid — and instead
-// resolves this connection with Skipped=true, so a record is not permanently blocked from reaching
-// synced=true just because Azure cannot accept a zero-amount row.
+// success. A row whose reportable quantity is zero cents is never sent — Azure treats a quantity
+// of zero as invalid — and instead resolves this connection with Skipped=true, so a record is not
+// permanently blocked from reaching synced=true just because Azure cannot accept a zero quantity.
 func (a *ReportActivities) reportAzureRecord(ctx context.Context, rec *usagerecord.UsageRecord, preparedConn *preparedConnection) (types.UsageRecordSyncEntry, bool) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -770,10 +771,16 @@ func (a *ReportActivities) reportAzureRecord(ctx context.Context, rec *usagereco
 		return types.UsageRecordSyncEntry{}, false
 	}
 
-	if rec.Amount.IsZero() {
-		a.logger.Info(ctx, "marketplace usage record skipped: zero amount not supported by azure", "marketplace", preparedConn.conn.ProviderType,
+	// Only called for USD records (see isEligibleForReport). Azure's quantity is a double, but is
+	// always sent as a whole number of cents — the tenant prices their dimension per cent.
+	cents := types.ToSmallestUnit(rec.Amount, marketplaceReportingCurrency)
+
+	// Skip on cents, not rec.Amount: a positive sub-cent amount rounds to zero cents and Azure
+	// rejects a zero quantity. Negatives are already filtered upstream (isEligibleForReport).
+	if cents == 0 {
+		a.logger.Info(ctx, "marketplace usage record skipped: zero quantity not supported by azure", "marketplace", preparedConn.conn.ProviderType,
 			"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", rec.SubscriptionID,
-			"usage_record_id", rec.ID, "connection_id", preparedConn.conn.ID)
+			"usage_record_id", rec.ID, "connection_id", preparedConn.conn.ID, "amount", rec.Amount)
 		return types.UsageRecordSyncEntry{
 			Marketplace: types.SecretProviderAzureMarketplace,
 			SyncedAt:    time.Now().UTC(),
@@ -782,10 +789,6 @@ func (a *ReportActivities) reportAzureRecord(ctx context.Context, rec *usagereco
 			SkipReason: "zero_amount_not_supported",
 		}, true
 	}
-
-	// Only called for USD records (see isEligibleForReport). Azure's quantity is a double, but is
-	// always sent as a whole number of cents — the tenant prices their dimension per cent.
-	cents := types.ToSmallestUnit(rec.Amount, marketplaceReportingCurrency)
 
 	res, err := a.azureClient.ReportUsageEvent(ctx, preparedConn.azureToken, azuremarketplace.UsageEventInput{
 		ResourceID: resourceID,
