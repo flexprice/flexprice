@@ -27,8 +27,6 @@ type Repository interface {
 	ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
 	ListAllWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*Transaction, error)
 	CountWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) (int, error)
-	// GetLastWalletAutoTopupTransaction returns the most recent wallet transaction
-	// with metadata.auto_topup=true (created_at desc), or nil if none exists.
 	GetLastWalletAutoTopupTransaction(ctx context.Context, walletID string) (*Transaction, error)
 	UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error
 	UpdateTransaction(ctx context.Context, tx *Transaction) error

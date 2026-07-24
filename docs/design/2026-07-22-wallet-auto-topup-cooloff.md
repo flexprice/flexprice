@@ -32,7 +32,7 @@ Manual credit/debit/top-up must never be gated by these rules.
 |---|---|
 | Invoiced | Existing `hasPendingAutoTopupInvoice` (customer + `WALLET_AUTO_TOPUP`) **and** latest auto-topup wallet txn pending |
 | Direct | Latest auto-topup wallet txn pending |
-| Both | Optional cooloff from the same latest auto-topup txn (`UpdatedAt`/`CreatedAt` + `cooldown`) when it is not pending |
+| Both | Optional cooloff from the same latest auto-topup txn (`CreatedAt` + `cooldown`) when it is not pending. 
 
 Discriminator: `metadata.auto_topup = "true"` (`types.WalletMetadataKeyAutoTopup`). Manual purchased-credit txns lack this key.
 

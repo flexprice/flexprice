@@ -12,10 +12,10 @@ import (
 type DurationUnit string
 
 const (
-	DurationUnitSecond DurationUnit = "SECOND"
-	DurationUnitMinute DurationUnit = "MINUTE"
-	DurationUnitHour   DurationUnit = "HOUR"
-	DurationUnitDay    DurationUnit = "DAY"
+	DurationUnitSecond DurationUnit = "second"
+	DurationUnitMinute DurationUnit = "minute"
+	DurationUnitHour   DurationUnit = "hour"
+	DurationUnitDay    DurationUnit = "day"
 )
 
 func (u DurationUnit) Validate() error {
@@ -46,10 +46,8 @@ func (d *Duration) IsSet() bool {
 	return d != nil && d.Value > 0 && d.Unit != ""
 }
 
-// ShouldClearCooldown reports whether this duration is the explicit clear marker
-// (value == 0). Used by partial updates where omit/null means "leave unchanged".
-func (d *Duration) ShouldClearCooldown() bool {
-	return d != nil && d.Value == 0
+func (d *Duration) IsEmpty() bool {
+	return d == nil || d.Value == 0
 }
 
 // Validate checks bounds when Duration is present. Nil Duration is valid (unset).

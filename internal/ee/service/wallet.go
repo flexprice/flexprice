@@ -1556,7 +1556,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 			current.Invoicing = req.AutoTopup.Invoicing
 		}
 		if req.AutoTopup.Cooldown != nil {
-			if req.AutoTopup.Cooldown.ShouldClearCooldown() {
+			if req.AutoTopup.Cooldown.IsEmpty() {
 				current.Cooldown = nil
 			} else {
 				current.Cooldown = req.AutoTopup.Cooldown
@@ -3686,8 +3686,6 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	return len(invoices) > 0, nil
 }
 
-// isWithinAutoTopupCooldown reports whether last auto-topup txn still falls inside
-// the wallet's configured cooldown window. last may be nil (no prior auto-topup).
 func (s *walletService) isWithinAutoTopupCooldown(w *wallet.Wallet, last *wallet.Transaction) (bool, error) {
 	if w.AutoTopup == nil || !w.AutoTopup.Cooldown.IsSet() || last == nil {
 		return false, nil
@@ -3698,12 +3696,7 @@ func (s *walletService) isWithinAutoTopupCooldown(w *wallet.Wallet, last *wallet
 		return false, err
 	}
 
-	anchor := last.UpdatedAt
-	if anchor.IsZero() {
-		anchor = last.CreatedAt
-	}
-
-	return time.Now().UTC().Before(anchor.Add(cooldown)), nil
+	return time.Now().UTC().Before(last.CreatedAt.Add(cooldown)), nil
 }
 
 // triggerAutoTopup checks if auto top-up is enabled and triggers it if needed.
@@ -3750,7 +3743,6 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			}
 		}
 
-		// Single lookup: latest auto-topup txn drives both in-flight + cooloff.
 		lastAutoTopup, err := s.WalletRepo.GetLastWalletAutoTopupTransaction(ctx, w.ID)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get last auto-topup wallet transaction",
