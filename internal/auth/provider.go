@@ -64,7 +64,7 @@ type Provider interface {
 	// GenerateDevToken creates a short-lived JWT for internal developer testing.
 	// The claim schema is provider-specific:
 	//   flexprice → { user_id, tenant_id, environment_id }   (email ignored)
-	//   supabase  → { sub, email, app_metadata.tenant_id }   (environmentID ignored; pass X-Environment-ID header)
+	//   supabase  → { sub, email, app_metadata.tenant_id, environment_id }
 	GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error)
 
 	// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
