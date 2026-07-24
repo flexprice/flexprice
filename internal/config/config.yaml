@@ -213,6 +213,7 @@ logging:
 
 webhook:
   enabled: true
+  derived_events_enabled: true
   topic: "flexprice_system_events"
   consumer_group: "system-events-consumer"
   rate_limit: 5

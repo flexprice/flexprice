@@ -111,17 +111,20 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	changedSubs := []dto.ChangedSubscription{{
 		ID:               sub.ID,
 		Action:           dto.ChangedSubscriptionActionUpdated,
-		Status:           types.SubscriptionStatusIncomplete,
+		Status:           types.SubscriptionStatusIncomplete, // Is this correct?
 		TrialEnd:         lo.ToPtr(now),
 		CurrentPeriodEnd: lo.ToPtr(now),
 	}}
 
-	changedInvoice := []dto.ChangedInvoice{
-		{
-			ID:      invRes.ID,
-			Action:  dto.ChangedInvoiceActionCreated,
-			Invoice: invRes,
-		},
+	var changedInvoice []dto.ChangedInvoice
+	if invRes != nil {
+		changedInvoice = []dto.ChangedInvoice{
+			{
+				ID:      invRes.ID,
+				Action:  dto.ChangedInvoiceActionCreated,
+				Invoice: invRes,
+			},
+		}
 	}
 	return &dto.SubscriptionModifyResponse{
 		ChangedResources: dto.ChangedResources{

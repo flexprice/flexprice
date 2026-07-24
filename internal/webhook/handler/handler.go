@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
+	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 )
 
@@ -41,6 +42,8 @@ type handler struct {
 	tracing         *tracing.Service
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
+	deriver         EventDeriver
+	publisher       publisher.WebhookPublisher
 }
 
 // NewHandler creates a new memory-based handler
@@ -53,6 +56,8 @@ func NewHandler(
 	tracingSvc *tracing.Service,
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
+	deriver EventDeriver,
+	webhookPublisher publisher.WebhookPublisher,
 ) (Handler, error) {
 	return &handler{
 		pubSub:          pubSub,
@@ -64,6 +69,8 @@ func NewHandler(
 		tracing:         tracingSvc,
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
+		deriver:         deriver,
+		publisher:       webhookPublisher,
 	}, nil
 }
 
@@ -226,11 +233,42 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 
 	if h.config.Svix.Enabled {
 		h.absorbDeliveryError(ctx, "svix", h.deliverSvix(ctx, &event, msg.UUID), &event, msg.UUID)
-		return nil
+	} else {
+		h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
 	}
 
-	h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
+	// Fan out derived events (e.g. subscription.updated) only on the Kafka consume path.
+	// The synchronous retry path (DeliverWebhook) intentionally skips this so retriggers
+	// never spawn duplicate derived events.
+	h.publishDerivedEvents(ctx, &event)
 	return nil
+}
+
+// publishDerivedEvents publishes any follow-on events implied by the consumed event back onto
+// the webhook topic, so they flow through the normal publish → consume → deliver pipeline
+// (and get their own system_events row + retry semantics). Best-effort: failures are logged.
+func (h *handler) publishDerivedEvents(ctx context.Context, event *types.WebhookEvent) {
+	if !h.config.DerivedEventsEnabled {
+		return
+	}
+
+	if h.deriver == nil || h.publisher == nil {
+		return
+	}
+
+	for _, derived := range h.deriver.Derive(ctx, event) {
+		if derived == nil {
+			continue
+		}
+		if err := h.publisher.PublishWebhook(ctx, derived); err != nil {
+			h.logger.Error(ctx, "failed to publish derived webhook event",
+				"error", err,
+				"source_event", event.EventName,
+				"derived_event", derived.EventName,
+				"tenant_id", event.TenantID,
+			)
+		}
+	}
 }
 
 // deliverSvix sends a webhook via Svix.

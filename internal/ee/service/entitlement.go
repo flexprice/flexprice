@@ -674,9 +674,7 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 }
 
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
-
-	err := s.EntitlementRepo.Delete(ctx, id)
-	if err != nil {
+	if err := s.EntitlementRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 

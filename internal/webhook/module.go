@@ -27,11 +27,25 @@ var Module = fx.Options(
 	// Webhook components
 	fx.Provide(
 		provideWebhookPublisher,
+		provideEventDeriver,
 		handler.NewHandler,
 		providePayloadBuilderFactory,
 		NewWebhookService,
 	),
 )
+
+// provideEventDeriver wires the consumer-side event deriver and registers its filters. Adding a
+// new derivation is a one-line filter registration here; the deriver statically rejects any
+// registration whose source→target edges would form a cycle (panics at boot).
+func provideEventDeriver(
+	entitlementService service.EntitlementService,
+	logger *logger.Logger,
+) handler.EventDeriver {
+	return handler.NewEventDeriver(
+		logger,
+		handler.NewEntitlementFilter(entitlementService, logger),
+	)
+}
 
 // providePayloadBuilderFactory creates a new payload builder factory with all required services
 func providePayloadBuilderFactory(
