@@ -38,7 +38,7 @@ Discriminator: `metadata.auto_topup = "true"` (`types.WalletMetadataKeyAutoTopup
 
 ### 2.3 Single ledger lookup
 
-`WalletRepo.GetLastWalletAutoTopupTransaction(ctx, walletID)` returns the most recent published txn with `metadata.auto_topup=true` (`created_at` desc), or nil.
+`WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, walletID)` returns the most recent published txn with `metadata.auto_topup=true` (`created_at` desc), or nil.
 
 `triggerAutoTopup` uses that one row for both guards:
 1. pending → skip (in-flight)
@@ -166,7 +166,7 @@ flowchart TD
   inv -->|yes| invPend{hasPendingAutoTopupInvoice}
   invPend -->|yes| out
   invPend -->|no| lastTxn
-  inv -->|no| lastTxn[GetLastWalletAutoTopupTransaction]
+  inv -->|no| lastTxn[GetLastAutoTopupTransactionForWallet]
   lastTxn --> pending{last txn pending?}
   pending -->|yes| out
   pending -->|no| cd{cooldown set?}
@@ -184,7 +184,7 @@ flowchart TD
 |---|---|
 | `types.Duration` / `DurationUnit` | `internal/types/duration.go` |
 | `AutoTopup.Cooldown`, `WalletMetadataKeyAutoTopup` | `internal/types/wallet.go` |
-| Repo lookup | `WalletRepo.GetLastWalletAutoTopupTransaction` (`internal/domain/wallet`, ent + inmemory) |
+| Repo lookup | `WalletRepo.GetLastAutoTopupTransactionForWallet` (`internal/domain/wallet`, ent + inmemory) |
 | Guards | `internal/ee/service/wallet.go` (`triggerAutoTopup`, `isWithinAutoTopupCooldown`) |
 | Legacy invoice guard (kept) | `hasPendingAutoTopupInvoice` |
 | Unit tests | `internal/types/duration_test.go`, `internal/ee/service/wallet_test.go` (`WalletAutoTopupInvoiceSuite`, `WalletAutoTopupDirectSuite`) |

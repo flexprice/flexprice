@@ -35,13 +35,11 @@ func (u DurationUnit) Validate() error {
 }
 
 // Duration is a generic value+unit time span.
-// Optionality is expressed by using *Duration at the call site (nil = unset).
 type Duration struct {
 	Value int          `json:"value"`
 	Unit  DurationUnit `json:"unit"`
 }
 
-// IsSet reports whether the duration pointer is non-nil with a positive value and unit.
 func (d *Duration) IsSet() bool {
 	return d != nil && d.Value > 0 && d.Unit != ""
 }
@@ -50,7 +48,6 @@ func (d *Duration) IsEmpty() bool {
 	return d == nil || d.Value == 0
 }
 
-// Validate checks bounds when Duration is present. Nil Duration is valid (unset).
 func (d *Duration) Validate() error {
 	if d == nil {
 		return nil
@@ -69,7 +66,6 @@ func (d *Duration) Validate() error {
 	return d.Unit.Validate()
 }
 
-// ToDuration converts to time.Duration. Returns an error if unset or invalid.
 func (d *Duration) ToDuration() (time.Duration, error) {
 	if err := d.Validate(); err != nil {
 		return 0, err

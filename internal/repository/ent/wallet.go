@@ -590,10 +590,10 @@ func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, pa
 	return walletdomain.TransactionFromEnt(t), nil
 }
 
-// GetLastWalletAutoTopupTransaction returns the most recent published wallet
+// GetLastAutoTopupTransactionForWallet returns the most recent published wallet
 // transaction with metadata.auto_topup=true for the wallet, or nil if none.
-func (r *walletRepository) GetLastWalletAutoTopupTransaction(ctx context.Context, walletID string) (*walletdomain.Transaction, error) {
-	span := StartRepositorySpan(ctx, "wallet", "get_last_wallet_auto_topup_transaction", map[string]interface{}{
+func (r *walletRepository) GetLastAutoTopupTransactionForWallet(ctx context.Context, walletID string) (*walletdomain.Transaction, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_last_auto_topup_transaction_for_wallet", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer FinishSpan(span)

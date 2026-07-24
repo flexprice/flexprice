@@ -490,7 +490,7 @@ func (s *InMemoryWalletStore) GetPendingTransactionByParent(ctx context.Context,
 	return transactions[0], nil
 }
 
-func (s *InMemoryWalletStore) GetLastWalletAutoTopupTransaction(ctx context.Context, walletID string) (*wallet.Transaction, error) {
+func (s *InMemoryWalletStore) GetLastAutoTopupTransactionForWallet(ctx context.Context, walletID string) (*wallet.Transaction, error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 

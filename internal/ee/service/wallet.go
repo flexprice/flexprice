@@ -3743,7 +3743,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			}
 		}
 
-		lastAutoTopup, err := s.WalletRepo.GetLastWalletAutoTopupTransaction(ctx, w.ID)
+		lastAutoTopup, err := s.WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, w.ID)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to get last auto-topup wallet transaction",
 				"error", err,
