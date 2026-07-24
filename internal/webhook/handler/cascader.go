@@ -57,7 +57,12 @@ func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.Webh
 				"depth":      event.CascadeDepth,
 			}).
 			Mark(ierr.ErrInternal)
-		c.logger.Error(ctx, err.Error())
+		c.logger.Error(ctx, "webhook cascade depth exceeded; dropping cascaded events",
+			"error", err,
+			"event_name", event.EventName,
+			"depth", event.CascadeDepth,
+			"tenant_id", event.TenantID,
+		)
 		return nil
 	}
 
@@ -76,7 +81,11 @@ func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.Webh
 						"target_event": targetEvent.EventName,
 					}).
 					Mark(ierr.ErrInternal)
-				c.logger.Error(ctx, err.Error())
+				c.logger.Error(ctx, "cascade rule emitted undeclared target event; dropping",
+					"error", err,
+					"source_event", event.EventName,
+					"target_event", targetEvent.EventName,
+				)
 				continue
 			}
 			targetEvent.CascadeDepth = event.CascadeDepth + 1

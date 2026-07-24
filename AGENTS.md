@@ -48,8 +48,15 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Analytics queries → ClickHouse. Transactional reads/writes → PostgreSQL.
 
 ### Observability
-- Structured logging (zerolog); always propagate `ctx` for trace correlation.
+- Structured logging via `internal/logger` (ctx-first API); always propagate `ctx` for trace correlation.
 - No `fmt.Println` or bare `log.Print` in production paths.
+- **Loglint is a merge gate.** Custom analyzer `tools/loglint` runs via `make lint-ci` (`go vet -vettool=./tools/bin/loglint ./internal/...`). Details: `internal/logger/README.md`.
+  - **LL006 (common failure):** every `log.Error(ctx, msg, fields...)` MUST include a literal `"error"` key in `fields`. The linter only accepts a string-literal key — `Error(ctx, err.Error())` alone fails.
+  - Correct: `s.logger.Error(ctx, "invoice finalize failed", "error", err, "invoice_id", id)`
+  - Also correct: `"error", err.Error()` or `"error", "redacted reason"` when you must not log the raw err.
+  - Wrong: `s.logger.Error(ctx, err.Error())` — no `"error"` field.
+  - Prefer logging at the boundary that owns the failure; intermediate helpers return errors without logging.
+  - Other enforced rules: LL001 deprecated logger methods; LL002 no `logger.L` / `GetLogger()` outside `cmd/`+`scripts/`; LL003 `Warn` only in bootstrap (`cmd/`, `main.go`, `init()`, `internal/config/`, `New*` constructors); LL004 no `fmt.Print*`; LL009 `ctx` is the first arg, not a field.
 
 ### Testing
 - Unit tests for all service-layer business logic.
