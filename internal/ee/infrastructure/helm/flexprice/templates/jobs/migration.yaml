@@ -384,7 +384,7 @@ spec:
         # Topics are NOT auto-created by the broker (autoCreateTopicsEnable: false).
         # This init container creates all required topics idempotently.
         - name: create-kafka-topics
-          image: "{{ if .Values.kafkaConfig.enabled }}bitnami/kafka:latest{{ else }}confluentinc/cp-kafka:{{ .Values.kafkaConfig.internal.image.tag | default "7.7.1" }}{{ end }}"
+          image: "{{ if .Values.kafkaConfig.enabled }}soldevelo/kafka:latest{{ else }}confluentinc/cp-kafka:{{ .Values.kafkaConfig.internal.image.tag | default "7.7.1" }}{{ end }}"
           command:
             - sh
             - -c
