@@ -492,7 +492,10 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
+			// propertyName is user-controlled and interpolated both as a SQL string
+			// literal and as a raw column alias identifier — neither can be bound with
+			// `?`, so validate against a strict allow-list before use.
+			if propertyName != "" && validateGroupByProperty(propertyName) == nil {
 				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
 				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
 				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
@@ -745,6 +748,11 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			// See the analogous guard above — propertyName cannot be parameterized
+			// since it is used as a column alias identifier, so validate it instead.
+			if validateGroupByProperty(propertyName) != nil {
+				continue
+			}
 			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
 			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
 			outerSelectColumns = append(outerSelectColumns, propertyName)
