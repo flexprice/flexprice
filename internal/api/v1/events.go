@@ -453,18 +453,22 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 
 // @Summary Get event
 // @ID getEvent
-// @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Reads the meter-usage pipeline; includes processing status and step-by-step debug tracker when unprocessed.
+// @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Reads the meter-usage pipeline; includes processing status and step-by-step debug tracker when unprocessed. Uses ?id= query param because event IDs can contain "/".
 // @Tags Events
 // @Produce json
 // @Security ApiKeyAuth
-// @Param id path string true "Event ID"
+// @Param id query string true "Event ID"
 // @Success 200 {object} dto.GetEventByIDResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /events/{id} [get]
+// @Router /events/lookup [get]
 func (h *EventsHandler) GetEventByID(c *gin.Context) {
 	ctx := c.Request.Context()
-	eventID := c.Param("id")
+	// Prefer ?id= (avoids "/" collisions in event IDs); fall back to legacy /events/:id path param.
+	eventID := c.Query("id")
+	if eventID == "" {
+		eventID = c.Param("id")
+	}
 	if eventID == "" {
 		c.Error(ierr.NewError("event ID is required").
 			WithHint("Please provide a valid event ID").
