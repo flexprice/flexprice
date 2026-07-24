@@ -658,8 +658,21 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
+	// auths the data nodes; SentinelUsername/Password auth the sentinels.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
