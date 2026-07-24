@@ -42,7 +42,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 		if types.IsServiceAccount(ctx) {
 			roles := types.GetRoles(ctx)
 			if !pm.rbacService.HasPermission(roles, string(entity), string(action)) {
-				pm.logger.Info(ctx, "service account access refrained due to insufficient RBAC roles",
+				pm.logger.Info(ctx, "service account access denied due to insufficient RBAC roles",
 					"user_id", types.GetUserID(ctx),
 					"tenant_id", types.GetTenantID(ctx),
 					"environment_id", types.GetEnvironmentID(ctx),
@@ -51,6 +51,10 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 					"action", action,
 					"path", c.Request.URL.Path,
 				)
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"message": "insufficient permissions",
+				})
+				return
 			}
 		}
 
