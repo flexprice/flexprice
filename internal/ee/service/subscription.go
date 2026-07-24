@@ -337,7 +337,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	for i := range req.LineItems {
 		itemReq := req.LineItems[i]
 		itemReq.SkipEntitlementCheck = true
-		if _, err = s.AddSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
+		if _, err = s.addSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
 			return nil, err
 		}
 	}
@@ -1283,7 +1283,7 @@ func (s *subscriptionService) createPhaseExtraLineItems(
 		liReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
 		liReq.SkipEntitlementCheck = true
 
-		li, err := s.AddSubscriptionLineItem(ctx, sub.ID, liReq)
+		li, err := s.addSubscriptionLineItem(ctx, sub.ID, liReq)
 		if err != nil {
 			return nil, err
 		}
@@ -4599,7 +4599,13 @@ func (s *subscriptionService) AddAddonToSubscription(
 	}
 	sub.LineItems = lineItems
 
-	return s.addAddonToSubscription(ctx, sub, req)
+	assoc, err := s.addAddonToSubscription(ctx, sub, req)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subID)
+	return assoc, nil
 }
 
 // addAddonToSubscription adds an addon to a subscription
@@ -5010,7 +5016,8 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		if !lineItem.EndDate.IsZero() {
 			continue
 		}
-		if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+
+		if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 			logger.Error(ctx, "failed to terminate addon line item",
 				"line_item_id", lineItem.ID,
 				"entity_id", lineItem.EntityID,
@@ -5147,7 +5154,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: effectiveEndDate}
 		for _, lineItem := range lineItems {
-			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+			if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 				return err
 			}
 		}
@@ -5185,6 +5192,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 		}
 	}
 
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, association.EntityID)
 	return nil
 }
 
@@ -6096,27 +6104,44 @@ func (s *subscriptionService) generateProrationDescriptionFromResult(
 // Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,
 // then converts results to billing charges and applies commitment/overage logic.
 func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
-	response := &dto.GetUsageBySubscriptionResponse{}
-
-	useFinal := req.Source == string(types.UsageSourceInvoiceCreation)
-
-	// Delegate querying to the centralized function
 	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	subMeterUsage, err := meterUsageSvc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+	subMeterUsage, err := meterUsageSvc.GetSubscriptionMeterUsage(ctx, toSubscriptionMeterUsageRequest(req))
+	if err != nil {
+		return nil, err
+	}
+	return s.buildMeterUsageResponse(ctx, subMeterUsage, req)
+}
+
+// GetMeterUsageForSubscription is the data-fed variant of
+// GetMeterUsageBySubscription: the caller supplies the subscription so no extra
+// DB fetch happens for it. Both routes share buildMeterUsageResponse.
+func (s *subscriptionService) GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	subMeterUsage, err := meterUsageSvc.GetSubscriptionMeterUsageWithSub(ctx, sub, toSubscriptionMeterUsageRequest(req))
+	if err != nil {
+		return nil, err
+	}
+	return s.buildMeterUsageResponse(ctx, subMeterUsage, req)
+}
+
+func toSubscriptionMeterUsageRequest(req *dto.GetUsageBySubscriptionRequest) *GetSubscriptionMeterUsageRequest {
+	return &GetSubscriptionMeterUsageRequest{
 		SubscriptionID:  req.SubscriptionID,
 		StartTime:       req.StartTime,
 		EndTime:         req.EndTime,
 		LifetimeUsage:   req.LifetimeUsage,
-		UseFinal:        useFinal,
+		UseFinal:        req.Source == string(types.UsageSourceInvoiceCreation),
 		IncludeFeatures: false,
 		// Billing for a Parent subscription must roll up every inherited
 		// child's usage — that is the consolidated-invoice contract.
 		IncludeChildren: true,
-	})
-	if err != nil {
-		return nil, err
 	}
+}
 
+// buildMeterUsageResponse converts the centralized usage result into the
+// billing response, applying commitment/overage splitting.
+func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMeterUsage *SubscriptionMeterUsage, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
+	response := &dto.GetUsageBySubscriptionResponse{}
 	sub := subMeterUsage.Subscription
 
 	// Resolve effective time range for response
@@ -6141,7 +6166,7 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 	}
 
 	// Convert to billing charges
-	usageCharges, totalCost, err := meterUsageSvc.ConvertToBillingCharges(ctx, subMeterUsage)
+	usageCharges, totalCost, err := NewMeterUsageService(s.ServiceParams).ConvertToBillingCharges(ctx, subMeterUsage)
 	if err != nil {
 		return nil, err
 	}

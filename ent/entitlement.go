@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Entitlement is the model entity for the Entitlement schema.
@@ -60,7 +61,17 @@ type Entitlement struct {
 	// End date for time-bound entitlements (subscription-scoped only)
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// ConfigValue holds the value of the "config_value" field.
-	ConfigValue        map[string]interface{} `json:"config_value,omitempty"`
+	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
+	// GrantMeasure holds the value of the "grant_measure" field.
+	GrantMeasure types.EntitlementGrantMeasure `json:"grant_measure,omitempty"`
+	// GrantDurationValue holds the value of the "grant_duration_value" field.
+	GrantDurationValue *int `json:"grant_duration_value,omitempty"`
+	// GrantDurationUnit holds the value of the "grant_duration_unit" field.
+	GrantDurationUnit types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	// GrantQuota holds the value of the "grant_quota" field.
+	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
+	// AggregationMode holds the value of the "aggregation_mode" field.
+	AggregationMode    types.EntitlementAggregationMode `json:"aggregation_mode,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -70,13 +81,15 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case entitlement.FieldGrantQuota:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case entitlement.FieldConfigValue:
 			values[i] = new([]byte)
 		case entitlement.FieldIsEnabled, entitlement.FieldIsSoftLimit:
 			values[i] = new(sql.NullBool)
-		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder:
+		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldAggregationMode:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -235,6 +248,38 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field config_value: %w", err)
 				}
 			}
+		case entitlement.FieldGrantMeasure:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_measure", values[i])
+			} else if value.Valid {
+				e.GrantMeasure = types.EntitlementGrantMeasure(value.String)
+			}
+		case entitlement.FieldGrantDurationValue:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_duration_value", values[i])
+			} else if value.Valid {
+				e.GrantDurationValue = new(int)
+				*e.GrantDurationValue = int(value.Int64)
+			}
+		case entitlement.FieldGrantDurationUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_duration_unit", values[i])
+			} else if value.Valid {
+				e.GrantDurationUnit = types.EntitlementGrantDurationUnit(value.String)
+			}
+		case entitlement.FieldGrantQuota:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_quota", values[i])
+			} else if value.Valid {
+				e.GrantQuota = new(decimal.Decimal)
+				*e.GrantQuota = *value.S.(*decimal.Decimal)
+			}
+		case entitlement.FieldAggregationMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field aggregation_mode", values[i])
+			} else if value.Valid {
+				e.AggregationMode = types.EntitlementAggregationMode(value.String)
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -348,6 +393,25 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("config_value=")
 	builder.WriteString(fmt.Sprintf("%v", e.ConfigValue))
+	builder.WriteString(", ")
+	builder.WriteString("grant_measure=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantMeasure))
+	builder.WriteString(", ")
+	if v := e.GrantDurationValue; v != nil {
+		builder.WriteString("grant_duration_value=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("grant_duration_unit=")
+	builder.WriteString(fmt.Sprintf("%v", e.GrantDurationUnit))
+	builder.WriteString(", ")
+	if v := e.GrantQuota; v != nil {
+		builder.WriteString("grant_quota=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("aggregation_mode=")
+	builder.WriteString(fmt.Sprintf("%v", e.AggregationMode))
 	builder.WriteByte(')')
 	return builder.String()
 }

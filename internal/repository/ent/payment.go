@@ -669,7 +669,7 @@ func (o PaymentQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query P
 
 func (o PaymentQueryOptions) ApplyStatusFilter(query PaymentQuery, status string) PaymentQuery {
 	if status == "" {
-		return query.Where(payment.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(payment.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(payment.Status(status))
 }

@@ -1617,3 +1617,80 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketVal
 		})
 	}
 }
+
+func (s *SubscriptionLineItemServiceSuite) resetWebhooks() {
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+}
+
+func (s *SubscriptionLineItemServiceSuite) countSubscriptionUpdated() int {
+	n := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionUpdated {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_PublishesSubscriptionUpdated() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	s.resetWebhooks()
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Equal(1, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_PublishesSubscriptionUpdated() {
+	ctx := s.GetContext()
+	s.resetWebhooks()
+	_, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+	s.Equal(1, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_DoesNotPublish() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(15),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	svc := s.service.(*subscriptionService)
+	s.resetWebhooks()
+	_, err := svc.addSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Equal(0, s.countSubscriptionUpdated())
+}

@@ -264,7 +264,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 	case types.AlertTypeFeatureWalletBalance,
 		types.AlertTypeSubscriptionSpend,
 		types.AlertTypeSubscriptionLineItemSpend,
-		types.AlertTypeSubscriptionGroupSpend:
+		types.AlertTypeSubscriptionGroupSpend,
+		types.AlertTypeEntitlementGrantExhausted:
 		// Publish webhook event using the publishSystemEvent helper
 		if webhookEventName != "" {
 			if err := s.publishSystemEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
@@ -369,6 +370,10 @@ var alertWebhookMapping = map[types.AlertType]map[types.AlertState]WebhookEventM
 		types.AlertStateInfo:    {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdReached},
 		types.AlertStateOk:      {WebhookEvent: types.WebhookEventSubscriptionGroupSpendThresholdRecovered},
 	},
+	// Grant alerts fire only on exhaustion; recovery is a new grant, not a state flip.
+	types.AlertTypeEntitlementGrantExhausted: {
+		types.AlertStateInAlarm: {WebhookEvent: types.WebhookEventEntitlementGrantExhausted},
+	},
 }
 
 // getWebhookEventName determines the appropriate webhook event name based on alert type and status
@@ -415,7 +420,10 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 			return err
 		}
 
-	case types.AlertTypeSubscriptionSpend, types.AlertTypeSubscriptionLineItemSpend, types.AlertTypeSubscriptionGroupSpend:
+	case types.AlertTypeSubscriptionSpend,
+		types.AlertTypeSubscriptionLineItemSpend,
+		types.AlertTypeSubscriptionGroupSpend,
+		types.AlertTypeEntitlementGrantExhausted:
 		webhookPayload, err = json.Marshal(webhookDto.InternalAlertEvent{
 			EntityType:       alertLog.EntityType,
 			EntityID:         alertLog.EntityID,

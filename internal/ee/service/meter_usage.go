@@ -49,6 +49,10 @@ type MeterUsageService interface {
 	// Both analytics and billing paths call this per-subscription to get line-item-bounded usage.
 	GetSubscriptionMeterUsage(ctx context.Context, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
 
+	// GetSubscriptionMeterUsageWithSub is the data-fed variant: the caller
+	// supplies the subscription and no DB fetch happens for it.
+	GetSubscriptionMeterUsageWithSub(ctx context.Context, sub *subscription.Subscription, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
+
 	// ConvertToBillingCharges maps SubscriptionMeterUsage to billing charges.
 	ConvertToBillingCharges(ctx context.Context, usage *SubscriptionMeterUsage) ([]*dto.SubscriptionUsageByMetersResponse, decimal.Decimal, error)
 
@@ -312,10 +316,24 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		return nil, ierr.NewError("subscription_id is required").Mark(ierr.ErrValidation)
 	}
 
-	// 1. Get subscription
 	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, err
+	}
+	return s.GetSubscriptionMeterUsageWithSub(ctx, sub, req)
+}
+
+// GetSubscriptionMeterUsageWithSub is the data-fed variant of
+// GetSubscriptionMeterUsage: the caller supplies the subscription so no extra
+// DB fetch happens for it. Line items are (re)loaded scoped to the usage window
+// and assigned onto sub.LineItems.
+func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req *GetSubscriptionMeterUsageRequest,
+) (*SubscriptionMeterUsage, error) {
+	if req == nil || sub == nil {
+		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
 	}
 
 	// 2. Resolve external customer IDs for meter_usage queries.
@@ -2145,12 +2163,12 @@ func (s *meterUsageService) ConvertToBillingCharges(
 			Quantity:               quantity.InexactFloat64(),
 			FilterValues:           make(price.JSONBFilters),
 			MeterID:                lu.MeterID,
-			MeterDisplayName:       lu.Meter.Name,
 			Price:                  lu.Price,
 			BucketedUsageResult:    lu.BucketedResult,
 		}
 
 		if lu.Meter != nil {
+			charge.MeterDisplayName = lu.Meter.Name
 			for _, filter := range lu.Meter.Filters {
 				charge.FilterValues[filter.Key] = filter.Values
 			}

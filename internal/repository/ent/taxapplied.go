@@ -359,7 +359,7 @@ func (o TaxAppliedQueryOptions) ApplyStatusFilter(query TaxAppliedQuery, status 
 	// Debug logging to understand what status is being applied
 	if status == "" {
 		// When status is empty, exclude deleted records
-		return query.Where(taxapplied.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(taxapplied.StatusEQ(string(types.StatusPublished)))
 	}
 	// When status is specified, filter by that exact status
 	return query.Where(taxapplied.Status(status))

@@ -81,6 +81,10 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 		return false
 	}
 
+	if f.HasGrantConfig != nil && e.HasGrantConfig() != *f.HasGrantConfig {
+		return false
+	}
+
 	// Filter by time range
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && e.CreatedAt.Before(*f.StartTime) {

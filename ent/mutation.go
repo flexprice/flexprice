@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -97,6 +98,7 @@ const (
 	TypeCreditNoteLineItem       = "CreditNoteLineItem"
 	TypeCustomer                 = "Customer"
 	TypeEntitlement              = "Entitlement"
+	TypeEntitlementGrant         = "EntitlementGrant"
 	TypeEntityIntegrationMapping = "EntityIntegrationMapping"
 	TypeEnvironment              = "Environment"
 	TypeFeature                  = "Feature"
@@ -23618,36 +23620,42 @@ func (m *CustomerMutation) ResetEdge(name string) error {
 // EntitlementMutation represents an operation that mutates the Entitlement nodes in the graph.
 type EntitlementMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *string
-	tenant_id             *string
-	status                *string
-	created_at            *time.Time
-	updated_at            *time.Time
-	created_by            *string
-	updated_by            *string
-	environment_id        *string
-	entity_type           *types.EntitlementEntityType
-	entity_id             *string
-	feature_id            *string
-	feature_type          *types.FeatureType
-	is_enabled            *bool
-	usage_limit           *int64
-	addusage_limit        *int64
-	usage_reset_period    *types.EntitlementUsageResetPeriod
-	is_soft_limit         *bool
-	static_value          *string
-	display_order         *int
-	adddisplay_order      *int
-	parent_entitlement_id *string
-	start_date            *time.Time
-	end_date              *time.Time
-	config_value          *map[string]interface{}
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*Entitlement, error)
-	predicates            []predicate.Entitlement
+	op                      Op
+	typ                     string
+	id                      *string
+	tenant_id               *string
+	status                  *string
+	created_at              *time.Time
+	updated_at              *time.Time
+	created_by              *string
+	updated_by              *string
+	environment_id          *string
+	entity_type             *types.EntitlementEntityType
+	entity_id               *string
+	feature_id              *string
+	feature_type            *types.FeatureType
+	is_enabled              *bool
+	usage_limit             *int64
+	addusage_limit          *int64
+	usage_reset_period      *types.EntitlementUsageResetPeriod
+	is_soft_limit           *bool
+	static_value            *string
+	display_order           *int
+	adddisplay_order        *int
+	parent_entitlement_id   *string
+	start_date              *time.Time
+	end_date                *time.Time
+	config_value            *map[string]interface{}
+	grant_measure           *types.EntitlementGrantMeasure
+	grant_duration_value    *int
+	addgrant_duration_value *int
+	grant_duration_unit     *types.EntitlementGrantDurationUnit
+	grant_quota             *decimal.Decimal
+	aggregation_mode        *types.EntitlementAggregationMode
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*Entitlement, error)
+	predicates              []predicate.Entitlement
 }
 
 var _ ent.Mutation = (*EntitlementMutation)(nil)
@@ -24707,6 +24715,259 @@ func (m *EntitlementMutation) ResetConfigValue() {
 	delete(m.clearedFields, entitlement.FieldConfigValue)
 }
 
+// SetGrantMeasure sets the "grant_measure" field.
+func (m *EntitlementMutation) SetGrantMeasure(tgm types.EntitlementGrantMeasure) {
+	m.grant_measure = &tgm
+}
+
+// GrantMeasure returns the value of the "grant_measure" field in the mutation.
+func (m *EntitlementMutation) GrantMeasure() (r types.EntitlementGrantMeasure, exists bool) {
+	v := m.grant_measure
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantMeasure returns the old "grant_measure" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantMeasure(ctx context.Context) (v types.EntitlementGrantMeasure, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantMeasure is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantMeasure requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantMeasure: %w", err)
+	}
+	return oldValue.GrantMeasure, nil
+}
+
+// ClearGrantMeasure clears the value of the "grant_measure" field.
+func (m *EntitlementMutation) ClearGrantMeasure() {
+	m.grant_measure = nil
+	m.clearedFields[entitlement.FieldGrantMeasure] = struct{}{}
+}
+
+// GrantMeasureCleared returns if the "grant_measure" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantMeasureCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantMeasure]
+	return ok
+}
+
+// ResetGrantMeasure resets all changes to the "grant_measure" field.
+func (m *EntitlementMutation) ResetGrantMeasure() {
+	m.grant_measure = nil
+	delete(m.clearedFields, entitlement.FieldGrantMeasure)
+}
+
+// SetGrantDurationValue sets the "grant_duration_value" field.
+func (m *EntitlementMutation) SetGrantDurationValue(i int) {
+	m.grant_duration_value = &i
+	m.addgrant_duration_value = nil
+}
+
+// GrantDurationValue returns the value of the "grant_duration_value" field in the mutation.
+func (m *EntitlementMutation) GrantDurationValue() (r int, exists bool) {
+	v := m.grant_duration_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantDurationValue returns the old "grant_duration_value" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantDurationValue(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantDurationValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantDurationValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantDurationValue: %w", err)
+	}
+	return oldValue.GrantDurationValue, nil
+}
+
+// AddGrantDurationValue adds i to the "grant_duration_value" field.
+func (m *EntitlementMutation) AddGrantDurationValue(i int) {
+	if m.addgrant_duration_value != nil {
+		*m.addgrant_duration_value += i
+	} else {
+		m.addgrant_duration_value = &i
+	}
+}
+
+// AddedGrantDurationValue returns the value that was added to the "grant_duration_value" field in this mutation.
+func (m *EntitlementMutation) AddedGrantDurationValue() (r int, exists bool) {
+	v := m.addgrant_duration_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGrantDurationValue clears the value of the "grant_duration_value" field.
+func (m *EntitlementMutation) ClearGrantDurationValue() {
+	m.grant_duration_value = nil
+	m.addgrant_duration_value = nil
+	m.clearedFields[entitlement.FieldGrantDurationValue] = struct{}{}
+}
+
+// GrantDurationValueCleared returns if the "grant_duration_value" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantDurationValueCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantDurationValue]
+	return ok
+}
+
+// ResetGrantDurationValue resets all changes to the "grant_duration_value" field.
+func (m *EntitlementMutation) ResetGrantDurationValue() {
+	m.grant_duration_value = nil
+	m.addgrant_duration_value = nil
+	delete(m.clearedFields, entitlement.FieldGrantDurationValue)
+}
+
+// SetGrantDurationUnit sets the "grant_duration_unit" field.
+func (m *EntitlementMutation) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) {
+	m.grant_duration_unit = &tgdu
+}
+
+// GrantDurationUnit returns the value of the "grant_duration_unit" field in the mutation.
+func (m *EntitlementMutation) GrantDurationUnit() (r types.EntitlementGrantDurationUnit, exists bool) {
+	v := m.grant_duration_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantDurationUnit returns the old "grant_duration_unit" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantDurationUnit(ctx context.Context) (v types.EntitlementGrantDurationUnit, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantDurationUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantDurationUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantDurationUnit: %w", err)
+	}
+	return oldValue.GrantDurationUnit, nil
+}
+
+// ClearGrantDurationUnit clears the value of the "grant_duration_unit" field.
+func (m *EntitlementMutation) ClearGrantDurationUnit() {
+	m.grant_duration_unit = nil
+	m.clearedFields[entitlement.FieldGrantDurationUnit] = struct{}{}
+}
+
+// GrantDurationUnitCleared returns if the "grant_duration_unit" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantDurationUnitCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantDurationUnit]
+	return ok
+}
+
+// ResetGrantDurationUnit resets all changes to the "grant_duration_unit" field.
+func (m *EntitlementMutation) ResetGrantDurationUnit() {
+	m.grant_duration_unit = nil
+	delete(m.clearedFields, entitlement.FieldGrantDurationUnit)
+}
+
+// SetGrantQuota sets the "grant_quota" field.
+func (m *EntitlementMutation) SetGrantQuota(d decimal.Decimal) {
+	m.grant_quota = &d
+}
+
+// GrantQuota returns the value of the "grant_quota" field in the mutation.
+func (m *EntitlementMutation) GrantQuota() (r decimal.Decimal, exists bool) {
+	v := m.grant_quota
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantQuota returns the old "grant_quota" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantQuota(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantQuota is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantQuota requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantQuota: %w", err)
+	}
+	return oldValue.GrantQuota, nil
+}
+
+// ClearGrantQuota clears the value of the "grant_quota" field.
+func (m *EntitlementMutation) ClearGrantQuota() {
+	m.grant_quota = nil
+	m.clearedFields[entitlement.FieldGrantQuota] = struct{}{}
+}
+
+// GrantQuotaCleared returns if the "grant_quota" field was cleared in this mutation.
+func (m *EntitlementMutation) GrantQuotaCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldGrantQuota]
+	return ok
+}
+
+// ResetGrantQuota resets all changes to the "grant_quota" field.
+func (m *EntitlementMutation) ResetGrantQuota() {
+	m.grant_quota = nil
+	delete(m.clearedFields, entitlement.FieldGrantQuota)
+}
+
+// SetAggregationMode sets the "aggregation_mode" field.
+func (m *EntitlementMutation) SetAggregationMode(tam types.EntitlementAggregationMode) {
+	m.aggregation_mode = &tam
+}
+
+// AggregationMode returns the value of the "aggregation_mode" field in the mutation.
+func (m *EntitlementMutation) AggregationMode() (r types.EntitlementAggregationMode, exists bool) {
+	v := m.aggregation_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregationMode returns the old "aggregation_mode" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldAggregationMode(ctx context.Context) (v types.EntitlementAggregationMode, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregationMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregationMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregationMode: %w", err)
+	}
+	return oldValue.AggregationMode, nil
+}
+
+// ResetAggregationMode resets all changes to the "aggregation_mode" field.
+func (m *EntitlementMutation) ResetAggregationMode() {
+	m.aggregation_mode = nil
+}
+
 // Where appends a list predicates to the EntitlementMutation builder.
 func (m *EntitlementMutation) Where(ps ...predicate.Entitlement) {
 	m.predicates = append(m.predicates, ps...)
@@ -24741,7 +25002,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 26)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -24805,6 +25066,21 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.config_value != nil {
 		fields = append(fields, entitlement.FieldConfigValue)
 	}
+	if m.grant_measure != nil {
+		fields = append(fields, entitlement.FieldGrantMeasure)
+	}
+	if m.grant_duration_value != nil {
+		fields = append(fields, entitlement.FieldGrantDurationValue)
+	}
+	if m.grant_duration_unit != nil {
+		fields = append(fields, entitlement.FieldGrantDurationUnit)
+	}
+	if m.grant_quota != nil {
+		fields = append(fields, entitlement.FieldGrantQuota)
+	}
+	if m.aggregation_mode != nil {
+		fields = append(fields, entitlement.FieldAggregationMode)
+	}
 	return fields
 }
 
@@ -24855,6 +25131,16 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.EndDate()
 	case entitlement.FieldConfigValue:
 		return m.ConfigValue()
+	case entitlement.FieldGrantMeasure:
+		return m.GrantMeasure()
+	case entitlement.FieldGrantDurationValue:
+		return m.GrantDurationValue()
+	case entitlement.FieldGrantDurationUnit:
+		return m.GrantDurationUnit()
+	case entitlement.FieldGrantQuota:
+		return m.GrantQuota()
+	case entitlement.FieldAggregationMode:
+		return m.AggregationMode()
 	}
 	return nil, false
 }
@@ -24906,6 +25192,16 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldEndDate(ctx)
 	case entitlement.FieldConfigValue:
 		return m.OldConfigValue(ctx)
+	case entitlement.FieldGrantMeasure:
+		return m.OldGrantMeasure(ctx)
+	case entitlement.FieldGrantDurationValue:
+		return m.OldGrantDurationValue(ctx)
+	case entitlement.FieldGrantDurationUnit:
+		return m.OldGrantDurationUnit(ctx)
+	case entitlement.FieldGrantQuota:
+		return m.OldGrantQuota(ctx)
+	case entitlement.FieldAggregationMode:
+		return m.OldAggregationMode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -25062,6 +25358,41 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConfigValue(v)
 		return nil
+	case entitlement.FieldGrantMeasure:
+		v, ok := value.(types.EntitlementGrantMeasure)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantMeasure(v)
+		return nil
+	case entitlement.FieldGrantDurationValue:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantDurationValue(v)
+		return nil
+	case entitlement.FieldGrantDurationUnit:
+		v, ok := value.(types.EntitlementGrantDurationUnit)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantDurationUnit(v)
+		return nil
+	case entitlement.FieldGrantQuota:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantQuota(v)
+		return nil
+	case entitlement.FieldAggregationMode:
+		v, ok := value.(types.EntitlementAggregationMode)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregationMode(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -25076,6 +25407,9 @@ func (m *EntitlementMutation) AddedFields() []string {
 	if m.adddisplay_order != nil {
 		fields = append(fields, entitlement.FieldDisplayOrder)
 	}
+	if m.addgrant_duration_value != nil {
+		fields = append(fields, entitlement.FieldGrantDurationValue)
+	}
 	return fields
 }
 
@@ -25088,6 +25422,8 @@ func (m *EntitlementMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedUsageLimit()
 	case entitlement.FieldDisplayOrder:
 		return m.AddedDisplayOrder()
+	case entitlement.FieldGrantDurationValue:
+		return m.AddedGrantDurationValue()
 	}
 	return nil, false
 }
@@ -25110,6 +25446,13 @@ func (m *EntitlementMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddDisplayOrder(v)
+		return nil
+	case entitlement.FieldGrantDurationValue:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGrantDurationValue(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement numeric field %s", name)
@@ -25154,6 +25497,18 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(entitlement.FieldConfigValue) {
 		fields = append(fields, entitlement.FieldConfigValue)
+	}
+	if m.FieldCleared(entitlement.FieldGrantMeasure) {
+		fields = append(fields, entitlement.FieldGrantMeasure)
+	}
+	if m.FieldCleared(entitlement.FieldGrantDurationValue) {
+		fields = append(fields, entitlement.FieldGrantDurationValue)
+	}
+	if m.FieldCleared(entitlement.FieldGrantDurationUnit) {
+		fields = append(fields, entitlement.FieldGrantDurationUnit)
+	}
+	if m.FieldCleared(entitlement.FieldGrantQuota) {
+		fields = append(fields, entitlement.FieldGrantQuota)
 	}
 	return fields
 }
@@ -25204,6 +25559,18 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldConfigValue:
 		m.ClearConfigValue()
+		return nil
+	case entitlement.FieldGrantMeasure:
+		m.ClearGrantMeasure()
+		return nil
+	case entitlement.FieldGrantDurationValue:
+		m.ClearGrantDurationValue()
+		return nil
+	case entitlement.FieldGrantDurationUnit:
+		m.ClearGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantQuota:
+		m.ClearGrantQuota()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement nullable field %s", name)
@@ -25276,6 +25643,21 @@ func (m *EntitlementMutation) ResetField(name string) error {
 	case entitlement.FieldConfigValue:
 		m.ResetConfigValue()
 		return nil
+	case entitlement.FieldGrantMeasure:
+		m.ResetGrantMeasure()
+		return nil
+	case entitlement.FieldGrantDurationValue:
+		m.ResetGrantDurationValue()
+		return nil
+	case entitlement.FieldGrantDurationUnit:
+		m.ResetGrantDurationUnit()
+		return nil
+	case entitlement.FieldGrantQuota:
+		m.ResetGrantQuota()
+		return nil
+	case entitlement.FieldAggregationMode:
+		m.ResetAggregationMode()
+		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -25326,6 +25708,1389 @@ func (m *EntitlementMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *EntitlementMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Entitlement edge %s", name)
+}
+
+// EntitlementGrantMutation represents an operation that mutates the EntitlementGrant nodes in the graph.
+type EntitlementGrantMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	entitlement_config_id *string
+	customer_id           *string
+	subscription_id       *string
+	scope_entity_type     *types.EntitlementGrantScopeEntityType
+	scope_entity_id       *string
+	measure               *types.EntitlementGrantMeasure
+	quota                 *decimal.Decimal
+	usage                 *decimal.Decimal
+	valid_from            *time.Time
+	valid_to              *time.Time
+	grant_status          *types.EntitlementGrantStatus
+	last_computed_at      *time.Time
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*EntitlementGrant, error)
+	predicates            []predicate.EntitlementGrant
+}
+
+var _ ent.Mutation = (*EntitlementGrantMutation)(nil)
+
+// entitlementgrantOption allows management of the mutation configuration using functional options.
+type entitlementgrantOption func(*EntitlementGrantMutation)
+
+// newEntitlementGrantMutation creates new mutation for the EntitlementGrant entity.
+func newEntitlementGrantMutation(c config, op Op, opts ...entitlementgrantOption) *EntitlementGrantMutation {
+	m := &EntitlementGrantMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEntitlementGrant,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEntitlementGrantID sets the ID field of the mutation.
+func withEntitlementGrantID(id string) entitlementgrantOption {
+	return func(m *EntitlementGrantMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EntitlementGrant
+		)
+		m.oldValue = func(ctx context.Context) (*EntitlementGrant, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EntitlementGrant.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEntitlementGrant sets the old EntitlementGrant of the mutation.
+func withEntitlementGrant(node *EntitlementGrant) entitlementgrantOption {
+	return func(m *EntitlementGrantMutation) {
+		m.oldValue = func(context.Context) (*EntitlementGrant, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EntitlementGrantMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EntitlementGrantMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of EntitlementGrant entities.
+func (m *EntitlementGrantMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EntitlementGrantMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EntitlementGrantMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EntitlementGrant.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *EntitlementGrantMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *EntitlementGrantMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *EntitlementGrantMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *EntitlementGrantMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EntitlementGrantMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EntitlementGrantMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *EntitlementGrantMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *EntitlementGrantMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *EntitlementGrantMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *EntitlementGrantMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *EntitlementGrantMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *EntitlementGrantMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *EntitlementGrantMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *EntitlementGrantMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *EntitlementGrantMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[entitlementgrant.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *EntitlementGrantMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, entitlementgrant.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *EntitlementGrantMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *EntitlementGrantMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *EntitlementGrantMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[entitlementgrant.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *EntitlementGrantMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, entitlementgrant.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *EntitlementGrantMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *EntitlementGrantMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *EntitlementGrantMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[entitlementgrant.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *EntitlementGrantMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, entitlementgrant.FieldEnvironmentID)
+}
+
+// SetEntitlementConfigID sets the "entitlement_config_id" field.
+func (m *EntitlementGrantMutation) SetEntitlementConfigID(s string) {
+	m.entitlement_config_id = &s
+}
+
+// EntitlementConfigID returns the value of the "entitlement_config_id" field in the mutation.
+func (m *EntitlementGrantMutation) EntitlementConfigID() (r string, exists bool) {
+	v := m.entitlement_config_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntitlementConfigID returns the old "entitlement_config_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldEntitlementConfigID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntitlementConfigID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntitlementConfigID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntitlementConfigID: %w", err)
+	}
+	return oldValue.EntitlementConfigID, nil
+}
+
+// ResetEntitlementConfigID resets all changes to the "entitlement_config_id" field.
+func (m *EntitlementGrantMutation) ResetEntitlementConfigID() {
+	m.entitlement_config_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *EntitlementGrantMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *EntitlementGrantMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *EntitlementGrantMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *EntitlementGrantMutation) SetSubscriptionID(s string) {
+	m.subscription_id = &s
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *EntitlementGrantMutation) SubscriptionID() (r string, exists bool) {
+	v := m.subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldSubscriptionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *EntitlementGrantMutation) ResetSubscriptionID() {
+	m.subscription_id = nil
+}
+
+// SetScopeEntityType sets the "scope_entity_type" field.
+func (m *EntitlementGrantMutation) SetScopeEntityType(tgset types.EntitlementGrantScopeEntityType) {
+	m.scope_entity_type = &tgset
+}
+
+// ScopeEntityType returns the value of the "scope_entity_type" field in the mutation.
+func (m *EntitlementGrantMutation) ScopeEntityType() (r types.EntitlementGrantScopeEntityType, exists bool) {
+	v := m.scope_entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScopeEntityType returns the old "scope_entity_type" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldScopeEntityType(ctx context.Context) (v types.EntitlementGrantScopeEntityType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScopeEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScopeEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScopeEntityType: %w", err)
+	}
+	return oldValue.ScopeEntityType, nil
+}
+
+// ResetScopeEntityType resets all changes to the "scope_entity_type" field.
+func (m *EntitlementGrantMutation) ResetScopeEntityType() {
+	m.scope_entity_type = nil
+}
+
+// SetScopeEntityID sets the "scope_entity_id" field.
+func (m *EntitlementGrantMutation) SetScopeEntityID(s string) {
+	m.scope_entity_id = &s
+}
+
+// ScopeEntityID returns the value of the "scope_entity_id" field in the mutation.
+func (m *EntitlementGrantMutation) ScopeEntityID() (r string, exists bool) {
+	v := m.scope_entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScopeEntityID returns the old "scope_entity_id" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldScopeEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScopeEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScopeEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScopeEntityID: %w", err)
+	}
+	return oldValue.ScopeEntityID, nil
+}
+
+// ResetScopeEntityID resets all changes to the "scope_entity_id" field.
+func (m *EntitlementGrantMutation) ResetScopeEntityID() {
+	m.scope_entity_id = nil
+}
+
+// SetMeasure sets the "measure" field.
+func (m *EntitlementGrantMutation) SetMeasure(tgm types.EntitlementGrantMeasure) {
+	m.measure = &tgm
+}
+
+// Measure returns the value of the "measure" field in the mutation.
+func (m *EntitlementGrantMutation) Measure() (r types.EntitlementGrantMeasure, exists bool) {
+	v := m.measure
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMeasure returns the old "measure" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldMeasure(ctx context.Context) (v types.EntitlementGrantMeasure, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMeasure is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMeasure requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMeasure: %w", err)
+	}
+	return oldValue.Measure, nil
+}
+
+// ResetMeasure resets all changes to the "measure" field.
+func (m *EntitlementGrantMutation) ResetMeasure() {
+	m.measure = nil
+}
+
+// SetQuota sets the "quota" field.
+func (m *EntitlementGrantMutation) SetQuota(d decimal.Decimal) {
+	m.quota = &d
+}
+
+// Quota returns the value of the "quota" field in the mutation.
+func (m *EntitlementGrantMutation) Quota() (r decimal.Decimal, exists bool) {
+	v := m.quota
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuota returns the old "quota" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldQuota(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuota is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuota requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuota: %w", err)
+	}
+	return oldValue.Quota, nil
+}
+
+// ResetQuota resets all changes to the "quota" field.
+func (m *EntitlementGrantMutation) ResetQuota() {
+	m.quota = nil
+}
+
+// SetUsage sets the "usage" field.
+func (m *EntitlementGrantMutation) SetUsage(d decimal.Decimal) {
+	m.usage = &d
+}
+
+// Usage returns the value of the "usage" field in the mutation.
+func (m *EntitlementGrantMutation) Usage() (r decimal.Decimal, exists bool) {
+	v := m.usage
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsage returns the old "usage" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldUsage(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsage: %w", err)
+	}
+	return oldValue.Usage, nil
+}
+
+// ResetUsage resets all changes to the "usage" field.
+func (m *EntitlementGrantMutation) ResetUsage() {
+	m.usage = nil
+}
+
+// SetValidFrom sets the "valid_from" field.
+func (m *EntitlementGrantMutation) SetValidFrom(t time.Time) {
+	m.valid_from = &t
+}
+
+// ValidFrom returns the value of the "valid_from" field in the mutation.
+func (m *EntitlementGrantMutation) ValidFrom() (r time.Time, exists bool) {
+	v := m.valid_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValidFrom returns the old "valid_from" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldValidFrom(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValidFrom is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValidFrom requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValidFrom: %w", err)
+	}
+	return oldValue.ValidFrom, nil
+}
+
+// ResetValidFrom resets all changes to the "valid_from" field.
+func (m *EntitlementGrantMutation) ResetValidFrom() {
+	m.valid_from = nil
+}
+
+// SetValidTo sets the "valid_to" field.
+func (m *EntitlementGrantMutation) SetValidTo(t time.Time) {
+	m.valid_to = &t
+}
+
+// ValidTo returns the value of the "valid_to" field in the mutation.
+func (m *EntitlementGrantMutation) ValidTo() (r time.Time, exists bool) {
+	v := m.valid_to
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValidTo returns the old "valid_to" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldValidTo(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValidTo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValidTo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValidTo: %w", err)
+	}
+	return oldValue.ValidTo, nil
+}
+
+// ResetValidTo resets all changes to the "valid_to" field.
+func (m *EntitlementGrantMutation) ResetValidTo() {
+	m.valid_to = nil
+}
+
+// SetGrantStatus sets the "grant_status" field.
+func (m *EntitlementGrantMutation) SetGrantStatus(tgs types.EntitlementGrantStatus) {
+	m.grant_status = &tgs
+}
+
+// GrantStatus returns the value of the "grant_status" field in the mutation.
+func (m *EntitlementGrantMutation) GrantStatus() (r types.EntitlementGrantStatus, exists bool) {
+	v := m.grant_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantStatus returns the old "grant_status" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldGrantStatus(ctx context.Context) (v types.EntitlementGrantStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantStatus: %w", err)
+	}
+	return oldValue.GrantStatus, nil
+}
+
+// ResetGrantStatus resets all changes to the "grant_status" field.
+func (m *EntitlementGrantMutation) ResetGrantStatus() {
+	m.grant_status = nil
+}
+
+// SetLastComputedAt sets the "last_computed_at" field.
+func (m *EntitlementGrantMutation) SetLastComputedAt(t time.Time) {
+	m.last_computed_at = &t
+}
+
+// LastComputedAt returns the value of the "last_computed_at" field in the mutation.
+func (m *EntitlementGrantMutation) LastComputedAt() (r time.Time, exists bool) {
+	v := m.last_computed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastComputedAt returns the old "last_computed_at" field's value of the EntitlementGrant entity.
+// If the EntitlementGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementGrantMutation) OldLastComputedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastComputedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastComputedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastComputedAt: %w", err)
+	}
+	return oldValue.LastComputedAt, nil
+}
+
+// ClearLastComputedAt clears the value of the "last_computed_at" field.
+func (m *EntitlementGrantMutation) ClearLastComputedAt() {
+	m.last_computed_at = nil
+	m.clearedFields[entitlementgrant.FieldLastComputedAt] = struct{}{}
+}
+
+// LastComputedAtCleared returns if the "last_computed_at" field was cleared in this mutation.
+func (m *EntitlementGrantMutation) LastComputedAtCleared() bool {
+	_, ok := m.clearedFields[entitlementgrant.FieldLastComputedAt]
+	return ok
+}
+
+// ResetLastComputedAt resets all changes to the "last_computed_at" field.
+func (m *EntitlementGrantMutation) ResetLastComputedAt() {
+	m.last_computed_at = nil
+	delete(m.clearedFields, entitlementgrant.FieldLastComputedAt)
+}
+
+// Where appends a list predicates to the EntitlementGrantMutation builder.
+func (m *EntitlementGrantMutation) Where(ps ...predicate.EntitlementGrant) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EntitlementGrantMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EntitlementGrantMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EntitlementGrant, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EntitlementGrantMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EntitlementGrantMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EntitlementGrant).
+func (m *EntitlementGrantMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EntitlementGrantMutation) Fields() []string {
+	fields := make([]string, 0, 19)
+	if m.tenant_id != nil {
+		fields = append(fields, entitlementgrant.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, entitlementgrant.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, entitlementgrant.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, entitlementgrant.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, entitlementgrant.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, entitlementgrant.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, entitlementgrant.FieldEnvironmentID)
+	}
+	if m.entitlement_config_id != nil {
+		fields = append(fields, entitlementgrant.FieldEntitlementConfigID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, entitlementgrant.FieldCustomerID)
+	}
+	if m.subscription_id != nil {
+		fields = append(fields, entitlementgrant.FieldSubscriptionID)
+	}
+	if m.scope_entity_type != nil {
+		fields = append(fields, entitlementgrant.FieldScopeEntityType)
+	}
+	if m.scope_entity_id != nil {
+		fields = append(fields, entitlementgrant.FieldScopeEntityID)
+	}
+	if m.measure != nil {
+		fields = append(fields, entitlementgrant.FieldMeasure)
+	}
+	if m.quota != nil {
+		fields = append(fields, entitlementgrant.FieldQuota)
+	}
+	if m.usage != nil {
+		fields = append(fields, entitlementgrant.FieldUsage)
+	}
+	if m.valid_from != nil {
+		fields = append(fields, entitlementgrant.FieldValidFrom)
+	}
+	if m.valid_to != nil {
+		fields = append(fields, entitlementgrant.FieldValidTo)
+	}
+	if m.grant_status != nil {
+		fields = append(fields, entitlementgrant.FieldGrantStatus)
+	}
+	if m.last_computed_at != nil {
+		fields = append(fields, entitlementgrant.FieldLastComputedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EntitlementGrantMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case entitlementgrant.FieldTenantID:
+		return m.TenantID()
+	case entitlementgrant.FieldStatus:
+		return m.Status()
+	case entitlementgrant.FieldCreatedAt:
+		return m.CreatedAt()
+	case entitlementgrant.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case entitlementgrant.FieldCreatedBy:
+		return m.CreatedBy()
+	case entitlementgrant.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case entitlementgrant.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case entitlementgrant.FieldEntitlementConfigID:
+		return m.EntitlementConfigID()
+	case entitlementgrant.FieldCustomerID:
+		return m.CustomerID()
+	case entitlementgrant.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case entitlementgrant.FieldScopeEntityType:
+		return m.ScopeEntityType()
+	case entitlementgrant.FieldScopeEntityID:
+		return m.ScopeEntityID()
+	case entitlementgrant.FieldMeasure:
+		return m.Measure()
+	case entitlementgrant.FieldQuota:
+		return m.Quota()
+	case entitlementgrant.FieldUsage:
+		return m.Usage()
+	case entitlementgrant.FieldValidFrom:
+		return m.ValidFrom()
+	case entitlementgrant.FieldValidTo:
+		return m.ValidTo()
+	case entitlementgrant.FieldGrantStatus:
+		return m.GrantStatus()
+	case entitlementgrant.FieldLastComputedAt:
+		return m.LastComputedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EntitlementGrantMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case entitlementgrant.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case entitlementgrant.FieldStatus:
+		return m.OldStatus(ctx)
+	case entitlementgrant.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case entitlementgrant.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case entitlementgrant.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case entitlementgrant.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case entitlementgrant.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case entitlementgrant.FieldEntitlementConfigID:
+		return m.OldEntitlementConfigID(ctx)
+	case entitlementgrant.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case entitlementgrant.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case entitlementgrant.FieldScopeEntityType:
+		return m.OldScopeEntityType(ctx)
+	case entitlementgrant.FieldScopeEntityID:
+		return m.OldScopeEntityID(ctx)
+	case entitlementgrant.FieldMeasure:
+		return m.OldMeasure(ctx)
+	case entitlementgrant.FieldQuota:
+		return m.OldQuota(ctx)
+	case entitlementgrant.FieldUsage:
+		return m.OldUsage(ctx)
+	case entitlementgrant.FieldValidFrom:
+		return m.OldValidFrom(ctx)
+	case entitlementgrant.FieldValidTo:
+		return m.OldValidTo(ctx)
+	case entitlementgrant.FieldGrantStatus:
+		return m.OldGrantStatus(ctx)
+	case entitlementgrant.FieldLastComputedAt:
+		return m.OldLastComputedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown EntitlementGrant field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EntitlementGrantMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case entitlementgrant.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case entitlementgrant.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case entitlementgrant.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case entitlementgrant.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case entitlementgrant.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case entitlementgrant.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case entitlementgrant.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case entitlementgrant.FieldEntitlementConfigID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntitlementConfigID(v)
+		return nil
+	case entitlementgrant.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case entitlementgrant.FieldSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case entitlementgrant.FieldScopeEntityType:
+		v, ok := value.(types.EntitlementGrantScopeEntityType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScopeEntityType(v)
+		return nil
+	case entitlementgrant.FieldScopeEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScopeEntityID(v)
+		return nil
+	case entitlementgrant.FieldMeasure:
+		v, ok := value.(types.EntitlementGrantMeasure)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMeasure(v)
+		return nil
+	case entitlementgrant.FieldQuota:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuota(v)
+		return nil
+	case entitlementgrant.FieldUsage:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsage(v)
+		return nil
+	case entitlementgrant.FieldValidFrom:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValidFrom(v)
+		return nil
+	case entitlementgrant.FieldValidTo:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValidTo(v)
+		return nil
+	case entitlementgrant.FieldGrantStatus:
+		v, ok := value.(types.EntitlementGrantStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantStatus(v)
+		return nil
+	case entitlementgrant.FieldLastComputedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastComputedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EntitlementGrant field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EntitlementGrantMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EntitlementGrantMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EntitlementGrantMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EntitlementGrant numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EntitlementGrantMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(entitlementgrant.FieldCreatedBy) {
+		fields = append(fields, entitlementgrant.FieldCreatedBy)
+	}
+	if m.FieldCleared(entitlementgrant.FieldUpdatedBy) {
+		fields = append(fields, entitlementgrant.FieldUpdatedBy)
+	}
+	if m.FieldCleared(entitlementgrant.FieldEnvironmentID) {
+		fields = append(fields, entitlementgrant.FieldEnvironmentID)
+	}
+	if m.FieldCleared(entitlementgrant.FieldLastComputedAt) {
+		fields = append(fields, entitlementgrant.FieldLastComputedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EntitlementGrantMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EntitlementGrantMutation) ClearField(name string) error {
+	switch name {
+	case entitlementgrant.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case entitlementgrant.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case entitlementgrant.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case entitlementgrant.FieldLastComputedAt:
+		m.ClearLastComputedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown EntitlementGrant nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EntitlementGrantMutation) ResetField(name string) error {
+	switch name {
+	case entitlementgrant.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case entitlementgrant.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case entitlementgrant.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case entitlementgrant.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case entitlementgrant.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case entitlementgrant.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case entitlementgrant.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case entitlementgrant.FieldEntitlementConfigID:
+		m.ResetEntitlementConfigID()
+		return nil
+	case entitlementgrant.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case entitlementgrant.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case entitlementgrant.FieldScopeEntityType:
+		m.ResetScopeEntityType()
+		return nil
+	case entitlementgrant.FieldScopeEntityID:
+		m.ResetScopeEntityID()
+		return nil
+	case entitlementgrant.FieldMeasure:
+		m.ResetMeasure()
+		return nil
+	case entitlementgrant.FieldQuota:
+		m.ResetQuota()
+		return nil
+	case entitlementgrant.FieldUsage:
+		m.ResetUsage()
+		return nil
+	case entitlementgrant.FieldValidFrom:
+		m.ResetValidFrom()
+		return nil
+	case entitlementgrant.FieldValidTo:
+		m.ResetValidTo()
+		return nil
+	case entitlementgrant.FieldGrantStatus:
+		m.ResetGrantStatus()
+		return nil
+	case entitlementgrant.FieldLastComputedAt:
+		m.ResetLastComputedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown EntitlementGrant field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EntitlementGrantMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EntitlementGrantMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EntitlementGrantMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EntitlementGrantMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EntitlementGrantMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EntitlementGrantMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EntitlementGrantMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EntitlementGrant unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EntitlementGrantMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EntitlementGrant edge %s", name)
 }
 
 // EntityIntegrationMappingMutation represents an operation that mutates the EntityIntegrationMapping nodes in the graph.

@@ -142,9 +142,9 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
-		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "entity_type", Type: field.TypeEnum, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group", "entitlement_grant"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group"}},
+		{Name: "parent_entity_type", Type: field.TypeEnum, Nullable: true, Enums: []string{"wallet", "feature", "subscription", "subscription_line_item", "group", "entitlement_grant"}},
 		{Name: "parent_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
@@ -871,6 +871,11 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "config_value", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "grant_measure", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "grant_duration_value", Type: field.TypeInt, Nullable: true},
+		{Name: "grant_duration_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "grant_quota", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "aggregation_mode", Type: field.TypeString, Default: "additive", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -881,7 +886,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[22]},
+				Columns:    []*schema.Column{EntitlementsColumns[27]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -917,6 +922,47 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((entity_type)::text = 'SUBSCRIPTION'::text) AND ((status)::text = 'published'::text))",
 				},
+			},
+		},
+	}
+	// EntitlementGrantsColumns holds the columns for the "entitlement_grants" table.
+	EntitlementGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entitlement_config_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "scope_entity_type", Type: field.TypeString, Default: "feature", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "scope_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "measure", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "quota", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "usage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "valid_from", Type: field.TypeTime},
+		{Name: "valid_to", Type: field.TypeTime},
+		{Name: "grant_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "last_computed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// EntitlementGrantsTable holds the schema information for the "entitlement_grants" table.
+	EntitlementGrantsTable = &schema.Table{
+		Name:       "entitlement_grants",
+		Columns:    EntitlementGrantsColumns,
+		PrimaryKey: []*schema.Column{EntitlementGrantsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "entitlementgrant_tenant_id_environment_id_entitlement_config_id_customer_id_subscription_id_valid_from",
+				Unique:  true,
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9], EntitlementGrantsColumns[10], EntitlementGrantsColumns[16]},
+			},
+			{
+				Name:    "entitlementgrant_tenant_id_environment_id_customer_id_valid_to_entitlement_config_id_subscription_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[17], EntitlementGrantsColumns[8], EntitlementGrantsColumns[10]},
 			},
 		},
 	}
@@ -1374,6 +1420,14 @@ var (
 				Name:    "meter_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{MetersColumns[1], MetersColumns[7]},
+			},
+			{
+				Name:    "idx_meter_tenant_env_status",
+				Unique:  false,
+				Columns: []*schema.Column{MetersColumns[1], MetersColumns[7], MetersColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = ANY (ARRAY['published'::text, 'archived'::text]))",
+				},
 			},
 		},
 	}
@@ -2739,6 +2793,7 @@ var (
 		CreditNoteLineItemsTable,
 		CustomersTable,
 		EntitlementsTable,
+		EntitlementGrantsTable,
 		EntityIntegrationMappingsTable,
 		EnvironmentsTable,
 		FeaturesTable,

@@ -569,7 +569,7 @@ func (o CreditNoteQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 
 func (o CreditNoteQueryOptions) ApplyStatusFilter(query CreditNoteQuery, status string) CreditNoteQuery {
 	if status == "" {
-		return query.Where(creditnote.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditnote.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(creditnote.Status(status))
 }

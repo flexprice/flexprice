@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -113,6 +114,8 @@ type Client struct {
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
+	// EntitlementGrant is the client for interacting with the EntitlementGrant builders.
+	EntitlementGrant *EntitlementGrantClient
 	// EntityIntegrationMapping is the client for interacting with the EntityIntegrationMapping builders.
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
@@ -212,6 +215,7 @@ func (c *Client) init() {
 	c.CreditNoteLineItem = NewCreditNoteLineItemClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
+	c.EntitlementGrant = NewEntitlementGrantClient(c.config)
 	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
@@ -357,6 +361,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditNoteLineItem:       NewCreditNoteLineItemClient(cfg),
 		Customer:                 NewCustomerClient(cfg),
 		Entitlement:              NewEntitlementClient(cfg),
+		EntitlementGrant:         NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
 		Environment:              NewEnvironmentClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
@@ -429,6 +434,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditNoteLineItem:       NewCreditNoteLineItemClient(cfg),
 		Customer:                 NewCustomerClient(cfg),
 		Entitlement:              NewEntitlementClient(cfg),
+		EntitlementGrant:         NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
 		Environment:              NewEnvironmentClient(cfg),
 		Feature:                  NewFeatureClient(cfg),
@@ -497,14 +503,14 @@ func (c *Client) Use(hooks ...Hook) {
 		c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
-		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
+		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -518,14 +524,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntityIntegrationMapping, c.Environment, c.Feature, c.Group,
-		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price,
-		c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
+		c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.Refund, c.ScheduledTask, c.Secret, c.Settings,
+		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -570,6 +576,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Customer.mutate(ctx, m)
 	case *EntitlementMutation:
 		return c.Entitlement.mutate(ctx, m)
+	case *EntitlementGrantMutation:
+		return c.EntitlementGrant.mutate(ctx, m)
 	case *EntityIntegrationMappingMutation:
 		return c.EntityIntegrationMapping.mutate(ctx, m)
 	case *EnvironmentMutation:
@@ -3324,6 +3332,139 @@ func (c *EntitlementClient) mutate(ctx context.Context, m *EntitlementMutation) 
 		return (&EntitlementDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Entitlement mutation op: %q", m.Op())
+	}
+}
+
+// EntitlementGrantClient is a client for the EntitlementGrant schema.
+type EntitlementGrantClient struct {
+	config
+}
+
+// NewEntitlementGrantClient returns a client for the EntitlementGrant from the given config.
+func NewEntitlementGrantClient(c config) *EntitlementGrantClient {
+	return &EntitlementGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `entitlementgrant.Hooks(f(g(h())))`.
+func (c *EntitlementGrantClient) Use(hooks ...Hook) {
+	c.hooks.EntitlementGrant = append(c.hooks.EntitlementGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `entitlementgrant.Intercept(f(g(h())))`.
+func (c *EntitlementGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EntitlementGrant = append(c.inters.EntitlementGrant, interceptors...)
+}
+
+// Create returns a builder for creating a EntitlementGrant entity.
+func (c *EntitlementGrantClient) Create() *EntitlementGrantCreate {
+	mutation := newEntitlementGrantMutation(c.config, OpCreate)
+	return &EntitlementGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EntitlementGrant entities.
+func (c *EntitlementGrantClient) CreateBulk(builders ...*EntitlementGrantCreate) *EntitlementGrantCreateBulk {
+	return &EntitlementGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EntitlementGrantClient) MapCreateBulk(slice any, setFunc func(*EntitlementGrantCreate, int)) *EntitlementGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EntitlementGrantCreateBulk{err: fmt.Errorf("calling to EntitlementGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EntitlementGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EntitlementGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EntitlementGrant.
+func (c *EntitlementGrantClient) Update() *EntitlementGrantUpdate {
+	mutation := newEntitlementGrantMutation(c.config, OpUpdate)
+	return &EntitlementGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EntitlementGrantClient) UpdateOne(eg *EntitlementGrant) *EntitlementGrantUpdateOne {
+	mutation := newEntitlementGrantMutation(c.config, OpUpdateOne, withEntitlementGrant(eg))
+	return &EntitlementGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EntitlementGrantClient) UpdateOneID(id string) *EntitlementGrantUpdateOne {
+	mutation := newEntitlementGrantMutation(c.config, OpUpdateOne, withEntitlementGrantID(id))
+	return &EntitlementGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EntitlementGrant.
+func (c *EntitlementGrantClient) Delete() *EntitlementGrantDelete {
+	mutation := newEntitlementGrantMutation(c.config, OpDelete)
+	return &EntitlementGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EntitlementGrantClient) DeleteOne(eg *EntitlementGrant) *EntitlementGrantDeleteOne {
+	return c.DeleteOneID(eg.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EntitlementGrantClient) DeleteOneID(id string) *EntitlementGrantDeleteOne {
+	builder := c.Delete().Where(entitlementgrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EntitlementGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for EntitlementGrant.
+func (c *EntitlementGrantClient) Query() *EntitlementGrantQuery {
+	return &EntitlementGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEntitlementGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EntitlementGrant entity by its id.
+func (c *EntitlementGrantClient) Get(ctx context.Context, id string) (*EntitlementGrant, error) {
+	return c.Query().Where(entitlementgrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EntitlementGrantClient) GetX(ctx context.Context, id string) *EntitlementGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EntitlementGrantClient) Hooks() []Hook {
+	return c.hooks.EntitlementGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *EntitlementGrantClient) Interceptors() []Interceptor {
+	return c.inters.EntitlementGrant
+}
+
+func (c *EntitlementGrantClient) mutate(ctx context.Context, m *EntitlementGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EntitlementGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EntitlementGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EntitlementGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EntitlementGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EntitlementGrant mutation op: %q", m.Op())
 	}
 }
 
@@ -8356,11 +8497,11 @@ type (
 		Addon, AddonAssociation, AlertLogs, AlertSettings, Auth, BillingSequence,
 		CheckoutSession, Connection, Costsheet, Coupon, CouponApplication,
 		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
-		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
-		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, Refund, ScheduledTask, Secret, Settings, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
+		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
+		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, Refund, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
@@ -8369,11 +8510,11 @@ type (
 		Addon, AddonAssociation, AlertLogs, AlertSettings, Auth, BillingSequence,
 		CheckoutSession, Connection, Costsheet, Coupon, CouponApplication,
 		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
-		CreditNoteLineItem, Customer, Entitlement, EntityIntegrationMapping,
-		Environment, Feature, Group, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, Refund, ScheduledTask, Secret, Settings, Subscription,
-		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
+		EntityIntegrationMapping, Environment, Feature, Group, IncomingWebhookEvent,
+		Invoice, InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, Refund, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor

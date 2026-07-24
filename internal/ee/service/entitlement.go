@@ -130,28 +130,40 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 			Mark(ierr.ErrValidation)
 	}
 
-	// For metered features, check if it's a bucketed max meter
+	// For metered features, check if it's a bucketed max meter and (below)
+	// carry the meter through to grant-shape validation.
+	var meterForGrantCheck *meter.Meter
 	if feature.Type == types.FeatureTypeMetered {
-		meter, err := s.MeterRepo.GetMeter(ctx, feature.MeterID)
+		m, err := s.MeterRepo.GetMeter(ctx, feature.MeterID)
 		if err != nil {
 			return nil, err
 		}
 
 		// Entitlements are restricted for bucketed max meters
-		if meter.IsBucketedMaxMeter() {
+		if m.IsBucketedMaxMeter() {
 			return nil, ierr.NewError("entitlements not supported for bucketed max meters").
 				WithHint("Bucketed max meters process each bucket independently and cannot have entitlements").
 				WithReportableDetails(map[string]interface{}{
-					"meter_id":     meter.ID,
-					"bucket_size":  meter.Aggregation.BucketSize,
+					"meter_id":     m.ID,
+					"bucket_size":  m.Aggregation.BucketSize,
 					"feature_type": req.FeatureType,
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		meterForGrantCheck = m
 	}
 
-	// Create entitlement
+	// Create entitlement (runs the field-coherence checks from
+	// entitlement.validateGrantConfig internally when we call Validate below).
 	e := req.ToEntitlement(ctx)
+
+	if err := e.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateEntitlementGrantShape(ctx, e, meterForGrantCheck); err != nil {
+		return nil, err
+	}
 	// Ensure entity type and ID are set correctly
 	e.EntityType = entityType
 	e.EntityID = entityID
@@ -303,28 +315,41 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 					Mark(ierr.ErrValidation)
 			}
 
-			// For metered features, check if it's a bucketed max meter
+			// For metered features, check if it's a bucketed max meter, and
+			// carry the meter through to grant-shape validation.
+			var meterForGrantCheck *meter.Meter
 			if feature.Type == types.FeatureTypeMetered {
-				meter, err := s.MeterRepo.GetMeter(txCtx, feature.MeterID)
+				m, err := s.MeterRepo.GetMeter(txCtx, feature.MeterID)
 				if err != nil {
 					return err
 				}
 
 				// Bucketed max meters cannot have entitlements
-				if meter.IsBucketedMaxMeter() {
+				if m.IsBucketedMaxMeter() {
 					return ierr.NewError("entitlements not supported for bucketed max meters").
 						WithHint("Bucketed max meters process each bucket independently and cannot have entitlements").
 						WithReportableDetails(map[string]interface{}{
-							"meter_id":     meter.ID,
-							"bucket_size":  meter.Aggregation.BucketSize,
+							"meter_id":     m.ID,
+							"bucket_size":  m.Aggregation.BucketSize,
 							"feature_type": entReq.FeatureType,
 							"index":        i,
 						}).
 						Mark(ierr.ErrValidation)
 				}
+				meterForGrantCheck = m
 			}
 
 			ent := entReq.ToEntitlement(txCtx)
+			if err := ent.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
+			if err := s.validateEntitlementGrantShape(txCtx, ent, meterForGrantCheck); err != nil {
+				return ierr.WithError(err).
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
 			entitlements[i] = ent
 		}
 
@@ -650,9 +675,46 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		existing.ConfigValue = req.ConfigValue
 	}
 
-	// Validate updated entitlement
+	// Grant fields: nil = leave alone; ClearGrantConfig wipes the whole config.
+	if req.ClearGrantConfig != nil && *req.ClearGrantConfig {
+		existing.GrantMeasure = ""
+		existing.GrantDurationValue = nil
+		existing.GrantDurationUnit = ""
+		existing.GrantQuota = nil
+		existing.AggregationMode = types.EntitlementAggregationModeAdditive
+	}
+	if req.GrantMeasure != nil {
+		existing.GrantMeasure = *req.GrantMeasure
+	}
+	if req.GrantDurationValue != nil {
+		existing.GrantDurationValue = req.GrantDurationValue
+	}
+	if req.GrantDurationUnit != nil {
+		existing.GrantDurationUnit = *req.GrantDurationUnit
+	}
+	if req.GrantQuota != nil {
+		existing.GrantQuota = req.GrantQuota
+	}
+	if req.AggregationMode != nil {
+		existing.AggregationMode = *req.AggregationMode
+	}
+
 	if err := existing.Validate(); err != nil {
 		return nil, err
+	}
+
+	if existing.HasGrantConfig() && existing.FeatureType == types.FeatureTypeMetered {
+		featureRow, err := s.FeatureRepo.Get(ctx, existing.FeatureID)
+		if err != nil {
+			return nil, err
+		}
+		m, err := s.MeterRepo.GetMeter(ctx, featureRow.MeterID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.validateEntitlementGrantShape(ctx, existing, m); err != nil {
+			return nil, err
+		}
 	}
 
 	result, err := s.EntitlementRepo.Update(ctx, existing)
@@ -674,9 +736,7 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 }
 
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
-
-	err := s.EntitlementRepo.Delete(ctx, id)
-	if err != nil {
+	if err := s.EntitlementRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 

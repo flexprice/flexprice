@@ -40,6 +40,7 @@ func (s *CustomerEntitlementsTestSuite) SetupTest() {
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
+		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		EnvironmentRepo:          stores.EnvironmentRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		TenantRepo:               stores.TenantRepo,

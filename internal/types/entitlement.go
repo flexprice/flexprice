@@ -87,6 +87,9 @@ type EntitlementFilter struct {
 	FeatureType *FeatureType           `form:"feature_type" json:"feature_type,omitempty"`
 	IsEnabled   *bool                  `form:"is_enabled" json:"is_enabled,omitempty"`
 	PlanIDs     []string               `form:"plan_ids" json:"plan_ids,omitempty"`
+
+	// HasGrantConfig filters on grant-config presence (grant_quota set or not).
+	HasGrantConfig *bool `form:"has_grant_config" json:"has_grant_config,omitempty"`
 }
 
 // NewDefaultEntitlementFilter creates a new EntitlementFilter with default values

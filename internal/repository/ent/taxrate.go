@@ -429,7 +429,7 @@ func (o TaxRateQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query T
 
 func (o TaxRateQueryOptions) ApplyStatusFilter(query TaxRateQuery, status string) TaxRateQuery {
 	if status == "" {
-		return query.Where(taxrate.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(taxrate.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(taxrate.Status(status))
 }

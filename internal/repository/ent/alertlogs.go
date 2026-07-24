@@ -421,7 +421,7 @@ func (o AlertLogQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query 
 
 func (o AlertLogQueryOptions) ApplyStatusFilter(query AlertLogQuery, status string) AlertLogQuery {
 	if status == "" {
-		return query.Where(alertlogs.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(alertlogs.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(alertlogs.Status(status))
 }

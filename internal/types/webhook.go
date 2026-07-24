@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -20,6 +21,75 @@ type WebhookEvent struct {
 	Payload       json.RawMessage  `json:"payload"`
 	EntityType    SystemEntityType `json:"entity_type,omitempty"`
 	EntityID      string           `json:"entity_id,omitempty"`
+	// CascadeDepth is a runtime backstop against derivation loops: it counts how many
+	// times this event was produced by deriving from another event. 0 for events emitted
+	// directly by services. The webhook consumer refuses to derive past a small max depth.
+	CascadeDepth int `json:"cascade_depth,omitempty"`
+}
+
+// WebhookEventBuilder centralises the WebhookEvent envelope boilerplate (ID, timestamp,
+// tenant/environment/user identity, payload marshalling) that would otherwise be duplicated
+// across every service's publishSystemEvent. It is entity-agnostic: callers supply the event
+// name, entity reference, and a payload struct to be JSON-marshalled.
+type WebhookEventBuilder struct {
+	event   *WebhookEvent
+	payload any
+}
+
+// NewWebhookEvent starts a builder for the given event name with a fresh system-event ID and
+// current timestamp.
+func NewWebhookEvent(eventName WebhookEventName) *WebhookEventBuilder {
+	return &WebhookEventBuilder{
+		event: &WebhookEvent{
+			ID:        GenerateUUIDWithPrefix(UUID_PREFIX_SYSTEM_EVENT),
+			EventName: eventName,
+			Timestamp: time.Now().UTC(),
+		},
+	}
+}
+
+// WithIdentityFromContext copies tenant/environment/user identity from the request context.
+func (b *WebhookEventBuilder) WithIdentityFromContext(ctx context.Context) *WebhookEventBuilder {
+	b.event.TenantID = GetTenantID(ctx)
+	b.event.EnvironmentID = GetEnvironmentID(ctx)
+	b.event.UserID = GetUserID(ctx)
+	return b
+}
+
+// WithIdentityFrom copies tenant/environment/user identity from a source event. Used when one
+// event is derived from another.
+func (b *WebhookEventBuilder) WithIdentityFrom(source *WebhookEvent) *WebhookEventBuilder {
+	if source != nil {
+		b.event.TenantID = source.TenantID
+		b.event.EnvironmentID = source.EnvironmentID
+		b.event.UserID = source.UserID
+	}
+	return b
+}
+
+// WithEntity sets the entity type/id the event refers to.
+func (b *WebhookEventBuilder) WithEntity(entityType SystemEntityType, entityID string) *WebhookEventBuilder {
+	b.event.EntityType = entityType
+	b.event.EntityID = entityID
+	return b
+}
+
+// WithPayload stores a payload struct to be JSON-marshalled at Build time.
+func (b *WebhookEventBuilder) WithPayload(payload any) *WebhookEventBuilder {
+	b.payload = payload
+	return b
+}
+
+// Build marshals the payload (if any) and returns the assembled event.
+func (b *WebhookEventBuilder) Build() (*WebhookEvent, error) {
+	if b.payload != nil {
+		raw, err := json.Marshal(b.payload)
+		if err != nil {
+			return nil, err
+		}
+		b.event.Payload = raw
+	}
+	return b.event, nil
 }
 
 // subscription event names
@@ -105,6 +175,8 @@ const (
 	WebhookEventSubscriptionLineItemSpendThresholdRecovered WebhookEventName = "subscription.line_item_spend.threshold_recovered"
 	WebhookEventSubscriptionGroupSpendThresholdReached      WebhookEventName = "subscription.group_spend.threshold_reached"
 	WebhookEventSubscriptionGroupSpendThresholdRecovered    WebhookEventName = "subscription.group_spend.threshold_recovered"
+
+	WebhookEventEntitlementGrantExhausted WebhookEventName = "entitlement.grant.exhausted"
 
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
