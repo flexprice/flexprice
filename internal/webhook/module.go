@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -12,6 +13,7 @@ import (
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
+	cascaderules "github.com/flexprice/flexprice/internal/webhook/handler/cascade_rules"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"go.uber.org/fx"
@@ -27,23 +29,23 @@ var Module = fx.Options(
 	// Webhook components
 	fx.Provide(
 		provideWebhookPublisher,
-		provideEventDeriver,
+		provideEventCascader,
 		handler.NewHandler,
 		providePayloadBuilderFactory,
 		NewWebhookService,
 	),
 )
 
-// provideEventDeriver wires the consumer-side event deriver and registers its filters. Adding a
-// new derivation is a one-line filter registration here; the deriver statically rejects any
-// registration whose source→target edges would form a cycle (panics at boot).
-func provideEventDeriver(
+// provideEventCascader wires the consumer-side event cascader and registers its CascadeRules.
+// Adding a new cascade is a one-line rule registration here; the cascader statically rejects
+// any registration whose source→target edges would form a cycle (panics at boot).
+func provideEventCascader(
 	entitlementService service.EntitlementService,
 	logger *logger.Logger,
-) handler.EventDeriver {
-	return handler.NewEventDeriver(
+) handler.EventCascader {
+	return handler.NewEventCascader(
 		logger,
-		handler.NewEntitlementFilter(entitlementService, logger),
+		cascaderules.NewEntitlementCascadeRule(entitlementService, logger),
 	)
 }
 

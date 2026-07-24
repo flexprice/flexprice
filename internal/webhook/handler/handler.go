@@ -42,7 +42,7 @@ type handler struct {
 	tracing         *tracing.Service
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
-	deriver         EventDeriver
+	cascader        EventCascader
 	publisher       publisher.WebhookPublisher
 }
 
@@ -56,7 +56,7 @@ func NewHandler(
 	tracingSvc *tracing.Service,
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
-	deriver EventDeriver,
+	cascader EventCascader,
 	webhookPublisher publisher.WebhookPublisher,
 ) (Handler, error) {
 	return &handler{
@@ -69,7 +69,7 @@ func NewHandler(
 		tracing:         tracingSvc,
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
-		deriver:         deriver,
+		cascader:        cascader,
 		publisher:       webhookPublisher,
 	}, nil
 }
@@ -252,19 +252,19 @@ func (h *handler) publishDerivedEvents(ctx context.Context, event *types.Webhook
 		return
 	}
 
-	if h.deriver == nil || h.publisher == nil {
+	if h.cascader == nil || h.publisher == nil {
 		return
 	}
 
-	for _, derived := range h.deriver.Derive(ctx, event) {
-		if derived == nil {
+	for _, cascadeEvent := range h.cascader.GetCascadedEvents(ctx, event) {
+		if cascadeEvent == nil {
 			continue
 		}
-		if err := h.publisher.PublishWebhook(ctx, derived); err != nil {
-			h.logger.Error(ctx, "failed to publish derived webhook event",
+		if err := h.publisher.PublishWebhook(ctx, cascadeEvent); err != nil {
+			h.logger.Error(ctx, "failed to publish cascaded webhook event",
 				"error", err,
 				"source_event", event.EventName,
-				"derived_event", derived.EventName,
+				"cascaded_event", cascadeEvent.EventName,
 				"tenant_id", event.TenantID,
 			)
 		}
