@@ -149,6 +149,7 @@ func NewRouter(
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write(types.EntityUser, types.ActionWrite), handlers.User.CreateUser)
 			user.PUT("/me", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateUser)
+			user.GET("/:id", handlers.User.GetUser)
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)
 			user.DELETE("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.DeleteUser)
 			user.POST("/search", handlers.User.QueryUsers)
