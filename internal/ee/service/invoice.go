@@ -230,29 +230,33 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 			return ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
 		}
 
-		// 3. For subscription invoices, check period uniqueness and get billing sequence
+		// 3. For subscription invoices, check period uniqueness (when no caller key) and get billing sequence.
+		// Callers that supply IdempotencyKey own uniqueness (e.g. mid-cycle one-off proration charges).
+		// Period uniqueness remains for cycle/opening invoices that rely on the auto-generated key.
 		var billingSeq *int
 		if req.SubscriptionID != nil {
-			existingForPeriod, err := s.InvoiceRepo.GetForPeriod(txCtx, *req.SubscriptionID, *req.PeriodStart, *req.PeriodEnd, string(req.BillingReason))
-			if err != nil && !ierr.IsNotFound(err) {
-				return err
-			}
-			if existingForPeriod != nil {
-				if existingForPeriod.InvoiceStatus == types.InvoiceStatusDraft || existingForPeriod.InvoiceStatus == types.InvoiceStatusSkipped {
-					s.Logger.Info(ctx, "draft/skipped invoice already exists for period, returning existing",
+			if req.IdempotencyKey == nil {
+				existingForPeriod, err := s.InvoiceRepo.GetForPeriod(txCtx, *req.SubscriptionID, *req.PeriodStart, *req.PeriodEnd, string(req.BillingReason))
+				if err != nil && !ierr.IsNotFound(err) {
+					return err
+				}
+				if existingForPeriod != nil {
+					if existingForPeriod.InvoiceStatus == types.InvoiceStatusDraft || existingForPeriod.InvoiceStatus == types.InvoiceStatusSkipped {
+						s.Logger.Info(ctx, "draft/skipped invoice already exists for period, returning existing",
+							"invoice_id", existingForPeriod.ID,
+							"subscription_id", *req.SubscriptionID,
+							"period_start", *req.PeriodStart,
+							"period_end", *req.PeriodEnd)
+						resp = dto.NewInvoiceResponse(existingForPeriod)
+						return nil
+					}
+					s.Logger.Debug(ctx, "invoice already exists for subscription period",
 						"invoice_id", existingForPeriod.ID,
 						"subscription_id", *req.SubscriptionID,
 						"period_start", *req.PeriodStart,
 						"period_end", *req.PeriodEnd)
-					resp = dto.NewInvoiceResponse(existingForPeriod)
-					return nil
+					return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
 				}
-				s.Logger.Debug(ctx, "invoice already exists for subscription period",
-					"invoice_id", existingForPeriod.ID,
-					"subscription_id", *req.SubscriptionID,
-					"period_start", *req.PeriodStart,
-					"period_end", *req.PeriodEnd)
-				return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
 			}
 
 			// Get billing sequence
