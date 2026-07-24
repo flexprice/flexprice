@@ -223,14 +223,6 @@ webhook:
   multiplier: 2.0
   max_elapsed_time: 2m
   tenants:
-    "00000000-0000-0000-0000-000000000000":
-      enabled: true
-      endpoint: "https://webhook.site/774479aa-b802-4217-91b4-d7df04a5a230"
-      headers:
-        "X-Webhook-Test": "flexprice-local"
-    "tenant_01KXFEYM7W2S826Y3GWC7KP0EC":
-      enabled: true
-      endpoint: "https://webhook.site/fa671147-77e2-4a5d-a115-32af914beb0e"
     "tenant_01JJ20ZF9M5GQQXJG2AQSMZCVM":
       enabled: true
       endpoint: "http://localhost:8080/health"

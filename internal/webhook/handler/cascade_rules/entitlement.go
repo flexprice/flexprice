@@ -9,15 +9,11 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-// entitlementCascadeRule cascades subscription.updated from subscription-scoped
-// entitlement.* events. The entitlement is resolved fresh (works for soft-deleted rows too),
-// so no data needs to be carried on the source event.
 type EntitlementCascadeRule struct {
 	entitlementService service.EntitlementService
 	logger             *logger.Logger
 }
 
-// NewEntitlementCascadeRule builds the entitlement→subscription.updated cascade rule.
 func NewEntitlementCascadeRule(entitlementService service.EntitlementService, logger *logger.Logger) CascadeRule {
 	return &EntitlementCascadeRule{
 		entitlementService: entitlementService,
@@ -55,10 +51,10 @@ func (r *EntitlementCascadeRule) GetEventsToCascade(ctx context.Context, event *
 		return nil
 	}
 
-	var cascadedEvents []*types.WebhookEvent
+	var eventsToCascade []*types.WebhookEvent
 	switch ent.EntityType {
 	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
-		cascaded, err := types.NewWebhookEvent(types.WebhookEventSubscriptionUpdated).
+		newEvent, err := types.NewWebhookEvent(types.WebhookEventSubscriptionUpdated).
 			WithIdentityFrom(event).
 			WithEntity(types.SystemEntityTypeSubscription, ent.EntityID).
 			WithPayload(webhookDto.InternalSubscriptionEvent{
@@ -74,8 +70,8 @@ func (r *EntitlementCascadeRule) GetEventsToCascade(ctx context.Context, event *
 			return nil
 		}
 
-		cascadedEvents = append(cascadedEvents, cascaded)
+		eventsToCascade = append(eventsToCascade, newEvent)
 	}
 
-	return cascadedEvents
+	return eventsToCascade
 }

@@ -60,7 +60,7 @@ func NewEventCascader(
 // webhook topic, so they flow through the normal publish → consume → deliver pipeline
 // (and get their own system_events row + retry semantics). Best-effort: failures are logged.
 func (c *eventCascader) Cascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent {
-	if c.publisher == nil || event == nil {
+	if event == nil {
 		return nil
 	}
 
@@ -99,16 +99,18 @@ func (c *eventCascader) Cascade(ctx context.Context, event *types.WebhookEvent) 
 			}
 
 			eventToCascade.CascadeDepth = event.CascadeDepth + 1
-			if err := c.publisher.PublishWebhook(ctx, eventToCascade); err != nil {
-				c.logger.Error(ctx, "failed to publish cascaded webhook event",
-					"error", err,
-					"source_event", event.EventName,
-					"target_event", eventToCascade.EventName,
-					"tenant_id", eventToCascade.TenantID,
-				)
-			} else {
-				out = append(out, eventToCascade)
+			if c.publisher != nil {
+				if err := c.publisher.PublishWebhook(ctx, eventToCascade); err != nil {
+					c.logger.Error(ctx, "failed to publish cascaded webhook event",
+						"error", err,
+						"source_event", event.EventName,
+						"target_event", eventToCascade.EventName,
+						"tenant_id", eventToCascade.TenantID,
+					)
+					continue
+				}
 			}
+			out = append(out, eventToCascade)
 		}
 	}
 
