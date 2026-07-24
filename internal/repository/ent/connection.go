@@ -402,6 +402,12 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 				"external_id": encryptedSecretData.AWSMarketplace.ExternalID,
 			}
 		}
+	case types.SecretProviderGCPMarketplace:
+		if encryptedSecretData.GCPMarketplace != nil {
+			return map[string]interface{}{
+				"credentials_json": encryptedSecretData.GCPMarketplace.CredentialsJSON,
+			}
+		}
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks != nil {
 			result := map[string]interface{}{

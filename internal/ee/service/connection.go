@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -32,14 +33,16 @@ type connectionService struct {
 	ServiceParams
 	encryptionService    security.EncryptionService
 	awsMarketplaceClient awsmarketplace.Client
+	gcpMarketplaceClient gcpmarketplace.Client
 }
 
 // NewConnectionService creates a new connection service
-func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService, awsMarketplaceClient awsmarketplace.Client) ConnectionService {
+func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService, awsMarketplaceClient awsmarketplace.Client, gcpMarketplaceClient gcpmarketplace.Client) ConnectionService {
 	return &connectionService{
 		ServiceParams:        params,
 		encryptionService:    encryptionService,
 		awsMarketplaceClient: awsMarketplaceClient,
+		gcpMarketplaceClient: gcpMarketplaceClient,
 	}
 }
 
@@ -397,6 +400,21 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			ExternalID: encryptedExternalID,
 		}
 
+	case types.SecretProviderGCPMarketplace:
+		if encryptedSecretData.GCPMarketplace == nil {
+			s.Logger.Info(context.Background(), "GCP Marketplace metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("GCP Marketplace metadata is required").
+				WithHint("GCP Marketplace connection requires encrypted_secret_data with credentials_json").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedCredentialsJSON, err := s.encryptionService.Encrypt(encryptedSecretData.GCPMarketplace.CredentialsJSON)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.GCPMarketplace = &types.GCPMarketplaceConnectionSecrets{
+			CredentialsJSON: encryptedCredentialsJSON,
+		}
+
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
 			s.Logger.Info(context.Background(), "Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
@@ -557,6 +575,13 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if err := conn.EncryptedSecretData.AWSMarketplace.Validate(); err != nil {
 			return nil, err
 		}
+		// Region selects the AWS Marketplace Metering Service regional endpoint BatchMeterUsage
+		// targets at report time. It must match the region AWS enabled SaaS metering for this product.
+		if conn.SyncConfig == nil || conn.SyncConfig.AWSMarketplace == nil || conn.SyncConfig.AWSMarketplace.Region == "" {
+			return nil, ierr.NewError("aws_marketplace connection requires region").
+				WithHint("sync_config.aws_marketplace.region is required").
+				Mark(ierr.ErrValidation)
+		}
 		// Bounded so a slow/unreachable AWS credential chain (e.g. the SDK falling through to an
 		// unreachable EC2 instance-metadata endpoint when Flexprice's own AWS credentials aren't
 		// configured via env vars) can't hang this request indefinitely — there's no other timeout
@@ -578,6 +603,32 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 			return nil, ierr.WithError(err).
 				WithHint("Could not assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID before creating this connection.").
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// GCP Marketplace: verify the tenant's Workload Identity Federation credentials actually work
+	// before the connection is ever persisted. WifSession forces the full AWS -> GCP STS ->
+	// service-account-impersonation exchange as its verification — succeeding is the whole check,
+	// mirroring the AWS AssumeRole block above.
+	if conn.ProviderType == types.SecretProviderGCPMarketplace {
+		if conn.EncryptedSecretData.GCPMarketplace == nil {
+			return nil, ierr.NewError("gcp_marketplace connection requires credentials_json").
+				WithHint("encrypted_secret_data.gcp_marketplace with credentials_json is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.GCPMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		// Bounded for the same reason the AWS verification above is: a slow/unreachable credential
+		// chain must not hang this request indefinitely.
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err := s.gcpMarketplaceClient.WifSession(
+			verifyCtx,
+			conn.EncryptedSecretData.GCPMarketplace.CredentialsJSON,
+		)
+		cancel()
+		if err != nil {
+			return nil, err
 		}
 	}
 

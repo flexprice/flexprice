@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/usagerecord"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -189,23 +190,23 @@ func (urc *UsageRecordCreate) SetPeriodEnd(t time.Time) *UsageRecordCreate {
 	return urc
 }
 
-// SetSyncs sets the "syncs" field.
-func (urc *UsageRecordCreate) SetSyncs(m map[string]interface{}) *UsageRecordCreate {
-	urc.mutation.SetSyncs(m)
+// SetSynced sets the "synced" field.
+func (urc *UsageRecordCreate) SetSynced(b bool) *UsageRecordCreate {
+	urc.mutation.SetSynced(b)
 	return urc
 }
 
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (urc *UsageRecordCreate) SetAllProvidersSynced(b bool) *UsageRecordCreate {
-	urc.mutation.SetAllProvidersSynced(b)
-	return urc
-}
-
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableAllProvidersSynced(b *bool) *UsageRecordCreate {
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (urc *UsageRecordCreate) SetNillableSynced(b *bool) *UsageRecordCreate {
 	if b != nil {
-		urc.SetAllProvidersSynced(*b)
+		urc.SetSynced(*b)
 	}
+	return urc
+}
+
+// SetSyncs sets the "syncs" field.
+func (urc *UsageRecordCreate) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordCreate {
+	urc.mutation.SetSyncs(mrse)
 	return urc
 }
 
@@ -274,9 +275,13 @@ func (urc *UsageRecordCreate) defaults() {
 		v := usagerecord.DefaultAmount
 		urc.mutation.SetAmount(v)
 	}
-	if _, ok := urc.mutation.AllProvidersSynced(); !ok {
-		v := usagerecord.DefaultAllProvidersSynced
-		urc.mutation.SetAllProvidersSynced(v)
+	if _, ok := urc.mutation.Synced(); !ok {
+		v := usagerecord.DefaultSynced
+		urc.mutation.SetSynced(v)
+	}
+	if _, ok := urc.mutation.Syncs(); !ok {
+		v := usagerecord.DefaultSyncs
+		urc.mutation.SetSyncs(v)
 	}
 }
 
@@ -343,8 +348,8 @@ func (urc *UsageRecordCreate) check() error {
 	if _, ok := urc.mutation.PeriodEnd(); !ok {
 		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "UsageRecord.period_end"`)}
 	}
-	if _, ok := urc.mutation.AllProvidersSynced(); !ok {
-		return &ValidationError{Name: "all_providers_synced", err: errors.New(`ent: missing required field "UsageRecord.all_providers_synced"`)}
+	if _, ok := urc.mutation.Synced(); !ok {
+		return &ValidationError{Name: "synced", err: errors.New(`ent: missing required field "UsageRecord.synced"`)}
 	}
 	return nil
 }
@@ -445,13 +450,13 @@ func (urc *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) 
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = value
 	}
+	if value, ok := urc.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+		_node.Synced = value
+	}
 	if value, ok := urc.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 		_node.Syncs = value
-	}
-	if value, ok := urc.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
-		_node.AllProvidersSynced = value
 	}
 	return _node, _spec
 }

@@ -27,11 +27,13 @@ func (s *InMemoryUsageRecordStore) Create(ctx context.Context, rec *usagerecord.
 	if rec.TenantID == "" {
 		rec.TenantID = types.GetTenantID(ctx)
 	}
+	if rec.Syncs == nil {
+		rec.Syncs = map[string]types.UsageRecordSyncEntry{}
+	}
 
 	// Mirrors the unique index on (tenant_id, environment_id, subscription_id, period_start,
-	// period_end) the ent schema no longer has (dropped per the "every sub has its own agreement,
-	// concurrent overlap is prevented by SCHEDULE_OVERLAP_POLICY_SKIP" call) — kept here anyway
-	// since it costs nothing in-memory and exercises snapshotSubscription's ErrAlreadyExists path.
+	// period_end) — kept in-memory since it costs nothing and exercises snapshotSubscription's
+	// ErrAlreadyExists path.
 	exists, _ := s.ExistsForPeriod(ctx, rec.SubscriptionID, rec.PeriodStart, rec.PeriodEnd)
 	if exists {
 		return ierr.NewError("usage record already exists for this subscription and period").
@@ -66,7 +68,7 @@ func (s *InMemoryUsageRecordStore) ListUnsynced(ctx context.Context, tenantID, e
 	filterFn := func(_ context.Context, r *usagerecord.UsageRecord, _ interface{}) bool {
 		return r.TenantID == tenantID &&
 			r.EnvironmentID == environmentID &&
-			!r.AllProvidersSynced &&
+			!r.Synced &&
 			r.Status == types.StatusPublished
 	}
 	items, err := s.store.List(ctx, nil, filterFn, nil)
@@ -80,24 +82,19 @@ func (s *InMemoryUsageRecordStore) ListUnsynced(ctx context.Context, tenantID, e
 	return result, nil
 }
 
-func (s *InMemoryUsageRecordStore) UpdateSyncResult(
-	ctx context.Context,
-	id string,
-	marketplace usagerecord.Marketplace,
-	entry usagerecord.MarketplaceSyncEntry,
-	allProvidersSynced bool,
-) error {
+func (s *InMemoryUsageRecordStore) MarkSynced(ctx context.Context, id string, syncs map[string]types.UsageRecordSyncEntry, synced bool) error {
 	existing, err := s.store.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	updated := copyUsageRecord(existing)
-	if updated.Syncs == nil {
-		updated.Syncs = make(map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry)
+	copied := make(map[string]types.UsageRecordSyncEntry, len(syncs))
+	for k, v := range syncs {
+		copied[k] = v
 	}
-	updated.Syncs[marketplace] = entry
-	updated.AllProvidersSynced = allProvidersSynced
+	updated.Syncs = copied
+	updated.Synced = synced
 	updated.UpdatedAt = time.Now().UTC()
 
 	return s.store.Update(ctx, id, updated)
@@ -111,7 +108,7 @@ func copyUsageRecord(r *usagerecord.UsageRecord) *usagerecord.UsageRecord {
 	if r == nil {
 		return nil
 	}
-	syncs := make(map[usagerecord.Marketplace]usagerecord.MarketplaceSyncEntry, len(r.Syncs))
+	syncs := make(map[string]types.UsageRecordSyncEntry, len(r.Syncs))
 	for k, v := range r.Syncs {
 		syncs[k] = v
 	}
@@ -126,8 +123,8 @@ func copyUsageRecord(r *usagerecord.UsageRecord) *usagerecord.UsageRecord {
 		Currency:           r.Currency,
 		PeriodStart:        r.PeriodStart,
 		PeriodEnd:          r.PeriodEnd,
+		Synced:             r.Synced,
 		Syncs:              syncs,
-		AllProvidersSynced: r.AllProvidersSynced,
 		EnvironmentID:      r.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  r.TenantID,
