@@ -675,8 +675,31 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel (Redis high-availability / automatic failover for self-hosted
+	// standalone Redis). When SentinelMasterName is non-empty the client runs in
+	// Sentinel mode and IGNORES Host/Port/ClusterMode: it resolves the current
+	// master (and replicas) through the sentinel quorum and re-resolves
+	// automatically on failover.
+	//
+	// SentinelAddrs must list the sentinel endpoints ("host:port"), NOT the Redis
+	// master. Password (above) still authenticates to the Redis data nodes;
+	// SentinelUsername/SentinelPassword authenticate to the sentinels themselves.
+	// Env overrides: FLEXPRICE_REDIS_SENTINEL_MASTER_NAME,
+	// FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated),
+	// FLEXPRICE_REDIS_SENTINEL_USERNAME, FLEXPRICE_REDIS_SENTINEL_PASSWORD.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) spreads read commands across replicas
+	// via go-redis's FailoverCluster client; writes still go to the master. This
+	// is read scaling, NOT data sharding — the whole dataset lives on the master.
+	// Env override: FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
