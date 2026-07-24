@@ -36,15 +36,14 @@ var Module = fx.Options(
 	),
 )
 
-// provideEventCascader wires the consumer-side event cascader and registers its CascadeRules.
-// Adding a new cascade is a one-line rule registration here; the cascader statically rejects
-// any registration whose source→target edges would form a cycle (panics at boot).
 func provideEventCascader(
 	entitlementService service.EntitlementService,
 	logger *logger.Logger,
+	webhookPublisher publisher.WebhookPublisher,
 ) handler.EventCascader {
 	return handler.NewEventCascader(
 		logger,
+		webhookPublisher,
 		cascaderules.NewEntitlementCascadeRule(entitlementService, logger),
 	)
 }

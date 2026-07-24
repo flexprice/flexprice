@@ -17,10 +17,10 @@ import (
 type CascadeRule interface {
 	// SourceEvents lists the event names this rule reacts to.
 	SourceEvents() []types.WebhookEventName
-	// TargetEvents lists every event name this rule may emit. Cascade output is validated
-	// against this set, and the set feeds the static cycle check.
+	// TargetEvents lists every event name this rule may emit. GetEventsToCascade output is
+	// validated against this set, and the set feeds the static cycle check.
 	TargetEvents() []types.WebhookEventName
-	// Cascade returns zero or more follow-on events for a matched source event. Best-effort:
-	// it never returns an error, so it cannot fail delivery of the source event.
-	Cascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent
+	// GetEventsToCascade returns zero or more follow-on events for a matched source event.
+	// Best-effort: it never returns an error, so it cannot fail delivery of the source event.
+	GetEventsToCascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent
 }

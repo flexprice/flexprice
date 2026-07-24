@@ -704,8 +704,6 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 
-	v.SetDefault("webhook.event_cascading_enabled", false)
-
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Printf("Error reading config file: %v\n", err)

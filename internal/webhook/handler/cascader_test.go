@@ -45,11 +45,11 @@ func planScopedEntitlement() *dto.EntitlementResponse {
 	}
 }
 
-func entitlementCascader(t *testing.T, resp *dto.EntitlementResponse, err error) EventCascader {
+func entitlementCascader(t *testing.T, resp *dto.EntitlementResponse, err error) *eventCascader {
 	t.Helper()
-	return NewEventCascader(testLogger(t),
+	return NewEventCascader(testLogger(t), nil,
 		cascaderules.NewEntitlementCascadeRule(&fakeEntitlementService{resp: resp, err: err}, testLogger(t)),
-	)
+	).(*eventCascader)
 }
 
 func TestCascade_SubscriptionScopedEntitlement_YieldsSubscriptionUpdated(t *testing.T) {
@@ -62,7 +62,7 @@ func TestCascade_SubscriptionScopedEntitlement_YieldsSubscriptionUpdated(t *test
 	} {
 		c := entitlementCascader(t, subScopedEntitlement("sub_123"), nil)
 
-		cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
+		cascaded := c.Cascade(context.Background(), &types.WebhookEvent{
 			EventName:     name,
 			EntityID:      "ent_1",
 			TenantID:      "ten_1",
@@ -86,7 +86,7 @@ func TestCascade_PlanScopedEntitlement_YieldsNothing(t *testing.T) {
 
 	c := entitlementCascader(t, planScopedEntitlement(), nil)
 
-	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
+	cascaded := c.Cascade(context.Background(), &types.WebhookEvent{
 		EventName: types.WebhookEventEntitlementCreated,
 		EntityID:  "ent_1",
 	})
@@ -99,7 +99,7 @@ func TestCascade_NonEntitlementEvent_YieldsNothing(t *testing.T) {
 
 	c := entitlementCascader(t, subScopedEntitlement("sub_123"), nil)
 
-	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
+	cascaded := c.Cascade(context.Background(), &types.WebhookEvent{
 		EventName: types.WebhookEventSubscriptionCreated,
 		EntityID:  "sub_123",
 	})
@@ -112,7 +112,7 @@ func TestCascade_ResolutionError_YieldsNothing(t *testing.T) {
 
 	c := entitlementCascader(t, nil, ierr.NewError("not found").Mark(ierr.ErrNotFound))
 
-	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
+	cascaded := c.Cascade(context.Background(), &types.WebhookEvent{
 		EventName: types.WebhookEventEntitlementDeleted,
 		EntityID:  "ent_gone",
 	})
@@ -127,7 +127,7 @@ func TestCascade_DepthBackstop(t *testing.T) {
 
 	c := entitlementCascader(t, subScopedEntitlement("sub_123"), nil)
 
-	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
+	cascaded := c.Cascade(context.Background(), &types.WebhookEvent{
 		EventName:    types.WebhookEventEntitlementCreated,
 		EntityID:     "ent_1",
 		CascadeDepth: maxCascadeDepth,
@@ -146,7 +146,7 @@ type stubCascadeRule struct {
 
 func (r stubCascadeRule) SourceEvents() []types.WebhookEventName { return r.sources }
 func (r stubCascadeRule) TargetEvents() []types.WebhookEventName { return r.targets }
-func (r stubCascadeRule) Cascade(_ context.Context, _ *types.WebhookEvent) []*types.WebhookEvent {
+func (r stubCascadeRule) GetEventsToCascade(_ context.Context, _ *types.WebhookEvent) []*types.WebhookEvent {
 	return r.emit
 }
 
@@ -154,16 +154,16 @@ func (r stubCascadeRule) Cascade(_ context.Context, _ *types.WebhookEvent) []*ty
 func TestCascade_UndeclaredTargetDropped(t *testing.T) {
 	t.Parallel()
 
-	c := NewEventCascader(testLogger(t), stubCascadeRule{
+	c := NewEventCascader(testLogger(t), nil, stubCascadeRule{
 		sources: []types.WebhookEventName{types.WebhookEventCustomerCreated},
 		targets: []types.WebhookEventName{types.WebhookEventSubscriptionUpdated},
 		emit: []*types.WebhookEvent{
 			{EventName: types.WebhookEventSubscriptionUpdated, EntityID: "sub_ok"},
 			{EventName: types.WebhookEventPaymentCreated, EntityID: "pay_undeclared"},
 		},
-	})
+	}).(*eventCascader)
 
-	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{EventName: types.WebhookEventCustomerCreated})
+	cascaded := c.Cascade(context.Background(), &types.WebhookEvent{EventName: types.WebhookEventCustomerCreated})
 
 	require.Len(t, cascaded, 1)
 	require.Equal(t, types.WebhookEventSubscriptionUpdated, cascaded[0].EventName)
@@ -175,7 +175,7 @@ func TestNewEventCascader_PanicsOnCycle(t *testing.T) {
 	t.Parallel()
 
 	require.Panics(t, func() {
-		NewEventCascader(testLogger(t),
+		NewEventCascader(testLogger(t), nil,
 			stubCascadeRule{
 				sources: []types.WebhookEventName{types.WebhookEventSubscriptionUpdated},
 				targets: []types.WebhookEventName{types.WebhookEventEntitlementCreated},
@@ -202,7 +202,7 @@ func TestNewEventCascader_PanicsOnLongCycle(t *testing.T) {
 	)
 
 	require.Panics(t, func() {
-		NewEventCascader(testLogger(t),
+		NewEventCascader(testLogger(t), nil,
 			stubCascadeRule{sources: []types.WebhookEventName{a}, targets: []types.WebhookEventName{b}},
 			stubCascadeRule{sources: []types.WebhookEventName{b}, targets: []types.WebhookEventName{c}},
 			stubCascadeRule{sources: []types.WebhookEventName{c}, targets: []types.WebhookEventName{d}},
@@ -224,7 +224,7 @@ func TestNewEventCascader_LongChainNoCycleOK(t *testing.T) {
 	)
 
 	require.NotPanics(t, func() {
-		NewEventCascader(testLogger(t),
+		NewEventCascader(testLogger(t), nil,
 			stubCascadeRule{sources: []types.WebhookEventName{a}, targets: []types.WebhookEventName{b}},
 			stubCascadeRule{sources: []types.WebhookEventName{b}, targets: []types.WebhookEventName{c}},
 			stubCascadeRule{sources: []types.WebhookEventName{c}, targets: []types.WebhookEventName{d}},
@@ -237,7 +237,7 @@ func TestNewEventCascader_NoCycleOK(t *testing.T) {
 	t.Parallel()
 
 	require.NotPanics(t, func() {
-		NewEventCascader(testLogger(t),
+		NewEventCascader(testLogger(t), nil,
 			stubCascadeRule{
 				sources: []types.WebhookEventName{types.WebhookEventEntitlementCreated},
 				targets: []types.WebhookEventName{types.WebhookEventSubscriptionUpdated},

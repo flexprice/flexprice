@@ -19,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
-	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 )
 
@@ -43,7 +42,6 @@ type handler struct {
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
 	cascader        EventCascader
-	publisher       publisher.WebhookPublisher
 }
 
 // NewHandler creates a new memory-based handler
@@ -57,7 +55,6 @@ func NewHandler(
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
 	cascader EventCascader,
-	webhookPublisher publisher.WebhookPublisher,
 ) (Handler, error) {
 	return &handler{
 		pubSub:          pubSub,
@@ -70,7 +67,6 @@ func NewHandler(
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
 		cascader:        cascader,
-		publisher:       webhookPublisher,
 	}, nil
 }
 
@@ -237,35 +233,10 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 		h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
 	}
 
-	h.publishCascadedEvents(ctx, &event)
+	if h.cascader != nil && h.config.EventCascadingEnabled {
+		h.cascader.Cascade(ctx, &event)
+	}
 	return nil
-}
-
-// publishCascadedEvents publishes any follow-on events implied by the consumed event back onto
-// the webhook topic, so they flow through the normal publish → consume → deliver pipeline
-// (and get their own system_events row + retry semantics). Best-effort: failures are logged.
-func (h *handler) publishCascadedEvents(ctx context.Context, event *types.WebhookEvent) {
-	if !h.config.EventCascadingEnabled {
-		return
-	}
-
-	if h.cascader == nil || h.publisher == nil {
-		return
-	}
-
-	for _, cascadeEvent := range h.cascader.GetCascadedEvents(ctx, event) {
-		if cascadeEvent == nil {
-			continue
-		}
-		if err := h.publisher.PublishWebhook(ctx, cascadeEvent); err != nil {
-			h.logger.Error(ctx, "failed to publish cascaded webhook event",
-				"error", err,
-				"source_event", event.EventName,
-				"cascaded_event", cascadeEvent.EventName,
-				"tenant_id", event.TenantID,
-			)
-		}
-	}
 }
 
 // deliverSvix sends a webhook via Svix.

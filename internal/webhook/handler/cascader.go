@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	cascaderules "github.com/flexprice/flexprice/internal/webhook/handler/cascade_rules"
+	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 )
 
@@ -16,20 +17,27 @@ import (
 // (e.g. a rule added without re-running the check in a hand-built cascader).
 const maxCascadeDepth = 3
 
-// EventCascader runs registered CascadeRules against a consumed event and returns any
-// follow-on events those rules produce.
+// EventCascader runs registered CascadeRules against a consumed event and publishes any
+// follow-on events those rules produce back onto the webhook topic.
 type EventCascader interface {
-	GetCascadedEvents(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent
+	// Cascade resolves follow-on events for the consumed event and publishes them.
+	// Best-effort: publish failures are logged;
+	Cascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent
 }
 
 type eventCascader struct {
 	eventRules map[types.WebhookEventName][]cascaderules.CascadeRule
+	publisher  publisher.WebhookPublisher
 	logger     *logger.Logger
 }
 
 // NewEventCascader registers the given cascade rules and panics if their source→target
 // edges form a cycle.
-func NewEventCascader(logger *logger.Logger, rules ...cascaderules.CascadeRule) EventCascader {
+func NewEventCascader(
+	logger *logger.Logger,
+	pub publisher.WebhookPublisher,
+	rules ...cascaderules.CascadeRule,
+) EventCascader {
 	if path := detectCascadeCycle(rules); path != nil {
 		panic(fmt.Sprintf("webhook event cascade cycle detected: %v", path))
 	}
@@ -41,11 +49,18 @@ func NewEventCascader(logger *logger.Logger, rules ...cascaderules.CascadeRule) 
 		}
 	}
 
-	return &eventCascader{eventRules: eventRules, logger: logger}
+	return &eventCascader{
+		eventRules: eventRules,
+		publisher:  pub,
+		logger:     logger,
+	}
 }
 
-func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent {
-	if event == nil {
+// Cascade publishes any follow-on events implied by the consumed event back onto the
+// webhook topic, so they flow through the normal publish → consume → deliver pipeline
+// (and get their own system_events row + retry semantics). Best-effort: failures are logged.
+func (c *eventCascader) Cascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent {
+	if c.publisher == nil || event == nil {
 		return nil
 	}
 
@@ -67,36 +82,39 @@ func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.Webh
 	}
 
 	var out []*types.WebhookEvent
-	for _, rr := range c.eventRules[event.EventName] {
-		for _, targetEvent := range rr.Cascade(ctx, event) {
-			if targetEvent == nil {
+	for _, rule := range c.eventRules[event.EventName] {
+		for _, eventToCascade := range rule.GetEventsToCascade(ctx, event) {
+			if eventToCascade == nil {
 				continue
 			}
 
-			if !lo.Contains(rr.TargetEvents(), targetEvent.EventName) {
-				err := ierr.NewError("cascade rule emitted undeclared target event").
-					WithHint("CascadeRule.Cascade returned an event name not listed in TargetEvents; drop and fix the rule.").
-					WithReportableDetails(map[string]any{
-						"source_event": event.EventName,
-						"target_event": targetEvent.EventName,
-					}).
-					Mark(ierr.ErrInternal)
+			if !lo.Contains(rule.TargetEvents(), eventToCascade.EventName) {
+				err := ierr.NewError("cascade rule emitted undeclared target event").Mark(ierr.ErrInternal)
 				c.logger.Error(ctx, "cascade rule emitted undeclared target event; dropping",
 					"error", err,
 					"source_event", event.EventName,
-					"target_event", targetEvent.EventName,
+					"target_event", eventToCascade.EventName,
 				)
 				continue
 			}
-			targetEvent.CascadeDepth = event.CascadeDepth + 1
-			out = append(out, targetEvent)
+
+			eventToCascade.CascadeDepth = event.CascadeDepth + 1
+			if err := c.publisher.PublishWebhook(ctx, eventToCascade); err != nil {
+				c.logger.Error(ctx, "failed to publish cascaded webhook event",
+					"error", err,
+					"source_event", event.EventName,
+					"target_event", eventToCascade.EventName,
+					"tenant_id", eventToCascade.TenantID,
+				)
+			} else {
+				out = append(out, eventToCascade)
+			}
 		}
 	}
+
 	return out
 }
 
-// detectCascadeCycle builds the directed graph of source→target edges across all cascade
-// rules and returns a cycle path if one exists, else nil.
 func detectCascadeCycle(rules []cascaderules.CascadeRule) []types.WebhookEventName {
 	adj := make(map[types.WebhookEventName][]types.WebhookEventName)
 	for _, r := range rules {
@@ -106,9 +124,9 @@ func detectCascadeCycle(rules []cascaderules.CascadeRule) []types.WebhookEventNa
 	}
 
 	const (
-		unprocessed = 0 // unvisited
-		processing  = 1 // on the current DFS stack
-		processed   = 2 // fully explored
+		unprocessed = 0
+		processing  = 1
+		processed   = 2
 	)
 	status := make(map[types.WebhookEventName]int)
 

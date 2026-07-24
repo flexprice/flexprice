@@ -37,7 +37,7 @@ func (r *EntitlementCascadeRule) TargetEvents() []types.WebhookEventName {
 	return []types.WebhookEventName{types.WebhookEventSubscriptionUpdated}
 }
 
-func (r *EntitlementCascadeRule) Cascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent {
+func (r *EntitlementCascadeRule) GetEventsToCascade(ctx context.Context, event *types.WebhookEvent) []*types.WebhookEvent {
 	if event.EntityID == "" {
 		return nil
 	}
