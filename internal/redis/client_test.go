@@ -58,25 +58,37 @@ func TestResolveRedisMode(t *testing.T) {
 }
 
 // TestNewClient_SentinelMissingAddrsErrors verifies that a misconfigured Sentinel
-// setup (master name set, no reachable sentinels) fails loudly with an error
-// rather than panicking or hanging. Uses a short timeout and an unroutable
-// address so it returns fast without external infra.
+// setup fails loudly rather than panicking, hanging, or (worse) silently
+// connecting to go-redis's 127.0.0.1:26379 default when addrs are empty.
 func TestNewClient_SentinelMissingAddrsErrors(t *testing.T) {
-	cfg := config.GetDefaultConfig()
-	cfg.Redis.Timeout = 500 * time.Millisecond
-	cfg.Redis.SentinelMasterName = "mymaster"
-	cfg.Redis.SentinelAddrs = []string{"127.0.0.1:1"} // nothing listens here
-
-	log, err := logger.NewLogger(cfg)
-	if err != nil {
-		t.Fatalf("logger: %v", err)
+	tests := []struct {
+		name  string
+		addrs []string
+	}{
+		// Empty addrs must be rejected up front — go-redis would otherwise
+		// substitute 127.0.0.1:26379 and connect to a phantom local sentinel.
+		{name: "empty addrs", addrs: nil},
+		// Unreachable addrs must surface a connection error, not hang.
+		{name: "unreachable addr", addrs: []string{"127.0.0.1:1"}},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.GetDefaultConfig()
+			cfg.Redis.Timeout = 500 * time.Millisecond
+			cfg.Redis.SentinelMasterName = "mymaster"
+			cfg.Redis.SentinelAddrs = tt.addrs
 
-	client, err := NewClient(cfg, log)
-	if err == nil {
-		if client != nil {
-			_ = client.Close()
-		}
-		t.Fatal("expected an error for unreachable sentinels, got nil")
+			log, err := logger.NewLogger(cfg)
+			if err != nil {
+				t.Fatalf("logger: %v", err)
+			}
+			client, err := NewClient(cfg, log)
+			if err == nil {
+				if client != nil {
+					_ = client.Close()
+				}
+				t.Fatal("expected an error, got nil")
+			}
+		})
 	}
 }

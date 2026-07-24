@@ -84,13 +84,20 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 		// maps them to SentinelAddrs and discovers the master/replicas itself.
 		// Password above still authenticates to the data nodes; SentinelUsername/
 		// SentinelPassword authenticate to the sentinels.
+		if len(config.Redis.SentinelAddrs) == 0 {
+			// go-redis silently defaults an empty Addrs to 127.0.0.1:26379, which
+			// would connect to a phantom local sentinel instead of failing. Fail loud.
+			return nil, fmt.Errorf("redis sentinel mode requires at least one sentinel address (FLEXPRICE_REDIS_SENTINEL_ADDRS)")
+		}
 		opts.Addrs = config.Redis.SentinelAddrs
 		opts.MasterName = config.Redis.SentinelMasterName
 		opts.SentinelUsername = config.Redis.SentinelUsername
 		opts.SentinelPassword = config.Redis.SentinelPassword
 		if mode == modeSentinelReplicaRead {
-			// FailoverCluster client spreads reads across replicas; writes still
-			// target the master. This is read scaling, not data sharding.
+			// FailoverCluster client with RouteByLatency: read-only commands go to
+			// the lowest-latency node among the master AND its replicas (writes
+			// always go to the master). This distributes reads for scaling; it is
+			// NOT data sharding — every node holds the full dataset.
 			opts.RouteByLatency = true
 			rdb = redis.NewFailoverClusterClient(opts.Failover())
 		} else {

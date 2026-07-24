@@ -448,7 +448,7 @@ redis:
   sentinel_addrs: [] # sentinel endpoints host:port (NOT the redis master); FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
   sentinel_username: "" # sentinel ACL username, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
   sentinel_password: "" # password to auth to the sentinels, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
-  route_reads_to_replicas: false # spread reads across replicas (sentinel only; NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
+  route_reads_to_replicas: false # route reads to lowest-latency node among master+replicas (sentinel only; NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:

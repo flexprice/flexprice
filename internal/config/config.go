@@ -695,10 +695,12 @@ type RedisConfig struct {
 	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
 	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
 
-	// RouteReadsToReplicas (Sentinel only) spreads read commands across replicas
-	// via go-redis's FailoverCluster client; writes still go to the master. This
-	// is read scaling, NOT data sharding — the whole dataset lives on the master.
-	// Env override: FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS.
+	// RouteReadsToReplicas (Sentinel only) routes read-only commands to the
+	// lowest-latency node among the master AND its replicas via go-redis's
+	// FailoverCluster client (RouteByLatency); writes always go to the master.
+	// This distributes reads for scaling — it is NOT data sharding (every node
+	// holds the full dataset). Reads served from a replica may be slightly stale
+	// (async replication). Env override: FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS.
 	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
