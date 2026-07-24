@@ -446,6 +446,12 @@ redis:
   # was always *redis.ClusterClient). Set to false when targeting a single-node
   # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
   cluster_mode: true
+  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
+  sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
+  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
+  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
+  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
+  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
