@@ -52,6 +52,17 @@ type AlertWebhookPayload struct {
 	Customer    *dto.CustomerResponse  `json:"customer,omitempty"`
 }
 
+// EntitlementGrantAlertEvent is the webhook payload for entitlement grant exhaustion.
+// UsageRatio is usage/quota at evaluation time (>= 1 when exhausted).
+type EntitlementGrantAlertEvent struct {
+	Subscription       *dto.SubscriptionResponse `json:"subscription"`
+	EntitlementGrantID string                    `json:"entitlement_grant_id"`
+	AlertType          types.AlertType           `json:"alert_type"`
+	AlertStatus        types.AlertState          `json:"alert_status"`
+	UsageRatio         string                    `json:"usage_ratio"`
+	TriggeredAt        time.Time                 `json:"triggered_at"`
+}
+
 func NewAlertWebhookPayload(feature *dto.FeatureResponse, wallet *dto.WalletResponse, customer *dto.CustomerResponse, alertType types.AlertType, alertStatus types.AlertState, eventType types.WebhookEventName) *AlertWebhookPayload {
 	return &AlertWebhookPayload{EventType: eventType, AlertType: alertType, AlertStatus: alertStatus, Feature: feature, Wallet: wallet, Customer: customer}
 }

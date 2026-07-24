@@ -35,6 +35,7 @@ func (s *EntitlementServiceSuite) setupService() {
 		Config:           s.GetConfig(),
 		DB:               s.GetDB(),
 		EntitlementRepo:  stores.EntitlementRepo,
+		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		PlanRepo:         stores.PlanRepo,
 		FeatureRepo:      stores.FeatureRepo,
 		MeterRepo:        testutil.NewInMemoryMeterStore(),

@@ -56,6 +56,16 @@ const (
 	FieldEndDate = "end_date"
 	// FieldConfigValue holds the string denoting the config_value field in the database.
 	FieldConfigValue = "config_value"
+	// FieldGrantMeasure holds the string denoting the grant_measure field in the database.
+	FieldGrantMeasure = "grant_measure"
+	// FieldGrantDurationValue holds the string denoting the grant_duration_value field in the database.
+	FieldGrantDurationValue = "grant_duration_value"
+	// FieldGrantDurationUnit holds the string denoting the grant_duration_unit field in the database.
+	FieldGrantDurationUnit = "grant_duration_unit"
+	// FieldGrantQuota holds the string denoting the grant_quota field in the database.
+	FieldGrantQuota = "grant_quota"
+	// FieldAggregationMode holds the string denoting the aggregation_mode field in the database.
+	FieldAggregationMode = "aggregation_mode"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -84,6 +94,11 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldConfigValue,
+	FieldGrantMeasure,
+	FieldGrantDurationValue,
+	FieldGrantDurationUnit,
+	FieldGrantQuota,
+	FieldAggregationMode,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
@@ -132,6 +147,8 @@ var (
 	DefaultIsSoftLimit bool
 	// DefaultDisplayOrder holds the default value on creation for the "display_order" field.
 	DefaultDisplayOrder int
+	// DefaultAggregationMode holds the default value on creation for the "aggregation_mode" field.
+	DefaultAggregationMode types.EntitlementAggregationMode
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -242,4 +259,29 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
+}
+
+// ByGrantMeasure orders the results by the grant_measure field.
+func ByGrantMeasure(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantMeasure, opts...).ToFunc()
+}
+
+// ByGrantDurationValue orders the results by the grant_duration_value field.
+func ByGrantDurationValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantDurationValue, opts...).ToFunc()
+}
+
+// ByGrantDurationUnit orders the results by the grant_duration_unit field.
+func ByGrantDurationUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantDurationUnit, opts...).ToFunc()
+}
+
+// ByGrantQuota orders the results by the grant_quota field.
+func ByGrantQuota(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantQuota, opts...).ToFunc()
+}
+
+// ByAggregationMode orders the results by the aggregation_mode field.
+func ByAggregationMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAggregationMode, opts...).ToFunc()
 }

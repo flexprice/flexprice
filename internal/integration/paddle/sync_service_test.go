@@ -957,6 +957,9 @@ func (m *mockSubscriptionService) GetFeatureUsageBySubscription(ctx context.Cont
 func (m *mockSubscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*apidto.EntitlementResponse, error) {
 	return nil, nil
 }

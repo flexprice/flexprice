@@ -176,6 +176,8 @@ const (
 	WebhookEventSubscriptionGroupSpendThresholdReached      WebhookEventName = "subscription.group_spend.threshold_reached"
 	WebhookEventSubscriptionGroupSpendThresholdRecovered    WebhookEventName = "subscription.group_spend.threshold_recovered"
 
+	WebhookEventEntitlementGrantExhausted WebhookEventName = "entitlement.grant.exhausted"
+
 	// cron driven webhook event names
 	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
 )

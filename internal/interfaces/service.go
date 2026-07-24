@@ -129,6 +129,11 @@ type SubscriptionService interface {
 	// Meter usage tracking (reads from meter_usage table)
 	GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 
+	// GetMeterUsageForSubscription is the data-fed variant of
+	// GetMeterUsageBySubscription: the caller supplies the subscription so no
+	// extra DB fetch happens for it.
+	GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
 	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 

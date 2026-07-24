@@ -357,8 +357,6 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
-  alert_debounce_enabled: false
-  alert_debounce_window: "5m30s"
 
 meter_usage_tracking_lazy:
   enabled: true
@@ -366,6 +364,13 @@ meter_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
+
+# Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
+# per-customer Temporal workflow (spend + entitlement grants + wallet alerts).
+usage_alerts:
+  enabled: false # meter usage pushes the debounce workflow
+  schedule_delay: "5m30s" # workflow StartDelay AND Redis schedule-throttle lock TTL
+  stale_after: "1h" # workflow runs firing later than this yield (ContinueAsNew); also activity ScheduleToStartTimeout
 
 costsheet_usage_tracking:
   enabled: false

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -13,7 +14,6 @@ import (
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"go.temporal.io/api/serviceerror"
 )
 
@@ -46,12 +46,9 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 		event.CustomerID = cust.ID
 	}
 
-	// When the debouncer is on it supersedes the Kafka wallet-alert path and the
-	// inline spend-breach check — a single Temporal workflow (deduped per customer)
-	// runs both checks once per debounce window. When off, the legacy paths stay
-	// available behind their existing flags so rollout can be flipped without a
-	// code change.
-	if s.Config.MeterUsageTracking.AlertDebounceEnabled {
+	// Debouncer supersedes the Kafka wallet-alert and inline spend-breach paths
+	// with one deduped Temporal workflow per customer.
+	if s.Config.UsageAlerts.Enabled {
 		s.scheduleUsageAlertWorkflow(ctx, cust)
 		return
 	}
@@ -61,17 +58,20 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 	}
 
 	if s.Config.MeterUsageTracking.SpendAlertWebhookEnabled {
-		meterIDs := lo.Uniq(lo.Map(records, func(r *events.MeterUsage, _ int) string { return r.MeterID }))
-		NewAlertService(s.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, cust, meterIDs)
+		NewAlertService(s.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, cust)
 	}
 }
 
-// scheduleUsageAlertWorkflow starts a debounced Temporal workflow that runs
-// the alert evaluation (spend + wallet balance) for the customer after
-// Config.AlertDebounceWindow. The workflow ID is stable per (tenant, environment,
-// customer); when a workflow with that ID is already running (armed but not yet
-// fired) Temporal rejects the start with WorkflowExecutionAlreadyStarted — that
-// error IS the dedupe signal and is swallowed.
+// scheduleUsageAlertWorkflow starts a debounced per-customer workflow. WorkflowID
+// is stable per (tenant, env, customer); WorkflowExecutionAlreadyStarted is the
+// dedup safety net on the Temporal side.
+//
+// A Redis throttle lock (TTL = schedule delay) keeps the Temporal RPC to one
+// attempt per customer per window: an event at 5:02pm scheduling a 5:07pm run
+// locks the customer until 5:07pm, so the burst in between never talks to
+// Temporal. There is no "does this customer have alert configs" pre-check here —
+// the workflow-side evaluators each bail on cheap indexed DB reads when there is
+// nothing to do.
 func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Context, cust *customer.Customer) {
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
@@ -79,6 +79,22 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 			"customer_id", cust.ID,
 		)
 		return
+	}
+
+	delay := s.Config.UsageAlerts.ScheduleDelay
+
+	var throttleLock cache.Lock
+	if s.Locker != nil {
+		throttleKey := cache.GenerateKey(ctx, cache.PrefixUsageAlertSchedule, cust.ID)
+		lock, err := s.Locker.AcquireLock(ctx, throttleKey, delay)
+		if err != nil {
+			// Fail open: a duplicate StartWorkflow is absorbed by AlreadyStarted.
+			s.Logger.Error(ctx, "failed to acquire usage alert schedule lock, scheduling anyway", "error", err, "customer_id", cust.ID)
+		} else if !lock.AcquiredSuccessfully() {
+			return // already scheduled within this window
+		} else {
+			throttleLock = lock
+		}
 	}
 
 	tenantID := types.GetTenantID(ctx)
@@ -94,12 +110,14 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 	options := workflowModels.StartWorkflowOptions{
 		ID:         workflowID,
 		TaskQueue:  types.TemporalUsageAlertWorkflow.TaskQueueName(),
-		StartDelay: s.Config.MeterUsageTracking.AlertDebounceWindow,
+		StartDelay: delay,
 	}
 	input := workflowModels.UsageAlertWorkflowInput{
 		TenantID:      tenantID,
 		EnvironmentID: envID,
 		CustomerID:    cust.ID,
+		ScheduledFor:  time.Now().UTC().Add(delay),
+		StaleAfter:    s.Config.UsageAlerts.StaleAfter,
 	}
 
 	if _, err := temporalSvc.StartWorkflow(ctx, options, types.TemporalUsageAlertWorkflow, input); err != nil {
@@ -110,6 +128,12 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 				"workflow_id", workflowID,
 			)
 			return
+		}
+		// Release the throttle lock so a later event in the window can retry the schedule.
+		if throttleLock != nil {
+			if releaseErr := throttleLock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release usage alert schedule lock", "error", releaseErr, "customer_id", cust.ID)
+			}
 		}
 		s.Logger.Error(ctx, "failed to schedule usage alert workflow",
 			"error", err,
@@ -122,7 +146,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 	s.Logger.Debug(ctx, "usage alert workflow scheduled",
 		"customer_id", cust.ID,
 		"workflow_id", workflowID,
-		"fires_in", s.Config.MeterUsageTracking.AlertDebounceWindow.String(),
+		"fires_in", delay.String(),
 	)
 }
 

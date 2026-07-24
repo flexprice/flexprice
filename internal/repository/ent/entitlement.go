@@ -33,6 +33,14 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache
 	}
 }
 
+// defaultedAggregationMode maps zero-value to `additive` so ent doesn't emit an empty string.
+func defaultedAggregationMode(m types.EntitlementAggregationMode) types.EntitlementAggregationMode {
+	if m == "" {
+		return types.EntitlementAggregationModeAdditive
+	}
+	return m
+}
+
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
 	client := r.client.Writer(ctx)
 
@@ -70,7 +78,12 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetUpdatedAt(e.UpdatedAt).
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
-		SetEnvironmentID(e.EnvironmentID)
+		SetEnvironmentID(e.EnvironmentID).
+		SetGrantMeasure(e.GrantMeasure).
+		SetNillableGrantDurationValue(e.GrantDurationValue).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetNillableGrantQuota(e.GrantQuota).
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	if e.ConfigValue != nil {
 		createQuery = createQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -298,7 +311,21 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableParentEntitlementID(e.ParentEntitlementID).
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx))
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetGrantMeasure(e.GrantMeasure).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
+	// SetNillable* with nil is a no-op, so clearing a grant config needs explicit Clear.
+	if e.GrantDurationValue != nil {
+		updateQuery = updateQuery.SetGrantDurationValue(*e.GrantDurationValue)
+	} else {
+		updateQuery = updateQuery.ClearGrantDurationValue()
+	}
+	if e.GrantQuota != nil {
+		updateQuery = updateQuery.SetGrantQuota(*e.GrantQuota)
+	} else {
+		updateQuery = updateQuery.ClearGrantQuota()
+	}
 	if e.ConfigValue != nil {
 		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
 	}
@@ -408,7 +435,12 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetUpdatedAt(e.UpdatedAt).
 			SetCreatedBy(e.CreatedBy).
 			SetUpdatedBy(e.UpdatedBy).
-			SetEnvironmentID(e.EnvironmentID)
+			SetEnvironmentID(e.EnvironmentID).
+			SetGrantMeasure(e.GrantMeasure).
+			SetNillableGrantDurationValue(e.GrantDurationValue).
+			SetGrantDurationUnit(e.GrantDurationUnit).
+			SetNillableGrantQuota(e.GrantQuota).
+			SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 		if e.ConfigValue != nil {
 			builder = builder.SetConfigValue(e.ConfigValue)
 		}
@@ -639,6 +671,14 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	// Apply is_enabled filter if specified
 	if f.IsEnabled != nil {
 		query = query.Where(entitlement.IsEnabled(*f.IsEnabled))
+	}
+
+	if f.HasGrantConfig != nil {
+		if *f.HasGrantConfig {
+			query = query.Where(entitlement.GrantQuotaNotNil())
+		} else {
+			query = query.Where(entitlement.GrantQuotaIsNil())
+		}
 	}
 
 	// Apply time range filters if specified

@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/shopspring/decimal"
 )
 
 // CreateEntitlementRequest represents the request to create a new entitlement
@@ -28,6 +29,13 @@ type CreateEntitlementRequest struct {
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 	ConfigValue         map[string]interface{}            `json:"config_value,omitempty"`
+
+	// Grant config — optional. All-or-nothing; see entitlement.validateGrantConfig.
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode    types.EntitlementAggregationMode   `json:"aggregation_mode,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -114,6 +122,11 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		ParentEntitlementID: r.ParentEntitlementID,
 		StartDate:           r.StartDate,
 		EndDate:             r.EndDate,
+		GrantMeasure:        r.GrantMeasure,
+		GrantDurationValue:  r.GrantDurationValue,
+		GrantDurationUnit:   r.GrantDurationUnit,
+		GrantQuota:          r.GrantQuota,
+		AggregationMode:     r.AggregationMode,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
@@ -128,6 +141,15 @@ type UpdateEntitlementRequest struct {
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`
 	StaticValue      string                            `json:"static_value"`
 	ConfigValue      map[string]interface{}            `json:"config_value,omitempty"`
+
+	// Grant config — nil fields leave the current value alone.
+	// ClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement).
+	ClearGrantConfig   *bool                               `json:"clear_grant_config,omitempty"`
+	GrantMeasure       *types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                                `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  *types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                    `json:"grant_quota,omitempty" swaggertype:"string"`
+	AggregationMode    *types.EntitlementAggregationMode   `json:"aggregation_mode,omitempty"`
 }
 
 // Validate validates the update entitlement request

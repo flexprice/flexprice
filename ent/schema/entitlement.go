@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Entitlement holds the schema definition for the Entitlement entity.
@@ -91,6 +92,31 @@ func (Entitlement) Fields() []ent.Field {
 		field.JSON("config_value", map[string]interface{}{}).
 			Optional().
 			SchemaType(map[string]string{"postgres": "jsonb"}),
+
+		// Grant config; a row with grant fields set is instantiated into entitlement_grants.
+		field.String("grant_measure").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Optional().
+			GoType(types.EntitlementGrantMeasure("")),
+
+		field.Int("grant_duration_value").
+			Optional().
+			Nillable(),
+
+		field.String("grant_duration_unit").
+			SchemaType(map[string]string{"postgres": "varchar(10)"}).
+			Optional().
+			GoType(types.EntitlementGrantDurationUnit("")),
+
+		field.Other("grant_quota", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(25,15)"}).
+			Optional().
+			Nillable(),
+
+		field.String("aggregation_mode").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Default(string(types.EntitlementAggregationModeAdditive)).
+			GoType(types.EntitlementAggregationMode("")),
 	}
 }
 

@@ -87,6 +87,14 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
+	// When a line item's meter has grants here, adjustMeterUsageGrants below takes precedence
+	// over adjustMeterUsageEntitlement (grants replace legacy entitlement quota semantics for that feature).
+	// Empty map means "no grants configured on this subscription" — the loop stays on the legacy path.
+	grantsByMeterID, err := s.loadEntitlementGrantsByMeterID(ctx, sub, aggregatedEntitlements.Features, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
 	priceService := NewPriceService(s.ServiceParams)
 
 	meterIDs := make([]string, 0)
@@ -167,7 +175,26 @@ func (s *billingService) CalculateMeterUsageCharges(
 		rawQtyBeforeEntitlement := quantityForCalculation
 		var entitlementAdjustedQty *decimal.Decimal
 		entitlement := entitlementsByMeterID[item.MeterID]
-		if !matchingCharge.IsOverage && entitlement != nil && entitlement.IsEnabled {
+
+		grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
+		if !matchingCharge.IsOverage {
+			if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
+				grantResult, grantsApplied = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService)
+			}
+		}
+
+		switch {
+		case grantsApplied:
+			// Grants replaced the legacy entitlement — adjustMeterUsageGrants
+			// already updated matchingCharge (Amount/Quantity). For the
+			// pricer, use the grant-derived quantity; amount-lane grants
+			// return zero here on purpose (already priced).
+			quantityForCalculation = decimal.NewFromFloat(matchingCharge.Quantity)
+			if grantResult.Measure == types.EntitlementGrantMeasureQuantity {
+				adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+				entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+			}
+		case !matchingCharge.IsOverage && entitlement != nil && entitlement.IsEnabled:
 			quantityForCalculation, err = s.adjustMeterUsageEntitlement(
 				ctx, item, m, matchingCharge, entitlement, sub, extCustomerIDs,
 				periodStart, periodEnd, priceService, querySource,
@@ -177,8 +204,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			}
 			adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
 			entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
-		} else if !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil {
-			// No entitlement — recalculate cost for non-bucketed meters
+		case !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil:
+			// No grant, no entitlement — recalculate cost for non-bucketed meters.
 			adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
 			matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
 		}
