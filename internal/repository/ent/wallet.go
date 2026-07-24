@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -581,6 +583,48 @@ func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, pa
 			WithHint("Failed to retrieve pending bonus transaction").
 			WithReportableDetails(map[string]interface{}{
 				"parent_transaction_id": parentTransactionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return walletdomain.TransactionFromEnt(t), nil
+}
+
+// GetLastWalletAutoTopupTransaction returns the most recent published wallet
+// transaction with metadata.auto_topup=true for the wallet, or nil if none.
+func (r *walletRepository) GetLastWalletAutoTopupTransaction(ctx context.Context, walletID string) (*walletdomain.Transaction, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_last_wallet_auto_topup_transaction", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	t, err := client.WalletTransaction.Query().
+		Where(
+			wallettransaction.WalletID(walletID),
+			wallettransaction.TenantID(types.GetTenantID(ctx)),
+			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
+			predicate.WalletTransaction(func(s *sql.Selector) {
+				s.Where(sqljson.ValueEQ(
+					wallettransaction.FieldMetadata,
+					"true",
+					sqljson.Path(types.WalletMetadataKeyAutoTopup),
+				))
+			}),
+		).
+		Order(wallettransaction.ByCreatedAt(sql.OrderDesc())).
+		First(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve last auto-topup wallet transaction").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": walletID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}

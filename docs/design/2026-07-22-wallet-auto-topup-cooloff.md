@@ -30,20 +30,21 @@ Manual credit/debit/top-up must never be gated by these rules.
 
 | Mode | Guards (in order) |
 |---|---|
-| Invoiced | Existing `hasPendingAutoTopupInvoice` (customer + `WALLET_AUTO_TOPUP`) **and** pending wallet txn matching auto-topup discriminator |
-| Direct | Pending wallet txn matching auto-topup discriminator only |
-| Both | Optional cooloff: last **completed** auto-topup txn `UpdatedAt`/`CreatedAt` + `cooldown` duration |
+| Invoiced | Existing `hasPendingAutoTopupInvoice` (customer + `WALLET_AUTO_TOPUP`) **and** latest auto-topup wallet txn pending |
+| Direct | Latest auto-topup wallet txn pending |
+| Both | Optional cooloff from the same latest auto-topup txn (`UpdatedAt`/`CreatedAt` + `cooldown`) when it is not pending |
 
 Discriminator: `metadata.auto_topup = "true"` (`types.WalletMetadataKeyAutoTopup`). Manual purchased-credit txns lack this key.
 
-### 2.3 Generic ledger helpers
+### 2.3 Single ledger lookup
 
-Not auto-topup-named; reusable by reason and/or metadata:
+`WalletRepo.GetLastWalletAutoTopupTransaction(ctx, walletID)` returns the most recent published txn with `metadata.auto_topup=true` (`created_at` desc), or nil.
 
-- `hasPendingWalletTransaction(ctx, walletID, lookup)`
-- `getLastCompletedWalletTransaction(ctx, walletID, lookup)`
+`triggerAutoTopup` uses that one row for both guards:
+1. pending → skip (in-flight)
+2. otherwise → cooloff check from its timestamp (when `cooldown` is set)
 
-Lookup scans up to 50 recent rows for the wallet+status (index-friendly on `wallet_id`; metadata filtered in app). Cooloff/pending stay ledger-authoritative — no Redis TTL (pending invoices/txns have no natural expiry today).
+Cooloff/pending stay ledger-authoritative — no Redis TTL (pending invoices/txns have no natural expiry today).
 
 ### 2.4 Cooloff semantics
 
@@ -164,12 +165,13 @@ flowchart TD
   th -->|yes| inv{invoicing?}
   inv -->|yes| invPend{hasPendingAutoTopupInvoice}
   invPend -->|yes| out
-  invPend -->|no| txnPend
-  inv -->|no| txnPend{hasPendingWalletTransaction auto_topup}
-  txnPend -->|yes| out
-  txnPend -->|no| cd{cooldown set?}
+  invPend -->|no| lastTxn
+  inv -->|no| lastTxn[GetLastWalletAutoTopupTransaction]
+  lastTxn --> pending{last txn pending?}
+  pending -->|yes| out
+  pending -->|no| cd{cooldown set?}
   cd -->|no| topup[TopUpWallet metadata.auto_topup]
-  cd -->|yes| within{now less than lastCompleted plus cooldown}
+  cd -->|yes| within{now less than lastTxn plus cooldown}
   within -->|yes| out
   within -->|no| topup
 ```
@@ -182,7 +184,8 @@ flowchart TD
 |---|---|
 | `types.Duration` / `DurationUnit` | `internal/types/duration.go` |
 | `AutoTopup.Cooldown`, `WalletMetadataKeyAutoTopup` | `internal/types/wallet.go` |
-| Guards + helpers | `internal/ee/service/wallet.go` (`triggerAutoTopup`, `hasPendingWalletTransaction`, `getLastCompletedWalletTransaction`, `isWithinAutoTopupCooldown`) |
+| Repo lookup | `WalletRepo.GetLastWalletAutoTopupTransaction` (`internal/domain/wallet`, ent + inmemory) |
+| Guards | `internal/ee/service/wallet.go` (`triggerAutoTopup`, `isWithinAutoTopupCooldown`) |
 | Legacy invoice guard (kept) | `hasPendingAutoTopupInvoice` |
 | Unit tests | `internal/types/duration_test.go`, `internal/ee/service/wallet_test.go` (`WalletAutoTopupInvoiceSuite`, `WalletAutoTopupDirectSuite`) |
 

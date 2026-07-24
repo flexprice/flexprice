@@ -2690,7 +2690,7 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_CooldownBlocksAfterCo
 	s.Equal(0, s.countAutoTopupInvoices(), "cooloff after completed auto-topup must block a new invoice")
 }
 
-func (s *WalletAutoTopupInvoiceSuite) TestHasPendingWalletTransaction_IgnoresManualPending() {
+func (s *WalletAutoTopupInvoiceSuite) TestGetLastWalletAutoTopupTransaction_IgnoresManualPending() {
 	ctx := s.GetContext()
 	manual := &wallet.Transaction{
 		ID:                "txn_manual_pending",
@@ -2707,9 +2707,9 @@ func (s *WalletAutoTopupInvoiceSuite) TestHasPendingWalletTransaction_IgnoresMan
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, manual))
 
-	has, err := s.svc().hasPendingWalletTransaction(ctx, s.wallet.ID, autoTopupWalletTransactionLookup())
+	last, err := s.GetStores().WalletRepo.GetLastWalletAutoTopupTransaction(ctx, s.wallet.ID)
 	s.NoError(err)
-	s.False(has, "manual pending txn without auto_topup metadata must not match")
+	s.Nil(last, "manual pending txn without auto_topup metadata must not match")
 }
 
 // ---------------------------------------------------------------------------

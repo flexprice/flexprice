@@ -490,6 +490,38 @@ func (s *InMemoryWalletStore) GetPendingTransactionByParent(ctx context.Context,
 	return transactions[0], nil
 }
 
+func (s *InMemoryWalletStore) GetLastWalletAutoTopupTransaction(ctx context.Context, walletID string) (*wallet.Transaction, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	filterFn := func(ctx context.Context, tx *wallet.Transaction, _ interface{}) bool {
+		if tx == nil {
+			return false
+		}
+		if tx.WalletID != walletID ||
+			tx.TenantID != tenantID ||
+			tx.EnvironmentID != environmentID ||
+			tx.Status != types.StatusPublished {
+			return false
+		}
+		return tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true"
+	}
+
+	transactions, err := s.transactions.List(ctx, nil, filterFn, transactionSortFn)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve last auto-topup wallet transaction").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": walletID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	if len(transactions) == 0 {
+		return nil, nil
+	}
+	return transactions[0], nil
+}
+
 func (s *InMemoryWalletStore) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
 	transactions, err := s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
 	if err != nil {

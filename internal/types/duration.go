@@ -46,9 +46,9 @@ func (d *Duration) IsSet() bool {
 	return d != nil && d.Value > 0 && d.Unit != ""
 }
 
-// IsClearSentinel reports whether this duration is the explicit clear marker
+// ShouldClearCooldown reports whether this duration is the explicit clear marker
 // (value == 0). Used by partial updates where omit/null means "leave unchanged".
-func (d *Duration) IsClearSentinel() bool {
+func (d *Duration) ShouldClearCooldown() bool {
 	return d != nil && d.Value == 0
 }
 

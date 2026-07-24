@@ -1556,8 +1556,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 			current.Invoicing = req.AutoTopup.Invoicing
 		}
 		if req.AutoTopup.Cooldown != nil {
-			// value == 0 clears; omit/null leaves unchanged (partial update).
-			if req.AutoTopup.Cooldown.IsClearSentinel() {
+			if req.AutoTopup.Cooldown.ShouldClearCooldown() {
 				current.Cooldown = nil
 			} else {
 				current.Cooldown = req.AutoTopup.Cooldown
@@ -3687,103 +3686,16 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	return len(invoices) > 0, nil
 }
 
-// walletTransactionLookup discriminates wallet transactions for generic pending /
-// last-completed lookups (reason and/or metadata key match).
-type walletTransactionLookup struct {
-	transactionReason *types.TransactionReason
-	metadata          types.Metadata
-}
-
-func autoTopupWalletTransactionLookup() walletTransactionLookup {
-	return walletTransactionLookup{
-		metadata: types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
-	}
-}
-
-func metadataMatches(txMeta, want types.Metadata) bool {
-	if len(want) == 0 {
-		return true
-	}
-	if txMeta == nil {
-		return false
-	}
-	for k, v := range want {
-		if txMeta[k] != v {
-			return false
-		}
-	}
-	return true
-}
-
-func (l walletTransactionLookup) matches(tx *wallet.Transaction) bool {
-	if tx == nil {
-		return false
-	}
-	if l.transactionReason != nil && tx.TransactionReason != *l.transactionReason {
-		return false
-	}
-	return metadataMatches(tx.Metadata, l.metadata)
-}
-
-// hasPendingWalletTransaction reports whether the wallet has a pending transaction
-// matching the lookup discriminator.
-func (s *walletService) hasPendingWalletTransaction(ctx context.Context, walletID string, lookup walletTransactionLookup) (bool, error) {
-	status := types.TransactionStatusPending
-	filter := types.NewWalletTransactionFilter()
-	filter.WalletID = &walletID
-	filter.TransactionStatus = &status
-	filter.Limit = lo.ToPtr(50)
-
-	txs, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
-	if err != nil {
-		return false, err
-	}
-	for _, tx := range txs {
-		if lookup.matches(tx) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// getLastCompletedWalletTransaction returns the most recent completed transaction
-// for the wallet matching the lookup discriminator (created_at desc), or nil if none.
-func (s *walletService) getLastCompletedWalletTransaction(ctx context.Context, walletID string, lookup walletTransactionLookup) (*wallet.Transaction, error) {
-	status := types.TransactionStatusCompleted
-	filter := types.NewWalletTransactionFilter()
-	filter.WalletID = &walletID
-	filter.TransactionStatus = &status
-	filter.Limit = lo.ToPtr(50)
-	// QueryFilter defaults already sort created_at desc.
-
-	txs, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	for _, tx := range txs {
-		if lookup.matches(tx) {
-			return tx, nil
-		}
-	}
-	return nil, nil
-}
-
-func (s *walletService) isWithinAutoTopupCooldown(ctx context.Context, w *wallet.Wallet) (bool, error) {
-	if w.AutoTopup == nil || !w.AutoTopup.Cooldown.IsSet() {
+// isWithinAutoTopupCooldown reports whether last auto-topup txn still falls inside
+// the wallet's configured cooldown window. last may be nil (no prior auto-topup).
+func (s *walletService) isWithinAutoTopupCooldown(w *wallet.Wallet, last *wallet.Transaction) (bool, error) {
+	if w.AutoTopup == nil || !w.AutoTopup.Cooldown.IsSet() || last == nil {
 		return false, nil
 	}
 
 	cooldown, err := w.AutoTopup.Cooldown.ToDuration()
 	if err != nil {
 		return false, err
-	}
-
-	last, err := s.getLastCompletedWalletTransaction(ctx, w.ID, autoTopupWalletTransactionLookup())
-	if err != nil {
-		return false, err
-	}
-	if last == nil {
-		return false, nil
 	}
 
 	anchor := last.UpdatedAt
@@ -3838,17 +3750,16 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			}
 		}
 
-		// Wallet-scoped pending txn guard: do not open another auto-topup
-		// while a matching pending wallet transaction exists.
-		hasPendingTxn, err := s.hasPendingWalletTransaction(ctx, w.ID, autoTopupWalletTransactionLookup())
+		// Single lookup: latest auto-topup txn drives both in-flight + cooloff.
+		lastAutoTopup, err := s.WalletRepo.GetLastWalletAutoTopupTransaction(ctx, w.ID)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to check for pending auto-topup wallet transaction",
+			s.Logger.Error(ctx, "failed to get last auto-topup wallet transaction",
 				"error", err,
 				"wallet_id", w.ID,
 			)
 			return err
 		}
-		if hasPendingTxn {
+		if lastAutoTopup != nil && lastAutoTopup.TxStatus == types.TransactionStatusPending {
 			s.Logger.Info(ctx, "pending auto-topup wallet transaction exists, skipping",
 				"wallet_id", w.ID,
 				"auto_topup_threshold", *w.AutoTopup.Threshold,
@@ -3856,8 +3767,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			return nil
 		}
 
-		// Optional cooloff after a successful auto-topup
-		withinCooldown, err := s.isWithinAutoTopupCooldown(ctx, w)
+		withinCooldown, err := s.isWithinAutoTopupCooldown(w, lastAutoTopup)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to check auto-topup cooloff",
 				"error", err,
