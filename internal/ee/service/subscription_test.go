@@ -7714,11 +7714,19 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
 	s.Require().NoError(err)
 	s.Require().Equal(types.SubscriptionStatusDraft, draftResp.SubscriptionStatus)
 
-	// Adding an addon to a draft subscription must succeed
+	// Adding an addon to a draft subscription must succeed and publish subscription.updated
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
 	_, err = s.service.AddAddonToSubscription(ctx, draftResp.ID, &dto.AddAddonToSubscriptionRequest{
 		AddonID: addonID,
 	})
 	s.NoError(err)
+	updatedCount := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionUpdated {
+			updatedCount++
+		}
+	}
+	s.Equal(1, updatedCount)
 
 	// Addon line item must be stored
 	filter := types.NewNoLimitSubscriptionLineItemFilter()

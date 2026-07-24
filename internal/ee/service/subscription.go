@@ -337,7 +337,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	for i := range req.LineItems {
 		itemReq := req.LineItems[i]
 		itemReq.SkipEntitlementCheck = true
-		if _, err = s.AddSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
+		if _, err = s.addSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
 			return nil, err
 		}
 	}
@@ -1283,7 +1283,7 @@ func (s *subscriptionService) createPhaseExtraLineItems(
 		liReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
 		liReq.SkipEntitlementCheck = true
 
-		li, err := s.AddSubscriptionLineItem(ctx, sub.ID, liReq)
+		li, err := s.addSubscriptionLineItem(ctx, sub.ID, liReq)
 		if err != nil {
 			return nil, err
 		}
@@ -4599,7 +4599,13 @@ func (s *subscriptionService) AddAddonToSubscription(
 	}
 	sub.LineItems = lineItems
 
-	return s.addAddonToSubscription(ctx, sub, req)
+	assoc, err := s.addAddonToSubscription(ctx, sub, req)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subID)
+	return assoc, nil
 }
 
 // addAddonToSubscription adds an addon to a subscription
@@ -5010,7 +5016,8 @@ func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, s
 		if !lineItem.EndDate.IsZero() {
 			continue
 		}
-		if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+
+		if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 			logger.Error(ctx, "failed to terminate addon line item",
 				"line_item_id", lineItem.ID,
 				"entity_id", lineItem.EntityID,
@@ -5147,7 +5154,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: effectiveEndDate}
 		for _, lineItem := range lineItems {
-			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+			if _, err := s.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 				return err
 			}
 		}
@@ -5185,6 +5192,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 		}
 	}
 
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, association.EntityID)
 	return nil
 }
 

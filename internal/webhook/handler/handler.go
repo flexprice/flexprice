@@ -41,6 +41,7 @@ type handler struct {
 	tracing         *tracing.Service
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
+	cascader        EventCascader
 }
 
 // NewHandler creates a new memory-based handler
@@ -53,6 +54,7 @@ func NewHandler(
 	tracingSvc *tracing.Service,
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
+	cascader EventCascader,
 ) (Handler, error) {
 	return &handler{
 		pubSub:          pubSub,
@@ -64,6 +66,7 @@ func NewHandler(
 		tracing:         tracingSvc,
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
+		cascader:        cascader,
 	}, nil
 }
 
@@ -226,10 +229,13 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 
 	if h.config.Svix.Enabled {
 		h.absorbDeliveryError(ctx, "svix", h.deliverSvix(ctx, &event, msg.UUID), &event, msg.UUID)
-		return nil
+	} else {
+		h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
 	}
 
-	h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
+	if h.cascader != nil && h.config.EventCascadingEnabled {
+		h.cascader.Cascade(ctx, &event)
+	}
 	return nil
 }
 
