@@ -237,18 +237,15 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 		h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
 	}
 
-	// Fan out derived events (e.g. subscription.updated) only on the Kafka consume path.
-	// The synchronous retry path (DeliverWebhook) intentionally skips this so retriggers
-	// never spawn duplicate derived events.
-	h.publishDerivedEvents(ctx, &event)
+	h.publishCascadedEvents(ctx, &event)
 	return nil
 }
 
-// publishDerivedEvents publishes any follow-on events implied by the consumed event back onto
+// publishCascadedEvents publishes any follow-on events implied by the consumed event back onto
 // the webhook topic, so they flow through the normal publish → consume → deliver pipeline
 // (and get their own system_events row + retry semantics). Best-effort: failures are logged.
-func (h *handler) publishDerivedEvents(ctx context.Context, event *types.WebhookEvent) {
-	if !h.config.DerivedEventsEnabled {
+func (h *handler) publishCascadedEvents(ctx context.Context, event *types.WebhookEvent) {
+	if !h.config.EventCascadingEnabled {
 		return
 	}
 

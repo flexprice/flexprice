@@ -76,7 +76,7 @@ func TestCascade_SubscriptionScopedEntitlement_YieldsSubscriptionUpdated(t *test
 		require.Equal(t, types.SystemEntityTypeSubscription, cascaded[0].EntityType)
 		require.Equal(t, "ten_1", cascaded[0].TenantID)
 		require.Equal(t, "env_1", cascaded[0].EnvironmentID)
-		require.Equal(t, 1, cascaded[0].DerivationDepth, "cascaded event should be stamped depth 1")
+		require.Equal(t, 1, cascaded[0].CascadeDepth, "cascaded event should be stamped depth 1")
 		require.NotEmpty(t, cascaded[0].ID)
 	}
 }
@@ -128,9 +128,9 @@ func TestCascade_DepthBackstop(t *testing.T) {
 	c := entitlementCascader(t, subScopedEntitlement("sub_123"), nil)
 
 	cascaded := c.GetCascadedEvents(context.Background(), &types.WebhookEvent{
-		EventName:       types.WebhookEventEntitlementCreated,
-		EntityID:        "ent_1",
-		DerivationDepth: maxCascadeDepth,
+		EventName:    types.WebhookEventEntitlementCreated,
+		EntityID:     "ent_1",
+		CascadeDepth: maxCascadeDepth,
 	})
 
 	require.Empty(t, cascaded)

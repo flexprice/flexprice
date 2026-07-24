@@ -111,7 +111,7 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	changedSubs := []dto.ChangedSubscription{{
 		ID:               sub.ID,
 		Action:           dto.ChangedSubscriptionActionUpdated,
-		Status:           types.SubscriptionStatusIncomplete, // Is this correct?
+		Status:           types.SubscriptionStatusIncomplete,
 		TrialEnd:         lo.ToPtr(now),
 		CurrentPeriodEnd: lo.ToPtr(now),
 	}}

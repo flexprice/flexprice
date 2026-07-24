@@ -7,18 +7,18 @@ import (
 
 // Webhook represents the configuration for the webhook system
 type Webhook struct {
-	Enabled              bool                           `mapstructure:"enabled"`
-	Topic                string                         `mapstructure:"topic" default:"system_events"`
-	ConsumerGroup        string                         `mapstructure:"consumer_group" default:"system-events-consumer"`
-	RateLimit            int64                          `mapstructure:"rate_limit" default:"5"`
-	MaxRetries           int                            `mapstructure:"max_retries" default:"3"`
-	InitialInterval      time.Duration                  `mapstructure:"initial_interval" default:"1s"`
-	MaxInterval          time.Duration                  `mapstructure:"max_interval" default:"10s"`
-	Multiplier           float64                        `mapstructure:"multiplier" default:"2.0"`
-	MaxElapsedTime       time.Duration                  `mapstructure:"max_elapsed_time" default:"2m"`
-	Tenants              map[string]TenantWebhookConfig `mapstructure:"tenants"`
-	Svix                 Svix                           `mapstructure:"svix_config"`
-	DerivedEventsEnabled bool                           `mapstructure:"derived_events_enabled" default:"false"`
+	Enabled               bool                           `mapstructure:"enabled"`
+	Topic                 string                         `mapstructure:"topic" default:"system_events"`
+	ConsumerGroup         string                         `mapstructure:"consumer_group" default:"system-events-consumer"`
+	RateLimit             int64                          `mapstructure:"rate_limit" default:"5"`
+	MaxRetries            int                            `mapstructure:"max_retries" default:"3"`
+	InitialInterval       time.Duration                  `mapstructure:"initial_interval" default:"1s"`
+	MaxInterval           time.Duration                  `mapstructure:"max_interval" default:"10s"`
+	Multiplier            float64                        `mapstructure:"multiplier" default:"2.0"`
+	MaxElapsedTime        time.Duration                  `mapstructure:"max_elapsed_time" default:"2m"`
+	Tenants               map[string]TenantWebhookConfig `mapstructure:"tenants"`
+	Svix                  Svix                           `mapstructure:"svix_config"`
+	EventCascadingEnabled bool                           `mapstructure:"event_cascading_enabled" default:"false"`
 }
 
 // TenantWebhookConfig represents webhook configuration for a specific tenant

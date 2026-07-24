@@ -21,10 +21,10 @@ type WebhookEvent struct {
 	Payload       json.RawMessage  `json:"payload"`
 	EntityType    SystemEntityType `json:"entity_type,omitempty"`
 	EntityID      string           `json:"entity_id,omitempty"`
-	// DerivationDepth is a runtime backstop against derivation loops: it counts how many
+	// CascadeDepth is a runtime backstop against derivation loops: it counts how many
 	// times this event was produced by deriving from another event. 0 for events emitted
 	// directly by services. The webhook consumer refuses to derive past a small max depth.
-	DerivationDepth int `json:"derivation_depth,omitempty"`
+	CascadeDepth int `json:"cascade_depth,omitempty"`
 }
 
 // WebhookEventBuilder centralises the WebhookEvent envelope boilerplate (ID, timestamp,
@@ -57,7 +57,7 @@ func (b *WebhookEventBuilder) WithIdentityFromContext(ctx context.Context) *Webh
 }
 
 // WithIdentityFrom copies tenant/environment/user identity from a source event. Used when one
-// event is derived from another. It does not touch DerivationDepth — the deriver stamps that.
+// event is derived from another.
 func (b *WebhookEventBuilder) WithIdentityFrom(source *WebhookEvent) *WebhookEventBuilder {
 	if source != nil {
 		b.event.TenantID = source.TenantID

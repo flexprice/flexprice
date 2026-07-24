@@ -49,12 +49,12 @@ func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.Webh
 		return nil
 	}
 
-	if event.DerivationDepth >= maxCascadeDepth {
+	if event.CascadeDepth >= maxCascadeDepth {
 		err := ierr.NewError("webhook cascade depth exceeded").
 			WithHint("A cascade chain exceeded the max depth backstop; check for a CascadeRule loop.").
 			WithReportableDetails(map[string]any{
 				"event_name": event.EventName,
-				"depth":      event.DerivationDepth,
+				"depth":      event.CascadeDepth,
 			}).
 			Mark(ierr.ErrInternal)
 		c.logger.Error(ctx, err.Error())
@@ -79,7 +79,7 @@ func (c *eventCascader) GetCascadedEvents(ctx context.Context, event *types.Webh
 				c.logger.Error(ctx, err.Error())
 				continue
 			}
-			targetEvent.DerivationDepth = event.DerivationDepth + 1
+			targetEvent.CascadeDepth = event.CascadeDepth + 1
 			out = append(out, targetEvent)
 		}
 	}
