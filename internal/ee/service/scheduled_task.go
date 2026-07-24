@@ -92,7 +92,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 	// Check if this is a Flexprice-managed S3 connection
 	jobConfig := req.JobConfig
-	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
+	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
 		s.logger.Info(ctx, "handling flexprice-managed S3 connection for scheduled task",
 			"connection_id", req.ConnectionID,
 			"tenant_id", tenantID)
@@ -113,7 +113,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		jobConfig = &types.S3JobConfig{
 			Bucket:               s.config.FlexpriceS3Exports.Bucket,
 			Region:               s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:            conn.SyncConfig.S3.KeyPrefix, // Tenant + Environment isolation
+			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
 			Compression:          req.JobConfig.Compression,
 			Encryption:           req.JobConfig.Encryption,
 			ExportMetadataFields: req.JobConfig.ExportMetadataFields,

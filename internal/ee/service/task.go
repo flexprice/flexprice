@@ -9,13 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -1170,27 +1169,11 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Parse S3 URL (format: s3://bucket/key)
-	s3URL := t.FileURL
-	if !strings.HasPrefix(s3URL, "s3://") {
-		return "", ierr.NewErrorf("invalid S3 URL format: %s", s3URL).
-			WithHint("File URL must start with s3://").
-			Mark(ierr.ErrValidation)
+	// Parse storage URL (format: s3://bucket/key or gs://bucket/key)
+	provider, bucket, key, err := storage.ParseFileURL(t.FileURL)
+	if err != nil {
+		return "", err
 	}
-
-	// Remove s3:// prefix
-	s3Path := strings.TrimPrefix(s3URL, "s3://")
-
-	// Split into bucket and key
-	parts := strings.SplitN(s3Path, "/", 2)
-	if len(parts) != 2 {
-		return "", ierr.NewErrorf("invalid S3 URL format: %s", s3URL).
-			WithHint("File URL must be in format s3://bucket/key").
-			Mark(ierr.ErrValidation)
-	}
-
-	bucket := parts[0]
-	key := parts[1]
 
 	s.Logger.Info(ctx, "generating presigned URL for task file",
 		"task_id", id,
@@ -1236,7 +1219,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	}
 
 	// Check if connection is Flexprice-managed
-	isFlexpriceManaged := conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged
+	isFlexpriceManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
 
 	// For Flexprice-managed, verify bucket matches config
 	if isFlexpriceManaged {
@@ -1260,58 +1243,31 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
-	// Get the S3 integration which handles credential decryption
-	s3Integration, err := s.IntegrationFactory.GetS3Client(ctx)
+	store, err := s.IntegrationFactory.GetStorageProvider(ctx, scheduledTask.ConnectionID)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to get S3 integration", "error", err)
+		s.Logger.Error(ctx, "failed to get storage provider", "error", err)
 		return "", ierr.WithError(err).
-			WithHint("Failed to initialize S3 integration").
+			WithHint("Failed to initialize storage provider").
 			Mark(ierr.ErrInternal)
 	}
 
-	// Determine the region based on connection type
-	var region string
-	if isFlexpriceManaged {
-		// For Flexprice-managed, use the region from config
-		region = s.Config.FlexpriceS3Exports.Region
-	} else {
-		// For customer-owned, use the region from scheduled task's job config
-		if scheduledTask.JobConfig == nil || scheduledTask.JobConfig.Region == "" {
-			return "", ierr.NewError("scheduled task job config region not configured").
-				WithHint("S3 region is required in job config for customer-owned exports").
-				WithReportableDetails(map[string]interface{}{
-					"task_id":           id,
-					"scheduled_task_id": t.ScheduledTaskID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		region = scheduledTask.JobConfig.Region
+	// Guard against a corrupted/stale FileURL whose scheme does not match the
+	// connection's actual configured storage backend (e.g. gs:// URL against
+	// an S3 connection) — presigning against the wrong backend would silently
+	// produce a URL for the wrong storage system.
+	if store.Provider() != provider {
+		return "", ierr.NewErrorf("file URL provider '%s' does not match connection's configured storage provider '%s'", provider, store.Provider()).
+			WithHint("File URL provider does not match connection's configured storage provider").
+			WithReportableDetails(map[string]interface{}{
+				"task_id":             id,
+				"connection_id":       scheduledTask.ConnectionID,
+				"file_url_provider":   provider,
+				"connection_provider": store.Provider(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	// Create job config with the bucket and region
-	jobConfig := &types.S3JobConfig{
-		Bucket: bucket,
-		Region: region,
-	}
-
-	// Get S3 client configured with connection-specific credentials
-	s3Client, _, err := s3Integration.GetS3Client(ctx, jobConfig, scheduledTask.ConnectionID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to get S3 client with connection credentials", "error", err)
-		return "", ierr.WithError(err).
-			WithHint("Failed to get S3 client with connection credentials").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Generate presigned URL using connection credentials
-	awsS3Client := s3Client.GetAWSS3Client()
-	presigner := s3.NewPresignClient(awsS3Client)
-
-	result, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	}, s3.WithPresignExpires(30*time.Minute))
-
+	url, err := store.PresignGet(ctx, key, 30*time.Minute)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to generate presigned URL", "error", err)
 		return "", ierr.WithError(err).
@@ -1324,5 +1280,5 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
-	return result.URL, nil
+	return url, nil
 }

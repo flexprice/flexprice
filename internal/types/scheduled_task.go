@@ -130,19 +130,30 @@ func (e S3EncryptionType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
-// S3ExportConfig represents S3 export configuration (non-sensitive settings)
-// This goes in the sync_config column
-type S3ExportConfig struct {
-	Bucket             string            `json:"bucket"`                         // S3 bucket name
-	Region             string            `json:"region"`                         // AWS region (e.g., "us-west-2")
-	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for S3 keys (e.g., "flexprice-exports/")
+// StorageExportConfig represents cloud storage export configuration (non-sensitive settings).
+// This goes in the sync_config column. Cloud-agnostic: used for both S3 and GCS connections.
+type StorageExportConfig struct {
+	Bucket             string            `json:"bucket"`                         // Storage bucket name
+	Region             string            `json:"region"`                         // Cloud region (e.g., "us-west-2"); unused for GCS
+	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for object keys (e.g., "flexprice-exports/")
 	Compression        S3CompressionType `json:"compression,omitempty"`          // Compression type: "gzip", "none" (default: "none")
 	Encryption         S3EncryptionType  `json:"encryption,omitempty"`           // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed S3 credentials instead of user-provided
+	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed storage credentials instead of user-provided
 }
 
-// Validate validates the S3 export configuration
-func (s *S3ExportConfig) Validate() error {
+// Validate validates the storage export configuration without provider context.
+//
+// NOTE: this method is also invoked implicitly by Ent's generated code, because
+// ent/schema/connection.go declares sync_config as field.JSON(&types.SyncConfig{}),
+// and Ent's codegen auto-detects and calls a no-arg Validate() error method on any
+// JSON field type at Create()/Update() time (see ent/connection_create.go,
+// ent/connection_update.go check()). That call site has no provider-type context
+// available, so this method intentionally does NOT enforce the S3-only Region
+// requirement — it only checks provider-agnostic invariants (bucket presence,
+// compression/encryption enum validity). Callers that DO have provider context
+// (i.e. the connection service, which knows req.ProviderType / conn.ProviderType)
+// must call ValidateForProvider instead to get the stricter, correct check.
+func (s *StorageExportConfig) Validate() error {
 	if s == nil {
 		return nil
 	}
@@ -156,11 +167,6 @@ func (s *S3ExportConfig) Validate() error {
 			WithHint("S3 bucket name is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.Region == "" {
-		return ierr.NewError("region is required").
-			WithHint("AWS region is required").
-			Mark(ierr.ErrValidation)
-	}
 
 	// Validate compression type if provided
 	if err := s.Compression.Validate(); err != nil {
@@ -170,6 +176,32 @@ func (s *S3ExportConfig) Validate() error {
 	// Validate encryption type if provided
 	if err := s.Encryption.Validate(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// ValidateForProvider validates the storage export configuration for the given
+// connection provider type. Region is required for S3 (AWS regions are mandatory)
+// but not for GCS (GCS buckets in this codebase's usage don't carry a region
+// requirement — see gcsbackend.Config, which has no Region field at all).
+//
+// Prefer this over the plain Validate() wherever the caller has provider-type
+// context (e.g. connection create/update); Validate() alone cannot enforce the
+// region-for-S3 rule because it is also invoked by Ent's generated code, which
+// has no provider-type context to pass in.
+func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	if s == nil || s.IsFlexpriceManaged {
+		return nil
+	}
+
+	if providerType != SecretProviderGCS && s.Region == "" {
+		return ierr.NewError("region is required").
+			WithHint("AWS region is required").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

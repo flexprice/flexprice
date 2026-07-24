@@ -14,6 +14,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/Shopify/sarama"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/joho/godotenv"
@@ -44,6 +45,8 @@ type Configuration struct {
 	Secrets                    SecretsConfig                    `validate:"required"`
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
+	Storage                    StorageConfig                    `mapstructure:"storage" validate:"omitempty"`
+	GCS                        GCSConfig                        `mapstructure:"gcs" validate:"omitempty"`
 	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
 	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
@@ -114,9 +117,56 @@ type BucketConfig struct {
 type FlexpriceS3ExportsConfig struct {
 	Bucket             string `mapstructure:"bucket" validate:"required"`
 	Region             string `mapstructure:"region" validate:"required"`
-	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
-	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
+	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"omitempty"`
+	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"omitempty"`
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
+	// FederationRoleARN enables GCP-to-AWS OIDC federation (AssumeRoleWithWebIdentity)
+	// in place of static keys. Empty means federation is not configured.
+	FederationRoleARN string `mapstructure:"federation_role_arn,omitempty"`
+	FederationEnabled bool   `mapstructure:"federation_enabled" default:"false"`
+}
+
+// Validate ensures at least one credential source is configured: static keys or
+// federation. Config-load time can't know whether the process is running on AWS-native
+// compute (where the ambient IRSA/instance-profile credential chain would otherwise
+// apply), so this method intentionally does NOT special-case "nothing configured" as
+// implicitly fine — callers wanting to rely on the ambient chain must not use this
+// section at all, or must call Validate only when the section is actually in use.
+//
+// NOTE: this method is not currently invoked from Configuration.Validate() — see
+// task-6-report.md for why (Configuration.Validate() is dead code on the real boot
+// path; NewValidatedConfig() deliberately skips it after a prior incident where dormant
+// `validate:"required"` tags crashlooped non-local pods). Task 7 (platform storage
+// wiring) should call FlexpriceS3Exports.Validate() explicitly wherever this section is
+// actually consumed.
+func (c *FlexpriceS3ExportsConfig) Validate() error {
+	hasStaticKeys := c.AWSAccessKeyID != "" && c.AWSSecretAccessKey != ""
+	hasFederation := c.FederationRoleARN != ""
+
+	if c.FederationEnabled && !hasFederation {
+		return ierr.NewError("federation_enabled is true but federation_role_arn is not set").
+			WithHint("Set flexprice_s3_exports.federation_role_arn when enabling federation").
+			Mark(ierr.ErrValidation)
+	}
+
+	if !hasStaticKeys && !hasFederation {
+		return ierr.NewError("no credential source configured for flexprice_s3_exports").
+			WithHint("Set either aws_access_key_id/aws_secret_access_key or federation_role_arn").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// StorageConfig lets deployments explicitly pin the platform storage backend,
+// overriding CloudDetector's auto-detection. Empty Provider means "auto-detect".
+type StorageConfig struct {
+	Provider string `mapstructure:"provider" validate:"omitempty,oneof=s3 gcs"`
+}
+
+type GCSConfig struct {
+	Enabled             bool         `mapstructure:"enabled" default:"false"`
+	InvoiceBucketConfig BucketConfig `mapstructure:"invoice" validate:"omitempty"`
 }
 
 // MarketplaceConfig groups Flexprice's own credentials for each marketplace it reports usage to.
