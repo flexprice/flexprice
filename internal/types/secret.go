@@ -30,21 +30,22 @@ type SecretProvider string
 
 // Provider types
 const (
-	SecretProviderFlexPrice      SecretProvider = "flexprice"
-	SecretProviderStripe         SecretProvider = "stripe"
-	SecretProviderS3             SecretProvider = "s3" // supports multiple connections per environment
-	SecretProviderHubSpot        SecretProvider = "hubspot"
-	SecretProviderRazorpay       SecretProvider = "razorpay"
-	SecretProviderChargebee      SecretProvider = "chargebee"
-	SecretProviderQuickBooks     SecretProvider = "quickbooks"
-	SecretProviderZohoBooks      SecretProvider = "zoho_books"
-	SecretProviderNomod          SecretProvider = "nomod"
-	SecretProviderMoyasar        SecretProvider = "moyasar"
-	SecretProviderPaddle         SecretProvider = "paddle"
-	SecretProviderWhop           SecretProvider = "whop"
-	SecretProviderTabs           SecretProvider = "tabs"
-	SecretProviderAWSMarketplace SecretProvider = "aws_marketplace"
-	SecretProviderGCPMarketplace SecretProvider = "gcp_marketplace"
+	SecretProviderFlexPrice        SecretProvider = "flexprice"
+	SecretProviderStripe           SecretProvider = "stripe"
+	SecretProviderS3               SecretProvider = "s3" // supports multiple connections per environment
+	SecretProviderHubSpot          SecretProvider = "hubspot"
+	SecretProviderRazorpay         SecretProvider = "razorpay"
+	SecretProviderChargebee        SecretProvider = "chargebee"
+	SecretProviderQuickBooks       SecretProvider = "quickbooks"
+	SecretProviderZohoBooks        SecretProvider = "zoho_books"
+	SecretProviderNomod            SecretProvider = "nomod"
+	SecretProviderMoyasar          SecretProvider = "moyasar"
+	SecretProviderPaddle           SecretProvider = "paddle"
+	SecretProviderWhop             SecretProvider = "whop"
+	SecretProviderTabs             SecretProvider = "tabs"
+	SecretProviderAWSMarketplace   SecretProvider = "aws_marketplace"
+	SecretProviderGCPMarketplace   SecretProvider = "gcp_marketplace"
+	SecretProviderAzureMarketplace SecretProvider = "azure_marketplace"
 )
 
 func (p SecretProvider) Validate() error {
@@ -64,6 +65,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderTabs,
 		SecretProviderAWSMarketplace,
 		SecretProviderGCPMarketplace,
+		SecretProviderAzureMarketplace,
 	}
 	if !lo.Contains(allowedSecretProviders, p) {
 		return ierr.NewError("invalid secret provider").

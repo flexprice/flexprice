@@ -1,9 +1,8 @@
-# Marketplace Integration — Azure + Batch Reporting
+# Marketplace Integration — Azure
 
 Author: Tsage
 Status: design, pending approval
-Scope: Azure Marketplace (new), plus moving AWS/GCP/Azure usage reporting onto one shared batch
-mechanism.
+Scope: Azure Marketplace (new), as a third provider alongside the shipped AWS and GCP integrations.
 
 This builds on the shipped state of
 [2026-07-18-FLE-1070-marketplace-integration-v2.md](2026-07-18-FLE-1070-marketplace-integration-v2.md).
@@ -21,10 +20,6 @@ snapshot cron, the entity-mapping table, and the lifecycle contract (the tenant 
 Flexprice never listens for it). It differs only in the specific API calls, the authentication
 mechanism, and — Azure-only — the offer and dimension the tenant sets up before anything can be
 reported.
-
-This document also changes AWS and GCP: both reporting clients move from one record per call to a
-shared batch mechanism. v2 §10 already noted this as a known gap ("Both APIs support batching … but v1
-sends one record per call for both … deferred"). This un-defers it, for all three providers together.
 
 ### Actors
 
@@ -59,7 +54,7 @@ through the metered dimension.
 
 ### 2.2 AWS: `BatchMeterUsage`
 
-Shipped today, one record per call. This document adds batching (up to 25 records).
+One record per call.
 
 ```jsonc
 // Request
@@ -68,7 +63,6 @@ Shipped today, one record per call. This document adds batching (up to 25 record
   "UsageRecords": [
     { "CustomerAWSAccountId": "222222222222", "LicenseArn": "arn:aws:license-manager:...:l-abc",
       "Dimension": "usage_fee", "Quantity": 1250, "Timestamp": 1752300000 }
-    // ... up to 25 records
   ]
 }
 ```
@@ -83,14 +77,13 @@ Shipped today, one record per call. This document adds batching (up to 25 record
 }
 ```
 
-Each record in `Results` carries its own `Status`: `Success | CustomerNotSubscribed | DuplicateRecord`. A present `Results` entry is not the same as accepted — `Status` must be checked
-([awsmarketplace/client.go:34-48](../../internal/integration/awsmarketplace/client.go)). Records that
-could not be processed at all come back in `UnprocessedRecords` and are retried next run. Batch cap:
-**25 records per call**, a hard limit.
+The record carries its own `Status`: `Success | CustomerNotSubscribed | DuplicateRecord`. A present `Results` entry is not the same as accepted — `Status` must be checked
+([awsmarketplace/client.go:34-48](../../internal/integration/awsmarketplace/client.go)). A record that
+could not be processed at all comes back in `UnprocessedRecords` and is retried next run.
 
 ### 2.3 GCP: `services.report`
 
-Shipped today, one record per call. This document adds batching.
+One record per call.
 
 ```jsonc
 // Request
@@ -100,13 +93,12 @@ POST https://servicecontrol.googleapis.com/v1/services/{service_name}:report
     { "operationId": "usage_rec_001", "operationName": "flexprice/usage_report",
       "consumerId": "USAGE_REPORTING_ID_A", "startTime": "...", "endTime": "...",
       "metricValueSets": [{ "metricName": "{service_name}/usage_fee", "metricValues": [{ "int64Value": "1250" }] }] }
-    // ... multiple operations; bounded by request size
   ]
 }
 ```
 
 ```jsonc
-// Response — HTTP 200, one operation rejected out of three
+// Response — HTTP 200, operation rejected
 {
   "reportErrors": [
     { "operationId": "usage_rec_002", "status": { "code": 5, "message": "Consumer '...' not found or not active." } }
@@ -129,61 +121,44 @@ GCP is the only provider that does not return a per-record success receipt. Succ
 > the 'Operations' in the request succeeded or failed."
 > — `ReportResponse.reportErrors`, [Service Control API discovery document](https://servicecontrol.googleapis.com/$discovery/rest?version=v1)
 
-Case 3 is the operational rule that matters for batching: if the RPC itself fails (network error, 5xx,
-timeout — not a 200 with populated `reportErrors`), every row in that batch is left unsynced and the
-whole batch is retried next run. This is safe because `operationId = usage_record.id`
+Case 3 is the operational rule that matters here: if the RPC itself fails (network error, 5xx, timeout
+— not a 200 with a populated `reportErrors`), the outcome of the call is unknown and the row is left
+unsynced for the next run. This is safe because `operationId = usage_record.id`
 ([gcpmarketplace/client.go:35-36](../../internal/integration/gcpmarketplace/client.go)), so a retry
-resends byte-identical operations.
-
-There is no count limit on `operations[]`, only a size limit:
-
-> "There is no limit on the number of operations in the same ReportRequest, however the ReportRequest
-> size should be no larger than 1MB."
-> — `ReportRequest.operations`, [Service Control API discovery document](https://servicecontrol.googleapis.com/$discovery/rest?version=v1)
+resends a byte-identical operation.
 
 A failure is matched back to its row by `ReportError.operationId` ("The Operation.operation_id value
 from the request"). `MetricValue` allows `int64Value | doubleValue | moneyValue | distributionValue | boolValue | stringValue`; only `int64Value` is used, matching the shipped client
 ([gcpmarketplace/client.go:41](../../internal/integration/gcpmarketplace/client.go)).
 
-### 2.4 Azure: `usageEvent` / `batchUsageEvent`
+### 2.4 Azure: `usageEvent`
 
-New. The single-event endpoint and the batch endpoint have the same record shape.
+New.
 
 ```jsonc
-// Single — POST https://marketplaceapi.microsoft.com/api/usageEvent?api-version=2018-08-31
+// Request — POST https://marketplaceapi.microsoft.com/api/usageEvent?api-version=2018-08-31
 { "resourceId": "<saas-subscription-guid>", "quantity": 1250.0, "dimension": "usage_fee",
   "effectiveStartTime": "2026-07-23T14:00:00", "planId": "silver" }
 ```
 
 ```jsonc
-// Batch — POST https://marketplaceapi.microsoft.com/api/batchUsageEvent?api-version=2018-08-31
-{ "request": [
-    { "resourceId": "<guid1>", "quantity": 1250.0, "dimension": "usage_fee", "effectiveStartTime": "...", "planId": "silver" }
-    // ... up to 25
-] }
-```
-
-```jsonc
-// Response — HTTP 200, one of three rejected
+// Response — HTTP 200
 {
-  "count": 3,
-  "result": [
-    { "usageEventId": "<guid>", "status": "Accepted",  "resourceId": "<guid1>", "dimension": "usage_fee", "effectiveStartTime": "...", "planId": "silver" },
-    { "status": "Duplicate", "error": { "code": "Conflict", "message": "This usage event already exist." },
-      "resourceId": "<guid2>", "dimension": "usage_fee", "effectiveStartTime": "...", "planId": "silver" },
-    { "usageEventId": "<guid>", "status": "Accepted",  "resourceId": "<guid3>", "dimension": "usage_fee", "effectiveStartTime": "...", "planId": "silver" }
-  ]
+  "usageEventId": "<guid>", "status": "Accepted", "messageTime": "2026-07-23T14:00:05Z",
+  "resourceId": "<saas-subscription-guid>", "quantity": 1250.0, "dimension": "usage_fee",
+  "effectiveStartTime": "2026-07-23T14:00:00", "planId": "silver"
 }
 ```
 
 — [Metering service APIs](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-metering-service-apis).
 
-The response is a `result[]` array, one entry per record sent, each with its own `status` and — when
-accepted — its own `usageEventId`. This is a per-record outcome, the same shape as AWS's `Results[]`.
-Per-record `status` values: `Accepted | Expired | Duplicate | Error | ResourceNotFound | ResourceNotAuthorized | ResourceNotActive | InvalidDimension | InvalidQuantity | BadArgument`.
-`usageEventId` is Azure's per-record receipt, the equivalent of AWS's `MeteringRecordId`. Match each
-result back to its row by the echoed `resourceId` / `dimension` / `effectiveStartTime` / `planId`, not
-by array position — the doc does not guarantee order is preserved.
+Unlike AWS's `Results[]` and GCP's `reportErrors`, a 200 response here carries no separate status to
+check: *"status: Accepted — this is the only value in case of single usage event."* Every rejection —
+`Duplicate`, `Expired`, an invalid resource, a malformed request — comes back as a distinct non-2xx
+status code with its own response shape, not as a 200 with a different `status` value. A `Duplicate`
+specifically is HTTP 409, with the conflicting event's details nested under
+`additionalInfo.acceptedMessage`. `usageEventId` is Azure's receipt, the equivalent of AWS's
+`MeteringRecordId`.
 
 Azure's dedup key is `(resourceId, dimension, calendar hour)` — one event per hour per resource per
 dimension, and events can only be reported for the past 24 hours:
@@ -193,47 +168,33 @@ dimension, and events can only be reported for the past 24 hours:
 > — [Metering service APIs](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-metering-service-apis)
 
 The 409 Conflict / `Duplicate` case is keyed on the resource: "A usage event has already been
-successfully reported for the specified resource ID, effective usage date and hour." Batch cap: **25
-records per call**, a hard limit ("The maximal number of events in a single batch is 25"); a batch of
-more than 25 returns 400.
+successfully reported for the specified resource ID, effective usage date and hour."
 
 **Quantity must be strictly greater than 0 — checked two ways, not one.** The `quantity` field's own
-inline doc comment (identical on both the single and batch request bodies) reads: *"how many units were
-consumed for the date and hour specified in effectiveStartTime, must be greater than 0 or a double
-integer."* That phrasing is ambiguous on its own — "double integer" isn't a defined value category, and
-every example on the page uses a whole number formatted as a double (`5.0`, `39.0`), so the more
-plausible reading is "must be greater than 0, [as] a double [or] integer [numeric type]" — describing
-the accepted *representation*, not opening a loophole around the positivity requirement. This document
-does not rely on that ambiguous sentence alone: the batch response's own error table settles it
-unambiguously — `InvalidQuantity`: *"The quantity passed is lower or equal to 0."* That is a normative
-rejection rule, not a loosely worded comment. Formatting a zero as a double changes nothing: `0.0` is
-still `0`, and `0 <= 0` triggers `InvalidQuantity` regardless of representation. Both sources agree:
-Azure requires `quantity > 0`, strictly, with no exception for how the zero is encoded.
+inline doc comment reads: *"how many units were consumed for the date and hour specified in
+effectiveStartTime, must be greater than 0 or a double integer."* That phrasing is ambiguous on its
+own — "double integer" isn't a defined value category, and every example on the page uses a whole
+number formatted as a double (`5.0`, `39.0`), so the more plausible reading is "must be greater than 0,
+[as] a double [or] integer [numeric type]" — describing the accepted *representation*, not opening a
+loophole around the positivity requirement. This document does not rely on that ambiguous sentence
+alone: the batch endpoint's error table settles it unambiguously — `InvalidQuantity`: *"The quantity
+passed is lower or equal to 0."* That is a normative rejection rule, not a loosely worded comment.
+Formatting a zero as a double changes nothing: `0.0` is still `0`, and `0 <= 0` triggers
+`InvalidQuantity` regardless of representation. Both sources agree: Azure requires `quantity > 0`,
+strictly, with no exception for how the zero is encoded.
 
 ### 2.5 The three, side by side
 
 
 |                      | AWS                                                                      | GCP                                                      | Azure                                       |
 | -------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------- |
-| Report call          | `BatchMeterUsage`                                                        | `services.report`                                        | `batchUsageEvent`                           |
-| Batch cap            | 25 per call (hard)                                                       | 1MB per call (no count cap)                              | 25 per call (hard)                          |
+| Report call          | `BatchMeterUsage`                                                        | `services.report`                                        | `usageEvent`                                |
 | Dedup key            | product + customer + dimension + `Timestamp` (byte-identical retry-safe) | `operationId` (caller-chosen)                            | `(resourceId, dimension, calendar hour)`    |
 | Quantity type        | int32 cents                                                              | int64 cents                                              | double (cents as a whole number)            |
 | Submission window    | 24h + 6h month-end grace                                                 | not documented; assumed similar                          | 24h, no stated grace                        |
-| Per-record receipt   | `MeteringRecordId`                                                       | none — absence from `reportErrors` = success             | `usageEventId`                              |
-| Per-record outcome   | `Results[]` + `UnprocessedRecords`                                       | only failures listed in `reportErrors`; success inferred | `result[]`, each with its own `status`      |
-| Batch-wide ambiguity | none — every record has an explicit outcome                              | RPC-level failure = outcome of the whole batch unknown   | none — every record has an explicit outcome |
-
-
-
-
-### 2.6 Batch size
-
-A usage-report record on any provider is a small flat object — a couple of GUIDs, an ISO-8601
-timestamp, a short dimension string, one numeric value — on the order of 200 bytes. Twenty-five of
-them with array and wrapper overhead is roughly 5–6KB, well under GCP's 1MB request-size cap (about
-half a percent of it). AWS and Azure cap by count, not size, at 25. So 25 is a safe, uniform batch
-size across all three. It is chosen for consistency; GCP's real ceiling is far higher.
+| Per-call receipt     | `MeteringRecordId`                                                       | none — absence from `reportErrors` = success              | `usageEventId`                              |
+| Rejection outcome    | `Status` in `Results[]`, or absent (`UnprocessedRecords`, retried)       | listed in `reportErrors`; success is its absence          | distinct non-2xx status code, not a 200     |
+| Call-level ambiguity | none — an explicit outcome every time                                    | RPC-level failure = outcome unknown, retried              | none — an explicit outcome every time       |
 
 ---
 
@@ -446,8 +407,12 @@ receives the JSON). Flexprice consumes credentials; it never creates them.
    from the tenant's directory so step 1's app can request tokens for it. This command is the method
    given in [Register a SaaS application](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/pc-saas-registration).
 4. **Wire the app's tenant ID and application ID into the offer's Technical Configuration** in Partner
-  Center. This is what makes Microsoft's later 401 check work — Microsoft cross-references the token's
-   app ID against what is registered for that offer.
+  Center, for every offer this app should report usage for. This is required for actual usage
+   reporting to work — Microsoft cross-references the token's app ID against what is registered for
+   the offer on every Marketplace API call, not just at setup — but it is entirely the tenant's own
+   responsibility to get right (§11.7). Flexprice has no way to know which offer(s) a given app is
+   meant to represent, so it does not check this at connection time; getting it wrong surfaces as a
+   report-time 401 (§8.4), not a rejected connection.
 5. **Paste** `tenant_id` **/** `client_id` **/** `client_secret` **into the Flexprice connection drawer.** The only
   step Flexprice touches: it receives three strings the tenant already generated.
 
@@ -463,7 +428,9 @@ grant_type=client_credentials&client_id={client_id}&client_secret={client_secret
 Returns a one-hour bearer token (`expires_in: 3600`). Flexprice requests one token per connection per
 cron run, the same pattern as AWS `AssumeRole` and GCP `WifSession`.
 
-**Connection verification** — synchronous, before the connection is saved, matching AWS/GCP:
+**Connection verification** — synchronous, before the connection is saved. Unlike AWS's `AssumeRole`
+and GCP's `WifSession`, this is a token request only, not also a call against a specific Marketplace
+resource (§11.7 explains why):
 
 ```mermaid
 sequenceDiagram
@@ -471,7 +438,6 @@ sequenceDiagram
     participant FE as Flexprice UI
     participant API as Flexprice API
     participant Entra as login.microsoftonline.com
-    participant Azure as marketplaceapi.microsoft.com
 
     Tenant->>FE: paste tenant_id, client_id, client_secret
     FE->>API: POST /v1/connections (azure_marketplace, encrypted_secret_data)
@@ -481,20 +447,16 @@ sequenceDiagram
         API-->>Tenant: 422, naming the failed step
     else token issued
         Entra-->>API: bearer token (1h)
-        API->>Azure: GET /api/saas/subscriptions (read-only check)
-        alt app/offer mismatch
-            Azure-->>API: 401 (offer published with a different Entra app id)
-            API-->>Tenant: 422, app/offer mismatch
-        else success
-            Azure-->>API: 200, subscriptions list
-            API-->>Tenant: 201, connection saved (published)
-        end
+        API-->>Tenant: 201, connection saved (published)
     end
 ```
 
-
-
-The 401 is a documented error:
+A successful token request proves the tenant_id/client_id/client_secret triple is real and the
+Marketplace API's service principal is registered in that directory (§6.2 step 3). It does not prove
+this is the Entra app wired into any particular offer's Technical Configuration — that binding is
+checked by Microsoft only when a token is used against an actual Marketplace API call, and Flexprice
+has no offer to check it against at connection time anyway. A mismatch there surfaces as a real 401 at
+report time instead (§8.4), documented here for when that's the failure being debugged:
 
 > "401 Unauthorized. … The request is attempting to access an SaaS subscription for an offer that was
 > published with a different Microsoft Entra app ID from the one used to create the authentication
@@ -569,7 +531,7 @@ erDiagram
 
 
 The `Marketplace` enum gains Azure. `SyncEntry` gains two fields, `Skipped` and `SkipReason`
-(rationale in §8.3/§11.8): a connection this row is relevant to can be resolved either because the
+(rationale in §8.3/§11.6): a connection this row is relevant to can be resolved either because the
 marketplace actually accepted the report (a real `ReportingID`), or because sending it is
 *deterministically* pointless — currently, only "Azure + amount == 0" qualifies. Both cases get an
 entry so `synced` can still reach `true`; only the first kind means anything was posted.
@@ -611,65 +573,53 @@ This does not collide with Azure's hour-grained dedup key. `period_end` is alway
 inside Azure's 24-hour window. Consecutive snapshot runs are 6 hours apart, so `period_end` lands in a
 different calendar hour every run — no two windows for the same subscription can share a `(resourceId, dimension, hour)` key. Azure reports with `effectiveStartTime = period_end`, matching AWS's `Timestamp = period_end`.
 
-### 8.2 Reporting cron — add batching (and Azure)
+### 8.2 Reporting cron — add Azure
 
 The shipped cron ([report_activities.go](../../internal/temporal/activities/marketplace/report_activities.go))
-already does everything except batch. `MarketplaceUsageReportActivity` groups every published
+does the same job for all three providers. `MarketplaceUsageReportActivity` groups every published
 marketplace connection by tenant/environment; `reportForTenant` then, for one tenant/environment:
 
 1. authenticates each connection once and loads its mappings (`prepareConnection`),
 2. reads that tenant's unsynced records once (`usageRecordRepo.ListUnsynced`),
 3. keeps the eligible ones (`isEligibleForReport`: currency is USD, amount is not negative),
 4. reports each eligible record to every relevant connection it isn't already in the `syncs` map for
-   (`isRelevantForSubscription`), and persists the record's `syncs` + `synced` (`MarkSynced`).
+   (`isRelevantForSubscription`), one API call per record, and persists the record's `syncs` + `synced`
+   (`MarkSynced`).
 
-Step 4 sends **one record per API call** today. This document changes only that: send **up to 25 per
-call**, and add Azure as a third provider. The tenant grouping, auth-once-per-connection,
-`ListUnsynced`, `isEligibleForReport`, the `syncs` map, and `MarkSynced` are all unchanged.
-
-Batching flips step 4 from record-outer to connection-outer (you cannot fill a 25-record call while
-iterating one record at a time). For each connection, gather the records it still owes, chunk them into
-groups of ≤25, and send each chunk as one call:
+Azure slots into step 4 the same way AWS and GCP already do — `reportAzureRecord` alongside
+`reportAWSRecord`/`reportGCPRecord` — with one addition: a zero-amount row is never sent to an Azure
+connection (§2.4, §11.6). Instead that connection is resolved immediately with a `skipped` `syncs`
+entry, so the row can still reach `synced = true` once its other connections succeed, without ever
+posting a quantity Azure would reject.
 
 ```text
 reportForTenant(conns):
-    prepared = [prepareConnection(c) for c in conns]                  # auth once each; drop any that fail
-    eligible = [r for r in ListUnsynced(tenant, env) if isEligibleForReport(r)]   # usd, amount not negative
+    preparedConns = [prepareConnection(c) for c in conns]             # auth once each; drop any that fail
+    eligible = ListUnsynced(tenant, env)                              # every unsynced row this tenant/environment owns
 
-    for pc in prepared:                                              # one connection at a time
-        pending = []
-        for r in eligible:
-            if not pc.isRelevantForSubscription(r.SubscriptionID): continue   # not this connection's row
-            if pc.conn.ID in r.Syncs:                              continue   # already reported here
-            if pc.provider == azure_marketplace and r.Amount == 0:
-                r.Syncs[pc.conn.ID] = { skipped: true, skip_reason: "zero_amount_not_supported" }  # Azure rejects 0 (§11.8)
+    for r in eligible:
+        if not isEligibleForReport(r): continue                      # usd, amount not negative
+
+        relevantConns = [c for c in preparedConns if c.isRelevantForSubscription(r.SubscriptionID)]
+        if not relevantConns: continue                               # no connection maps to this subscription yet
+
+        added = false
+        for c in relevantConns:
+            if c.ID in r.Syncs: continue                             # already reported here
+            if c.provider == azure_marketplace and r.Amount == 0:
+                r.Syncs[c.ID] = { skipped: true, skip_reason: "zero_amount_not_supported" }  # Azure rejects 0 (§11.6)
+                added = true
                 continue
-            pending.append(r)
+            res = reportRecord(c, r)                                 # ONE call: BatchMeterUsage | services.report | usageEvent
+            if res.accepted:
+                r.Syncs[c.ID] = { marketplace, reporting_id: res.reportingID, synced_at: now }
+                added = true
+            # not accepted -> no entry; retried next run (per-provider rules in §8.3)
 
-        for chunk in chunk(pending, 25):                            # each chunk holds 1..25 records
-            results = pc.reportChunk(chunk)                         # ONE call: BatchMeterUsage | services.report | batchUsageEvent
-            for (r, res) in match(results, chunk):
-                if res.accepted:
-                    r.Syncs[pc.conn.ID] = { marketplace, reporting_id: res.reportingID, synced_at: now }
-                # not accepted -> no entry; retried next run (per-provider rules in §8.3)
-
-    for r in eligible that got a new entry this run:
-        synced = every connection relevant to r now has an entry in r.Syncs
+        synced = every connection in relevantConns now has an entry in r.Syncs
+        if not added and not synced: continue                        # nothing changed this run; leave the row as-is
         MarkSynced(r.ID, r.Syncs, synced)
 ```
-
-Two new pieces, everything else reused:
-
-- **`chunk(records, 25)`** — the one new helper; splits a slice into groups of at most 25.
-- **`reportChunk`** — the provider report methods change from single-record (`reportAWSRecord`,
-  `reportGCPRecord`) to per-chunk (one `BatchMeterUsage` / `services.report` / `batchUsageEvent` call),
-  returning a per-record result the caller matches back to its row (§8.3). New `reportAzureChunk` for
-  Azure.
-
-`isEligibleForReport` is unchanged. The Azure `amount == 0` skip is the only per-connection rule —
-applied while gathering `pending`, because AWS and GCP accept zero (already sent today) and only Azure
-rejects it. It writes a `skipped` `syncs` entry so the row can still reach `synced = true` once its
-other connections succeed (§11.8).
 
 ```mermaid
 sequenceDiagram
@@ -680,16 +630,20 @@ sequenceDiagram
 
     Sch->>Cron: run (per tenant/environment)
     Cron->>Cron: prepareConnection each (auth once)
-    Cron->>DB: eligible = ListUnsynced + isEligibleForReport (usd, amount not negative)
-    loop each connection, one at a time
-        Cron->>Cron: pending = its relevant rows not yet in syncs<br/>(Azure amount==0 -> skipped syncs entry, not batched)
-        loop chunk(pending, 25)
-            Cron->>MP: reportChunk — one BatchMeterUsage | services.report | batchUsageEvent
-            MP-->>Cron: per-record results
-            Cron->>Cron: accepted -> add syncs entry; else leave unsynced (§8.3)
+    Cron->>DB: eligible = ListUnsynced (usd, amount not negative)
+    loop each eligible row
+        Cron->>Cron: relevant = connections mapped to this row's subscription
+        loop each relevant connection not yet in syncs
+            alt Azure and amount == 0
+                Cron->>Cron: syncs entry = skipped (§11.6), no call made
+            else
+                Cron->>MP: reportRecord — one BatchMeterUsage | services.report | usageEvent
+                MP-->>Cron: outcome
+                Cron->>Cron: accepted -> add syncs entry; else leave unsynced (§8.3)
+            end
         end
+        Cron->>DB: MarkSynced (synced = all relevant connections present)
     end
-    Cron->>DB: MarkSynced each touched row (synced = all relevant connections present)
 ```
 
 
@@ -698,13 +652,13 @@ sequenceDiagram
 
 ### 8.3 Per-provider response handling
 
-`reportChunk` reads each provider's per-record result and returns, per row, accepted (with a
+Each provider's report method reads its own response shape and returns, per row, accepted (with a
 `reporting_id`) or not. A row with `amount == 0` is sent to AWS/GCP like any other and read the same way
 (AWS documents `Quantity` valid range minimum 0; GCP documents no minimum); only Azure filters it out
-before sending (§8.2, §11.8).
+before sending (§8.2, §11.6).
 
 ```text
-# AWS: per-record Status in Results[]; UnprocessedRecords retried next run
+# AWS: Status in Results[], or absent from UnprocessedRecords (retried next run)
 Success               -> syncs[conn] = { reporting_id: MeteringRecordId }
 CustomerNotSubscribed -> no entry, log.error (self-heals when the buyer resubscribes)
 DuplicateRecord       -> no entry, log.error (a conflicting different record — needs a human)
@@ -713,79 +667,73 @@ in UnprocessedRecords -> no entry, retried next run
 # GCP: absence from reportErrors (given a 200 RPC) = accepted
 not in reportErrors -> syncs[conn] = { reporting_id: operationId }   # our own id
 in reportErrors     -> no entry, log.error(code + message)
-RPC itself failed   -> no entry for the whole chunk, log.error (§2.3 case 3)
+RPC itself failed   -> no entry, log.error (§2.3 case 3)
 
-# Azure: per-record status in result[]
-Accepted  -> syncs[conn] = { reporting_id: usageEventId }
-Duplicate -> no entry, log.error (ambiguous — §11.7)
-Expired | ResourceNotActive | InvalidDimension | InvalidQuantity | BadArgument -> no entry, log.error
-amount == 0 (never sent, §8.2) -> syncs[conn] = { skipped: true, skip_reason: "zero_amount_not_supported" }
+# Azure: 200 is unconditionally Accepted; every rejection is a distinct non-2xx status (§2.4)
+200 (Accepted)                                     -> syncs[conn] = { reporting_id: usageEventId }
+409 Duplicate                                      -> no entry, log.error (ambiguous — §11.5)
+400 / 401 / 403 / 409 (other) / 500                -> no entry, log.error
+amount == 0 (never sent, §8.2)                     -> syncs[conn] = { skipped: true, skip_reason: "zero_amount_not_supported" }
 ```
 
-A `syncs` entry is only ever written for a definitive `Accepted` (a real `reporting_id`) or the Azure
+A `syncs` entry is only ever written for a definitive accept (a real `reporting_id`) or the Azure
 zero-amount skip (`skipped: true`). Every other outcome — including Azure `Duplicate`, which is
-ambiguous (§11.7) — is left with no entry and retried next run. `usage_records` stays the source of
+ambiguous (§11.5) — is left with no entry and retried next run. `usage_records` stays the source of
 truth: an entry is either a real receipt or an explicit `skipped`, never a guess.
 
 ### 8.4 Logging and what to search for
 
 Until a live Azure listing exists we cannot end-to-end test a real report, so these logs are the only
-signal that reporting works. Every stage logs, on every provider — successful `info` lines included,
-not just failures. Levels are `error`, `info`, or `debug` only — never `warn`.
+signal that reporting works. Levels are `error`, `info`, or `debug` only — never `warn`.
 
 **Credentials are never logged, at any level, for any provider.** No `client_secret` and no bearer
 token (Azure); no `role_arn`, `external_id`, or assumed-role temporary credentials (AWS); no Workload
-Identity Federation JSON, federated token, or impersonation token (GCP). Buyer identifiers are also
-never logged: `resource_id` / `beneficiary_account_id` (Azure); `license_arn` /
-`customer_aws_account_id` (AWS); `usageReportingId` / `account_id` (GCP). AWS's `AssumeRole` error path
+Identity Federation JSON, federated token, or impersonation token (GCP). AWS's `AssumeRole` error path
 already redacts the raw SDK error because it can embed the role ARN; the GCP and Azure clients follow
-the same rule for their own errors. Only the safe correlators below ever appear in a line.
+the same rule for their own errors.
 
-Safe correlators (tag on every line): `usage_record_id`, `connection_id`, `marketplace`
-(`aws_marketplace` | `gcp_marketplace` | `azure_marketplace`), `period_start` / `period_end`, the
-amount in cents, and the marketplace's returned `status` / error code.
+Every log line tied to one connection carries `marketplace` (`aws_marketplace` | `gcp_marketplace` |
+`azure_marketplace`) and `connection_id`, so a search can always be scoped to one provider or one
+connection regardless of which message matched. The two pre-filter checks in `isEligibleForReport` run
+before any connection is chosen and carry no `marketplace` tag — a row can be relevant to more than one
+connection at that point.
 
-The stages are identical across all three providers — `marketplace` is what tells them apart:
-
-| Stage | Level | Message to grep | Tags |
+| Stage | Level | Message | Tags |
 |---|---|---|---|
-| Connection authenticated | `debug` | `marketplace connection authenticated` | `connection_id`, `marketplace` |
-| Row skipped: non-usd | `info` | `marketplace skip` | `usage_record_id`, `connection_id`, `currency` |
-| Row skipped: negative amount (investigate) | `error` | `marketplace usage record has negative amount` | `usage_record_id`, `connection_id`, `amount` |
-| Zero-amount row skipped on Azure only (never sent; connection resolved via a `skipped` `syncs` entry, §11.8) | `info` | `marketplace usage record skipped: zero amount not supported by azure` | `usage_record_id`, `connection_id` |
-| About to report a row (includes `amount == 0` on AWS/GCP — sent normally, §11.8) | `debug` | `marketplace reporting` | `usage_record_id`, `connection_id`, `marketplace`, `cents`, `period_end` |
-| Row reported successfully | `info` | `marketplace usage record synced` | `usage_record_id`, `connection_id`, `marketplace`, `reporting_id` |
-| Row not accepted (rejected / Azure `Duplicate` / GCP `reportErrors`) | `error` | `marketplace usage record not synced` | `usage_record_id`, `connection_id`, `marketplace`, `status` |
-| Whole batch call failed (network / 5xx / GCP RPC failure) | `error` | `marketplace batch call failed` | `connection_id`, `marketplace`, `chunk_size` |
+| Row skipped: non-USD | `debug` | `skipping marketplace usage record, currency not usd` | `subscription_id`, `usage_record_id`, `currency` |
+| Row skipped: negative amount (investigate) | `error` | `marketplace usage record has negative amount` | `subscription_id`, `usage_record_id`, `amount` |
+| Zero-amount row skipped on Azure only (§11.6) | `info` | `marketplace usage record skipped: zero amount not supported by azure` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id` |
+| Row reported successfully | `info` | `marketplace usage record synced` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `reporting_id` |
+| AWS: buyer not subscribed to this product | `error` | `marketplace usage report rejected by aws: customer not subscribed, will retry next run` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount` |
+| AWS: conflicts with a different record on file | `error` | `marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount`, `period_end` |
+| AWS: unrecognized `Status` value | `error` | `marketplace usage report rejected by aws: unrecognized status, will retry next run` | `marketplace`, `connection_id`, `license_arn`, `dimension`, `amount`, `aws_status` |
+| AWS: record returned in `UnprocessedRecords` | `info` | `marketplace usage record not processed by aws, will retry next run` | `marketplace`, `connection_id`, `license_arn`, `dimension`, `amount` |
+| GCP: row present in `reportErrors` | `error` | `marketplace usage report rejected by gcp, will retry next run` | `marketplace`, `connection_id`, `error_code`, `error_message` |
+| Any provider: the call itself failed, a mapping was missing, or an auth/decrypt step failed | `error` | `marketplace usage report failed` | `marketplace`, `connection_id`, `error`, `stage` |
 
-To scope a search to one provider, filter the same message on its `marketplace` value:
+`stage` on the generic `marketplace usage report failed` line names exactly what broke:
+`read_connection` / `decrypt_*` / `load_mappings` / `assume_role` / `wif_session` / `get_token` (auth,
+before any record is reported), `resolve_record` (a record has no entity mapping for this connection),
+`convert_quantity` (AWS only — cents exceed `int32`), or the report call itself:
+`batch_meter_usage` (AWS), `services_report` (GCP), `usage_event` (Azure — every Azure rejection,
+including a `Duplicate` 409, surfaces here, since Azure's client turns any non-2xx into an error rather
+than a checkable status field, §2.4).
 
-- **GCP failures** — `marketplace usage record not synced` with `marketplace=gcp_marketplace` (a
-  per-row `reportErrors` rejection; `status` carries the GCP error code/message), or `marketplace
-  batch call failed` with `marketplace=gcp_marketplace` (the case-3 whole-batch RPC failure, §2.3).
-- **AWS failures** — `marketplace usage record not synced` with `marketplace=aws_marketplace`
-  (`status` = `CustomerNotSubscribed` | `DuplicateRecord`), or `marketplace batch call failed` with
-  `marketplace=aws_marketplace`.
-- **Azure failures** — `marketplace usage record not synced` with `marketplace=azure_marketplace`
-  (`status` = `Duplicate` | `Expired` | `ResourceNotActive` | `InvalidDimension` | `InvalidQuantity` |
-  `BadArgument`), or `marketplace batch call failed` with `marketplace=azure_marketplace`.
-
-Example lines — an Azure success, an Azure `Duplicate`, a GCP whole-batch failure:
+Example lines — an Azure success, an Azure rejection, a GCP row-level rejection:
 
 ```text
-level=info  msg="marketplace usage record synced"     usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace reporting_id=<usageEventId>
-level=error msg="marketplace usage record not synced" usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace status=Duplicate
-level=error msg="marketplace batch call failed"       connection_id=conn_gcp_01 marketplace=gcp_marketplace chunk_size=25 error="rpc DeadlineExceeded"
+level=info  msg="marketplace usage record synced"                                   usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace reporting_id=<usageEventId>
+level=error msg="marketplace usage report failed"                                   usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace stage=usage_event error="409 Conflict: This usage event already exist."
+level=error msg="marketplace usage report rejected by gcp, will retry next run"     usage_record_id=ur_01H.. connection_id=conn_gcp_01 marketplace=gcp_marketplace  error_code=5 error_message="Consumer not found or not active."
 ```
 
 To answer "did this record get reported", grep `usage_record_id=<id>`: `marketplace usage record
 synced` means it landed and was accepted; `marketplace usage record skipped: zero amount not supported
 by azure` means that connection is resolved but nothing was ever posted there (check the row's `syncs`
-map for that connection's `skipped: true` to confirm — never assume it was billed); `marketplace usage
-record not synced` or `marketplace batch call failed` means it was sent (or attempted) and
-rejected/unknown, and is retried next run. The new Azure client (`GetToken`, `BatchReportUsageEvent`)
-must emit every stage above — called out because it is new and has no existing logging to inherit,
-unlike the AWS and GCP clients.
+map for that connection's `skipped: true` to confirm — never assume it was billed); any other line for
+that id means it was sent (or attempted) and rejected or unknown, and is retried next run. The new
+Azure client (`GetToken`, `ReportUsageEvent`) must emit every message above it's responsible for —
+called out because it is new and has no existing logging to inherit, unlike the AWS and GCP clients.
 
 ---
 
@@ -794,18 +742,17 @@ unlike the AWS and GCP clients.
 ## 9. Client interfaces
 
 ```go
-// awsmarketplace.Client — BatchMeterUsage takes a slice. The AWS SDK type is already []UsageRecord;
-// awsmarketplace/client.go:163 builds a one-element slice into it today. This removes that narrowing.
+// awsmarketplace.Client
 AssumeRole(ctx, roleArn, externalID string, duration time.Duration) (aws.Credentials, error)
-BatchMeterUsage(ctx, creds, region string, records []UsageRecordInput) ([]BatchMeterUsageResult, error) // up to 25
+BatchMeterUsage(ctx, creds, region string, record UsageRecordInput) (*BatchMeterUsageResult, error)
 
-// gcpmarketplace.Client — Report widened to ReportBatch
+// gcpmarketplace.Client
 WifSession(ctx, wifCredentialsJSON string) (*servicecontrol.Service, error)
-ReportBatch(ctx, svc *servicecontrol.Service, records []UsageReportInput) ([]ReportResult, error) // up to 25; match by OperationID
+Report(ctx, svc *servicecontrol.Service, record UsageReportInput) (*ReportResult, error)
 
 // azuremarketplace.Client — new
 GetToken(ctx, tenantID, clientID, clientSecret string) (Token, error) // client_credentials, ~1h
-BatchReportUsageEvent(ctx, token Token, records []UsageEventInput) ([]UsageEventResult, error) // up to 25; match by echoed fields
+ReportUsageEvent(ctx, token Token, record UsageEventInput) (*UsageEventResult, error)
 
 type UsageEventInput struct {
     ResourceID, Dimension, PlanID string
@@ -813,12 +760,7 @@ type UsageEventInput struct {
     EffectiveStartTime time.Time // = period_end
 }
 type UsageEventResult struct {
-    Accepted     bool   // Status == "Accepted"
-    UsageEventID string // populated only when Accepted
-    Status       string // Accepted | Expired | Duplicate | Error | ResourceNotFound | ResourceNotAuthorized | ResourceNotActive | InvalidDimension | InvalidQuantity | BadArgument
-    // echoed back for matching, since order is not guaranteed:
-    ResourceID, Dimension, PlanID string
-    EffectiveStartTime            time.Time
+    UsageEventID string // a nil error already means Accepted (§2.4) — nothing else to check
 }
 ```
 
@@ -889,23 +831,14 @@ offers, this is the only available option",
 Stored encrypted in `encrypted_secret_data.azure_marketplace`, the same as every other provider's
 secret.
 
-**11.5 — Batch reporting for all three, at 25 per call.** AWS and GCP move off one-record-per-call.
-Batch size 25 is safe per §2.6. GCP having no per-record success receipt does not block batching:
-Flexprice generates `operationId` per row before sending, so it needs `reportErrors` only to detect
-failures.
-
-**11.6 — GCP RPC-level failure retries the whole batch, never partial.** Required by §2.3 case 3: if
-the call itself fails, the outcome of each operation is unknown, so all rows in the batch are retried.
-Safe because `operationId` is deterministic.
-
-**11.7 — Azure** `Duplicate` **is logged, never marked synced.** A `Duplicate` says Azure already holds
+**11.5 — Azure** `Duplicate` **is logged, never marked synced.** A `Duplicate` says Azure already holds
 *an* event for `(resourceId, dimension, hour)`, but the response is not matched against what we sent, so
 it does not prove that event is ours. Marking the row synced off it would let Azure's response, not our
 own record, decide the table's state. So it gets no `syncs` entry, is logged at `error`, and is retried
 next run (§12 covers the rows that then never resolve). Distinct from AWS `DuplicateRecord`, which is a
 conflicting *different* record and needs a human.
 
-**11.8 — Zero-amount is provider-specific.** `amount < 0` is never sent, on any provider — a negative
+**11.6 — Zero-amount is provider-specific.** `amount < 0` is never sent, on any provider — a negative
 computed charge is an upstream bug, logged at `error`. `amount == 0` differs by provider, per each
 one's own docs:
 
@@ -919,8 +852,24 @@ one's own docs:
 For Azure the connection still needs resolving, or a fan-out row with an Azure connection could never
 reach `synced = true` even after AWS/GCP succeed. It gets a `SyncEntry` with `Skipped: true`,
 `ReportingID: ""` (§7) — recording that nothing was posted while still letting the row complete. This is
-safe because Azure's zero-rejection is deterministic, unlike `Duplicate` (§11.7), which is ambiguous and
+safe because Azure's zero-rejection is deterministic, unlike `Duplicate` (§11.5), which is ambiguous and
 gets no entry.
+
+**11.7 — Connection verification is a token request only, not also an offer-binding check.** A
+successful `client_credentials` token proves the tenant_id/client_id/client_secret are real and the
+Marketplace API's service principal is registered in that directory. It does not prove the app is the
+one wired into any particular offer's Technical Configuration in Partner Center — Microsoft only checks
+that binding when a token is used against an actual Marketplace API call tied to a specific offer's
+subscriptions. An earlier version of this design added a second call
+(`GET /api/saas/subscriptions`) purely to force that check synchronously, mirroring how AWS's
+`AssumeRole` and GCP's `WifSession` fully exercise the credential before saving a connection. That does
+not carry over to Azure: unlike AWS/GCP, where the connection itself is scoped to one resource Flexprice
+can directly probe, Azure's connection is scoped to the tenant's Entra app, not to any one offer —
+Flexprice has no offer to check the binding against at connection-creation time, and one Entra app is
+expected to be reused across every offer the tenant reports through it (§1, §5), so there is no single
+"the offer" this call could even target. Getting the Technical Configuration wiring wrong is entirely
+the tenant's own responsibility (step 4 in the setup above); it surfaces as a real 401 the first time a
+report is attempted (§8.4), not as a rejected connection.
 
 ---
 
@@ -930,7 +879,7 @@ gets no entry.
 
 - **No terminal state / TTL for un-acceptable or expired rows.** A row a marketplace will not accept —
 the subscription closed, the row is past the 24h submission window, or Azure keeps answering
-`Duplicate` (§11.7) — is retried every run, because nothing marks a row permanently done. A
+`Duplicate` (§11.5) — is retried every run, because nothing marks a row permanently done. A
 `synced=false` (or missing `syncs` entry) means both "retry me" and "I can never succeed"; the two
 are indistinguishable today. The reporting cron runs every 3h and Azure accepts a `period_end` for
 24h, so a row that first fails still has ~21h — about 7 more runs — to succeed before it expires.
@@ -943,16 +892,37 @@ here.
 - **No dead-letter table.** A failed row is visible only as a log line plus its own state in
 `usage_records`. There is no place that surfaces "these rows have failed N times". Carried through
 v1 and v2; not blocking Azure.
-- **Azure transport-level (network/5xx) failure is not documented.** Azure's per-record batch response
-is fully documented (§2.4). What is not documented is what has landed if the `batchUsageEvent` HTTP
-call itself fails before returning a 200 body. Handled conservatively, the same as GCP case 3: leave
-the whole chunk unsynced and retry. Safe because `effectiveStartTime = period_end` is deterministic,
-so the resend is byte-identical — if the earlier attempt did land, the resend comes back `Duplicate`,
-which is logged and left unsynced (§11.7), not double-charged.
 - **Azure's late-submission rule is unconfirmed.** Does Azure judge lateness by submission time or by
 `effectiveStartTime`? No doc checked answers it. The 4–10h snapshot lag (§8.1) makes this a
 non-issue for ordinary reporting, but the edge case of a subscription closing right at the 24h
 boundary is untested. Same open status as the equivalent AWS/GCP question in v2.
+- **Usage records are reported one at a time, not batched.** All three providers support a
+multi-record call — AWS and Azure up to 25 records, GCP up to a 1MB request. None of that is used
+here; every report is one API call per record. Two reasons this is deferred rather than done now:
+
+  1. AWS's `BatchMeterUsage` and GCP's `services.report` both scope a single call to one product
+     (AWS: one `ProductCode` for the whole `UsageRecords[]` array; GCP: `service_name` is part of the
+     URL path, not per-operation). A connection can back more than one plan with a different product —
+     a tenant running a Basic and a Pro listing under one seller account is a realistic setup — so a
+     naive chunk of unrelated records into one call would silently misreport whichever records don't
+     match the call's single declared product. Making that safe requires grouping pending records by
+     product before chunking, which is real added complexity for no correctness gain today. Azure's
+     `usageEvent`/`batchUsageEvent` do not have this constraint — every record in a batch is
+     self-describing (`resourceId`, `dimension`, `planId` all per-record) — but is deferred alongside
+     AWS and GCP for one uniform reporting path across all three, rather than batching only the one
+     provider where it is already safe.
+  2. AWS is moving new SaaS products off `ProductCode` onto `LicenseArn` for Concurrent Agreements,
+     required starting June 1, 2026. Unlike `ProductCode`, `LicenseArn` is already a per-record field
+     on `UsageRecord`, not scoped to the whole call — so once a product is on that model, AWS's
+     single-product-per-call constraint no longer applies, and batching AWS records across different
+     products becomes safe without any product-grouping step. Revisiting batching for all three makes
+     more sense once that's the norm rather than the exception.
+
+  References: [BatchMeterUsage API reference](https://docs.aws.amazon.com/marketplace/latest/APIReference/API_marketplace-metering_BatchMeterUsage.html)
+  (`ProductCode` is a top-level request field, not per-record); [Configuring metering for usage with SaaS subscriptions](https://docs.aws.amazon.com/marketplace/latest/userguide/metering-for-usage.html)
+  (the June 1, 2026 `LicenseArn` requirement for Concurrent Agreements); [Service Control API discovery document](https://servicecontrol.googleapis.com/$discovery/rest?version=v1)
+  (`services.report`'s `service_name` in the URL path); [Metering service APIs](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-metering-service-apis)
+  (Azure's per-record batch request shape, §2.4).
 
 ---
 
@@ -980,7 +950,7 @@ boundary is untested. Same open status as the equivalent AWS/GCP question in v2.
 **Google — GCP Marketplace / Service Control:**
 - [services.report method reference](https://docs.cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/services/report)
 - [Service Control API discovery document](https://servicecontrol.googleapis.com/$discovery/rest?version=v1) — schema for `Operation`, `MetricValue`, `ReportRequest`, `ReportResponse`, `ReportError`, `Status`
-- [Reporting billing metrics](https://docs.cloud.google.com/service-infrastructure/docs/reporting-billing-metrics) — DELTA/INT64 constraint; no documented minimum value for a `MetricValue` (§11.8)
+- [Reporting billing metrics](https://docs.cloud.google.com/service-infrastructure/docs/reporting-billing-metrics) — DELTA/INT64 constraint; no documented minimum value for a `MetricValue` (§11.6)
 - [Entitlement resource reference](https://docs.cloud.google.com/marketplace/docs/partners/commerce-procurement-api/reference/rest/v1/providers.entitlements)
 - [Account resource reference](https://docs.cloud.google.com/marketplace/docs/partners/commerce-procurement-api/reference/rest/v1/providers.accounts)
 - [Configuring usage reports](https://docs.cloud.google.com/marketplace/docs/partners/integrated-saas/configure-usage-reports)

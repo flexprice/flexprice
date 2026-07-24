@@ -57,6 +57,13 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		}
 		subProviderEntityID = req.GCP.UsageReportingID
 		custProviderEntityID = req.GCP.AccountID
+	case types.SecretProviderAzureMarketplace:
+		planProviderEntityID = req.Azure.PlanID
+		planMetadata = map[string]interface{}{
+			"dimension": req.Azure.Dimension,
+		}
+		subProviderEntityID = req.Azure.ResourceID
+		custProviderEntityID = req.Azure.BeneficiaryAccountID
 	}
 
 	// The subscription must already exist and be active; this endpoint never creates subscriptions.
