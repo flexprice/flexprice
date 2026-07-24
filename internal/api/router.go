@@ -169,7 +169,8 @@ func NewRouter(
 			events.POST("", write(types.EntityEvent, types.ActionWrite), handlers.Events.IngestEvent)
 			events.POST("/bulk", write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
-			events.GET("/:id", handlers.Events.GetEventByID)
+			events.GET("/lookup", handlers.Events.GetEventByID)
+			events.GET("/:id", handlers.Events.GetEventByID) // legacy alias, remove once no caller uses /events/:id
 			events.POST("/query", handlers.Events.QueryEvents)
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
