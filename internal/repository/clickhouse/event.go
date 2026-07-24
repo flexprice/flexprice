@@ -97,7 +97,8 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 		)
 	`
 
-	err = r.store.GetConn().Exec(ctx, query,
+	// Wait for the server-side batch to flush before acknowledging the insert.
+	err = r.store.GetConn().AsyncInsert(ctx, query, true,
 		event.ID,
 		event.ExternalCustomerID,
 		event.CustomerID,
@@ -128,6 +129,9 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events.Event) error {
 	if len(events) == 0 {
 		return nil
+	}
+	if len(events) == 1 {
+		return r.InsertEvent(ctx, events[0])
 	}
 
 	// Start a span for this repository operation
