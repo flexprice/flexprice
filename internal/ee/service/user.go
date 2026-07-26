@@ -28,6 +28,7 @@ type UserService interface {
 	UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error)
 	UpdateUserRoles(ctx context.Context, id string, req *dto.UpdateUserRolesRequest) (*dto.UpdateUserRolesResponse, error)
 	DeleteUser(ctx context.Context, id string) error
+	RemoveUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
@@ -616,4 +617,71 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 	}
 
 	return s.userRepo.Delete(ctx, id)
+}
+
+// RemoveUser removes a human user (type=user) from their tenant. Service accounts
+// are not supported here; use DeleteUser for those.
+func (s *userService) RemoveUser(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if existingUser.Type != types.UserTypeUser {
+		return ierr.NewError("only human users can be removed").
+			WithHint("Use the service account delete API to remove a service account").
+			Mark(ierr.ErrValidation)
+	}
+
+	actorUserID := types.GetUserID(ctx)
+	if id == actorUserID {
+		return ierr.NewError("cannot remove yourself").
+			WithHint("Ask another tenant member to remove your access").
+			Mark(ierr.ErrValidation)
+	}
+
+	_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		Type:        lo.ToPtr(types.UserTypeUser),
+	})
+	if err != nil {
+		return err
+	}
+	if totalHumanUsers <= 1 {
+		return ierr.NewError("cannot remove the last user in the tenant").
+			WithHint("At least one human user must remain in the tenant").
+			Mark(ierr.ErrValidation)
+	}
+
+	activeKeys, err := s.secretRepo.ListAll(ctx, &types.SecretFilter{
+		QueryFilter: &types.QueryFilter{
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		UserID: &id,
+	})
+	if err != nil {
+		return err
+	}
+	for _, key := range activeKeys {
+		if err := s.secretRepo.Delete(ctx, key.ID); err != nil {
+			return err
+		}
+	}
+
+	if err := s.userRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	s.logger.Info(ctx, "user removed from tenant",
+		"actor_user_id", actorUserID,
+		"target_user_id", id,
+		"tenant_id", existingUser.TenantID,
+	)
+
+	return nil
 }

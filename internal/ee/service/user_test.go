@@ -683,6 +683,117 @@ func (s *UserServiceSuite) TestDeleteUser() {
 	})
 }
 
+func (s *UserServiceSuite) TestRemoveUser() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+
+	seedStore := func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		s.secretRepo = testutil.NewInMemorySecretStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "actor-1",
+			Email:     "actor@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-1",
+			Email:     "u@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "sa-1",
+			Type:      types.UserTypeServiceAccount,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, logger: testLogger(s.T())}
+	}
+
+	s.Run("success_user_removed_and_keys_revoked", func() {
+		seedStore()
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:       "key-1",
+			UserID:   "user-1",
+			UserType: string(types.UserTypeUser),
+			BaseModel: types.BaseModel{
+				TenantID: types.DefaultTenantID,
+				Status:   types.StatusPublished,
+			},
+		})
+		err := s.userService.RemoveUser(ctx, "user-1")
+		s.NoError(err)
+
+		removedUser, err := s.userRepo.GetByID(ctx, "user-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, removedUser.Status)
+
+		_, err = s.secretRepo.Get(ctx, "key-1")
+		s.Error(err, "expected the user's secret to be deleted on removal")
+	})
+
+	s.Run("empty_id_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "")
+		s.Error(err)
+		s.Contains(err.Error(), "user ID is required")
+	})
+
+	s.Run("unknown_id_returns_not_found", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "user-unknown")
+		s.Error(err)
+	})
+
+	s.Run("service_account_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "sa-1")
+		s.Error(err)
+		s.Contains(err.Error(), "only human users can be removed")
+	})
+
+	s.Run("self_removal_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.RemoveUser(ctx, "actor-1")
+		s.Error(err)
+		s.Contains(err.Error(), "cannot remove yourself")
+	})
+
+	s.Run("last_human_user_returns_validation_error", func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		s.secretRepo = testutil.NewInMemorySecretStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "actor-1",
+			Email:     "actor@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, logger: testLogger(s.T())}
+
+		// Removing anyone other than the sole remaining user would already be
+		// unknown-ID; here the actor is the only user, so self-removal fires
+		// first. Add a second user, remove it, then the (now sole) actor
+		// cannot be removed by a third identity check below.
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-2",
+			Email:     "u2@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		err := s.userService.RemoveUser(ctx, "user-2")
+		s.NoError(err)
+
+		ctx2 := context.WithValue(ctx, types.CtxUserID, "someone-else")
+		err = s.userService.RemoveUser(ctx2, "actor-1")
+		s.Error(err)
+		s.Contains(err.Error(), "cannot remove the last user")
+	})
+}
+
 // ---------------------------------------------------------------------------
 // RBAC permission tests
 // ---------------------------------------------------------------------------
