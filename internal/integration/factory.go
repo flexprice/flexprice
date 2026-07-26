@@ -226,6 +226,7 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		f.customerRepo,
 		f.subscriptionRepo,
 		f.priceRepo,
+		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
 
