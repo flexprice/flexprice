@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -171,6 +172,8 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				"line_item_id", lineItem.ID, "error", applyErr)
 		}
 	}
+
+	s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, lineItem.ID, lineItem.PriceType, models.HubSpotLineItemSyncOperationCreated)
 
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
@@ -430,6 +433,8 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 		}
 	}
 
+	s.triggerHubSpotDealSyncForLineItem(ctx, lineItem.SubscriptionID, lineItem.CustomerID, lineItem.ID, lineItem.PriceType, models.HubSpotLineItemSyncOperationDeleted)
+
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
 
@@ -592,6 +597,8 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		if err != nil {
 			return nil, err
 		}
+
+		s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, newLineItem.ID, newLineItem.PriceType, models.HubSpotLineItemSyncOperationCreated)
 
 		s.Logger.Info(ctx, "updated subscription line item with price overrides",
 			"subscription_id", sub.ID,
