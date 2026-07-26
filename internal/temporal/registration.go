@@ -402,7 +402,8 @@ func buildWorkerConfig(
 		)
 		activitiesList = append(activitiesList,
 			taskActivities.ProcessTask,
-			hubspotDealSyncActivities.CreateLineItems,
+			hubspotDealSyncActivities.CreateLineItem,
+			hubspotDealSyncActivities.DeleteLineItem,
 			hubspotDealSyncActivities.UpdateDealAmount,
 			hubspotInvoiceSyncActivities.SyncInvoiceToHubSpot,
 			hubspotQuoteSyncActivities.CreateQuoteAndLineItems,
