@@ -1,7 +1,7 @@
 # HubSpot Deal Line Item Sync — keep Deal line items in sync as subscriptions change
 
 - **Date:** 2026-07-27
-- **Status:** Proposed — pending implementation
+- **Status:** Implemented
 - **Reviewers:** *tbd*
 
 ---
