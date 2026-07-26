@@ -12,7 +12,8 @@ const (
 	// Workflow name - must match the function name
 	WorkflowHubSpotDealSync = "HubSpotDealSyncWorkflow"
 	// Activity names - must match the registered method names
-	ActivityCreateLineItems  = "CreateLineItems"
+	ActivityCreateLineItem   = "CreateLineItem"
+	ActivityDeleteLineItem   = "DeleteLineItem"
 	ActivityUpdateDealAmount = "UpdateDealAmount"
 )
 
@@ -44,18 +45,29 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-	// Step 1: Create HubSpot line items
-	logger.Info("Step 1: Creating line items in HubSpot", "subscription_id", input.SubscriptionID)
+	// Step 1: Create or delete the HubSpot line item, per the mutation that triggered this workflow
+	logger.Info("Step 1: syncing HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID,
+		"operation", input.Operation)
 
-	err := workflow.ExecuteActivity(ctx, ActivityCreateLineItems, input).Get(ctx, nil)
+	activityName := ActivityCreateLineItem
+	if input.Operation == models.HubSpotLineItemSyncOperationDeleted {
+		activityName = ActivityDeleteLineItem
+	}
+
+	err := workflow.ExecuteActivity(ctx, activityName, input).Get(ctx, nil)
 	if err != nil {
-		logger.Error("Failed to create line items",
+		logger.Error("Failed to sync line item",
 			"error", err,
-			"subscription_id", input.SubscriptionID)
+			"subscription_id", input.SubscriptionID,
+			"line_item_id", input.LineItemID,
+			"operation", input.Operation)
 		return err
 	}
 
-	logger.Info("Line items created successfully", "subscription_id", input.SubscriptionID)
+	logger.Info("Line item synced successfully",
+		"subscription_id", input.SubscriptionID, "line_item_id", input.LineItemID)
 
 	// Step 2: Sleep for 10 seconds to allow HubSpot to recalculate ACV
 	logger.Info("Step 2: Waiting for HubSpot to recalculate ACV",

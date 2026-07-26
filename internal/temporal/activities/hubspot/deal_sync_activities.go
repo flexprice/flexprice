@@ -28,14 +28,16 @@ func NewDealSyncActivities(
 	}
 }
 
-// CreateLineItems creates HubSpot line items from subscription
-// This is the first step - it creates line items but doesn't update deal amount
-func (a *DealSyncActivities) CreateLineItems(
+// CreateLineItem creates a single HubSpot line item for the mutated subscription line item.
+// This is the first step for a "created" operation -- it creates the line item but doesn't
+// update deal amount.
+func (a *DealSyncActivities) CreateLineItem(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
 ) error {
-	a.logger.Info(ctx, "creating HubSpot line items",
+	a.logger.Info(ctx, "creating HubSpot line item",
 		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
@@ -62,17 +64,69 @@ func (a *DealSyncActivities) CreateLineItems(
 		return err
 	}
 
-	// Create line items - uses existing DealSyncService logic
-	err = hubspotIntegration.DealSyncSvc.SyncSubscriptionToDeal(ctx, input.SubscriptionID)
+	err = hubspotIntegration.DealSyncSvc.SyncLineItemCreated(ctx, input.SubscriptionID, input.LineItemID, input.DealID)
 	if err != nil {
-		a.logger.Error(ctx, "failed to create line items",
+		a.logger.Error(ctx, "failed to create line item",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"line_item_id", input.LineItemID)
+		return err
+	}
+
+	a.logger.Info(ctx, "successfully created HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID)
+
+	return nil
+}
+
+// DeleteLineItem deletes the HubSpot line item mapped to the mutated subscription line item.
+// This is the first step for a "deleted" operation.
+func (a *DealSyncActivities) DeleteLineItem(
+	ctx context.Context,
+	input models.HubSpotDealSyncWorkflowInput,
+) error {
+	a.logger.Info(ctx, "deleting HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID,
+		"tenant_id", input.TenantID,
+		"environment_id", input.EnvironmentID)
+
+	// Set context for operations
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	// Get HubSpot integration with proper context
+	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Debug(ctx, "HubSpot connection not configured",
+				"subscription_id", input.SubscriptionID)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
+		a.logger.Error(ctx, "failed to get HubSpot integration",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
 	}
 
-	a.logger.Info(ctx, "successfully created HubSpot line items",
-		"subscription_id", input.SubscriptionID)
+	err = hubspotIntegration.DealSyncSvc.SyncLineItemDeleted(ctx, input.LineItemID)
+	if err != nil {
+		a.logger.Error(ctx, "failed to delete line item",
+			"error", err,
+			"subscription_id", input.SubscriptionID,
+			"line_item_id", input.LineItemID)
+		return err
+	}
+
+	a.logger.Info(ctx, "successfully deleted HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID)
 
 	return nil
 }
