@@ -137,7 +137,7 @@ sequenceDiagram
 - `DealSyncService` gains a `DeleteHubSpotLineItem` method alongside the existing `createHubSpotLineItem`, both operating against a single line item rather than the full set. No update/PATCH method is added — FlexPrice never mutates a line item's HubSpot-relevant fields in place (see §2.1 correction).
 - `HubSpotDealSyncWorkflow` keeps its registered workflow type name (no Temporal registration churn) but its input is extended to `{subscription_id, line_item_id, operation}` instead of just `{subscription_id}`; the creation call site is updated to fire once per line item with `operation=created` instead of syncing the whole set inline.
 - `entity_integration_mapping` gains a `subscription_line_item` entity type and a `subscription` → HubSpot-deal-id mapping (see §7).
-- Five subscription-service call sites gain a trigger, per §8.
+- Four `subscriptionService` hook points gain a trigger, per §8.1 (fewer than the six mutation scenarios might suggest, since several already funnel through `DeleteSubscriptionLineItem`/one already needs an extra `created` fire for its internally-created replacement line item).
 
 ## 7. Data Model
 
@@ -183,18 +183,23 @@ Written on `created`, read/deleted on `deleted` (or self-healed away on a 404 fr
 
 ### 8.1 Trigger call sites in `subscriptionService`
 
-All fire the workflow fire-and-forget, after the DB transaction commits — same pattern as today's `triggerHubSpotDealSyncWorkflow` call. Each skips silently (no workflow fired) if `resolveDealID` finds nothing, or the mutated line item is not `FIXED`+active. A single API call can fire more than one workflow trigger (e.g. an override fires both a `deleted` and a `created`).
+Tracing the actual call graph collapses what looked like six separate mutation points down to **four real hook points**, because several higher-level operations already funnel through `DeleteSubscriptionLineItem` or `AddSubscriptionLineItem` internally:
 
+- `UpdateSubscriptionLineItem`'s `ShouldCreateNewLineItem()` branch terminates the old line item by calling `s.DeleteSubscriptionLineItem(ctx, lineItemID, deleteReq)` internally ([subscription_line_item.go:494](../../internal/ee/service/subscription_line_item.go)) before creating the new one directly via `SubscriptionLineItemRepo.Create` — so hooking `DeleteSubscriptionLineItem` alone already covers the "old line item ends" half of an override.
+- `RemoveAddonFromSubscription` calls `s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq)` in a loop for every addon line item ([subscription.go:5146](../../internal/ee/service/subscription.go)) — also already covered by the same hook.
+- `addAddonToSubscription` (called by `AddAddonToSubscription`) does **not** go through `AddSubscriptionLineItem` — it persists new addon line items directly via `s.SubscriptionLineItemRepo.Create(ctx, lineItem)` in a loop ([subscription.go:4729](../../internal/ee/service/subscription.go)), so it needs its own hook.
+- `cancelAllLineItemsForSubscription` (called by `CancelSubscription`) does **not** go through `DeleteSubscriptionLineItem` either — it calls `SubscriptionLineItemRepo.BulkTerminate(ctx, subscriptionID, effectiveDate)` directly, a bulk DB update that returns only a count, not the terminated line items' IDs ([line_item_repository.go:25](../../internal/domain/subscription/line_item_repository.go)). This needs its own hook too, and — because `BulkTerminate` doesn't hand back which line items it touched — the hook must fetch the subscription's active `FIXED`+HubSpot-mapped line items *before* calling `BulkTerminate`, then fire `deleted` for each of those IDs afterward.
 
-| Call site                                                                | Mutation                                                                  | Operation(s) fired                                       |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `AddSubscriptionLineItem`                                                | new line item                                                             | `created` (new line item)                                |
-| `DeleteSubscriptionLineItem`                                             | line item ended                                                          | `deleted` (terminated line item)                         |
-| `UpdateSubscriptionLineItem`, `ShouldCreateNewLineItem()` branch         | price/amount/tier/commitment override — terminates old, creates new       | `deleted` (old line item ID) **and** `created` (new line item ID) |
-| `UpdateSubscriptionLineItem`, metadata-only branch                       | metadata/commitment-only update, same line item ID, no price/qty change   | none — HubSpot line item has nothing to sync              |
-| `AddAddonToSubscription` → `createLineItemFromPrice`                     | addon adds a line item                                                    | `created`                                                |
-| `RemoveAddonFromSubscription` / `cancelAddonsForSubscription`            | addon removed                                                             | `deleted`                                                |
-| `CancelSubscription` → `cancelAllLineItemsForSubscription`               | subscription cancelled                                                    | `deleted` per mapped line item                           |
+All four fire the workflow fire-and-forget, after the relevant DB transaction commits — same pattern as today's `triggerHubSpotDealSyncWorkflow` call. Each skips silently (no workflow fired) if `resolveDealID` finds nothing, or the line item in question is not `FIXED`.
+
+| Hook point                                                  | Fires on                                                                                          | Operation(s)                                    |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `AddSubscriptionLineItem`                                   | direct API call adding a line item                                                                 | `created`                                        |
+| `DeleteSubscriptionLineItem`                                | direct API call ending a line item; **also** covers `UpdateSubscriptionLineItem`'s override path (old line item) and `RemoveAddonFromSubscription` (each addon line item), since both call this function internally | `deleted`                                        |
+| `addAddonToSubscription` (inside `AddAddonToSubscription`)  | addon adds one or more line items, persisted directly via `SubscriptionLineItemRepo.Create`         | `created` per new line item                      |
+| `cancelAllLineItemsForSubscription` (inside `CancelSubscription`) | subscription cancelled — bulk-terminates via `SubscriptionLineItemRepo.BulkTerminate`          | `deleted` per line item fetched *before* the bulk call |
+
+`UpdateSubscriptionLineItem`'s override path additionally creates a new line item via `SubscriptionLineItemRepo.Create` directly (not through `AddSubscriptionLineItem`) — so that one line, too, needs its own `created` fire, alongside the `deleted` it already gets for free via `DeleteSubscriptionLineItem`. The metadata-only branch of `UpdateSubscriptionLineItem` fires nothing — it never touches `Price`/`Quantity`/`Amount`, so there is nothing for a HubSpot line item to sync.
 
 
 ### 8.2 `HubSpotDealSyncWorkflow` (extended)
