@@ -299,19 +299,3 @@ This project can maintain a code knowledge graph under **`graphify-out/`** (when
 
 Persistent human/agent-oriented architecture docs live under **`docs/`** (`REPO_MAP.md`, `ARCHITECTURE.md`, `DEPENDENCY_GRAPH.md`, `HOTSPOTS.md`, `FLOWS/`). For the same workflow in **any** repository, use the personal Cursor skill **`repo-architecture-intelligence`** in `~/.cursor/skills/repo-architecture-intelligence/SKILL.md` and copy prompts from **`USAGE.md`** in that folder.
 
-## Comment Rules
-
-- Keep comments to one or two lines unless the extra detail is essential.
-- Explain intent, invariants, or non-obvious constraints; never narrate obvious code.
-- Do not include implementation history, redundant parameter descriptions, or speculative context.
-
-## Testing Rules
-
-- Tests are required only for service-layer business logic.
-- Do not add tests solely for types, DTOs, models, or other trivial plumbing unless explicitly requested.
-
-## Logging Rules
-
-- Log only meaningful state changes, failures, and operational decisions.
-- Include the relevant IDs and error; omit redundant inputs, duplicate messages, and routine success logs.
-

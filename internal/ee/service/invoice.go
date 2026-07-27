@@ -1117,7 +1117,7 @@ func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
 	for _, tenantEnvConfig := range tenantEnvConfigs {
 		cfg, err := utils.ToStruct[types.DraftInvoiceRecomputeConfig](tenantEnvConfig.Config)
 		if err != nil {
-			s.Logger.Warn(ctx, "skipping tenant with malformed draft_invoice_recompute_config",
+			s.Logger.Info(ctx, "skipping tenant with malformed draft_invoice_recompute_config",
 				"tenant_id", tenantEnvConfig.TenantID,
 				"environment_id", tenantEnvConfig.EnvironmentID,
 				"error", err)

@@ -93,6 +93,10 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 		"skipped", result.SkippedCount,
 		"failed", result.FailedCount)
 
+	if result.FailedCount > 0 {
+		return nil, fmt.Errorf("failed to trigger %d daily draft-and-compute workflows", result.FailedCount)
+	}
+
 	return result, nil
 }
 
