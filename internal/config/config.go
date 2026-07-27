@@ -370,6 +370,10 @@ type OtelMetricsConfig struct {
 	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
 	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
 	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+	// TemporalEnabled attaches the Temporal Go SDK MetricsHandler to the shared
+	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
+	// SDK series are higher volume than app DB/cache metrics.
+	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
