@@ -238,10 +238,6 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		}, nil
 	}
 
-	// Spread the already-applied invoice-level authority onto current line items first, so
-	// CalculateCreditAdjustments' additive floor (line.PrepaidCreditsApplied) reflects prior state
-	// correctly even after a recompute rebuilt the line items (which zeroes the per-line field but
-	// never the invoice-level authority).
 	spreadPrepaidCreditsAcrossLineItems(inv)
 
 	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
@@ -276,10 +272,6 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		walletLookupMap[w.ID] = w
 	}
 
-	// Always enter the transaction and persist line items - even when there's no NEW credit to debit,
-	// the spread above may have changed per-line PrepaidCreditsApplied values (e.g. after a recompute
-	// shrank a line's ceiling below what was previously applied), and those must land in the DB
-	// regardless of whether this call found additional wallet balance to apply.
 	var result *dto.CreditAdjustmentResult
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Take money from each wallet that contributed amounts (no-op if amountsToDebitFromWallets is nil/empty)
@@ -359,13 +351,6 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	return result, nil
 }
 
-// applyExpiringCreditToInvoice applies up to tx.CreditsAvailable of credit from ONE specific about-to-
-// expire wallet transaction to an invoice, spreading it across usage line items and debiting ONLY that
-// transaction's grant (via ParentCreditTxID). Unlike ApplyCreditsToInvoice, this never touches
-// FindEligibleCredits or wallet pooling: the source and amount are already fully known, and generic FIFO
-// selection would exclude this credit anyway (FindEligibleCredits excludes any credit whose expiry has
-// already passed - exactly the population pre-expiry processes).
-//
 // Persists line-item PrepaidCreditsApplied and the invoice's TotalPrepaidCreditsApplied / Total /
 // AmountDue / AmountRemaining in one transaction.
 func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Context, inv *invoice.Invoice, tx *wallet.Transaction) (*dto.CreditAdjustmentResult, error) {
@@ -399,17 +384,10 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 		amountToApply = decimal.Zero
 	}
 
-	// Always enter the transaction and persist every line item - even when there's no NEW credit to debit
-	// (amountToApply may be zero), spreadPrepaidCreditsAcrossLineItems below may still change per-line
-	// values relative to what's currently in the DB (e.g. after a recompute reset them), and those must be
-	// persisted regardless of whether a debit happens.
 	var result *dto.CreditAdjustmentResult
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if amountToApply.GreaterThan(decimal.Zero) {
 			generator := idempotency.NewGenerator()
-			// Deterministic per (invoice, source grant): naturally dedupes activity retries, and is distinct
-			// from ExpireCredits' remainder-expiry key (tx.ID alone) so the two debits never collide on the
-			// unique (tenant, environment, idempotency_key) index.
 			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
 				"invoice_id":   inv.ID,
 				"source_tx_id": tx.ID,
@@ -468,7 +446,7 @@ func (s *creditAdjustmentService) applyExpiringCreditToInvoice(ctx context.Conte
 	return result, nil
 }
 
-// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices. Returns amount consumed.
+// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices.
 func (s *creditAdjustmentService) ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error) {
 	consumed := decimal.Zero
 	if tx.ExpiryDate == nil {
