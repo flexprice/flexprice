@@ -25,7 +25,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/google/cel-go v0.28.1
+	github.com/google/cel-go v0.29.0
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go v1.2.4
 	github.com/h2non/filetype v1.1.3
