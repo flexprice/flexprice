@@ -40,7 +40,7 @@ func (s *SubscriptionDraftAndComputeOptionsSuite) TestZeroValueOptionsMatchExist
 func (s *SubscriptionDraftAndComputeOptionsSuite) TestEmptySubscriptionIDStillValidatesFirst() {
 	_, err := s.service.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
 		s.GetContext(), "", interfaces.DraftAndComputeOptions{
-			TaskQueue:  types.TemporalTaskQueue("billing"),
+			TaskQueue:  types.TemporalTaskQueueBilling,
 			WorkflowID: "wf_test_123",
 		},
 	)
@@ -55,7 +55,7 @@ func (s *SubscriptionDraftAndComputeOptionsSuite) TestNonEmptyWorkflowIDTakesThe
 	)
 	_, errExplicitID := s.service.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
 		s.GetContext(), subID, interfaces.DraftAndComputeOptions{
-			TaskQueue:  types.TemporalTaskQueue("billing"),
+			TaskQueue:  types.TemporalTaskQueueBilling,
 			WorkflowID: "wf_test_explicit_id",
 		},
 	)
