@@ -74,9 +74,9 @@ type GCPMarketplaceAgreement struct {
 // AzureMarketplaceAgreement carries the Azure-specific identifiers a tenant read off the Resolve
 // response or the Subscribe webhook before calling this endpoint.
 type AzureMarketplaceAgreement struct {
-	PlanID               string `json:"plan_id" validate:"required"`                // -> batchUsageEvent's planId; Azure's plan id, distinct from the request's top-level PlanID
-	Dimension            string `json:"dimension" validate:"required"`              // -> batchUsageEvent's dimension (always "usage_fee" in the cents model)
-	ResourceID           string `json:"resource_id" validate:"required"`            // -> batchUsageEvent's resourceId; the Azure SaaS subscription id
+	PlanID               string `json:"plan_id" validate:"required"`                // -> usageEvent's planId; Azure's plan id, distinct from the request's top-level PlanID
+	Dimension            string `json:"dimension" validate:"required"`              // -> usageEvent's dimension (always "usage_fee" in the cents model)
+	ResourceID           string `json:"resource_id" validate:"required"`            // -> usageEvent's resourceId; the Azure SaaS subscription id
 	BeneficiaryAccountID string `json:"beneficiary_account_id" validate:"required"` // writes the customer mapping; not read in the report payload
 }
 
