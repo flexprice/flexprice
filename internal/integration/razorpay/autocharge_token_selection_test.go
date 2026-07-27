@@ -29,7 +29,7 @@ func TestSelectAutoChargeToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := selectAutoChargeToken(tt.tokens, decimal.NewFromInt(100))
+			got, ok := selectAutoChargeToken(tt.tokens, "", decimal.NewFromInt(100))
 			assert.Equal(t, tt.wantFound, ok)
 			if tt.wantFound {
 				assert.Equal(t, tt.wantID, got.GatewayMethodID)

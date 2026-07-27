@@ -177,13 +177,29 @@ migrate-local:
 
 .PHONY: test test-verbose test-coverage
 
+# Run go test, stream output, then print a short failure summary at the end.
+# Usage: $(call run-go-test,<go test args...>)
+define run-go-test
+	@bash -c 'set -o pipefail; \
+	tmp=$$(mktemp -t flexprice-test.XXXXXX); \
+	go test $(1) 2>&1 | tee "$$tmp"; \
+	status=$$?; \
+	echo ""; \
+	echo "======== FAILED TESTS ========"; \
+	grep -E "^--- FAIL:" "$$tmp" || echo "(none)"; \
+	echo "======== FAILED PACKAGES ====="; \
+	grep -E "^FAIL[[:space:]]" "$$tmp" || echo "(none)"; \
+	rm -f "$$tmp"; \
+	exit $$status'
+endef
+
 # Run all tests
 test: install-typst
-	go test -v -race ./internal/...
+	$(call run-go-test,-v -race ./internal/...)
 
 # Run tests with verbose output
 test-verbose:
-	go test -v ./internal/...
+	$(call run-go-test,-v ./internal/...)
 
 # Run tests with coverage report
 test-coverage:

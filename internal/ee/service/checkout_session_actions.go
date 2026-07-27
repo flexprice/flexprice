@@ -96,7 +96,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			return nil, err
 		}
 
-		resp, err = provider.CreateAuthorizationLink(ctx, interfaces.AuthorizationLinkRequest{
+		authReq := interfaces.AuthorizationLinkRequest{
 			InvoiceID:       req.InvoiceID,
 			CustomerID:      req.CustomerID,
 			PaymentID:       req.PaymentID,
@@ -107,7 +107,18 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			SuccessURL:      req.SuccessURL,
 			CancelURL:       req.CancelURL,
 			Metadata:        req.Metadata,
-		})
+		}
+
+		// Prefer an existing confirmed token (off-session). If none / amount above
+		// mandate max, fall back to registration+charge auth link.
+		if chargedResp, charged, chargeErr := provider.TryAutoChargingSavedMethod(ctx, authReq); chargeErr != nil {
+			return nil, chargeErr
+		} else if charged {
+			resp = chargedResp
+			break
+		}
+
+		resp, err = provider.CreateAuthorizationLink(ctx, authReq)
 
 	case types.CollectionMethodSendInvoice:
 		resp, err = provider.CreatePaymentLink(ctx, req)
@@ -129,23 +140,26 @@ func (s *checkoutSessionService) callCheckoutProvider(
 	}
 
 	// Record ProviderSessionID → FlexPrice PaymentID so incoming webhooks can route back.
-	mappingSvc := NewEntityIntegrationMappingService(s.ServiceParams)
-	if _, err := mappingSvc.CreateEntityIntegrationMapping(ctx, dto.CreateEntityIntegrationMappingRequest{
-		EntityID:         payResp.ID,
-		EntityType:       types.IntegrationEntityTypePayment,
-		ProviderType:     session.PaymentProvider.String(),
-		ProviderEntityID: resp.ProviderSessionID,
-	}); err != nil {
-		return nil, err
+	if resp.ProviderSessionID != "" {
+		mappingSvc := NewEntityIntegrationMappingService(s.ServiceParams)
+		if _, err := mappingSvc.CreateEntityIntegrationMapping(ctx, dto.CreateEntityIntegrationMappingRequest{
+			EntityID:         payResp.ID,
+			EntityType:       types.IntegrationEntityTypePayment,
+			ProviderType:     session.PaymentProvider.String(),
+			ProviderEntityID: resp.ProviderSessionID,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
-	return &types.CheckoutProviderResult{
-		NextAction:              &resp.NextAction,
+	result := &types.CheckoutProviderResult{
 		ProviderSessionID:       resp.ProviderSessionID,
 		ProviderPaymentIntentID: resp.ProviderPaymentIntentID,
 		ExpiresAt:               resp.ExpiresAt,
 		ProviderMetadata:        resp.ProviderMetadata,
-	}, nil
+		NextAction:              lo.ToPtr(resp.NextAction),
+	}
+	return result, nil
 }
 
 // resolveMaxMandateLimit caps MaxMandateLimit against the tenant's
@@ -194,6 +208,8 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 		return s.completeSubscriptionCheckout(ctx, session, providerResult)
 	case types.CheckoutActionModifySubscription:
 		return s.completeModifySubscriptionCheckout(ctx, session, providerResult)
+	case types.CheckoutActionWalletTopup:
+		return s.completeWalletTopupCheckout(ctx, session, providerResult)
 	default:
 		return ierr.NewError("unsupported checkout action for completion").
 			WithHint("No completion handler for this action type").
@@ -210,24 +226,12 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	session *domainCheckout.CheckoutSession,
 	providerResult *types.CheckoutProviderResult,
 ) error {
-	cfg := session.Configuration.ToCheckoutConfiguration()
-	params := cfg.ModifySubscriptionParams
-	if params == nil {
-		return ierr.NewError("session has no modify_subscription_params").
-			WithHint("checkout session must have modify_subscription_params before it can be completed").
-			Mark(ierr.ErrValidation)
-	}
-	if session.CheckoutInvoiceID == nil || *session.CheckoutInvoiceID == "" {
-		return ierr.NewError("session has no checkout invoice").
-			WithHint("checkout session must have checkout_invoice_id before it can be completed").
-			Mark(ierr.ErrValidation)
-	}
-	if session.CheckoutPaymentID == nil || *session.CheckoutPaymentID == "" {
-		return ierr.NewError("session has no checkout payment").
-			WithHint("checkout session must have checkout_payment_id before it can be completed").
-			Mark(ierr.ErrValidation)
+	if err := dto.ValidateCheckoutSessionForCompletion(session); err != nil {
+		return err
 	}
 
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	params := cfg.ModifySubscriptionParams
 	invoiceID := *session.CheckoutInvoiceID
 	paymentID := *session.CheckoutPaymentID
 
@@ -240,40 +244,50 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 		return err
 	}
 
-	// Finalize the draft invoice (idempotent: check status first).
-	invSvc := NewInvoiceService(s.ServiceParams)
-	invResp, err := invSvc.GetInvoice(ctx, invoiceID)
-	if err != nil {
-		return err
-	}
-	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
-		if err := invSvc.FinalizeInvoice(ctx, invoiceID); err != nil {
-			return err
-		}
-	}
-
-	// Mark the checkout payment as SUCCEEDED, storing the gateway payment ID.
-	statusStr := string(types.PaymentStatusSucceeded)
-	now := time.Now().UTC()
-	updateReq := dto.UpdatePaymentRequest{
-		PaymentStatus: &statusStr,
-		SucceededAt:   &now,
-	}
-	if providerResult != nil && providerResult.ProviderPaymentIntentID != "" {
-		id := providerResult.ProviderPaymentIntentID
-		updateReq.GatewayPaymentID = &id
-	}
-	paySvc := NewPaymentService(s.ServiceParams)
-	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
-		return err
-	}
-
-	if err := invSvc.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, nil); err != nil {
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceID, paymentID, providerResult); err != nil {
 		return err
 	}
 
 	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
 	return nil
+}
+
+// completeWalletTopupCheckout finalizes the DRAFT credit-purchase invoice and reconciles
+// payment. Wallet credits are applied by the existing ReconcilePaymentStatus hook via
+// invoice metadata.wallet_transaction_id.
+func (s *checkoutSessionService) completeWalletTopupCheckout(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	providerResult *types.CheckoutProviderResult,
+) error {
+	if err := dto.ValidateCheckoutSessionForCompletion(session); err != nil {
+		return err
+	}
+
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	params := cfg.WalletTopupParams
+
+	w, err := s.WalletRepo.GetWalletByID(ctx, params.WalletID)
+	if err != nil {
+		return err
+	}
+	if w.WalletStatus != types.WalletStatusActive {
+		return ierr.NewError("wallet is not active").
+			WithHint("The wallet must be active to complete a payment-gated top-up").
+			WithReportableDetails(map[string]any{
+				"wallet_id":     params.WalletID,
+				"wallet_status": w.WalletStatus,
+				"status":        w.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.finalizeCheckoutInvoiceAndPayment(
+		ctx,
+		*session.CheckoutInvoiceID,
+		*session.CheckoutPaymentID,
+		providerResult,
+	)
 }
 
 func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Context, session *domainCheckout.CheckoutSession, providerResult *types.CheckoutProviderResult) error {
@@ -296,19 +310,29 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 		}
 	}
 
-	// 2. Finalize the draft invoice (idempotent: check status first).
+	// 2. Finalize draft + mark payment succeeded + reconcile (credits wallet for top-up invoices).
+	return s.finalizeCheckoutInvoiceAndPayment(ctx, res.InvoiceID, res.PaymentID, providerResult)
+}
+
+// finalizeCheckoutInvoiceAndPayment finalizes a DRAFT checkout invoice (idempotent),
+// marks the checkout payment SUCCEEDED, and reconciles invoice payment status.
+func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
+	ctx context.Context,
+	invoiceID string,
+	paymentID string,
+	providerResult *types.CheckoutProviderResult,
+) error {
 	invSvc := NewInvoiceService(s.ServiceParams)
-	invResp, err := invSvc.GetInvoice(ctx, res.InvoiceID)
+	invResp, err := invSvc.GetInvoice(ctx, invoiceID)
 	if err != nil {
 		return err
 	}
 	if invResp.InvoiceStatus != types.InvoiceStatusFinalized {
-		if err := invSvc.FinalizeInvoice(ctx, res.InvoiceID); err != nil {
+		if err := invSvc.FinalizeInvoice(ctx, invoiceID); err != nil {
 			return err
 		}
 	}
 
-	// 3. Mark the checkout payment as SUCCEEDED, storing the gateway payment ID.
 	statusStr := string(types.PaymentStatusSucceeded)
 	now := time.Now().UTC()
 	updateReq := dto.UpdatePaymentRequest{
@@ -320,10 +344,9 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 		updateReq.GatewayPaymentID = &id
 	}
 	paySvc := NewPaymentService(s.ServiceParams)
-	if _, err := paySvc.UpdatePayment(ctx, res.PaymentID, updateReq); err != nil {
+	if _, err := paySvc.UpdatePayment(ctx, paymentID, updateReq); err != nil {
 		return err
 	}
 
-	// 4. Reconcile invoice payment status (marks invoice as paid — already idempotent).
-	return invSvc.ReconcilePaymentStatus(ctx, res.InvoiceID, types.PaymentStatusSucceeded, nil)
+	return invSvc.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, nil)
 }

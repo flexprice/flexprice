@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // RazorpayCustomerService defines the interface for Razorpay customer operations
@@ -19,6 +20,7 @@ type RazorpayCustomerService interface {
 	SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error)
 	GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error)
 	UpdateRazorpayCustomerNotes(ctx context.Context, razorpayCustomerID string, notes map[string]interface{}) error
+	ListConfirmedCustomerTokens(ctx context.Context, customerID string) (razorpayCustomerID string, tokens []*interfaces.ProviderPaymentMethod, err error)
 }
 
 // CustomerService handles Razorpay customer operations
@@ -264,6 +266,29 @@ func (s *CustomerService) GetRazorpayCustomerID(ctx context.Context, customerID 
 	}
 
 	return mappings[0].ProviderEntityID, nil
+}
+
+// ListConfirmedCustomerTokens resolves the Razorpay customer ID and returns
+// confirmed tokens normalized to ProviderPaymentMethod.
+func (s *CustomerService) ListConfirmedCustomerTokens(
+	ctx context.Context,
+	customerID string,
+) (string, []*interfaces.ProviderPaymentMethod, error) {
+	razorpayCustomerID, err := s.GetRazorpayCustomerID(ctx, customerID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	rawTokens, err := s.client.GetCustomerTokens(ctx, razorpayCustomerID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	tokens := lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
+		pm, normErr := NormalizeRazorpayToken(raw)
+		return pm, normErr == nil && pm != nil
+	})
+	return razorpayCustomerID, tokens, nil
 }
 
 // mergeCustomerMetadata merges new metadata with existing customer metadata
