@@ -176,6 +176,7 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_METRICS_AUTH_VALUE
     auth_value: ""
     interval_seconds: 60
+    temporal_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
