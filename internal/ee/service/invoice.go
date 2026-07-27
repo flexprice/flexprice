@@ -1151,14 +1151,11 @@ func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
 
 		offset := 0
 		for {
-			filter := &types.SubscriptionFilter{
-				QueryFilter: &types.QueryFilter{
-					Limit:  lo.ToPtr(batchSize),
-					Offset: lo.ToPtr(offset),
-					Status: lo.ToPtr(types.StatusPublished),
-				},
-				SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
-			}
+			filter := types.NewSubscriptionFilter()
+			filter.Limit = lo.ToPtr(batchSize)
+			filter.Offset = lo.ToPtr(offset)
+			filter.Status = lo.ToPtr(types.StatusPublished)
+			filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
 			subs, err := s.SubRepo.List(tenantCtx, filter)
 			if err != nil {
 				s.Logger.Error(ctx, "failed to list subscriptions for daily draft-and-compute",
