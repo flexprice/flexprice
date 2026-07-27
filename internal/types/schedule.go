@@ -73,9 +73,7 @@ func (id ScheduleID) Validate() error {
 type ScheduleConfig struct {
 	ID       ScheduleID
 	Interval time.Duration
-	// Offset is a fixed offset added within each Interval period (e.g. Interval: 24h,
-	// Offset: 2h fires at 02:00 UTC daily — Temporal anchors interval schedules to the
-	// Unix epoch, so this is deterministic and stable across restarts). Zero means no offset.
+	// Offset is applied within each interval.
 	Offset    time.Duration
 	Workflow  interface{}
 	Input     interface{}

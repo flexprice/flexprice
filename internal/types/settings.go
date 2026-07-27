@@ -499,14 +499,12 @@ func (c PaymentMandateLimits) Validate() error {
 	return nil
 }
 
-// DraftInvoiceRecomputeConfig gates the daily draft-and-compute job for a tenant×environment.
-// When Enabled, every active subscription gets its current-period draft invoice created (if
-// missing) and recomputed once per day; finalized invoices are never touched.
+// DraftInvoiceRecomputeConfig enables daily draft invoice recomputation.
 type DraftInvoiceRecomputeConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
-// Validate implements SettingConfig interface
+// Validate implements SettingConfig.
 func (c DraftInvoiceRecomputeConfig) Validate() error {
 	return nil
 }

@@ -9,20 +9,13 @@ import (
 )
 
 type SubscriptionDraftAndComputeOptionsSuite struct {
-	SubscriptionServiceSuite // reuse the existing suite's SetupTest/service/test data wiring
+	SubscriptionServiceSuite
 }
 
 func TestSubscriptionDraftAndComputeOptions(t *testing.T) {
 	suite.Run(t, new(SubscriptionDraftAndComputeOptionsSuite))
 }
 
-// Both cases below only need to reach "temporal service not available" — there is no live
-// Temporal server in unit tests, so temporalservice.GetGlobalTemporalService() returns nil and
-// every call errors before touching the network. That's enough to prove which code path
-// (ExecuteWorkflow vs StartWorkflow with an explicit ID) each option set takes, without needing
-// a running Temporal server: the zero-value path returns the exact same "temporal service not
-// available" error TriggerSubscriptionDraftAndComputeWorkflow already returns today, proving
-// nothing about the delegation changed observably.
 func (s *SubscriptionDraftAndComputeOptionsSuite) TestZeroValueOptionsMatchExistingMethod() {
 	subID := s.testData.subscription.ID
 
@@ -62,7 +55,4 @@ func (s *SubscriptionDraftAndComputeOptionsSuite) TestNonEmptyWorkflowIDTakesThe
 
 	s.Require().Error(errZeroValue)
 	s.Require().Error(errExplicitID)
-	// Both hit "temporal service not available" (no live Temporal server in unit tests) before
-	// the ExecuteWorkflow/StartWorkflow branch matters, but they must still both fail — proving
-	// the explicit-ID branch doesn't panic or behave differently pre-Temporal-call.
 }

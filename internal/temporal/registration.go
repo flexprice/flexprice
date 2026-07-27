@@ -567,10 +567,7 @@ func buildWorkerConfig(
 		)
 
 	case types.TemporalTaskQueueBilling:
-		// Dedicated queue for the daily draft-and-compute fan-out — same workflow and
-		// activities as TemporalTaskQueueInvoice's DraftAndComputeSubscriptionInvoiceWorkflow,
-		// registered again here so bulk daily triggers never compete with interactive,
-		// API-triggered invoice work on the shared "invoice" queue.
+		// Isolate bulk daily invoice work from interactive requests.
 		workflowsList = append(workflowsList,
 			invoiceWorkflows.DraftAndComputeSubscriptionInvoiceWorkflow,
 		)

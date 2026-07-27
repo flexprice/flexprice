@@ -82,20 +82,13 @@ type RevenueAnalyticsService interface {
 	GetDetailedCostAnalytics(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
 }
 
-// DraftAndComputeOptions customizes TriggerSubscriptionDraftAndComputeWorkflowWithOptions.
-// Zero value reproduces TriggerSubscriptionDraftAndComputeWorkflow's exact existing behavior.
+// DraftAndComputeOptions configures draft-and-compute workflows.
 type DraftAndComputeOptions struct {
-	// TaskQueue overrides which Temporal task queue the workflow starts on.
-	// Zero value means the workflow's default queue (from TemporalWorkflowType.TaskQueueName()).
+	// TaskQueue overrides the default queue.
 	TaskQueue types.TemporalTaskQueue
-	// WorkflowID sets a deterministic, caller-supplied workflow ID instead of a generated one.
-	// A non-empty value automatically implies WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE — this
-	// is not a separate option because a caller-supplied ID only ever makes sense paired with
-	// dedupe-on-completion; exposing them as independent fields would let a caller set one
-	// without the other and silently reopen double-triggering on retry.
+	// WorkflowID enables deterministic duplicate rejection.
 	WorkflowID string
-	// SkipIfAlreadyInvoiced is threaded through to the workflow input — see
-	// invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowInput.
+	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool
 }
 
@@ -169,10 +162,7 @@ type SubscriptionService interface {
 	// TriggerSubscriptionDraftAndComputeWorkflow creates an idempotent draft for the current period and runs compute via Temporal (invoice task queue).
 	TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
-	// TriggerSubscriptionDraftAndComputeWorkflowWithOptions is the options-taking sibling of
-	// TriggerSubscriptionDraftAndComputeWorkflow, used by the daily draft-and-compute cron job
-	// to target a dedicated task queue and a deterministic, day-stamped workflow ID (which
-	// automatically implies WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE — see implementation).
+	// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
 	TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts DraftAndComputeOptions) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
 	// Cron methods

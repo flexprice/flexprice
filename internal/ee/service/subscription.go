@@ -7126,12 +7126,7 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx con
 	return s.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx, subscriptionID, interfaces.DraftAndComputeOptions{})
 }
 
-// TriggerSubscriptionDraftAndComputeWorkflowWithOptions is the options-taking sibling used by the
-// daily draft-and-compute cron job. Zero-value opts reproduce
-// TriggerSubscriptionDraftAndComputeWorkflow's exact existing behavior (ExecuteWorkflow, default
-// queue, generated ID). A non-empty opts.WorkflowID switches to StartWorkflow with an explicit ID
-// and automatically sets WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE (see DraftAndComputeOptions
-// doc comment for why this is inferred rather than a separate field).
+// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
 func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
 	ctx context.Context, subscriptionID string, opts interfaces.DraftAndComputeOptions,
 ) (*dto.TriggerSubscriptionWorkflowResponse, error) {
@@ -7173,8 +7168,6 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOpti
 	var workflowRun models.WorkflowRun
 	var err error
 	if opts.WorkflowID == "" {
-		// Default path: byte-for-byte the same call TriggerSubscriptionDraftAndComputeWorkflow
-		// has always made — generated ID, default queue.
 		workflowRun, err = temporalSvc.ExecuteWorkflow(
 			ctx,
 			types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,

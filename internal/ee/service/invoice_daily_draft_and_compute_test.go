@@ -10,7 +10,7 @@ import (
 )
 
 type ListSubscriptionsDueForDailyDraftComputeSuite struct {
-	InvoiceServiceSuite // reuse InvoiceService wiring, customer/plan/subscription fixtures
+	InvoiceServiceSuite
 }
 
 func TestListSubscriptionsDueForDailyDraftCompute(t *testing.T) {
@@ -31,7 +31,7 @@ func (s *ListSubscriptionsDueForDailyDraftComputeSuite) enableForTenant(tenantID
 func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestDisabledTenantYieldsNoSubscriptions() {
 	ctx := s.GetContext()
 
-	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx, nil)
+	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx)
 	s.Require().NoError(err)
 	s.Require().Empty(subs, "no tenant has draft_invoice_recompute_config enabled yet")
 }
@@ -42,10 +42,7 @@ func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestEnabledTenantYieldsO
 	environmentID := types.GetEnvironmentID(ctx)
 	s.enableForTenant(tenantID, environmentID)
 
-	// s.testData.subscription (from InvoiceServiceSuite.setupTestData) is active + published
-	// with valid CurrentPeriodStart/End, so it must be returned.
-	callCount := 0
-	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx, func() { callCount++ })
+	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx)
 	s.Require().NoError(err)
 
 	found := false
@@ -55,7 +52,6 @@ func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestEnabledTenantYieldsO
 		}
 	}
 	s.Require().True(found, "the enabled tenant's active subscription must be included")
-	s.Require().GreaterOrEqual(callCount, 1, "onTenantEnvScanned must fire at least once per enabled tenant×env")
 }
 
 func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestCancelledSubscriptionIsExcluded() {
@@ -79,21 +75,9 @@ func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestCancelledSubscriptio
 	}
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, cancelled, nil))
 
-	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx, nil)
+	subs, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx)
 	s.Require().NoError(err)
 	for _, sub := range subs {
 		s.Require().NotEqual(cancelled.ID, sub.ID, "cancelled subscriptions must be excluded")
 	}
-}
-
-func (s *ListSubscriptionsDueForDailyDraftComputeSuite) TestNilCallbackDoesNotPanic() {
-	ctx := s.GetContext()
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	s.enableForTenant(tenantID, environmentID)
-
-	s.Require().NotPanics(func() {
-		_, err := s.service.ListSubscriptionsDueForDailyDraftCompute(ctx, nil)
-		s.Require().NoError(err)
-	})
 }

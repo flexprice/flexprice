@@ -21,9 +21,7 @@ const (
 	TemporalTaskQueueInvoice         TemporalTaskQueue = "invoice"
 	TemporalTaskQueueReprocessEvents TemporalTaskQueue = "events"
 	TemporalTaskQueueCron            TemporalTaskQueue = "cron"
-	// TemporalTaskQueueBilling is dedicated to bulk daily draft-and-compute fan-out, isolated
-	// from TemporalTaskQueueInvoice so a large daily run can never starve interactive,
-	// API-triggered invoice work on the same DraftAndComputeSubscriptionInvoiceWorkflow type.
+	// TemporalTaskQueueBilling isolates daily invoice processing.
 	TemporalTaskQueueBilling TemporalTaskQueue = "billing"
 )
 

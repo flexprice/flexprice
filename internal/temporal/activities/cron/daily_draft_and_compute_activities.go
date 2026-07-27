@@ -15,13 +15,7 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
-// heartbeatEvery controls how often DailyDraftAndComputeActivity records a Temporal heartbeat
-// while triggering subscriptions — matches ExpireCreditsActivity's cadence for the same
-// cross-tenant fan-out shape (see wallet_activities.go).
-const heartbeatEvery = 100
-
-// DailyDraftAndComputeActivities wraps the daily draft-and-compute cron job (one InvoiceService,
-// one SubscriptionService — both already Temporal-agnostic).
+// DailyDraftAndComputeActivities runs the daily draft-and-compute job.
 type DailyDraftAndComputeActivities struct {
 	invoiceService      service.InvoiceService
 	subscriptionService service.SubscriptionService
@@ -41,10 +35,7 @@ func NewDailyDraftAndComputeActivities(
 	}
 }
 
-// DailyDraftAndComputeActivity finds every active subscription in a tenant×environment where
-// draft_invoice_recompute_config.enabled is true, and triggers
-// DraftAndComputeSubscriptionInvoiceWorkflow for each on the dedicated "billing" task queue with
-// a day-stamped, deterministic workflow ID. Never finalizes anything.
+// DailyDraftAndComputeActivity triggers daily invoice recomputation.
 func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	ctx context.Context,
 	input cronModels.DailyDraftAndComputeActivityInput,
@@ -55,20 +46,14 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	result := &cronModels.DailyDraftAndComputeWorkflowResult{}
 	tenantEnvsSeen := make(map[string]struct{})
 
-	subs, err := a.invoiceService.ListSubscriptionsDueForDailyDraftCompute(ctx, func() {
-		activity.RecordHeartbeat(ctx, "scanning tenant environments")
-	})
+	subs, err := a.invoiceService.ListSubscriptionsDueForDailyDraftCompute(ctx)
 	if err != nil {
 		log.Error("Failed to list subscriptions due for daily draft-and-compute", "error", err)
 		return nil, err
 	}
 	result.TotalDueSubscriptions = len(subs)
 
-	for i, sub := range subs {
-		if i%heartbeatEvery == 0 {
-			activity.RecordHeartbeat(ctx, fmt.Sprintf("triggered %d/%d", i, len(subs)))
-		}
-
+	for _, sub := range subs {
 		tenantEnvKey := sub.TenantID + "|" + sub.EnvironmentID
 		if _, seen := tenantEnvsSeen[tenantEnvKey]; !seen {
 			tenantEnvsSeen[tenantEnvKey] = struct{}{}
@@ -89,10 +74,7 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 		if err != nil {
 			var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
 			if errors.As(err, &alreadyStarted) {
-				// Expected on any retry: this subscription was already triggered (or already
-				// completed, per WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE) earlier in this
-				// same activity attempt. Not a failure — routine retries must not look like
-				// production incidents.
+				// Duplicate workflow IDs are expected on retries.
 				result.SkippedCount++
 				continue
 			}
@@ -114,11 +96,7 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	return result, nil
 }
 
-// dailyDraftAndComputeWorkflowID returns the deterministic, day-stamped workflow ID used to dedupe
-// a subscription's daily draft-and-compute trigger for a given reference time. Pure function —
-// referenceTime must be a fixed value threaded down from the parent workflow (see
-// DailyDraftAndComputeActivityInput.ReferenceTime), never time.Now(), or a retry hours later could
-// stamp a different day and silently defeat the dedupe.
+// dailyDraftAndComputeWorkflowID returns a deterministic daily workflow ID.
 func dailyDraftAndComputeWorkflowID(subscriptionID string, referenceTime time.Time) string {
 	return fmt.Sprintf("%s_%s_%s_%s",
 		types.UUID_PREFIX_WORKFLOW,

@@ -12,20 +12,13 @@ const (
 	ActivityDailyDraftAndCompute = "DailyDraftAndComputeActivity"
 )
 
-// DailyDraftAndComputeWorkflow ensures every active subscription in an enabled tenant×environment
-// has a draft invoice for its current period and recomputes it — never finalizes. Triggered daily
-// by a Temporal Schedule (see internal/temporal/service/schedules.go).
+// DailyDraftAndComputeWorkflow creates and recomputes daily draft invoices.
 func DailyDraftAndComputeWorkflow(ctx workflow.Context, _ cronModels.DailyDraftAndComputeWorkflowInput) (*cronModels.DailyDraftAndComputeWorkflowResult, error) {
 	log := workflow.GetLogger(ctx)
 	log.Info("Starting DailyDraftAndComputeWorkflow")
 
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 24 * time.Hour,
-		// HeartbeatTimeout matches ExpireCreditsActivity's cross-tenant fan-out pattern
-		// (WalletCreditExpiryWorkflow), not FinalizeDueDraftsActivity's (which doesn't
-		// heartbeat) — a worker crash mid-run must be caught in minutes, not up to 24h, since
-		// this job's whole premise is same-day freshness.
-		HeartbeatTimeout: 2 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    10 * time.Second,
 			BackoffCoefficient: 2.0,
@@ -35,9 +28,7 @@ func DailyDraftAndComputeWorkflow(ctx workflow.Context, _ cronModels.DailyDraftA
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// Anchor the day-stamp used for child workflow IDs to this run's scheduled start time, not
-	// wall-clock time read inside a retried activity — mirrors MarketplaceUsageSnapshotWorkflow's
-	// scheduledStartTime helper in this same package.
+	// Keep workflow IDs stable across activity retries.
 	referenceTime, ok := scheduledStartTime(ctx)
 	if !ok {
 		log.Warn("scheduled start time unavailable; falling back to current time for the day-stamp")

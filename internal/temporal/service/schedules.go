@@ -142,7 +142,10 @@ func ensureOneSchedule(ctx context.Context, tc client.TemporalClient, cfg types.
 
 	spec := sdkclient.ScheduleSpec{
 		Intervals: []sdkclient.ScheduleIntervalSpec{
-			{Every: cfg.Interval, Offset: cfg.Offset},
+			{
+				Every:  cfg.Interval,
+				Offset: cfg.Offset,
+			},
 		},
 	}
 

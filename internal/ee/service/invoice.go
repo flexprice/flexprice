@@ -74,14 +74,8 @@ type InvoiceService interface {
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
 
-	// ListSubscriptionsDueForDailyDraftCompute returns active, published subscriptions across
-	// every tenant×environment where draft_invoice_recompute_config.enabled is true. Used by
-	// the daily draft-and-compute cron job (never by the API path). onTenantEnvScanned is
-	// invoked once per enabled tenant×environment finished scanning, purely so the caller (the
-	// Temporal activity) can heartbeat during a scan that might otherwise run long with no
-	// other progress signal — this method itself stays Temporal-agnostic. Pass nil if you
-	// don't need it.
-	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context, onTenantEnvScanned func()) ([]*subscription.Subscription, error)
+	// ListSubscriptionsDueForDailyDraftCompute returns subscriptions due for daily processing.
+	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context) ([]*subscription.Subscription, error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 
@@ -1108,18 +1102,10 @@ func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSi
 	return s.InvoiceRepo.ListAllTenant(ctx, filter)
 }
 
-// ListSubscriptionsDueForDailyDraftCompute returns active, published subscriptions across every
-// tenant×environment where draft_invoice_recompute_config.enabled is true, with valid current
-// period bounds. A malformed config for one tenant×env is logged and skipped, not fatal to the
-// whole scan; a listing failure for one tenant×env is logged and skipped the same way — no
-// single tenant's problem should ever abort the daily run for everyone else.
+// ListSubscriptionsDueForDailyDraftCompute skips invalid tenant environments.
 func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
-	ctx context.Context, onTenantEnvScanned func(),
+	ctx context.Context,
 ) ([]*subscription.Subscription, error) {
-	if onTenantEnvScanned == nil {
-		onTenantEnvScanned = func() {}
-	}
-
 	tenantEnvConfigs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyDraftInvoiceRecomputeConfig)
 	if err != nil {
 		return nil, err
@@ -1178,8 +1164,6 @@ func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
 			}
 			offset += batchSize
 		}
-
-		onTenantEnvScanned()
 	}
 
 	return due, nil

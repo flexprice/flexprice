@@ -61,12 +61,7 @@ type StartWorkflowOptions struct {
 	// StartDelay is the delay before starting the workflow
 	StartDelay time.Duration
 
-	// WorkflowIDReusePolicy controls whether a new run may start under this ID when a
-	// previous run with the same ID already reached a terminal state. Zero value
-	// (WORKFLOW_ID_REUSE_POLICY_UNSPECIFIED) reproduces today's behavior for every existing
-	// caller — none of them set this field. Only set REJECT_DUPLICATE when the ID is a
-	// deterministic, caller-supplied dedupe key (e.g. day-stamped); an ID that's always
-	// freshly generated has no need for it.
+	// WorkflowIDReusePolicy controls reuse of completed workflow IDs.
 	WorkflowIDReusePolicy enumspb.WorkflowIdReusePolicy
 }
 

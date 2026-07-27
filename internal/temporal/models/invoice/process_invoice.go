@@ -276,9 +276,7 @@ type DraftAndComputeSubscriptionInvoiceWorkflowInput struct {
 	TenantID       string `json:"tenant_id"`
 	EnvironmentID  string `json:"environment_id"`
 	UserID         string `json:"user_id"`
-	// SkipIfAlreadyInvoiced, when true, makes an already-finalized invoice for the current
-	// period a skip instead of an error. Default false preserves today's behavior for the
-	// API-triggered path; only the daily cron job sets this true.
+	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool `json:"skip_if_already_invoiced,omitempty"`
 }
 
@@ -316,7 +314,7 @@ type CreateDraftForCurrentSubscriptionPeriodActivityInput struct {
 	TenantID       string `json:"tenant_id"`
 	EnvironmentID  string `json:"environment_id"`
 	UserID         string `json:"user_id"`
-	// SkipIfAlreadyInvoiced — see DraftAndComputeSubscriptionInvoiceWorkflowInput.
+	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool `json:"skip_if_already_invoiced,omitempty"`
 }
 
@@ -343,8 +341,7 @@ func (i *CreateDraftForCurrentSubscriptionPeriodActivityInput) Validate() error 
 // CreateDraftForCurrentSubscriptionPeriodActivityOutput is returned after creating the idempotent draft.
 type CreateDraftForCurrentSubscriptionPeriodActivityOutput struct {
 	InvoiceID string `json:"invoice_id"`
-	// Skipped is true when SkipIfAlreadyInvoiced was set and the current period was already
-	// finalized — InvoiceID is empty in that case and no compute step should run.
+	// Skipped means no draft was created.
 	Skipped bool `json:"skipped"`
 }
 
