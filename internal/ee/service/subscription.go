@@ -3719,14 +3719,25 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 	var pricesResponse *dto.ListPricesResponse
 	var err error
 
-	if entityType == types.PRICE_ENTITY_TYPE_PLAN {
+	switch entityType {
+	case types.PRICE_ENTITY_TYPE_PLAN:
 		pricesResponse, err = priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
-			PlanID:         entityID,
-			AllowExpired:   false,
-			BillingPeriods: []types.BillingPeriod{subscription.BillingPeriod},
+			PlanID:       entityID,
+			AllowExpired: false,
+			BillingPeriods: []types.BillingPeriod{
+				subscription.BillingPeriod,
+				types.BILLING_PERIOD_ONETIME,
+			},
 		})
-	} else if entityType == types.PRICE_ENTITY_TYPE_ADDON {
+	case types.PRICE_ENTITY_TYPE_ADDON:
 		pricesResponse, err = priceService.GetPricesByAddonID(ctx, entityID)
+	default:
+		return nil, ierr.NewError("unsupported price entity type").
+			WithHint("Only PLAN and ADDON entity types are supported for subscription prices").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": entityType,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	if err != nil {

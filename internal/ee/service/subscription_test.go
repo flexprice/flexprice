@@ -110,6 +110,38 @@ func (s *SubscriptionServiceSuite) TestPaymentBehaviorValidation() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestValidateAndFilterPricesForSubscriptionRejectsUnsupportedEntityTypes() {
+	tests := []struct {
+		name       string
+		entityType types.PriceEntityType
+	}{
+		{
+			name:       "empty",
+			entityType: "",
+		},
+		{
+			name:       "subscription",
+			entityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			_, err := s.service.(*subscriptionService).ValidateAndFilterPricesForSubscription(
+				s.GetContext(),
+				"entity_123",
+				tc.entityType,
+				nil,
+				nil,
+			)
+
+			s.Error(err)
+			s.True(ierr.IsValidation(err))
+			s.Contains(err.Error(), "unsupported price entity type")
+		})
+	}
+}
+
 // A recurring credit grant sourced from a ONETIME (time-bounded) addon must be
 // capped at the addon association's end date, not the subscription end date, so
 // the grant stops applying once the addon's single period is over.
