@@ -6,8 +6,39 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
+	amount := decimal.NewFromInt(100)
+
+	t.Run("accepts overage factor of exactly 1.0", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			CommitmentAmount: &amount,
+			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+			OverageFactor:    lo.ToPtr(decimal.NewFromInt(1)),
+		}
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("rejects overage factor below 1.0", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			CommitmentAmount: &amount,
+			CommitmentType:   types.COMMITMENT_TYPE_AMOUNT,
+			OverageFactor:    lo.ToPtr(decimal.NewFromFloat(0.5)),
+		}
+		err := c.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(err.Error(), "overage_factor must be at least 1.0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
 	return CreateSubscriptionRequest{

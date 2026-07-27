@@ -700,15 +700,16 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 2: Overage factor must be greater than 1.0 when commitment is set
+	// Rule 2: Overage factor must be at least 1.0 when commitment is set.
+	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
 	if lineItem.CommitmentOverageFactor == nil {
 		return ierr.NewError("commitment_overage_factor is required when commitment is set").
-			WithHint("Specify a commitment_overage_factor greater than 1.0").
+			WithHint("Specify a commitment_overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if lineItem.CommitmentOverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("commitment_overage_factor must be greater than 1.0").
+	if lineItem.CommitmentOverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("commitment_overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"commitment_overage_factor": lineItem.CommitmentOverageFactor,
