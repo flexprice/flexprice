@@ -285,3 +285,22 @@ func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_QuantityDefaul
 		})
 	}
 }
+
+func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
+	amount := decimal.NewFromInt(100)
+
+	t.Run("accepts overage factor of exactly 1.0", func(t *testing.T) {
+		err := validateCommitmentFieldsCommon(
+			&amount, nil, types.COMMITMENT_TYPE_AMOUNT, lo.ToPtr(decimal.NewFromInt(1)), true,
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("rejects overage factor below 1.0", func(t *testing.T) {
+		err := validateCommitmentFieldsCommon(
+			&amount, nil, types.COMMITMENT_TYPE_AMOUNT, lo.ToPtr(decimal.NewFromFloat(0.5)), true,
+		)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "commitment_overage_factor must be at least 1.0")
+	})
+}

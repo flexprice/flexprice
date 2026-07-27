@@ -40,7 +40,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 	// 1. Fetch cost analytics from the meter_usage-backed costsheet path.
 	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
 	if err != nil {
-		s.Logger.Info(context.Background(), "failed to fetch cost analytics", "error", err)
+		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
 		costAnalytics = nil
 	}
 
@@ -58,7 +58,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		IncludeChildren:    req.IncludeChildren,
 	})
 	if err != nil {
-		s.Logger.Info(context.Background(), "failed to fetch revenue analytics", "error", err)
+		s.Logger.Info(ctx, "failed to fetch revenue analytics", "error", err)
 		revenueAnalytics = nil
 	}
 
