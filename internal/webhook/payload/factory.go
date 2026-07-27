@@ -186,6 +186,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventSubscriptionGroupSpendThresholdRecovered] = func() PayloadBuilder {
 		return NewAlertPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventEntitlementGrantExhausted] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
 
 	// checkout session builders
 	f.builders[types.WebhookEventCheckoutSessionInitiated] = func() PayloadBuilder {

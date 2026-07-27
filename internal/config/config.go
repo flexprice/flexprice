@@ -54,6 +54,7 @@ type Configuration struct {
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -70,6 +71,11 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+	Onboarding                 OnboardingConfig                 `mapstructure:"onboarding" validate:"omitempty"`
+}
+
+type OnboardingConfig struct {
+	DefaultTenantName string `mapstructure:"default_tenant_name" validate:"omitempty" default:"Flexprice"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -364,6 +370,10 @@ type OtelMetricsConfig struct {
 	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
 	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
 	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+	// TemporalEnabled attaches the Temporal Go SDK MetricsHandler to the shared
+	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
+	// SDK series are higher volume than app DB/cache metrics.
+	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
@@ -515,12 +525,23 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
 
-	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
-	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
-	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
-	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
-	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
+// UsageAlertsConfig controls the usage-driven alert pipeline end to end:
+// meter-usage post-insert schedules a debounced per-customer Temporal workflow
+// which evaluates spend, entitlement-grant, and wallet alerts.
+type UsageAlertsConfig struct {
+	// Enabled routes post-insert alerting through the debounced Temporal
+	// workflow instead of the Kafka wallet-alert path and inline spend-breach check.
+	Enabled bool `mapstructure:"enabled" default:"false"`
+	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
+	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
+	// StaleAfter bounds staleness on both queues: a workflow run firing more
+	// than this past its intended time yields once (ContinueAsNew) to the back
+	// of the queue so fresher customers evaluate first, and each activity's
+	// ScheduleToStartTimeout is set to the same value.
+	StaleAfter time.Duration `mapstructure:"stale_after" default:"1h"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -675,8 +696,21 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
+	// auths the data nodes; SentinelUsername/Password auth the sentinels.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {

@@ -48,6 +48,7 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 			APIKey:    options.APIKey,
 			Namespace: options.Namespace,
 		},
+		MetricsHandler: options.MetricsHandler,
 	}
 
 	// Configure TLS if enabled

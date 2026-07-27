@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -849,10 +850,75 @@ func init() {
 	entitlementDescDisplayOrder := entitlementFields[10].Descriptor()
 	// entitlement.DefaultDisplayOrder holds the default value on creation for the display_order field.
 	entitlement.DefaultDisplayOrder = entitlementDescDisplayOrder.Default.(int)
+	// entitlementDescAggregationMode is the schema descriptor for aggregation_mode field.
+	entitlementDescAggregationMode := entitlementFields[19].Descriptor()
+	// entitlement.DefaultAggregationMode holds the default value on creation for the aggregation_mode field.
+	entitlement.DefaultAggregationMode = types.EntitlementAggregationMode(entitlementDescAggregationMode.Default.(string))
 	// entitlementDescID is the schema descriptor for id field.
 	entitlementDescID := entitlementFields[0].Descriptor()
 	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	entitlement.IDValidator = entitlementDescID.Validators[0].(func(string) error)
+	entitlementgrantMixin := schema.EntitlementGrant{}.Mixin()
+	entitlementgrantMixinFields0 := entitlementgrantMixin[0].Fields()
+	_ = entitlementgrantMixinFields0
+	entitlementgrantMixinFields1 := entitlementgrantMixin[1].Fields()
+	_ = entitlementgrantMixinFields1
+	entitlementgrantFields := schema.EntitlementGrant{}.Fields()
+	_ = entitlementgrantFields
+	// entitlementgrantDescTenantID is the schema descriptor for tenant_id field.
+	entitlementgrantDescTenantID := entitlementgrantMixinFields0[0].Descriptor()
+	// entitlementgrant.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	entitlementgrant.TenantIDValidator = entitlementgrantDescTenantID.Validators[0].(func(string) error)
+	// entitlementgrantDescStatus is the schema descriptor for status field.
+	entitlementgrantDescStatus := entitlementgrantMixinFields0[1].Descriptor()
+	// entitlementgrant.DefaultStatus holds the default value on creation for the status field.
+	entitlementgrant.DefaultStatus = entitlementgrantDescStatus.Default.(string)
+	// entitlementgrantDescCreatedAt is the schema descriptor for created_at field.
+	entitlementgrantDescCreatedAt := entitlementgrantMixinFields0[2].Descriptor()
+	// entitlementgrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	entitlementgrant.DefaultCreatedAt = entitlementgrantDescCreatedAt.Default.(func() time.Time)
+	// entitlementgrantDescUpdatedAt is the schema descriptor for updated_at field.
+	entitlementgrantDescUpdatedAt := entitlementgrantMixinFields0[3].Descriptor()
+	// entitlementgrant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	entitlementgrant.DefaultUpdatedAt = entitlementgrantDescUpdatedAt.Default.(func() time.Time)
+	// entitlementgrant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	entitlementgrant.UpdateDefaultUpdatedAt = entitlementgrantDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// entitlementgrantDescEnvironmentID is the schema descriptor for environment_id field.
+	entitlementgrantDescEnvironmentID := entitlementgrantMixinFields1[0].Descriptor()
+	// entitlementgrant.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	entitlementgrant.DefaultEnvironmentID = entitlementgrantDescEnvironmentID.Default.(string)
+	// entitlementgrantDescEntitlementConfigID is the schema descriptor for entitlement_config_id field.
+	entitlementgrantDescEntitlementConfigID := entitlementgrantFields[1].Descriptor()
+	// entitlementgrant.EntitlementConfigIDValidator is a validator for the "entitlement_config_id" field. It is called by the builders before save.
+	entitlementgrant.EntitlementConfigIDValidator = entitlementgrantDescEntitlementConfigID.Validators[0].(func(string) error)
+	// entitlementgrantDescCustomerID is the schema descriptor for customer_id field.
+	entitlementgrantDescCustomerID := entitlementgrantFields[2].Descriptor()
+	// entitlementgrant.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	entitlementgrant.CustomerIDValidator = entitlementgrantDescCustomerID.Validators[0].(func(string) error)
+	// entitlementgrantDescSubscriptionID is the schema descriptor for subscription_id field.
+	entitlementgrantDescSubscriptionID := entitlementgrantFields[3].Descriptor()
+	// entitlementgrant.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	entitlementgrant.SubscriptionIDValidator = entitlementgrantDescSubscriptionID.Validators[0].(func(string) error)
+	// entitlementgrantDescScopeEntityType is the schema descriptor for scope_entity_type field.
+	entitlementgrantDescScopeEntityType := entitlementgrantFields[4].Descriptor()
+	// entitlementgrant.DefaultScopeEntityType holds the default value on creation for the scope_entity_type field.
+	entitlementgrant.DefaultScopeEntityType = types.EntitlementGrantScopeEntityType(entitlementgrantDescScopeEntityType.Default.(string))
+	// entitlementgrantDescScopeEntityID is the schema descriptor for scope_entity_id field.
+	entitlementgrantDescScopeEntityID := entitlementgrantFields[5].Descriptor()
+	// entitlementgrant.ScopeEntityIDValidator is a validator for the "scope_entity_id" field. It is called by the builders before save.
+	entitlementgrant.ScopeEntityIDValidator = entitlementgrantDescScopeEntityID.Validators[0].(func(string) error)
+	// entitlementgrantDescMeasure is the schema descriptor for measure field.
+	entitlementgrantDescMeasure := entitlementgrantFields[6].Descriptor()
+	// entitlementgrant.MeasureValidator is a validator for the "measure" field. It is called by the builders before save.
+	entitlementgrant.MeasureValidator = entitlementgrantDescMeasure.Validators[0].(func(string) error)
+	// entitlementgrantDescUsage is the schema descriptor for usage field.
+	entitlementgrantDescUsage := entitlementgrantFields[8].Descriptor()
+	// entitlementgrant.DefaultUsage holds the default value on creation for the usage field.
+	entitlementgrant.DefaultUsage = entitlementgrantDescUsage.Default.(decimal.Decimal)
+	// entitlementgrantDescGrantStatus is the schema descriptor for grant_status field.
+	entitlementgrantDescGrantStatus := entitlementgrantFields[11].Descriptor()
+	// entitlementgrant.DefaultGrantStatus holds the default value on creation for the grant_status field.
+	entitlementgrant.DefaultGrantStatus = types.EntitlementGrantStatus(entitlementgrantDescGrantStatus.Default.(string))
 	entityintegrationmappingMixin := schema.EntityIntegrationMapping{}.Mixin()
 	entityintegrationmappingMixinFields0 := entityintegrationmappingMixin[0].Fields()
 	_ = entityintegrationmappingMixinFields0

@@ -1,6 +1,7 @@
 package zoho
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -118,6 +119,177 @@ type InvoiceResponse struct {
 	InvoiceNumber string          `json:"invoice_number"`
 	Status        string          `json:"status,omitempty"`
 	Total         decimal.Decimal `json:"total,omitempty"`
+	CustomerID    string          `json:"customer_id,omitempty"`
+	Balance       decimal.Decimal `json:"balance,omitempty"`
+}
+
+// CustomerPaymentInvoiceApply links a recorded Zoho customer payment to an invoice it settles.
+type CustomerPaymentInvoiceApply struct {
+	invoiceID     string
+	amountApplied decimal.Decimal
+}
+
+// NewCustomerPaymentInvoiceApply builds a CustomerPaymentInvoiceApply for the given invoice and amount.
+func NewCustomerPaymentInvoiceApply(invoiceID string, amountApplied decimal.Decimal) CustomerPaymentInvoiceApply {
+	return CustomerPaymentInvoiceApply{invoiceID: invoiceID, amountApplied: amountApplied}
+}
+
+func (a CustomerPaymentInvoiceApply) InvoiceID() string { return a.invoiceID }
+
+func (a CustomerPaymentInvoiceApply) AmountApplied() decimal.Decimal { return a.amountApplied }
+
+func (a CustomerPaymentInvoiceApply) MarshalJSON() ([]byte, error) {
+	return json.Marshal(customerPaymentInvoiceApplyWire{
+		InvoiceID:     a.invoiceID,
+		AmountApplied: a.amountApplied,
+	})
+}
+
+func (a *CustomerPaymentInvoiceApply) UnmarshalJSON(data []byte) error {
+	var wire customerPaymentInvoiceApplyWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	a.invoiceID = wire.InvoiceID
+	a.amountApplied = wire.AmountApplied
+	return nil
+}
+
+type customerPaymentInvoiceApplyWire struct {
+	InvoiceID     string          `json:"invoice_id"`
+	AmountApplied decimal.Decimal `json:"amount_applied"`
+}
+
+// CustomerPaymentCreateRequest is the body for POST /books/v3/customerpayments.
+type CustomerPaymentCreateRequest struct {
+	customerID  string
+	paymentMode string
+	amount      decimal.Decimal
+	date        string
+	invoices    []CustomerPaymentInvoiceApply
+}
+
+// NewCustomerPaymentCreateRequest builds the request body for recording a Zoho customer payment.
+func NewCustomerPaymentCreateRequest(
+	customerID string,
+	paymentMode string,
+	amount decimal.Decimal,
+	date string,
+	invoices []CustomerPaymentInvoiceApply,
+) *CustomerPaymentCreateRequest {
+	return &CustomerPaymentCreateRequest{
+		customerID:  customerID,
+		paymentMode: paymentMode,
+		amount:      amount,
+		date:        date,
+		invoices:    invoices,
+	}
+}
+
+func (r *CustomerPaymentCreateRequest) CustomerID() string {
+	if r == nil {
+		return ""
+	}
+	return r.customerID
+}
+
+func (r *CustomerPaymentCreateRequest) PaymentMode() string {
+	if r == nil {
+		return ""
+	}
+	return r.paymentMode
+}
+
+func (r *CustomerPaymentCreateRequest) Amount() decimal.Decimal {
+	if r == nil {
+		return decimal.Zero
+	}
+	return r.amount
+}
+
+func (r *CustomerPaymentCreateRequest) Date() string {
+	if r == nil {
+		return ""
+	}
+	return r.date
+}
+
+func (r *CustomerPaymentCreateRequest) Invoices() []CustomerPaymentInvoiceApply {
+	if r == nil {
+		return nil
+	}
+	return r.invoices
+}
+
+func (r *CustomerPaymentCreateRequest) MarshalJSON() ([]byte, error) {
+	if r == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(customerPaymentCreateRequestWire{
+		CustomerID:  r.customerID,
+		PaymentMode: r.paymentMode,
+		Amount:      r.amount,
+		Date:        r.date,
+		Invoices:    r.invoices,
+	})
+}
+
+func (r *CustomerPaymentCreateRequest) UnmarshalJSON(data []byte) error {
+	var wire customerPaymentCreateRequestWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	r.customerID = wire.CustomerID
+	r.paymentMode = wire.PaymentMode
+	r.amount = wire.Amount
+	r.date = wire.Date
+	r.invoices = wire.Invoices
+	return nil
+}
+
+type customerPaymentCreateRequestWire struct {
+	CustomerID  string                        `json:"customer_id"`
+	PaymentMode string                        `json:"payment_mode"`
+	Amount      decimal.Decimal               `json:"amount"`
+	Date        string                        `json:"date"`
+	Invoices    []CustomerPaymentInvoiceApply `json:"invoices"`
+}
+
+// CustomerPaymentResponse is the response from POST /books/v3/customerpayments.
+type CustomerPaymentResponse struct {
+	paymentID string
+}
+
+// NewCustomerPaymentResponse builds a CustomerPaymentResponse for the given Zoho payment ID.
+func NewCustomerPaymentResponse(paymentID string) *CustomerPaymentResponse {
+	return &CustomerPaymentResponse{paymentID: paymentID}
+}
+
+func (r *CustomerPaymentResponse) PaymentID() string {
+	if r == nil {
+		return ""
+	}
+	return r.paymentID
+}
+
+func (r *CustomerPaymentResponse) MarshalJSON() ([]byte, error) {
+	if r == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(customerPaymentResponseWire{PaymentID: r.paymentID})
+}
+
+func (r *CustomerPaymentResponse) UnmarshalJSON(data []byte) error {
+	var wire customerPaymentResponseWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	r.paymentID = wire.PaymentID
+	return nil
+}
+
+type customerPaymentResponseWire struct {
+	PaymentID string `json:"payment_id"`
 }
 
 type ZohoInvoiceSyncRequest struct {

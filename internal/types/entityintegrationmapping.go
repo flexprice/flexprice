@@ -54,14 +54,15 @@ type IntegrationProviderType string
 
 // Provider types
 const (
-	IntegrationProviderTypeStripe         IntegrationProviderType = "stripe"
-	IntegrationProviderTypeRazorpay       IntegrationProviderType = "razorpay"
-	IntegrationProviderTypePaypal         IntegrationProviderType = "paypal"
-	IntegrationProviderTypeQuickBooks     IntegrationProviderType = "quickbooks"
-	IntegrationProviderTypeZohoBooks      IntegrationProviderType = "zoho_books"
-	IntegrationProviderTypePaddle         IntegrationProviderType = "paddle"
-	IntegrationProviderTypeAWSMarketplace IntegrationProviderType = "aws_marketplace"
-	IntegrationProviderTypeGCPMarketplace IntegrationProviderType = "gcp_marketplace"
+	IntegrationProviderTypeStripe           IntegrationProviderType = "stripe"
+	IntegrationProviderTypeRazorpay         IntegrationProviderType = "razorpay"
+	IntegrationProviderTypePaypal           IntegrationProviderType = "paypal"
+	IntegrationProviderTypeQuickBooks       IntegrationProviderType = "quickbooks"
+	IntegrationProviderTypeZohoBooks        IntegrationProviderType = "zoho_books"
+	IntegrationProviderTypePaddle           IntegrationProviderType = "paddle"
+	IntegrationProviderTypeAWSMarketplace   IntegrationProviderType = "aws_marketplace"
+	IntegrationProviderTypeGCPMarketplace   IntegrationProviderType = "gcp_marketplace"
+	IntegrationProviderTypeAzureMarketplace IntegrationProviderType = "azure_marketplace"
 )
 
 func (p IntegrationProviderType) Validate() error {
@@ -74,10 +75,11 @@ func (p IntegrationProviderType) Validate() error {
 		IntegrationProviderTypePaddle,
 		IntegrationProviderTypeAWSMarketplace,
 		IntegrationProviderTypeGCPMarketplace,
+		IntegrationProviderTypeAzureMarketplace,
 	}
 	if !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid provider type").
-			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books, paddle, aws_marketplace, gcp_marketplace").
+			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books, paddle, aws_marketplace, gcp_marketplace, azure_marketplace").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

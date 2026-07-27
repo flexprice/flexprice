@@ -13,10 +13,8 @@ import (
 	"go.temporal.io/sdk/activity"
 )
 
-// AlertActivities hosts the usage-driven alert evaluation activities. They are
-// thin adapters over the AlertService methods; all real work lives in the service
-// layer so the activities stay trivial and the service methods can be called
-// directly (e.g. from a REST test endpoint) without Temporal.
+// AlertActivities hosts usage-driven alert evaluation activities. Thin adapters
+// over AlertService; all logic lives in the service layer.
 type AlertActivities struct {
 	serviceParams service.ServiceParams
 	logger        *logger.Logger
@@ -29,9 +27,8 @@ func NewAlertActivities(serviceParams service.ServiceParams, logger *logger.Logg
 	}
 }
 
-// prepare loads the customer and injects tenant/environment IDs into the
-// activity context. Returns (nil, nil) when the customer no longer exists — a
-// no-op is the right response since the whole workflow is customer-scoped.
+// prepare loads the customer + injects tenant/env into ctx. Returns (nil, nil)
+// when the customer no longer exists (activity becomes a no-op).
 func (a *AlertActivities) prepare(ctx context.Context, tenantID, environmentID, customerID string) (context.Context, *customer.Customer, error) {
 	ctx = types.SetTenantID(ctx, tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
@@ -46,12 +43,12 @@ func (a *AlertActivities) prepare(ctx context.Context, tenantID, environmentID, 
 	return ctx, cust, nil
 }
 
-// SpendAlertsActivity evaluates subscription / line-item / group spend
-// alerts for the customer end to end (fetch subs + configs + usage + charges,
-// compare thresholds, log alerts). Self-contained.
-func (a *AlertActivities) SpendAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
+// SpendAndEntitlementAlertsActivity evaluates spend alerts (subscription /
+// line-item / group) and per-grant exhaustion in one pass. Idempotent under
+// Temporal retries via LogAlert state-transition dedup + UpdateSnapshot.
+func (a *AlertActivities) SpendAndEntitlementAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
 	log := activity.GetLogger(ctx)
-	log.Info("SpendAlertsActivity started",
+	log.Info("SpendAndEntitlementAlertsActivity started",
 		"tenant_id", input.TenantID,
 		"customer_id", input.CustomerID,
 	)
@@ -61,17 +58,14 @@ func (a *AlertActivities) SpendAlertsActivity(ctx context.Context, input models.
 		return err
 	}
 	if cust == nil {
-		log.Info("customer not found, spend alerts activity is a no-op", "customer_id", input.CustomerID)
+		log.Info("customer not found, fused alerts activity is a no-op", "customer_id", input.CustomerID)
 		return nil
 	}
 
-	return service.NewAlertService(a.serviceParams).EvaluateSpendAlertsForCustomer(ctx, cust, nil, nil)
+	return service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust)
 }
 
-// WalletAlertsActivity evaluates wallet-balance / feature-wallet-balance
-// alerts and auto-topup for the customer end to end (fetch wallets +
-// alert config + real-time balance, compare thresholds, log alerts, trigger
-// topups). Self-contained.
+// WalletAlertsActivity evaluates wallet-balance alerts and auto-topup.
 func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models.UsageAlertActivityInput) error {
 	log := activity.GetLogger(ctx)
 	log.Info("WalletAlertsActivity started",
@@ -88,9 +82,7 @@ func (a *AlertActivities) WalletAlertsActivity(ctx context.Context, input models
 		return nil
 	}
 
-	// Anchor the auto-topup idempotency key to the Temporal workflow run id so
-	// activity retries within the same debounce firing collapse into a single
-	// top-up per wallet (fresh UUIDs on each retry would double-topup).
+	// Run-id-seeded idempotency: retries within the same firing dedupe to one topup.
 	autoTopupSeed := activity.GetInfo(ctx).WorkflowExecution.RunID
 	return service.NewAlertService(a.serviceParams).EvaluateWalletAlertsForCustomer(ctx, cust, autoTopupSeed)
 }

@@ -264,6 +264,7 @@ func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, event
 
 		meterFilter := types.NewNoLimitMeterFilter()
 		meterFilter.EventName = eventName
+		meterFilter.Status = lo.ToPtr(types.StatusPublished)
 
 		meters, err := s.MeterRepo.List(ctx, meterFilter)
 		if err != nil {

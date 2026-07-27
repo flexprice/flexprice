@@ -344,7 +344,7 @@ func (o RefundQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Re
 
 func (o RefundQueryOptions) ApplyStatusFilter(query RefundQuery, status string) RefundQuery {
 	if status == "" {
-		return query.Where(refund.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(refund.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(refund.Status(status))
 }

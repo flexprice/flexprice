@@ -240,6 +240,23 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			GCPMarketplace: gcpMarketplaceSecrets,
 		}
 
+	case types.SecretProviderAzureMarketplace:
+		azureMarketplaceSecrets := &types.AzureMarketplaceConnectionSecrets{}
+
+		if tenantID, ok := flatMetadata["tenant_id"].(string); ok {
+			azureMarketplaceSecrets.TenantID = tenantID
+		}
+		if clientID, ok := flatMetadata["client_id"].(string); ok {
+			azureMarketplaceSecrets.ClientID = clientID
+		}
+		if clientSecret, ok := flatMetadata["client_secret"].(string); ok {
+			azureMarketplaceSecrets.ClientSecret = clientSecret
+		}
+
+		return types.ConnectionMetadata{
+			AzureMarketplace: azureMarketplaceSecrets,
+		}
+
 	case types.SecretProviderMoyasar:
 		moyasarMetadata := &types.MoyasarConnectionMetadata{}
 

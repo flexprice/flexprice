@@ -32,6 +32,12 @@ const (
 	AlertTypeSubscriptionSpend         AlertType = "subscription_spend"
 	AlertTypeSubscriptionLineItemSpend AlertType = "subscription_line_item_spend"
 	AlertTypeSubscriptionGroupSpend    AlertType = "subscription_group_spend"
+
+	// Entitlement grant alert types (FLE-959). Fired by the alert workflow
+	// against `alert_logs` when a grant crosses a configured threshold or
+	// hits exhaustion. See ERD §7.3.
+	AlertTypeEntitlementGrantThreshold AlertType = "entitlement_grant_threshold"
+	AlertTypeEntitlementGrantExhausted AlertType = "entitlement_grant_exhausted"
 )
 
 // AlertEntityType represents the type of entity for alerts
@@ -46,6 +52,12 @@ const (
 	AlertEntityTypeSubscription         AlertEntityType = "subscription"
 	AlertEntityTypeSubscriptionLineItem AlertEntityType = "subscription_line_item"
 	AlertEntityTypeGroup                AlertEntityType = "group"
+
+	// AlertEntityTypeEntitlementGrant identifies alert rows written by the
+	// FLE-959 grant lifecycle (threshold + exhaustion transitions). Not
+	// creatable via CreateAlertSettingsRequest; the workflow writes these
+	// directly. See ERD §7.3.
+	AlertEntityTypeEntitlementGrant AlertEntityType = "entitlement_grant"
 )
 
 // allAlertEntityTypes lists every value this type can hold, across both alert pipelines
@@ -55,6 +67,7 @@ var allAlertEntityTypes = []AlertEntityType{
 	AlertEntityTypeSubscription,
 	AlertEntityTypeSubscriptionLineItem,
 	AlertEntityTypeGroup,
+	AlertEntityTypeEntitlementGrant,
 }
 
 func (aet AlertEntityType) Validate() error {
@@ -92,6 +105,8 @@ func (at AlertType) Validate() error {
 		AlertTypeSubscriptionSpend,
 		AlertTypeSubscriptionLineItemSpend,
 		AlertTypeSubscriptionGroupSpend,
+		AlertTypeEntitlementGrantThreshold,
+		AlertTypeEntitlementGrantExhausted,
 	}
 	if !lo.Contains(allowedTypes, at) {
 		return ierr.NewError("invalid alert type").

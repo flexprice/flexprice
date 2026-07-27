@@ -13,9 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
-	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
-	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
@@ -90,10 +88,6 @@ func main() {
 			// Security
 			security.NewEncryptionService,
 
-			// Marketplace clients
-			awsmarketplace.NewClient,
-			gcpmarketplace.NewClient,
-
 			// RBAC
 			rbac.NewRBACService,
 
@@ -159,6 +153,7 @@ func main() {
 			repository.NewInvoiceLineItemRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
+			repository.NewEntitlementGrantRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,
@@ -250,6 +245,7 @@ func main() {
 			service.NewInvoiceService,
 			service.NewFeatureService,
 			service.NewEntitlementService,
+			service.NewEntitlementGrantService,
 			service.NewPaymentService,
 			service.NewPaymentProcessorService,
 			service.NewTaskService,
@@ -465,7 +461,7 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger, tracingSvc *tracing.Service) (client.TemporalClient, error) {
 	log.Info(context.Background(), "Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
 
 	// Use default options and merge with config
@@ -480,6 +476,7 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 		options.APIKey = cfg.APIKey
 	}
 	options.TLS = cfg.TLS
+	options.MetricsHandler = tracingSvc.TemporalMetricsHandler()
 
 	// Create temporal client directly
 	temporalClient, err := client.NewTemporalClient(options, log)

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -50,6 +51,22 @@ type AlertWebhookPayload struct {
 	Feature     *dto.FeatureResponse   `json:"feature,omitempty"`
 	Wallet      *dto.WalletResponse    `json:"wallet,omitempty"`
 	Customer    *dto.CustomerResponse  `json:"customer,omitempty"`
+}
+
+// EntitlementGrantAlertEvent is the webhook payload for entitlement grant
+// exhaustion: four flat entities, no nesting — the builder strips the
+// subscription's embedded customer/line items/plan and the entitlement's
+// feature/plan expansions. UsageRatio is usage/quota at evaluation time
+// (>= 1 when exhausted).
+type EntitlementGrantAlertEvent struct {
+	Subscription     *dto.SubscriptionResponseV2        `json:"subscription"`
+	Customer         *dto.CustomerResponse              `json:"customer"`
+	Entitlement      *dto.EntitlementResponse           `json:"entitlement"`
+	EntitlementGrant *entitlementgrant.EntitlementGrant `json:"entitlement_grant"`
+	AlertType        types.AlertType                    `json:"alert_type"`
+	AlertStatus      types.AlertState                   `json:"alert_status"`
+	UsageRatio       string                             `json:"usage_ratio"`
+	TriggeredAt      time.Time                          `json:"triggered_at"`
 }
 
 func NewAlertWebhookPayload(feature *dto.FeatureResponse, wallet *dto.WalletResponse, customer *dto.CustomerResponse, alertType types.AlertType, alertStatus types.AlertState, eventType types.WebhookEventName) *AlertWebhookPayload {

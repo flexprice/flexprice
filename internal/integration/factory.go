@@ -19,8 +19,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
@@ -716,6 +719,32 @@ func (f *Factory) GetTabsIntegration(ctx context.Context) (*TabsIntegration, err
 	}, nil
 }
 
+// GetAWSMarketplaceIntegration returns an AWS Marketplace client. Unlike the other Get*Integration
+// methods, this does not resolve a connection from connectionRepo: it is called from
+// connection-creation verification, before the connection being verified is persisted, so there is
+// nothing yet to look up. The client itself is stateless and takes credentials per call.
+func (f *Factory) GetAWSMarketplaceIntegration(ctx context.Context) (*AWSMarketplaceIntegration, error) {
+	return &AWSMarketplaceIntegration{
+		Client: awsmarketplace.NewClient(f.config, f.logger),
+	}, nil
+}
+
+// GetGCPMarketplaceIntegration returns a GCP Marketplace client. See GetAWSMarketplaceIntegration
+// for why this does not resolve a connection from connectionRepo.
+func (f *Factory) GetGCPMarketplaceIntegration(ctx context.Context) (*GCPMarketplaceIntegration, error) {
+	return &GCPMarketplaceIntegration{
+		Client: gcpmarketplace.NewClient(f.config, f.logger),
+	}, nil
+}
+
+// GetAzureMarketplaceIntegration returns an Azure Marketplace client. See
+// GetAWSMarketplaceIntegration for why this does not resolve a connection from connectionRepo.
+func (f *Factory) GetAzureMarketplaceIntegration(ctx context.Context) (*AzureMarketplaceIntegration, error) {
+	return &AzureMarketplaceIntegration{
+		Client: azuremarketplace.NewClient(f.logger),
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (Base, error) {
 	switch providerType {
@@ -1055,6 +1084,24 @@ type TabsIntegration struct {
 
 func (t *TabsIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
 	return fmt.Errorf("invoice pull sync not supported for tabs")
+}
+
+// AWSMarketplaceIntegration contains the AWS Marketplace client. Unlike the other Integration
+// structs, this is not registered in GetIntegrationByProvider: marketplace connections are
+// consumed through the dedicated marketplace agreement/report flows, not the generic
+// invoice-pull-sync Base interface.
+type AWSMarketplaceIntegration struct {
+	Client awsmarketplace.Client
+}
+
+// GCPMarketplaceIntegration contains the GCP Marketplace client.
+type GCPMarketplaceIntegration struct {
+	Client gcpmarketplace.Client
+}
+
+// AzureMarketplaceIntegration contains the Azure Marketplace client.
+type AzureMarketplaceIntegration struct {
+	Client azuremarketplace.Client
 }
 
 // IntegrationProvider defines the interface for all integration providers

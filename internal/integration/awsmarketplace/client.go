@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // UsageRecordInput is one usage record to report. CustomerAWSAccountID + LicenseArn identify the
@@ -91,9 +92,10 @@ func NewClient(conf *config.Configuration, log *logger.Logger) Client {
 // last step probes the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for
 // seconds before failing — that must never be in the path of a user-facing connection request.
 //
-// On failure, the AWS SDK error is not logged or returned — a bad trust policy's AccessDenied
-// message embeds the role ARN in its text, so nothing derived from it is surfaced anywhere. The
-// role ARN and external ID are never logged.
+// On failure, AWS's own error is logged and returned in full apart from the role ARN and external ID,
+// which are stripped from its text (see redactSecrets) — the reason for the failure is what makes it
+// debuggable, the two secrets are not, and callers get the already-redacted error so no caller can
+// reintroduce them by logging it.
 func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, duration time.Duration) (aws.Credentials, error) {
 	if roleArn == "" || externalID == "" {
 		return aws.Credentials{}, ierr.NewError("role_arn and external_id are required").
@@ -120,12 +122,15 @@ func (c *client) AssumeRole(ctx context.Context, roleArn, externalID string, dur
 
 	creds, err := provider.Retrieve(ctx)
 	if err != nil {
-		// Deliberately not logger.Err(err) and not ierr.WithError(err): AWS's AccessDenied
-		// message for a bad trust policy embeds the role ARN in its text. The redacted
-		// placeholder still satisfies loglint's "every Error() log carries an error field"
-		// invariant without leaking it into logs or API responses.
-		c.logger.Error(ctx, "aws marketplace assume role failed", "error", "redacted: aws error message may embed the role arn")
-		return aws.Credentials{}, ierr.NewError("aws marketplace assume role failed").
+		reason := utils.RedactSecrets(err.Error(), roleArn, externalID)
+		c.logger.Error(ctx, "aws marketplace assume role failed",
+			"region", c.cfg.Region,
+			"role_session_name", "flexprice-marketplace-metering",
+			"duration", duration,
+			"error", reason)
+		// NewError(reason), not WithError(err): wrapping the raw error would carry the unredacted
+		// message through .Error() into every caller's logs and the API response.
+		return aws.Credentials{}, ierr.NewError(reason).
 			WithHint("Failed to assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID.").
 			Mark(ierr.ErrValidation)
 	}

@@ -187,25 +187,6 @@ func (s *InvoiceSyncService) findOrCreateAutoChargePayment(
 	return newPayment, false, nil
 }
 
-// autoChargeMethodPriority is the order tokens are tried for auto-charge.
-var autoChargeMethodPriority = []types.PaymentMethodType{
-	types.PaymentMethodTypeCard,
-	types.PaymentMethodTypeUPI,
-}
-
-// selectAutoChargeToken finds the first usable token across autoChargeMethodPriority.
-func selectAutoChargeToken(
-	tokens []*interfaces.ProviderPaymentMethod,
-	invoiceTotal decimal.Decimal,
-) (*interfaces.ProviderPaymentMethod, bool) {
-	for _, method := range autoChargeMethodPriority {
-		if token, ok := SelectUsableToken(tokens, method, invoiceTotal); ok {
-			return token, true
-		}
-	}
-	return nil, false
-}
-
 // tryAutoCharge resolves the customer's Razorpay tokens; if a usable token
 // exists it calls executeAutoCharge and returns (true, nil). If token probing
 // fails for any reason it logs and returns (false, nil) so the caller falls
@@ -221,26 +202,14 @@ func (s *InvoiceSyncService) tryAutoCharge(
 		return false, nil
 	}
 
-	razorpayCustomerID, err := s.customerSvc.GetRazorpayCustomerID(ctx, inv.CustomerID)
+	razorpayCustomerID, tokens, err := s.customerSvc.ListConfirmedCustomerTokens(ctx, inv.CustomerID)
 	if err != nil {
-		s.logger.Info(ctx, "failed to resolve Razorpay customer ID, falling through to send invoice",
+		s.logger.Info(ctx, "failed to resolve Razorpay customer tokens, falling through to send invoice",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
 		return false, nil
 	}
 
-	rawTokens, err := s.client.GetCustomerTokens(ctx, razorpayCustomerID)
-	if err != nil {
-		s.logger.Info(ctx, "failed to list customer tokens, falling through to send invoice",
-			"invoice_id", inv.ID, "error", err)
-		return false, nil
-	}
-
-	tokens := lo.FilterMap(rawTokens, func(raw map[string]interface{}, _ int) (*interfaces.ProviderPaymentMethod, bool) {
-		pm, normErr := NormalizeRazorpayToken(raw)
-		return pm, normErr == nil && pm != nil
-	})
-
-	token, ok := selectAutoChargeToken(tokens, inv.AmountRemaining)
+	token, ok := selectAutoChargeToken(tokens, "", inv.AmountRemaining)
 	if !ok {
 		s.logger.Debug(ctx, "no usable token found for any supported method, falling through to send invoice",
 			"invoice_id", inv.ID, "customer_id", inv.CustomerID,

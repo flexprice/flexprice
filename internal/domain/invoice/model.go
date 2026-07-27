@@ -138,6 +138,13 @@ type Invoice struct {
 	types.BaseModel
 }
 
+func (i *Invoice) GetId() string {
+	if i == nil {
+		return ""
+	}
+	return i.ID
+}
+
 // FromEnt converts an ent.Invoice to domain Invoice
 func FromEnt(e *ent.Invoice) *Invoice {
 	if e == nil {

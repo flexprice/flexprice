@@ -352,12 +352,17 @@ func (f *WalletFilter) Validate() error {
 	return f.QueryFilter.Validate()
 }
 
+// WalletMetadataKeyAutoTopup marks wallet transactions / invoices created by auto top-up.
+const WalletMetadataKeyAutoTopup = "auto_topup"
+
 // AutoTopup represents the auto top-up configuration for a wallet
 type AutoTopup struct {
 	Enabled   *bool            `json:"enabled"`
 	Threshold *decimal.Decimal `json:"threshold"`
 	Amount    *decimal.Decimal `json:"amount"`
 	Invoicing *bool            `json:"invoicing"`
+	// Cooldown is an optional cooloff after a successful auto top-up before another may run.
+	Cooldown *Duration `json:"cooldown,omitempty"`
 }
 
 func (a *AutoTopup) Validate() error {
@@ -375,6 +380,9 @@ func (a *AutoTopup) Validate() error {
 		return ierr.NewError("invoicing boolean is required").
 			WithHint("Invoicing boolean is required").
 			Mark(ierr.ErrValidation)
+	}
+	if err := a.Cooldown.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
