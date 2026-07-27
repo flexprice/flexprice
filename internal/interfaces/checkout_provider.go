@@ -17,6 +17,11 @@ type CheckoutProvider interface {
 	// invoice as part of the same authorization. Unsupported providers return an
 	// error marked ierr.ErrNotImplemented.
 	CreateAuthorizationLink(ctx context.Context, req AuthorizationLinkRequest) (*CheckoutProviderResponse, error)
+
+	// TryAutoChargingSavedMethod attempts an off-session charge against a previously
+	// registered instrument. charged=false means no usable method (caller should
+	// fall back to CreateAuthorizationLink). A hard provider error is returned as err.
+	TryAutoChargingSavedMethod(ctx context.Context, req AuthorizationLinkRequest) (resp *CheckoutProviderResponse, charged bool, err error)
 }
 
 // CheckoutProviderRequest is the unified input for all checkout provider adapters.

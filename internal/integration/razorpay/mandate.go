@@ -170,3 +170,46 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: shortURL},
 	}, nil
 }
+
+// TryAutoChargingSavedMethod implements interfaces.CheckoutProvider by delegating
+// to PaymentService.ChargeSavedToken and mapping into CheckoutProviderResponse.
+func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
+	ctx context.Context,
+	req interfaces.AuthorizationLinkRequest,
+) (*interfaces.CheckoutProviderResponse, bool, error) {
+	if a == nil || a.Svc == nil || a.CustomerSvc == nil {
+		return nil, false, nil
+	}
+
+	custResp, err := a.CustomerSvc.GetCustomer(ctx, req.CustomerID)
+	if err != nil || custResp == nil || custResp.Customer == nil {
+		a.Svc.logger.Info(ctx, "checkout auto-charge: failed to load customer, falling back to auth link",
+			"customer_id", req.CustomerID, "error", err)
+		return nil, false, nil
+	}
+
+	result, charged, err := a.Svc.ChargeSavedToken(ctx, ChargeSavedTokenRequest{
+		Customer:           custResp.Customer,
+		InvoiceID:          req.InvoiceID,
+		Amount:             req.Amount,
+		Currency:           req.Currency,
+		FlexPricePaymentID: req.PaymentID,
+		PreferredMethod:    req.PreferredMethod,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if !charged || result == nil {
+		return nil, false, nil
+	}
+
+	sessionID := result.RazorpayOrderID
+	if sessionID == "" {
+		sessionID = result.RazorpayPaymentID
+	}
+	return &interfaces.CheckoutProviderResponse{
+		ProviderSessionID:       sessionID,
+		ProviderPaymentIntentID: result.RazorpayPaymentID,
+		// No NextAction — off-session charge; completion via payment webhook.
+	}, true, nil
+}
