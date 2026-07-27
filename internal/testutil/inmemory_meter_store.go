@@ -219,8 +219,12 @@ func meterFilterFn(ctx context.Context, m *meter.Meter, filter interface{}) bool
 		return false
 	}
 
-	// Apply status filter
-	if f.Status != nil && m.Status != *f.Status {
+	// Apply status filter — empty status mirrors Ent ApplyStatusFilter (published + archived).
+	if f.GetStatus() == "" {
+		if m.Status != types.StatusPublished && m.Status != types.StatusArchived {
+			return false
+		}
+	} else if string(m.Status) != f.GetStatus() {
 		return false
 	}
 

@@ -4988,3 +4988,30 @@ func (s *MeterUsageServiceSuite) TestGetDetailedAnalytics_ForceApplyCommitment_F
 	_, hasEmpty := bySrcFlag[""]
 	s.False(hasEmpty, "with the flag the commitment LI must not also emit a Source=\"\" row: %v", bySrcFlag)
 }
+
+// TestConvertToBillingCharges_NilMeter: prices can expand without a meter
+// (deleted/missing meter). ConvertToBillingCharges must not panic and must
+// still emit a charge with empty MeterDisplayName.
+func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NilMeter() {
+	ctx := s.GetContext()
+
+	usage := &SubscriptionMeterUsage{
+		Subscription: s.sub,
+		LineItemUsages: []*LineItemMeterUsage{
+			{
+				LineItem: &subscription.SubscriptionLineItem{ID: "li_orphan_meter"},
+				MeterID:  "meter_missing",
+				Meter:    nil,
+				Price:    s.priceAPI,
+				Usage:    decimal.NewFromInt(10),
+			},
+		},
+	}
+
+	charges, totalCost, err := s.svc.ConvertToBillingCharges(ctx, usage)
+	s.Require().NoError(err)
+	s.Require().Len(charges, 1)
+	s.Equal("", charges[0].MeterDisplayName)
+	s.Equal("meter_missing", charges[0].MeterID)
+	s.True(totalCost.Equal(decimal.NewFromFloat(0.10)), "expected 10 * $0.01, got %s", totalCost)
+}

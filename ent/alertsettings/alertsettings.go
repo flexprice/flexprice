@@ -95,7 +95,7 @@ var (
 // EntityTypeValidator is a validator for the "entity_type" field enum values. It is called by the builders before save.
 func EntityTypeValidator(et types.AlertEntityType) error {
 	switch et {
-	case "wallet", "feature", "subscription", "subscription_line_item", "group":
+	case "wallet", "feature", "subscription", "subscription_line_item", "group", "entitlement_grant":
 		return nil
 	default:
 		return fmt.Errorf("alertsettings: invalid enum value for entity_type field: %q", et)
@@ -105,7 +105,7 @@ func EntityTypeValidator(et types.AlertEntityType) error {
 // ParentEntityTypeValidator is a validator for the "parent_entity_type" field enum values. It is called by the builders before save.
 func ParentEntityTypeValidator(pet types.AlertEntityType) error {
 	switch pet {
-	case "wallet", "feature", "subscription", "subscription_line_item", "group":
+	case "wallet", "feature", "subscription", "subscription_line_item", "group", "entitlement_grant":
 		return nil
 	default:
 		return fmt.Errorf("alertsettings: invalid enum value for parent_entity_type field: %q", pet)

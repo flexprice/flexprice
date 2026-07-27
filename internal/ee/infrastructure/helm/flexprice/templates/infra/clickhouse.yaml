@@ -1,4 +1,18 @@
 {{- if eq .Values.clickhouse.mode "standalone" }}
+{{- if and .Values.clickhouse.namespace (ne .Values.clickhouse.namespace .Release.Namespace) }}
+---
+# Dedicated ClickHouse namespace (created only when clickhouse.namespace is set
+# and differs from the release namespace). resource-policy: keep so `helm
+# uninstall` of the app release never cascades a delete of the CH namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.clickhouse.namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+{{- end }}
 ---
 # Single-replica ClickHouse StatefulSet. No operator required.
 # Service: {{ include "flexprice.fullname" . }}-clickhouse  (ports 8123 HTTP, 9000 native)
@@ -6,7 +20,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "flexprice.fullname" . }}-clickhouse
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "flexprice.clickhouseNamespace" . }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: clickhouse
@@ -99,7 +113,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "flexprice.fullname" . }}-clickhouse
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "flexprice.clickhouseNamespace" . }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: clickhouse
@@ -129,7 +143,7 @@ apiVersion: clickhouse.altinity.com/v1
 kind: ClickHouseInstallation
 metadata:
   name: {{ include "flexprice.fullname" . }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "flexprice.clickhouseNamespace" . }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: clickhouse

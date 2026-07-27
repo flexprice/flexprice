@@ -256,6 +256,28 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			AWSMarketplace: awsMarketplaceSecrets,
 		}
+	case types.SecretProviderGCPMarketplace:
+		gcpMarketplaceSecrets := &types.GCPMarketplaceConnectionSecrets{}
+		if credentialsJSON, ok := metadata["credentials_json"].(string); ok {
+			gcpMarketplaceSecrets.CredentialsJSON = credentialsJSON
+		}
+		return types.ConnectionMetadata{
+			GCPMarketplace: gcpMarketplaceSecrets,
+		}
+	case types.SecretProviderAzureMarketplace:
+		azureMarketplaceSecrets := &types.AzureMarketplaceConnectionSecrets{}
+		if tenantID, ok := metadata["tenant_id"].(string); ok {
+			azureMarketplaceSecrets.TenantID = tenantID
+		}
+		if clientID, ok := metadata["client_id"].(string); ok {
+			azureMarketplaceSecrets.ClientID = clientID
+		}
+		if clientSecret, ok := metadata["client_secret"].(string); ok {
+			azureMarketplaceSecrets.ClientSecret = clientSecret
+		}
+		return types.ConnectionMetadata{
+			AzureMarketplace: azureMarketplaceSecrets,
+		}
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
 		if clientID, ok := metadata["client_id"].(string); ok {

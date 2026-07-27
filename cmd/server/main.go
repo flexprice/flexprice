@@ -13,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
-	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -89,10 +88,6 @@ func main() {
 			// Security
 			security.NewEncryptionService,
 
-			// AWS Marketplace client (also used directly by internal/temporal/registration.go for
-			// the cron activities, which construct it manually rather than via this FX container)
-			awsmarketplace.NewClient,
-
 			// RBAC
 			rbac.NewRBACService,
 
@@ -158,6 +153,7 @@ func main() {
 			repository.NewInvoiceLineItemRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
+			repository.NewEntitlementGrantRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,
@@ -249,6 +245,7 @@ func main() {
 			service.NewInvoiceService,
 			service.NewFeatureService,
 			service.NewEntitlementService,
+			service.NewEntitlementGrantService,
 			service.NewPaymentService,
 			service.NewPaymentProcessorService,
 			service.NewTaskService,

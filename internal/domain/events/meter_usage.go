@@ -25,17 +25,26 @@ type MeterUsage struct {
 }
 
 // MeterUsageQueryParams defines filters for querying the meter_usage table
+// TimeRange is a half-open [Start, End) window.
+type TimeRange struct {
+	Start time.Time
+	End   time.Time
+}
+
 type MeterUsageQueryParams struct {
 	TenantID           string
 	EnvironmentID      string
 	ExternalCustomerID string
 	// ExternalCustomerIDs supports multi-customer queries (e.g. inherited subscriptions)
 	ExternalCustomerIDs []string
-	MeterID             string
-	MeterIDs            []string
-	StartTime           time.Time
-	EndTime             time.Time
-	AggregationType     types.AggregationType
+	MeterID  string
+	MeterIDs []string
+	StartTime time.Time
+	EndTime   time.Time
+	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
+	// OR'd half-open [Start, End) windows — one query for disjoint ranges.
+	TimeRanges      []TimeRange
+	AggregationType types.AggregationType
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
 	// Timezone is the customer's IANA timezone name. See UsageParams.Timezone.
@@ -168,6 +177,11 @@ type MeterUsageRepository interface {
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.
 	GetDistinctMeterIDs(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
+	// GetEarliestUsageTimestamp returns the earliest event timestamp matching the
+	// params' filters within [StartTime, EndTime), or nil when no events match.
+	// Used to anchor entitlement grant windows at the first uncovered usage.
+	GetEarliestUsageTimestamp(ctx context.Context, params *MeterUsageQueryParams) (*time.Time, error)
 
 	// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data
 	GetDetailedAnalytics(ctx context.Context, params *MeterUsageDetailedAnalyticsParams) ([]*MeterUsageDetailedResult, error)

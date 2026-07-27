@@ -233,7 +233,31 @@ Resolve the ClickHouse address (host:port) based on clickhouse.mode.
 {{- else if eq .Values.clickhouse.mode "altinity" -}}
 {{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
 {{- else -}}
-{{- printf "%s-clickhouse:9000" (include "flexprice.fullname" .) }}
+{{- printf "%s:9000" (include "flexprice.clickhouseServiceHost" .) }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Namespace the in-cluster ClickHouse (standalone/altinity) is deployed into.
+Defaults to the release namespace for backward compatibility; set
+clickhouse.namespace to isolate ClickHouse in its own namespace.
+*/}}
+{{- define "flexprice.clickhouseNamespace" -}}
+{{- .Values.clickhouse.namespace | default .Release.Namespace -}}
+{{- end }}
+
+{{/*
+Service host for the standalone ClickHouse. When clickhouse.namespace is set,
+returns the cross-namespace FQDN so consumers in other namespaces (app,
+migration job) resolve it; otherwise the short in-namespace service name
+(zero-diff from previous behavior).
+*/}}
+{{- define "flexprice.clickhouseServiceHost" -}}
+{{- $svc := printf "%s-clickhouse" (include "flexprice.fullname" .) -}}
+{{- if .Values.clickhouse.namespace -}}
+{{- printf "%s.%s.svc.cluster.local" $svc .Values.clickhouse.namespace -}}
+{{- else -}}
+{{- $svc -}}
 {{- end -}}
 {{- end }}
 

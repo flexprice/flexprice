@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -402,4 +403,42 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestValidateRemoveFromGroupedInv
 	err := s.subscriptionService.validateRemoveFromGroupedInvoicingDryRun(ctx, child.ID)
 	require.Error(s.T(), err)
 	require.True(s.T(), ierr.IsValidation(err))
+}
+
+func (s *SubscriptionGroupedInvoicingTestSuite) TestExecuteGroupedInvoicingMembership_PublishesSubscriptionUpdated() {
+	ctx := s.GetContext()
+	cust := s.createTestCustomer()
+
+	parent := s.makeParentSub(cust.ID, baseAnchor, baseAnchor)
+	child := s.makeChildSub(cust.ID, baseAnchor, baseAnchor)
+
+	modSvc := NewSubscriptionModificationService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		SubRepo:                  s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
+		CustomerRepo:             s.GetStores().CustomerRepo,
+		WebhookPublisher:         s.GetWebhookPublisher(),
+	})
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	_, err := modSvc.Execute(ctx, parent.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeGroupedInvoicing,
+		GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{
+			Action:               dto.GroupedInvoicingActionAdd,
+			ParentSubscriptionID: parent.ID,
+			ChildSubscriptionIDs: []string{child.ID},
+		},
+	})
+	require.NoError(s.T(), err)
+
+	updatedCount := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionUpdated {
+			updatedCount++
+		}
+	}
+	// child updated; parent may also be promoted from standalone → parent
+	require.GreaterOrEqual(s.T(), updatedCount, 1)
 }

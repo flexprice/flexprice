@@ -46,7 +46,7 @@ type PaymentService interface {
 type InvoiceService interface {
 	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
-	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (bool, error)
+	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
@@ -129,6 +129,11 @@ type SubscriptionService interface {
 
 	// Meter usage tracking (reads from meter_usage table)
 	GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
+	// GetMeterUsageForSubscription is the data-fed variant of
+	// GetMeterUsageBySubscription: the caller supplies the subscription so no
+	// extra DB fetch happens for it.
+	GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 
 	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)

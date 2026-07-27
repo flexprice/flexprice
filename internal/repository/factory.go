@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -160,6 +161,10 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache)
+}
+
+func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {
+	return entRepo.NewEntitlementGrantRepository(p.EntClient, p.Logger)
 }
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {

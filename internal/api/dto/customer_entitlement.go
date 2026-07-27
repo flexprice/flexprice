@@ -47,7 +47,10 @@ type AggregatedFeature struct {
 	Sources     []*EntitlementSource   `json:"sources"`
 }
 
-// AggregatedEntitlement contains the final calculated entitlement values
+// AggregatedEntitlement contains the final calculated entitlement values.
+//
+// For parallel aggregation, Buckets carries the per-entitlement view — each
+// entry is an independent budget. UsageLimit still reports the sum for legacy display.
 type AggregatedEntitlement struct {
 	IsEnabled        bool                              `json:"is_enabled"`
 	UsageLimit       *int64                            `json:"usage_limit,omitempty"`
@@ -55,6 +58,19 @@ type AggregatedEntitlement struct {
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
 	StaticValues     []string                          `json:"static_values,omitempty"`
 	ConfigValues     []map[string]any                  `json:"config_values,omitempty"`
+	AggregationMode  types.EntitlementAggregationMode  `json:"aggregation_mode,omitempty"`
+	Buckets          []*AggregatedEntitlementBucket    `json:"buckets,omitempty"`
+}
+
+// AggregatedEntitlementBucket is one independent budget within a parallel feature.
+type AggregatedEntitlementBucket struct {
+	EntitlementID      string                             `json:"entitlement_id"`
+	SourceEntityID     string                             `json:"source_entity_id"`
+	UsageLimit         *int64                             `json:"usage_limit,omitempty"`
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty" swaggertype:"string"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
 }
 
 // EntitlementSourceType defines the type of entitlement source

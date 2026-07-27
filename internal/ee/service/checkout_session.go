@@ -179,6 +179,17 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 			}
 		}
 	}
+	// modify_subscription (and other actions) store ids on the session columns.
+	if session.CheckoutPaymentID != nil && *session.CheckoutPaymentID != "" {
+		if err := s.PaymentRepo.Delete(ctx, *session.CheckoutPaymentID); err != nil {
+			s.Logger.Error(ctx, "failed to archive checkout payment", "payment_id", *session.CheckoutPaymentID, "error", err)
+		}
+	}
+	if session.CheckoutInvoiceID != nil && *session.CheckoutInvoiceID != "" {
+		if err := s.InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID); err != nil {
+			s.Logger.Error(ctx, "failed to archive checkout invoice", "invoice_id", *session.CheckoutInvoiceID, "error", err)
+		}
+	}
 
 	// Terminal status depends on whether this is a natural expiry or an error.
 	if reason != nil {
@@ -361,7 +372,7 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		return nil, nil, err
 	}
 
-	skipped, err := invSvc.ComputeInvoice(ctx, invResp.ID, nil)
+	inv, skipped, err := invSvc.ComputeInvoice(ctx, invResp.ID, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -370,8 +381,15 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 			Mark(ierr.ErrValidation)
 	}
 
-	// Re-fetch after compute so invoice amounts are populated on the returned struct.
-	invResp, err = invSvc.GetInvoice(ctx, invResp.ID)
+	// Apply subscription taxes so AmountDue includes tax before payment link creation.
+	// FinalizeInvoice will recalculate taxes idempotently (safe if credits adjust the base).
+	if _, err := invSvc.RecalculateTaxesOnInvoice(ctx, inv); err != nil {
+		return nil, nil, err
+	}
+
+	// Full GetInvoice so the returned response matches the normal invoice API shape
+	// (line items, customer, tax applied, etc.) for downstream checkout fulfillment.
+	invResp, err = invSvc.GetInvoice(ctx, inv.ID)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -50,7 +49,7 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeInheritance:
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
-		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
+		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
@@ -306,255 +305,46 @@ func (s *subscriptionModificationService) previewInheritance(
 
 // ─────────────────────────────────────────────
 // Sub-feature 2: Quantity Change
+// Request (A) + proration (B) + apply/settle in subscription_modification_quantity.go.
 // ─────────────────────────────────────────────
-
-// validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
-// [lineItem.StartDate, lineEnd), where lineEnd is lineItem.EndDate when set, otherwise
-// sub.CurrentPeriodEnd (open-ended line item). Subscription period bounds are validated separately.
-func validateQuantityChangeEffectiveDateWithinLineItemWindow(
-	effectiveDate time.Time,
-	sub *subscription.Subscription,
-	lineItem *subscription.SubscriptionLineItem,
-	lineItemID string,
-) error {
-	if !lineItem.StartDate.IsZero() && effectiveDate.Before(lineItem.StartDate) {
-		return ierr.NewError("effective_date cannot be before the line item start date").
-			WithHint("Set effective_date to a time when the line item is active").
-			WithReportableDetails(map[string]interface{}{
-				"effective_date":  effectiveDate,
-				"line_item_id":    lineItemID,
-				"line_item_start": lineItem.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	lineEnd := sub.CurrentPeriodEnd
-	if !lineItem.EndDate.IsZero() {
-		lineEnd = lineItem.EndDate
-	}
-	if !effectiveDate.Before(lineEnd) {
-		return ierr.NewError("effective_date must be before the line item end date").
-			WithHint("Set effective_date to a time before the line item's active window ends").
-			WithReportableDetails(map[string]interface{}{
-				"effective_date": effectiveDate,
-				"line_item_id":   lineItemID,
-				"line_item_end":  lineEnd,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
 
 func (s *subscriptionModificationService) executeQuantityChange(
 	ctx context.Context,
 	subscriptionID string,
 	params *dto.SubModifyQuantityChangeRequest,
+	checkout *dto.CheckoutParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	// Get subscription with line items
-	sub, _, err := sp.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	quantityChangeReq, err := s.buildQuantityChangeRequest(ctx, subscriptionID, params)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate subscription is active
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		return nil, ierr.NewError("subscription is not active").
-			WithHint("Only active subscriptions can have quantity changes applied").
-			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
-			Mark(ierr.ErrValidation)
-	}
-
-	now := time.Now().UTC()
-	changedLineItems := make([]dto.ChangedLineItem, 0)
-	changedInvoices := make([]dto.ChangedInvoice, 0)
-
-	// itemsForProration accumulates pairs of old/new line items + their effective dates.
-	// It is populated inside the transaction and consumed after it commits.
-	type prorationPair struct {
-		old           *subscription.SubscriptionLineItem
-		new_          *subscription.SubscriptionLineItem
-		effectiveDate time.Time
-	}
-	var itemsForProration []prorationPair
-
-	// Single transaction: end all old line items and create all new ones atomically.
-	// Proration (invoice creation / wallet credits) happens after the transaction commits
-	// because those operations have their own side effects.
-	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		changedLineItems = nil  // reset for safety
-		itemsForProration = nil // reset for safety
-
-		for _, change := range params.LineItems {
-			// Resolve effective date: caller-supplied or now.
-			// Backdating within the current period is allowed (e.g. to backfill a change);
-			// dates before the period start or at/after the period end are rejected.
-			effectiveDate := now
-			if change.EffectiveDate != nil {
-				effectiveDate = change.EffectiveDate.UTC()
-			}
-			if effectiveDate.Before(sub.CurrentPeriodStart) {
-				return ierr.NewError("effective_date cannot be before the current period start").
-					WithHint("Set effective_date to a time within the current billing period").
-					WithReportableDetails(map[string]interface{}{
-						"effective_date":       effectiveDate,
-						"current_period_start": sub.CurrentPeriodStart,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			if !effectiveDate.Before(sub.CurrentPeriodEnd) {
-				return ierr.NewError("effective_date must be before the current period end").
-					WithHint("Set effective_date to a time within the current billing period").
-					WithReportableDetails(map[string]interface{}{
-						"effective_date":     effectiveDate,
-						"current_period_end": sub.CurrentPeriodEnd,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Fetch line item
-			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, change.ID)
-			if err != nil {
-				return err
-			}
-
-			// Validate it belongs to the subscription
-			if lineItem.SubscriptionID != subscriptionID {
-				return ierr.NewError("line item does not belong to subscription").
-					WithHint("The specified line item ID must belong to the given subscription").
-					WithReportableDetails(map[string]interface{}{"line_item_id": change.ID, "subscription_id": subscriptionID}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Validate it is published (active)
-			if lineItem.Status != types.StatusPublished {
-				return ierr.NewError("line item is not active").
-					WithHint("Only published line items can have their quantity changed").
-					WithReportableDetails(map[string]interface{}{"line_item_id": change.ID}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Validate it is a fixed-price item
-			if lineItem.PriceType != types.PRICE_TYPE_FIXED {
-				return ierr.NewError("line item is not a fixed-price item").
-					WithHint("Quantity changes are only supported for fixed-price line items").
-					WithReportableDetails(map[string]interface{}{"line_item_id": change.ID, "price_type": lineItem.PriceType}).
-					Mark(ierr.ErrValidation)
-			}
-
-			if err := validateQuantityChangeEffectiveDateWithinLineItemWindow(effectiveDate, sub, lineItem, change.ID); err != nil {
-				return err
-			}
-
-			// Skip no-op: quantity unchanged avoids unnecessary DB writes and a spurious invoice.
-			if change.Quantity.Equal(lineItem.Quantity) {
-				sp.Logger.Debug(ctx, "skipping quantity change: quantity is unchanged",
-					"line_item_id", change.ID, "quantity", change.Quantity)
-				continue
-			}
-
-			// Capture original end date before mutation (used later for changed_resources).
-			originalEndDate := lineItem.EndDate
-
-			// End the old line item at effective date
-			lineItem.EndDate = effectiveDate
-			if err := sp.SubscriptionLineItemRepo.Update(txCtx, lineItem); err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to end existing line item").
-					Mark(ierr.ErrDatabase)
-			}
-
-			// Create new line item (copy with new quantity)
-			newItem := &subscription.SubscriptionLineItem{
-				ID:                      types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-				SubscriptionID:          lineItem.SubscriptionID,
-				CustomerID:              lineItem.CustomerID,
-				EntityID:                lineItem.EntityID,
-				EntityType:              lineItem.EntityType,
-				PlanDisplayName:         lineItem.PlanDisplayName,
-				PriceID:                 lineItem.PriceID,
-				PriceType:               lineItem.PriceType,
-				MeterID:                 lineItem.MeterID,
-				MeterDisplayName:        lineItem.MeterDisplayName,
-				PriceUnitID:             lineItem.PriceUnitID,
-				PriceUnit:               lineItem.PriceUnit,
-				DisplayName:             lineItem.DisplayName,
-				Quantity:                change.Quantity,
-				Currency:                lineItem.Currency,
-				BillingPeriod:           lineItem.BillingPeriod,
-				BillingPeriodCount:      lineItem.BillingPeriodCount,
-				InvoiceCadence:          lineItem.InvoiceCadence,
-				StartDate:               effectiveDate,
-				CommitmentAmount:        lineItem.CommitmentAmount,
-				CommitmentQuantity:      lineItem.CommitmentQuantity,
-				CommitmentType:          lineItem.CommitmentType,
-				CommitmentOverageFactor: lineItem.CommitmentOverageFactor,
-				CommitmentTrueUpEnabled: lineItem.CommitmentTrueUpEnabled,
-				CommitmentWindowed:      lineItem.CommitmentWindowed,
-				CommitmentDuration:      lineItem.CommitmentDuration,
-				EnvironmentID:           lineItem.EnvironmentID,
-				BaseModel:               types.GetDefaultBaseModel(txCtx),
-			}
-			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
-				return err
-			}
-
-			oldStart := lineItem.StartDate
-			endDate := effectiveDate
-			startDate := effectiveDate
-			// New item runs from effectiveDate until the original item's end (or period end if open-ended).
-			newEndDate := sub.CurrentPeriodEnd
-			if !originalEndDate.IsZero() {
-				newEndDate = originalEndDate
-			}
-			changedLineItems = append(changedLineItems,
-				dto.ChangedLineItem{
-					ID:           lineItem.ID,
-					PriceID:      lineItem.PriceID,
-					Quantity:     lineItem.Quantity,
-					StartDate:    &oldStart,
-					EndDate:      &endDate,
-					ChangeAction: dto.ChangedLineItemActionEnded,
-				},
-				dto.ChangedLineItem{
-					ID:           newItem.ID,
-					PriceID:      newItem.PriceID,
-					Quantity:     newItem.Quantity,
-					StartDate:    &startDate,
-					EndDate:      &newEndDate,
-					ChangeAction: dto.ChangedLineItemActionCreated,
-				},
-			)
-
-			// Collect pairs that need proration (handled after the transaction commits).
-			// ADVANCE items are billed upfront, so any mid-cycle quantity change requires a proration.
-			if lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
-				itemsForProration = append(itemsForProration, prorationPair{old: lineItem, new_: newItem, effectiveDate: effectiveDate})
-			}
-		}
-
-		// Post-transaction: handle proration outside the DB transaction because invoice creation
-		// and wallet top-ups carry their own side effects (payment attempts, credit grants).
-		for _, pair := range itemsForProration {
-			inv, err := s.handleQuantityChangeProration(ctx, sub, pair.old, pair.new_, pair.effectiveDate)
-			if err != nil {
-				return err
-			}
-			if inv != nil {
-				changedInvoices = append(changedInvoices, *inv)
-			}
-		}
-
-		return nil
-	})
+	prorationResult, err := s.calculateProration(ctx, quantityChangeReq)
 	if err != nil {
 		return nil, err
 	}
 
-	// Publish webhook event
+	// Pay-first when checkout is present and the batch nets to a charge
+	// (charges − credits). Mixed upgrade/downgrade LIs are netted into one total.
+	if checkout != nil {
+		if err := checkout.Validate(); err != nil {
+			return nil, err
+		}
+		if prorationResult.GetNetAmount().GreaterThan(decimal.Zero) {
+			return s.settlePayFirst(ctx, quantityChangeReq, prorationResult, checkout)
+		}
+		// checkout + net credit/zero → immediate path (ignore checkout)
+	}
+
+	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
+	if err != nil {
+		return nil, err
+	}
+
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	// Build response
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
@@ -577,126 +367,20 @@ func (s *subscriptionModificationService) previewQuantityChange(
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	// Get subscription with line items
-	sub, _, err := sp.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	quantityChangeReq, err := s.buildQuantityChangeRequest(ctx, subscriptionID, params)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate subscription is active
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		return nil, ierr.NewError("subscription is not active").
-			WithHint("Only active subscriptions can have quantity changes applied").
-			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
-			Mark(ierr.ErrValidation)
+	prorationResult, err := s.calculateProration(ctx, quantityChangeReq)
+	if err != nil {
+		return nil, err
 	}
 
-	now := time.Now().UTC()
-	changedLineItems := make([]dto.ChangedLineItem, 0)
-	changedInvoices := make([]dto.ChangedInvoice, 0)
-
-	for _, change := range params.LineItems {
-		// Resolve effective date: caller-supplied or now.
-		// Must be >= now (no backdating) and before the current period end.
-		effectiveDate := now
-		if change.EffectiveDate != nil {
-			effectiveDate = change.EffectiveDate.UTC()
-		}
-		if effectiveDate.Before(sub.CurrentPeriodStart) {
-			return nil, ierr.NewError("effective_date cannot be before the current period start").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":       effectiveDate,
-					"current_period_start": sub.CurrentPeriodStart,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if !effectiveDate.Before(sub.CurrentPeriodEnd) {
-			return nil, ierr.NewError("effective_date must be before the current period end").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":     effectiveDate,
-					"current_period_end": sub.CurrentPeriodEnd,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, change.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if lineItem.SubscriptionID != subscriptionID {
-			return nil, ierr.NewError("line item does not belong to subscription").
-				WithHint("The specified line item ID must belong to the given subscription").
-				WithReportableDetails(map[string]interface{}{"line_item_id": change.ID, "subscription_id": subscriptionID}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if lineItem.Status != types.StatusPublished {
-			return nil, ierr.NewError("line item is not active").
-				WithHint("Only published line items can have their quantity changed").
-				WithReportableDetails(map[string]interface{}{"line_item_id": change.ID}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if lineItem.PriceType != types.PRICE_TYPE_FIXED {
-			return nil, ierr.NewError("line item is not a fixed-price item").
-				WithHint("Quantity changes are only supported for fixed-price line items").
-				WithReportableDetails(map[string]interface{}{"line_item_id": change.ID, "price_type": lineItem.PriceType}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := validateQuantityChangeEffectiveDateWithinLineItemWindow(effectiveDate, sub, lineItem, change.ID); err != nil {
-			return nil, err
-		}
-
-		// Skip no-op: same quantity as current.
-		if change.Quantity.Equal(lineItem.Quantity) {
-			continue
-		}
-
-		oldStart := lineItem.StartDate
-		endDate := effectiveDate
-		startDate := effectiveDate
-		// New item runs from effectiveDate until the old item's end (or period end if open-ended).
-		newEndDate := sub.CurrentPeriodEnd
-		if !lineItem.EndDate.IsZero() {
-			newEndDate = lineItem.EndDate
-		}
-		changedLineItems = append(changedLineItems,
-			dto.ChangedLineItem{
-				ID:           "(preview-ended)",
-				PriceID:      lineItem.PriceID,
-				Quantity:     lineItem.Quantity,
-				StartDate:    &oldStart,
-				EndDate:      &endDate,
-				ChangeAction: dto.ChangedLineItemActionEnded,
-			},
-			dto.ChangedLineItem{
-				ID:           "(preview-created)",
-				PriceID:      lineItem.PriceID,
-				Quantity:     change.Quantity,
-				StartDate:    &startDate,
-				EndDate:      &newEndDate,
-				ChangeAction: dto.ChangedLineItemActionCreated,
-			},
-		)
-
-		// Preview proration for ADVANCE items — calculate only, do NOT create invoices or wallet credits.
-		// Always preview for ADVANCE items regardless of proration_behavior (same reasoning as execute).
-		if lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
-			previewNewItem := &subscription.SubscriptionLineItem{
-				PriceID:  lineItem.PriceID,
-				Quantity: change.Quantity,
-			}
-			inv, err := s.previewQuantityChangeProration(ctx, sub, lineItem, previewNewItem, effectiveDate)
-			if err != nil {
-				sp.Logger.Info(context.Background(), "failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
-			} else if inv != nil {
-				changedInvoices = append(changedInvoices, *inv)
-			}
-		}
+	changedLineItems := quantityChangeReq.previewChangedLineItems()
+	changedInvoices, err := s.toPreviewChangedInvoices(ctx, quantityChangeReq.GetSubscription(), prorationResult)
+	if err != nil {
+		return nil, err
 	}
 
 	subSvc := NewSubscriptionService(sp)
@@ -714,152 +398,53 @@ func (s *subscriptionModificationService) previewQuantityChange(
 	}, nil
 }
 
-// handleQuantityChangeProration handles the proration logic for quantity changes on in-advance line items.
-func (s *subscriptionModificationService) handleQuantityChangeProration(
+// toPreviewChangedInvoices maps Module B calc results to synthetic ChangedInvoice entries.
+func (s *subscriptionModificationService) toPreviewChangedInvoices(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	oldItem *subscription.SubscriptionLineItem,
-	newItem *subscription.SubscriptionLineItem,
-	effectiveDate time.Time,
-) (*dto.ChangedInvoice, error) {
-	sp := s.serviceParams
-	prorationSvc := NewProrationService(sp)
-	priceSvc := NewPriceService(sp)
-
-	price, err := priceSvc.GetPrice(ctx, oldItem.PriceID)
-	if err != nil {
-		return nil, err
-	}
-
-	customerTimezone := sub.Timezone
-	if customerTimezone == "" {
-		customerTimezone = types.DefaultTimezone
-	}
-
-	prorationParams := proration.ProrationParams{
-		SubscriptionID:     sub.ID,
-		LineItemID:         oldItem.ID,
-		PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
-		Action:             types.ProrationActionQuantityChange,
-		NewPriceID:         newItem.PriceID,
-		OldQuantity:        oldItem.Quantity,
-		NewQuantity:        newItem.Quantity,
-		NewPricePerUnit:    price.Price.Amount,
-		OldPricePerUnit:    price.Price.Amount,
-		ProrationDate:      effectiveDate,
-		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-		ProrationStrategy:  types.StrategySecondBased,
-		Currency:           sub.Currency,
-		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:           customerTimezone,
-	}
-
-	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.NetAmount.IsZero() {
+	prorationResult *quantityChangeProration,
+) ([]dto.ChangedInvoice, error) {
+	if sub == nil || prorationResult == nil {
 		return nil, nil
 	}
-
-	if result.NetAmount.GreaterThan(decimal.Zero) {
-		// Upgrade: create a delta-only invoice for exactly the prorated amount (Stripe-style).
-		// We do NOT re-bill the full remaining period — only the incremental charge.
-		invoiceSvc := NewInvoiceService(sp)
-		periodEnd := sub.CurrentPeriodEnd
-		billingPeriod := string(sub.BillingPeriod)
-		billingCustomer := sub.GetInvoicingCustomerID()
-
-		// Build a descriptive line item for the delta charge.
-		qtyDelta := newItem.Quantity.Sub(oldItem.Quantity)
-		displayName := fmt.Sprintf("%s — Quantity Change Proration (%s – %s)",
-			oldItem.DisplayName,
-			effectiveDate.Format("2 Jan 2006"),
-			periodEnd.Format("2 Jan 2006"))
-		priceID := oldItem.PriceID
-		priceType := string(price.Price.Type)
-		planDisplayName := oldItem.PlanDisplayName
-		lineItemDescription := fmt.Sprintf("Proration for quantity change: %s → %s units × %s %s/unit (%s – %s)",
-			oldItem.Quantity.String(), newItem.Quantity.String(),
-			strings.ToUpper(sub.Currency), price.Price.Amount.String(),
-			effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
-		lineItems := []dto.CreateInvoiceLineItemRequest{
-			{
-				PriceID:         &priceID,
-				PriceType:       &priceType,
-				PlanDisplayName: &planDisplayName,
-				DisplayName:     &displayName,
-				Amount:          result.NetAmount,
-				Quantity:        qtyDelta,
-				PeriodStart:     &effectiveDate,
-				PeriodEnd:       &periodEnd,
-				Metadata:        types.Metadata{"description": lineItemDescription},
-			},
+	out := make([]dto.ChangedInvoice, 0, len(prorationResult.getItems()))
+	for _, item := range prorationResult.getItems() {
+		if item == nil {
+			continue
 		}
-
-		// Use InvoiceTypeOneOff so ComputeInvoice uses the explicit delta amount rather
-		// than recomputing from the subscription's (now-updated) line items.
-		// SubscriptionID is set for reference/traceability only.
-		inv, err := invoiceSvc.CreateInvoice(ctx, dto.CreateInvoiceRequest{
-			CustomerID:     billingCustomer,
-			SubscriptionID: &sub.ID,
-			InvoiceType:    types.InvoiceTypeOneOff,
-			Currency:       sub.Currency,
-			BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
-			AmountDue:      result.NetAmount,
-			Total:          result.NetAmount,
-			Subtotal:       result.NetAmount,
-			PeriodStart:    &effectiveDate,
-			PeriodEnd:      &periodEnd,
-			BillingPeriod:  &billingPeriod,
-			LineItems:      lineItems,
-		})
+		mod := item.getMod()
+		oldItem := mod.getOldLineItem()
+		price := item.getPrice()
+		netAmount := item.getNetAmount()
+		if mod == nil || oldItem == nil || price == nil || netAmount.IsZero() {
+			continue
+		}
+		newItem := &subscription.SubscriptionLineItem{
+			PriceID:  oldItem.PriceID,
+			Quantity: mod.getQuantity(),
+		}
+		if netAmount.GreaterThan(decimal.Zero) {
+			invResp := previewProrationQuantityChangeInvoiceResponse(ctx, sub, oldItem, newItem, mod.getEffectiveDate(), price, netAmount)
+			out = append(out, dto.ChangedInvoice{
+				ID:      "(preview-invoice)",
+				Action:  dto.ChangedInvoiceActionCreated,
+				Status:  dto.ChangedInvoiceStatusPreview,
+				Invoice: invResp,
+			})
+			continue
+		}
+		walletTx, err := s.previewProrationWalletTransactionResponse(ctx, sub, netAmount.Abs())
 		if err != nil {
-			sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
 			return nil, err
 		}
-		// CreateInvoice with InvoiceTypeOneOff already finalizes the invoice internally.
-		// Attempt payment (credits + payment method charge).
-		if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-			sp.Logger.Info(context.Background(), "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
-		}
-		// Re-fetch to get latest payment status after finalize+payment attempt.
-		latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
-		if fetchErr != nil {
-			latest = inv
-		}
-		return &dto.ChangedInvoice{
-			ID:      latest.ID,
-			Action:  dto.ChangedInvoiceActionCreated,
-			Status:  dto.ChangedInvoiceStatusFromPaymentStatus(latest.PaymentStatus),
-			Invoice: latest,
-		}, nil
+		out = append(out, dto.ChangedInvoice{
+			ID:                "(preview-wallet-credit)",
+			Action:            dto.ChangedInvoiceActionWalletCredit,
+			Status:            dto.ChangedInvoiceStatusPreview,
+			WalletTransaction: walletTx,
+		})
 	}
-
-	// Downgrade: wallet credit
-	walletSvc := NewWalletService(sp)
-	creditAmount := result.NetAmount.Abs()
-	billingCustomer := sub.GetInvoicingCustomerID()
-	// Stable idempotency key: prevents duplicate credits if this call is retried.
-	idempotencyKey := fmt.Sprintf("proration_credit_%s_%s_%s", sub.ID, oldItem.ID, effectiveDate.Format(time.RFC3339))
-	walletTx, err := walletSvc.TopUpWalletForProratedCharge(ctx, billingCustomer, creditAmount, sub.Currency, idempotencyKey)
-	if err != nil {
-		sp.Logger.Error(ctx, "failed to top up wallet for downgrade proration", "error", err)
-		return nil, err
-	}
-	changedID := "(wallet_credit)"
-	if walletTx != nil && walletTx.Transaction != nil && walletTx.ID != "" {
-		changedID = walletTx.ID
-	}
-	return &dto.ChangedInvoice{
-		ID:                changedID,
-		Action:            dto.ChangedInvoiceActionWalletCredit,
-		Status:            dto.ChangedInvoiceStatusWalletIssued,
-		WalletTransaction: walletTx,
-	}, nil
+	return out, nil
 }
 
 // previewProrationQuantityChangeInvoiceResponse builds a non-persisted invoice shaped like the execute-path delta invoice.
@@ -998,80 +583,6 @@ func (s *subscriptionModificationService) previewProrationWalletTransactionRespo
 	return dto.FromWalletTransaction(tx), nil
 }
 
-// previewQuantityChangeProration calculates what proration would occur without creating any
-// invoices, wallet credits, or other side effects. Safe to call from the preview endpoint.
-func (s *subscriptionModificationService) previewQuantityChangeProration(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	oldItem *subscription.SubscriptionLineItem,
-	newItem *subscription.SubscriptionLineItem,
-	effectiveDate time.Time,
-) (*dto.ChangedInvoice, error) {
-	sp := s.serviceParams
-	prorationSvc := NewProrationService(sp)
-	priceSvc := NewPriceService(sp)
-
-	price, err := priceSvc.GetPrice(ctx, oldItem.PriceID)
-	if err != nil {
-		return nil, err
-	}
-
-	customerTimezone := sub.Timezone
-	if customerTimezone == "" {
-		customerTimezone = types.DefaultTimezone
-	}
-
-	prorationParams := proration.ProrationParams{
-		SubscriptionID:     sub.ID,
-		LineItemID:         oldItem.ID,
-		PlanPayInAdvance:   price.Price.InvoiceCadence == types.InvoiceCadenceAdvance,
-		CurrentPeriodStart: sub.CurrentPeriodStart,
-		CurrentPeriodEnd:   sub.CurrentPeriodEnd.Add(-time.Second),
-		Action:             types.ProrationActionQuantityChange,
-		NewPriceID:         newItem.PriceID,
-		OldQuantity:        oldItem.Quantity,
-		NewQuantity:        newItem.Quantity,
-		NewPricePerUnit:    price.Price.Amount,
-		OldPricePerUnit:    price.Price.Amount,
-		ProrationDate:      effectiveDate,
-		ProrationBehavior:  types.ProrationBehaviorCreateProrations,
-		ProrationStrategy:  types.StrategySecondBased,
-		Currency:           sub.Currency,
-		PlanDisplayName:    oldItem.PlanDisplayName,
-		Timezone:           customerTimezone,
-	}
-
-	result, err := prorationSvc.CalculateProration(ctx, prorationParams)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.NetAmount.IsZero() {
-		return nil, nil
-	}
-
-	// Return a preview-only ChangedInvoice — no invoice is created, no payment attempted.
-	if result.NetAmount.GreaterThan(decimal.Zero) {
-		invResp := previewProrationQuantityChangeInvoiceResponse(ctx, sub, oldItem, newItem, effectiveDate, price, result.NetAmount)
-		return &dto.ChangedInvoice{
-			ID:      "(preview-invoice)",
-			Action:  dto.ChangedInvoiceActionCreated,
-			Status:  dto.ChangedInvoiceStatusPreview,
-			Invoice: invResp,
-		}, nil
-	}
-	walletTx, err := s.previewProrationWalletTransactionResponse(ctx, sub, result.NetAmount.Abs())
-	if err != nil {
-		return nil, err
-	}
-	return &dto.ChangedInvoice{
-		ID:                "(preview-wallet-credit)",
-		Action:            dto.ChangedInvoiceActionWalletCredit,
-		Status:            dto.ChangedInvoiceStatusPreview,
-		WalletTransaction: walletTx,
-	}, nil
-}
-
 // ─────────────────────────────────────────────
 // Helper methods
 // ─────────────────────────────────────────────
@@ -1079,6 +590,14 @@ func (s *subscriptionModificationService) previewQuantityChangeProration(
 // resolveExternalCustomersForInheritance resolves published customers by external ID and validates
 // they may receive an inherited subscription.
 func (s *subscriptionModificationService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
+	// Drop empty strings and short-circuit on empty input. Without this, the customer
+	// repo's `if len(ExternalIDs) > 0` guard treats an empty slice as "no filter" and,
+	// combined with NewNoLimitCustomerFilter, loads every customer in the tenant/env.
+	externalIDs = lo.Compact(externalIDs)
+	if len(externalIDs) == 0 {
+		return nil, nil
+	}
+
 	// Step 1: fetch all subscription IDs belonging to the parent customer.
 	// These are used to distinguish "already under this parent" (allowed) from
 	// "under a different parent" (blocked).
@@ -1272,6 +791,13 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 // Unlike resolveExternalCustomersForInheritance, this does not require StatusPublished
 // since we are removing (not adding) children.
 func (s *subscriptionModificationService) resolveCustomersByExternalIDs(ctx context.Context, externalIDs []string) ([]string, error) {
+	// Drop empty strings and short-circuit on empty input — see the note on
+	// resolveExternalCustomersForInheritance above.
+	externalIDs = lo.Compact(externalIDs)
+	if len(externalIDs) == 0 {
+		return nil, nil
+	}
+
 	childFilter := types.NewNoLimitCustomerFilter()
 	childFilter.ExternalIDs = externalIDs
 	childFilter.Status = lo.ToPtr(types.StatusPublished)

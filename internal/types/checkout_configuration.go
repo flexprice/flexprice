@@ -9,6 +9,7 @@ import (
 
 type CheckoutConfiguration struct {
 	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
+	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -23,6 +24,13 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.CreateSubscriptionParams.Validate()
+	case CheckoutActionModifySubscription:
+		if c.ModifySubscriptionParams == nil {
+			return ierr.NewError("modify_subscription_params is required for modify_subscription action").
+				WithHint("Provide modify_subscription_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.ModifySubscriptionParams.Validate()
 	}
 	return nil
 }
@@ -69,6 +77,52 @@ func (p *CreateSubscriptionParams) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return nil
+}
+
+// ModifySubscriptionParams is persisted on checkout sessions for payment-gated
+// subscription modifications (e.g. quantity_change). Applied on payment success.
+type ModifySubscriptionParams struct {
+	SubscriptionID        string                       `json:"subscription_id"`
+	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
+}
+
+// ModifySubscriptionLineItem is one close-and-replace intent for a line item.
+type ModifySubscriptionLineItem struct {
+	LineItemID    string          `json:"line_item_id"`
+	Quantity      decimal.Decimal `json:"quantity" swaggertype:"string"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+}
+
+func (p *ModifySubscriptionParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("modify_subscription_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Provide subscription_id in modify_subscription_params").
+			Mark(ierr.ErrValidation)
+	}
+	if len(p.LineItemModifications) == 0 {
+		return ierr.NewError("line_item_modifications is required").
+			WithHint("Provide at least one line_item_modification").
+			Mark(ierr.ErrValidation)
+	}
+	for i, mod := range p.LineItemModifications {
+		if mod.LineItemID == "" {
+			return ierr.NewError("line_item_id is required").
+				WithHint("Each line_item_modification must have a non-empty line_item_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if mod.Quantity.IsNegative() {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
 	return nil
 }
 

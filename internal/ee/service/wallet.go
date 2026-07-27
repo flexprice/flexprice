@@ -603,7 +603,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 				req.BonusCreditsToAdd = lo.ToPtr(resolveBonusCredits(slab, req.CreditsToAdd))
 				// Slab expiry only kicks in if the caller didn't pin an explicit expiry.
 				if req.BonusCreditsExpiryDateUTC == nil {
-					req.BonusCreditsExpiryDateUTC = resolveBonusExpiry(slab, time.Now().UTC())
+					req.BonusCreditsExpiryDateUTC = types.ResolveCreditsExpiry(slab.ExpirationDuration, slab.ExpirationDurationUnit, time.Now().UTC())
 				}
 			}
 		}
@@ -736,29 +736,6 @@ func resolveBonusCredits(slab *types.BonusCreditsSlab, creditsToAdd decimal.Deci
 	default:
 		return decimal.Zero
 	}
-}
-
-// resolveBonusExpiry computes the bonus tx expiry from a matched slab (now + duration).
-// Returns nil when the slab omits the duration config (bonus never expires).
-func resolveBonusExpiry(slab *types.BonusCreditsSlab, now time.Time) *time.Time {
-	if slab.ExpirationDuration == nil || slab.ExpirationDurationUnit == nil {
-		return nil
-	}
-	duration := *slab.ExpirationDuration
-	var expiry time.Time
-	switch *slab.ExpirationDurationUnit {
-	case types.CreditGrantExpiryDurationUnitDays:
-		expiry = now.Add(time.Duration(duration) * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitWeeks:
-		expiry = now.Add(time.Duration(duration) * 7 * 24 * time.Hour)
-	case types.CreditGrantExpiryDurationUnitMonths:
-		expiry = now.AddDate(0, duration, 0)
-	case types.CreditGrantExpiryDurationUnitYears:
-		expiry = now.AddDate(duration, 0, 0)
-	default:
-		return nil
-	}
-	return &expiry
 }
 
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
@@ -1577,6 +1554,13 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 		}
 		if req.AutoTopup.Invoicing != nil {
 			current.Invoicing = req.AutoTopup.Invoicing
+		}
+		if req.AutoTopup.Cooldown != nil {
+			if req.AutoTopup.Cooldown.IsEmpty() {
+				current.Cooldown = nil
+			} else {
+				current.Cooldown = req.AutoTopup.Cooldown
+			}
 		}
 		existing.AutoTopup = current
 	}
@@ -3651,6 +3635,19 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	return len(invoices) > 0, nil
 }
 
+func (s *walletService) isWithinAutoTopupCooldown(w *wallet.Wallet, last *wallet.Transaction) (bool, error) {
+	if w.AutoTopup == nil || !w.AutoTopup.Cooldown.IsSet() || last == nil {
+		return false, nil
+	}
+
+	cooldown, err := w.AutoTopup.Cooldown.ToDuration()
+	if err != nil {
+		return false, err
+	}
+
+	return time.Now().UTC().Before(last.CreatedAt.Add(cooldown)), nil
+}
+
 // triggerAutoTopup checks if auto top-up is enabled and triggers it if needed.
 //
 // autoTopupIdempotencyKey, when non-empty, is used verbatim as the TopUpWallet
@@ -3695,6 +3692,38 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			}
 		}
 
+		lastAutoTopup, err := s.WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, w.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to get last auto-topup wallet transaction",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+			return err
+		}
+		if lastAutoTopup != nil && lastAutoTopup.TxStatus == types.TransactionStatusPending {
+			s.Logger.Info(ctx, "pending auto-topup wallet transaction exists, skipping",
+				"wallet_id", w.ID,
+				"auto_topup_threshold", *w.AutoTopup.Threshold,
+			)
+			return nil
+		}
+
+		withinCooldown, err := s.isWithinAutoTopupCooldown(w, lastAutoTopup)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to check auto-topup cooloff",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+			return err
+		}
+		if withinCooldown {
+			s.Logger.Info(ctx, "auto-topup cooloff active, skipping",
+				"wallet_id", w.ID,
+				"auto_topup_threshold", *w.AutoTopup.Threshold,
+			)
+			return nil
+		}
+
 		transactionReason := lo.Ternary(isInvoiced,
 			types.TransactionReasonPurchasedCreditInvoiced,
 			types.TransactionReasonPurchasedCreditDirect,
@@ -3708,14 +3737,14 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 		if idempotencyKey == "" {
 			idempotencyKey = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)
 		}
-		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+		_, err = s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
 			CreditsToAdd:      *w.AutoTopup.Amount,
 			Amount:            *w.AutoTopup.Amount,
 			TransactionReason: transactionReason,
 			BillingReason:     billingReason,
 			IdempotencyKey:    lo.ToPtr(idempotencyKey),
 			Description:       "Auto top-up triggered for low ongoing balance",
-			Metadata:          types.Metadata{"auto_topup": "true"},
+			Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
 		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to top up wallet for auto top-up",

@@ -35,6 +35,7 @@ func (s *EntitlementServiceSuite) setupService() {
 		Config:           s.GetConfig(),
 		DB:               s.GetDB(),
 		EntitlementRepo:  stores.EntitlementRepo,
+		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		PlanRepo:         stores.PlanRepo,
 		FeatureRepo:      stores.FeatureRepo,
 		MeterRepo:        testutil.NewInMemoryMeterStore(),
@@ -863,9 +864,18 @@ func (s *EntitlementServiceSuite) TestConfigEntitlement() {
 	})
 
 	s.Run("Create config entitlement without config_value is allowed", func() {
+		// Own feature: only one published entitlement per (plan, feature).
+		configFeature2 := &feature.Feature{
+			ID:        "feat-config-2",
+			Name:      "Config Feature 2",
+			Type:      types.FeatureTypeConfig,
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		}
+		s.NoError(s.GetStores().FeatureRepo.Create(s.GetContext(), configFeature2))
+
 		req := dto.CreateEntitlementRequest{
 			PlanID:      testPlan.ID,
-			FeatureID:   configFeature.ID,
+			FeatureID:   configFeature2.ID,
 			FeatureType: types.FeatureTypeConfig,
 			IsEnabled:   true,
 		}

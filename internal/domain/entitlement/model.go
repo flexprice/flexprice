@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // Entitlement represents the benefits a customer gets from a subscription plan
@@ -28,7 +29,33 @@ type Entitlement struct {
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
+
+	// Grant config; all-or-nothing set (see validateGrantConfig). Presence of a
+	// grant config turns the entitlement into a time-boxed bucket source.
+	GrantMeasure       types.EntitlementGrantMeasure      `json:"grant_measure,omitempty"`
+	GrantDurationValue *int                               `json:"grant_duration_value,omitempty"`
+	GrantDurationUnit  types.EntitlementGrantDurationUnit `json:"grant_duration_unit,omitempty"`
+	GrantQuota         *decimal.Decimal                   `json:"grant_quota,omitempty"`
+	AggregationMode    types.EntitlementAggregationMode   `json:"aggregation_mode,omitempty"`
+
 	types.BaseModel
+}
+
+// HasGrantConfig reports whether this entitlement carries a grant config and
+// therefore rolls into entitlement_grants.
+func (e *Entitlement) HasGrantConfig() bool {
+	if e == nil {
+		return false
+	}
+	return e.GrantQuota != nil || e.GrantDurationValue != nil || e.GrantMeasure != "" || e.GrantDurationUnit != ""
+}
+
+func (e *Entitlement) GrantDuration() (time.Duration, error) {
+	if e == nil || e.GrantDurationValue == nil {
+		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
+			Mark(ierr.ErrValidation)
+	}
+	return types.EntitlementGrantDurationOf(*e.GrantDurationValue, e.GrantDurationUnit)
 }
 
 // EntitlementCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
@@ -125,6 +152,65 @@ func (e *Entitlement) Validate() error {
 		}
 	}
 
+	if err := e.validateGrantConfig(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateGrantConfig enforces coherence on the grant fields: either none are
+// set (legacy entitlement) or the full measure/duration/quota set is present on
+// a metered feature. Meter-shape and pricing-shape checks live in the service layer.
+func (e *Entitlement) validateGrantConfig() error {
+	if err := e.AggregationMode.Validate(); err != nil {
+		return err
+	}
+
+	if !e.HasGrantConfig() {
+		if e.AggregationMode == types.EntitlementAggregationModeParallel {
+			return ierr.NewError("aggregation_mode=parallel requires a grant config").
+				WithHint("Parallel buckets only exist for grant-based entitlements; legacy entitlements always aggregate additively").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
+	}
+
+	if e.FeatureType != types.FeatureTypeMetered {
+		return ierr.NewError("grant config requires a metered feature").
+			WithReportableDetails(map[string]interface{}{"feature_type": e.FeatureType}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := e.GrantMeasure.Validate(); err != nil {
+		return err
+	}
+	if e.GrantMeasure == "" {
+		return ierr.NewError("grant_measure is required for grant-based entitlements").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := e.GrantDurationUnit.Validate(); err != nil {
+		return err
+	}
+	dur, err := e.GrantDuration()
+	if err != nil {
+		return err
+	}
+	if dur < types.EntitlementGrantMinDuration {
+		return ierr.NewError("grant_duration must be at least 1 hour").
+			WithReportableDetails(map[string]interface{}{
+				"grant_duration_value": e.GrantDurationValue,
+				"grant_duration_unit":  e.GrantDurationUnit,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
+		return ierr.NewError("grant_quota must be positive for grant-based entitlements").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
@@ -151,6 +237,11 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		ParentEntitlementID: e.ParentEntitlementID,
 		StartDate:           e.StartDate,
 		EndDate:             e.EndDate,
+		GrantMeasure:        e.GrantMeasure,
+		GrantDurationValue:  e.GrantDurationValue,
+		GrantDurationUnit:   e.GrantDurationUnit,
+		GrantQuota:          e.GrantQuota,
+		AggregationMode:     e.AggregationMode,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

@@ -50,6 +50,8 @@ type Tx struct {
 	Customer *CustomerClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
+	// EntitlementGrant is the client for interacting with the EntitlementGrant builders.
+	EntitlementGrant *EntitlementGrantClient
 	// EntityIntegrationMapping is the client for interacting with the EntityIntegrationMapping builders.
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
@@ -269,6 +271,7 @@ func (tx *Tx) init() {
 	tx.CreditNoteLineItem = NewCreditNoteLineItemClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
+	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)

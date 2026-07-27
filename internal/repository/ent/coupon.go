@@ -499,7 +499,7 @@ func (o CouponQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Co
 
 func (o CouponQueryOptions) ApplyStatusFilter(query CouponQuery, status string) CouponQuery {
 	if status == "" {
-		return query.Where(coupon.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(coupon.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(coupon.Status(status))
 }

@@ -428,7 +428,7 @@ func (o AddonQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Add
 
 func (o AddonQueryOptions) ApplyStatusFilter(query AddonQuery, status string) AddonQuery {
 	if status == "" {
-		return query.Where(addon.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(addon.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(addon.Status(status))
 }

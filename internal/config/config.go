@@ -54,6 +54,7 @@ type Configuration struct {
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -70,6 +71,11 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+	Onboarding                 OnboardingConfig                 `mapstructure:"onboarding" validate:"omitempty"`
+}
+
+type OnboardingConfig struct {
+	DefaultTenantName string `mapstructure:"default_tenant_name" validate:"omitempty" default:"Flexprice"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -119,10 +125,11 @@ type FlexpriceS3ExportsConfig struct {
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
 }
 
-// MarketplaceConfig groups Flexprice's own credentials for each marketplace it reports usage to.
-// AWS is the only one implemented today; Azure and GCP would be added as sibling fields.
+// MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports
+// usage to. Azure would be added as a further sibling field.
 type MarketplaceConfig struct {
 	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+	GCP GCPMarketplaceConfig `mapstructure:"gcp" validate:"omitempty"`
 }
 
 // AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
@@ -142,6 +149,22 @@ type AWSMarketplaceConfig struct {
 	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
 	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
 	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
+}
+
+// GCPMarketplaceConfig holds the two values Flexprice renders into the tenant-facing Workload
+// Identity Federation setup script (design doc FLE-981 §5.3, step 2's --account-id and
+// --attribute-condition). Unlike AWSMarketplaceConfig, these are not credentials: authenticating to
+// GCP happens ambiently, via the AWS identity attached to the worker process's own runtime
+// environment (the credentials JSON a tenant generates hard-codes a real EC2/ECS instance-metadata
+// endpoint for Google's client library to fetch that identity from — see the GCP client package
+// doc comment for the full explanation). This is a different identity from AWSMarketplaceConfig's
+// static caller credentials above (which sign AssumeRole calls for AWS Marketplace) — it names the
+// ambient instance role the worker actually runs as, purely so the WIF setup script we hand tenants
+// trusts the right principal. FlexpriceAWSAccountID/RoleName only need to be *correct*, i.e. matching
+// that role.
+type GCPMarketplaceConfig struct {
+	FlexpriceAWSAccountID string `mapstructure:"flexprice_aws_account_id" validate:"omitempty"`
+	FlexpriceAWSRoleName  string `mapstructure:"flexprice_aws_role_name" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {
@@ -498,12 +521,23 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
 
-	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
-	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
-	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
-	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
-	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
+// UsageAlertsConfig controls the usage-driven alert pipeline end to end:
+// meter-usage post-insert schedules a debounced per-customer Temporal workflow
+// which evaluates spend, entitlement-grant, and wallet alerts.
+type UsageAlertsConfig struct {
+	// Enabled routes post-insert alerting through the debounced Temporal
+	// workflow instead of the Kafka wallet-alert path and inline spend-breach check.
+	Enabled bool `mapstructure:"enabled" default:"false"`
+	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
+	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
+	// StaleAfter bounds staleness on both queues: a workflow run firing more
+	// than this past its intended time yields once (ContinueAsNew) to the back
+	// of the queue so fresher customers evaluate first, and each activity's
+	// ScheduleToStartTimeout is set to the same value.
+	StaleAfter time.Duration `mapstructure:"stale_after" default:"1h"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -671,8 +705,21 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
+	// auths the data nodes; SentinelUsername/Password auth the sentinels.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
