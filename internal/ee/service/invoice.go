@@ -26,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -72,6 +73,15 @@ type InvoiceService interface {
 	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
+
+	// ListSubscriptionsDueForDailyDraftCompute returns active, published subscriptions across
+	// every tenant×environment where draft_invoice_recompute_config.enabled is true. Used by
+	// the daily draft-and-compute cron job (never by the API path). onTenantEnvScanned is
+	// invoked once per enabled tenant×environment finished scanning, purely so the caller (the
+	// Temporal activity) can heartbeat during a scan that might otherwise run long with no
+	// other progress signal — this method itself stays Temporal-agnostic. Pass nil if you
+	// don't need it.
+	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context, onTenantEnvScanned func()) ([]*subscription.Subscription, error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 
@@ -1096,6 +1106,83 @@ func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSi
 		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
 	}
 	return s.InvoiceRepo.ListAllTenant(ctx, filter)
+}
+
+// ListSubscriptionsDueForDailyDraftCompute returns active, published subscriptions across every
+// tenant×environment where draft_invoice_recompute_config.enabled is true, with valid current
+// period bounds. A malformed config for one tenant×env is logged and skipped, not fatal to the
+// whole scan; a listing failure for one tenant×env is logged and skipped the same way — no
+// single tenant's problem should ever abort the daily run for everyone else.
+func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
+	ctx context.Context, onTenantEnvScanned func(),
+) ([]*subscription.Subscription, error) {
+	if onTenantEnvScanned == nil {
+		onTenantEnvScanned = func() {}
+	}
+
+	tenantEnvConfigs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	const batchSize = 1000
+	var due []*subscription.Subscription
+
+	for _, tenantEnvConfig := range tenantEnvConfigs {
+		cfg, err := utils.ToStruct[types.DraftInvoiceRecomputeConfig](tenantEnvConfig.Config)
+		if err != nil {
+			s.Logger.Warn(ctx, "skipping tenant with malformed draft_invoice_recompute_config",
+				"tenant_id", tenantEnvConfig.TenantID,
+				"environment_id", tenantEnvConfig.EnvironmentID,
+				"error", err)
+			continue
+		}
+		if !cfg.Enabled {
+			continue
+		}
+
+		tenantCtx := types.SetTenantID(ctx, tenantEnvConfig.TenantID)
+		tenantCtx = types.SetEnvironmentID(tenantCtx, tenantEnvConfig.EnvironmentID)
+
+		offset := 0
+		for {
+			filter := &types.SubscriptionFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(batchSize),
+					Offset: lo.ToPtr(offset),
+					Status: lo.ToPtr(types.StatusPublished),
+				},
+				SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			}
+			subs, err := s.SubRepo.List(tenantCtx, filter)
+			if err != nil {
+				s.Logger.Error(ctx, "failed to list subscriptions for daily draft-and-compute",
+					"tenant_id", tenantEnvConfig.TenantID,
+					"environment_id", tenantEnvConfig.EnvironmentID,
+					"error", err)
+				break
+			}
+			if len(subs) == 0 {
+				break
+			}
+
+			for _, sub := range subs {
+				if sub.CurrentPeriodStart.IsZero() || sub.CurrentPeriodEnd.IsZero() {
+					continue
+				}
+				due = append(due, sub)
+			}
+
+			if len(subs) < batchSize {
+				break
+			}
+			offset += batchSize
+		}
+
+		onTenantEnvScanned()
+	}
+
+	return due, nil
 }
 
 // updateMetadata merges the request metadata with the existing invoice metadata.
