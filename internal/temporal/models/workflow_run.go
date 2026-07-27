@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 )
 
@@ -59,6 +60,14 @@ type StartWorkflowOptions struct {
 
 	// StartDelay is the delay before starting the workflow
 	StartDelay time.Duration
+
+	// WorkflowIDReusePolicy controls whether a new run may start under this ID when a
+	// previous run with the same ID already reached a terminal state. Zero value
+	// (WORKFLOW_ID_REUSE_POLICY_UNSPECIFIED) reproduces today's behavior for every existing
+	// caller — none of them set this field. Only set REJECT_DUPLICATE when the ID is a
+	// deterministic, caller-supplied dedupe key (e.g. day-stamped); an ID that's always
+	// freshly generated has no need for it.
+	WorkflowIDReusePolicy enumspb.WorkflowIdReusePolicy
 }
 
 // ToSDKOptions converts StartWorkflowOptions to Temporal SDK client.StartWorkflowOptions
@@ -69,6 +78,7 @@ func (o *StartWorkflowOptions) ToSDKOptions() client.StartWorkflowOptions {
 		WorkflowExecutionTimeout: o.WorkflowExecutionTimeout,
 		WorkflowRunTimeout:       o.WorkflowRunTimeout,
 		WorkflowTaskTimeout:      o.WorkflowTaskTimeout,
+		WorkflowIDReusePolicy:    o.WorkflowIDReusePolicy,
 	}
 
 	if o.StartDelay.Seconds() > 0 {
