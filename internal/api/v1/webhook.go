@@ -1221,12 +1221,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 	c.Request = c.Request.WithContext(ctx)
 
-	var event whopwebhook.WhopWebhookEvent
-	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Error(ctx, "failed to parse Whop webhook payload", "error", err)
-		return
-	}
-
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get Whop integration", "error", err)
@@ -1244,17 +1238,21 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	hasWebhookSecretConfigured := conn.EncryptedSecretData.Whop != nil &&
 		conn.EncryptedSecretData.Whop.WebhookSecret != ""
 
-	// Verify X-Whop-Signature if configured (same optional-secret pattern as Moyasar)
+	// Verify the signature on the raw body if configured (same optional-secret
+	// pattern as Moyasar), before the payload is parsed, so a forged/malformed
+	// payload is never unmarshaled ahead of authentication.
 	if hasWebhookSecretConfigured {
-		signature := c.GetHeader("X-Whop-Signature")
-		if signature == "" {
-			h.logger.Info(ctx, "Whop webhook secret configured but X-Whop-Signature header missing - rejecting request",
+		webhookID := c.GetHeader("webhook-id")
+		timestamp := c.GetHeader("webhook-timestamp")
+		signature := c.GetHeader("webhook-signature")
+		if webhookID == "" || timestamp == "" || signature == "" {
+			h.logger.Info(ctx, "Whop webhook secret configured but signature headers missing - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
 			return
 		}
 
-		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
+		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, webhookID, timestamp, signature); err != nil {
 			h.logger.Info(ctx, "Whop webhook signature verification failed - rejecting request",
 				"error", err,
 				"tenant_id", tenantID,
@@ -1271,6 +1269,12 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		h.logger.Info(ctx, "Whop webhook received without secret verification",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
+	}
+
+	var event whopwebhook.WhopWebhookEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		h.logger.Error(ctx, "failed to parse Whop webhook payload", "error", err)
+		return
 	}
 
 	h.logger.Info(ctx, "received Whop webhook",

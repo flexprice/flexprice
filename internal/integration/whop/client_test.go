@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -15,6 +17,19 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
+
+// signWhopPayload signs payload per Whop's Standard Webhooks scheme, mirroring
+// VerifyWebhookSignature: HMAC-SHA256("{id}.{timestamp}.{body}") keyed by the
+// base64-decoded secret, base64-encoded, prefixed with the "v1," version tag.
+func signWhopPayload(secret, webhookID, timestamp string, payload []byte) string {
+	key, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		panic(err)
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(fmt.Sprintf("%s.%s.%s", webhookID, timestamp, payload)))
+	return "v1," + base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
 
 // fakeConnectionRepo is a minimal in-memory connection.Repository implementation
 // scoped to this test file. We can't use internal/testutil here — it imports
@@ -156,29 +171,44 @@ func testCtx() context.Context {
 	return ctx
 }
 
+// testWebhookSecretB64 mimics the base64-encoded secret Whop issues from its
+// dashboard (the raw bytes here are arbitrary).
+var testWebhookSecretB64 = base64.StdEncoding.EncodeToString([]byte("test_webhook_secret"))
+
 func TestVerifyWebhookSignature_ValidSignature(t *testing.T) {
-	secret := "test_webhook_secret"
 	payload := []byte(`{"type":"payment.succeeded","data":{}}`)
+	webhookID := "msg_test123"
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	validSig := signWhopPayload(testWebhookSecretB64, webhookID, timestamp, payload)
 
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(payload)
-	validSig := hex.EncodeToString(mac.Sum(nil))
-
-	client, conn := newTestWhopClientWithSecret(t, secret)
-	err := client.VerifyWebhookSignature(testCtx(), payload, validSig)
+	client, conn := newTestWhopClientWithSecret(t, testWebhookSecretB64)
+	err := client.VerifyWebhookSignature(testCtx(), payload, webhookID, timestamp, validSig)
 	require.NoError(t, err)
 	_ = conn
 }
 
 func TestVerifyWebhookSignature_InvalidSignature(t *testing.T) {
-	client, _ := newTestWhopClientWithSecret(t, "test_webhook_secret")
-	err := client.VerifyWebhookSignature(testCtx(), []byte(`{"type":"payment.succeeded"}`), "deadbeef")
+	client, _ := newTestWhopClientWithSecret(t, testWebhookSecretB64)
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	err := client.VerifyWebhookSignature(testCtx(), []byte(`{"type":"payment.succeeded"}`), "msg_test123", timestamp, "v1,deadbeef")
 	require.Error(t, err)
 }
 
 func TestVerifyWebhookSignature_MissingSignatureHeader(t *testing.T) {
-	client, _ := newTestWhopClientWithSecret(t, "test_webhook_secret")
-	err := client.VerifyWebhookSignature(testCtx(), []byte(`{}`), "")
+	client, _ := newTestWhopClientWithSecret(t, testWebhookSecretB64)
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	err := client.VerifyWebhookSignature(testCtx(), []byte(`{}`), "msg_test123", timestamp, "")
+	require.Error(t, err)
+}
+
+func TestVerifyWebhookSignature_StaleTimestampRejected(t *testing.T) {
+	client, _ := newTestWhopClientWithSecret(t, testWebhookSecretB64)
+	payload := []byte(`{"type":"payment.succeeded"}`)
+	webhookID := "msg_test123"
+	staleTimestamp := fmt.Sprintf("%d", time.Now().Add(-10*time.Minute).Unix())
+	sig := signWhopPayload(testWebhookSecretB64, webhookID, staleTimestamp, payload)
+
+	err := client.VerifyWebhookSignature(testCtx(), payload, webhookID, staleTimestamp, sig)
 	require.Error(t, err)
 }
 
@@ -186,11 +216,11 @@ func TestVerifyWebhookSignature_MissingConfiguredSecret(t *testing.T) {
 	client, _ := newTestWhopClientWithSecret(t, "")
 
 	payload := []byte(`{"type":"payment.succeeded"}`)
-	mac := hmac.New(sha256.New, []byte("irrelevant"))
-	mac.Write(payload)
-	sig := hex.EncodeToString(mac.Sum(nil))
+	webhookID := "msg_test123"
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	sig := signWhopPayload(testWebhookSecretB64, webhookID, timestamp, payload)
 
-	err := client.VerifyWebhookSignature(testCtx(), payload, sig)
+	err := client.VerifyWebhookSignature(testCtx(), payload, webhookID, timestamp, sig)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not configured")
 }
