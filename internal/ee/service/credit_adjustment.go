@@ -603,7 +603,7 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 	defer func() { _ = lock.Release(ctx) }()
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
-	skipped, err := invoiceService.ComputeInvoice(ctx, inv.ID, nil)
+	inv, skipped, err := invoiceService.ComputeInvoice(ctx, inv.ID, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -613,10 +613,6 @@ func (s *creditAdjustmentService) consumeExpiringCreditIntoInvoice(ctx context.C
 	}
 
 	// Reload after compute so Subtotal/discounts/tax match what we net prepaid against.
-	inv, err = s.InvoiceRepo.Get(ctx, inv.ID)
-	if err != nil {
-		return decimal.Zero, err
-	}
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
 		return decimal.Zero, ierr.NewError("invoice is not draft").
 			WithHint("Only draft invoices can be consumed into").

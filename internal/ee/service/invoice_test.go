@@ -2438,7 +2438,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_HonorsPre
 
 	// First real compute: establishes Subtotal ($50 fixed + $50 usage = $100) from actual
 	// subscription/usage data, with no credits involved yet.
-	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
@@ -2476,7 +2476,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_HonorsPre
 
 	// Recompute again - simulating an unrelated recompute trigger (support tool, /compute endpoint,
 	// another pre-expiry pass, etc.) that is NOT part of the pre-expiry consumption's own call chain.
-	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
@@ -2513,7 +2513,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroAutho
 	sub, periodStart, periodEnd := s.setupRecomputeCreditFixture("zero", 4) // usage line = 4 * $5 = $20
 	draft := s.createRecomputeDraftInvoice(sub, periodStart, periodEnd)
 
-	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
@@ -2524,7 +2524,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroAutho
 	s.True(first.AmountDue.Equal(first.Subtotal))
 
 	// Recompute again with no authority ever set - a no-op for Total/AmountDue.
-	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
@@ -2548,7 +2548,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroCeili
 	sub, periodStart, periodEnd := s.setupRecomputeCreditFixture("zeroceiling", 10) // usage line = 10 * $5 = $50
 	draft := s.createRecomputeDraftInvoice(sub, periodStart, periodEnd)
 
-	skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err := s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
@@ -2581,7 +2581,7 @@ func (s *InvoiceServiceSuite) TestComputeInvoice_SubscriptionRecompute_ZeroCeili
 	// positive ($50) and the invoice is not short-circuited into Skipped.
 	s.eventRepo.Clear()
 
-	skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
+	_, skipped, err = s.service.ComputeInvoice(ctx, draft.ID, nil)
 	s.NoError(err)
 	s.False(skipped)
 
