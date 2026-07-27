@@ -26,6 +26,17 @@ func NewCustomerActivities(serviceParams service.ServiceParams, logger *logger.L
 	}
 }
 
+// scopedCtx sets tenancy identity and forces every DB read/write onto the
+// writer. Customer onboarding runs create→wallet→subscription as separate
+// Temporal activities; automatic per-activity writer pinning does not cover
+// reading entities written by a prior activity under replica lag.
+func scopedCtx(ctx context.Context, tenantID, environmentID, userID string) context.Context {
+	ctx = types.SetTenantID(ctx, tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	ctx = types.SetUserID(ctx, userID)
+	return types.WithForceWriter(ctx)
+}
+
 // CreateCustomerActivity creates a customer based on external ID from the event.
 // Idempotent: if a customer with this external_id already exists, returns the existing customer.
 func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input models.CreateCustomerActivityInput) (*models.CreateCustomerActivityResult, error) {
@@ -37,10 +48,7 @@ func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input m
 		return nil, err
 	}
 
-	// Set tenant_id, environment_id, and user_id in context
-	ctx = types.SetTenantID(ctx, input.TenantID)
-	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
-	ctx = types.SetUserID(ctx, input.UserID)
+	ctx = scopedCtx(ctx, input.TenantID, input.EnvironmentID, input.UserID)
 
 	customerService := service.NewCustomerService(a.serviceParams)
 
@@ -101,10 +109,7 @@ func (a *CustomerActivities) CreateWalletActivity(ctx context.Context, input mod
 		return nil, err
 	}
 
-	// Set tenant_id, environment_id, and user_id in context for proper BaseModel creation
-	ctx = types.SetTenantID(ctx, input.TenantID)
-	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
-	ctx = types.SetUserID(ctx, input.UserID)
+	ctx = scopedCtx(ctx, input.TenantID, input.EnvironmentID, input.UserID)
 
 	// Create wallet service
 	walletService := service.NewWalletService(a.serviceParams)
@@ -165,10 +170,7 @@ func (a *CustomerActivities) CreateSubscriptionActivity(ctx context.Context, inp
 	// Now safe to log plan_id after validation
 	logger.Info("Starting CreateSubscriptionActivity", "customer_id", input.CustomerID, "plan_id", input.SubscriptionConfig.PlanID)
 
-	// Set tenant_id, environment_id, and user_id in context for proper BaseModel creation
-	ctx = types.SetTenantID(ctx, input.TenantID)
-	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
-	ctx = types.SetUserID(ctx, input.UserID)
+	ctx = scopedCtx(ctx, input.TenantID, input.EnvironmentID, input.UserID)
 
 	// Get price information for currency
 	priceService := service.NewPriceService(a.serviceParams)

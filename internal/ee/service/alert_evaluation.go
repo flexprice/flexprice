@@ -313,9 +313,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			errs = append(errs, err)
 		}
 
-		// Record the quota exhaustion timestamp, once per grant. Same >= as the
-		// exhausted flip below: once quota is fully consumed, every later unit
-		// is overage, so exhausted ⟺ crossing set.
+		// Record the quota exhaustion timestamp, once per grant.
 		// NOTE: this is the EVALUATION time, not the exact crossing time.
 		// finding that exactly needs extra ClickHouse queries (binary search on the
 		// running usage). Billing only charges usage AFTER this timestamp, so
