@@ -37,6 +37,7 @@ type InvoiceService interface {
 	// Additional methods specific to this service
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
+	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
@@ -342,6 +343,24 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	return dto.NewInvoiceResponse(inv), nil
+}
+
+func (s *invoiceService) CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error) {
+	draftResp, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+	if err != nil {
+		return nil, false, err
+	}
+
+	computeReq := req.ToComputeRequest()
+	inv, skipped, err := s.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	if err != nil {
+		return nil, false, err
+	}
+	if skipped {
+		return dto.NewInvoiceResponse(inv), true, nil
+	}
+
+	return dto.NewInvoiceResponse(inv), false, nil
 }
 
 // CreateDraftInvoiceForSubscription creates a zero-dollar draft invoice without line items for a subscription period.

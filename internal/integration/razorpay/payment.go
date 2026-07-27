@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -33,6 +34,16 @@ type AutoChargeResult struct {
 	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
 	RazorpayOrderID   string // Razorpay order_xxx — always populated when a new or existing order was resolved
 	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
+}
+
+// ChargeSavedTokenRequest is the input for PaymentService.ChargeSavedToken.
+type ChargeSavedTokenRequest struct {
+	Customer           *customer.Customer
+	InvoiceID          string
+	Amount             decimal.Decimal
+	Currency           string
+	FlexPricePaymentID string
+	PreferredMethod    types.PaymentMethodType // empty = Card then UPI
 }
 
 // PaymentLinkStatus captures the fields the FlexPrice sync path needs from a
@@ -768,6 +779,88 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 		}
 	}
 	return ""
+}
+
+// selectAutoChargeToken finds the first usable token. When preferred is set only
+// that method is tried; otherwise Card then UPI.
+func selectAutoChargeToken(
+	tokens []*interfaces.ProviderPaymentMethod,
+	preferred types.PaymentMethodType,
+	amount decimal.Decimal,
+) (*interfaces.ProviderPaymentMethod, bool) {
+	priority := []types.PaymentMethodType{
+		types.PaymentMethodTypeCard,
+		types.PaymentMethodTypeUPI,
+	}
+	if preferred != "" {
+		priority = []types.PaymentMethodType{preferred}
+	}
+
+	for _, method := range priority {
+		if token, ok := SelectUsableToken(tokens, method, amount); ok {
+			return token, true
+		}
+	}
+
+	return nil, false
+}
+
+// ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
+// customer and submits AutoCharge.
+func (s *PaymentService) ChargeSavedToken(
+	ctx context.Context,
+	req ChargeSavedTokenRequest,
+) (*AutoChargeResult, bool, error) {
+	if s == nil || req.Customer == nil || req.Customer.ID == "" {
+		return nil, false, nil
+	}
+
+	razorpayCustomerID, tokens, err := s.customerSvc.ListConfirmedCustomerTokens(ctx, req.Customer.ID)
+	if err != nil {
+		s.logger.Info(ctx, "charge saved token: list tokens failed",
+			"customer_id", req.Customer.ID, "invoice_id", req.InvoiceID, "error", err)
+		return nil, false, nil
+	}
+
+	token, ok := selectAutoChargeToken(tokens, req.PreferredMethod, req.Amount)
+	if !ok {
+		s.logger.Info(ctx, "charge saved token: no usable token",
+			"customer_id", req.Customer.ID,
+			"invoice_id", req.InvoiceID,
+			"amount", req.Amount.String(),
+			"preferred_method", req.PreferredMethod,
+			"tokens_inspected", len(tokens))
+		return nil, false, nil
+	}
+
+	var contact string
+	if req.Customer.Contact != nil {
+		contact = *req.Customer.Contact
+	}
+
+	result, err := s.AutoCharge(ctx, AutoChargeRequest{
+		InvoiceID:          req.InvoiceID,
+		RazorpayCustomerID: razorpayCustomerID,
+		TokenID:            token.GatewayMethodID,
+		Amount:             req.Amount,
+		Currency:           req.Currency,
+		FlexPricePaymentID: req.FlexPricePaymentID,
+		Contact:            contact,
+		Email:              req.Customer.Email,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	s.logger.Info(ctx, "charge saved token: submitted",
+		"invoice_id", req.InvoiceID,
+		"token_id", token.GatewayMethodID,
+		"method", token.Method,
+		"razorpay_payment_id", result.RazorpayPaymentID,
+		"already_submitted", result.AlreadySubmitted,
+	)
+
+	return result, true, nil
 }
 
 // AutoCharge submits a server-initiated (off-session) recurring charge against an

@@ -43,6 +43,7 @@ type CheckoutAction string
 const (
 	CheckoutActionCreateSubscription CheckoutAction = "create_subscription"
 	CheckoutActionModifySubscription CheckoutAction = "modify_subscription"
+	CheckoutActionWalletTopup        CheckoutAction = "wallet_topup"
 )
 
 func (a CheckoutAction) String() string { return string(a) }
@@ -51,10 +52,11 @@ func (a CheckoutAction) Validate() error {
 	allowed := []CheckoutAction{
 		CheckoutActionCreateSubscription,
 		CheckoutActionModifySubscription,
+		CheckoutActionWalletTopup,
 	}
 	if a != "" && !lo.Contains(allowed, a) {
 		return ierr.NewError("invalid checkout action").
-			WithHint("Allowed values: create_subscription, modify_subscription").
+			WithHint("Allowed values: create_subscription, modify_subscription, wallet_topup").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -123,17 +125,37 @@ type PaymentAction struct {
 
 type CheckoutSessionFilter struct {
 	*QueryFilter
-	CustomerIDs        []string                  `json:"customer_ids,omitempty"`
-	Actions            []CheckoutAction          `json:"actions,omitempty"`
-	PaymentProviders   []CheckoutPaymentProvider `json:"payment_providers,omitempty"`
-	CheckoutStatuses   []CheckoutStatus          `json:"checkout_statuses,omitempty"`
-	ExpiresAtLT        *time.Time                `json:"expires_at_lt,omitempty"`
-	CheckoutInvoiceIDs []string                  `json:"checkout_invoice_ids,omitempty"`
-	CheckoutPaymentIDs []string                  `json:"checkout_payment_ids,omitempty"`
+	CustomerIDs        []string                      `json:"customer_ids,omitempty"`
+	Actions            []CheckoutAction              `json:"actions,omitempty"`
+	PaymentProviders   []CheckoutPaymentProvider     `json:"payment_providers,omitempty"`
+	CheckoutStatuses   []CheckoutStatus              `json:"checkout_statuses,omitempty"`
+	ExpiresAtLT        *time.Time                    `json:"expires_at_lt,omitempty"`
+	CheckoutInvoiceIDs []string                      `json:"checkout_invoice_ids,omitempty"`
+	CheckoutPaymentIDs []string                      `json:"checkout_payment_ids,omitempty"`
+	Configuration      *CheckoutConfigurationFilter  `json:"configuration,omitempty"`
+}
+
+// CheckoutConfigurationFilter matches fields inside checkout_sessions.configuration
+// JSONB. Each non-empty field is ANDed as a path equality predicate.
+type CheckoutConfigurationFilter struct {
+	WalletID       string `json:"wallet_id,omitempty"`
+	SubscriptionID string `json:"subscription_id,omitempty"`
+}
+
+func (f *CheckoutConfigurationFilter) IsEmpty() bool {
+	return f == nil || (f.WalletID == "" && f.SubscriptionID == "")
 }
 
 func NewDefaultCheckoutSessionFilter() *CheckoutSessionFilter {
 	return &CheckoutSessionFilter{QueryFilter: NewDefaultQueryFilter()}
+}
+
+func (f *CheckoutSessionFilter) GetStatus() string {
+	if f == nil || f.QueryFilter == nil {
+		return ""
+	}
+
+	return f.QueryFilter.GetStatus()
 }
 
 func (f *CheckoutSessionFilter) Validate() error {

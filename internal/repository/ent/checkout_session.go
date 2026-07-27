@@ -5,8 +5,11 @@ import (
 	"errors"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/flexprice/flexprice/ent"
 	entCheckout "github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/predicate"
 	entSchema "github.com/flexprice/flexprice/ent/schema"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -431,6 +434,26 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 	}
 	if len(f.CheckoutPaymentIDs) > 0 {
 		query = query.Where(entCheckout.CheckoutPaymentIDIn(f.CheckoutPaymentIDs...))
+	}
+	if !f.Configuration.IsEmpty() {
+		if f.Configuration.WalletID != "" {
+			query = query.Where(predicate.CheckoutSession(func(s *sql.Selector) {
+				s.Where(sqljson.ValueEQ(
+					entCheckout.FieldConfiguration,
+					f.Configuration.WalletID,
+					sqljson.Path("wallet_topup_params", "wallet_id"),
+				))
+			}))
+		}
+		if f.Configuration.SubscriptionID != "" {
+			query = query.Where(predicate.CheckoutSession(func(s *sql.Selector) {
+				s.Where(sqljson.ValueEQ(
+					entCheckout.FieldConfiguration,
+					f.Configuration.SubscriptionID,
+					sqljson.Path("modify_subscription_params", "subscription_id"),
+				))
+			}))
+		}
 	}
 	return query, nil
 }
