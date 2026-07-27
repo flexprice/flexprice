@@ -24,6 +24,8 @@ type GetCostAnalyticsRequest struct {
 
 	// Expand options - specify which entities to expand
 	Expand []string `json:"expand,omitempty"` // "meter", "price"
+	// Property filters to filter the events by the keys in `properties` field of the event
+	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
 
 	// Pagination
 	Limit  int `json:"limit,omitempty"`
