@@ -2,16 +2,13 @@ package cron
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 )
 
@@ -66,18 +63,10 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 
 		_, err := a.subscriptionService.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
 			subCtx, sub.ID, interfaces.DraftAndComputeOptions{
-				TaskQueue:             types.TemporalTaskQueueBilling,
-				WorkflowID:            dailyDraftAndComputeWorkflowID(sub.ID, input.ReferenceTime),
 				SkipIfAlreadyInvoiced: true,
 			},
 		)
 		if err != nil {
-			var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
-			if errors.As(err, &alreadyStarted) {
-				// Duplicate workflow IDs are expected on retries.
-				result.SkippedCount++
-				continue
-			}
 			log.Error("Failed to trigger daily draft-and-compute for subscription",
 				"subscription_id", sub.ID, "error", err)
 			result.FailedCount++
@@ -90,7 +79,6 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 		"tenant_envs_processed", result.TenantEnvsProcessed,
 		"total_due_subscriptions", result.TotalDueSubscriptions,
 		"triggered", result.TriggeredCount,
-		"skipped", result.SkippedCount,
 		"failed", result.FailedCount)
 
 	if result.FailedCount > 0 {
@@ -98,14 +86,4 @@ func (a *DailyDraftAndComputeActivities) DailyDraftAndComputeActivity(
 	}
 
 	return result, nil
-}
-
-// dailyDraftAndComputeWorkflowID returns a deterministic daily workflow ID.
-func dailyDraftAndComputeWorkflowID(subscriptionID string, referenceTime time.Time) string {
-	return fmt.Sprintf("%s_%s_%s_%s",
-		types.UUID_PREFIX_WORKFLOW,
-		types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
-		subscriptionID,
-		referenceTime.UTC().Format("20060102"),
-	)
 }

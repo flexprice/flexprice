@@ -7,7 +7,7 @@ type DailyDraftAndComputeWorkflowInput struct{}
 
 // DailyDraftAndComputeActivityInput is input for DailyDraftAndComputeActivity.
 type DailyDraftAndComputeActivityInput struct {
-	// ReferenceTime anchors deterministic workflow IDs across retries.
+	// ReferenceTime is the scheduled run's start time, for log correlation.
 	ReferenceTime time.Time `json:"reference_time"`
 }
 
@@ -17,6 +17,5 @@ type DailyDraftAndComputeWorkflowResult struct {
 	TenantEnvsFailed      int `json:"tenant_envs_failed"`
 	TotalDueSubscriptions int `json:"total_due_subscriptions"`
 	TriggeredCount        int `json:"triggered_count"`
-	SkippedCount          int `json:"skipped_count"`
 	FailedCount           int `json:"failed_count"`
 }

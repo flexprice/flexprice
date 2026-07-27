@@ -30,7 +30,6 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	enumspb "go.temporal.io/api/enums/v1"
 )
 
 type SubscriptionService = interfaces.SubscriptionService
@@ -7201,30 +7200,11 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOpti
 			Mark(ierr.ErrInternal)
 	}
 
-	var workflowRun models.WorkflowRun
-	var err error
-	if opts.WorkflowID == "" {
-		workflowRun, err = temporalSvc.ExecuteWorkflow(
-			ctx,
-			types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
-			workflowInput,
-		)
-	} else {
-		startOpts := models.StartWorkflowOptions{
-			ID:                    opts.WorkflowID,
-			TaskQueue:             opts.TaskQueue.String(),
-			WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-		}
-		if startOpts.TaskQueue == "" {
-			startOpts.TaskQueue = types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow.TaskQueueName()
-		}
-		workflowRun, err = temporalSvc.StartWorkflow(
-			ctx,
-			startOpts,
-			types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
-			workflowInput,
-		)
-	}
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
+		workflowInput,
+	)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to trigger draft-and-compute subscription invoice workflow",
 			"error", err,

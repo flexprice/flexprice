@@ -28,7 +28,6 @@ func DailyDraftAndComputeWorkflow(ctx workflow.Context, _ cronModels.DailyDraftA
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	// Keep workflow IDs stable across activity retries.
 	referenceTime, ok := scheduledStartTime(ctx)
 	if !ok {
 		log.Warn("scheduled start time unavailable; falling back to current time for the day-stamp")
@@ -49,7 +48,6 @@ func DailyDraftAndComputeWorkflow(ctx workflow.Context, _ cronModels.DailyDraftA
 		"tenant_envs_processed", result.TenantEnvsProcessed,
 		"total_due_subscriptions", result.TotalDueSubscriptions,
 		"triggered", result.TriggeredCount,
-		"skipped", result.SkippedCount,
 		"failed", result.FailedCount)
 
 	return &result, nil

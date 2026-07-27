@@ -21,8 +21,7 @@ const (
 	TemporalTaskQueueInvoice         TemporalTaskQueue = "invoice"
 	TemporalTaskQueueReprocessEvents TemporalTaskQueue = "events"
 	TemporalTaskQueueCron            TemporalTaskQueue = "cron"
-	// TemporalTaskQueueBilling isolates daily invoice processing.
-	TemporalTaskQueueBilling TemporalTaskQueue = "billing"
+	TemporalTaskQueueBilling         TemporalTaskQueue = "billing"
 )
 
 // String returns the string representation of the task queue

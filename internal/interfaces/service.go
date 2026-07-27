@@ -84,10 +84,6 @@ type RevenueAnalyticsService interface {
 
 // DraftAndComputeOptions configures draft-and-compute workflows.
 type DraftAndComputeOptions struct {
-	// TaskQueue overrides the default queue.
-	TaskQueue types.TemporalTaskQueue
-	// WorkflowID enables deterministic duplicate rejection.
-	WorkflowID string
 	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool
 }

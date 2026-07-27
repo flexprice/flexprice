@@ -1168,12 +1168,9 @@ func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
 				break
 			}
 
-			for _, sub := range subs {
-				if sub.CurrentPeriodStart.IsZero() || sub.CurrentPeriodEnd.IsZero() {
-					continue
-				}
-				due = append(due, sub)
-			}
+			due = append(due, lo.Filter(subs, func(sub *subscription.Subscription, _ int) bool {
+				return !sub.CurrentPeriodStart.IsZero() && !sub.CurrentPeriodEnd.IsZero()
+			})...)
 
 			if len(subs) < batchSize {
 				break
