@@ -26,6 +26,7 @@ const (
 	ScheduleIDCheckoutSessionExpiry                   ScheduleID = "checkout-session-expiry"
 	ScheduleIDMarketplaceUsageSnapshot                ScheduleID = "marketplace-usage-snapshot"
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
+	ScheduleIDDailyDraftAndCompute                    ScheduleID = "daily-draft-and-compute"
 )
 
 // String returns the raw schedule id.
@@ -48,6 +49,10 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDCheckoutSessionExpiry,
 		ScheduleIDMarketplaceUsageSnapshot,
 		ScheduleIDMarketplaceUsageReport,
+		// ScheduleIDDailyDraftAndCompute is intentionally not registered here yet — it's added
+		// together with its AllTemporalScheduleConfigs() entry once the workflow it points to
+		// exists (see internal/temporal/service/schedules.go), keeping
+		// TestAllTemporalScheduleConfigsMatchServerScheduleIDs green at every intermediate step.
 	}
 }
 
@@ -69,8 +74,12 @@ func (id ScheduleID) Validate() error {
 
 // ScheduleConfig is everything needed to create or update one Temporal server schedule.
 type ScheduleConfig struct {
-	ID        ScheduleID
-	Interval  time.Duration
+	ID       ScheduleID
+	Interval time.Duration
+	// Offset is a fixed offset added within each Interval period (e.g. Interval: 24h,
+	// Offset: 2h fires at 02:00 UTC daily — Temporal anchors interval schedules to the
+	// Unix epoch, so this is deterministic and stable across restarts). Zero means no offset.
+	Offset    time.Duration
 	Workflow  interface{}
 	Input     interface{}
 	TaskQueue TemporalTaskQueue
