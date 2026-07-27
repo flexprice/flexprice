@@ -52,9 +52,10 @@ func TestAllTemporalServerScheduleIDs_covers_all_consts(t *testing.T) {
 		ScheduleIDCheckoutSessionExpiry,
 		ScheduleIDMarketplaceUsageReport,
 		ScheduleIDMarketplaceUsageSnapshot,
+		ScheduleIDDailyDraftAndCompute,
 	} {
 		_, ok := seen[c]
 		require.True(t, ok, "const %q must appear in AllTemporalServerScheduleIDs", c)
 	}
-	require.Equal(t, 13, len(ids), "expected thirteen managed server schedule ids")
+	require.Equal(t, 14, len(ids), "expected fourteen managed server schedule ids")
 }

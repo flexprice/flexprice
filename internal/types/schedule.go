@@ -49,10 +49,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDCheckoutSessionExpiry,
 		ScheduleIDMarketplaceUsageSnapshot,
 		ScheduleIDMarketplaceUsageReport,
-		// ScheduleIDDailyDraftAndCompute is intentionally not registered here yet — it's added
-		// together with its AllTemporalScheduleConfigs() entry once the workflow it points to
-		// exists (see internal/temporal/service/schedules.go), keeping
-		// TestAllTemporalScheduleConfigsMatchServerScheduleIDs green at every intermediate step.
+		ScheduleIDDailyDraftAndCompute,
 	}
 }
 
