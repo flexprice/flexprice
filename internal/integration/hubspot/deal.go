@@ -154,6 +154,13 @@ func (s *DealSyncService) SyncLineItemCreated(ctx context.Context, subscriptionI
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		// The HubSpot line item now exists but we couldn't record it locally, so a
+		// Temporal retry would otherwise find no mapping and create a duplicate.
+		// Compensate by deleting the just-created line item so the retry starts clean.
+		if delErr := s.client.DeleteDealLineItem(ctx, resp.ID); delErr != nil && !ierr.IsNotFound(delErr) {
+			s.logger.Error(ctx, "failed to compensate orphaned HubSpot line item after mapping persist failure",
+				"error", delErr, "hubspot_line_item_id", resp.ID, "line_item_id", lineItemID)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to persist HubSpot line item mapping").
 			Mark(ierr.ErrDatabase)
