@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -37,16 +38,15 @@ func NewConsumer(cfg *config.Configuration) (MessageConsumer, error) {
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
 
-		// See internal/pubsub/kafka/consumer.go: JoinGroup on the 100-partition
-		// events topic does not complete within the 60s default, so members time
-		// out mid-join and reconnect forever.
-		saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
-		saramaConfig.Net.ReadTimeout = 300 * time.Second
-
-		// Do not set Rebalance.GroupStrategies here — see the comment in
-		// internal/pubsub/kafka/consumer.go. Services sharing a consumer group must
-		// agree on the assignment protocol, so changing it requires deploying all of
-		// them together via scale-to-0.
+		// Assignment protocol: RoundRobin preferred, Range as the fallback.
+		// Must stay in sync with internal/pubsub/kafka/consumer.go — see the long
+		// comment there. Range is kept as the second entry so members on a new
+		// image can still negotiate with members on an older one during a rolling
+		// deploy; removing it locks out every service that shares the group.
+		saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
+			sarama.BalanceStrategyRoundRobin,
+			sarama.BalanceStrategyRange,
+		}
 	}
 
 	subscriber, err := kafka.NewSubscriber(
