@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -15,6 +16,7 @@ import (
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
 )
 
 // getConnectionIfExists returns the connection for a provider, or nil if none is configured.
@@ -320,6 +322,157 @@ func DispatchSubscriptionVendorSync(
 		SubscriptionID: pl.SubscriptionID,
 		CustomerID:     pl.CustomerID,
 	})
+}
+
+// DispatchHubSpotDealLineItemSync handles subscription.line_item.created/deleted events,
+// replacing the old direct-inline HubSpot trigger that used to fire from deep inside
+// subscription/subscription-line-item service methods (including from inside open DB
+// transactions). eventName distinguishes created vs deleted since both share one payload shape.
+func DispatchHubSpotDealLineItemSync(
+	ctx context.Context,
+	cfg *config.Configuration,
+	connRepo connection.Repository,
+	custRepo customer.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	log *logger.Logger,
+	event *types.WebhookEvent,
+	msgUUID string,
+	eventName types.WebhookEventName,
+) error {
+	if cfg != nil && !cfg.IntegrationEvents.Enabled {
+		return nil
+	}
+
+	var pl webhookDto.InternalSubscriptionLineItemEvent
+	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.LineItemID == "" || pl.SubscriptionID == "" {
+		log.Info(context.Background(), "integration_events: invalid line item event payload, skipping",
+			"message_uuid", msgUUID, "error", err)
+		return nil
+	}
+
+	if pl.PriceType != types.PRICE_TYPE_FIXED {
+		return nil
+	}
+
+	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderHubSpot)
+	if err != nil {
+		return err
+	}
+	if conn == nil || !conn.IsDealOutboundEnabled() {
+		return nil
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return errTemporalUnavailable
+	}
+
+	operation := temporalmodels.HubSpotLineItemSyncOperationCreated
+	if eventName == types.WebhookEventSubscriptionLineItemDeleted {
+		operation = temporalmodels.HubSpotLineItemSyncOperationDeleted
+	}
+
+	if operation == temporalmodels.HubSpotLineItemSyncOperationCreated &&
+		lineItemAlreadySynced(ctx, eimRepo, pl.LineItemID) {
+		log.Info(ctx, "integration_events: line item already synced to HubSpot, skipping",
+			"line_item_id", pl.LineItemID)
+		return nil
+	}
+
+	dealID, err := resolveHubSpotDealID(ctx, eimRepo, custRepo, log, pl.SubscriptionID, pl.CustomerID)
+	if err != nil {
+		log.Error(ctx, "integration_events: failed to resolve HubSpot deal ID",
+			"error", err, "subscription_id", pl.SubscriptionID)
+		return err
+	}
+	if dealID == "" {
+		return nil
+	}
+
+	input := &temporalmodels.HubSpotDealSyncWorkflowInput{
+		SubscriptionID: pl.SubscriptionID,
+		CustomerID:     pl.CustomerID,
+		DealID:         dealID,
+		LineItemID:     pl.LineItemID,
+		Operation:      operation,
+		TenantID:       pl.TenantID,
+		EnvironmentID:  pl.EnvironmentID,
+	}
+	if err := input.Validate(); err != nil {
+		log.Error(ctx, "integration_events: invalid HubSpot deal sync workflow input",
+			"error", err, "line_item_id", pl.LineItemID)
+		return nil
+	}
+
+	return executeWorkflow(ctx, temporalSvc, log, types.TemporalHubSpotDealSyncWorkflow, input, types.SecretProviderHubSpot, pl.LineItemID)
+}
+
+// lineItemAlreadySynced mirrors invoiceAlreadySynced/customerAlreadySynced — a cheap
+// pre-check so a redelivered event doesn't even start a redundant workflow, on top of
+// the idempotency check DealSyncService.SyncLineItemCreated already performs.
+func lineItemAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, lineItemID string) bool {
+	if eimRepo == nil {
+		return false
+	}
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = lineItemID
+	filter.EntityType = types.IntegrationEntityTypeSubscriptionLineItem
+	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
+	count, err := eimRepo.Count(ctx, filter)
+	return err == nil && count > 0
+}
+
+// resolveHubSpotDealID mirrors the subscriptionService method of the same name that used
+// to live in internal/ee/service/subscription.go before this event-driven redesign — moved
+// here since the dispatch layer is now the only caller. Checks for an existing
+// subscription->deal mapping first, falling back to customer.Metadata["hubspot_deal_id"]
+// and backfilling the mapping when found.
+func resolveHubSpotDealID(
+	ctx context.Context,
+	eimRepo entityintegrationmapping.Repository,
+	custRepo customer.Repository,
+	log *logger.Logger,
+	subscriptionID, customerID string,
+) (string, error) {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = subscriptionID
+	filter.EntityType = types.IntegrationEntityTypeSubscription
+	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	mappings, err := eimRepo.List(ctx, filter)
+	if err != nil {
+		return "", fmt.Errorf("looking up HubSpot deal mapping: %w", err)
+	}
+	if len(mappings) > 0 {
+		return mappings[0].ProviderEntityID, nil
+	}
+
+	cust, err := custRepo.Get(ctx, customerID)
+	if err != nil {
+		return "", err
+	}
+	dealID, ok := cust.Metadata["hubspot_deal_id"]
+	if !ok || dealID == "" {
+		return "", nil
+	}
+
+	backfill := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         subscriptionID,
+		EntityType:       types.IntegrationEntityTypeSubscription,
+		ProviderType:     string(types.SecretProviderHubSpot),
+		ProviderEntityID: dealID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	if err := eimRepo.Create(ctx, backfill); err != nil {
+		log.Error(ctx, "integration_events: failed to backfill HubSpot deal mapping, continuing anyway",
+			"error", err, "subscription_id", subscriptionID, "deal_id", dealID)
+		return dealID, nil // backfill is best-effort; still return the resolved ID
+	}
+
+	return dealID, nil
 }
 
 type subscriptionVendorSyncInput struct {
