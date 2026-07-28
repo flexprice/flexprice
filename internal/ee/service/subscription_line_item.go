@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -603,7 +602,14 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			return nil, err
 		}
 
-		s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, newLineItem.ID, newLineItem.PriceType, models.HubSpotLineItemSyncOperationCreated)
+		// Publish both only after the transaction above (delete-old + create-new) has
+		// committed — publishing from inside deleteSubscriptionLineItem or
+		// SubscriptionLineItemRepo.Create would reference line items that could still be
+		// rolled back.
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{existingLineItem}, types.WebhookEventSubscriptionLineItemDeleted)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{newLineItem}, types.WebhookEventSubscriptionLineItemCreated)
 
 		s.Logger.Info(ctx, "updated subscription line item with price overrides",
 			"subscription_id", sub.ID,
