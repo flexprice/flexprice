@@ -10481,7 +10481,7 @@ func (s *SubscriptionServiceSuite) TestPublishLineItemEvents_FiltersToFixedPrice
 		{ID: "li_usage", CustomerID: "cus_1", PriceType: types.PRICE_TYPE_USAGE},
 	}
 
-	svc.publishLineItemEvents(s.GetContext(), types.WebhookEventSubscriptionLineItemCreated, "sub_1", lineItems)
+	svc.publishLineItemEvents(s.GetContext(), "sub_1", lineItems, types.WebhookEventSubscriptionLineItemCreated)
 
 	events := publisher.Events()
 	s.Len(events, 1, "expected exactly 1 published event (FIXED only)")
