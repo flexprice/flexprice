@@ -89,11 +89,41 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		return nil
 	}
 
+	// Batched path: one ClickHouse INSERT per batch downstream. Disabled falls back to one
+	// message per event, leaving the `events` topic and its consumers untouched.
+	if s.config != nil && s.config.Event.BulkPublishEnabled {
+		return s.bulkCreateEventsBatched(ctx, events)
+	}
+
 	// publish events to Kafka for downstream processing
 	for _, event := range events.Events {
 		if err := s.CreateEvent(ctx, event); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// bulkCreateEventsBatched validates every event up front so a bad event fails the request
+// instead of poisoning a batch the consumer would retry whole.
+func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.BulkIngestEventRequest) error {
+	domainEvents := make([]*events.Event, 0, len(req.Events))
+	for _, createEventRequest := range req.Events {
+		if err := createEventRequest.Validate(); err != nil {
+			return err
+		}
+		event := createEventRequest.ToEvent(ctx)
+		createEventRequest.EventID = event.ID
+		domainEvents = append(domainEvents, event)
+	}
+
+	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
+		// Accepted-then-published (202): a broker failure is logged, not surfaced, as in CreateEvent.
+		s.logger.With(
+			"event_count", len(domainEvents),
+			"error", err,
+		).Error("failed to publish event batch")
 	}
 
 	return nil
@@ -149,7 +179,7 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		PriceID:             req.PriceID,
 		MeterID:             req.MeterID,
 		BillingAnchor:       req.BillingAnchor,
-		Timezone:    req.Timezone,
+		Timezone:            req.Timezone,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation

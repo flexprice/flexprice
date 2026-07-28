@@ -40,7 +40,7 @@ func NewEventPublisher(primaryProducer *Producer, secondaryProducer *SecondaryPr
 	}
 	ep := &EventPublisher{
 		logger:     logger,
-		primary:    primaryProducer,   // local cluster is always written
+		primary:    primaryProducer, // local cluster is always written
 		primaryCfg: &cfg.Kafka,
 	}
 	// Presence-based dual-write: a configured second cluster ⇒ also write there.
@@ -113,10 +113,162 @@ func (p *EventPublisher) buildMessage(event *events.Event, payload []byte, parti
 	return msg
 }
 
+// determineBulkTopic resolves the batch topic for one cluster, like determineTopic.
+func determineBulkTopic(kc *config.KafkaConfig) string {
+	if kc == nil {
+		return ""
+	}
+	return kc.TopicBulk
+}
+
 // determineTopic routes to a cluster's lazy or main topic using that cluster's own config.
 func determineTopic(kc *config.KafkaConfig, event *events.Event) string {
 	if slices.Contains(kc.RouteTenantsOnLazyMode, event.TenantID) {
 		return kc.TopicLazy
 	}
 	return kc.Topic
+}
+
+// PublishBatch writes events as batched messages so one message becomes one ClickHouse
+// INSERT downstream, paying the per-INSERT cost once per batch instead of once per event.
+// Events are grouped by tenant and environment only — the envelope carries one of each — and
+// placement is left to sarama's default partitioner, since the producer sets no Kafka key.
+func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event) error {
+	if len(evts) == 0 {
+		return nil
+	}
+
+	if determineBulkTopic(p.primaryCfg) == "" {
+		return ierr.NewError("batch topic is not configured").
+			WithHint("Set kafka.topic_bulk (FLEXPRICE_KAFKA_TOPIC_BULK)").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Bounds come from the local cluster so both clusters get identical payloads.
+	groups, err := groupForBatching(evts, p.primaryCfg)
+	if err != nil {
+		return err
+	}
+
+	var firstErr error
+	for _, g := range groups {
+		payload, err := json.Marshal(events.EventBatch{
+			Events:        g.events,
+			TenantID:      g.tenantID,
+			EnvironmentID: g.environmentID,
+		})
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to marshal event batch").
+				Mark(ierr.ErrValidation)
+		}
+
+		// No single event id to use as the message UUID; dedup still holds because
+		// ClickHouse dedupes on the ids inside the payload.
+		if err := p.publishBatchMessage(ctx, payload, g, len(g.events)); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+type eventGroup struct {
+	tenantID      string
+	environmentID string
+	events        []*events.Event
+}
+
+// groupForBatching buckets events by tenant and environment, then cuts each bucket into size-
+// and byte-bounded batches, measuring bytes as each event marshals. Scope must not be mixed:
+// the envelope carries one tenant/environment for the whole batch.
+func groupForBatching(evts []*events.Event, kc *config.KafkaConfig) ([]eventGroup, error) {
+	maxSize := kc.BulkMaxBatchSize
+	if maxSize <= 0 {
+		maxSize = 1
+	}
+	maxBytes := kc.BulkMaxBatchBytes
+
+	open := make(map[string]*eventGroup)
+	sizes := make(map[string]int)
+	out := make([]eventGroup, 0, len(evts)/maxSize+1)
+
+	for _, e := range evts {
+		if e.ID == "" {
+			e.ID = watermill.NewUUID()
+		}
+		groupKey := e.TenantID + "|" + e.EnvironmentID
+
+		size := 0
+		if maxBytes > 0 {
+			b, err := json.Marshal(e)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithHint("Failed to marshal event for batching").
+					WithReportableDetails(map[string]interface{}{"event_id": e.ID}).
+					Mark(ierr.ErrValidation)
+			}
+			size = len(b)
+		}
+
+		g, ok := open[groupKey]
+		if !ok {
+			g = &eventGroup{tenantID: e.TenantID, environmentID: e.EnvironmentID}
+			open[groupKey] = g
+		}
+
+		// Close before breaching either bound. An event larger than maxBytes still goes out
+		// alone, so an over-limit event surfaces as a broker rejection rather than silence.
+		overSize := len(g.events)+1 > maxSize
+		overBytes := maxBytes > 0 && len(g.events) > 0 && sizes[groupKey]+size > maxBytes
+		if overSize || overBytes {
+			out = append(out, *g)
+			g = &eventGroup{tenantID: e.TenantID, environmentID: e.EnvironmentID}
+			open[groupKey] = g
+			sizes[groupKey] = 0
+		}
+
+		g.events = append(g.events, e)
+		sizes[groupKey] += size
+	}
+
+	for _, g := range open {
+		if len(g.events) > 0 {
+			out = append(out, *g)
+		}
+	}
+	return out, nil
+}
+
+// publishBatchMessage writes one batch to every cluster, resolving the topic per cluster as
+// Publish does — topic names need not match across clusters.
+func (p *EventPublisher) publishBatchMessage(ctx context.Context, payload []byte, g eventGroup, count int) error {
+	msg := message.NewMessage(watermill.NewUUID(), payload)
+	msg.Metadata.Set("tenant_id", g.tenantID)
+	msg.Metadata.Set("environment_id", g.environmentID)
+	msg.Metadata.Set("batch_size", fmt.Sprintf("%d", count))
+
+	var firstErr error
+	if err := p.primary.Publish(determineBulkTopic(p.primaryCfg), msg); err != nil {
+		p.logBatchFailure(ctx, "primary", g, count, err)
+		firstErr = err
+	}
+	if p.secondary != nil {
+		if err := p.secondary.Publish(determineBulkTopic(p.secondaryCfg), msg); err != nil {
+			p.logBatchFailure(ctx, "secondary", g, count, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (p *EventPublisher) logBatchFailure(ctx context.Context, cluster string, g eventGroup, count int, err error) {
+	p.logger.Ctx(ctx).With(
+		"cluster", cluster,
+		"tenant_id", g.tenantID,
+		"environment_id", g.environmentID,
+		"batch_size", count,
+		"error", err,
+	).Error("kafka batch publish failed")
 }
