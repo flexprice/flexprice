@@ -502,14 +502,14 @@ raw_event_consumption:
 # Reuses the raw_event_consumption topic; the metadata filter keeps Bento
 # batches on their own path (RawEventConsumptionService).
 bulk_event_consumption:
-  enabled: true
+  enabled: false
   topic: "staging_events_bulk"
   rate_limit: 10
   consumer_group: "v1_bulk_event_consumption"
   topic_dlq: "staging_events_bulk_dlq"
 
 bulk_meter_usage_tracking:
-  enabled: true
+  enabled: false
   topic: "staging_events_bulk"
   rate_limit: 10
   consumer_group: "v1_bulk_meter_usage_tracking"
