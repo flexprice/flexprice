@@ -483,7 +483,8 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
 
-	if filter.GetLimit() == 0 {
+	isUnlimited := filter.IsUnlimited()
+	if !isUnlimited && filter.GetLimit() <= 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
@@ -498,9 +499,12 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		return nil, err
 	}
 
-	count, err := s.EntitlementRepo.Count(ctx, filter)
-	if err != nil {
-		return nil, err
+	count := len(entitlements)
+	if !isUnlimited {
+		count, err = s.EntitlementRepo.Count(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	response := &dto.ListEntitlementsResponse{
@@ -538,16 +542,15 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 
 		if filter.GetExpand().Has(types.ExpandMeters) {
-			// Collect meter IDs
-			meterIDs := []string{}
+			meterIDs := make([]string, 0, len(featuresByID))
 			for _, f := range featuresByID {
-				meterIDs = append(meterIDs, f.MeterID)
+				if f.MeterID != "" {
+					meterIDs = append(meterIDs, f.MeterID)
+				}
 			}
 
 			if len(meterIDs) > 0 {
-				meterFilter := types.NewNoLimitMeterFilter()
-				meterFilter.MeterIDs = meterIDs
-				meters, err := s.MeterRepo.List(ctx, meterFilter)
+				meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 				if err != nil {
 					return nil, err
 				}

@@ -189,6 +189,7 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 // @Security ApiKeyAuth
 // @x-scope "read"
 // @Param external_id path string true "Customer External ID"
+// @Param expand query string false "Comma-separated fields to expand: subscription_line_items, subscription_line_items.meters, entitlements, plan, customer"
 // @Success 200 {object} dto.ListSubscriptionsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
@@ -203,7 +204,7 @@ func (h *SubscriptionHandler) GetSubscriptionsForCustomer(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetSubscriptionsForCustomer(c.Request.Context(), externalID)
+	resp, err := h.service.GetSubscriptionsForCustomer(c.Request.Context(), externalID, types.NewExpand(c.Query("expand")))
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to get subscriptions for customer", "error", err, "external_id", externalID)
 		c.Error(err)

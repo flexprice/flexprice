@@ -88,6 +88,17 @@ var (
 		},
 	}
 
+	SubscriptionsForCustomerExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandSubscriptionLineItems, ExpandEntitlements},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandSubscriptionLineItems: {ExpandMeters},
+			ExpandMeters:                {},
+			ExpandEntitlements:          {},
+			ExpandPlan:                  {},
+			ExpandCustomer:              {},
+		},
+	}
+
 	// EntitlementExpandConfig defines what can be expanded on an entitlement
 	EntitlementExpandConfig = ExpandConfig{
 		AllowedFields: []ExpandableField{ExpandFeatures},

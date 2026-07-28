@@ -567,9 +567,12 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		return nil, err
 	}
 
-	priceCount, err := s.PriceRepo.Count(ctx, filter)
-	if err != nil {
-		return nil, err
+	priceCount := len(prices)
+	if !filter.IsUnlimited() {
+		priceCount, err = s.PriceRepo.Count(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Build response

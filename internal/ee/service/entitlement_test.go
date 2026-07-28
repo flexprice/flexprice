@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -1104,13 +1105,13 @@ func (s *EntitlementServiceSuite) TestGetPlanEntitlements_CachesByPlanID() {
 	}
 	s.NoError(s.GetStores().FeatureRepo.Create(ctx, extraFeature))
 	_, err = s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
-		ID:         "ent-cache-extra",
-		EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN,
-		EntityID:   testPlan.ID,
-		FeatureID:  extraFeature.ID,
+		ID:          "ent-cache-extra",
+		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:    testPlan.ID,
+		FeatureID:   extraFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
-		IsEnabled:  true,
-		BaseModel:  types.GetDefaultBaseModel(ctx),
+		IsEnabled:   true,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
 	})
 	s.NoError(err)
 
@@ -1136,4 +1137,56 @@ func (s *EntitlementServiceSuite) TestGetPlanEntitlements_CachesByPlanID() {
 	afterInvalidate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
 	s.NoError(err)
 	s.Greater(len(afterInvalidate.Items), 1, "cache must be invalidated after CreateEntitlement")
+}
+
+// A no-limit filter must survive ListEntitlements' limit normalization. GetLimit()
+// returns 0 for unlimited filters, so a naive `GetLimit() == 0` check would clobber the
+// filter with the default page size and silently truncate the result set.
+func (s *EntitlementServiceSuite) TestListEntitlements_NoLimitFilterIsNotTruncated() {
+	ctx := s.GetContext()
+
+	const total = 75 // deliberately above types.GetDefaultFilter().Limit (50)
+
+	testPlan := &plan.Plan{
+		ID:        "plan-no-limit",
+		Name:      "No Limit Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, testPlan))
+
+	for i := 0; i < total; i++ {
+		f := &feature.Feature{
+			ID:        fmt.Sprintf("feat-no-limit-%d", i),
+			Name:      fmt.Sprintf("Feature %d", i),
+			Type:      types.FeatureTypeBoolean,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+
+		_, err := s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
+			ID:          fmt.Sprintf("ent-no-limit-%d", i),
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+			EntityID:    testPlan.ID,
+			FeatureID:   f.ID,
+			FeatureType: types.FeatureTypeBoolean,
+			IsEnabled:   true,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		})
+		s.NoError(err)
+	}
+
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithEntityIDs([]string{testPlan.ID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
+	filter.WithStatus(types.StatusPublished)
+
+	resp, err := s.service.ListEntitlements(ctx, filter)
+	s.NoError(err)
+	s.Len(resp.Items, total, "no-limit filter must return every entitlement, not just the default page")
+
+	// Total comes from len(items) rather than a COUNT query when the filter is unlimited.
+	s.Equal(total, resp.Pagination.Total)
+
+	// The caller's filter must not be mutated into a limited one.
+	s.True(filter.IsUnlimited(), "ListEntitlements must not clobber a no-limit filter")
 }

@@ -174,9 +174,12 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		return nil, err
 	}
 
-	count, err := s.AddonRepo.Count(ctx, filter)
-	if err != nil {
-		return nil, err
+	count := len(result)
+	if !filter.IsUnlimited() {
+		count, err = s.AddonRepo.Count(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	items := lo.Map(result, func(addon *addon.Addon, _ int) *dto.AddonResponse {
@@ -432,9 +435,12 @@ func (s *addonService) ListAddonAssociations(ctx context.Context, filter *types.
 		return nil, err
 	}
 
-	count, err := s.AddonAssociationRepo.Count(ctx, filter)
-	if err != nil {
-		return nil, err
+	count := len(associations)
+	if !filter.IsUnlimited() {
+		count, err = s.AddonAssociationRepo.Count(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	resp := &dto.ListAddonAssociationsResponse{

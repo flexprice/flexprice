@@ -351,6 +351,14 @@ type SubscriptionFilter struct {
 	// line item loading (set to false). The service layer ORs this with the
 	// expand check before invoking the repository.
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
+
+	// WithCouponAssociations eager-loads coupon associations and their coupons.
+	//
+	// Kept separate from WithLineItems because the coupon_associations table has no
+	// index leading with subscription_id, so Ent's edge load degrades to a full table
+	// scan. Only set it when the response actually surfaces the associations; the
+	// service layer back-fills it from expand="coupon_associations".
+	WithCouponAssociations bool `json:"with_coupon_associations,omitempty" form:"with_coupon_associations"`
 }
 
 // NewSubscriptionFilter creates a new SubscriptionFilter with default values
