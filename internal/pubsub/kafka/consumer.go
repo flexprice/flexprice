@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -38,35 +37,44 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
 
-		// Assignment protocol: RoundRobin preferred, Range as the fallback.
+		// JoinGroup on the events topic does not finish inside the 60s default.
 		//
-		// GroupStrategies is a priority-ordered list. Kafka requires every member
-		// of a group to agree on one protocol, and the coordinator selects the
-		// highest entry that ALL members advertise. Keeping Range as the second
-		// entry is what makes this safe to roll out incrementally: members on the
-		// new image advertise [roundrobin, range] and still negotiate range with
-		// members on an older image, so no one is locked out mid-deploy.
+		// Sarama sends this value as JoinGroupRequest.RebalanceTimeout
+		// (consumer_group.go:431) and waits that long for the coordinator's
+		// response. The events topic has 100 partitions and tens of millions of
+		// messages of committed-offset state, so with dozens of members the
+		// coordinator does not answer in time. Production showed the read failing
+		// at exactly 60s — errors 60.008s apart, all "read tcp ...:9096: i/o
+		// timeout" — after which the member reconnects and retries forever. The
+		// group ends up with one or two members holding every partition while the
+		// rest loop, and the small-topic groups those same processes join stay
+		// fully populated.
 		//
-		// Dropping Range from this list — or replacing it with a single strategy
-		// that other members do not advertise — makes the odd service out fail
-		// every join with:
+		// Net.ReadTimeout is raised alongside it: at its 30s default it would clip
+		// the same response before the rebalance timeout could apply.
+		saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
+		saramaConfig.Net.ReadTimeout = 300 * time.Second
+
+		// DO NOT set Consumer.Group.Rebalance.GroupStrategies here without
+		// deploying every service that shares a consumer group at the same time.
+		//
+		// The web-consumer and the split main-consumer both join
+		// system_events, onboarding_events and integration-events. Kafka requires
+		// all members of a group to agree on the assignment protocol, so if one
+		// service runs Sticky and the other the Range default, the odd one out
+		// fails every join with:
 		//
 		//   kafka server: The provider group protocol type is incompatible
 		//   with the other members
 		//
 		// It presents as a group stuck Empty or PreparingRebalance with 0
 		// partitions owned while the tasks look healthy and loop
-		// Starting consuming -> Consuming done. A single-strategy Sticky rollout
-		// hit exactly this in production (2026-07-28) and left meter-usage unable
-		// to join its own group.
+		// Starting consuming -> Consuming done. A rolling deploy cannot cross
+		// this boundary; both services need scale-to-0 and back.
 		//
-		// The web-consumer, the split main-consumer, the API and the temporal
-		// worker all run this same binary and share consumer groups, so RoundRobin
-		// only becomes active once every one of them is on an image carrying it.
-		saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
-			sarama.BalanceStrategyRoundRobin,
-			sarama.BalanceStrategyRange,
-		}
+		// A Sticky rollout hit exactly this in production (2026-07-28) and left
+		// meter-usage unable to join its own group. Range (the Sarama default) is
+		// used deliberately.
 	}
 
 	subscriber, err := kafka.NewSubscriber(
