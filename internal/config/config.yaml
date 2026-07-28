@@ -385,10 +385,16 @@ meter_usage_tracking:
   # Struct `default:` tags are NOT applied at runtime — defaults live here (see
   # the bindEnvs comment in config.go). Omitting these keys leaves them at the Go
   # zero value, and insert_batch_size: 0 silently disables batching entirely.
-  # 1 disables batching (one INSERT per message).
-  insert_batch_size: 500
+  #
+  # Default 1 = one INSERT per message, the long-standing behaviour. Batching is
+  # opt-in per deployment via FLEXPRICE_METER_USAGE_TRACKING_INSERT_BATCH_SIZE
+  # because it has not yet been shown to help in production: ClickHouse Cloud
+  # AsyncInsertFlush latency (6-40s, max 217s) dominates, so larger client-side
+  # batches mostly move the wait around. Turn it on deliberately, with the
+  # ClickHouse flush queue healthy, and measure.
+  insert_batch_size: 1
   insert_batch_max_delay: "1s"
-  insert_flush_timeout: "30s"
+  insert_flush_timeout: "60s"
 
 meter_usage_tracking_lazy:
   enabled: true

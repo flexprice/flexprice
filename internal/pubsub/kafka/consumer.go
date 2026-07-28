@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -31,36 +30,33 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 	if saramaConfig != nil {
 		// Optimize consumer configs for throughput
 		// TODO: move this to config
-		saramaConfig.Consumer.Group.Session.Timeout = 60000 * time.Millisecond
+		saramaConfig.Consumer.Group.Session.Timeout = 45000 * time.Millisecond
 		saramaConfig.Consumer.Fetch.Min = 1                        // Minimum number of bytes to fetch in a request
 		saramaConfig.Consumer.Fetch.Max = 10 * 1024 * 1024         // Maximum number of bytes to fetch (10MB)
 		saramaConfig.Consumer.Fetch.Default = 1024 * 1024          // Default fetch size (1MB)
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
+		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
 
-		// MaxProcessingTime is how long Sarama waits for a handler to take a
-		// message off the partition channel before it stops feeding that channel.
-		// It does NOT govern heartbeats — Sarama runs those on their own
-		// goroutine — and the effective grace is MaxProcessingTime *
-		// ChannelBufferSize (256 by default), so this is backpressure tuning, not
-		// an eviction fix.
+		// DO NOT set Consumer.Group.Rebalance.GroupStrategies here without
+		// deploying every service that shares a consumer group at the same time.
 		//
-		// It is raised here because handlers do a synchronous ClickHouse INSERT
-		// per message (observed p50 ~1s, p99 ~21s), far beyond the previous
-		// 500ms, so the buffer was being throttled during entirely normal
-		// processing.
-		saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
-
-		// Sticky assignment preserves each member's previous partitions across a
-		// rebalance instead of Range's full reshuffle, so a membership change costs
-		// far less redistribution. Still an eager protocol (all partitions are
-		// revoked then reassigned) — Sarama does not implement KIP-429 cooperative
-		// rebalancing — but convergence is much faster with a large group.
-		saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
-			sarama.BalanceStrategySticky,
-		}
-
-		// Give slow members time to rejoin before the coordinator drops them.
-		saramaConfig.Consumer.Group.Rebalance.Timeout = 120 * time.Second
+		// The web-consumer and the split main-consumer both join
+		// system_events, onboarding_events and integration-events. Kafka requires
+		// all members of a group to agree on the assignment protocol, so if one
+		// service runs Sticky and the other the Range default, the odd one out
+		// fails every join with:
+		//
+		//   kafka server: The provider group protocol type is incompatible
+		//   with the other members
+		//
+		// It presents as a group stuck Empty or PreparingRebalance with 0
+		// partitions owned while the tasks look healthy and loop
+		// Starting consuming -> Consuming done. A rolling deploy cannot cross
+		// this boundary; both services need scale-to-0 and back.
+		//
+		// A Sticky rollout hit exactly this in production (2026-07-28) and left
+		// meter-usage unable to join its own group. Range (the Sarama default) is
+		// used deliberately.
 	}
 
 	subscriber, err := kafka.NewSubscriber(
