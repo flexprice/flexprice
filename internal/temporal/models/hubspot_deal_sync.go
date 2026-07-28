@@ -37,6 +37,9 @@ type HubSpotDealSyncWorkflowInput struct {
 
 // Validate validates the workflow input
 func (input *HubSpotDealSyncWorkflowInput) Validate() error {
+	if input.Operation == "" {
+		input.Operation = HubSpotLineItemSyncOperationCreated
+	}
 	if input.SubscriptionID == "" {
 		return ierr.NewError("subscription_id is required").
 			WithHint("SubscriptionID must not be empty").
