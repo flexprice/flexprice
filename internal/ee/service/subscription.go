@@ -561,15 +561,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, result.Sub.ID)
 	} else {
-		if _, lineItems, err := s.SubRepo.GetWithLineItems(ctx, result.Sub.ID); err != nil {
-			s.Logger.Error(ctx, "failed to fetch line items for HubSpot deal sync, skipping",
-				"error", err, "subscription_id", result.Sub.ID)
-		} else {
-			now := time.Now().UTC()
-			for _, li := range lineItems {
-				if li.PriceType == types.PRICE_TYPE_FIXED && li.IsActive(now) {
-					s.triggerHubSpotDealSyncForLineItem(ctx, result.Sub.ID, result.Customer.ID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationCreated)
-				}
+		for _, li := range result.Sub.LineItems {
+			if li.PriceType == types.PRICE_TYPE_FIXED {
+				s.triggerHubSpotDealSyncForLineItem(ctx, result.Sub.ID, result.Customer.ID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationCreated)
 			}
 		}
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
