@@ -46,9 +46,6 @@ func (a *DealSyncActivities) CreateLineItem(
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debug(ctx, "HubSpot connection not configured",
-				"subscription_id", input.SubscriptionID)
-			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
 				"ConnectionNotFound",
@@ -70,10 +67,6 @@ func (a *DealSyncActivities) CreateLineItem(
 		return err
 	}
 
-	a.logger.Info(ctx, "successfully created HubSpot line item",
-		"subscription_id", input.SubscriptionID,
-		"line_item_id", input.LineItemID)
-
 	return nil
 }
 
@@ -93,8 +86,6 @@ func (a *DealSyncActivities) DeleteLineItem(
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debug(ctx, "HubSpot connection not configured",
-				"subscription_id", input.SubscriptionID)
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
 				"ConnectionNotFound",
@@ -135,18 +126,12 @@ func (a *DealSyncActivities) UpdateDealAmount(
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
-	// Set context for operations
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
-	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debug(ctx, "HubSpot connection not configured",
-				"customer_id", input.CustomerID,
-				"deal_id", input.DealID)
-			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
 				"ConnectionNotFound",
