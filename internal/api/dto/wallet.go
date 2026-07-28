@@ -461,6 +461,21 @@ type WalletBalanceResponse struct {
 	IsCachedFallback bool `json:"is_cached_fallback"`
 }
 
+type ExpiredCreditsResponseItem struct {
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	Count         int    `json:"count"`
+	Success       int    `json:"success"`
+	Failed        int    `json:"failed"`
+}
+
+type ExpiredCreditsResponse struct {
+	Items   []*ExpiredCreditsResponseItem `json:"items"`
+	Total   int                           `json:"total"`
+	Success int                           `json:"success"`
+	Failed  int                           `json:"failed"`
+}
+
 type GetCustomerWalletsRequest struct {
 	ID                     string `form:"id"`
 	LookupKey              string `form:"lookup_key"`

@@ -325,10 +325,8 @@ const (
 
 // ExpireCreditsResult is the result of attempting to expire a single credit transaction.
 type ExpireCreditsResult struct {
-	// Expired is true if the credits were expired.
+	// Expired is true if the remaining credits were expired.
 	Expired bool `json:"expired"`
-	// SkipReason is set when expiry was skipped (e.g. active_subscription, active_invoice).
-	SkipReason CreditExpirySkipReason `json:"skip_reason,omitempty"`
 }
 
 // WalletFilter represents the filter options for wallets
