@@ -28,9 +28,6 @@ func NewDealSyncActivities(
 	}
 }
 
-// CreateLineItem creates a single HubSpot line item for the mutated subscription line item.
-// This is the first step for a "created" operation -- it creates the line item but doesn't
-// update deal amount.
 func (a *DealSyncActivities) CreateLineItem(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
@@ -80,8 +77,6 @@ func (a *DealSyncActivities) CreateLineItem(
 	return nil
 }
 
-// DeleteLineItem deletes the HubSpot line item mapped to the mutated subscription line item.
-// This is the first step for a "deleted" operation.
 func (a *DealSyncActivities) DeleteLineItem(
 	ctx context.Context,
 	input models.HubSpotDealSyncWorkflowInput,
@@ -92,17 +87,14 @@ func (a *DealSyncActivities) DeleteLineItem(
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
-	// Set context for operations
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
-	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			a.logger.Debug(ctx, "HubSpot connection not configured",
 				"subscription_id", input.SubscriptionID)
-			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
 				"ConnectionNotFound",

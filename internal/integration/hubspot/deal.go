@@ -13,7 +13,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// DealSyncService handles synchronization of subscription line items with HubSpot deal line items.
 type DealSyncService struct {
 	client                       HubSpotClient
 	customerRepo                 customer.Repository
@@ -42,8 +41,6 @@ func NewDealSyncService(
 	}
 }
 
-// getLineItemMapping returns the published subscription_line_item -> HubSpot mapping for
-// lineItemID, if one exists.
 func (s *DealSyncService) getLineItemMapping(ctx context.Context, lineItemID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = lineItemID
@@ -63,11 +60,6 @@ func (s *DealSyncService) getLineItemMapping(ctx context.Context, lineItemID str
 	return mappings[0], nil
 }
 
-// SyncLineItemCreated creates a HubSpot deal line item for the given subscription line item
-// and associates it with dealID. A no-op (not an error) if:
-//   - the line item is not FIXED (usage-based line items are never synced to HubSpot)
-//   - a mapping for this line item already exists (idempotent retry-safety: the workflow may
-//     be retried after a partial failure, and must never double-create)
 func (s *DealSyncService) SyncLineItemCreated(ctx context.Context, subscriptionID, lineItemID, dealID string) error {
 	existing, err := s.getLineItemMapping(ctx, lineItemID)
 	if err != nil {
@@ -172,10 +164,6 @@ func (s *DealSyncService) SyncLineItemCreated(ctx context.Context, subscriptionI
 	return nil
 }
 
-// SyncLineItemDeleted deletes the HubSpot line item mapped to lineItemID, if any. A no-op if
-// there is no mapping (never synced, e.g. the line item wasn't FIXED at creation time) or if
-// HubSpot reports the line item is already gone (self-heals the stale local mapping instead
-// of failing).
 func (s *DealSyncService) SyncLineItemDeleted(ctx context.Context, lineItemID string) error {
 	mapping, err := s.getLineItemMapping(ctx, lineItemID)
 	if err != nil {
@@ -209,8 +197,6 @@ func (s *DealSyncService) SyncLineItemDeleted(ctx context.Context, lineItemID st
 	return nil
 }
 
-// UpdateDealAmountFromACV updates the deal amount based on HubSpot's calculated ACV.
-// This should be called after a line item create/delete, once HubSpot has recalculated ACV.
 func (s *DealSyncService) UpdateDealAmountFromACV(ctx context.Context, customerID, dealID string) error {
 	s.logger.Info(ctx, "updating deal amount from ACV", "customer_id", customerID, "deal_id", dealID)
 	if err := s.updateDealAmountFromHubSpot(ctx, dealID); err != nil {
@@ -237,8 +223,6 @@ func (s *DealSyncService) mapBillingFrequency(period types.BillingPeriod) string
 	}
 }
 
-// updateDealAmountFromHubSpot fetches the deal's ACV from HubSpot and updates the deal amount.
-// This function only reads ACV calculated by HubSpot, never calculates manually.
 func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealID string) error {
 	deal, err := s.client.GetDeal(ctx, dealID)
 	if err != nil {
