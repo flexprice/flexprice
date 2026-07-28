@@ -15,10 +15,10 @@ import (
 )
 
 // MeterUsageTrackingEvaluationSuite covers alertService.EvaluateSpendBreachForEvent's short-circuit gates — unknown
-// customer, no affected line items, nothing configured — which all return before any billing
+// customer, no active subscriptions, nothing configured — which all return before any billing
 // calculation runs. It uses real in-memory repos (unlike MeterUsageTrackingSuite in
 // meter_usage_tracking_test.go) because EvaluateSpendAlertsForCustomer reads through
-// CustomerRepo/SubscriptionLineItemRepo/AlertRepo.
+// SubRepo/AlertRepo.
 //
 // It does not cover an actual threshold-crossing → LogAlert → webhook run: that needs a full
 // GetMeterUsageBySubscription/CalculateMeterUsageCharges fixture (customer, subscription, usage
@@ -77,19 +77,19 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_Unknown
 	}
 
 	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer, []string{"meter_eval_test"})
+		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }
 
-func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAffectedLineItems_NoOp() {
+func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoActiveSubscriptions_NoOp() {
 	event := &events.Event{
-		ID:                 "event_no_line_items",
+		ID:                 "event_no_subs",
 		ExternalCustomerID: s.customer.ExternalID,
 	}
 
 	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer, []string{"meter_does_not_exist"})
+		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(s.GetContext(), event, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }
@@ -137,7 +137,7 @@ func (s *MeterUsageTrackingEvaluationSuite) TestCheckSpendBreachForEvent_NoAlert
 	// attempting a billing calculation — which would otherwise fail/panic on this bare fixture
 	// (no price/meter usage data behind it).
 	s.NotPanics(func() {
-		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, s.customer, []string{"meter_eval_test"})
+		NewAlertService(s.svc.ServiceParams).EvaluateSpendBreachForEvent(ctx, event, s.customer)
 	})
 	s.Equal(0, s.countAlertLogs())
 }

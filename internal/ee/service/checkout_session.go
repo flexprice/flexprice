@@ -415,3 +415,80 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 		Gateway: gateway,
 	})
 }
+
+// StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
+// fulfills payment + provider link, and publishes checkout.session.initiated.
+// On session create failure the draft is archived. On fulfill failure the session is cleaned up.
+func (s *checkoutSessionService) StartPayFirstCheckoutSession(
+	ctx context.Context,
+	req *dto.PayFirstCheckoutRequest,
+) (*dto.CheckoutSessionResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	providerCfg := &types.CheckoutPaymentProviderConfig{}
+	if req.Checkout.PaymentProviderConfig != nil {
+		providerCfg = req.Checkout.PaymentProviderConfig
+	}
+	if providerCfg.CollectionMethod == "" {
+		providerCfg.CollectionMethod = types.CollectionMethodSendInvoice
+	}
+	if err := providerCfg.Validate(); err != nil {
+		return nil, err
+	}
+	req.Checkout.PaymentProviderConfig = providerCfg
+
+	draftInvoiceID := req.DraftInvoice.ID
+	session := req.ToCheckoutSession(ctx, req.CustomerID)
+	session.CheckoutInvoiceID = lo.ToPtr(draftInvoiceID)
+
+	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
+			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
+				"invoice_id", draftInvoiceID,
+				"error", delErr,
+				"original_err", err,
+			)
+		}
+		return nil, err
+	}
+
+	if err := s.fulfillCheckoutSession(ctx, session, req.DraftInvoice); err != nil {
+		if cleanupErr := s.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
+			s.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
+				"session_id", session.ID,
+				"error", cleanupErr,
+				"original_err", err,
+			)
+		}
+		return nil, err
+	}
+
+	sessionResp := dto.ToCheckoutSessionResponse(session)
+	s.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
+	return sessionResp, nil
+}
+
+// fulfillCheckoutSession creates the INITIATED payment, calls the provider for a
+// payment link / next action, and marks the session pending.
+func (s *checkoutSessionService) fulfillCheckoutSession(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	inv *invoice.Invoice,
+) error {
+	payResp, err := s.createCheckoutPayment(ctx, inv, session.PaymentProvider)
+	if err != nil {
+		return err
+	}
+	session.CheckoutInvoiceID = &inv.ID
+	session.CheckoutPaymentID = &payResp.ID
+
+	providerResult, err := s.callCheckoutProvider(ctx, session, payResp)
+	if err != nil {
+		return err
+	}
+	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	session.CheckoutStatus = types.CheckoutStatusPending
+	return s.CheckoutSessionRepo.Update(ctx, session)
+}

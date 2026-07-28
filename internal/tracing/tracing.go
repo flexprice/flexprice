@@ -41,6 +41,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.temporal.io/sdk/client"
+	temporalotel "go.temporal.io/sdk/contrib/opentelemetry"
 	"go.uber.org/fx"
 )
 
@@ -60,6 +62,7 @@ type Service struct {
 	// App-level metrics (independent of span export; see initMeter).
 	meterProvider  *sdkmetric.MeterProvider
 	metricsEnabled bool
+	meterInitDone  bool // true after a successful enable or deliberate skip (idempotent)
 	dbDuration     metric.Float64Histogram // db.client.duration (ms) — {operation, db_system, status}
 	cacheRequests  metric.Int64Counter     // cache.requests — {operation, result}
 }
@@ -72,14 +75,21 @@ func Module() fx.Option {
 	)
 }
 
-// NewService creates the Service. Initialization of the tracer provider and
-// Sentry client happens in RegisterHooks so we don't block fx graph wiring.
+// NewService creates the Service. Tracer and Sentry init still happen in
+// RegisterHooks. MeterProvider is initialized eagerly here so FX Provide-time
+// consumers (Temporal client dial) can attach a MetricsHandler before OnStart.
 func NewService(cfg *config.Configuration, log *logger.Logger) *Service {
-	return &Service{
+	s := &Service{
 		cfg:    cfg,
 		logger: log,
 		tracer: otel.Tracer(tracerName),
 	}
+	if err := s.initMeter(context.Background()); err != nil {
+		// Leave metrics unset so RegisterHooks.OnStart can retry and fail boot
+		// when metrics are enabled but the exporter cannot be created.
+		s.logger.Error(context.Background(), "OTel metrics eager init failed; will retry on start", "error", err)
+	}
+	return s
 }
 
 // RegisterHooks attaches lifecycle hooks for tracer + Sentry init/shutdown.
@@ -299,11 +309,17 @@ func (s *Service) newMetricResource(ctx context.Context) (*resource.Resource, er
 
 // initMeter wires the OTLP metric pipeline (PeriodicReader → exporter) and
 // creates the app-level DB/cache instruments. Independent of tracing: metrics
-// stay on even when storage spans are sampled down or off.
+// stay on even when storage spans are sampled down or off. Idempotent: safe to
+// call from NewService (eager) and again from RegisterHooks.OnStart.
 func (s *Service) initMeter(ctx context.Context) error {
+	if s.meterInitDone {
+		return nil
+	}
+
 	mc := s.cfg.Otel.Metrics
 	if !s.cfg.Otel.Enabled || !mc.Enabled || mc.Endpoint == "" {
 		s.logger.Info(ctx, "OTel metrics is disabled")
+		s.meterInitDone = true
 		return nil
 	}
 
@@ -358,6 +374,7 @@ func (s *Service) initMeter(ctx context.Context) error {
 	}
 
 	s.metricsEnabled = true
+	s.meterInitDone = true
 	s.logger.Info(ctx, "OTel metrics initialized", "endpoint", mc.Endpoint, "interval", interval.String())
 	return nil
 }
@@ -419,6 +436,27 @@ func (s *Service) shutdown(ctx context.Context) {
 		s.logger.Info(ctx, "Flushing Sentry events before shutdown")
 		sentry.Flush(2 * time.Second)
 	}
+}
+
+// TemporalMetricsHandler returns a Temporal SDK MetricsHandler backed by this
+// process's OTEL MeterProvider when metrics are initialized and
+// otel.metrics.temporal_enabled is set. Otherwise returns nil (Temporal dials
+// without SDK metrics). This is the only Temporal-metrics surface on Service —
+// MeterProvider and contrib options stay private.
+func (s *Service) TemporalMetricsHandler() client.MetricsHandler {
+	if s == nil || !s.metricsEnabled || s.meterProvider == nil || s.cfg == nil || !s.cfg.Otel.Metrics.TemporalEnabled {
+		return nil
+	}
+
+	return temporalotel.NewMetricsHandler(temporalotel.MetricsHandlerOptions{
+		Meter: s.meterProvider.Meter("temporal-sdk-go"),
+		OnError: func(err error) {
+			if s.logger == nil {
+				return
+			}
+			s.logger.Error(context.Background(), "temporal otel metrics handler error", "error", err)
+		},
+	})
 }
 
 // IsEnabled reports whether any observability backend is active (tracing OR
@@ -864,22 +902,6 @@ func (s *Service) GetSpanFromContext(ctx context.Context) *Span {
 func (s *Service) StartMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
 	name := fmt.Sprintf("monitoring.%s", operation)
 	return s.startSpan(ctx, name, "monitoring.operation", params)
-}
-
-// StartKafkaLagMonitoringSpan tracks Kafka consumer lag metrics with tags so
-// downstream alerting can filter by topic / consumer group.
-func (s *Service) StartKafkaLagMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	name := fmt.Sprintf("monitoring.%s", operation)
-	span, newCtx := s.startSpan(ctx, name, "monitoring.kafka.lag", params)
-	if span != nil {
-		if topic, ok := params["topic"].(string); ok {
-			span.SetTag("kafka.topic", topic)
-		}
-		if cg, ok := params["consumer_group"].(string); ok {
-			span.SetTag("kafka.consumer_group", cg)
-		}
-	}
-	return span, newCtx
 }
 
 // ---------------------------------------------------------------------------

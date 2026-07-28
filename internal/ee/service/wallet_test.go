@@ -74,10 +74,10 @@ func (s *WalletServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.ClearStores()
 }
 
-func (s *WalletServiceSuite) setupService() {
+func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 	stores := s.GetStores()
 	pubsub := testutil.NewInMemoryPubSub()
-	s.service = NewWalletService(ServiceParams{
+	return ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -92,21 +92,36 @@ func (s *WalletServiceSuite) setupService() {
 		MeterRepo:                    stores.MeterRepo,
 		CustomerRepo:                 stores.CustomerRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
+		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
+		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		FeatureRepo:                  stores.FeatureRepo,
 		AddonAssociationRepo:         stores.AddonAssociationRepo,
 		SettingsRepo:                 stores.SettingsRepo,
-		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		AlertLogsRepo:                stores.AlertLogsRepo,
+		PaymentRepo:                  stores.PaymentRepo,
+		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
+		CouponRepo:                   stores.CouponRepo,
+		CouponAssociationRepo:        stores.CouponAssociationRepo,
+		CouponApplicationRepo:        stores.CouponApplicationRepo,
+		TaxAssociationRepo:           stores.TaxAssociationRepo,
+		TaxRateRepo:                  stores.TaxRateRepo,
+		TaxAppliedRepo:               stores.TaxAppliedRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: pubsub},
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
-		TaxAssociationRepo:           stores.TaxAssociationRepo,
-		TaxRateRepo:                  stores.TaxRateRepo,
-		TaxAppliedRepo:               stores.TaxAppliedRepo,
-	})
+		AddonRepo:                    stores.AddonRepo,
+		CreditGrantRepo:              stores.CreditGrantRepo,
+		Locker:                       s.GetLocker(),
+	}
+}
+
+func (s *WalletServiceSuite) setupService() {
+	s.service = NewWalletService(s.buildServiceParams())
+	stores := s.GetStores()
 	s.subsService = NewSubscriptionService(ServiceParams{
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
@@ -120,7 +135,9 @@ func (s *WalletServiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		CouponRepo:               stores.CouponRepo,
 		CouponAssociationRepo:    stores.CouponAssociationRepo,
@@ -564,6 +581,7 @@ func (s *WalletServiceSuite) setupTestData() {
 func (s *WalletServiceSuite) setupWallet() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
+	s.GetStores().CheckoutSessionRepo.(*testutil.InMemoryCheckoutSessionStore).Clear()
 
 	s.testData.wallet = &wallet.Wallet{
 		ID:                  "wallet-1",
@@ -2225,8 +2243,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(961),
-			expectedCurrentUsage:    decimal.NewFromInt(39),
+			// Limit 1000 alone covers less usage than case 1's 2000, so more is billed.
+			expectedRealTimeBalance: decimal.NewFromInt(951), // 1000 - 49
+			expectedCurrentUsage:    decimal.NewFromInt(49),
 			wantErr:                 false,
 		},
 		{
@@ -2254,9 +2273,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 		{
 			name: "disabled_entitlement",
 			setupFunc: func() {
-				// Clear any existing entitlements first
-				s.GetStores().EntitlementRepo.(*testutil.InMemoryEntitlementStore).Clear()
-
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
 					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
@@ -2288,6 +2304,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupWallet()
+			// Each case models exactly one entitlement on (plan, feat_api_calls);
+			// the DB allows only one published entitlement per (entity, feature).
+			s.GetStores().EntitlementRepo.(*testutil.InMemoryEntitlementStore).Clear()
 			if tt.setupFunc != nil {
 				tt.setupFunc()
 			}
@@ -2371,6 +2390,188 @@ func (s *WalletServiceSuite) TestGetCreditsAvailableBreakdown() {
 }
 
 // ---------------------------------------------------------------------------
+// ExpireCredits consume-then-expire
+// ---------------------------------------------------------------------------
+
+// createActiveStandaloneSubscriptionForExpiry creates and persists a minimal active standalone
+// subscription for the suite's test customer. ConsumeExpiringCreditIntoInvoices (invoked internally by
+// ExpireCredits) filters draft invoices by active standalone/parent subscriptions, so these tests need a
+// real, persisted subscription.
+func (s *WalletServiceSuite) createActiveStandaloneSubscriptionForExpiry(id, currency string) *subscription.Subscription {
+	now := s.GetNow()
+	sub := &subscription.Subscription{
+		ID:                 id,
+		CustomerID:         s.testData.customer.ID,
+		Currency:           currency,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		StartDate:          now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
+	return sub
+}
+
+// createDraftSubInvoiceWithUsageLineItemForExpiry creates a DB-backed draft invoice tied to a real
+// subscription, with a single usage line item of the given amount. Uses InvoiceType OneOff (not
+// Subscription) with req=nil on the ComputeInvoice call ConsumeExpiringCreditIntoInvoices exercises: for a
+// OneOff invoice, ComputeInvoice's nil-request path does not touch line items or recompute totals from
+// usage, so the manually-seeded line item and Subtotal survive untouched.
+func (s *WalletServiceSuite) createDraftSubInvoiceWithUsageLineItemForExpiry(id, currency string, amount decimal.Decimal, subID string, periodStart time.Time) *invoice.Invoice {
+	pt := string(types.PRICE_TYPE_USAGE)
+	li := &invoice.InvoiceLineItem{
+		ID:               s.GetUUID(),
+		InvoiceID:        id,
+		CustomerID:       s.testData.customer.ID,
+		Amount:           amount,
+		Currency:         currency,
+		Quantity:         decimal.NewFromInt(1),
+		PriceType:        &pt,
+		LineItemDiscount: decimal.Zero,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	periodEnd := periodStart.Add(30 * 24 * time.Hour)
+	inv := &invoice.Invoice{
+		ID:              id,
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(subID),
+		Currency:        currency,
+		Subtotal:        amount,
+		Total:           amount,
+		AmountDue:       amount,
+		AmountRemaining: amount, // required: ConsumeExpiringCreditIntoInvoices filters AmountRemainingGt=0
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PeriodStart:     lo.ToPtr(periodStart),
+		PeriodEnd:       lo.ToPtr(periodEnd),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+		LineItems:       []*invoice.InvoiceLineItem{li},
+	}
+
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+	return inv
+}
+
+// reloadInvoiceWithLineItemsForExpiry reloads an invoice and its line items from the repos.
+func (s *WalletServiceSuite) reloadInvoiceWithLineItemsForExpiry(id string) *invoice.Invoice {
+	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), id)
+	s.NoError(err)
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), id)
+	s.NoError(err)
+	inv.LineItems = lineItems
+	return inv
+}
+
+// createWalletForExpiry creates a zero-balance prepaid wallet for the suite's test customer.
+func (s *WalletServiceSuite) createWalletForExpiry(id, currency string) *wallet.Wallet {
+	w := &wallet.Wallet{
+		ID:             id,
+		CustomerID:     s.testData.customer.ID,
+		Currency:       currency,
+		Balance:        decimal.Zero,
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "Test Wallet " + id,
+		Description:    "Test wallet",
+		ConversionRate: decimal.NewFromInt(1),
+		EnvironmentID:  "env_test",
+		WalletType:     types.WalletTypePrePaid,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), w))
+	return w
+}
+
+// createWalletCreditForExpiry directly creates a wallet credit transaction via the repository,
+// bypassing WalletOperation.Validate() (which unconditionally rejects a past ExpiryDate). Updates the
+// wallet's Balance/CreditBalance to match (all test wallets here use conversion rate 1).
+func (s *WalletServiceSuite) createWalletCreditForExpiry(walletID string, amount decimal.Decimal, expiryDate *time.Time) *wallet.Transaction {
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), walletID)
+	s.Require().NoError(err)
+
+	tx := &wallet.Transaction{
+		ID:                  s.GetUUID(),
+		WalletID:            walletID,
+		CustomerID:          w.CustomerID,
+		Type:                types.TransactionTypeCredit,
+		Amount:              amount,
+		CreditAmount:        amount,
+		TxStatus:            types.TransactionStatusCompleted,
+		TransactionReason:   types.TransactionReasonFreeCredit,
+		ExpiryDate:          expiryDate,
+		CreditBalanceBefore: w.CreditBalance,
+		CreditBalanceAfter:  w.CreditBalance.Add(amount),
+		CreditsAvailable:    amount,
+		Currency:            w.Currency,
+		EnvironmentID:       "env_test",
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), tx))
+
+	newCreditBalance := w.CreditBalance.Add(amount)
+	newBalance := w.Balance.Add(amount) // conversion rate is 1 for all test wallets
+	s.Require().NoError(s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), walletID, newBalance, newCreditBalance))
+
+	return tx
+}
+
+// ExpireCredits must consume as much of the expiring credit as the customer's active-subscription draft
+// invoice can absorb, THEN expire whatever remains - not just skip when a subscription/invoice exists
+// (the old behavior).
+func (s *WalletServiceSuite) TestExpireCredits_ConsumeThenExpire() {
+	sub := s.createActiveStandaloneSubscriptionForExpiry("sub_expire_consume", "USD")
+	inv := s.createDraftSubInvoiceWithUsageLineItemForExpiry(
+		"inv_expire_consume", "USD", decimal.NewFromInt(40), sub.ID, s.GetNow().Add(-24*time.Hour))
+
+	w := s.createWalletForExpiry("wallet_expire_consume", "USD")
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCreditForExpiry(w.ID, decimal.NewFromInt(100), &pastExpiry)
+
+	res, err := s.service.ExpireCredits(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+
+	// 40 of the 100 was consumed by the invoice (its full ceiling); the remaining 60 was expired.
+	s.True(res.Expired, "expected remaining credits to be expired")
+
+	reloadedInv := s.reloadInvoiceWithLineItemsForExpiry(inv.ID)
+	s.True(decimal.NewFromInt(40).Equal(reloadedInv.TotalPrepaidCreditsApplied),
+		"invoice TotalPrepaidCreditsApplied = %s, want 40", reloadedInv.TotalPrepaidCreditsApplied.String())
+
+	reloadedWallet, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.Require().NoError(err)
+	s.True(decimal.Zero.Equal(reloadedWallet.Balance),
+		"expected wallet balance to be 0 (40 consumed + 60 expired = 100 drawn down), got %s", reloadedWallet.Balance.String())
+}
+
+// A credit fully consumed into invoices (no remainder) should report Expired=false since there's nothing
+// left to expire - the debit-based "expire" step is skipped entirely.
+func (s *WalletServiceSuite) TestExpireCredits_FullyConsumedNoRemainderToExpire() {
+	sub := s.createActiveStandaloneSubscriptionForExpiry("sub_expire_full", "USD")
+	s.createDraftSubInvoiceWithUsageLineItemForExpiry(
+		"inv_expire_full", "USD", decimal.NewFromInt(75), sub.ID, s.GetNow().Add(-24*time.Hour))
+
+	w := s.createWalletForExpiry("wallet_expire_full", "USD")
+	pastExpiry := s.GetNow().Add(-time.Hour)
+	source := s.createWalletCreditForExpiry(w.ID, decimal.NewFromInt(50), &pastExpiry)
+
+	res, err := s.service.ExpireCredits(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+
+	s.False(res.Expired, "expected no remainder to expire")
+
+	reloadedSource, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), source.ID)
+	s.Require().NoError(err)
+	s.True(reloadedSource.CreditsAvailable.IsZero(),
+		"expected the credit transaction to be fully drawn down by consumption alone, got %s available",
+		reloadedSource.CreditsAvailable.String())
+}
+
+// ---------------------------------------------------------------------------
 // WalletAutoTopupInvoiceSuite
 // ---------------------------------------------------------------------------
 
@@ -2421,7 +2622,9 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
@@ -2491,6 +2694,41 @@ func (s *WalletAutoTopupInvoiceSuite) countAutoTopupInvoices() int {
 	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.NoError(err)
 	return len(invoices)
+}
+
+func (s *WalletAutoTopupInvoiceSuite) countAutoTopupWalletTxns(status *types.TransactionStatus) int {
+	ctx := s.GetContext()
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	if status != nil {
+		filter.TransactionStatus = status
+	}
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	count := 0
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			if status == nil || tx.TxStatus == *status {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func (s *WalletAutoTopupInvoiceSuite) completePendingAutoTopupWalletTxns() {
+	ctx := s.GetContext()
+	pending := types.TransactionStatusPending
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	filter.TransactionStatus = &pending
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			s.NoError(s.GetStores().WalletRepo.UpdateTransactionStatus(ctx, tx.ID, types.TransactionStatusCompleted))
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -2579,12 +2817,14 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 	ctx := s.GetContext()
 	balance := decimal.NewFromInt(3) // below threshold of 5
 
-	// First trigger – creates one pending invoice.
+	// First trigger – creates one pending invoice + pending wallet txn.
 	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+	pending := types.TransactionStatusPending
+	s.Equal(1, s.countAutoTopupWalletTxns(&pending), "expected 1 pending auto-topup wallet txn")
 
-	// Fetch the invoice and mark it as paid.
+	// Fetch the invoice and mark it as paid; complete the wallet txn (mirrors reconcile).
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = s.customer.ID
 	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
@@ -2594,12 +2834,256 @@ func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfter
 
 	invoices[0].PaymentStatus = types.PaymentStatusSucceeded
 	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, invoices[0]))
+	s.completePendingAutoTopupWalletTxns()
 
-	// Second trigger – guard no longer blocks because invoice is paid.
-	// Re-read wallet to get fresh state (balance still low since no actual credit was added).
+	// Second trigger – invoice + pending-txn guards cleared; no cooloff configured.
 	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
 	s.NoError(err)
 	s.Equal(2, s.countAutoTopupInvoices(), "expected 2 auto-topup invoices after payment cleared the guard")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_PendingWalletTxnBlocksEvenWithoutInvoice() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3)
+
+	// Seed a pending auto-topup wallet txn without an invoice row.
+	pendingTx := &wallet.Transaction{
+		ID:                "txn_pending_autotopup",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, pendingTx))
+
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices(), "pending wallet txn alone must block a new auto-topup invoice")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_CooldownBlocksAfterCompletedTxn() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3)
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	completed := &wallet.Transaction{
+		ID:                "txn_completed_autotopup",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusCompleted,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{types.WalletMetadataKeyAutoTopup: "true"},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, completed))
+
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance, "")
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices(), "cooloff after completed auto-topup must block a new invoice")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TestGetLastAutoTopupTransactionForWallet_IgnoresManualPending() {
+	ctx := s.GetContext()
+	manual := &wallet.Transaction{
+		ID:                "txn_manual_pending",
+		WalletID:          s.wallet.ID,
+		CustomerID:        s.customer.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Amount:            decimal.NewFromInt(10),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Metadata:          types.Metadata{},
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, manual))
+
+	last, err := s.GetStores().WalletRepo.GetLastAutoTopupTransactionForWallet(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.Nil(last, "manual pending txn without auto_topup metadata must not match")
+}
+
+// ---------------------------------------------------------------------------
+// WalletAutoTopupDirectSuite – direct (non-invoiced) cooloff / burst behavior
+// ---------------------------------------------------------------------------
+
+type WalletAutoTopupDirectSuite struct {
+	testutil.BaseServiceTestSuite
+	service  WalletService
+	customer *customer.Customer
+	wallet   *wallet.Wallet
+}
+
+func TestWalletAutoTopupDirect(t *testing.T) {
+	suite.Run(t, new(WalletAutoTopupDirectSuite))
+}
+
+func (s *WalletAutoTopupDirectSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
+	s.service = NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterUsageRepo:           stores.MeterUsageRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+		TaxAssociationRepo:       stores.TaxAssociationRepo,
+		TaxRateRepo:              stores.TaxRateRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
+	})
+
+	ctx := s.GetContext()
+	s.customer = &customer.Customer{
+		ID:         "cust_autotopup_direct",
+		ExternalID: "ext_cust_autotopup_direct",
+		Name:       "AutoTopup Direct Customer",
+		Email:      "autotopup-direct@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(stores.CustomerRepo.Create(ctx, s.customer))
+
+	threshold := decimal.NewFromInt(50)
+	amount := decimal.NewFromInt(10)
+	enabled := true
+	invoicing := false
+	s.wallet = &wallet.Wallet{
+		ID:                  "wallet_autotopup_direct",
+		CustomerID:          s.customer.ID,
+		Currency:            "usd",
+		WalletType:          types.WalletTypePrePaid,
+		WalletStatus:        types.WalletStatusActive,
+		Balance:             decimal.NewFromInt(5),
+		CreditBalance:       decimal.NewFromInt(5),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		AutoTopup: &types.AutoTopup{
+			Enabled:   &enabled,
+			Threshold: &threshold,
+			Amount:    &amount,
+			Invoicing: &invoicing,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(stores.WalletRepo.CreateWallet(ctx, s.wallet))
+}
+
+func (s *WalletAutoTopupDirectSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
+func (s *WalletAutoTopupDirectSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *WalletAutoTopupDirectSuite) svc() *walletService {
+	return s.service.(*walletService)
+}
+
+func (s *WalletAutoTopupDirectSuite) countCompletedAutoTopupTxns() int {
+	ctx := s.GetContext()
+	completed := types.TransactionStatusCompleted
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &s.wallet.ID
+	filter.TransactionStatus = &completed
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.NoError(err)
+	count := 0
+	for _, tx := range txs {
+		if tx.Metadata != nil && tx.Metadata[types.WalletMetadataKeyAutoTopup] == "true" {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *WalletAutoTopupDirectSuite) TestDirect_NoCooldown_BurstsUntilAboveThreshold() {
+	ctx := s.GetContext()
+	// balance 5, threshold 50, amount 10 → nested re-eval should credit until > 50
+	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
+		Logger:        s.GetLogger(),
+		AlertLogsRepo: s.GetStores().AlertLogsRepo,
+		SettingsRepo:  s.GetStores().SettingsRepo,
+	}), "")
+	s.NoError(err)
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.True(w.CreditBalance.GreaterThan(decimal.NewFromInt(50)),
+		"expected burst to push balance above threshold, got %s", w.CreditBalance)
+	s.GreaterOrEqual(s.countCompletedAutoTopupTxns(), 5, "expected multiple direct auto-topup credits without cooloff")
+}
+
+func (s *WalletAutoTopupDirectSuite) TestUpdateWallet_CooldownZeroClears() {
+	ctx := s.GetContext()
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	updated, err := s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Cooldown: &types.Duration{Value: 0, Unit: types.DurationUnitSecond},
+		},
+	})
+	s.NoError(err)
+	s.Require().NotNil(updated.AutoTopup)
+	s.Nil(updated.AutoTopup.Cooldown, "value 0 must clear persisted cooldown")
+
+	// Omit cooldown on a later update must leave it cleared (not resurrect).
+	updated, err = s.svc().UpdateWallet(ctx, s.wallet.ID, &dto.UpdateWalletRequest{
+		AutoTopup: &types.AutoTopup{
+			Enabled: lo.ToPtr(true),
+		},
+	})
+	s.NoError(err)
+	s.Nil(updated.AutoTopup.Cooldown, "omitting cooldown must not restore a cleared cooldown")
+}
+
+func (s *WalletAutoTopupDirectSuite) TestDirect_WithCooldown_OneShotPerWindow() {
+	ctx := s.GetContext()
+	s.wallet.AutoTopup.Cooldown = &types.Duration{Value: 1, Unit: types.DurationUnitDay}
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, s.wallet.ID, s.wallet))
+
+	err := s.svc().EvaluateAlertsForWallet(ctx, s.wallet, NewAlertLogsService(ServiceParams{
+		Logger:        s.GetLogger(),
+		AlertLogsRepo: s.GetStores().AlertLogsRepo,
+		SettingsRepo:  s.GetStores().SettingsRepo,
+	}), "")
+	s.NoError(err)
+
+	s.Equal(1, s.countCompletedAutoTopupTxns(), "cooloff must suppress direct-mode burst to a single top-up")
+	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+	s.NoError(err)
+	s.True(w.CreditBalance.Equal(decimal.NewFromInt(15)),
+		"expected balance 5+10=15 after one top-up, got %s", w.CreditBalance)
 }
 
 // ---------------------------------------------------------------------------
@@ -2660,7 +3144,9 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,

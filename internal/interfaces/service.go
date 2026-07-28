@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -82,6 +83,12 @@ type RevenueAnalyticsService interface {
 	GetDetailedCostAnalytics(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
 }
 
+// DraftAndComputeOptions configures draft-and-compute workflows.
+type DraftAndComputeOptions struct {
+	// SkipIfAlreadyInvoiced skips finalized current periods.
+	SkipIfAlreadyInvoiced bool
+}
+
 type SubscriptionService interface {
 	CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error)
 	GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error)
@@ -129,6 +136,11 @@ type SubscriptionService interface {
 	// Meter usage tracking (reads from meter_usage table)
 	GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 
+	// GetMeterUsageForSubscription is the data-fed variant of
+	// GetMeterUsageBySubscription: the caller supplies the subscription so no
+	// extra DB fetch happens for it.
+	GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
 	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 
@@ -151,6 +163,9 @@ type SubscriptionService interface {
 
 	// TriggerSubscriptionDraftAndComputeWorkflow creates an idempotent draft for the current period and runs compute via Temporal (invoice task queue).
 	TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
+
+	// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
+	TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts DraftAndComputeOptions) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
 	// Cron methods
 
@@ -205,6 +220,10 @@ type PriceUnitService interface {
 type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
+
+	// ConsumeExpiringCreditIntoInvoices best-effort applies an expiring credit to draft invoices for
+	// tenants enabled via feature_flag.pre_expiry_credit_consumption_*. Returns amount consumed.
+	ConsumeExpiringCreditIntoInvoices(ctx context.Context, tx *wallet.Transaction) (decimal.Decimal, error)
 }
 
 type CheckoutSessionService interface {
@@ -223,6 +242,9 @@ type CheckoutSessionService interface {
 	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
 	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
 	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
+	// StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
+	// fulfills payment + provider link, and publishes checkout.session.initiated.
+	StartPayFirstCheckoutSession(ctx context.Context, req *dto.PayFirstCheckoutRequest) (*dto.CheckoutSessionResponse, error)
 }
 
 type ServiceDependencies struct {

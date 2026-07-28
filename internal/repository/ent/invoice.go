@@ -1018,7 +1018,7 @@ func (o InvoiceQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query I
 
 func (o InvoiceQueryOptions) ApplyStatusFilter(query InvoiceQuery, status string) InvoiceQuery {
 	if status == "" {
-		return query.Where(invoice.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(invoice.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(invoice.Status(status))
 }

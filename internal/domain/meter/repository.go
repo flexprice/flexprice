@@ -14,4 +14,7 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.MeterFilter) (int, error)
 	DisableMeter(ctx context.Context, id string) error
 	UpdateMeter(ctx context.Context, id string, filters []Filter) error
+
+	// GetMatchingMetersByEventName returns published meters matching eventName for current tenant/environment.
+	GetMatchingMetersByEventName(ctx context.Context, eventName string) ([]*Meter, error)
 }

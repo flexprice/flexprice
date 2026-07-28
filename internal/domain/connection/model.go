@@ -234,6 +234,9 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		if productID, ok := metadata["product_id"].(string); ok {
 			whopMetadata.ProductID = productID
 		}
+		if webhookSecret, ok := metadata["webhook_secret"].(string); ok {
+			whopMetadata.WebhookSecret = webhookSecret
+		}
 		return types.ConnectionMetadata{
 			Whop: whopMetadata,
 		}
@@ -263,6 +266,20 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		}
 		return types.ConnectionMetadata{
 			GCPMarketplace: gcpMarketplaceSecrets,
+		}
+	case types.SecretProviderAzureMarketplace:
+		azureMarketplaceSecrets := &types.AzureMarketplaceConnectionSecrets{}
+		if tenantID, ok := metadata["tenant_id"].(string); ok {
+			azureMarketplaceSecrets.TenantID = tenantID
+		}
+		if clientID, ok := metadata["client_id"].(string); ok {
+			azureMarketplaceSecrets.ClientID = clientID
+		}
+		if clientSecret, ok := metadata["client_secret"].(string); ok {
+			azureMarketplaceSecrets.ClientSecret = clientSecret
+		}
+		return types.ConnectionMetadata{
+			AzureMarketplace: azureMarketplaceSecrets,
 		}
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}

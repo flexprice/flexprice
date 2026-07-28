@@ -337,7 +337,7 @@ func (o TaxAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, 
 
 func (o TaxAssociationQueryOptions) ApplyStatusFilter(query TaxAssociationQuery, status string) TaxAssociationQuery {
 	if status == "" {
-		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entTaxConfig.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entTaxConfig.Status(status))
 }

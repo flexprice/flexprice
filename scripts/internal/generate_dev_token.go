@@ -17,7 +17,7 @@ import (
 // Environment variables:
 //
 //	TENANT_ID       required
-//	ENVIRONMENT_ID  optional (flexprice provider embeds it; supabase provider ignores it — pass X-Environment-ID header)
+//	ENVIRONMENT_ID  optional (embedded as environment_id when provided)
 //	USER_ID         optional, defaults to types.DefaultUserID
 //	USER_EMAIL      required when auth.provider=supabase, defaults to "dev@flexprice.io"
 //	EXPIRY_HOURS    optional, defaults to 1
@@ -25,7 +25,7 @@ import (
 // The claim schema is chosen automatically based on auth.provider in config:
 //
 //	flexprice → { user_id, tenant_id, environment_id, exp, iat }
-//	supabase  → { sub, email, app_metadata.tenant_id, exp, iat }
+//	supabase  → { sub, email, app_metadata.tenant_id, environment_id, exp, iat }
 func GenerateDevToken() error {
 	tenantID := os.Getenv("TENANT_ID")
 	environmentID := os.Getenv("ENVIRONMENT_ID")
@@ -72,7 +72,11 @@ func GenerateDevToken() error {
 	if cfg.Auth.Provider == types.AuthProviderSupabase {
 		fmt.Printf("User ID (sub):  %s\n", userID)
 		fmt.Printf("Email:          %s\n", userEmail)
-		fmt.Printf("Environment ID: (not in token — pass X-Environment-ID header)\n")
+		if environmentID != "" {
+			fmt.Printf("Environment ID: %s\n", environmentID)
+		} else {
+			fmt.Printf("Environment ID: (not set — use X-Environment-ID header)\n")
+		}
 	} else {
 		fmt.Printf("User ID:        %s\n", userID)
 		if environmentID != "" {

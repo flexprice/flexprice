@@ -81,6 +81,10 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 		return false
 	}
 
+	if f.HasGrantConfig != nil && e.HasGrantConfig() != *f.HasGrantConfig {
+		return false
+	}
+
 	// Filter by time range
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && e.CreatedAt.Before(*f.StartTime) {
@@ -102,6 +106,35 @@ func entitlementSortFn(i, j *entitlement.Entitlement) bool {
 	return i.CreatedAt.After(j.CreatedAt)
 }
 
+// checkUniquePerEntityFeature mirrors the partial unique index on
+// (tenant, env, entity_type, entity_id, feature_id) WHERE status='published'
+// AND aggregation_mode <> 'parallel': one published entitlement per
+// (entity, feature), except parallel-mode grant ECs which may stack.
+func (s *InMemoryEntitlementStore) checkUniquePerEntityFeature(ctx context.Context, e *entitlement.Entitlement) error {
+	if e.AggregationMode == types.EntitlementAggregationModeParallel || e.Status != types.StatusPublished {
+		return nil
+	}
+	existing, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, other *entitlement.Entitlement, _ interface{}) bool {
+		return other != nil &&
+			other.Status == types.StatusPublished &&
+			other.AggregationMode != types.EntitlementAggregationModeParallel &&
+			other.EnvironmentID == e.EnvironmentID &&
+			other.EntityType == e.EntityType &&
+			other.EntityID == e.EntityID &&
+			other.FeatureID == e.FeatureID
+	}, entitlementSortFn)
+	if err == nil && len(existing) > 0 {
+		return errors.NewError("a published entitlement already exists for this entity and feature").
+			WithReportableDetails(map[string]interface{}{
+				"entity_type": e.EntityType,
+				"entity_id":   e.EntityID,
+				"feature_id":  e.FeatureID,
+			}).
+			Mark(errors.ErrAlreadyExists)
+	}
+	return nil
+}
+
 func (s *InMemoryEntitlementStore) Create(ctx context.Context, e *entitlement.Entitlement) (*entitlement.Entitlement, error) {
 	if e == nil {
 		return nil, errors.NewError("entitlement cannot be nil").Mark(errors.ErrValidation)
@@ -110,6 +143,10 @@ func (s *InMemoryEntitlementStore) Create(ctx context.Context, e *entitlement.En
 	// Set environment ID from context if not already set
 	if e.EnvironmentID == "" {
 		e.EnvironmentID = types.GetEnvironmentID(ctx)
+	}
+
+	if err := s.checkUniquePerEntityFeature(ctx, e); err != nil {
+		return nil, err
 	}
 
 	err := s.InMemoryStore.Create(ctx, e.ID, e)
@@ -205,6 +242,10 @@ func (s *InMemoryEntitlementStore) CreateBulk(ctx context.Context, entitlements 
 		// Set environment ID from context if not already set
 		if e.EnvironmentID == "" {
 			e.EnvironmentID = environmentID
+		}
+
+		if err := s.checkUniquePerEntityFeature(ctx, e); err != nil {
+			return nil, err
 		}
 
 		if err := s.InMemoryStore.Create(ctx, e.ID, e); err != nil {

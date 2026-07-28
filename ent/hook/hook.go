@@ -225,6 +225,18 @@ func (f EntitlementFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntitlementMutation", m)
 }
 
+// The EntitlementGrantFunc type is an adapter to allow the use of ordinary
+// function as EntitlementGrant mutator.
+type EntitlementGrantFunc func(context.Context, *ent.EntitlementGrantMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EntitlementGrantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EntitlementGrantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EntitlementGrantMutation", m)
+}
+
 // The EntityIntegrationMappingFunc type is an adapter to allow the use of ordinary
 // function as EntityIntegrationMapping mutator.
 type EntityIntegrationMappingFunc func(context.Context, *ent.EntityIntegrationMappingMutation) (ent.Value, error)

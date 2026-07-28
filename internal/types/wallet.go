@@ -325,10 +325,8 @@ const (
 
 // ExpireCreditsResult is the result of attempting to expire a single credit transaction.
 type ExpireCreditsResult struct {
-	// Expired is true if the credits were expired.
+	// Expired is true if the remaining credits were expired.
 	Expired bool `json:"expired"`
-	// SkipReason is set when expiry was skipped (e.g. active_subscription, active_invoice).
-	SkipReason CreditExpirySkipReason `json:"skip_reason,omitempty"`
 }
 
 // WalletFilter represents the filter options for wallets
@@ -352,12 +350,17 @@ func (f *WalletFilter) Validate() error {
 	return f.QueryFilter.Validate()
 }
 
+// WalletMetadataKeyAutoTopup marks wallet transactions / invoices created by auto top-up.
+const WalletMetadataKeyAutoTopup = "auto_topup"
+
 // AutoTopup represents the auto top-up configuration for a wallet
 type AutoTopup struct {
 	Enabled   *bool            `json:"enabled"`
 	Threshold *decimal.Decimal `json:"threshold"`
 	Amount    *decimal.Decimal `json:"amount"`
 	Invoicing *bool            `json:"invoicing"`
+	// Cooldown is an optional cooloff after a successful auto top-up before another may run.
+	Cooldown *Duration `json:"cooldown,omitempty"`
 }
 
 func (a *AutoTopup) Validate() error {
@@ -375,6 +378,9 @@ func (a *AutoTopup) Validate() error {
 		return ierr.NewError("invoicing boolean is required").
 			WithHint("Invoicing boolean is required").
 			Mark(ierr.ErrValidation)
+	}
+	if err := a.Cooldown.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

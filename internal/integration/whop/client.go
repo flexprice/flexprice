@@ -2,9 +2,15 @@ package whop
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -18,7 +24,7 @@ import (
 // WhopClient defines the interface for Whop API operations
 type WhopClient interface {
 	GetWhopConfig(ctx context.Context) (*WhopConfig, error)
-	GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfig, error)
+	GetDecryptedWhopConfig(ctx context.Context, conn *connection.Connection) (*WhopConfig, error)
 	HasWhopConnection(ctx context.Context) bool
 	GetConnection(ctx context.Context) (*connection.Connection, error)
 	UpdateProductID(ctx context.Context, productID string) error
@@ -29,6 +35,9 @@ type WhopClient interface {
 	CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error)
 	MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error
 	GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error)
+	// VerifyWebhookSignature verifies a Whop webhook per the Standard Webhooks spec:
+	// https://docs.whop.com/developer/guides/webhooks
+	VerifyWebhookSignature(ctx context.Context, payload []byte, webhookID, timestamp, signature string) error
 }
 
 // Client handles Whop API client setup and configuration
@@ -71,7 +80,7 @@ func (c *Client) GetWhopConfig(ctx context.Context) (*WhopConfig, error) {
 			Mark(ierr.ErrNotFound)
 	}
 
-	whopConfig, err := c.GetDecryptedWhopConfig(conn)
+	whopConfig, err := c.GetDecryptedWhopConfig(ctx, conn)
 	if err != nil {
 		return nil, ierr.NewError("failed to get Whop configuration").
 			WithHint("Invalid Whop configuration").
@@ -93,14 +102,14 @@ func (c *Client) GetWhopConfig(ctx context.Context) (*WhopConfig, error) {
 }
 
 // GetDecryptedWhopConfig decrypts and returns Whop configuration
-func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfig, error) {
+func (c *Client) GetDecryptedWhopConfig(ctx context.Context, conn *connection.Connection) (*WhopConfig, error) {
 	if conn.ProviderType != types.SecretProviderWhop {
 		return nil, ierr.NewError("invalid provider type").
 			WithHint("Connection is not a Whop connection").
 			Mark(ierr.ErrValidation)
 	}
 	if conn.EncryptedSecretData.Whop == nil {
-		c.logger.Info(context.Background(), "no whop metadata found", "connection_id", conn.ID)
+		c.logger.Info(ctx, "no whop metadata found", "connection_id", conn.ID)
 		return &WhopConfig{}, nil
 	}
 
@@ -108,21 +117,114 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 
 	apiKey, err := c.encryptionService.Decrypt(w.APIKey)
 	if err != nil {
-		c.logger.Error(context.Background(), "failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(ctx, "failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop API key").Mark(ierr.ErrInternal)
 	}
 
 	companyID, err := c.encryptionService.Decrypt(w.CompanyID)
 	if err != nil {
-		c.logger.Error(context.Background(), "failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
+		c.logger.Error(ctx, "failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop company ID").Mark(ierr.ErrInternal)
 	}
 
+	var webhookSecret string
+	if w.WebhookSecret != "" {
+		webhookSecret, err = c.encryptionService.Decrypt(w.WebhookSecret)
+		if err != nil {
+			c.logger.Error(ctx, "failed to decrypt Whop webhook secret", "connection_id", conn.ID, "error", err)
+			// Don't fail - webhook secret is optional for non-webhook flows
+			webhookSecret = ""
+		}
+	}
+
 	return &WhopConfig{
-		APIKey:    apiKey,
-		CompanyID: companyID,
-		ProductID: w.ProductID,
+		APIKey:        apiKey,
+		CompanyID:     companyID,
+		ProductID:     w.ProductID,
+		WebhookSecret: webhookSecret,
 	}, nil
+}
+
+// whopSignatureTolerance is the maximum allowed difference between the
+// webhook-timestamp header and the current time, guarding against replay attacks.
+// Whop's documented retry policy (initial attempt plus 3 retries at 10s/20s/40s)
+// finishes in under 90s, so 5 minutes gives legitimate deliveries a wide margin
+// while still bounding how long a captured request stays replayable.
+const whopSignatureTolerance = 5 * time.Minute
+
+// VerifyWebhookSignature verifies a Whop webhook per the Standard Webhooks spec
+// (https://docs.whop.com/developer/guides/webhooks, https://github.com/standard-webhooks/standard-webhooks):
+// the signed content is "{webhook-id}.{webhook-timestamp}.{raw_body}", HMAC-SHA256'd
+// with the base64-decoded webhook secret, base64-encoded, and compared against the
+// "v1,<signature>" entries in the webhook-signature header.
+func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, webhookID, timestamp, signature string) error {
+	if webhookID == "" || timestamp == "" || signature == "" {
+		return ierr.NewError("missing webhook signature headers").
+			WithHint("Whop webhooks must include webhook-id, webhook-timestamp and webhook-signature headers").
+			Mark(ierr.ErrValidation)
+	}
+
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return ierr.NewError("invalid webhook-timestamp header").
+			WithHint("webhook-timestamp must be a unix timestamp in seconds").
+			Mark(ierr.ErrValidation)
+	}
+	if age := time.Since(time.Unix(ts, 0)); age > whopSignatureTolerance || age < -whopSignatureTolerance {
+		return ierr.NewError("webhook timestamp outside of tolerance").
+			WithHint("Request may be a replay attack or the sender's clock is skewed").
+			Mark(ierr.ErrValidation)
+	}
+
+	config, err := c.GetWhopConfig(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load Whop config for webhook verification").
+			Mark(ierr.ErrInternal)
+	}
+
+	if config.WebhookSecret == "" {
+		return ierr.NewError("webhook_secret not configured in Whop connection").
+			WithHint("Set webhook_secret in the Whop connection encrypted_secret_data").
+			Mark(ierr.ErrValidation)
+	}
+
+	secretKey, err := decodeWhopWebhookSecret(config.WebhookSecret)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("webhook_secret must be the base64-encoded secret from the Whop dashboard").
+			Mark(ierr.ErrValidation)
+	}
+
+	signedContent := fmt.Sprintf("%s.%s.%s", webhookID, timestamp, payload)
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write([]byte(signedContent))
+	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	for _, entry := range strings.Fields(signature) {
+		version, sig, ok := strings.Cut(entry, ",")
+		if !ok || version != "v1" {
+			continue
+		}
+		if hmac.Equal([]byte(sig), []byte(expectedSignature)) {
+			return nil
+		}
+	}
+
+	return ierr.NewError("webhook signature mismatch").
+		WithHint("Request may have been tampered with or webhook_secret is incorrect").
+		Mark(ierr.ErrValidation)
+}
+
+// decodeWhopWebhookSecret strips the conventional "whsec_" prefix (if present) and
+// base64-decodes the Whop webhook secret, per the Standard Webhooks spec.
+func decodeWhopWebhookSecret(secret string) ([]byte, error) {
+	secret = strings.TrimPrefix(secret, "whsec_")
+	decoded, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		return nil, ierr.NewError("invalid webhook secret encoding").Mark(ierr.ErrValidation)
+	}
+	return decoded, nil
 }
 
 // HasWhopConnection checks if the tenant has a Whop connection available

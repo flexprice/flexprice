@@ -13,7 +13,12 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
+
+// matching meters by event name is a hot path for the single-event and bulk consumers.
+// the in-memory cache is used to avoid hitting the database for repeat lookups.
+const matchingMetersByEventNameCacheTTL = 10 * time.Minute
 
 type meterRepository struct {
 	client    postgres.IClient
@@ -169,6 +174,31 @@ func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) (
 
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+// GetMatchingMetersByEventName fetches published meters for the event name using the in-memory cache first.
+func (r *meterRepository) GetMatchingMetersByEventName(ctx context.Context, eventName string) ([]*domainMeter.Meter, error) {
+	eventName = strings.TrimSpace(eventName)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixMeter, "event_name", eventName)
+
+	if cached, found := r.cache.Get(ctx, cacheKey); found {
+		if meters, ok := cached.([]*domainMeter.Meter); ok {
+			return meters, nil
+		}
+	}
+
+	filter := types.NewNoLimitMeterFilter()
+	filter.EventName = eventName
+	filter.Status = lo.ToPtr(types.StatusPublished)
+
+	meters, err := r.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(meters) > 0 {
+		r.cache.Set(ctx, cacheKey, meters, matchingMetersByEventNameCacheTTL)
+	}
+	return meters, nil
 }
 
 func (r *meterRepository) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*domainMeter.Meter, error) {
@@ -334,7 +364,10 @@ func (o MeterQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Met
 
 func (o MeterQueryOptions) ApplyStatusFilter(query MeterQuery, status string) MeterQuery {
 	if status == "" {
-		return query.Where(meter.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(meter.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(meter.Status(status))
 }

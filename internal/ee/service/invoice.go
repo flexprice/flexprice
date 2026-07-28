@@ -26,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -37,12 +38,16 @@ type InvoiceService interface {
 	// Additional methods specific to this service
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
+	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
+	// GetOrCreateDraftInvoiceForSubscription creates a Draft invoice for the subscription's current
+	// period (BillingReason=SUBSCRIPTION_CYCLE) if none exists yet, or returns the existing one.
+	GetOrCreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetInternalPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -53,7 +58,6 @@ type InvoiceService interface {
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, id string, forceGenerate bool) (string, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
-	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRealtimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error)
@@ -72,6 +76,9 @@ type InvoiceService interface {
 	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
+
+	// ListSubscriptionsDueForDailyDraftCompute returns subscriptions due for daily processing.
+	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context) ([]*subscription.Subscription, error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 
@@ -230,29 +237,33 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 			return ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
 		}
 
-		// 3. For subscription invoices, check period uniqueness and get billing sequence
+		// 3. For subscription invoices, check period uniqueness (when no caller key) and get billing sequence.
+		// Callers that supply IdempotencyKey own uniqueness (e.g. mid-cycle one-off proration charges).
+		// Period uniqueness remains for cycle/opening invoices that rely on the auto-generated key.
 		var billingSeq *int
 		if req.SubscriptionID != nil {
-			existingForPeriod, err := s.InvoiceRepo.GetForPeriod(txCtx, *req.SubscriptionID, *req.PeriodStart, *req.PeriodEnd, string(req.BillingReason))
-			if err != nil && !ierr.IsNotFound(err) {
-				return err
-			}
-			if existingForPeriod != nil {
-				if existingForPeriod.InvoiceStatus == types.InvoiceStatusDraft || existingForPeriod.InvoiceStatus == types.InvoiceStatusSkipped {
-					s.Logger.Info(ctx, "draft/skipped invoice already exists for period, returning existing",
+			if req.IdempotencyKey == nil {
+				existingForPeriod, err := s.InvoiceRepo.GetForPeriod(txCtx, *req.SubscriptionID, *req.PeriodStart, *req.PeriodEnd, string(req.BillingReason))
+				if err != nil && !ierr.IsNotFound(err) {
+					return err
+				}
+				if existingForPeriod != nil {
+					if existingForPeriod.InvoiceStatus == types.InvoiceStatusDraft || existingForPeriod.InvoiceStatus == types.InvoiceStatusSkipped {
+						s.Logger.Info(ctx, "draft/skipped invoice already exists for period, returning existing",
+							"invoice_id", existingForPeriod.ID,
+							"subscription_id", *req.SubscriptionID,
+							"period_start", *req.PeriodStart,
+							"period_end", *req.PeriodEnd)
+						resp = dto.NewInvoiceResponse(existingForPeriod)
+						return nil
+					}
+					s.Logger.Debug(ctx, "invoice already exists for subscription period",
 						"invoice_id", existingForPeriod.ID,
 						"subscription_id", *req.SubscriptionID,
 						"period_start", *req.PeriodStart,
 						"period_end", *req.PeriodEnd)
-					resp = dto.NewInvoiceResponse(existingForPeriod)
-					return nil
+					return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
 				}
-				s.Logger.Debug(ctx, "invoice already exists for subscription period",
-					"invoice_id", existingForPeriod.ID,
-					"subscription_id", *req.SubscriptionID,
-					"period_start", *req.PeriodStart,
-					"period_end", *req.PeriodEnd)
-				return ierr.NewError("invoice already exists").WithHint("invoice already exists for this period").Mark(ierr.ErrAlreadyExists)
 			}
 
 			// Get billing sequence
@@ -344,6 +355,24 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	return dto.NewInvoiceResponse(inv), nil
 }
 
+func (s *invoiceService) CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error) {
+	draftResp, err := s.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+	if err != nil {
+		return nil, false, err
+	}
+
+	computeReq := req.ToComputeRequest()
+	inv, skipped, err := s.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	if err != nil {
+		return nil, false, err
+	}
+	if skipped {
+		return dto.NewInvoiceResponse(inv), true, nil
+	}
+
+	return dto.NewInvoiceResponse(inv), false, nil
+}
+
 // CreateDraftInvoiceForSubscription creates a zero-dollar draft invoice without line items for a subscription period.
 // No invoice number is assigned. Use ComputeInvoice to populate line items and FinalizeInvoice to assign the number.
 func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error) {
@@ -370,6 +399,15 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
+// GetOrCreateDraftInvoiceForSubscription creates a Draft invoice for the subscription's given period if
+// none exists yet (BillingReason=SUBSCRIPTION_CYCLE), or returns the existing one. See
+// CreateDraftInvoiceForSubscription for the underlying idempotency-key + GetForPeriod dedup this relies
+// on — best-effort, not backed by a DB unique constraint on subscription+period+reason (the index named
+// idx_subscription_period_unique in ent/schema/invoice.go is not actually marked .Unique()).
+func (s *invoiceService) GetOrCreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*dto.InvoiceResponse, error) {
+	return s.CreateDraftInvoiceForSubscription(ctx, subscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd)
+}
+
 // ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
 // applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
 // Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
@@ -391,7 +429,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return inv, false, nil
 	}
 
-	// check if the sub is of type inherited and if so, skip computation
+	// Skip computation for inherited / grouped-invoicing subscriptions — their charges
+	// are rolled into the parent invoice. One-off invoices (no SubscriptionID) continue.
 	if inv.SubscriptionID != nil {
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
 		if err != nil {
@@ -528,9 +567,23 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 					return err
 				}
 			} else {
-				// Subscription: coupons only — credits and taxes deferred to finalization
+				// Subscription: coupons only — credits and taxes deferred to finalization.
 				if err := s.applyCouponsToInvoice(txCtx, inv, *applyReq); err != nil {
 					return err
+				}
+
+				// Re-apply any preserved prepaid credits so recompute doesn't wipe the prior debit.
+				if inv.TotalPrepaidCreditsApplied.IsPositive() {
+					effectiveApplied := spreadPrepaidCreditsAcrossLineItems(inv)
+					for _, li := range inv.LineItems {
+						if err := s.InvoiceLineItemRepo.Update(txCtx, li); err != nil {
+							return err
+						}
+					}
+					inv.TotalPrepaidCreditsApplied = effectiveApplied
+					inv.Total = decimal.Max(decimal.Zero, inv.Subtotal.Sub(inv.TotalDiscount).Sub(effectiveApplied).Add(inv.TotalTax))
+					inv.AmountDue = inv.Total
+					inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 				}
 			}
 		}
@@ -1096,6 +1149,67 @@ func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSi
 		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
 	}
 	return s.InvoiceRepo.ListAllTenant(ctx, filter)
+}
+
+// ListSubscriptionsDueForDailyDraftCompute skips invalid tenant environments.
+func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
+	ctx context.Context,
+) ([]*subscription.Subscription, error) {
+	tenantEnvConfigs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	const batchSize = 1000
+	var due []*subscription.Subscription
+
+	for _, tenantEnvConfig := range tenantEnvConfigs {
+		cfg, err := utils.ToStruct[types.DraftInvoiceRecomputeConfig](tenantEnvConfig.Config)
+		if err != nil {
+			s.Logger.Info(ctx, "skipping tenant with malformed draft_invoice_recompute_config",
+				"tenant_id", tenantEnvConfig.TenantID,
+				"environment_id", tenantEnvConfig.EnvironmentID,
+				"error", err)
+			continue
+		}
+		if !cfg.Enabled {
+			continue
+		}
+
+		tenantCtx := types.SetTenantID(ctx, tenantEnvConfig.TenantID)
+		tenantCtx = types.SetEnvironmentID(tenantCtx, tenantEnvConfig.EnvironmentID)
+
+		offset := 0
+		for {
+			filter := types.NewSubscriptionFilter()
+			filter.Limit = lo.ToPtr(batchSize)
+			filter.Offset = lo.ToPtr(offset)
+			filter.Status = lo.ToPtr(types.StatusPublished)
+			filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+			subs, err := s.SubRepo.List(tenantCtx, filter)
+			if err != nil {
+				s.Logger.Error(ctx, "failed to list subscriptions for daily draft-and-compute",
+					"tenant_id", tenantEnvConfig.TenantID,
+					"environment_id", tenantEnvConfig.EnvironmentID,
+					"error", err)
+				break
+			}
+			if len(subs) == 0 {
+				break
+			}
+
+			due = append(due, lo.Filter(subs, func(sub *subscription.Subscription, _ int) bool {
+				return !sub.CurrentPeriodStart.IsZero() && !sub.CurrentPeriodEnd.IsZero()
+			})...)
+
+			if len(subs) < batchSize {
+				break
+			}
+			offset += batchSize
+		}
+	}
+
+	return due, nil
 }
 
 // updateMetadata merges the request metadata with the existing invoice metadata.
@@ -1912,6 +2026,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 				"subscription_status": subscription.SubscriptionStatus,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Ledger freshness at the money moment: materialize any pending entitlement
+	// grant overage (debounce gap) before charges are calculated. Idempotent;
+	// never blocks invoicing — worst case billing folds the last materialized
+	// values. Dep guard keeps partially-wired test services on the old path.
+	if s.EntitlementGrantRepo != nil && s.CustomerRepo != nil && s.SubRepo != nil && s.MeterUsageRepo != nil {
+		if err := NewAlertService(s.ServiceParams).RefreshEntitlementGrantsForCustomer(ctx, subscription.CustomerID); err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before invoicing failed; using last materialized overage",
+				"subscription_id", subscription.ID, "error", err)
+		}
 	}
 
 	// Draft-first: create zero-dollar draft (idempotent; returns existing if same period)
@@ -3038,10 +3163,9 @@ func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types
 	)
 }
 
-// reconcileLineItems updates existing line items in-place when sub_line_item_id matches,
-// inserts new ones, and archives unmatched old ones.
-// Falls back to delete+create when existing items have no sub_line_item_id (pre-migration data).
-// Credits/discounts are NOT applied here — call applyCreditsAndCouponsToInvoice after this returns.
+// reconcileLineItems syncs invoice line items to the new billing payload
+// (update-in-place by sub_line_item_id, or delete+create as fallback).
+// Does not apply credits or coupons.
 func (s *invoiceService) reconcileLineItems(
 	ctx context.Context,
 	inv *invoice.Invoice,
@@ -3148,156 +3272,6 @@ func (s *invoiceService) reconcileLineItems(
 	result = append(result, toUpdate...)
 	result = append(result, toInsert...)
 	return result, nil
-}
-
-// RecalculateInvoiceV2 recalculates a draft subscription invoice in-place (replaces line items, reapplies credits/coupons/taxes).
-func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
-	s.Logger.Info(ctx, "recalculating invoice v2 (draft)", "invoice_id", id)
-
-	// Get the invoice with its line items
-	inv, err := s.getInvoiceWithLineItems(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate invoice is in draft state
-	if inv.InvoiceStatus != types.InvoiceStatusDraft {
-		return nil, ierr.NewError("invoice is not in draft status").
-			WithHint("Only draft invoices can be recalculated").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id":     inv.ID,
-				"current_status": inv.InvoiceStatus,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate this is a subscription invoice
-	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil {
-		return nil, ierr.NewError("invoice is not a subscription invoice").
-			WithHint("Only subscription invoices can be recalculated").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id":   inv.ID,
-				"invoice_type": inv.InvoiceType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate period dates are available
-	if inv.PeriodStart == nil || inv.PeriodEnd == nil {
-		return nil, ierr.NewError("invoice period dates are missing").
-			WithHint("Invoice must have period start and end dates for recalculation").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Get sub with line items
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start transaction to update invoice atomically
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// STEP 2: Call PrepareSubscriptionInvoiceRequest for fresh calculation.
-		// Line items are reconciled after this call (update-in-place or delete+create).
-		billingService := NewBillingService(s.ServiceParams)
-
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
-
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, &dto.PrepareSubscriptionInvoiceRequestParams{
-			Subscription:   sub,
-			PeriodStart:    *inv.PeriodStart,
-			PeriodEnd:      *inv.PeriodEnd,
-			ReferencePoint: referencePoint,
-		})
-		if err != nil {
-			return err
-		}
-
-		// STEP 3: Update invoice totals, metadata, and customer ID
-		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
-		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
-		prevAmountDue := inv.AmountDue
-		inv.Total = newInvoiceReq.Total
-		inv.Subtotal = newInvoiceReq.Subtotal
-		inv.CustomerID = newInvoiceReq.CustomerID
-		inv.AmountDue = newInvoiceReq.AmountDue
-		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
-		inv.Description = newInvoiceReq.Description
-		if newInvoiceReq.Metadata != nil {
-			inv.Metadata = newInvoiceReq.Metadata
-		}
-
-		// Update payment status if amount due changed
-		if inv.AmountRemaining.IsZero() {
-			inv.PaymentStatus = types.PaymentStatusSucceeded
-		} else if inv.AmountPaid.IsZero() {
-			inv.PaymentStatus = types.PaymentStatusPending
-		} else {
-			inv.PaymentStatus = types.PaymentStatusPending // Partially paid
-		}
-
-		// STEP 4+5: Reconcile line items (update-in-place or delete+create fallback)
-		reconciledItems, err := s.reconcileLineItems(txCtx, inv, newInvoiceReq.LineItems)
-		if err != nil {
-			return err
-		}
-		inv.LineItems = reconciledItems
-
-		// STEP 6: Update the invoice with subtotal/totals from billing
-		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-			return err
-		}
-
-		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		computeReq := newInvoiceReq.ToComputeRequest()
-		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, computeReq); err != nil {
-			return err
-		}
-		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-			return err
-		}
-
-		// STEP 7: Apply taxes after recalculation
-		if _, err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
-			return err
-		}
-
-		s.Logger.Info(ctx, "successfully recalculated invoice with fresh calculation",
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID,
-			"old_amount_due", prevAmountDue,
-			"new_amount_due", newInvoiceReq.AmountDue,
-			"new_line_items", len(reconciledItems),
-			"recalculation_type", "complete_fresh_calculation")
-
-		return nil
-	})
-
-	if err != nil {
-		s.Logger.Error(ctx, "failed to recalculate invoice",
-			"error", err,
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID)
-		return nil, err
-	}
-
-	// Publish webhook event for invoice recalculation
-	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
-
-	// Finalize the invoice if requested
-	if finalize {
-		if err := s.FinalizeInvoice(ctx, id); err != nil {
-			s.Logger.Error(ctx, "failed to finalize invoice after recalculation",
-				"error", err,
-				"invoice_id", id)
-			return nil, err
-		}
-		s.Logger.Info(ctx, "successfully finalized invoice after recalculation", "invoice_id", id)
-	}
-
-	// Return updated invoice
-	return s.GetInvoice(ctx, id)
 }
 
 // RecalculateVoidedInvoice creates a fresh replacement invoice for a voided subscription invoice

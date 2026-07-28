@@ -350,6 +350,11 @@ type TopUpWalletRequest struct {
 	BonusCreditsExpiryDateUTC *time.Time `json:"bonus_credits_expiry_date_utc,omitempty"`
 
 	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
+
+	// checkout opts into pay-first hosted checkout for PURCHASED_CREDIT_INVOICED top-ups.
+	// When set, credits are applied only after checkout payment succeeds.
+	// Omit for today's pay-later / auto-complete behavior.
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -411,6 +416,20 @@ func (r *TopUpWalletRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if r.Checkout != nil {
+		if r.TransactionReason != types.TransactionReasonPurchasedCreditInvoiced {
+			return ierr.NewError("checkout is only supported for PURCHASED_CREDIT_INVOICED").
+				WithHint("Omit checkout, or set transaction_reason to PURCHASED_CREDIT_INVOICED").
+				WithReportableDetails(map[string]interface{}{
+					"transaction_reason": r.TransactionReason,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := r.Checkout.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -422,6 +441,8 @@ type TopUpWalletResponse struct {
 	InvoiceID *string `json:"invoice_id,omitempty"`
 	// Wallet details after the operation
 	Wallet *WalletResponse `json:"wallet"`
+	// CheckoutSession is set when pay-first checkout was requested on top-up.
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // WalletBalanceResponse represents the response for getting wallet balance
@@ -441,22 +462,18 @@ type WalletBalanceResponse struct {
 }
 
 type ExpiredCreditsResponseItem struct {
-	TenantID                       string `json:"tenant_id"`
-	EnvironmentID                  string `json:"environment_id"`
-	Count                          int    `json:"count"`
-	Success                        int    `json:"success"`
-	Failed                         int    `json:"failed"`
-	SkippedDueToActiveSubscription int    `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int    `json:"skipped_due_to_active_invoice"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	Count         int    `json:"count"`
+	Success       int    `json:"success"`
+	Failed        int    `json:"failed"`
 }
 
 type ExpiredCreditsResponse struct {
-	Items                          []*ExpiredCreditsResponseItem `json:"items"`
-	Total                          int                           `json:"total"`
-	Success                        int                           `json:"success"`
-	Failed                         int                           `json:"failed"`
-	SkippedDueToActiveSubscription int                           `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int                           `json:"skipped_due_to_active_invoice"`
+	Items   []*ExpiredCreditsResponseItem `json:"items"`
+	Total   int                           `json:"total"`
+	Success int                           `json:"success"`
+	Failed  int                           `json:"failed"`
 }
 
 type GetCustomerWalletsRequest struct {

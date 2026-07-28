@@ -553,7 +553,10 @@ func (o CreditGrantQueryOptions) ApplyEnvironmentFilter(ctx context.Context, que
 
 func (o CreditGrantQueryOptions) ApplyStatusFilter(query CreditGrantQuery, status string) CreditGrantQuery {
 	if status == "" {
-		return query.Where(creditgrant.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditgrant.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(creditgrant.Status(status))
 }

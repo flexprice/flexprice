@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // EntitlementUpdate is the builder for updating Entitlement entities.
@@ -325,6 +326,107 @@ func (eu *EntitlementUpdate) ClearConfigValue() *EntitlementUpdate {
 	return eu
 }
 
+// SetGrantMeasure sets the "grant_measure" field.
+func (eu *EntitlementUpdate) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdate {
+	eu.mutation.SetGrantMeasure(tgm)
+	return eu
+}
+
+// SetNillableGrantMeasure sets the "grant_measure" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableGrantMeasure(tgm *types.EntitlementGrantMeasure) *EntitlementUpdate {
+	if tgm != nil {
+		eu.SetGrantMeasure(*tgm)
+	}
+	return eu
+}
+
+// ClearGrantMeasure clears the value of the "grant_measure" field.
+func (eu *EntitlementUpdate) ClearGrantMeasure() *EntitlementUpdate {
+	eu.mutation.ClearGrantMeasure()
+	return eu
+}
+
+// SetGrantDurationValue sets the "grant_duration_value" field.
+func (eu *EntitlementUpdate) SetGrantDurationValue(i int) *EntitlementUpdate {
+	eu.mutation.ResetGrantDurationValue()
+	eu.mutation.SetGrantDurationValue(i)
+	return eu
+}
+
+// SetNillableGrantDurationValue sets the "grant_duration_value" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableGrantDurationValue(i *int) *EntitlementUpdate {
+	if i != nil {
+		eu.SetGrantDurationValue(*i)
+	}
+	return eu
+}
+
+// AddGrantDurationValue adds i to the "grant_duration_value" field.
+func (eu *EntitlementUpdate) AddGrantDurationValue(i int) *EntitlementUpdate {
+	eu.mutation.AddGrantDurationValue(i)
+	return eu
+}
+
+// ClearGrantDurationValue clears the value of the "grant_duration_value" field.
+func (eu *EntitlementUpdate) ClearGrantDurationValue() *EntitlementUpdate {
+	eu.mutation.ClearGrantDurationValue()
+	return eu
+}
+
+// SetGrantDurationUnit sets the "grant_duration_unit" field.
+func (eu *EntitlementUpdate) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) *EntitlementUpdate {
+	eu.mutation.SetGrantDurationUnit(tgdu)
+	return eu
+}
+
+// SetNillableGrantDurationUnit sets the "grant_duration_unit" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableGrantDurationUnit(tgdu *types.EntitlementGrantDurationUnit) *EntitlementUpdate {
+	if tgdu != nil {
+		eu.SetGrantDurationUnit(*tgdu)
+	}
+	return eu
+}
+
+// ClearGrantDurationUnit clears the value of the "grant_duration_unit" field.
+func (eu *EntitlementUpdate) ClearGrantDurationUnit() *EntitlementUpdate {
+	eu.mutation.ClearGrantDurationUnit()
+	return eu
+}
+
+// SetGrantQuota sets the "grant_quota" field.
+func (eu *EntitlementUpdate) SetGrantQuota(d decimal.Decimal) *EntitlementUpdate {
+	eu.mutation.SetGrantQuota(d)
+	return eu
+}
+
+// SetNillableGrantQuota sets the "grant_quota" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableGrantQuota(d *decimal.Decimal) *EntitlementUpdate {
+	if d != nil {
+		eu.SetGrantQuota(*d)
+	}
+	return eu
+}
+
+// ClearGrantQuota clears the value of the "grant_quota" field.
+func (eu *EntitlementUpdate) ClearGrantQuota() *EntitlementUpdate {
+	eu.mutation.ClearGrantQuota()
+	return eu
+}
+
+// SetAggregationMode sets the "aggregation_mode" field.
+func (eu *EntitlementUpdate) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdate {
+	eu.mutation.SetAggregationMode(tam)
+	return eu
+}
+
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdate {
+	if tam != nil {
+		eu.SetAggregationMode(*tam)
+	}
+	return eu
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return eu.mutation
@@ -386,6 +488,21 @@ func (eu *EntitlementUpdate) check() error {
 	if v, ok := eu.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
+		}
+	}
+	if v, ok := eu.mutation.GrantMeasure(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_measure", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_measure": %w`, err)}
+		}
+	}
+	if v, ok := eu.mutation.GrantDurationUnit(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := eu.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -495,6 +612,36 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
+	}
+	if value, ok := eu.mutation.GrantMeasure(); ok {
+		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
+	}
+	if eu.mutation.GrantMeasureCleared() {
+		_spec.ClearField(entitlement.FieldGrantMeasure, field.TypeString)
+	}
+	if value, ok := eu.mutation.GrantDurationValue(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
+	}
+	if value, ok := eu.mutation.AddedGrantDurationValue(); ok {
+		_spec.AddField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
+	}
+	if eu.mutation.GrantDurationValueCleared() {
+		_spec.ClearField(entitlement.FieldGrantDurationValue, field.TypeInt)
+	}
+	if value, ok := eu.mutation.GrantDurationUnit(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
+	}
+	if eu.mutation.GrantDurationUnitCleared() {
+		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
+	}
+	if value, ok := eu.mutation.GrantQuota(); ok {
+		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
+	}
+	if eu.mutation.GrantQuotaCleared() {
+		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
+	}
+	if value, ok := eu.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -812,6 +959,107 @@ func (euo *EntitlementUpdateOne) ClearConfigValue() *EntitlementUpdateOne {
 	return euo
 }
 
+// SetGrantMeasure sets the "grant_measure" field.
+func (euo *EntitlementUpdateOne) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdateOne {
+	euo.mutation.SetGrantMeasure(tgm)
+	return euo
+}
+
+// SetNillableGrantMeasure sets the "grant_measure" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableGrantMeasure(tgm *types.EntitlementGrantMeasure) *EntitlementUpdateOne {
+	if tgm != nil {
+		euo.SetGrantMeasure(*tgm)
+	}
+	return euo
+}
+
+// ClearGrantMeasure clears the value of the "grant_measure" field.
+func (euo *EntitlementUpdateOne) ClearGrantMeasure() *EntitlementUpdateOne {
+	euo.mutation.ClearGrantMeasure()
+	return euo
+}
+
+// SetGrantDurationValue sets the "grant_duration_value" field.
+func (euo *EntitlementUpdateOne) SetGrantDurationValue(i int) *EntitlementUpdateOne {
+	euo.mutation.ResetGrantDurationValue()
+	euo.mutation.SetGrantDurationValue(i)
+	return euo
+}
+
+// SetNillableGrantDurationValue sets the "grant_duration_value" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableGrantDurationValue(i *int) *EntitlementUpdateOne {
+	if i != nil {
+		euo.SetGrantDurationValue(*i)
+	}
+	return euo
+}
+
+// AddGrantDurationValue adds i to the "grant_duration_value" field.
+func (euo *EntitlementUpdateOne) AddGrantDurationValue(i int) *EntitlementUpdateOne {
+	euo.mutation.AddGrantDurationValue(i)
+	return euo
+}
+
+// ClearGrantDurationValue clears the value of the "grant_duration_value" field.
+func (euo *EntitlementUpdateOne) ClearGrantDurationValue() *EntitlementUpdateOne {
+	euo.mutation.ClearGrantDurationValue()
+	return euo
+}
+
+// SetGrantDurationUnit sets the "grant_duration_unit" field.
+func (euo *EntitlementUpdateOne) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
+	euo.mutation.SetGrantDurationUnit(tgdu)
+	return euo
+}
+
+// SetNillableGrantDurationUnit sets the "grant_duration_unit" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableGrantDurationUnit(tgdu *types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
+	if tgdu != nil {
+		euo.SetGrantDurationUnit(*tgdu)
+	}
+	return euo
+}
+
+// ClearGrantDurationUnit clears the value of the "grant_duration_unit" field.
+func (euo *EntitlementUpdateOne) ClearGrantDurationUnit() *EntitlementUpdateOne {
+	euo.mutation.ClearGrantDurationUnit()
+	return euo
+}
+
+// SetGrantQuota sets the "grant_quota" field.
+func (euo *EntitlementUpdateOne) SetGrantQuota(d decimal.Decimal) *EntitlementUpdateOne {
+	euo.mutation.SetGrantQuota(d)
+	return euo
+}
+
+// SetNillableGrantQuota sets the "grant_quota" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableGrantQuota(d *decimal.Decimal) *EntitlementUpdateOne {
+	if d != nil {
+		euo.SetGrantQuota(*d)
+	}
+	return euo
+}
+
+// ClearGrantQuota clears the value of the "grant_quota" field.
+func (euo *EntitlementUpdateOne) ClearGrantQuota() *EntitlementUpdateOne {
+	euo.mutation.ClearGrantQuota()
+	return euo
+}
+
+// SetAggregationMode sets the "aggregation_mode" field.
+func (euo *EntitlementUpdateOne) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	euo.mutation.SetAggregationMode(tam)
+	return euo
+}
+
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	if tam != nil {
+		euo.SetAggregationMode(*tam)
+	}
+	return euo
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return euo.mutation
@@ -886,6 +1134,21 @@ func (euo *EntitlementUpdateOne) check() error {
 	if v, ok := euo.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
+		}
+	}
+	if v, ok := euo.mutation.GrantMeasure(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_measure", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_measure": %w`, err)}
+		}
+	}
+	if v, ok := euo.mutation.GrantDurationUnit(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if v, ok := euo.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -1012,6 +1275,36 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
+	}
+	if value, ok := euo.mutation.GrantMeasure(); ok {
+		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
+	}
+	if euo.mutation.GrantMeasureCleared() {
+		_spec.ClearField(entitlement.FieldGrantMeasure, field.TypeString)
+	}
+	if value, ok := euo.mutation.GrantDurationValue(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
+	}
+	if value, ok := euo.mutation.AddedGrantDurationValue(); ok {
+		_spec.AddField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
+	}
+	if euo.mutation.GrantDurationValueCleared() {
+		_spec.ClearField(entitlement.FieldGrantDurationValue, field.TypeInt)
+	}
+	if value, ok := euo.mutation.GrantDurationUnit(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
+	}
+	if euo.mutation.GrantDurationUnitCleared() {
+		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
+	}
+	if value, ok := euo.mutation.GrantQuota(); ok {
+		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
+	}
+	if euo.mutation.GrantQuotaCleared() {
+		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
+	}
+	if value, ok := euo.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

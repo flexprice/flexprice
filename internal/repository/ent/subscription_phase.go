@@ -398,7 +398,7 @@ func (o SubscriptionPhaseQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 
 func (o SubscriptionPhaseQueryOptions) ApplyStatusFilter(query SubscriptionPhaseQuery, status string) SubscriptionPhaseQuery {
 	if status == "" {
-		return query.Where(subscriptionphase.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(subscriptionphase.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(subscriptionphase.Status(status))
 }

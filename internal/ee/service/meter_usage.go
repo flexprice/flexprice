@@ -49,8 +49,20 @@ type MeterUsageService interface {
 	// Both analytics and billing paths call this per-subscription to get line-item-bounded usage.
 	GetSubscriptionMeterUsage(ctx context.Context, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
 
+	// GetSubscriptionMeterUsageWithSub is the data-fed variant: the caller
+	// supplies the subscription and no DB fetch happens for it.
+	GetSubscriptionMeterUsageWithSub(ctx context.Context, sub *subscription.Subscription, req *GetSubscriptionMeterUsageRequest) (*SubscriptionMeterUsage, error)
+
 	// ConvertToBillingCharges maps SubscriptionMeterUsage to billing charges.
 	ConvertToBillingCharges(ctx context.Context, usage *SubscriptionMeterUsage) ([]*dto.SubscriptionUsageByMetersResponse, decimal.Decimal, error)
+
+	// GetUsageTotal returns a meter's aggregated usage total (FINAL consistency;
+	// supports a single range or multiple disjoint TimeRanges in one query).
+	GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error)
+
+	// GetMeterWindowCost prices the meter's usage in [from, to) through the
+	// billing path, so a mid-window price change is priced per line-item segment.
+	GetMeterWindowCost(ctx context.Context, sub *subscription.Subscription, meterID string, from, to time.Time) (decimal.Decimal, error)
 
 	// DebugEvent powers GET /events/:id — reports processing status and
 	// per-lookup diagnostics for a single event under the meter-usage pipeline.
@@ -73,6 +85,45 @@ func NewMeterUsageService(params ServiceParams) MeterUsageService {
 		repo:          params.MeterUsageRepo,
 		logger:        params.Logger,
 	}
+}
+
+func (s *meterUsageService) GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error) {
+	if s.repo == nil {
+		return decimal.Zero, ierr.NewError("meter usage repository is not configured").Mark(ierr.ErrSystem)
+	}
+	result, err := s.repo.GetUsage(ctx, req.ToParams())
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return result.TotalValue, nil
+}
+
+func (s *meterUsageService) GetMeterWindowCost(ctx context.Context, sub *subscription.Subscription, meterID string, from, to time.Time) (decimal.Decimal, error) {
+	if !to.After(from) {
+		return decimal.Zero, nil
+	}
+	subUsage, err := s.GetSubscriptionMeterUsageWithSub(ctx, sub, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  sub.ID,
+		StartTime:       from,
+		EndTime:         to,
+		MeterIDs:        []string{meterID},
+		UseFinal:        true,
+		IncludeChildren: true,
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	charges, _, err := s.ConvertToBillingCharges(ctx, subUsage)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, c := range charges {
+		if c != nil && c.MeterID == meterID {
+			total = total.Add(decimal.NewFromFloat(c.Amount))
+		}
+	}
+	return total, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -312,10 +363,24 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		return nil, ierr.NewError("subscription_id is required").Mark(ierr.ErrValidation)
 	}
 
-	// 1. Get subscription
 	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, err
+	}
+	return s.GetSubscriptionMeterUsageWithSub(ctx, sub, req)
+}
+
+// GetSubscriptionMeterUsageWithSub is the data-fed variant of
+// GetSubscriptionMeterUsage: the caller supplies the subscription so no extra
+// DB fetch happens for it. Line items are (re)loaded scoped to the usage window
+// and assigned onto sub.LineItems.
+func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req *GetSubscriptionMeterUsageRequest,
+) (*SubscriptionMeterUsage, error) {
+	if req == nil || sub == nil {
+		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
 	}
 
 	// 2. Resolve external customer IDs for meter_usage queries.
@@ -2145,12 +2210,12 @@ func (s *meterUsageService) ConvertToBillingCharges(
 			Quantity:               quantity.InexactFloat64(),
 			FilterValues:           make(price.JSONBFilters),
 			MeterID:                lu.MeterID,
-			MeterDisplayName:       lu.Meter.Name,
 			Price:                  lu.Price,
 			BucketedUsageResult:    lu.BucketedResult,
 		}
 
 		if lu.Meter != nil {
+			charge.MeterDisplayName = lu.Meter.Name
 			for _, filter := range lu.Meter.Filters {
 				charge.FilterValues[filter.Key] = filter.Values
 			}

@@ -35,7 +35,6 @@ type EventService interface {
 	GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error)
 	GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error)
 	GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error)
-	MonitorKafkaLag(ctx context.Context) error
 }
 
 type eventService struct {
@@ -90,11 +89,41 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		return nil
 	}
 
+	// Batched path: one ClickHouse INSERT per batch downstream. Disabled falls back to one
+	// message per event, leaving the `events` topic and its consumers untouched.
+	if s.config != nil && s.config.Event.BulkPublishEnabled {
+		return s.bulkCreateEventsBatched(ctx, events)
+	}
+
 	// publish events to Kafka for downstream processing
 	for _, event := range events.Events {
 		if err := s.CreateEvent(ctx, event); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// bulkCreateEventsBatched validates every event up front so a bad event fails the request
+// instead of poisoning a batch the consumer would retry whole.
+func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.BulkIngestEventRequest) error {
+	domainEvents := make([]*events.Event, 0, len(req.Events))
+	for _, createEventRequest := range req.Events {
+		if err := createEventRequest.Validate(); err != nil {
+			return err
+		}
+		event := createEventRequest.ToEvent(ctx)
+		createEventRequest.EventID = event.ID
+		domainEvents = append(domainEvents, event)
+	}
+
+	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
+		// Accepted-then-published (202): a broker failure is logged, not surfaced, as in CreateEvent.
+		s.logger.With(
+			"event_count", len(domainEvents),
+			"error", err,
+		).Error("failed to publish event batch")
 	}
 
 	return nil
@@ -150,7 +179,7 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		PriceID:             req.PriceID,
 		MeterID:             req.MeterID,
 		BillingAnchor:       req.BillingAnchor,
-		Timezone:    req.Timezone,
+		Timezone:            req.Timezone,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation
@@ -691,71 +720,6 @@ func parseEventIteratorToStruct(key string) (*events.EventIterator, error) {
 
 func createEventIteratorKey(timestamp time.Time, id string) string {
 	return fmt.Sprintf("%d::%s", timestamp.UnixNano(), id)
-}
-
-// MonitorKafkaLag monitors Kafka consumer lag for the event consumption pipeline.
-// It creates OTel monitoring spans to track lag metrics for alerting and observability.
-func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
-	sentrySvc := s.tracingSvc
-	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
-
-	eventConsumptionTopic, eventConsumptionConsumerGroup := s.getKafkaConsumerConfig(ctx)
-
-	if err := s.monitorConsumerLag(
-		ctx,
-		sentrySvc,
-		kafkaMonitoring,
-		eventConsumptionTopic,
-		eventConsumptionConsumerGroup,
-		"kafka.lag.event_consumption",
-	); err != nil {
-		s.logger.Info(ctx, "failed to monitor event consumption lag",
-			"error", err,
-			"topic", eventConsumptionTopic,
-			"consumer_group", eventConsumptionConsumerGroup)
-	}
-
-	return nil
-}
-
-// monitorConsumerLag retrieves and reports consumer lag metrics for a specific Kafka topic and consumer group.
-// It creates a Sentry monitoring span with lag details for observability.
-func (s *eventService) monitorConsumerLag(
-	ctx context.Context,
-	sentrySvc *tracing.Service,
-	kafkaMonitoring *kafka.MonitoringService,
-	topic string,
-	consumerGroup string,
-	spanName string,
-) error {
-	// Retrieve consumer lag metrics
-	lag, err := kafkaMonitoring.GetConsumerLag(ctx, topic, consumerGroup)
-	if err != nil {
-		return err
-	}
-
-	// Create monitoring span for lag tracking
-	spanParams := map[string]interface{}{
-		"topic":          topic,
-		"consumer_group": consumerGroup,
-		"total_lag":      lag.TotalLag,
-	}
-
-	span, spanCtx := sentrySvc.StartKafkaLagMonitoringSpan(ctx, spanName, spanParams)
-	if span != nil {
-		defer span.Finish()
-	}
-
-	s.logger.Info(ctx, "kafka lag monitored",
-		"topic", topic,
-		"consumer_group", consumerGroup,
-		"total_lag", lag.TotalLag,
-		"span_name", spanName)
-
-	// Use the spanCtx to ensure proper context propagation
-	_ = spanCtx
-
-	return nil
 }
 
 func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error) {

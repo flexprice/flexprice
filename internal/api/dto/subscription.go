@@ -216,15 +216,16 @@ func (c *LineItemCommitmentConfig) Validate() error {
 		}
 	}
 
-	// Rule 3: Overage factor is required and must be greater than 1.0 when commitment is set
+	// Rule 3: Overage factor is required and must be at least 1.0 when commitment is set.
+	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
 	if c.OverageFactor == nil {
 		return ierr.NewError("overage_factor is required when commitment is set").
-			WithHint("Specify an overage_factor greater than 1.0").
+			WithHint("Specify an overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if c.OverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be greater than 1.0").
+	if c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"overage_factor": c.OverageFactor,

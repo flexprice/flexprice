@@ -25,6 +25,11 @@ kafka:
   consumer_group: "flexprice-consumer-local"
   topic: "staging_events"
   topic_lazy: "staging_events_lazy"
+  topic_bulk: "staging_events_bulk"
+  # Batching bounds for the bulk publish path; whichever is hit first closes the batch.
+  # Keep bulk_max_batch_bytes under the topic's max.message.bytes (1 MB default on MSK).
+  bulk_max_batch_size: 200
+  bulk_max_batch_bytes: 524288
   topic_dlq: "staging_events_dlq"
   tls: false
   use_sasl: false
@@ -50,6 +55,8 @@ kafka:
     events_dlq:
       partitions: 3
     events_backfill:
+      partitions: 6
+    events_bulk:
       partitions: 6
     events_post_processing:
       partitions: 6
@@ -92,6 +99,20 @@ clickhouse:
   password: flexprice123
   database: flexprice
   max_memory_usage: 50
+  # Per-process connection pool (0 would fall back to clickhouse-go's defaults: idle 5,
+  # open idle+5 = 10 — a hidden 10-query cap per pod/task that bottlenecks event ingest,
+  # since consumers doing one INSERT per event are bounded by max_open_conns / insert latency).
+  # max_idle_conns stays lower than max_open_conns so the pool bursts under load and releases
+  # when idle: 100 idle x N pods would otherwise hold a permanent connection floor server-side.
+  # Sizing check before raising further: FLEET tasks x max_open_conns must stay under the
+  # server's max_connections (4096 on ClickHouse Cloud), and only helps while the server has
+  # spare admission (system.metrics Query vs max_concurrent_queries).
+  max_open_conns: 100
+  max_idle_conns: 20
+  # dial_timeout also bounds the pool-acquire wait inside the driver; read_timeout bounds
+  # a running query. 0 = built-in defaults (10s / 30s).
+  dial_timeout: 0s
+  read_timeout: 0s
 
 postgres:
   host: 127.0.0.1 # For local mode
@@ -176,6 +197,7 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_METRICS_AUTH_VALUE
     auth_value: ""
     interval_seconds: 60
+    temporal_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
@@ -188,6 +210,9 @@ pyroscope:
 
 event:
   publish_destination: "kafka"
+  # Batched publishing for POST /v1/events/bulk (kafka.topic_bulk). Off by default: batched
+  # events bypass the `events` consumers, so enable only where a bulk consumer runs.
+  bulk_publish_enabled: false
 
 dynamodb:
   in_use: false
@@ -213,6 +238,7 @@ logging:
 
 webhook:
   enabled: true
+  event_cascading_enabled: true
   topic: "flexprice_system_events"
   consumer_group: "system-events-consumer"
   rate_limit: 5
@@ -356,8 +382,6 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
-  alert_debounce_enabled: false
-  alert_debounce_window: "5m30s"
 
 meter_usage_tracking_lazy:
   enabled: true
@@ -365,6 +389,13 @@ meter_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
+
+# Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
+# per-customer Temporal workflow (spend + entitlement grants + wallet alerts).
+usage_alerts:
+  enabled: false # meter usage pushes the debounce workflow
+  schedule_delay: "5m30s" # workflow StartDelay AND Redis schedule-throttle lock TTL
+  stale_after: "1h" # workflow runs firing later than this yield (ContinueAsNew); also activity ScheduleToStartTimeout
 
 costsheet_usage_tracking:
   enabled: false
@@ -394,6 +425,10 @@ feature_flag:
   meter_usage_for_billing_enabled_tenants: []
   meter_usage_for_billing_disabled_tenants: []
 
+  # Apply about-to-expire wallet credits into draft invoices before expiry. Global off by default; roll out tenant-by-tenant via enabled_tenants.
+  enable_pre_expiry_credit_consumption: false
+  pre_expiry_credit_consumption_enabled_tenants: []
+
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:
   api_key: ""
@@ -419,7 +454,7 @@ oauth:
   # Development: http://localhost:3000/tools/integrations/oauth/callback
   # Staging: https://admin-dev.flexprice.io/tools/integrations/oauth/callback
   # Production: https://admin.flexprice.io/tools/integrations/oauth/callback
-  redirect_uri: "" 
+  redirect_uri: ""
 
 # Customer portal configuration
 customer_portal:
@@ -440,6 +475,12 @@ redis:
   # was always *redis.ClusterClient). Set to false when targeting a single-node
   # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
   cluster_mode: true
+  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
+  sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
+  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
+  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
+  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
+  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
@@ -453,6 +494,26 @@ raw_event_consumption:
   output_topic: "staging_events" # OUTPUT: Publishes transformed events to here
   rate_limit: 10
   consumer_group: "v1_raw_event_processing_v4"
+
+# Bulk event consumers — read RawEventBatch messages published by
+# POST /events/bulk (identified via metadata batch_source=api_bulk) and
+# bulk-insert directly. Two parallel consumer groups on the same topic:
+# one writes to events, one extracts meter+qty and writes to meter_usage.
+# Reuses the raw_event_consumption topic; the metadata filter keeps Bento
+# batches on their own path (RawEventConsumptionService).
+bulk_event_consumption:
+  enabled: false
+  topic: "staging_events_bulk"
+  rate_limit: 10
+  consumer_group: "v1_bulk_event_consumption"
+  topic_dlq: "staging_events_bulk_dlq"
+
+bulk_meter_usage_tracking:
+  enabled: false
+  topic: "staging_events_bulk"
+  rate_limit: 10
+  consumer_group: "v1_bulk_meter_usage_tracking"
+  topic_dlq: "staging_meter_usage_tracking_bulk_dlq"
 
 integration_events:
   enabled: true
@@ -469,3 +530,6 @@ onboarding_events:
 # Checkout base URL for the checkout page
 checkout:
   base_url: ""
+
+onboarding:
+  default_tenant_name: "Flexprice"

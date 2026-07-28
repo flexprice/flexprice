@@ -16,6 +16,9 @@ import (
 // EventPublisher handles event publishing across multiple destinations
 type EventPublisher interface {
 	Publish(ctx context.Context, event *events.Event) error
+	// PublishBatch writes events as batched messages. Kafka only — other destinations have no
+	// batch format and fall back to per-event publishing.
+	PublishBatch(ctx context.Context, evts []*events.Event) error
 }
 
 type eventPublisher struct {
@@ -106,4 +109,45 @@ func (s *eventPublisher) Publish(ctx context.Context, event *events.Event) error
 	default:
 		return fmt.Errorf("unknown publish destination: %s", s.config.PublishDestination)
 	}
+}
+
+func (s *eventPublisher) PublishBatch(ctx context.Context, evts []*events.Event) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(evts) == 0 {
+		return nil
+	}
+
+	// Expanded per event for DynamoDB: our client exposes only single-item Publish. DynamoDB
+	// itself supports BatchWriteItem — wiring that up is a separate change.
+	switch s.config.PublishDestination {
+	case types.PublishToKafka:
+		return s.kafkaPublisher.PublishBatch(ctx, evts)
+	case types.PublishToDynamoDB:
+		return s.publishEachToDynamo(ctx, evts)
+	case types.PublishToAll:
+		kafkaErr := s.kafkaPublisher.PublishBatch(ctx, evts)
+		dynamoErr := s.publishEachToDynamo(ctx, evts)
+		if kafkaErr != nil && dynamoErr != nil {
+			return fmt.Errorf("failed to publish batch to both kafka and dynamodb: %v, %v", kafkaErr, dynamoErr)
+		} else if kafkaErr != nil {
+			return fmt.Errorf("failed to publish batch to kafka: %w", kafkaErr)
+		} else if dynamoErr != nil {
+			return fmt.Errorf("failed to publish batch to dynamodb: %w", dynamoErr)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown publish destination: %s", s.config.PublishDestination)
+	}
+}
+
+func (s *eventPublisher) publishEachToDynamo(ctx context.Context, evts []*events.Event) error {
+	var firstErr error
+	for _, e := range evts {
+		if err := s.dynamoPublisher.Publish(ctx, e); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }

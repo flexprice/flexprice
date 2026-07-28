@@ -3,16 +3,18 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -777,84 +779,41 @@ func (s *subscriptionModificationService) settlePayFirst(
 		return nil, err
 	}
 
-	if err := s.guardPendingModifyCheckout(ctx, sub.CustomerID, request.GetSubscriptionID()); err != nil {
+	existing, err := s.getAnyPendingCheckoutSession(ctx, sub.CustomerID, sub.ID)
+	if err != nil {
 		return nil, err
 	}
-
-	providerCfg := &types.CheckoutPaymentProviderConfig{}
-	if checkout.PaymentProviderConfig != nil {
-		providerCfg = checkout.PaymentProviderConfig
-	}
-	if providerCfg.CollectionMethod == "" {
-		providerCfg.CollectionMethod = types.CollectionMethodSendInvoice
-	}
-	if err := providerCfg.Validate(); err != nil {
-		return nil, err
+	if len(existing) > 0 {
+		return nil, ierr.NewError("a pending checkout session already exists for this subscription").
+			WithHint("Complete or cancel the existing checkout before starting another payment-gated modification").
+			WithReportableDetails(map[string]any{
+				"subscription_id":     sub.ID,
+				"checkout_session_id": existing[0].ID,
+			}).
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	draftInvoice, err := s.createAggregatedProrationDraftInvoice(ctx, sub, prorationResult)
 	if err != nil {
 		return nil, err
 	}
-	draftInvoiceID := draftInvoice.ID
 
-	var meta types.Metadata
-	if len(checkout.Metadata) > 0 {
-		meta = types.Metadata(checkout.Metadata)
-	}
-
-	session := &domainCheckout.CheckoutSession{
-		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
-		EnvironmentID:   types.GetEnvironmentID(ctx),
-		CustomerID:      sub.CustomerID,
-		Action:          types.CheckoutActionModifySubscription,
-		CheckoutStatus:  types.CheckoutStatusInitiated,
-		PaymentProvider: checkout.PaymentProvider,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+	checkoutSvc := NewCheckoutSessionService(sp)
+	sessionResp, err := checkoutSvc.StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+		CustomerID: sub.CustomerID,
+		Action:     types.CheckoutActionModifySubscription,
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: modifyParams,
-		}),
-		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(providerCfg),
-		CheckoutInvoiceID:     &draftInvoiceID,
-		IdempotencyKey:        checkout.IdempotencyKey,
-		SuccessURL:            checkout.SuccessURL,
-		FailureURL:            checkout.FailureURL,
-		CancelURL:             checkout.CancelURL,
-		ExpiresAt:             time.Now().UTC().Add(checkout.PaymentProvider.SessionExpiry()),
-		Metadata:              meta,
-		BaseModel:             types.GetDefaultBaseModel(ctx),
-	}
-
-	if err := sp.CheckoutSessionRepo.Create(ctx, session); err != nil {
-		// Session never persisted — archive the draft so it is not orphaned.
-		if delErr := sp.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
-			sp.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
-				"invoice_id", draftInvoiceID,
-				"error", delErr,
-				"original_err", err,
-			)
-		}
+		},
+		DraftInvoice: &draftInvoice.Invoice,
+		Checkout:     checkout,
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	checkoutSvc := &checkoutSessionService{ServiceParams: s.serviceParams}
-
-	// Fulfill: payment + provider link. On failure, best-effort cleanup.
-	if err := s.fulfillModifySubscriptionCheckout(ctx, checkoutSvc, session, &draftInvoice.Invoice); err != nil {
-		if cleanupErr := checkoutSvc.cleanupCheckoutSession(ctx, session, err); cleanupErr != nil {
-			sp.Logger.Error(ctx, "checkout cleanup failed after pay-first fulfillment error",
-				"session_id", session.ID,
-				"error", cleanupErr,
-				"original_err", err,
-			)
-		}
-		return nil, err
-	}
-
-	sessionResp := dto.ToCheckoutSessionResponse(session)
-	checkoutSvc.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
 
 	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, request.GetSubscriptionID())
+	subResp, err := subSvc.GetSubscription(ctx, sub.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -883,63 +842,20 @@ func (s *subscriptionModificationService) settlePayFirst(
 	}, nil
 }
 
-func (s *subscriptionModificationService) fulfillModifySubscriptionCheckout(
-	ctx context.Context,
-	checkoutSvc *checkoutSessionService,
-	session *domainCheckout.CheckoutSession,
-	inv *invoice.Invoice,
-) error {
-	payResp, err := checkoutSvc.createCheckoutPayment(ctx, inv, session.PaymentProvider)
-	if err != nil {
-		return err
-	}
-	session.CheckoutInvoiceID = &inv.ID
-	session.CheckoutPaymentID = &payResp.ID
-
-	providerResult, err := checkoutSvc.callCheckoutProvider(ctx, session, payResp)
-	if err != nil {
-		return err
-	}
-	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
-	session.CheckoutStatus = types.CheckoutStatusPending
-	return s.serviceParams.CheckoutSessionRepo.Update(ctx, session)
-}
-
-func (s *subscriptionModificationService) guardPendingModifyCheckout(
-	ctx context.Context,
-	customerID string,
-	subscriptionID string,
-) error {
-	filter := &types.CheckoutSessionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
+func (s *subscriptionModificationService) getAnyPendingCheckoutSession(ctx context.Context, customerID string, subscriptionID string) ([]*checkout.CheckoutSession, error) {
+	pendingFilter := &types.CheckoutSessionFilter{
+		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
 		CustomerIDs: []string{customerID},
 		Actions:     []types.CheckoutAction{types.CheckoutActionModifySubscription},
 		CheckoutStatuses: []types.CheckoutStatus{
 			types.CheckoutStatusInitiated,
 			types.CheckoutStatusPending,
 		},
+		Configuration: &types.CheckoutConfigurationFilter{SubscriptionID: subscriptionID},
 	}
-	sessions, err := s.serviceParams.CheckoutSessionRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-	for _, sess := range sessions {
-		if sess == nil {
-			continue
-		}
-		cfg := sess.Configuration.ToCheckoutConfiguration()
-		if cfg.ModifySubscriptionParams != nil &&
-			cfg.ModifySubscriptionParams.SubscriptionID == subscriptionID {
-			return ierr.NewError("a pending checkout session already exists for this subscription").
-				WithHint("Complete or cancel the existing checkout before starting another payment-gated modification").
-				WithReportableDetails(map[string]any{
-					"subscription_id":     subscriptionID,
-					"checkout_session_id": sess.ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
-		}
-	}
-	return nil
+	pendingFilter.Limit = lo.ToPtr(1)
+
+	return s.serviceParams.CheckoutSessionRepo.List(ctx, pendingFilter)
 }
 
 // createAggregatedProrationDraftInvoice locks the batch net (charges − credits) on one DRAFT ONE_OFF.
@@ -966,23 +882,21 @@ func (s *subscriptionModificationService) createAggregatedProrationDraftInvoice(
 	}
 
 	req := buildAggregatedProrationChargeInvoiceRequest(sub, items)
+
 	invoiceSvc := NewInvoiceService(s.serviceParams)
-	draftResp, err := invoiceSvc.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
-	if err != nil {
-		return nil, err
-	}
-	computeReq := req.ToComputeRequest()
-	_, skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
+	inv, skipped, err := invoiceSvc.CreateComputedDraftInvoice(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	if skipped {
-		return nil, ierr.NewError("proration draft invoice was skipped").
-			WithHint("Expected a non-zero proration charge").
-			WithReportableDetails(map[string]any{"invoice_id": draftResp.ID}).
+		return nil, ierr.NewError("draft invoice was skipped").
+			WithHint("Expected a non-zero invoice amount").
+			WithReportableDetails(map[string]any{
+				"invoice_id": inv.GetId(),
+			}).
 			Mark(ierr.ErrValidation)
 	}
-	return invoiceSvc.GetInvoice(ctx, draftResp.ID)
+	return inv, nil
 }
 
 func buildAggregatedProrationChargeInvoiceRequest(
@@ -994,6 +908,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 	var periodStart *time.Time
 	periodEnd := sub.CurrentPeriodEnd
 	billingPeriod := string(sub.BillingPeriod)
+	keyParts := make([]prorationChargeKeyPart, 0, len(items))
 
 	for _, item := range items {
 		single := buildProrationChargeInvoiceRequest(sub, item)
@@ -1002,8 +917,14 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		if single.PeriodStart != nil && (periodStart == nil || single.PeriodStart.Before(*periodStart)) {
 			periodStart = single.PeriodStart
 		}
+		if mod := item.getMod(); mod != nil {
+			if oldItem := mod.getOldLineItem(); oldItem != nil {
+				keyParts = append(keyParts, newProrationChargeKeyPart(oldItem.ID, mod.getEffectiveDate()))
+			}
+		}
 	}
 
+	idempKey := prorationChargeIdempotencyKey(sub.ID, keyParts)
 	return dto.CreateInvoiceRequest{
 		CustomerID:     sub.GetInvoicingCustomerID(),
 		SubscriptionID: &sub.ID,
@@ -1017,6 +938,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
 		LineItems:      lineItems,
+		IdempotencyKey: &idempKey,
 	}
 }
 
@@ -1045,26 +967,22 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 	req := buildProrationChargeInvoiceRequest(sub, item)
 
 	if draft {
-		draftResp, err := invoiceSvc.CreateEmptyDraftInvoice(ctx, req.ToDraftRequest())
+		latest, skipped, err := invoiceSvc.CreateComputedDraftInvoice(ctx, req)
 		if err != nil {
 			sp.Logger.Error(ctx, "failed to create draft proration invoice for quantity change", "error", err)
 			return nil, err
 		}
-		computeReq := req.ToComputeRequest()
-		_, skipped, err := invoiceSvc.ComputeInvoice(ctx, draftResp.ID, &computeReq)
-		if err != nil {
-			return nil, err
-		}
 		if skipped {
-			return nil, ierr.NewError("proration draft invoice was skipped").
-				WithHint("Expected a non-zero proration charge").
-				WithReportableDetails(map[string]any{"invoice_id": draftResp.ID}).
+			return nil, ierr.NewError("draft invoice was skipped").
+				WithHint("Expected a non-zero invoice amount").
+				WithReportableDetails(
+					map[string]any{
+						"invoice_id": latest.GetId(),
+					},
+				).
 				Mark(ierr.ErrValidation)
 		}
-		latest, err := invoiceSvc.GetInvoice(ctx, draftResp.ID)
-		if err != nil {
-			return nil, err
-		}
+		
 		return &dto.ChangedInvoice{
 			ID:      latest.ID,
 			Action:  dto.ChangedInvoiceActionCreated,
@@ -1153,6 +1071,9 @@ func buildProrationChargeInvoiceRequest(
 		strings.ToUpper(sub.Currency), price.Price.Amount.String(),
 		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
 
+	idempKey := prorationChargeIdempotencyKey(sub.ID, []prorationChargeKeyPart{
+		newProrationChargeKeyPart(oldItem.ID, effectiveDate),
+	})
 	return dto.CreateInvoiceRequest{
 		CustomerID:     billingCustomer,
 		SubscriptionID: &sub.ID,
@@ -1165,6 +1086,7 @@ func buildProrationChargeInvoiceRequest(
 		PeriodStart:    &effectiveDate,
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
+		IdempotencyKey: &idempKey,
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
 				PriceID:         &priceID,
@@ -1179,6 +1101,50 @@ func buildProrationChargeInvoiceRequest(
 			},
 		},
 	}
+}
+
+// prorationChargeKeyPart identifies one line-item change for charge invoice idempotency.
+type prorationChargeKeyPart struct {
+	lineItemID    string
+	effectiveDate time.Time
+}
+
+func newProrationChargeKeyPart(lineItemID string, effectiveDate time.Time) prorationChargeKeyPart {
+	return prorationChargeKeyPart{
+		lineItemID:    lineItemID,
+		effectiveDate: effectiveDate,
+	}
+}
+
+func (p *prorationChargeKeyPart) getLineItemID() string {
+	if p == nil {
+		return ""
+	}
+	return p.lineItemID
+}
+
+func (p *prorationChargeKeyPart) getEffectiveDate() time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	return p.effectiveDate
+}
+
+// prorationChargeIdempotencyKey builds a stable key via idempotency.Generator.
+// Params include subscription_id and a sorted "lineItemID|RFC3339" payload so
+// per-item and batch keys share one format and mixed effective dates stay unique.
+func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart) string {
+	lines := make([]string, 0, len(parts))
+	for i := range parts {
+		p := &parts[i]
+		lines = append(lines, p.getLineItemID()+"|"+p.getEffectiveDate().UTC().Format(time.RFC3339))
+	}
+	sort.Strings(lines)
+
+	return idempotency.NewGenerator().GenerateKey(idempotency.ScopeProrationCharge, map[string]interface{}{
+		"subscription_id":   subID,
+		"line_item_changes": strings.Join(lines, "\n"),
+	})
 }
 
 // validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in

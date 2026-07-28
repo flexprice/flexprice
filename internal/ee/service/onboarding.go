@@ -417,7 +417,7 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error {
 	tenantName := req.TenantName
 	if tenantName == "" {
-		tenantName = "Flexprice"
+		tenantName = s.Config.Onboarding.DefaultTenantName
 	}
 
 	tenantService := NewTenantService(s.ServiceParams)

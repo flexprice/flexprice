@@ -387,6 +387,9 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			if encryptedSecretData.Whop.ProductID != "" {
 				data["product_id"] = encryptedSecretData.Whop.ProductID
 			}
+			if encryptedSecretData.Whop.WebhookSecret != "" {
+				data["webhook_secret"] = encryptedSecretData.Whop.WebhookSecret
+			}
 			return data
 		}
 	case types.SecretProviderTabs:
@@ -406,6 +409,14 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 		if encryptedSecretData.GCPMarketplace != nil {
 			return map[string]interface{}{
 				"credentials_json": encryptedSecretData.GCPMarketplace.CredentialsJSON,
+			}
+		}
+	case types.SecretProviderAzureMarketplace:
+		if encryptedSecretData.AzureMarketplace != nil {
+			return map[string]interface{}{
+				"tenant_id":     encryptedSecretData.AzureMarketplace.TenantID,
+				"client_id":     encryptedSecretData.AzureMarketplace.ClientID,
+				"client_secret": encryptedSecretData.AzureMarketplace.ClientSecret,
 			}
 		}
 	case types.SecretProviderZohoBooks:
@@ -609,7 +620,7 @@ func (o ConnectionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 
 func (o ConnectionQueryOptions) ApplyStatusFilter(query ConnectionQuery, status string) ConnectionQuery {
 	if status == "" {
-		return query.Where(connection.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(connection.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(connection.Status(status))
 }
