@@ -173,6 +173,8 @@ const (
 	WebhookEventSubscriptionSpendThresholdRecovered         WebhookEventName = "subscription.spend.threshold_recovered"
 	WebhookEventSubscriptionLineItemSpendThresholdReached   WebhookEventName = "subscription.line_item_spend.threshold_reached"
 	WebhookEventSubscriptionLineItemSpendThresholdRecovered WebhookEventName = "subscription.line_item_spend.threshold_recovered"
+	WebhookEventSubscriptionLineItemCreated                 WebhookEventName = "subscription.line_item.created"
+	WebhookEventSubscriptionLineItemDeleted                 WebhookEventName = "subscription.line_item.deleted"
 	WebhookEventSubscriptionGroupSpendThresholdReached      WebhookEventName = "subscription.group_spend.threshold_reached"
 	WebhookEventSubscriptionGroupSpendThresholdRecovered    WebhookEventName = "subscription.group_spend.threshold_recovered"
 
