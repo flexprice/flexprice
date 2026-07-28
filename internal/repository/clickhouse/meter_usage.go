@@ -51,7 +51,7 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 		INSERT INTO meter_usage (
 			id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
 			timestamp, qty_total, unique_hash, source, properties
-		)
+		) SETTINGS async_insert = 1, wait_for_async_insert = 0
 	`)
 	if err != nil {
 		return ierr.WithError(err).

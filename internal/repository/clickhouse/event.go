@@ -92,7 +92,7 @@ func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) 
 	query := `
 		INSERT INTO events (
 			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
-		) VALUES (
+		) SETTINGS async_insert = 1, wait_for_async_insert = 0 VALUES (
 			?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
@@ -144,7 +144,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 		batch, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO events (
 			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
-		)
+		) SETTINGS async_insert = 1, wait_for_async_insert = 0
 	`)
 		if err != nil {
 			// SetSpanError(span, err)
