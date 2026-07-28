@@ -45,9 +45,7 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypeSubscriptionLineItem,
 	}
 	if !lo.Contains(allowed, e) {
-		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price, invoice_line_item, subscription_line_item").
-			Mark(ierr.ErrValidation)
+		return ierr.NewError("invalid entity type").Mark(ierr.ErrValidation)
 	}
 	return nil
 }
