@@ -45,11 +45,6 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-	logger.Info("Step 1: syncing HubSpot line item",
-		"subscription_id", input.SubscriptionID,
-		"line_item_id", input.LineItemID,
-		"operation", input.Operation)
-
 	activityName := ActivityCreateLineItem
 	if input.Operation == models.HubSpotLineItemSyncOperationDeleted {
 		activityName = ActivityDeleteLineItem
@@ -57,16 +52,9 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 
 	err := workflow.ExecuteActivity(ctx, activityName, input).Get(ctx, nil)
 	if err != nil {
-		logger.Error("Failed to sync line item",
-			"error", err,
-			"subscription_id", input.SubscriptionID,
-			"line_item_id", input.LineItemID,
-			"operation", input.Operation)
+		logger.Error("HubSpot line item sync failed", "error", err, "line_item_id", input.LineItemID)
 		return err
 	}
-
-	logger.Info("Line item synced successfully",
-		"subscription_id", input.SubscriptionID, "line_item_id", input.LineItemID)
 
 	// Step 2: Sleep for 10 seconds to allow HubSpot to recalculate ACV
 	logger.Info("Step 2: Waiting for HubSpot to recalculate ACV",
