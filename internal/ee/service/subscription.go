@@ -5053,9 +5053,7 @@ func (s *subscriptionService) addAddonToSubscription(
 		return nil, err
 	}
 
-	for _, li := range lineItems {
-		s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationCreated)
-	}
+	s.publishLineItemEvents(ctx, sub.ID, lineItems, types.WebhookEventSubscriptionLineItemCreated)
 
 	effectiveDate := addonRequestedStart
 	for _, li := range lineItems {
