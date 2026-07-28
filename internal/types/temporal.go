@@ -21,6 +21,7 @@ const (
 	TemporalTaskQueueInvoice         TemporalTaskQueue = "invoice"
 	TemporalTaskQueueReprocessEvents TemporalTaskQueue = "events"
 	TemporalTaskQueueCron            TemporalTaskQueue = "cron"
+	TemporalTaskQueueBilling         TemporalTaskQueue = "billing"
 )
 
 // String returns the string representation of the task queue
@@ -39,6 +40,7 @@ func (tq TemporalTaskQueue) Validate() error {
 		TemporalTaskQueueInvoice,
 		TemporalTaskQueueReprocessEvents,
 		TemporalTaskQueueCron,
+		TemporalTaskQueueBilling,
 	}
 	if lo.Contains(allowedQueues, tq) {
 		return nil
@@ -104,6 +106,7 @@ const (
 	TemporalSubscriptionChangeWorkflow                 TemporalWorkflowType = "SubscriptionChangeWorkflow"
 	TemporalSubscriptionCreationWorkflow               TemporalWorkflowType = "SubscriptionCreationWorkflow"
 	TemporalTaskProcessingWorkflow                     TemporalWorkflowType = "TaskProcessingWorkflow"
+	TemporalDailyDraftAndComputeWorkflow               TemporalWorkflowType = "DailyDraftAndComputeWorkflow"
 )
 
 // temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
@@ -116,6 +119,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalSubscriptionRenewalDueAlertsWorkflow,
 	TemporalOutboundWebhookStaleRetryWorkflow,
 	TemporalAutoInvoiceThresholdBillingWorkflow,
+	TemporalDailyDraftAndComputeWorkflow,
 }
 
 var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
@@ -316,6 +320,10 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))
 		copy(out, temporalCronWorkflowTypes)
 		return out
+	case TemporalTaskQueueBilling:
+		return []TemporalWorkflowType{
+			TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
+		}
 	default:
 		return []TemporalWorkflowType{}
 	}
@@ -332,6 +340,7 @@ func GetAllTaskQueues() []TemporalTaskQueue {
 		TemporalTaskQueueWorkflows,
 		TemporalTaskQueueReprocessEvents,
 		TemporalTaskQueueCron,
+		TemporalTaskQueueBilling,
 	}
 }
 

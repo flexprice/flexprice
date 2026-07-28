@@ -192,3 +192,54 @@ func TestNilServiceStorageSpanNoPanic(t *testing.T) {
 		t.Errorf("expected nil span from nil service, got %v", span)
 	}
 }
+
+func TestTemporalMetricsHandler(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+
+	t.Run("nil service", func(t *testing.T) {
+		var s *Service
+		if s.TemporalMetricsHandler() != nil {
+			t.Fatal("expected nil handler from nil service")
+		}
+	})
+
+	t.Run("metrics disabled", func(t *testing.T) {
+		s := &Service{
+			cfg: &config.Configuration{
+				Otel: config.OtelConfig{Metrics: config.OtelMetricsConfig{TemporalEnabled: true}},
+			},
+			metricsEnabled: false,
+			meterProvider:  mp,
+		}
+		if s.TemporalMetricsHandler() != nil {
+			t.Fatal("expected nil when metrics pipeline is off")
+		}
+	})
+
+	t.Run("temporal flag off", func(t *testing.T) {
+		s := &Service{
+			cfg: &config.Configuration{
+				Otel: config.OtelConfig{Metrics: config.OtelMetricsConfig{TemporalEnabled: false}},
+			},
+			metricsEnabled: true,
+			meterProvider:  mp,
+		}
+		if s.TemporalMetricsHandler() != nil {
+			t.Fatal("expected nil when temporal_enabled is false")
+		}
+	})
+
+	t.Run("metrics on and temporal enabled", func(t *testing.T) {
+		s := &Service{
+			cfg: &config.Configuration{
+				Otel: config.OtelConfig{Metrics: config.OtelMetricsConfig{TemporalEnabled: true}},
+			},
+			metricsEnabled: true,
+			meterProvider:  mp,
+		}
+		if s.TemporalMetricsHandler() == nil {
+			t.Fatal("expected non-nil Temporal MetricsHandler")
+		}
+	})
+}

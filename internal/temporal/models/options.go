@@ -26,6 +26,9 @@ type ClientOptions struct {
 	RetryPolicy *common.RetryPolicy
 	// DataConverter is an optional data converter for serialization
 	DataConverter converter.DataConverter
+	// MetricsHandler is an optional Temporal SDK metrics handler (e.g. OTEL).
+	// Built by tracing.Service; nil skips SDK metrics.
+	MetricsHandler client.MetricsHandler
 }
 
 // DefaultClientOptions returns the default client options

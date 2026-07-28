@@ -451,6 +451,84 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Advance
 	}
 }
 
+// TestExecuteQuantityChange_DistinctLineItems_SameEffectiveDate verifies that upgrading
+// two different ADVANCE line items at the same effective_date each creates its own
+// proration charge invoice (operation-scoped idempotency keys; not one-per-period).
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_DistinctLineItems_SameEffectiveDate() {
+	ctx := s.GetContext()
+	periodStart := s.GetNow()
+	periodEnd := periodStart.AddDate(0, 1, 0)
+	effectiveDate := periodStart.AddDate(0, 0, 15)
+
+	cust := s.createCustomer("distinct-li-same-eff")
+	sub := s.createActiveSub(cust.ID)
+	s.setSubPeriod(sub.ID, periodStart, periodEnd)
+
+	priceA := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	priceB := s.createFixedPrice(decimal.NewFromInt(40), types.InvoiceCadenceAdvance)
+	liA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, priceA.ID)
+	liB := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, priceB.ID)
+
+	respA, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: liA.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+			},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().Len(respA.ChangedResources.Invoices, 1)
+	s.Equal(dto.ChangedInvoiceActionCreated, respA.ChangedResources.Invoices[0].Action)
+	invA, err := s.GetStores().InvoiceRepo.Get(ctx, respA.ChangedResources.Invoices[0].ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(invA.IdempotencyKey)
+	s.NotEqual(types.InvoiceStatusDraft, invA.InvoiceStatus)
+
+	respB, err := s.service.Execute(ctx, sub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: liB.ID, Quantity: decimal.NewFromInt(2), EffectiveDate: &effectiveDate},
+			},
+		},
+	})
+	s.Require().NoError(err, "second distinct line-item upgrade at same effective_date must succeed")
+	s.Require().Len(respB.ChangedResources.Invoices, 1)
+	s.Equal(dto.ChangedInvoiceActionCreated, respB.ChangedResources.Invoices[0].Action)
+	invB, err := s.GetStores().InvoiceRepo.Get(ctx, respB.ChangedResources.Invoices[0].ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(invB.IdempotencyKey)
+	s.NotEqual(*invA.IdempotencyKey, *invB.IdempotencyKey)
+	s.NotEqual(invA.ID, invB.ID)
+}
+
+// TestProrationChargeIdempotencyKey_StableAndDistinct covers the hashed charge key helper.
+func (s *SubscriptionModificationServiceSuite) TestProrationChargeIdempotencyKey_StableAndDistinct() {
+	subID := "sub_test"
+	t1 := time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
+
+	k1 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_a", t1)})
+	k1Again := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_a", t1)})
+	k2 := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{newProrationChargeKeyPart("li_b", t1)})
+	s.Equal(k1, k1Again)
+	s.NotEqual(k1, k2)
+	s.True(strings.HasPrefix(k1, "proration_charge-"))
+	s.LessOrEqual(len(k1), 100)
+
+	batchAB := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{
+		newProrationChargeKeyPart("li_a", t1),
+		newProrationChargeKeyPart("li_b", t2),
+	})
+	batchBA := prorationChargeIdempotencyKey(subID, []prorationChargeKeyPart{
+		newProrationChargeKeyPart("li_b", t2),
+		newProrationChargeKeyPart("li_a", t1),
+	})
+	s.Equal(batchAB, batchBA, "batch fingerprint must be order-independent")
+	s.NotEqual(k1, batchAB)
+}
+
 // ─────────────────────────────────────────────
 // Arrear tests
 // ─────────────────────────────────────────────

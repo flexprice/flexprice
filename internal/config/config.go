@@ -228,12 +228,28 @@ type KafkaTopicSpec struct {
 }
 
 type ClickHouseConfig struct {
-	Address        string `mapstructure:"address" validate:"required"`
-	TLS            bool   `mapstructure:"tls"`
-	Username       string `mapstructure:"username" validate:"required"`
-	Password       string `mapstructure:"password" validate:"required"`
-	Database       string `mapstructure:"database" validate:"required"`
-	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+	// MaxOpenConns caps concurrent ClickHouse queries per PROCESS, so insert throughput is
+	// bounded by (MaxOpenConns / insert latency) per pod/task no matter how many run. Left
+	// at 0 the driver applies MaxIdleConns+5 = 10, which silently caps a consumer fleet:
+	// 40 tasks x 10 conns / 685ms inserts = ~580 events/s. Exhaustion surfaces as
+	// clickhouse-go ErrAcquireConnTimeout ("acquire conn timeout") raised client-side —
+	// the query never reaches the server, so ClickHouse logs nothing. Size it against the
+	// server's spare admission (system.metrics Query vs max_concurrent_queries): raising it
+	// helps only when ClickHouse has headroom, and hurts when it is already saturated.
+	MaxOpenConns int `mapstructure:"max_open_conns"`
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+	// DialTimeout doubles as the pool-acquire deadline inside clickhouse-go
+	// (clickhouse.go acquire() waits on a semaphore of MaxOpenConns slots for DialTimeout),
+	// so it cannot be tuned for pool pressure without also changing dial failover — see
+	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
+	DialTimeout    time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout    time.Duration `mapstructure:"read_timeout"`
+	Address        string        `mapstructure:"address" validate:"required"`
+	TLS            bool          `mapstructure:"tls"`
+	Username       string        `mapstructure:"username" validate:"required"`
+	Password       string        `mapstructure:"password" validate:"required"`
+	Database       string        `mapstructure:"database" validate:"required"`
+	MaxMemoryUsage int64         `mapstructure:"max_memory_usage" validate:"required"`
 }
 
 type LoggingConfig struct {
@@ -370,6 +386,10 @@ type OtelMetricsConfig struct {
 	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
 	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
 	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+	// TemporalEnabled attaches the Temporal Go SDK MetricsHandler to the shared
+	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
+	// SDK series are higher volume than app DB/cache metrics.
+	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
@@ -874,6 +894,11 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+const (
+	defaultClickHouseDialTimeout = 10 * time.Second
+	defaultClickHouseReadTimeout = 30 * time.Second
+)
+
 // placeholderSecrets are the exact dev/sample values baked into config.yaml (plus empty).
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
@@ -982,8 +1007,18 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		// fronted by multiple AZ ENIs, and an in-order dial to an ENI that never
 		// completes the TCP/native handshake hangs indefinitely with no default
 		// deadline. A finite DialTimeout makes it fail over to the next address.
-		DialTimeout: 10 * time.Second,
-		ReadTimeout: 30 * time.Second,
+		DialTimeout: defaultClickHouseDialTimeout,
+		ReadTimeout: defaultClickHouseReadTimeout,
+		// Pool sizing. Zero values leave the driver defaults (MaxIdleConns 5,
+		// MaxOpenConns MaxIdleConns+5), which cap per-process query concurrency at 10.
+		MaxOpenConns: c.MaxOpenConns,
+		MaxIdleConns: c.MaxIdleConns,
+	}
+	if c.DialTimeout > 0 {
+		options.DialTimeout = c.DialTimeout
+	}
+	if c.ReadTimeout > 0 {
+		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}

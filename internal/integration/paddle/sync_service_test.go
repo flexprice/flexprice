@@ -987,6 +987,9 @@ func (m *mockSubscriptionService) TriggerSubscriptionWorkflow(ctx context.Contex
 func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts interfaces.DraftAndComputeOptions) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]apidto.Period, error) {
 	return nil, nil
 }

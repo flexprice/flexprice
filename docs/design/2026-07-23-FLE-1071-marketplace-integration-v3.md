@@ -683,57 +683,178 @@ truth: an entry is either a real receipt or an explicit `skipped`, never a guess
 
 ### 8.4 Logging and what to search for
 
-Until a live Azure listing exists we cannot end-to-end test a real report, so these logs are the only
-signal that reporting works. Levels are `error`, `info`, or `debug` only — never `warn`.
+Levels are `error`, `info`, or `debug` only — never `warn`.
 
 **Credentials are never logged, at any level, for any provider.** No `client_secret` and no bearer
 token (Azure); no `role_arn`, `external_id`, or assumed-role temporary credentials (AWS); no Workload
-Identity Federation JSON, federated token, or impersonation token (GCP). AWS's `AssumeRole` error path
-already redacts the raw SDK error because it can embed the role ARN; the GCP and Azure clients follow
-the same rule for their own errors.
+Identity Federation JSON, federated token, or impersonation token (GCP). Every provider error message
+is passed through `utils.RedactSecrets` before it is logged or returned: the tenant's own identifiers
+are stripped and **everything else the provider said is preserved verbatim**, because the status code,
+error code, and reason are what make the failure diagnosable.
 
-Every log line tied to one connection carries `marketplace` (`aws_marketplace` | `gcp_marketplace` |
-`azure_marketplace`) and `connection_id`, so a search can always be scoped to one provider or one
-connection regardless of which message matched. The two pre-filter checks in `isEligibleForReport` run
-before any connection is chosen and carry no `marketplace` tag — a row can be relevant to more than one
-connection at that point.
+Two log messages carry the whole reporting path and are worth memorising:
 
-| Stage | Level | Message | Tags |
+- `marketplace usage report failed` — the generic failure line. **Always tagged `stage`**, which names
+  exactly what broke. This is the line to grep first.
+- `marketplace usage record synced` — the only line that means a marketplace accepted a record.
+
+Every line tied to one connection carries `marketplace` (`aws_marketplace` | `gcp_marketplace` |
+`azure_marketplace`) and `connection_id`, so any search can be scoped to one provider or one
+connection. The `isEligibleForReport` pre-filters are the exception: they run before a connection is
+chosen and carry no `marketplace` tag, because a row can be relevant to several connections at once.
+
+The stages below run in order, from creating a connection to the record being marked synced.
+
+---
+
+#### Stage 1 — Connection setup (`POST /v1/connections`, synchronous)
+
+Verification runs before the connection is persisted, so a failure here means **nothing was saved**
+(§6.2). This is the only stage a tenant sees in real time, as the API response.
+
+| Provider | Level | Message | Tags | What it means |
+|---|---|---|---|---|
+| **AWS** | `error` | `aws marketplace assume role failed` | `region`, `role_session_name`, `duration`, `error` | `AssumeRole` was refused. Trust policy, external ID, or role ARN is wrong. Emitted by the client. |
+| **AWS** | `error` | `aws marketplace connection verification failed` | `tenant_id`, `environment_id`, `region`, `error` | Service-layer wrapper for the same failure, carrying the tenant context. |
+| **GCP** | `error` | `gcp marketplace failed to assume the flexprice gcp metering role` | `region`, `error` | Flexprice's *own* AWS role could not be assumed. This is a Flexprice-side misconfiguration (`marketplace.aws.*`), not the tenant's. Marked `ErrSystem`. |
+| **GCP** | `error` | `gcp marketplace wif exchange failed` | `error` | The AWS → GCP STS → service-account impersonation chain failed. Pool, provider, attribute condition, or the `workloadIdentityUser` binding is wrong. |
+| **Azure** | `error` | `azure marketplace token request failed` | `error` | The `client_credentials` token request was refused. `error` carries Entra's own `AADSTS` code and description (bad secret, app not found, tenant not found, or the Marketplace service principal not registered — §6.2). |
+
+Note the asymmetry: GCP and Azure have no service-layer equivalent of AWS's
+`aws marketplace connection verification failed`. Their verification blocks return the client's error
+directly, so the client line above is the only one emitted for them.
+
+---
+
+#### Stage 2 — Snapshot cron (`marketplace-usage-snapshot`, every 6h)
+
+**Provider-agnostic.** This cron computes usage and writes `usage_records`; it never calls a
+marketplace. Every failure is `error` + `marketplace usage snapshot failed`, distinguished by `stage`.
+It tags `provider_type` (not `marketplace`) because it is iterating connections to decide *which*
+subscriptions to snapshot, not reporting to anyone.
+
+| `stage` | What broke |
+|---|---|
+| `list_connections` | Could not list published connections for a provider. |
+| `list_customer_mappings` | Could not load customer mappings for a connection. |
+| `list_subscription_mappings` | Could not load subscription mappings for a connection. |
+| `get_subscription` | The mapped subscription could not be fetched. |
+| `check_existing` | The "already snapshotted for this window" lookup failed. |
+| `get_meter_usage` | Usage retrieval for the window failed. |
+| `calculate_charges` | `CalculateMeterUsageCharges` failed. |
+| `create_usage_record` | Writing the `usage_records` row failed. |
+
+A subscription that produces no row here will never be reported in Stage 5 — if a buyer is missing
+from a marketplace entirely, check this cron before suspecting the report path.
+
+---
+
+#### Stage 3 — Report cron: connection auth and mapping load
+
+Runs once per connection per run, before any record is touched. A failure here skips the whole
+connection for this run — **every** record for it is silently deferred, so a single line here can
+explain thousands of unreported rows. All lines are `error` + `marketplace usage report failed`.
+
+| Provider | `stage` values | What broke |
+|---|---|---|
+| **All** | `list_connections` | Listing published connections for a provider failed. |
+| **All** | `list_unsynced` | Reading the tenant's unsynced records failed. |
+| **All** | `read_connection` | The connection has no secret data for its own provider type. |
+| **All** | `load_mappings` | Entity mappings for this connection could not be loaded. |
+| **AWS** | `decrypt_role_arn`, `decrypt_external_id` | Secret decryption failed. |
+| **AWS** | `assume_role` | Cross-account `AssumeRole` failed at report time (worked at connection time, so the trust policy or role changed since). |
+| **GCP** | `decrypt_credentials_json` | Secret decryption failed. |
+| **GCP** | `wif_session` | The WIF exchange failed at report time. |
+| **Azure** | `decrypt_tenant_id`, `decrypt_client_id`, `decrypt_client_secret` | Secret decryption failed. Each field is a separate stage, so the line names which one. |
+| **Azure** | `get_token` | The token request failed at report time. Most commonly an **expired client secret** — the one failure mode that appears after months of working normally (§6.2). |
+
+---
+
+#### Stage 4 — Record pre-filter (before any connection is chosen)
+
+Provider-agnostic, so these carry **no** `marketplace` or `connection_id` tag.
+
+| Level | Message | Tags | What it means |
 |---|---|---|---|
-| Row skipped: non-USD | `debug` | `skipping marketplace usage record, currency not usd` | `subscription_id`, `usage_record_id`, `currency` |
-| Row skipped: negative amount (investigate) | `error` | `marketplace usage record has negative amount` | `subscription_id`, `usage_record_id`, `amount` |
-| Zero-quantity row skipped on Azure only (§11.6) | `info` | `marketplace usage record skipped: zero quantity not supported by azure` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `amount` |
-| Row reported successfully | `info` | `marketplace usage record synced` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `reporting_id` |
-| AWS: buyer not subscribed to this product | `error` | `marketplace usage report rejected by aws: customer not subscribed, will retry next run` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount` |
-| AWS: conflicts with a different record on file | `error` | `marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation` | `marketplace`, `connection_id`, `customer_id`, `license_arn`, `dimension`, `amount`, `period_end` |
-| AWS: unrecognized `Status` value | `error` | `marketplace usage report rejected by aws: unrecognized status, will retry next run` | `marketplace`, `connection_id`, `license_arn`, `dimension`, `amount`, `aws_status` |
-| AWS: record returned in `UnprocessedRecords` | `info` | `marketplace usage record not processed by aws, will retry next run` | `marketplace`, `connection_id`, `license_arn`, `dimension`, `amount` |
-| GCP: row present in `reportErrors` | `error` | `marketplace usage report rejected by gcp, will retry next run` | `marketplace`, `connection_id`, `error_code`, `error_message` |
-| Any provider: the call itself failed, a mapping was missing, or an auth/decrypt step failed | `error` | `marketplace usage report failed` | `marketplace`, `connection_id`, `error`, `stage` |
+| `debug` | `skipping marketplace usage record, currency not usd` | `subscription_id`, `usage_record_id`, `currency` | Not an error. The row stays unsynced and is retried once currency conversion exists (§8.2). |
+| `error` | `marketplace usage record has negative amount` | `subscription_id`, `usage_record_id`, `amount`, `error=negative_amount` | An upstream billing bug. Never sent to any provider. Investigate the charge computation, not the marketplace. |
 
-`stage` on the generic `marketplace usage report failed` line names exactly what broke:
-`read_connection` / `decrypt_*` / `load_mappings` / `assume_role` / `wif_session` / `get_token` (auth,
-before any record is reported), `resolve_record` (a record has no entity mapping for this connection),
-`convert_quantity` (AWS only — cents exceed `int32`), or the report call itself:
-`batch_meter_usage` (AWS), `services_report` (GCP), `usage_event` (Azure — every Azure rejection,
-including a `Duplicate` 409, surfaces here, since Azure's client turns any non-2xx into an error rather
-than a checkable status field, §2.4).
+---
 
-Example lines — an Azure success, an Azure rejection, a GCP row-level rejection:
+#### Stage 5 — The report call, per record per connection
+
+The stage that actually talks to a marketplace. Note the asymmetry in how each provider signals
+rejection — it is the single biggest difference between the three (§2.5, §8.3).
+
+**Common to all three**
+
+| Level | Message | Tags | Meaning |
+|---|---|---|---|
+| `info` | `marketplace usage record synced` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `reporting_id` | **Accepted.** The only line that means this. `reporting_id` is AWS's `MeteringRecordId`, GCP's `operationId`, or Azure's `usageEventId`. Never emitted for a skipped row. |
+| `error` | `marketplace usage report failed` + `stage=resolve_record` | `marketplace`, `connection_id`, `subscription_id`, `customer_id`, `plan_id` | This record has no entity mapping for this connection. The agreement was never registered, or was registered against a different plan. Nothing was sent. |
+
+**AWS** — a `200` can still carry a per-record rejection in `Results[].Status`, so the status must be
+read; each value gets its own message.
+
+| Level | Message | Extra tags | Meaning |
+|---|---|---|---|
+| `error` | `marketplace usage report failed` + `stage=convert_quantity` | `error=quantity exceeds the maximum aws accepts` | AWS-only: cents exceed `int32`. |
+| `error` | `marketplace usage report failed` + `stage=batch_meter_usage` | `license_arn`, `dimension`, `amount`, `error` | The call itself failed (transport, auth, malformed). |
+| `info` | `marketplace usage record not processed by aws, will retry next run` | `license_arn`, `dimension`, `amount` | Returned in `UnprocessedRecords`. Transient; retried. |
+| `error` | `marketplace usage report rejected by aws: customer not subscribed, will retry next run` | `customer_id`, `license_arn`, `dimension`, `amount`, `error=customer_not_subscribed` | Buyer has no active agreement. **Self-healing** once they resubscribe. |
+| `error` | `marketplace usage report rejected by aws: conflicts with a different record already on file, needs manual investigation` | `customer_id`, `license_arn`, `dimension`, `amount`, `period_end`, `error=duplicate_record` | **Needs a human.** AWS holds a *different* record for the same customer+dimension+timestamp. Retrying cannot fix it (§11.5). |
+| `error` | `marketplace usage report rejected by aws: unrecognized status, will retry next run` | `license_arn`, `dimension`, `amount`, `aws_status`, `error=unrecognized_aws_status` | AWS returned a `Status` we do not model. `aws_status` has the raw value. |
+
+**GCP** — Service Control returns `200 OK` with a populated `reportErrors`, so acceptance is never
+implied by the HTTP status.
+
+| Level | Message | Extra tags | Meaning |
+|---|---|---|---|
+| `error` | `marketplace usage report failed` + `stage=services_report` | `error` | The call itself failed. |
+| `error` | `marketplace usage report rejected by gcp, will retry next run` | `error=rejected_by_gcp`, `error_code`, `error_message` | Row-level rejection inside a `200`. Common `error_code`s: `5` NOT_FOUND (consumer inactive), `7` PERMISSION_DENIED, `3` INVALID_ARGUMENT. |
+
+**Azure** — the inverse of the other two: a `200` is *unconditionally* `Accepted`, and **every**
+rejection is a distinct non-2xx that the client turns into an error (§2.4). So Azure has no
+`rejected by azure` message at all — rejections surface only as `stage=usage_event`.
+
+| Level | Message | Extra tags | Meaning |
+|---|---|---|---|
+| `info` | `marketplace usage record skipped: zero quantity not supported by azure` | `marketplace`, `connection_id`, `subscription_id`, `usage_record_id`, `amount` | Azure-only. Never sent; resolved with `skipped: true` so the row is not blocked forever (§11.6). **Not** a billing event. |
+| `error` | `marketplace usage report failed` + `stage=usage_event` | `resource_id`, `dimension`, `amount`, `error` | **Every** Azure rejection lands here. Read the status in `error`: `400` bad data or `effectiveStartTime` older than 24h; `401` the offer's Technical Configuration names a different Entra app than the token's (§6.2); `403` insufficient permissions; `409` duplicate for that `(resourceId, dimension, hour)` — ambiguous, so never treated as success (§11.5); `500` retry. |
+
+---
+
+#### Stage 6 — Persisting the result
+
+| Level | Message | Tags | Meaning |
+|---|---|---|---|
+| `error` | `marketplace usage report failed` + `stage=mark_synced` | `subscription_id`, `usage_record_id`, `error` | The report may have been **accepted by the marketplace** but the `syncs` update failed. The row is retried next run, and the marketplace's own dedup (AWS timestamp, GCP `operationId`, Azure `(resourceId, dimension, hour)`) is what prevents double billing. |
+
+---
+
+#### Worked examples
 
 ```text
+level=error msg="azure marketplace token request failed"                            error="status 401: {\"error\":\"invalid_client\",\"error_description\":\"AADSTS7000215: Invalid client secret provided...\"}"
 level=info  msg="marketplace usage record synced"                                   usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace reporting_id=<usageEventId>
-level=error msg="marketplace usage report failed"                                   usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace stage=usage_event error="409 Conflict: This usage event already exist."
+level=error msg="marketplace usage report failed"                                   usage_record_id=ur_01H.. connection_id=conn_az_01  marketplace=azure_marketplace stage=usage_event error="status 409: {\"message\":\"This usage event already exist.\",\"code\":\"Conflict\"}"
 level=error msg="marketplace usage report rejected by gcp, will retry next run"     usage_record_id=ur_01H.. connection_id=conn_gcp_01 marketplace=gcp_marketplace  error_code=5 error_message="Consumer not found or not active."
 ```
 
-To answer "did this record get reported", grep `usage_record_id=<id>`: `marketplace usage record
-synced` means it landed and was accepted; `marketplace usage record skipped: zero quantity not supported
-by azure` means that connection is resolved but nothing was ever posted there (check the row's `syncs`
-map for that connection's `skipped: true` to confirm — never assume it was billed); any other line for
-that id means it was sent (or attempted) and rejected or unknown, and is retried next run. The new
-Azure client (`GetToken`, `ReportUsageEvent`) must emit every message above it's responsible for —
-called out because it is new and has no existing logging to inherit, unlike the AWS and GCP clients.
+#### Answering "was this record billed?"
+
+Grep `usage_record_id=<id>` and read in this order:
+
+1. `marketplace usage record synced` → **yes**, accepted, `reporting_id` is the receipt.
+2. `marketplace usage record skipped: zero quantity not supported by azure` → **no**, and nothing was
+   ever posted. Confirm via that connection's `skipped: true` in the row's `syncs` map. Never assume
+   it was billed.
+3. Any other line → attempted and not accepted; unsynced and retried next run.
+4. **No line at all** → it never reached the report path. Check Stage 3 (whole connection skipped) and
+   Stage 2 (row never created).
+
+Per-provider first greps: `marketplace=aws_marketplace`, `marketplace=gcp_marketplace`,
+`marketplace=azure_marketplace`. To find what broke rather than which record, grep `stage=`.
 
 ---
 

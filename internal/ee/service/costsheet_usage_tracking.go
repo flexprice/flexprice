@@ -1525,7 +1525,8 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		IncludeChildren: req.IncludeChildren,
 		// Group by meter_id so we get one row per meter (matches how the old
 		// costsheet_usage path keyed its results).
-		GroupBy: []string{"meter_id"},
+		GroupBy:         []string{"meter_id"},
+		PropertyFilters: req.PropertyFilters,
 	}
 	if cust != nil {
 		analyticsParams.ExternalCustomerID = cust.ExternalID

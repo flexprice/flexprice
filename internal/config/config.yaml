@@ -92,6 +92,20 @@ clickhouse:
   password: flexprice123
   database: flexprice
   max_memory_usage: 50
+  # Per-process connection pool (0 would fall back to clickhouse-go's defaults: idle 5,
+  # open idle+5 = 10 — a hidden 10-query cap per pod/task that bottlenecks event ingest,
+  # since consumers doing one INSERT per event are bounded by max_open_conns / insert latency).
+  # max_idle_conns stays lower than max_open_conns so the pool bursts under load and releases
+  # when idle: 100 idle x N pods would otherwise hold a permanent connection floor server-side.
+  # Sizing check before raising further: FLEET tasks x max_open_conns must stay under the
+  # server's max_connections (4096 on ClickHouse Cloud), and only helps while the server has
+  # spare admission (system.metrics Query vs max_concurrent_queries).
+  max_open_conns: 100
+  max_idle_conns: 20
+  # dial_timeout also bounds the pool-acquire wait inside the driver; read_timeout bounds
+  # a running query. 0 = built-in defaults (10s / 30s).
+  dial_timeout: 0s
+  read_timeout: 0s
 
 postgres:
   host: 127.0.0.1 # For local mode
@@ -176,6 +190,7 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_METRICS_AUTH_VALUE
     auth_value: ""
     interval_seconds: 60
+    temporal_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling

@@ -83,6 +83,12 @@ type RevenueAnalyticsService interface {
 	GetDetailedCostAnalytics(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
 }
 
+// DraftAndComputeOptions configures draft-and-compute workflows.
+type DraftAndComputeOptions struct {
+	// SkipIfAlreadyInvoiced skips finalized current periods.
+	SkipIfAlreadyInvoiced bool
+}
+
 type SubscriptionService interface {
 	CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error)
 	GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error)
@@ -157,6 +163,9 @@ type SubscriptionService interface {
 
 	// TriggerSubscriptionDraftAndComputeWorkflow creates an idempotent draft for the current period and runs compute via Temporal (invoice task queue).
 	TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
+
+	// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
+	TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts DraftAndComputeOptions) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
 	// Cron methods
 

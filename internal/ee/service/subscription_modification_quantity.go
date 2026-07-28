@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -906,6 +908,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 	var periodStart *time.Time
 	periodEnd := sub.CurrentPeriodEnd
 	billingPeriod := string(sub.BillingPeriod)
+	keyParts := make([]prorationChargeKeyPart, 0, len(items))
 
 	for _, item := range items {
 		single := buildProrationChargeInvoiceRequest(sub, item)
@@ -914,8 +917,14 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		if single.PeriodStart != nil && (periodStart == nil || single.PeriodStart.Before(*periodStart)) {
 			periodStart = single.PeriodStart
 		}
+		if mod := item.getMod(); mod != nil {
+			if oldItem := mod.getOldLineItem(); oldItem != nil {
+				keyParts = append(keyParts, newProrationChargeKeyPart(oldItem.ID, mod.getEffectiveDate()))
+			}
+		}
 	}
 
+	idempKey := prorationChargeIdempotencyKey(sub.ID, keyParts)
 	return dto.CreateInvoiceRequest{
 		CustomerID:     sub.GetInvoicingCustomerID(),
 		SubscriptionID: &sub.ID,
@@ -929,6 +938,7 @@ func buildAggregatedProrationChargeInvoiceRequest(
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
 		LineItems:      lineItems,
+		IdempotencyKey: &idempKey,
 	}
 }
 
@@ -1061,6 +1071,9 @@ func buildProrationChargeInvoiceRequest(
 		strings.ToUpper(sub.Currency), price.Price.Amount.String(),
 		effectiveDate.Format("2 Jan 2006"), periodEnd.Format("2 Jan 2006"))
 
+	idempKey := prorationChargeIdempotencyKey(sub.ID, []prorationChargeKeyPart{
+		newProrationChargeKeyPart(oldItem.ID, effectiveDate),
+	})
 	return dto.CreateInvoiceRequest{
 		CustomerID:     billingCustomer,
 		SubscriptionID: &sub.ID,
@@ -1073,6 +1086,7 @@ func buildProrationChargeInvoiceRequest(
 		PeriodStart:    &effectiveDate,
 		PeriodEnd:      &periodEnd,
 		BillingPeriod:  &billingPeriod,
+		IdempotencyKey: &idempKey,
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
 				PriceID:         &priceID,
@@ -1087,6 +1101,50 @@ func buildProrationChargeInvoiceRequest(
 			},
 		},
 	}
+}
+
+// prorationChargeKeyPart identifies one line-item change for charge invoice idempotency.
+type prorationChargeKeyPart struct {
+	lineItemID    string
+	effectiveDate time.Time
+}
+
+func newProrationChargeKeyPart(lineItemID string, effectiveDate time.Time) prorationChargeKeyPart {
+	return prorationChargeKeyPart{
+		lineItemID:    lineItemID,
+		effectiveDate: effectiveDate,
+	}
+}
+
+func (p *prorationChargeKeyPart) getLineItemID() string {
+	if p == nil {
+		return ""
+	}
+	return p.lineItemID
+}
+
+func (p *prorationChargeKeyPart) getEffectiveDate() time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	return p.effectiveDate
+}
+
+// prorationChargeIdempotencyKey builds a stable key via idempotency.Generator.
+// Params include subscription_id and a sorted "lineItemID|RFC3339" payload so
+// per-item and batch keys share one format and mixed effective dates stay unique.
+func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart) string {
+	lines := make([]string, 0, len(parts))
+	for i := range parts {
+		p := &parts[i]
+		lines = append(lines, p.getLineItemID()+"|"+p.getEffectiveDate().UTC().Format(time.RFC3339))
+	}
+	sort.Strings(lines)
+
+	return idempotency.NewGenerator().GenerateKey(idempotency.ScopeProrationCharge, map[string]interface{}{
+		"subscription_id":   subID,
+		"line_item_changes": strings.Join(lines, "\n"),
+	})
 }
 
 // validateQuantityChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in

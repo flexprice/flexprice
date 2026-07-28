@@ -38,41 +38,27 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 	}
 
 	// 1. Fetch cost analytics from the meter_usage-backed costsheet path.
-	var costAnalytics *dto.GetCostAnalyticsResponse
-	var err error
-	costAnalytics, err = s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
+	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
 	if err != nil {
-		s.Logger.Info(context.Background(), "failed to fetch cost analytics", "error", err)
+		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
 		costAnalytics = nil
 	}
 
 	// 2. Fetch revenue analytics from meter usage.
-	var revenueAnalytics *dto.GetUsageAnalyticsResponse
-	revenueReq := &dto.GetUsageAnalyticsRequest{
+	meterUsageService := NewMeterUsageService(s.ServiceParams)
+	revenueAnalytics, err := meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		ExternalCustomerID: req.ExternalCustomerID,
 		FeatureIDs:         req.FeatureIDs,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
+		Expand:             req.Expand,
+		PropertyFilters:    req.PropertyFilters,
 		IncludeChildren:    req.IncludeChildren,
-	}
-	meterUsageService := NewMeterUsageService(s.ServiceParams)
-	revenueAnalytics, err = meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerID:  revenueReq.ExternalCustomerID,
-		ExternalCustomerIDs: revenueReq.ExternalCustomerIDs,
-		FeatureIDs:          revenueReq.FeatureIDs,
-		StartTime:           revenueReq.StartTime,
-		EndTime:             revenueReq.EndTime,
-		GroupBy:             revenueReq.GroupBy,
-		PropertyFilters:     revenueReq.PropertyFilters,
-		Sources:             revenueReq.Sources,
-		WindowSize:          revenueReq.WindowSize,
-		Expand:              revenueReq.Expand,
-		IncludeChildren:     revenueReq.IncludeChildren,
 	})
 	if err != nil {
-		s.Logger.Info(context.Background(), "failed to fetch revenue analytics", "error", err)
+		s.Logger.Info(ctx, "failed to fetch revenue analytics", "error", err)
 		revenueAnalytics = nil
 	}
 
