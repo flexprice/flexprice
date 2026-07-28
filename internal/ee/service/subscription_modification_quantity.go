@@ -997,7 +997,7 @@ func (s *subscriptionModificationService) createProrationChargeInvoice(
 				).
 				Mark(ierr.ErrValidation)
 		}
-		
+
 		return &dto.ChangedInvoice{
 			ID:      latest.ID,
 			Action:  dto.ChangedInvoiceActionCreated,
