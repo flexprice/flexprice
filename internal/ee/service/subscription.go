@@ -350,9 +350,9 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	for i := range req.LineItems {
 		itemReq := req.LineItems[i]
 		itemReq.SkipEntitlementCheck = true
-		extraLineItem, err := s.addSubscriptionLineItem(ctx, sub.ID, itemReq)
-		if err != nil {
-			return nil, err
+		extraLineItem, addErr := s.addSubscriptionLineItem(ctx, sub.ID, itemReq)
+		if addErr != nil {
+			return nil, addErr
 		}
 		// Feed into sub.LineItems so CreateSubscription's post-commit publishLineItemEvents
 		// call covers these too, instead of losing the event entirely now that
