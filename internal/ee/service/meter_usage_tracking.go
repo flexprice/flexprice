@@ -22,6 +22,7 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	goCache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -55,6 +56,17 @@ type meterUsageTrackingService struct {
 	bulkPubSub          pubsub.PubSub
 	meterUsageRepo      events.MeterUsageRepository
 	expressionEvaluator expression.Evaluator
+	// meterListCache is a dedicated in-memory cache for meter lists keyed by
+	// "tenantID:environmentID:eventName". It is intentionally separate from the
+	// global cache so it is always in-memory (fast) and unaffected by the
+	// global cache.Type config (which may be Redis). Meters are immutable after
+	// creation so no active invalidation is required.
+	meterListCache *goCache.Cache
+
+	// insertBatcher coalesces meter_usage rows from concurrently-processed Kafka
+	// messages into one ClickHouse INSERT. Nil when batching is disabled
+	// (InsertBatchSize <= 1), in which case processEvent inserts directly.
+	insertBatcher *insertBatcher[*events.MeterUsage]
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
@@ -66,6 +78,24 @@ func NewMeterUsageTrackingService(
 		ServiceParams:       params,
 		meterUsageRepo:      meterUsageRepo,
 		expressionEvaluator: expression.NewCELEvaluator(),
+	}
+
+	// batchSize <= 1 keeps the original one-INSERT-per-message behaviour, which
+	// is the escape hatch if batching ever needs to be disabled without a
+	// rollback.
+	if batchSize := params.Config.MeterUsageTracking.InsertBatchSize; batchSize > 1 {
+		maxDelay := params.Config.MeterUsageTracking.InsertBatchMaxDelay
+		if maxDelay <= 0 {
+			maxDelay = time.Second
+		}
+		svc.insertBatcher = newInsertBatcher(batchSize, maxDelay,
+			func(ctx context.Context, records []*events.MeterUsage) error {
+				return meterUsageRepo.BulkInsertMeterUsage(ctx, records)
+			})
+		params.Logger.Info(context.Background(), "meter usage insert batching enabled",
+			"batch_size", batchSize,
+			"max_delay", maxDelay,
+		)
 	}
 
 	ps, err := kafka.NewPubSubFromConfig(
@@ -457,8 +487,19 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		return nil
 	}
 
-	// Step 3: Bulk insert
-	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
+	// Step 3: Bulk insert.
+	//
+	// When batching is enabled this blocks until the batch containing these
+	// records has actually been written to ClickHouse, and returns that write's
+	// error. That ordering is what keeps delivery at-least-once: the handler
+	// only returns nil (and Watermill only acks, committing the Kafka offset)
+	// after the rows are durable. A crash before the flush leaves the offset
+	// uncommitted, so the messages are redelivered rather than lost.
+	if s.insertBatcher != nil {
+		if err := s.insertBatcher.Add(ctx, records); err != nil {
+			return fmt.Errorf("failed to bulk insert meter usage (batched): %w", err)
+		}
+	} else if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
 		return fmt.Errorf("failed to bulk insert meter usage: %w", err)
 	}
 

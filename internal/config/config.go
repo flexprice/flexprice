@@ -539,11 +539,23 @@ type EventProcessingReplayConfig struct {
 
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
-	Enabled                   bool   `mapstructure:"enabled" default:"true"`
-	Topic                     string `mapstructure:"topic" default:"events"`
-	RateLimit                 int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
-	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
+
+	// InsertBatchSize is how many meter_usage rows are coalesced into a single
+	// ClickHouse INSERT. One INSERT per Kafka message caps a task at
+	// ~1/round-trip-latency (measured ~7-13 msg/s in prod), which no task count
+	// can overcome because the cost is per-message. Set to 1 to restore the
+	// old per-message behaviour.
+	InsertBatchSize int `mapstructure:"insert_batch_size" default:"500"`
+	// InsertBatchMaxDelay bounds how long a partially-filled batch waits before
+	// flushing, so low traffic doesn't stall messages until InsertBatchSize is
+	// reached. Handlers block for at most this long before their rows are
+	// written and their Kafka offsets committed.
+	InsertBatchMaxDelay time.Duration `mapstructure:"insert_batch_max_delay" default:"1s"`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
 	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
 	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`
