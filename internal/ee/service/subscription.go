@@ -350,8 +350,15 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	for i := range req.LineItems {
 		itemReq := req.LineItems[i]
 		itemReq.SkipEntitlementCheck = true
-		if _, err = s.addSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
+		extraLineItem, err := s.addSubscriptionLineItem(ctx, sub.ID, itemReq)
+		if err != nil {
 			return nil, err
+		}
+		// Feed into sub.LineItems so CreateSubscription's post-commit publishLineItemEvents
+		// call covers these too, instead of losing the event entirely now that
+		// addSubscriptionLineItem no longer triggers it inline.
+		if extraLineItem != nil && extraLineItem.SubscriptionLineItem != nil {
+			sub.LineItems = append(sub.LineItems, extraLineItem.SubscriptionLineItem)
 		}
 	}
 	if len(req.OverrideEntitlements) > 0 {
@@ -427,6 +434,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			if extraErr != nil {
 				return nil, extraErr
 			}
+			sub.LineItems = append(sub.LineItems, extraItems...)
 			// Apply phase 0 coupons to the extra line items created above.
 			// handleSubCoupons runs before this block and only covers req.Coupons /
 			// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
