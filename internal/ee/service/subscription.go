@@ -2489,6 +2489,111 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	return response, nil
 }
 
+func (s *subscriptionService) GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string) (*dto.ListSubscriptionsResponse, error) {
+	if externalCustomerID == "" {
+		return nil, ierr.NewError("external_customer_id is required").
+			WithHint("Please provide a valid external customer ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	response := &dto.ListSubscriptionsResponse{}
+
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, externalCustomerID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve external customer ID",
+			"error", err,
+			"external_customer_id", externalCustomerID)
+		return nil, ierr.WithError(err).
+			WithHintf("Customer with external ID '%s' not found", externalCustomerID).
+			WithReportableDetails(map[string]interface{}{
+				"external_customer_id": externalCustomerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	filter := &types.SubscriptionFilter{
+		QueryFilter:   types.NewNoLimitQueryFilter(),
+		CustomerID:    customer.ID,
+		WithLineItems: true,
+	}
+
+	subscriptions, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list subscriptions for customer",
+			"error", err,
+			"customer_id", customer.ID,
+			"external_customer_id", externalCustomerID)
+		return nil, err
+	}
+
+	if len(subscriptions) == 0 {
+		return response, nil
+	}
+
+	meterIDSet := make(map[string]struct{})
+	for _, sub := range subscriptions {
+		for _, li := range sub.GetLineItems() {
+			if li.GetMeterID() == "" {
+				continue
+			}
+
+			meterIDSet[li.GetMeterID()] = struct{}{}
+		}
+	}
+
+	if len(meterIDSet) > 0 {
+		meterIDs := lo.Keys(meterIDSet)
+		meterFilter := types.NewNoLimitMeterFilter()
+		meterFilter.MeterIDs = meterIDs
+		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		meterMap := make(map[string]*domainMeter.Meter, len(meters))
+		for _, m := range meters {
+			meterMap[m.ID] = m
+		}
+
+		for _, item := range subscriptions {
+			for i, li := range item.GetLineItems() {
+				if m, ok := meterMap[li.GetMeterID()]; ok {
+					item.GetLineItems()[i].Meter = m
+				}
+			}
+		}
+	}
+
+	billingService := NewBillingService(s.ServiceParams)
+	ents, err := billingService.GetCustomerEntitlements(ctx, customer.ID, &dto.GetCustomerEntitlementsRequest{})
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load entitlements for customer",
+			"error", err,
+			"customer_id", customer.ID)
+		return nil, err
+	}
+
+	for _, af := range ents.Features {
+		if af != nil && af.Feature != nil {
+			af.Feature.Meter = nil
+		}
+	}
+
+	response.Items = make([]*dto.SubscriptionResponse, len(subscriptions))
+	for i, sub := range subscriptions {
+		if sub == nil {
+			continue
+		}
+
+		response.Items[i] = &dto.SubscriptionResponse{
+			Subscription: sub,
+			Entitlements: ents.Features,
+		}
+	}
+
+	return response, nil
+}
+
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 

@@ -891,6 +891,9 @@ func (m *mockSubscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx co
 func (m *mockSubscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*apidto.ListSubscriptionsResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string) (*apidto.ListSubscriptionsResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
 	return nil, nil
 }

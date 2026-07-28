@@ -31,15 +31,16 @@ func (s *EntitlementServiceSuite) SetupTest() {
 func (s *EntitlementServiceSuite) setupService() {
 	stores := s.GetStores()
 	s.service = NewEntitlementService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		EntitlementRepo:  stores.EntitlementRepo,
-		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
-		PlanRepo:         stores.PlanRepo,
-		FeatureRepo:      stores.FeatureRepo,
-		MeterRepo:        testutil.NewInMemoryMeterStore(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:               s.GetLogger(),
+		Config:               s.GetConfig(),
+		DB:                   s.GetDB(),
+		EntitlementRepo:      stores.EntitlementRepo,
+		EntitlementGrantRepo: stores.EntitlementGrantRepo,
+		PlanRepo:             stores.PlanRepo,
+		FeatureRepo:          stores.FeatureRepo,
+		MeterRepo:            testutil.NewInMemoryMeterStore(),
+		WebhookPublisher:     s.GetWebhookPublisher(),
+		RedisCache:           s.GetRedisCache(),
 	})
 }
 
@@ -1062,4 +1063,77 @@ func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
 	r3 := aggregateConfigEntitlementsForBilling(nil)
 	s.False(r3.IsEnabled)
 	s.Len(r3.ConfigValues, 0)
+}
+
+func (s *EntitlementServiceSuite) TestGetPlanEntitlements_CachesByPlanID() {
+	ctx := s.GetContext()
+
+	testPlan := &plan.Plan{
+		ID:        "plan-cache-1",
+		Name:      "Cache Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, testPlan))
+
+	boolFeature := &feature.Feature{
+		ID:        "feat-cache-bool",
+		Name:      "Bool",
+		Type:      types.FeatureTypeBoolean,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, boolFeature))
+
+	_, err := s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		PlanID:      testPlan.ID,
+		FeatureID:   boolFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true,
+	})
+	s.NoError(err)
+
+	first, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Len(first.Items, 1)
+
+	// Bypass the service so the plan-entitlements cache is not invalidated.
+	extraFeature := &feature.Feature{
+		ID:        "feat-cache-bool-2",
+		Name:      "Bool 2",
+		Type:      types.FeatureTypeBoolean,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, extraFeature))
+	_, err = s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
+		ID:         "ent-cache-extra",
+		EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:   testPlan.ID,
+		FeatureID:  extraFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:  true,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	})
+	s.NoError(err)
+
+	cached, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Len(cached.Items, 1, "second GetPlanEntitlements should serve the cached plan entitlements")
+
+	thirdFeature := &feature.Feature{
+		ID:        "feat-cache-bool-3",
+		Name:      "Bool 3",
+		Type:      types.FeatureTypeBoolean,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, thirdFeature))
+	_, err = s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		PlanID:      testPlan.ID,
+		FeatureID:   thirdFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true,
+	})
+	s.NoError(err)
+
+	afterInvalidate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Greater(len(afterInvalidate.Items), 1, "cache must be invalidated after CreateEntitlement")
 }

@@ -58,6 +58,14 @@ type SubscriptionLineItem struct {
 	types.BaseModel
 }
 
+func (li *SubscriptionLineItem) GetMeterID() string {
+	if li == nil {
+		return ""
+	}
+	
+	return li.MeterID
+}
+
 // IsActive returns true if the line item is active
 // to check if the line item is active and is mostly used with time.Now()
 // and in case of event post processing, we pass the event timestamp

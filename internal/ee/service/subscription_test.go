@@ -5051,6 +5051,36 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestGetSubscriptionsForCustomer() {
+	ctx := s.GetContext()
+
+	_, err := s.service.GetSubscriptionsForCustomer(ctx, "")
+	s.Error(err)
+
+	_, err = s.service.GetSubscriptionsForCustomer(ctx, "missing_external_id")
+	s.Error(err)
+
+	resp, err := s.service.GetSubscriptionsForCustomer(ctx, s.testData.customer.ExternalID)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.NotEmpty(resp.Items)
+
+	for _, item := range resp.Items {
+		s.Equal(s.testData.customer.ID, item.CustomerID)
+		s.Nil(item.Plan, "plan should not be hydrated")
+		s.Nil(item.Customer, "customer should not be hydrated")
+		s.NotNil(item.Entitlements, "entitlements should be populated")
+		if item.Subscription != nil {
+			for _, li := range item.Subscription.LineItems {
+				if li.MeterID != "" {
+					s.NotNil(li.Meter, "usage line items should have meters attached")
+					s.Equal(li.MeterID, li.Meter.ID)
+				}
+			}
+		}
+	}
+}
+
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// Create a test subscription that's ready for period transition
 	now := time.Now().UTC()
