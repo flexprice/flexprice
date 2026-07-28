@@ -5348,18 +5348,20 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 
 	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
 
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 	// Calling it again with the same effectiveDate must not error, even though every
 	// resource is already terminated (repo-level guards make this a no-op the second time).
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}
@@ -5383,6 +5385,89 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 	s.NoError(err)
 	s.Require().NotNil(gotGrant.EndDate)
 	s.True(gotGrant.EndDate.Equal(effectiveDate), "credit grant EndDate must equal the exact effective date, not just be non-nil")
+}
+
+// TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce guards against a regression where an
+// addon's FIXED-price line item, terminated by cancelAddonsForSubscription, was ALSO picked up by
+// cancelAllLineItemsForSubscription's own (separate) activeLineItems query moments later in the same
+// transaction — because that query built its filter with ActiveFilter=true but no CurrentPeriodStart,
+// which both the Ent repo and the in-memory test double treat as "skip the active filter entirely".
+// That made cancelAllLineItemsForSubscription publish a second subscription.line_item.deleted event for
+// the same already-terminated addon line item, on top of the one published post-commit via
+// TerminateSubscriptionResources's returned terminated line items.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_addon_dedup_test",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	addonID := "addon_dedup_test"
+	priceID := "price_addon_dedup_test"
+	a := &addon.Addon{ID: addonID, LookupKey: addonID, Name: "Addon", BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.NoError(subService.AddonRepo.Create(ctx, a))
+	// FIXED price type so publishLineItemEvents (which filters to PRICE_TYPE_FIXED only) actually fires.
+	amount := decimal.NewFromInt(10)
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             amount,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	addAddonNow := time.Now().UTC()
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: &addAddonNow})
+	s.NoError(err)
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{sub.ID}
+	liFilter.EntityIDs = []string{addonID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	addonLineItemsBefore, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	s.Require().Len(addonLineItemsBefore, 1, "expected exactly one addon line item")
+	addonLineItemID := addonLineItemsBefore[0].ID
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+		Reason:            "test_addon_dedup",
+	})
+	s.NoError(err)
+
+	deletedEventsForAddonLineItem := 0
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemDeleted && evt.EntityID == addonLineItemID {
+			deletedEventsForAddonLineItem++
+		}
+	}
+	s.Equal(1, deletedEventsForAddonLineItem,
+		"expected exactly one subscription.line_item.deleted event for the terminated addon line item, got %d", deletedEventsForAddonLineItem)
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
