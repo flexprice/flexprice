@@ -7875,9 +7875,7 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 
 	logger.Info(ctx, "terminated line items for subscription", "line_items_terminated", terminated)
 
-	for _, li := range activeLineItems {
-		s.triggerHubSpotDealSyncForLineItem(ctx, subscriptionID, li.CustomerID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationDeleted)
-	}
+	s.publishLineItemEvents(ctx, subscriptionID, activeLineItems, types.WebhookEventSubscriptionLineItemDeleted)
 	return nil
 }
 
