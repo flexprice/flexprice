@@ -53,6 +53,17 @@ func (p *InMemoryPublisherService) startConsumer() {
 	}
 }
 
+// PublishBatch implements publisher.EventPublisher. Tests exercise the same delivery path
+// as Publish so a batched publish is still observable event-by-event.
+func (p *InMemoryPublisherService) PublishBatch(ctx context.Context, evts []*events.Event) error {
+	for _, event := range evts {
+		if err := p.Publish(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Publish implements publisher.Service interface
 func (p *InMemoryPublisherService) Publish(ctx context.Context, event *events.Event) error {
 	p.mu.Lock()

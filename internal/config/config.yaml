@@ -25,6 +25,11 @@ kafka:
   consumer_group: "flexprice-consumer-local"
   topic: "staging_events"
   topic_lazy: "staging_events_lazy"
+  topic_bulk: "events_bulk"
+  # Batching bounds for the bulk publish path; whichever is hit first closes the batch.
+  # Keep bulk_max_batch_bytes under the topic's max.message.bytes (1 MB default on MSK).
+  bulk_max_batch_size: 200
+  bulk_max_batch_bytes: 524288
   topic_dlq: "staging_events_dlq"
   tls: false
   use_sasl: false
@@ -50,6 +55,8 @@ kafka:
     events_dlq:
       partitions: 3
     events_backfill:
+      partitions: 6
+    events_bulk:
       partitions: 6
     events_post_processing:
       partitions: 6
@@ -188,6 +195,9 @@ pyroscope:
 
 event:
   publish_destination: "kafka"
+  # Batched publishing for POST /v1/events/bulk (kafka.topic_bulk). Off by default: batched
+  # events bypass the `events` consumers, so enable only where a bulk consumer runs.
+  bulk_publish_enabled: false
 
 dynamodb:
   in_use: false

@@ -169,6 +169,15 @@ type KafkaConfig struct {
 	ConsumerGroup string   `mapstructure:"consumer_group" validate:"required"`
 	Topic         string   `mapstructure:"topic" validate:"required"`
 	TopicLazy     string   `mapstructure:"topic_lazy" validate:"required"`
+	// TopicBulk is this cluster's batched-ingest topic. Per-cluster because a shared prod
+	// cluster renames topics (FLEXPRICE_KAFKA_TOPICS).
+	TopicBulk string `mapstructure:"topic_bulk"`
+	// Batching bounds for PublishBatch; a batch closes at whichever is hit first.
+	// BulkMaxBatchBytes must stay under the topic's max.message.bytes (1 MB default on MSK).
+	// Read from the LOCAL cluster only: both clusters must receive byte-identical payloads to
+	// stay dedup-identical, so these must not diverge per cluster.
+	BulkMaxBatchSize  int `mapstructure:"bulk_max_batch_size" default:"200"`
+	BulkMaxBatchBytes int `mapstructure:"bulk_max_batch_bytes" default:"524288"`
 	// TopicDLQ is the global fallback dead-letter Kafka topic used by handlers that
 	// do not define their own per-consumer-group topic_dlq. Empty disables DLQ for
 	// those handlers.
