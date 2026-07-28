@@ -1013,10 +1013,10 @@ func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx cont
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription, terminatedLineItems []*subscription.SubscriptionLineItem) {
 }
-func (m *mockSubscriptionService) TerminateSubscriptionResources(ctx context.Context, req apidto.TerminateSubscriptionResourcesRequest) error {
-	return nil
+func (m *mockSubscriptionService) TerminateSubscriptionResources(ctx context.Context, req apidto.TerminateSubscriptionResourcesRequest) ([]*subscription.SubscriptionLineItem, error) {
+	return nil, nil
 }
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
