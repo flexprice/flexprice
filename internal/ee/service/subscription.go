@@ -609,11 +609,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.triggerHubSpotQuoteSyncWorkflow(ctx, result.Sub.ID, result.Customer.ID)
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
 	} else {
-		for _, li := range result.Sub.LineItems {
-			if li.PriceType == types.PRICE_TYPE_FIXED {
-				s.triggerHubSpotDealSyncForLineItem(ctx, result.Sub.ID, result.Customer.ID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationCreated)
-			}
-		}
+		s.publishLineItemEvents(ctx, result.Sub.ID, result.Sub.LineItems, types.WebhookEventSubscriptionLineItemCreated)
 		s.runPaddleSubscriptionSync(ctx, result.Sub)
 	}
 	return response, nil
