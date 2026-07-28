@@ -63,10 +63,11 @@ type meterUsageTrackingService struct {
 	// creation so no active invalidation is required.
 	meterListCache *goCache.Cache
 
-	// insertBatcher coalesces meter_usage rows from concurrently-processed Kafka
-	// messages into one ClickHouse INSERT. Nil when batching is disabled
+	// insertBatchers coalesces meter_usage rows from concurrently-processed Kafka
+	// messages into one ClickHouse INSERT, keyed by (tenant, environment) so a
+	// batch never spans tenants. Nil when batching is disabled
 	// (InsertBatchSize <= 1), in which case processEvent inserts directly.
-	insertBatcher *insertBatcher[*events.MeterUsage]
+	insertBatchers *batcherGroup[*events.MeterUsage]
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
@@ -88,13 +89,15 @@ func NewMeterUsageTrackingService(
 		if maxDelay <= 0 {
 			maxDelay = time.Second
 		}
-		svc.insertBatcher = newInsertBatcher(batchSize, maxDelay,
+		flushTimeout := params.Config.MeterUsageTracking.InsertFlushTimeout
+		svc.insertBatchers = newBatcherGroup(context.Background(), batchSize, maxDelay, flushTimeout,
 			func(ctx context.Context, records []*events.MeterUsage) error {
 				return meterUsageRepo.BulkInsertMeterUsage(ctx, records)
 			})
 		params.Logger.Info(context.Background(), "meter usage insert batching enabled",
 			"batch_size", batchSize,
 			"max_delay", maxDelay,
+			"flush_timeout", flushTimeout,
 		)
 	}
 
@@ -495,8 +498,11 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	// only returns nil (and Watermill only acks, committing the Kafka offset)
 	// after the rows are durable. A crash before the flush leaves the offset
 	// uncommitted, so the messages are redelivered rather than lost.
-	if s.insertBatcher != nil {
-		if err := s.insertBatcher.Add(ctx, records); err != nil {
+	// Batches are keyed by (tenant, environment) so rows from different tenants
+	// are never coalesced into the same INSERT.
+	if s.insertBatchers != nil {
+		batchKey := types.GetTenantID(ctx) + ":" + types.GetEnvironmentID(ctx)
+		if err := s.insertBatchers.Add(ctx, batchKey, records); err != nil {
 			return fmt.Errorf("failed to bulk insert meter usage (batched): %w", err)
 		}
 	} else if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {

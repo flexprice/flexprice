@@ -556,6 +556,11 @@ type MeterUsageTrackingConfig struct {
 	// reached. Handlers block for at most this long before their rows are
 	// written and their Kafka offsets committed.
 	InsertBatchMaxDelay time.Duration `mapstructure:"insert_batch_max_delay" default:"1s"`
+	// InsertFlushTimeout is the hard ceiling on a single batch write. A batch
+	// holds rows from many concurrent handlers, all blocked until it completes,
+	// so an unbounded write would park every one of them on a wedged connection.
+	// On timeout the batch fails, nothing is acked, and Kafka redelivers.
+	InsertFlushTimeout time.Duration `mapstructure:"insert_flush_timeout" default:"30s"`
 	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
 	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
 	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`

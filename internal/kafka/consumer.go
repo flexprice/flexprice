@@ -37,9 +37,10 @@ func NewConsumer(cfg *config.Configuration) (MessageConsumer, error) {
 		saramaConfig.Consumer.Fetch.Default = 1024 * 1024          // Default fetch size (1MB)
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 
-		// See internal/pubsub/kafka/consumer.go for the rationale: handlers do a
-		// synchronous ClickHouse INSERT per message, so a 500ms MaxProcessingTime
-		// starves heartbeats and evicts members mid-rebalance.
+		// See internal/pubsub/kafka/consumer.go for the rationale. In short: this
+		// bounds how long Sarama waits for a handler to take a message off the
+		// partition channel, not heartbeats, and 500ms was well below the real
+		// per-message INSERT latency.
 		saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
 
 		// Sticky keeps prior partition assignments across rebalances instead of

@@ -17,7 +17,7 @@ func TestInsertBatcher_FlushesWhenBatchIsFull(t *testing.T) {
 	var flushes int32
 	var flushed []int
 
-	b := newInsertBatcher(3, time.Hour, func(_ context.Context, items []int) error {
+	b := newInsertBatcher(context.Background(), 3, time.Hour, 5*time.Second, func(_ context.Context, items []int) error {
 		atomic.AddInt32(&flushes, 1)
 		flushed = append(flushed, items...)
 		return nil
@@ -50,7 +50,7 @@ func TestInsertBatcher_FlushesOnMaxDelay(t *testing.T) {
 	done := make(chan struct{})
 
 	// maxSize is far above what we add, so only the delay timer can flush.
-	b := newInsertBatcher(1000, 50*time.Millisecond, func(_ context.Context, items []int) error {
+	b := newInsertBatcher(context.Background(), 1000, 50*time.Millisecond, 5*time.Second, func(_ context.Context, items []int) error {
 		flushed = append(flushed, items...)
 		close(done)
 		return nil
@@ -79,7 +79,7 @@ func TestInsertBatcher_FlushesOnMaxDelay(t *testing.T) {
 func TestInsertBatcher_FlushErrorReachesEveryCaller(t *testing.T) {
 	flushErr := errors.New("clickhouse unavailable")
 
-	b := newInsertBatcher(3, time.Hour, func(_ context.Context, _ []int) error {
+	b := newInsertBatcher(context.Background(), 3, time.Hour, 5*time.Second, func(_ context.Context, _ []int) error {
 		return flushErr
 	})
 
@@ -108,7 +108,7 @@ func TestInsertBatcher_FlushErrorReachesEveryCaller(t *testing.T) {
 func TestInsertBatcher_AddBlocksUntilFlushCompletes(t *testing.T) {
 	var writeFinished atomic.Bool
 
-	b := newInsertBatcher(2, time.Hour, func(_ context.Context, _ []int) error {
+	b := newInsertBatcher(context.Background(), 2, time.Hour, 5*time.Second, func(_ context.Context, _ []int) error {
 		time.Sleep(100 * time.Millisecond)
 		writeFinished.Store(true)
 		return nil
@@ -129,9 +129,96 @@ func TestInsertBatcher_AddBlocksUntilFlushCompletes(t *testing.T) {
 	wg.Wait()
 }
 
+// A stalled write must not park callers forever. Before flushTimeout existed,
+// the timer-triggered flush ran under a context stripped of its deadline, so a
+// wedged ClickHouse connection held every caller in the batch indefinitely.
+func TestInsertBatcher_FlushTimeoutUnblocksCallers(t *testing.T) {
+	b := newInsertBatcher(context.Background(), 2, time.Hour, 100*time.Millisecond,
+		func(ctx context.Context, _ []int) error {
+			// Simulate a write that never completes on its own.
+			<-ctx.Done()
+			return ctx.Err()
+		})
+
+	start := time.Now()
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			errs[idx] = b.Add(context.Background(), []int{idx})
+		}(i)
+	}
+	wg.Wait()
+	elapsed := time.Since(start)
+
+	if elapsed > 2*time.Second {
+		t.Fatalf("callers blocked for %v — flushTimeout did not bound the write", elapsed)
+	}
+	for i, err := range errs {
+		if err == nil {
+			t.Errorf("caller %d got nil error on a timed-out flush; it would ack "+
+				"a message that was never written", i)
+		}
+	}
+}
+
+// Rows from different tenants must never share an INSERT: the write runs under
+// one tenant-scoped context, and mixing tenants is shared mutable state across
+// a tenant boundary.
+func TestBatcherGroup_DoesNotMixKeys(t *testing.T) {
+	var mu sync.Mutex
+	batches := map[string][]int{}
+
+	g := newBatcherGroup(context.Background(), 2, time.Hour, 5*time.Second,
+		func(_ context.Context, items []int) error {
+			mu.Lock()
+			defer mu.Unlock()
+			// Every item in a batch is tagged with its tenant via value range:
+			// tenant A uses 10-19, tenant B uses 20-29.
+			key := "A"
+			if items[0] >= 20 {
+				key = "B"
+			}
+			batches[key] = append(batches[key], items...)
+			return nil
+		})
+
+	var wg sync.WaitGroup
+	for _, spec := range []struct {
+		key  string
+		vals []int
+	}{
+		{"tenantA:env1", []int{10, 11}},
+		{"tenantB:env1", []int{20, 21}},
+	} {
+		wg.Add(1)
+		go func(k string, v []int) {
+			defer wg.Done()
+			_ = g.Add(context.Background(), k, v)
+		}(spec.key, spec.vals)
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	for key, items := range batches {
+		for _, it := range items {
+			inA := it >= 10 && it < 20
+			if (key == "A") != inA {
+				t.Fatalf("batch for %s contained cross-tenant row %d: %v", key, it, batches)
+			}
+		}
+	}
+	if len(batches["A"]) != 2 || len(batches["B"]) != 2 {
+		t.Fatalf("expected 2 rows per tenant, got %v", batches)
+	}
+}
+
 func TestInsertBatcher_EmptyAddIsNoop(t *testing.T) {
 	var flushes int32
-	b := newInsertBatcher(2, 50*time.Millisecond, func(_ context.Context, _ []int) error {
+	b := newInsertBatcher(context.Background(), 2, 50*time.Millisecond, 5*time.Second, func(_ context.Context, _ []int) error {
 		atomic.AddInt32(&flushes, 1)
 		return nil
 	})
@@ -152,7 +239,7 @@ func TestInsertBatcher_CoalescesAcrossCallers(t *testing.T) {
 	var batchSizes []int
 	var mu sync.Mutex
 
-	b := newInsertBatcher(10, time.Hour, func(_ context.Context, items []int) error {
+	b := newInsertBatcher(context.Background(), 10, time.Hour, 5*time.Second, func(_ context.Context, items []int) error {
 		mu.Lock()
 		batchSizes = append(batchSizes, len(items))
 		mu.Unlock()

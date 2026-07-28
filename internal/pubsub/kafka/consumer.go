@@ -37,12 +37,17 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 		saramaConfig.Consumer.Fetch.Default = 1024 * 1024          // Default fetch size (1MB)
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 
-		// MaxProcessingTime must exceed the real per-message handler latency,
-		// otherwise Sarama treats normal processing as a stall: it stops pumping
-		// the partition channel, heartbeats starve, the member is evicted, and the
-		// group rebalances — repeatedly. Handlers here do a synchronous ClickHouse
-		// INSERT per message (observed p50 ~1s, p99 ~21s), so 500ms was ~2-40x too
-		// low and kept the group in a permanent PreparingRebalance loop.
+		// MaxProcessingTime is how long Sarama waits for a handler to take a
+		// message off the partition channel before it stops feeding that channel.
+		// It does NOT govern heartbeats — Sarama runs those on their own
+		// goroutine — and the effective grace is MaxProcessingTime *
+		// ChannelBufferSize (256 by default), so this is backpressure tuning, not
+		// an eviction fix.
+		//
+		// It is raised here because handlers do a synchronous ClickHouse INSERT
+		// per message (observed p50 ~1s, p99 ~21s), far beyond the previous
+		// 500ms, so the buffer was being throttled during entirely normal
+		// processing.
 		saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
 
 		// Sticky assignment preserves each member's previous partitions across a
