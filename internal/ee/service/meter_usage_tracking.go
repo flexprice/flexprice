@@ -94,7 +94,10 @@ func NewMeterUsageTrackingService(
 			func(ctx context.Context, records []*events.MeterUsage) error {
 				return meterUsageRepo.BulkInsertMeterUsage(ctx, records)
 			})
-		params.Logger.Info(context.Background(), "meter usage insert batching enabled",
+		// Warn, not Info: prod runs at FLEXPRICE_LOGGING_LEVEL=warn, so an Info
+		// line here is invisible exactly where confirming the batching config
+		// matters most.
+		params.Logger.Warn(context.Background(), "meter usage insert batching enabled",
 			"batch_size", batchSize,
 			"max_delay", maxDelay,
 			"flush_timeout", flushTimeout,

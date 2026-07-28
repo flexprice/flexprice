@@ -12,7 +12,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,56 +33,61 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 	}
 }
 
-// BulkInsertMeterUsage inserts meter usage records in batches of 100
+// BulkInsertMeterUsage writes all records in a single ClickHouse INSERT.
+//
+// This used to chunk at 100 rows and issue one PrepareBatch/Send per chunk,
+// sequentially. That was harmless when callers passed 1-3 rows, but it makes a
+// caller-side batch pathologically slow: a 500-row batch became five sequential
+// round-trips to ClickHouse Cloud over PrivateLink, all inside the caller's
+// timeout, which is what drove "context deadline exceeded" on batched inserts in
+// production. The driver streams rows into one block, so one Send for the whole
+// set is both correct and the point of batching.
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	batches := lo.Chunk(records, 100)
+	stmt, err := r.store.GetConn().PrepareBatch(ctx, `
+		INSERT INTO meter_usage (
+			id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
+			timestamp, qty_total, unique_hash, source, properties
+		)
+	`)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to prepare batch for meter_usage insert").
+			Mark(ierr.ErrDatabase)
+	}
 
-	for _, batch := range batches {
-		stmt, err := r.store.GetConn().PrepareBatch(ctx, `
-			INSERT INTO meter_usage (
-				id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
-				timestamp, qty_total, unique_hash, source, properties
-			)
-		`)
+	for _, record := range records {
+		propsStr := r.marshalProperties(record)
+
+		err = stmt.Append(
+			record.ID,
+			record.TenantID,
+			record.EnvironmentID,
+			record.ExternalCustomerID,
+			record.MeterID,
+			record.EventName,
+			record.Timestamp,
+			record.QtyTotal,
+			record.UniqueHash,
+			record.Source,
+			propsStr,
+		)
 		if err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to prepare batch for meter_usage insert").
+				WithHint("Failed to append row to meter_usage batch").
+				WithReportableDetails(map[string]interface{}{"event_id": record.ID}).
 				Mark(ierr.ErrDatabase)
 		}
+	}
 
-		for _, record := range batch {
-			propsStr := r.marshalProperties(record)
-
-			err = stmt.Append(
-				record.ID,
-				record.TenantID,
-				record.EnvironmentID,
-				record.ExternalCustomerID,
-				record.MeterID,
-				record.EventName,
-				record.Timestamp,
-				record.QtyTotal,
-				record.UniqueHash,
-				record.Source,
-				propsStr,
-			)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to append row to meter_usage batch").
-					WithReportableDetails(map[string]interface{}{"event_id": record.ID}).
-					Mark(ierr.ErrDatabase)
-			}
-		}
-
-		if err := stmt.Send(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to send meter_usage batch").
-				Mark(ierr.ErrDatabase)
-		}
+	if err := stmt.Send(); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to send meter_usage batch").
+			WithReportableDetails(map[string]interface{}{"row_count": len(records)}).
+			Mark(ierr.ErrDatabase)
 	}
 
 	return nil
