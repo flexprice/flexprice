@@ -386,13 +386,27 @@ meter_usage_tracking:
   # the bindEnvs comment in config.go). Omitting these keys leaves them at the Go
   # zero value, and insert_batch_size: 0 silently disables batching entirely.
   #
-  # Default 1 = one INSERT per message, the long-standing behaviour. Batching is
-  # opt-in per deployment via FLEXPRICE_METER_USAGE_TRACKING_INSERT_BATCH_SIZE
-  # because it has not yet been shown to help in production: ClickHouse Cloud
-  # AsyncInsertFlush latency (6-40s, max 217s) dominates, so larger client-side
-  # batches mostly move the wait around. Turn it on deliberately, with the
-  # ClickHouse flush queue healthy, and measure.
-  insert_batch_size: 1
+  # Batching is ON. insert_batch_size <= 1 leaves insertBatchers nil and makes
+  # processEvent insert per message, which is what capped Sarvam production at
+  # ~27-58 msg/s against ~1,830 msg/s of incoming traffic.
+  #
+  # Measured there on 2026-07-28 with batching off: 19,073 INSERTs carrying 1.08
+  # rows each, ~4,100 ms average wall-clock per INSERT for 1.2 ms of server CPU.
+  # The wait is not flush contention — the async flush pool was idle throughout
+  # (PendingAsyncInsert 121, 446 flushes averaging 1.1 s, async_insert_threads at
+  # its default 16). Each INSERT simply blocks on the server-side async ack.
+  # Batching amortises one such wait across up to insert_batch_size rows.
+  #
+  # Batches are keyed by (tenant, environment), so this only helps when traffic
+  # concentrates on few keys — a wide key spread yields tiny batches that each
+  # still pay a full round-trip plus insert_batch_max_delay, which is slower than
+  # not batching. Sarvam measured 2 active keys with 99.9% of rows on one, so
+  # batches fill well inside the delay window there. Re-check that spread before
+  # assuming this default suits another deployment.
+  #
+  # Add() still blocks its caller until the batch flushes, so at-least-once is
+  # unchanged — see the contract comment in insert_batcher.go.
+  insert_batch_size: 500
   insert_batch_max_delay: "1s"
   insert_flush_timeout: "60s"
 

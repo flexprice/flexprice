@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	clickhousego "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -42,16 +43,36 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 // timeout, which is what drove "context deadline exceeded" on batched inserts in
 // production. The driver streams rows into one block, so one Send for the whole
 // set is both correct and the point of batching.
+//
+// The async-insert settings are passed through the driver context, NOT as a
+// SETTINGS clause on the statement. PrepareBatch sends an INSERT header and then
+// streams row blocks over the native protocol; a trailing SETTINGS clause in that
+// statement text is not applied as query settings. Verified against Sarvam
+// production on 2026-07-28: with `) SETTINGS async_insert = 1,
+// wait_for_async_insert = 0` written inline, system.query_log showed
+// Settings['async_insert'] and Settings['wait_for_async_insert'] EMPTY on all
+// 33,435 inserts in the sample, so the server-level wait_for_async_insert = 1
+// applied and every insert blocked ~2.5-4 s on the async ack. clickhouse.Context
+// with WithSettings puts them on the wire where the server reads them.
+//
+// wait_for_async_insert = 0 means the server acks once the rows are buffered,
+// before they are flushed to the table. Combined with the caller-side batcher
+// this is what keeps the insert off the consumer's critical path.
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
 	if len(records) == 0 {
 		return nil
 	}
 
+	ctx = clickhousego.Context(ctx, clickhousego.WithSettings(clickhousego.Settings{
+		"async_insert":          1,
+		"wait_for_async_insert": 0,
+	}))
+
 	stmt, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO meter_usage (
 			id, tenant_id, environment_id, external_customer_id, meter_id, event_name,
 			timestamp, qty_total, unique_hash, source, properties
-		) SETTINGS async_insert = 1, wait_for_async_insert = 0
+		)
 	`)
 	if err != nil {
 		return ierr.WithError(err).

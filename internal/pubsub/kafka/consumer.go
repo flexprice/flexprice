@@ -52,8 +52,14 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 		//
 		// Net.ReadTimeout is raised alongside it: at its 30s default it would clip
 		// the same response before the rebalance timeout could apply.
-		saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
-		saramaConfig.Net.ReadTimeout = 300 * time.Second
+		//
+		// DISABLED 2026-07-28. Deployed to Sarvam prod and did not help: the group
+		// stayed in PreparingRebalance with 0/100 partitions assigned and members
+		// draining, for longer than one full 300 s join budget. The same
+		// oscillation reproduces on images that predate this change, so raising
+		// these timeouts is not the fix and only slows down failure detection.
+		// saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
+		// saramaConfig.Net.ReadTimeout = 300 * time.Second
 
 		// DO NOT set Consumer.Group.Rebalance.GroupStrategies here without
 		// deploying every service that shares a consumer group at the same time.
