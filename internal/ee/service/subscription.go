@@ -4664,6 +4664,53 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 }
 
+// publishLineItemEvents publishes a subscription.line_item.created/deleted event for each
+// FIXED-price line item in lineItems. Non-FIXED line items are skipped — HubSpot deal sync
+// (the current consumer of this event) only tracks flat-rate charges, matching the filter
+// triggerHubSpotDealSyncForLineItem currently applies inline.
+func (s *subscriptionService) publishLineItemEvents(
+	ctx context.Context,
+	subscriptionID string,
+	lineItems []*subscription.SubscriptionLineItem,
+	eventName types.WebhookEventName,
+) {
+	for _, li := range lineItems {
+		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		payload := webhookDto.InternalSubscriptionLineItemEvent{
+			SubscriptionID: subscriptionID,
+			LineItemID:     li.ID,
+			CustomerID:     li.CustomerID,
+			PriceType:      li.PriceType,
+			TenantID:       types.GetTenantID(ctx),
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+		}
+
+		webhookPayload, err := json.Marshal(payload)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to marshal line item event payload", "error", err, "line_item_id", li.ID)
+			continue
+		}
+
+		webhookEvent := &types.WebhookEvent{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+			EventName:     eventName,
+			TenantID:      types.GetTenantID(ctx),
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			UserID:        types.GetUserID(ctx),
+			Timestamp:     time.Now().UTC(),
+			Payload:       json.RawMessage(webhookPayload),
+			EntityType:    types.SystemEntityTypeSubscriptionLineItem,
+			EntityID:      li.ID,
+		}
+		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+			s.Logger.Error(ctx, "failed to publish line item event", "event_name", eventName, "line_item_id", li.ID, "error", err)
+		}
+	}
+}
+
 func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)

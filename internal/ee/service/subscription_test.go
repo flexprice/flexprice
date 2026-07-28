@@ -10396,3 +10396,24 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_GroupedInvoicingChildr
 	s.Error(err, "expected duplicate price_id in a child's override_line_items to be rejected")
 	s.Contains(err.Error(), "duplicate price_id in override line items")
 }
+
+func (s *SubscriptionServiceSuite) TestPublishLineItemEvents_FiltersToFixedPriceType() {
+	svc, ok := s.service.(*subscriptionService)
+	s.Require().True(ok, "expected concrete *subscriptionService")
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	lineItems := []*subscription.SubscriptionLineItem{
+		{ID: "li_fixed", CustomerID: "cus_1", PriceType: types.PRICE_TYPE_FIXED},
+		{ID: "li_usage", CustomerID: "cus_1", PriceType: types.PRICE_TYPE_USAGE},
+	}
+
+	svc.publishLineItemEvents(s.GetContext(), "sub_1", lineItems, types.WebhookEventSubscriptionLineItemCreated)
+
+	events := publisher.Events()
+	s.Len(events, 1, "expected exactly 1 published event (FIXED only)")
+	s.Equal(types.WebhookEventSubscriptionLineItemCreated, events[0].EventName)
+	s.Equal("li_fixed", events[0].EntityID, "surviving event must be for the FIXED line item, not the USAGE one")
+}
