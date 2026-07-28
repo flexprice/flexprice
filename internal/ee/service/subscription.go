@@ -2542,10 +2542,7 @@ func (s *subscriptionService) GetSubscriptionsForCustomer(ctx context.Context, e
 	}
 
 	if len(meterIDSet) > 0 {
-		meterIDs := lo.Keys(meterIDSet)
-		meterFilter := types.NewNoLimitMeterFilter()
-		meterFilter.MeterIDs = meterIDs
-		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		meters, err := s.MeterRepo.ListByIDs(ctx, lo.Keys(meterIDSet))
 		if err != nil {
 			return nil, err
 		}

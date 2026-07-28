@@ -66,6 +66,19 @@ services:
       timeout: 3s
       retries: 30
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:main
     profiles:
@@ -134,6 +147,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_started
+      redis:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
     environment:
@@ -144,6 +159,11 @@ services:
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Redis cache: single-node container, so cluster mode must be off
+      - FLEXPRICE_REDIS_HOST=redis
+      - FLEXPRICE_REDIS_CLUSTER_MODE=false
+      - FLEXPRICE_CACHE_ENABLED=true
+      - FLEXPRICE_CACHE_REDIS_ENABLED=true
       # Auth: API key mode — raw key is sk_local_flexprice_test_key
       - FLEXPRICE_AUTH_PROVIDER=api_key
       - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
@@ -163,6 +183,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=consumer
       # Override config.yaml settings for containerized environment
@@ -171,6 +193,11 @@ services:
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Redis cache: single-node container, so cluster mode must be off
+      - FLEXPRICE_REDIS_HOST=redis
+      - FLEXPRICE_REDIS_CLUSTER_MODE=false
+      - FLEXPRICE_CACHE_ENABLED=true
+      - FLEXPRICE_CACHE_REDIS_ENABLED=true
       # Auth: API key mode — raw key is sk_local_flexprice_test_key
       - FLEXPRICE_AUTH_PROVIDER=api_key
       - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
@@ -190,6 +217,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=temporal_worker
       # Override config.yaml settings for containerized environment
@@ -198,6 +227,11 @@ services:
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Redis cache: single-node container, so cluster mode must be off
+      - FLEXPRICE_REDIS_HOST=redis
+      - FLEXPRICE_REDIS_CLUSTER_MODE=false
+      - FLEXPRICE_CACHE_ENABLED=true
+      - FLEXPRICE_CACHE_REDIS_ENABLED=true
       # Auth: API key mode — raw key is sk_local_flexprice_test_key
       - FLEXPRICE_AUTH_PROVIDER=api_key
       - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
@@ -210,3 +244,4 @@ volumes:
   postgres-data:
   kafka-data:
   clickhouse-data:
+  redis-data:
