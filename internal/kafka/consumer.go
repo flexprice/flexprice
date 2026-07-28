@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -30,12 +31,23 @@ func NewConsumer(cfg *config.Configuration) (MessageConsumer, error) {
 	if saramaConfig != nil {
 		// Optimize consumer configs for throughput
 		// TODO: move this to config
-		saramaConfig.Consumer.Group.Session.Timeout = 45000 * time.Millisecond
+		saramaConfig.Consumer.Group.Session.Timeout = 60000 * time.Millisecond
 		saramaConfig.Consumer.Fetch.Min = 1                        // Minimum number of bytes to fetch in a request
 		saramaConfig.Consumer.Fetch.Max = 10 * 1024 * 1024         // Maximum number of bytes to fetch (10MB)
 		saramaConfig.Consumer.Fetch.Default = 1024 * 1024          // Default fetch size (1MB)
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
-		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
+
+		// See internal/pubsub/kafka/consumer.go for the rationale: handlers do a
+		// synchronous ClickHouse INSERT per message, so a 500ms MaxProcessingTime
+		// starves heartbeats and evicts members mid-rebalance.
+		saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
+
+		// Sticky keeps prior partition assignments across rebalances instead of
+		// Range's full reshuffle.
+		saramaConfig.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
+			sarama.BalanceStrategySticky,
+		}
+		saramaConfig.Consumer.Group.Rebalance.Timeout = 120 * time.Second
 	}
 
 	subscriber, err := kafka.NewSubscriber(
