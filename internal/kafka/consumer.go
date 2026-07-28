@@ -37,6 +37,12 @@ func NewConsumer(cfg *config.Configuration) (MessageConsumer, error) {
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
 
+		// See internal/pubsub/kafka/consumer.go: JoinGroup on the 100-partition
+		// events topic does not complete within the 60s default, so members time
+		// out mid-join and reconnect forever.
+		saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
+		saramaConfig.Net.ReadTimeout = 300 * time.Second
+
 		// Do not set Rebalance.GroupStrategies here — see the comment in
 		// internal/pubsub/kafka/consumer.go. Services sharing a consumer group must
 		// agree on the assignment protocol, so changing it requires deploying all of

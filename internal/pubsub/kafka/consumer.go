@@ -37,6 +37,24 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 		saramaConfig.Consumer.MaxWaitTime = 100 * time.Millisecond // Max time to wait for new data
 		saramaConfig.Consumer.MaxProcessingTime = 500 * time.Millisecond
 
+		// JoinGroup on the events topic does not finish inside the 60s default.
+		//
+		// Sarama sends this value as JoinGroupRequest.RebalanceTimeout
+		// (consumer_group.go:431) and waits that long for the coordinator's
+		// response. The events topic has 100 partitions and tens of millions of
+		// messages of committed-offset state, so with dozens of members the
+		// coordinator does not answer in time. Production showed the read failing
+		// at exactly 60s — errors 60.008s apart, all "read tcp ...:9096: i/o
+		// timeout" — after which the member reconnects and retries forever. The
+		// group ends up with one or two members holding every partition while the
+		// rest loop, and the small-topic groups those same processes join stay
+		// fully populated.
+		//
+		// Net.ReadTimeout is raised alongside it: at its 30s default it would clip
+		// the same response before the rebalance timeout could apply.
+		saramaConfig.Consumer.Group.Rebalance.Timeout = 300 * time.Second
+		saramaConfig.Net.ReadTimeout = 300 * time.Second
+
 		// DO NOT set Consumer.Group.Rebalance.GroupStrategies here without
 		// deploying every service that shares a consumer group at the same time.
 		//
