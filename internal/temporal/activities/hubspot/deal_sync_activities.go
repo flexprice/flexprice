@@ -145,8 +145,6 @@ func (a *DealSyncActivities) UpdateDealAmount(
 		return err
 	}
 
-	// Update deal amount - uses existing DealSyncService logic
-	// Now we pass customerID and dealID directly instead of fetching subscription
 	err = hubspotIntegration.DealSyncSvc.UpdateDealAmountFromACV(ctx, input.CustomerID, input.DealID)
 	if err != nil {
 		a.logger.Error(ctx, "failed to update deal amount",
