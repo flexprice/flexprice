@@ -5,16 +5,10 @@ import (
 	"github.com/samber/lo"
 )
 
-// HubSpotLineItemSyncOperation identifies what to do to the HubSpot line item identified by
-// HubSpotDealSyncWorkflowInput.LineItemID.
 type HubSpotLineItemSyncOperation string
 
 const (
-	// HubSpotLineItemSyncOperationCreated creates a new HubSpot line item and associates it
-	// with the deal. A no-op if a mapping for this line item already exists (retry-safety).
 	HubSpotLineItemSyncOperationCreated HubSpotLineItemSyncOperation = "created"
-	// HubSpotLineItemSyncOperationDeleted deletes the HubSpot line item mapped to this line
-	// item, if any. A no-op if no mapping exists, or if HubSpot returns 404.
 	HubSpotLineItemSyncOperationDeleted HubSpotLineItemSyncOperation = "deleted"
 )
 
@@ -31,8 +25,6 @@ func (o HubSpotLineItemSyncOperation) Validate() error {
 	return nil
 }
 
-// HubSpotDealSyncWorkflowInput contains the input for the HubSpot deal sync workflow.
-// One workflow execution syncs exactly one subscription line item mutation to HubSpot.
 type HubSpotDealSyncWorkflowInput struct {
 	SubscriptionID string                       `json:"subscription_id"`
 	CustomerID     string                       `json:"customer_id"`

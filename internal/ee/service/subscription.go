@@ -784,12 +784,6 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	return response, nil
 }
 
-// resolveHubSpotDealID resolves the HubSpot deal ID for a subscription. It prefers the
-// entity_integration_mapping row (keyed per subscription, fixing the one-deal-per-customer
-// collision when a customer has multiple subscriptions), and falls back to
-// customer.Metadata["hubspot_deal_id"] for subscriptions synced before this mapping existed --
-// backfilling the mapping row on fallback so future lookups use it directly. Returns ("", nil)
-// if the subscription/customer isn't linked to a HubSpot deal at all (not an error).
 func (s *subscriptionService) resolveHubSpotDealID(ctx context.Context, subscriptionID, customerID string) (string, error) {
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = subscriptionID
@@ -816,7 +810,6 @@ func (s *subscriptionService) resolveHubSpotDealID(ctx context.Context, subscrip
 		return "", nil
 	}
 
-	// Backfill the subscription-level mapping so future lookups hit the fast path above.
 	backfill := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityID:         subscriptionID,
@@ -834,10 +827,6 @@ func (s *subscriptionService) resolveHubSpotDealID(ctx context.Context, subscrip
 	return dealID, nil
 }
 
-// triggerHubSpotDealSyncForLineItem fires the Temporal workflow that syncs a single subscription
-// line item mutation to its HubSpot deal. A no-op if there's no ConnectionRepo, no HubSpot
-// connection, Deal.Outbound sync is disabled, the subscription/customer isn't linked to a
-// HubSpot deal, or the line item is not FIXED (usage-based line items never sync to HubSpot).
 func (s *subscriptionService) triggerHubSpotDealSyncForLineItem(ctx context.Context, subscriptionID, customerID, lineItemID string, priceType types.PriceType, operation models.HubSpotLineItemSyncOperation) {
 	if priceType != types.PRICE_TYPE_FIXED {
 		return
@@ -863,7 +852,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncForLineItem(ctx context.Cont
 		return
 	}
 	if dealID == "" {
-		return // not a HubSpot-linked customer/subscription
+		return
 	}
 
 	tenantID := types.GetTenantID(ctx)
@@ -7547,9 +7536,6 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 		"effective_date", effectiveDate,
 	)
 
-	// Fetch active line items before BulkTerminate wipes their "active" status --
-	// BulkTerminate returns only a count, not which line items it touched, and the HubSpot
-	// sync trigger needs each line item's ID + customer ID + price type.
 	filter := types.NewNoLimitSubscriptionLineItemFilter()
 	filter.SubscriptionIDs = []string{subscriptionID}
 	filter.ActiveFilter = true

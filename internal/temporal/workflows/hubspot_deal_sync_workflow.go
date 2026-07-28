@@ -45,7 +45,6 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-	// Step 1: Create or delete the HubSpot line item, per the mutation that triggered this workflow
 	logger.Info("Step 1: syncing HubSpot line item",
 		"subscription_id", input.SubscriptionID,
 		"line_item_id", input.LineItemID,
