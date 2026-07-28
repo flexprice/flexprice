@@ -559,6 +559,14 @@ func (s *subscriptionModificationService) calculateProration(
 // Module C — apply request (line-item writes only)
 // ─────────────────────────────────────────────
 
+// quantityChangeLineItemDelta carries the raw domain line items (ended + replacement)
+// produced by one applyQuantityChange mod, so callers can publish HubSpot-sync events
+// with fields (PriceType, CustomerID) the dto.ChangedLineItem projection doesn't carry.
+type quantityChangeLineItemDelta struct {
+	ended *subscription.SubscriptionLineItem
+	new   *subscription.SubscriptionLineItem
+}
+
 // applyQuantityChange ends old line items and creates replacements inside one
 // transaction (reuses an ambient tx when present). New LI UUIDs are generated at
 // apply time. No invoices, payments, or wallets.
@@ -567,22 +575,24 @@ func (s *subscriptionModificationService) calculateProration(
 func (s *subscriptionModificationService) applyQuantityChange(
 	ctx context.Context,
 	request *quantityChangeRequest,
-) ([]dto.ChangedLineItem, error) {
+) ([]dto.ChangedLineItem, []quantityChangeLineItemDelta, error) {
 	if request == nil {
-		return nil, ierr.NewError("quantity change request is required").
+		return nil, nil, ierr.NewError("quantity change request is required").
 			Mark(ierr.ErrValidation)
 	}
 
 	sp := s.serviceParams
 	mods := request.GetModifications()
 	if len(mods) == 0 {
-		return []dto.ChangedLineItem{}, nil
+		return []dto.ChangedLineItem{}, nil, nil
 	}
 
 	changedLineItems := make([]dto.ChangedLineItem, 0, len(mods)*2)
+	lineItemDeltas := make([]quantityChangeLineItemDelta, 0, len(mods))
 
 	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		changedLineItems = nil
+		lineItemDeltas = nil
 
 		for _, mod := range mods {
 			if mod == nil {
@@ -663,15 +673,16 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					ChangeAction: dto.ChangedLineItemActionCreated,
 				},
 			)
+			lineItemDeltas = append(lineItemDeltas, quantityChangeLineItemDelta{ended: endedItem, new: newItem})
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return changedLineItems, nil
+	return changedLineItems, lineItemDeltas, nil
 }
 
 // ─────────────────────────────────────────────
@@ -685,14 +696,15 @@ func (s *subscriptionModificationService) settlePayLater(
 	ctx context.Context,
 	request *quantityChangeRequest,
 	prorationResult *quantityChangeProration,
-) ([]dto.ChangedLineItem, []dto.ChangedInvoice, error) {
+) ([]dto.ChangedLineItem, []dto.ChangedInvoice, []quantityChangeLineItemDelta, error) {
 	sp := s.serviceParams
 	var changedLineItems []dto.ChangedLineItem
+	var lineItemDeltas []quantityChangeLineItemDelta
 	changedInvoices := make([]dto.ChangedInvoice, 0)
 
 	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
-		changedLineItems, err = s.applyQuantityChange(txCtx, request)
+		changedLineItems, lineItemDeltas, err = s.applyQuantityChange(txCtx, request)
 		if err != nil {
 			return err
 		}
@@ -723,7 +735,7 @@ func (s *subscriptionModificationService) settlePayLater(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Best-effort collection after LI + invoice rows are committed together.
@@ -745,7 +757,7 @@ func (s *subscriptionModificationService) settlePayLater(
 		}
 	}
 
-	return changedLineItems, changedInvoices, nil
+	return changedLineItems, changedInvoices, lineItemDeltas, nil
 }
 
 // ─────────────────────────────────────────────
