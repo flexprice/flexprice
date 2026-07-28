@@ -387,6 +387,9 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			if encryptedSecretData.Whop.ProductID != "" {
 				data["product_id"] = encryptedSecretData.Whop.ProductID
 			}
+			if encryptedSecretData.Whop.WebhookSecret != "" {
+				data["webhook_secret"] = encryptedSecretData.Whop.WebhookSecret
+			}
 			return data
 		}
 	case types.SecretProviderTabs:
