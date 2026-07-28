@@ -4670,9 +4670,9 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 // HubSpot deal sync.
 func (s *subscriptionService) publishLineItemEvents(
 	ctx context.Context,
-	eventName types.WebhookEventName,
 	subscriptionID string,
 	lineItems []*subscription.SubscriptionLineItem,
+	eventName types.WebhookEventName,
 ) {
 	for _, li := range lineItems {
 		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
