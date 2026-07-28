@@ -25,7 +25,7 @@ kafka:
   consumer_group: "flexprice-consumer-local"
   topic: "staging_events"
   topic_lazy: "staging_events_lazy"
-  topic_bulk: "events_bulk"
+  topic_bulk: "staging_events_bulk"
   # Batching bounds for the bulk publish path; whichever is hit first closes the batch.
   # Keep bulk_max_batch_bytes under the topic's max.message.bytes (1 MB default on MSK).
   bulk_max_batch_size: 200
@@ -494,6 +494,26 @@ raw_event_consumption:
   output_topic: "staging_events" # OUTPUT: Publishes transformed events to here
   rate_limit: 10
   consumer_group: "v1_raw_event_processing_v4"
+
+# Bulk event consumers — read RawEventBatch messages published by
+# POST /events/bulk (identified via metadata batch_source=api_bulk) and
+# bulk-insert directly. Two parallel consumer groups on the same topic:
+# one writes to events, one extracts meter+qty and writes to meter_usage.
+# Reuses the raw_event_consumption topic; the metadata filter keeps Bento
+# batches on their own path (RawEventConsumptionService).
+bulk_event_consumption:
+  enabled: false
+  topic: "staging_events_bulk"
+  rate_limit: 10
+  consumer_group: "v1_bulk_event_consumption"
+  topic_dlq: "staging_events_bulk_dlq"
+
+bulk_meter_usage_tracking:
+  enabled: false
+  topic: "staging_events_bulk"
+  rate_limit: 10
+  consumer_group: "v1_bulk_meter_usage_tracking"
+  topic_dlq: "staging_meter_usage_tracking_bulk_dlq"
 
 integration_events:
   enabled: true

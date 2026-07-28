@@ -22,34 +22,10 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	goCache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// meterCacheTTL is how long we cache meter lists per (tenant, environment, eventName).
-//
-// Why 10 minutes:
-//   - Meters are append-only in practice; existing meters never change after creation.
-//   - The TTL only matters for newly-created meters: a consumer process will start
-//     seeing a new meter within at most meterCacheTTL of it being created.
-//   - Using NoExpiration would be marginally faster but would require a process
-//     restart to pick up new meters. 10 minutes is a safe middle ground.
-//
-// Why in-process and not Redis:
-//   - The global cache.Type may be "redis", which adds a network hop on every
-//     lookup and would not improve latency over a fresh Postgres query.
-//   - Meter data per (tenant, environment, eventName) key is tiny (~KB), so a
-//     per-process copy across N consumer pods is perfectly fine.
-//
-// Memory footprint estimate (worst case):
-//   - 200 tenants × 20 event names × 10 meters × ~500 B/meter ≈ 20 MB
-//
-// Singleton guarantee:
-//   - This service is registered via fx.Provide() (main.go) and is therefore
-//     instantiated exactly once per process. The goCache.Cache inside it, and
-//     its single background cleanup goroutine, are also allocated exactly once.
-const meterCacheTTL = 10 * time.Minute
 const eventDeduplicationLockTTL = 24 * time.Hour
 
 // MeterUsageTrackingService handles meter-level usage tracking.
@@ -65,20 +41,20 @@ type MeterUsageTrackingService interface {
 	// RegisterHandlerLazy registers a dedicated consumer for the events_lazy
 	// topic (lazy-mode tenants — see kafka.RouteTenantsOnLazyMode).
 	RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// RegisterBulkHandler registers a batch-mode consumer that reads
+	// RawEventBatch messages published by the bulk-ingest API path and
+	// bulk-inserts meter_usage records for every event in one call.
+	RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 }
 
 type meterUsageTrackingService struct {
 	ServiceParams
 	pubSub              pubsub.PubSub
 	lazyPubSub          pubsub.PubSub
+	bulkPubSub          pubsub.PubSub
 	meterUsageRepo      events.MeterUsageRepository
 	expressionEvaluator expression.Evaluator
-	// meterListCache is a dedicated in-memory cache for meter lists keyed by
-	// "tenantID:environmentID:eventName". It is intentionally separate from the
-	// global cache so it is always in-memory (fast) and unaffected by the
-	// global cache.Type config (which may be Redis). Meters are immutable after
-	// creation so no active invalidation is required.
-	meterListCache *goCache.Cache
 }
 
 // NewMeterUsageTrackingService creates a new meter usage tracking service
@@ -90,7 +66,6 @@ func NewMeterUsageTrackingService(
 		ServiceParams:       params,
 		meterUsageRepo:      meterUsageRepo,
 		expressionEvaluator: expression.NewCELEvaluator(),
-		meterListCache:      goCache.New(meterCacheTTL, 2*meterCacheTTL),
 	}
 
 	ps, err := kafka.NewPubSubFromConfig(
@@ -114,6 +89,17 @@ func NewMeterUsageTrackingService(
 		return nil
 	}
 	svc.lazyPubSub = lazyPS
+
+	bulkPS, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.BulkMeterUsageTracking.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create bulk pubsub for meter usage tracking", "error", err)
+		return nil
+	}
+	svc.bulkPubSub = bulkPS
 
 	return svc
 }
@@ -197,6 +183,138 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 	)
 }
 
+// RegisterBulkHandler subscribes the bulk consumer group to the bulk-events
+// topic. One Kafka message = one RawEventBatch = one bulk-insert into
+// meter_usage. Runs alongside RegisterHandler(Lazy); the two groups process
+// disjoint topics so bulk traffic can't starve the single-event stream.
+func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.BulkMeterUsageTracking.Enabled {
+		s.Logger.Info(context.Background(), "bulk meter usage tracking handler disabled by configuration")
+		return
+	}
+
+	throttle := middleware.NewThrottle(cfg.BulkMeterUsageTracking.RateLimit, time.Second)
+
+	dlq := cfg.BulkMeterUsageTracking.TopicDLQ
+	if dlq == "" {
+		dlq = cfg.Kafka.TopicDLQ
+	}
+
+	router.AddNoPublishHandler(
+		"bulk_meter_usage_tracking_handler",
+		cfg.BulkMeterUsageTracking.Topic,
+		dlq,
+		s.bulkPubSub,
+		s.processBulkMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered bulk meter usage tracking handler",
+		"topic", cfg.BulkMeterUsageTracking.Topic,
+		"consumer_group", cfg.BulkMeterUsageTracking.ConsumerGroup,
+		"rate_limit", cfg.BulkMeterUsageTracking.RateLimit,
+	)
+}
+
+// processBulkMessage unmarshals a RawEventBatch, matches every event to its
+// meters, and issues a single BulkInsertMeterUsage. Malformed rows inside the
+// batch are skipped so healthy siblings still land in ClickHouse.
+func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg *message.Message) error {
+	var batch events.EventBatch
+	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal bulk meter usage batch",
+			"error", err,
+			"message_uuid", msg.UUID,
+		)
+		return fmt.Errorf("non-retriable unmarshal error: %w", err)
+	}
+
+	if len(batch.Events) == 0 {
+		return nil
+	}
+
+	tenantID := batch.TenantID
+	environmentID := batch.EnvironmentID
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	records := make([]*events.MeterUsage, 0, len(batch.Events))
+	for _, evt := range batch.Events {
+		if evt == nil {
+			continue
+		}
+		if evt.TenantID == "" {
+			evt.TenantID = tenantID
+		}
+		if evt.EnvironmentID == "" {
+			evt.EnvironmentID = environmentID
+		}
+		evt.EventName = strings.TrimSpace(evt.EventName)
+
+		meters, err := s.MeterRepo.GetMatchingMetersByEventName(ctx, evt.EventName)
+		if err != nil {
+			// Meter-lookup errors are retriable: return so the whole batch is
+			// redelivered rather than silently dropping downstream billing rows.
+			return fmt.Errorf("list meters for event %s: %w", evt.EventName, err)
+		}
+		if len(meters) == 0 {
+			continue
+		}
+
+		for _, m := range meters {
+			if !s.checkMeterFilters(evt, m.Filters) {
+				continue
+			}
+			qty, err := s.extractQuantity(evt, m)
+			if err != nil {
+				s.Logger.Error(ctx, "failed to extract quantity, skipping meter",
+					"event_id", evt.ID,
+					"meter_id", m.ID,
+					"error", err,
+				)
+				continue
+			}
+			if qty.IsNegative() {
+				qty = decimal.Zero
+			}
+			records = append(records, &events.MeterUsage{
+				Event:      *evt,
+				MeterID:    m.ID,
+				QtyTotal:   qty,
+				UniqueHash: s.generateUniqueHash(evt, m),
+			})
+		}
+	}
+
+	if len(records) == 0 {
+		s.Logger.Debug(ctx, "bulk meter usage batch produced zero records, skipping",
+			"batch_size", len(batch.Events),
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
+	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
+		s.Logger.Error(ctx, "bulk meter usage insert failed",
+			"error", err,
+			"record_count", len(records),
+			"message_uuid", msg.UUID,
+		)
+		return fmt.Errorf("bulk insert meter usage: %w", err)
+	}
+
+	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
+		"record_count", len(records),
+		"batch_size", len(batch.Events),
+		"message_uuid", msg.UUID,
+	)
+	return nil
+}
+
 // processMessage unmarshals the Kafka message and delegates to processEvent
 func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *message.Message) error {
 	tenantID := types.GetTenantID(ctx)
@@ -247,49 +365,6 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 	return nil
 }
 
-// getMetersForEvent returns meters matching the given event name.
-// Results are cached in-process for meterCacheTTL to avoid a Postgres round-trip
-// on every Kafka message. The cache is nil-safe: if the service was constructed
-// without a cache (e.g. directly in unit tests) it falls through to the repo.
-func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, eventName string) ([]*meter.Meter, error) {
-	eventName = strings.TrimSpace(eventName)
-	if s.meterListCache != nil {
-		tenantID := types.GetTenantID(ctx)
-		environmentID := types.GetEnvironmentID(ctx)
-		cacheKey := tenantID + ":" + environmentID + ":" + eventName
-
-		if cached, ok := s.meterListCache.Get(cacheKey); ok {
-			return cached.([]*meter.Meter), nil
-		}
-
-		meterFilter := types.NewNoLimitMeterFilter()
-		meterFilter.EventName = eventName
-		meterFilter.Status = lo.ToPtr(types.StatusPublished)
-
-		meters, err := s.MeterRepo.List(ctx, meterFilter)
-		if err != nil {
-			return nil, err
-		}
-
-		// Only cache non-empty results. Caching empty slices for event names that
-		// have no matching meters would cause unbounded cache growth when the
-		// consumer receives high-cardinality event names. Unknown event names are
-		// cheap to query (indexed, returns zero rows quickly).
-		//
-		// goCache.DefaultExpiration (0) means "use the TTL set at New() time",
-		// i.e. meterCacheTTL. The stored slice is never mutated after insertion so
-		// concurrent reads do not need additional synchronisation.
-		if len(meters) > 0 {
-			s.meterListCache.Set(cacheKey, meters, goCache.DefaultExpiration)
-		}
-		return meters, nil
-	}
-
-	meterFilter := types.NewNoLimitMeterFilter()
-	meterFilter.EventName = eventName
-	return s.MeterRepo.List(ctx, meterFilter)
-}
-
 // processEvent matches an event to meters and writes meter_usage records.
 // No subscription/feature/price resolution needed.
 func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *events.Event) (err error) {
@@ -311,8 +386,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 
 			// Release the dedup lock on any processing failure below so retries
 			// aren't dedup-skipped until TTL. `err` here is the named return —
-			// it captures failures from getMetersForEvent, BulkInsertMeterUsage,
-			// etc., not just the AcquireLock result.
+			// it captures failures from further processing, not just the AcquireLock result.
 			defer func() {
 				if err != nil {
 					releaseErr := lock.Release(ctx)
@@ -325,7 +399,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	// Step 1: Lookup meters by event name (cache-first)
-	meters, err := s.getMetersForEvent(ctx, event.EventName)
+	meters, err := s.MeterRepo.GetMatchingMetersByEventName(ctx, event.EventName)
 	if err != nil {
 		return fmt.Errorf("failed to list meters for event %s: %w", event.EventName, err)
 	}

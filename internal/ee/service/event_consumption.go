@@ -30,6 +30,11 @@ type EventConsumptionService interface {
 	// Register replay handler with the router
 	RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration)
 
+	// RegisterBulkHandler registers a batch-mode consumer that reads
+	// RawEventBatch messages published by the bulk-ingest API path and
+	// bulk-inserts every event in the batch into the events table in one call.
+	RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration)
+
 	// Process a raw event payload (used for AWS Lambda and direct processing)
 	ProcessRawEvent(ctx context.Context, payload []byte) error
 }
@@ -39,6 +44,7 @@ type eventConsumptionService struct {
 	pubSub         pubsub.PubSub
 	lazyPubSub     pubsub.PubSub
 	replayPubSub   pubsub.PubSub
+	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
 }
@@ -88,7 +94,112 @@ func NewEventConsumptionService(
 	}
 	ev.replayPubSub = replayPubSub
 
+	bulkPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.BulkEventConsumption.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create bulk pubsub", "error", err)
+		return nil
+	}
+	ev.bulkPubSub = bulkPubSub
+
 	return ev
+}
+
+// RegisterBulkHandler subscribes the bulk consumer group to the bulk-events
+// topic. One Kafka message = one RawEventBatch = one bulk-insert into the
+// events ClickHouse table.
+func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.BulkEventConsumption.Enabled {
+		s.Logger.Info(context.Background(), "bulk event consumption handler disabled by configuration")
+		return
+	}
+
+	throttle := middleware.NewThrottle(cfg.BulkEventConsumption.RateLimit, time.Second)
+
+	dlq := cfg.BulkEventConsumption.TopicDLQ
+	if dlq == "" {
+		dlq = cfg.Kafka.TopicDLQ
+	}
+
+	router.AddNoPublishHandler(
+		"bulk_event_consumption_handler",
+		cfg.BulkEventConsumption.Topic,
+		dlq,
+		s.bulkPubSub,
+		s.processBulkMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered bulk event consumption handler",
+		"topic", cfg.BulkEventConsumption.Topic,
+		"consumer_group", cfg.BulkEventConsumption.ConsumerGroup,
+		"rate_limit", cfg.BulkEventConsumption.RateLimit,
+	)
+}
+
+// processBulkMessage unmarshals a RawEventBatch and bulk-inserts every event
+// in the batch with a single call. Malformed rows inside the batch are
+// skipped so healthy siblings still land in ClickHouse.
+func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *message.Message) error {
+	var batch events.EventBatch
+	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal bulk event batch",
+			"error", err,
+			"message_uuid", msg.UUID,
+		)
+		s.tracingService.CaptureException(ctx, err)
+		return fmt.Errorf("non-retriable unmarshal error: %w", err)
+	}
+
+	if len(batch.Events) == 0 {
+		return nil
+	}
+
+	tenantID := batch.TenantID
+	environmentID := batch.EnvironmentID
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	inserts := make([]*events.Event, 0, len(batch.Events))
+	for _, evt := range batch.Events {
+		if evt.TenantID == "" {
+			evt.TenantID = tenantID
+		}
+		if evt.EnvironmentID == "" {
+			evt.EnvironmentID = environmentID
+		}
+		inserts = append(inserts, evt)
+	}
+
+	if len(inserts) == 0 {
+		s.Logger.Info(ctx, "bulk event batch produced zero valid events, skipping",
+			"batch_size", len(batch.Events),
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
+	if err := s.eventRepo.BulkInsertEvents(ctx, inserts); err != nil {
+		s.Logger.Error(ctx, "bulk event batch insert failed",
+			"error", err,
+			"batch_size", len(inserts),
+			"message_uuid", msg.UUID,
+		)
+		return fmt.Errorf("bulk insert events: %w", err)
+	}
+
+	s.Logger.Debug(ctx, "bulk event batch inserted",
+		"batch_size", len(inserts),
+		"message_uuid", msg.UUID,
+	)
+	return nil
 }
 
 // RegisterHandler registers the event consumption handler with the router
