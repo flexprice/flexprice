@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -67,18 +66,6 @@ func (f *failingCreateMappingRepo) Create(ctx context.Context, mapping *entityin
 
 func (f *failingCreateMappingRepo) List(ctx context.Context, filter *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
 	return []*entityintegrationmapping.EntityIntegrationMapping{}, nil
-}
-
-func newTestLogger(t *testing.T) *logger.Logger {
-	t.Helper()
-	cfg := &config.Configuration{
-		Logging: config.LoggingConfig{
-			Level: types.LogLevelInfo,
-		},
-	}
-	log, err := logger.NewLogger(cfg)
-	require.NoError(t, err)
-	return log
 }
 
 func TestSyncLineItemCreated_CompensatesOrphanedLineItemOnMappingPersistFailure(t *testing.T) {
@@ -143,7 +130,7 @@ func TestSyncLineItemCreated_CompensatesOrphanedLineItemOnMappingPersistFailure(
 		subscriptionRepo,
 		priceRepo,
 		mappingRepo,
-		newTestLogger(t),
+		logger.NewNoopLogger(),
 	)
 
 	err := svc.SyncLineItemCreated(ctx, sub.ID, lineItem.ID, "deal_1")
