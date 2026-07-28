@@ -324,6 +324,10 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+
+	s.publishLineItemEvents(ctx, resp.SubscriptionID,
+		[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem}, types.WebhookEventSubscriptionLineItemDeleted)
+
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 	return resp, nil
 }
@@ -435,8 +439,6 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 			}
 		}
 	}
-
-	s.triggerHubSpotDealSyncForLineItem(ctx, lineItem.SubscriptionID, lineItem.CustomerID, lineItem.ID, lineItem.PriceType, models.HubSpotLineItemSyncOperationDeleted)
 
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
