@@ -56,6 +56,12 @@ type insertBatcher[T any] struct {
 	// partially-filled batch still drains under low traffic instead of sitting
 	// until maxSize is reached.
 	timer *time.Timer
+	// flushing serializes writes: only one flush may be in flight per batcher.
+	// Without it, a second full batch would start its own INSERT while the first
+	// is still running, so slow ClickHouse writes would fan out into unbounded
+	// concurrent inserts — each pinning a batch's rows and its blocked callers in
+	// memory. Serializing means a slow write applies backpressure instead.
+	flushing bool
 }
 
 func newInsertBatcher[T any](
@@ -129,36 +135,55 @@ func (b *insertBatcher[T]) Add(ctx context.Context, items []T) error {
 	}
 }
 
-// flush takes the current batch and writes it under a bounded context. The
-// swap happens under b.mu but the write itself runs unlocked, so other
-// goroutines can keep filling the next batch while this one is in flight.
+// flush drains pending batches one at a time. Only one write is ever in flight
+// per batcher: a caller that arrives while a flush is running returns
+// immediately, and the in-flight drain loop picks up whatever accumulated. That
+// keeps a slow ClickHouse write applying backpressure — batches queue behind it
+// — instead of fanning out into concurrent inserts that each pin a batch's rows
+// and its blocked callers in memory.
 func (b *insertBatcher[T]) flush() {
 	b.mu.Lock()
-	if len(b.pending) == 0 {
+	if b.flushing {
+		// Another goroutine owns the drain loop; it will pick up our rows.
 		b.mu.Unlock()
 		return
 	}
+	b.flushing = true
 
-	batch := b.pending
-	waiters := b.waiters
-	b.pending = nil
-	b.waiters = nil
-	if b.timer != nil {
-		b.timer.Stop()
-		b.timer = nil
+	for {
+		if len(b.pending) == 0 {
+			b.flushing = false
+			b.mu.Unlock()
+			return
+		}
+
+		batch := b.pending
+		waiters := b.waiters
+		b.pending = nil
+		b.waiters = nil
+		if b.timer != nil {
+			b.timer.Stop()
+			b.timer = nil
+		}
+		b.mu.Unlock()
+
+		err := b.writeBatch(batch)
+
+		// Every caller in this batch gets the same verdict. Buffered channels, so
+		// no send blocks even if a caller already gave up on ctx.Done().
+		for _, w := range waiters {
+			w <- err
+		}
+
+		b.mu.Lock()
 	}
-	b.mu.Unlock()
+}
 
+// writeBatch performs one bounded write.
+func (b *insertBatcher[T]) writeBatch(batch []T) error {
 	ctx, cancel := context.WithTimeout(b.baseCtx, b.flushTimeout)
 	defer cancel()
-
-	err := b.flushFn(ctx, batch)
-
-	// Every caller in this batch gets the same verdict. Buffered channels, so
-	// no send blocks even if a caller already gave up on ctx.Done().
-	for _, w := range waiters {
-		w <- err
-	}
+	return b.flushFn(ctx, batch)
 }
 
 // batcherGroup keeps one insertBatcher per key so rows from different keys are

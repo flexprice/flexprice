@@ -216,6 +216,43 @@ func TestBatcherGroup_DoesNotMixKeys(t *testing.T) {
 	}
 }
 
+// Only one write may be in flight per batcher. Without serialization a slow
+// ClickHouse insert fans out into unbounded concurrent writes, each pinning a
+// batch's rows and its blocked callers in memory instead of applying
+// backpressure.
+func TestInsertBatcher_SerializesFlushes(t *testing.T) {
+	var inFlight, maxInFlight int32
+
+	b := newInsertBatcher(context.Background(), 2, time.Hour, 5*time.Second,
+		func(_ context.Context, _ []int) error {
+			cur := atomic.AddInt32(&inFlight, 1)
+			for {
+				prev := atomic.LoadInt32(&maxInFlight)
+				if cur <= prev || atomic.CompareAndSwapInt32(&maxInFlight, prev, cur) {
+					break
+				}
+			}
+			time.Sleep(30 * time.Millisecond)
+			atomic.AddInt32(&inFlight, -1)
+			return nil
+		})
+
+	// 20 callers => 10 full batches, all contending at once.
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_ = b.Add(context.Background(), []int{n})
+		}(i)
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&maxInFlight); got > 1 {
+		t.Fatalf("observed %d concurrent flushes; writes must be serialized per batcher", got)
+	}
+}
+
 func TestInsertBatcher_EmptyAddIsNoop(t *testing.T) {
 	var flushes int32
 	b := newInsertBatcher(context.Background(), 2, 50*time.Millisecond, 5*time.Second, func(_ context.Context, _ []int) error {

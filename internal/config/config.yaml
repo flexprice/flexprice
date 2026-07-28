@@ -382,6 +382,13 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
+  # Struct `default:` tags are NOT applied at runtime — defaults live here (see
+  # the bindEnvs comment in config.go). Omitting these keys leaves them at the Go
+  # zero value, and insert_batch_size: 0 silently disables batching entirely.
+  # 1 disables batching (one INSERT per message).
+  insert_batch_size: 500
+  insert_batch_max_delay: "1s"
+  insert_flush_timeout: "30s"
 
 meter_usage_tracking_lazy:
   enabled: true
