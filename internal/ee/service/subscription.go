@@ -20,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	subscriptionDomain "github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -2092,6 +2091,10 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
+	// Declared here, before Step 2 shadows the "subscription" package name with a
+	// same-named local variable, so the package-qualified type can still be referenced.
+	var terminatedLineItemsForHubSpot []*subscription.SubscriptionLineItem
+
 	// Step 2: Get subscription with line items
 	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
@@ -2172,7 +2175,6 @@ func (s *subscriptionService) CancelSubscription(
 
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
-	var terminatedLineItemsForHubSpot []*subscriptionDomain.SubscriptionLineItem
 
 	// Trialing subscriptions have not been charged yet, so generating a
 	// non-zero invoice on cancellation is incorrect — skip invoice creation.
