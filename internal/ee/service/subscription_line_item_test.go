@@ -604,6 +604,45 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Effect
 	s.Equal(oldEndDate.Truncate(time.Second).Unix(), resp.SubscriptionLineItem.EndDate.Truncate(time.Second).Unix())
 }
 
+// TestUpdateSubscriptionLineItem_PublishesDeleteAndCreateLineItemEvents guards against
+// regressing the fix where the replace path's webhook publishes (delete of the old line
+// item, create of the new one) moved to strictly after the transaction commits. A price
+// override (setting Amount) triggers ShouldCreateNewLineItem(), which terminates the
+// existing line item and creates a replacement inside a single DB transaction; both
+// events must fire exactly once each, and only for the two line items involved.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_PublishesDeleteAndCreateLineItemEvents() {
+	ctx := s.GetContext()
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	newAmount := decimal.NewFromInt(200)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		Amount: &newAmount,
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotEqual(s.testData.lineItem.ID, resp.SubscriptionLineItem.ID, "replace path should create a new line item")
+
+	var deletedEvents, createdEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		switch evt.EventName {
+		case types.WebhookEventSubscriptionLineItemDeleted:
+			deletedEvents = append(deletedEvents, evt)
+		case types.WebhookEventSubscriptionLineItemCreated:
+			createdEvents = append(createdEvents, evt)
+		}
+	}
+
+	s.Require().Len(deletedEvents, 1, "expected exactly 1 subscription.line_item.deleted event")
+	s.Equal(s.testData.lineItem.ID, deletedEvents[0].EntityID, "deleted event should reference the old line item")
+
+	s.Require().Len(createdEvents, 1, "expected exactly 1 subscription.line_item.created event")
+	s.Equal(resp.SubscriptionLineItem.ID, createdEvents[0].EntityID, "created event should reference the new line item")
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_EffectiveFromWithoutCriticalField() {
 	ctx := s.GetContext()
 	effectiveFrom := time.Now().UTC().Add(24 * time.Hour)
