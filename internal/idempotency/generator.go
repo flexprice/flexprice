@@ -32,6 +32,9 @@ const (
 
 	// Wallet Credit Adjustment
 	ScopeWalletCreditAdjustment Scope = "wallet_credit_adjustment"
+
+	// Mid-cycle proration charge invoices (subscription quantity-change modify)
+	ScopeProrationCharge Scope = "proration_charge"
 )
 
 // Generator generates idempotency keys

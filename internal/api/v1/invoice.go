@@ -74,6 +74,7 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param expand_by_source query bool false "Include source-level price breakdown for usage line items (legacy)"
 // @Param group_by query []string false "Group usage breakdown by specified fields (e.g., source, feature_id, properties.org_id)"
+// @Param expand query string false "Comma-separated related fields to include. Supports 'tax_applied.tax_rate' to attach rate details to each applied tax."
 // @Success 200 {object} dto.InvoiceResponse
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -94,6 +95,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		ID:                        id,
 		GroupBy:                   groupByParams,
 		ForceRuntimeRecalculation: forceRuntimeRecalculation,
+		Expand:                    c.Query("expand"),
 	}
 
 	invoice, err := h.invoiceService.GetInvoiceWithBreakdown(c.Request.Context(), req)
@@ -200,7 +202,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 
 		if syncMode {
 			// Synchronous: execute workflow and wait for result
-			skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
+			_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
 			if err != nil {
 				h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 				c.Error(err)
@@ -253,7 +255,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 		reqPtr = &body
 	}
 
-	skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
+	_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 		c.Error(err)

@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -42,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -79,6 +81,7 @@ type Stores struct {
 	TenantRepo                   tenant.Repository
 	EnvironmentRepo              environment.Repository
 	EntitlementRepo              entitlement.Repository
+	EntitlementGrantRepo         entitlementgrant.Repository
 	FeatureRepo                  feature.Repository
 	TaskRepo                     task.Repository
 	SecretRepo                   secret.Repository
@@ -101,6 +104,7 @@ type Stores struct {
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
+	UsageRecordRepo              usagerecord.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -134,6 +138,9 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 		},
 		Secrets: config.SecretsConfig{
 			EncryptionKey: "test-encryption-key-for-unit-tests-only",
+		},
+		Onboarding: config.OnboardingConfig{
+			DefaultTenantName: "Flexprice",
 		},
 	}
 	var err error
@@ -228,6 +235,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		TenantRepo:                   NewInMemoryTenantStore(),
 		EnvironmentRepo:              NewInMemoryEnvironmentStore(),
 		EntitlementRepo:              NewInMemoryEntitlementStore(),
+		EntitlementGrantRepo:         NewInMemoryEntitlementGrantStore(),
 		FeatureRepo:                  NewInMemoryFeatureStore(),
 		TaskRepo:                     NewInMemoryTaskStore(),
 		SecretRepo:                   NewInMemorySecretStore(),
@@ -252,6 +260,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
+		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 	}
 
 	// Cache stores
@@ -285,6 +294,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.TenantRepo.(*InMemoryTenantStore).Clear()
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()
+	s.stores.EntitlementGrantRepo.(*InMemoryEntitlementGrantStore).Clear()
 	s.stores.FeatureRepo.(*InMemoryFeatureStore).Clear()
 	s.stores.TaskRepo.(*InMemoryTaskStore).Clear()
 	s.stores.SecretRepo.(*InMemorySecretStore).Clear()
@@ -311,6 +321,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
+	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
@@ -320,6 +331,12 @@ func (s *BaseServiceTestSuite) ClearStores() {
 // GetContext returns the test context
 func (s *BaseServiceTestSuite) GetContext() context.Context {
 	return s.ctx
+}
+
+// WithEnvironment scopes the suite context to an environment, for suites whose
+// code paths require both tenant and environment ids (call from SetupTest).
+func (s *BaseServiceTestSuite) WithEnvironment(environmentID string) {
+	s.ctx = context.WithValue(s.ctx, types.CtxEnvironmentID, environmentID)
 }
 
 // GetConfig returns the test configuration

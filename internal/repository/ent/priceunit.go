@@ -390,7 +390,7 @@ func (o PriceUnitQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query
 
 func (o PriceUnitQueryOptions) ApplyStatusFilter(query PriceUnitQuery, status string) PriceUnitQuery {
 	if status == "" {
-		return query.Where(priceunit.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(priceunit.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(priceunit.Status(status))
 }

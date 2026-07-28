@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/flexprice/flexprice/docs/swagger"
-	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
@@ -66,8 +65,6 @@ type Handlers struct {
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
-	// Cron jobs: optional HTTP /v1/cron/invoices/void-old-pending manual trigger (no Temporal equivalent exists).
-	CronInvoice *cron.InvoiceHandler
 }
 
 func NewRouter(
@@ -172,7 +169,8 @@ func NewRouter(
 			events.POST("", write(types.EntityEvent, types.ActionWrite), handlers.Events.IngestEvent)
 			events.POST("/bulk", write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
-			events.GET("/:id", handlers.Events.GetEventByID)
+			events.GET("/lookup", handlers.Events.GetEventByID)
+			events.GET("/:id", handlers.Events.GetEventByID) // legacy alias, remove once no caller uses /events/:id
 			events.POST("/query", handlers.Events.QueryEvents)
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
@@ -664,13 +662,6 @@ func NewRouter(
 		webhooks.POST("/zoho_books/:tenant_id/:environment_id", handlers.Webhook.HandleZohoBooksWebhook)
 		// Whop webhook endpoint: POST /v1/webhooks/whop/{tenant_id}/{environment_id}
 		webhooks.POST("/whop/:tenant_id/:environment_id", handlers.Webhook.HandleWhopWebhook)
-	}
-
-	// HTTP cron: optional manual/legacy trigger for void-old-pending-invoices (no Temporal equivalent exists).
-	cron := v1Private.Group("/cron")
-	invoiceGroup := cron.Group("/invoices")
-	{
-		invoiceGroup.POST("/void-old-pending", write(types.EntityCron, types.ActionWrite), handlers.CronInvoice.VoidOldPendingInvoices)
 	}
 
 	// Settings routes

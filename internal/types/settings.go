@@ -19,18 +19,19 @@ type SettingConfig interface {
 type SettingKey string
 
 const (
-	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
-	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
-	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
-	SettingKeyTenantConfig             SettingKey = "tenant_config"
-	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
-	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
-	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
-	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
-	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
-	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
-	SettingKeyBonusCreditsTopupConfig  SettingKey = "bonus_credits_topup_config"
-	SettingKeyPaymentMandateLimits     SettingKey = "payment_mandate_limits"
+	SettingKeyInvoiceConfig               SettingKey = "invoice_config"
+	SettingKeySubscriptionConfig          SettingKey = "subscription_config"
+	SettingKeyInvoicePDFConfig            SettingKey = "invoice_pdf_config"
+	SettingKeyTenantConfig                SettingKey = "tenant_config"
+	SettingKeyCustomerOnboarding          SettingKey = "customer_onboarding"
+	SettingKeyWalletBalanceAlertConfig    SettingKey = "wallet_balance_alert_config"
+	SettingKeyPrepareProcessedEvents      SettingKey = "prepare_processed_events_config"
+	SettingKeyCustomAnalytics             SettingKey = "custom_analytics_config"
+	SettingKeyCustomerPortalConfig        SettingKey = "customer_portal_config"
+	SettingKeyEventIngestionFilter        SettingKey = "event_ingestion_filter"
+	SettingKeyBonusCreditsTopupConfig     SettingKey = "bonus_credits_topup_config"
+	SettingKeyPaymentMandateLimits        SettingKey = "payment_mandate_limits"
+	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -48,6 +49,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyEventIngestionFilter,
 		SettingKeyBonusCreditsTopupConfig,
 		SettingKeyPaymentMandateLimits,
+		SettingKeyDraftInvoiceRecomputeConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -388,6 +390,11 @@ type BonusCreditsSlab struct {
 	Threshold decimal.Decimal    `json:"threshold" validate:"required"`
 	Operator  FilterOperatorType `json:"operator" validate:"required"`
 	Bonus     BonusValue         `json:"bonus" validate:"required"`
+	// ExpirationDuration + ExpirationDurationUnit optionally set the bonus tx expiry when this
+	// slab resolves the bonus (expiry = now + duration). Both must be set together, or neither.
+	// Skipped if the caller passes bonus_credits_expiry_date_utc explicitly on the top-up request.
+	ExpirationDuration     *int                           `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 }
 
 // BonusCreditsTopupConfig defines slab-based bonus-credit rules applied to a purchased wallet top-up.
@@ -436,6 +443,21 @@ func (c BonusCreditsTopupConfig) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if (slab.ExpirationDuration == nil) != (slab.ExpirationDurationUnit == nil) {
+			return ierr.NewError("bonus_credits_topup_config: expiration_duration and expiration_duration_unit must be set together").
+				WithHint("Provide both fields, or neither (bonus never expires)").
+				Mark(ierr.ErrValidation)
+		}
+		if slab.ExpirationDuration != nil {
+			if *slab.ExpirationDuration <= 0 {
+				return ierr.NewError("bonus_credits_topup_config: expiration_duration must be greater than 0").
+					WithHint("Duration must be a positive integer").
+					Mark(ierr.ErrValidation)
+			}
+			if err := slab.ExpirationDurationUnit.Validate(); err != nil {
+				return err
+			}
+		}
 		if i > 0 && !c.Slabs[i-1].Threshold.GreaterThan(slab.Threshold) {
 			return ierr.NewError("bonus_credits_topup_config: slabs must be sorted descending by threshold").
 				WithHint("Slabs must be sorted in strictly descending order by threshold, the highest bracket first").
@@ -474,6 +496,16 @@ func (c PaymentMandateLimits) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	}
+	return nil
+}
+
+// DraftInvoiceRecomputeConfig enables daily draft invoice recomputation.
+type DraftInvoiceRecomputeConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Validate implements SettingConfig.
+func (c DraftInvoiceRecomputeConfig) Validate() error {
 	return nil
 }
 
@@ -651,6 +683,14 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultDraftInvoiceRecomputeConfig := DraftInvoiceRecomputeConfig{
+		Enabled: false,
+	}
+	defaultDraftInvoiceRecomputeConfigMap, err := utils.ToMap(defaultDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
@@ -713,6 +753,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyPaymentMandateLimits,
 			DefaultValue: defaultPaymentMandateLimitsMap,
 			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
+		},
+		SettingKeyDraftInvoiceRecomputeConfig: {
+			Key:          SettingKeyDraftInvoiceRecomputeConfig,
+			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
+			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
 		},
 	}, nil
 }
@@ -829,6 +874,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyPaymentMandateLimits:
 		config, err := utils.ToStruct[PaymentMandateLimits](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyDraftInvoiceRecomputeConfig:
+		config, err := utils.ToStruct[DraftInvoiceRecomputeConfig](value)
 		if err != nil {
 			return err
 		}

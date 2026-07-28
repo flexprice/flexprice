@@ -44,6 +44,11 @@ type RazorpayClient interface {
 	// "amount_refunded" int in the smallest currency unit). There is no boolean
 	// "refunded" field on this entity.
 	FetchPayment(ctx context.Context, paymentID string) (map[string]interface{}, error)
+	// FetchPaymentLink retrieves a payment link's current state from Razorpay
+	// (GET /v1/payment_links/{id}). The response's "status" field takes values
+	// "created" | "partially_paid" | "paid" | "expired" | "cancelled", and its
+	// "payments" array carries the underlying pay_xxx attempts once any exist.
+	FetchPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error)
 }
 
 // Client handles Razorpay API client setup and configuration
@@ -590,6 +595,28 @@ func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string
 			WithReportableDetails(map[string]interface{}{
 				"payment_id": paymentID,
 				"error":      err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	return result, nil
+}
+
+// FetchPaymentLink retrieves a payment link's current state from Razorpay. SDK: PaymentLink.Fetch.
+func (c *Client) FetchPaymentLink(ctx context.Context, paymentLinkID string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.PaymentLink.Fetch(paymentLinkID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay payment link", "error", err, "payment_link_id", paymentLinkID)
+		return nil, ierr.NewError("failed to fetch Razorpay payment link").
+			WithHint("Unable to retrieve the payment link from Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"payment_link_id": paymentLinkID,
+				"error":           err.Error(),
 			}).
 			Mark(ierr.ErrInternal)
 	}

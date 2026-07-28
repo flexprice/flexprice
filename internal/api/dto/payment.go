@@ -74,6 +74,41 @@ type PaymentResponse struct {
 	UpdatedAt              time.Time                    `json:"updated_at"`
 	CreatedBy              string                       `json:"created_by"`
 	UpdatedBy              string                       `json:"updated_by"`
+	EnvironmentID          string                       `json:"environment_id"`
+}
+
+func (p *PaymentResponse) ToPayment() *payment.Payment {
+	return &payment.Payment{
+		ID:                p.ID,
+		IdempotencyKey:    p.IdempotencyKey,
+		DestinationType:   p.DestinationType,
+		DestinationID:     p.DestinationID,
+		PaymentMethodType: p.PaymentMethodType,
+		PaymentMethodID:   p.PaymentMethodID,
+		Amount:            p.Amount,
+		Currency:          p.Currency,
+		PaymentStatus:     p.PaymentStatus,
+		TrackAttempts:     p.TrackAttempts,
+		PaymentGateway:    p.PaymentGateway,
+		GatewayPaymentID:  p.GatewayPaymentID,
+		GatewayTrackingID: p.GatewayTrackingID,
+		GatewayMetadata:   p.GatewayMetadata,
+		Metadata:          p.Metadata,
+		SucceededAt:       p.SucceededAt,
+		FailedAt:          p.FailedAt,
+		RefundedAt:        p.RefundedAt,
+		VoidedAt:          p.VoidedAt,
+		ErrorMessage:      p.ErrorMessage,
+		EnvironmentID:     p.EnvironmentID,
+		BaseModel: types.BaseModel{
+			TenantID:  p.TenantID,
+			CreatedAt: p.CreatedAt,
+			UpdatedAt: p.UpdatedAt,
+			CreatedBy: p.CreatedBy,
+			UpdatedBy: p.UpdatedBy,
+		},
+	}
+
 }
 
 // PaymentAttemptResponse represents a payment attempt response

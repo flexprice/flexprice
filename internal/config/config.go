@@ -45,6 +45,7 @@ type Configuration struct {
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
 	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
@@ -53,6 +54,7 @@ type Configuration struct {
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -69,6 +71,11 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+	Onboarding                 OnboardingConfig                 `mapstructure:"onboarding" validate:"omitempty"`
+}
+
+type OnboardingConfig struct {
+	DefaultTenantName string `mapstructure:"default_tenant_name" validate:"omitempty" default:"Flexprice"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -116,6 +123,48 @@ type FlexpriceS3ExportsConfig struct {
 	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
 	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
+}
+
+// MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports
+// usage to. Azure would be added as a further sibling field.
+type MarketplaceConfig struct {
+	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+	GCP GCPMarketplaceConfig `mapstructure:"gcp" validate:"omitempty"`
+}
+
+// AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
+// role. sts:AssumeRole is an authenticated API: the tenant's trust policy names this principal, so
+// these credentials are what signs the AssumeRole request. They are unrelated to the tenant's
+// role_arn/external_id, which are the assume *target*, stored per-connection.
+//
+// These are set explicitly rather than resolved from the ambient AWS credential chain: the chain
+// ends at the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for seconds
+// before failing — turning connection creation into a hang on any non-EC2 host.
+//
+// SessionToken is only set when the credentials are temporary (an ASIA... key from STS/SSO). A
+// long-lived AKIA... IAM user key has no session token, and sending a non-empty one with it makes
+// AWS reject the request.
+type AWSMarketplaceConfig struct {
+	Region          string `mapstructure:"region" validate:"omitempty"`
+	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
+	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
+	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
+}
+
+// GCPMarketplaceConfig holds the two values Flexprice renders into the tenant-facing Workload
+// Identity Federation setup script (design doc FLE-981 §5.3, step 2's --account-id and
+// --attribute-condition). Unlike AWSMarketplaceConfig, these are not credentials: authenticating to
+// GCP happens ambiently, via the AWS identity attached to the worker process's own runtime
+// environment (the credentials JSON a tenant generates hard-codes a real EC2/ECS instance-metadata
+// endpoint for Google's client library to fetch that identity from — see the GCP client package
+// doc comment for the full explanation). This is a different identity from AWSMarketplaceConfig's
+// static caller credentials above (which sign AssumeRole calls for AWS Marketplace) — it names the
+// ambient instance role the worker actually runs as, purely so the WIF setup script we hand tenants
+// trusts the right principal. FlexpriceAWSAccountID/RoleName only need to be *correct*, i.e. matching
+// that role.
+type GCPMarketplaceConfig struct {
+	FlexpriceAWSAccountID string `mapstructure:"flexprice_aws_account_id" validate:"omitempty"`
+	FlexpriceAWSRoleName  string `mapstructure:"flexprice_aws_role_name" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {
@@ -179,12 +228,28 @@ type KafkaTopicSpec struct {
 }
 
 type ClickHouseConfig struct {
-	Address        string `mapstructure:"address" validate:"required"`
-	TLS            bool   `mapstructure:"tls"`
-	Username       string `mapstructure:"username" validate:"required"`
-	Password       string `mapstructure:"password" validate:"required"`
-	Database       string `mapstructure:"database" validate:"required"`
-	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+	// MaxOpenConns caps concurrent ClickHouse queries per PROCESS, so insert throughput is
+	// bounded by (MaxOpenConns / insert latency) per pod/task no matter how many run. Left
+	// at 0 the driver applies MaxIdleConns+5 = 10, which silently caps a consumer fleet:
+	// 40 tasks x 10 conns / 685ms inserts = ~580 events/s. Exhaustion surfaces as
+	// clickhouse-go ErrAcquireConnTimeout ("acquire conn timeout") raised client-side —
+	// the query never reaches the server, so ClickHouse logs nothing. Size it against the
+	// server's spare admission (system.metrics Query vs max_concurrent_queries): raising it
+	// helps only when ClickHouse has headroom, and hurts when it is already saturated.
+	MaxOpenConns int `mapstructure:"max_open_conns"`
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+	// DialTimeout doubles as the pool-acquire deadline inside clickhouse-go
+	// (clickhouse.go acquire() waits on a semaphore of MaxOpenConns slots for DialTimeout),
+	// so it cannot be tuned for pool pressure without also changing dial failover — see
+	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
+	DialTimeout    time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout    time.Duration `mapstructure:"read_timeout"`
+	Address        string        `mapstructure:"address" validate:"required"`
+	TLS            bool          `mapstructure:"tls"`
+	Username       string        `mapstructure:"username" validate:"required"`
+	Password       string        `mapstructure:"password" validate:"required"`
+	Database       string        `mapstructure:"database" validate:"required"`
+	MaxMemoryUsage int64         `mapstructure:"max_memory_usage" validate:"required"`
 }
 
 type LoggingConfig struct {
@@ -256,8 +321,9 @@ type OtelConfig struct {
 	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
 	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
 
-	Traces OtelTracesConfig `mapstructure:"traces"`
-	Logs   OtelLogsConfig   `mapstructure:"logs"`
+	Traces  OtelTracesConfig  `mapstructure:"traces"`
+	Logs    OtelLogsConfig    `mapstructure:"logs"`
+	Metrics OtelMetricsConfig `mapstructure:"metrics"`
 }
 
 // OtelTracesConfig configures OTLP span export.
@@ -275,6 +341,10 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
+	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
+	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
+	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
@@ -301,6 +371,29 @@ func (c OtelTracesConfig) MergedHeaders() map[string]string {
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
 func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// OtelMetricsConfig configures OTLP metric export (app-level DB/cache metrics).
+// Independent of Traces: metrics are always-on aggregate signal, cheap and
+// unsampled, so they carry steady-state monitoring while spans stay for debug.
+type OtelMetricsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
+	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+	// TemporalEnabled attaches the Temporal Go SDK MetricsHandler to the shared
+	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
+	// SDK series are higher volume than app DB/cache metrics.
+	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelMetricsConfig) MergedHeaders() map[string]string {
 	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
 }
 
@@ -432,6 +525,7 @@ type EventProcessingReplayConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
+
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
 	Enabled                   bool   `mapstructure:"enabled" default:"true"`
@@ -447,12 +541,23 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
 
-	// AlertDebounceEnabled routes post-insert alerting (spend breach + wallet balance)
-	// through a per-customer Temporal debouncer instead of the Kafka wallet-alert path and inline spend-breach check.
-	AlertDebounceEnabled bool `mapstructure:"alert_debounce_enabled" default:"false"`
-	// AlertDebounceWindow is the delay between the first event and the alert-check workflow firing
-	AlertDebounceWindow time.Duration `mapstructure:"alert_debounce_window" default:"5m30s"`
+// UsageAlertsConfig controls the usage-driven alert pipeline end to end:
+// meter-usage post-insert schedules a debounced per-customer Temporal workflow
+// which evaluates spend, entitlement-grant, and wallet alerts.
+type UsageAlertsConfig struct {
+	// Enabled routes post-insert alerting through the debounced Temporal
+	// workflow instead of the Kafka wallet-alert path and inline spend-breach check.
+	Enabled bool `mapstructure:"enabled" default:"false"`
+	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
+	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
+	// StaleAfter bounds staleness on both queues: a workflow run firing more
+	// than this past its intended time yields once (ContinueAsNew) to the back
+	// of the queue so fresher customers evaluate first, and each activity's
+	// ScheduleToStartTimeout is set to the same value.
+	StaleAfter time.Duration `mapstructure:"stale_after" default:"1h"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -607,8 +712,21 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
+	// auths the data nodes; SentinelUsername/Password auth the sentinels.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -765,6 +883,11 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+const (
+	defaultClickHouseDialTimeout = 10 * time.Second
+	defaultClickHouseReadTimeout = 30 * time.Second
+)
+
 // placeholderSecrets are the exact dev/sample values baked into config.yaml (plus empty).
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
@@ -873,8 +996,18 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		// fronted by multiple AZ ENIs, and an in-order dial to an ENI that never
 		// completes the TCP/native handshake hangs indefinitely with no default
 		// deadline. A finite DialTimeout makes it fail over to the next address.
-		DialTimeout: 10 * time.Second,
-		ReadTimeout: 30 * time.Second,
+		DialTimeout: defaultClickHouseDialTimeout,
+		ReadTimeout: defaultClickHouseReadTimeout,
+		// Pool sizing. Zero values leave the driver defaults (MaxIdleConns 5,
+		// MaxOpenConns MaxIdleConns+5), which cap per-process query concurrency at 10.
+		MaxOpenConns: c.MaxOpenConns,
+		MaxIdleConns: c.MaxIdleConns,
+	}
+	if c.DialTimeout > 0 {
+		options.DialTimeout = c.DialTimeout
+	}
+	if c.ReadTimeout > 0 {
+		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}

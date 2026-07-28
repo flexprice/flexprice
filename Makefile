@@ -92,6 +92,26 @@ run-server-local: run-server
 .PHONY: run
 run: run-server
 
+.PHONY: dev-token
+dev-token:
+	@tenant_id=''; \
+	while [ -z "$$tenant_id" ]; do \
+		printf 'Tenant ID: '; \
+		if ! IFS= read -r tenant_id; then \
+			printf '\nUnable to read tenant ID.\n'; \
+			exit 1; \
+		fi; \
+		if [ -z "$$tenant_id" ]; then \
+			echo 'Tenant ID is required.'; \
+		fi; \
+	done; \
+	printf 'Environment ID (optional): '; \
+	if ! IFS= read -r environment_id; then \
+		printf '\nUnable to read environment ID.\n'; \
+		exit 1; \
+	fi; \
+	go run ./scripts -cmd generate-dev-token -tenant-id "$$tenant_id" -environment-id "$$environment_id"
+
 # ---------------------------------------------------------------------------
 # Local development targets — load .env.local on top of .env so local Docker
 # infra overrides take effect without touching production config.
@@ -157,13 +177,29 @@ migrate-local:
 
 .PHONY: test test-verbose test-coverage
 
+# Run go test, stream output, then print a short failure summary at the end.
+# Usage: $(call run-go-test,<go test args...>)
+define run-go-test
+	@bash -c 'set -o pipefail; \
+	tmp=$$(mktemp -t flexprice-test.XXXXXX); \
+	go test $(1) 2>&1 | tee "$$tmp"; \
+	status=$$?; \
+	echo ""; \
+	echo "======== FAILED TESTS ========"; \
+	grep -E "^--- FAIL:" "$$tmp" || echo "(none)"; \
+	echo "======== FAILED PACKAGES ====="; \
+	grep -E "^FAIL[[:space:]]" "$$tmp" || echo "(none)"; \
+	rm -f "$$tmp"; \
+	exit $$status'
+endef
+
 # Run all tests
 test: install-typst
-	go test -v -race ./internal/...
+	$(call run-go-test,-v -race ./internal/...)
 
 # Run tests with verbose output
 test-verbose:
-	go test -v ./internal/...
+	$(call run-go-test,-v ./internal/...)
 
 # Run tests with coverage report
 test-coverage:

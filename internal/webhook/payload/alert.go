@@ -26,6 +26,10 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 		return nil, err
 	}
 
+	if internalEvent.EntityType == types.AlertEntityTypeEntitlementGrant {
+		return b.buildEntitlementGrantAlertPayload(ctx, internalEvent)
+	}
+
 	// Subscription/line-item/group spend alert (alert_settings table): resolve the owning
 	// subscription fresh, so currency and period start reflect its state as of delivery.
 	if internalEvent.EntityType != "" {
@@ -75,6 +79,50 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 
 	// If we get here, no valid combination found - return nil
 	return nil, nil
+}
+
+// buildEntitlementGrantAlertPayload resolves a grant-exhaustion alert into its
+// webhook payload: subscription, customer, entitlement (the EC) and the grant,
+// each flat — nested expansions are stripped. entity_id is the grant;
+// parent_entity_id is the subscription.
+func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent) (json.RawMessage, error) {
+	if internalEvent.ParentEntityID == "" {
+		return nil, ierr.NewError("entitlement grant alert missing subscription id").
+			WithReportableDetails(map[string]any{"entitlement_grant_id": internalEvent.EntityID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	grant, err := b.services.EntitlementGrantSvc.GetGrant(ctx, internalEvent.EntityID)
+	if err != nil {
+		return nil, err
+	}
+
+	sub, err := b.services.SubscriptionService.GetSubscriptionV2(ctx, internalEvent.ParentEntityID, types.Expand{})
+	if err != nil {
+		return nil, err
+	}
+
+	customer, err := b.services.CustomerService.GetCustomer(ctx, grant.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	ec, err := b.services.EntitlementService.GetEntitlement(ctx, grant.EntitlementConfigID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := &webhookDto.EntitlementGrantAlertEvent{
+		Subscription:     sub,
+		Customer:         customer,
+		Entitlement:      ec,
+		EntitlementGrant: grant,
+		AlertType:        internalEvent.AlertType,
+		AlertStatus:      internalEvent.AlertStatus,
+		UsageRatio:       internalEvent.AlertInfo.ValueAtTime.String(),
+		TriggeredAt:      internalEvent.AlertInfo.Timestamp,
+	}
+	return json.Marshal(payload)
 }
 
 // buildSpendAlertPayload resolves an InternalAlertEvent carrying a subscription/line-item/group

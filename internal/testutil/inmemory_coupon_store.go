@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,15 @@ import (
 // InMemoryCouponStore implements coupon.Repository
 type InMemoryCouponStore struct {
 	*InMemoryStore[*coupon.Coupon]
+
+	// redemptionMu serializes IncrementRedemptions' read-check-write sequence.
+	// The embedded InMemoryStore locks each individual Get/Update call, but not
+	// across both — without this, two concurrent IncrementRedemptions calls can
+	// both Get() the same pre-increment state, both pass the limit check, and
+	// both Update(), letting TotalRedemptions exceed MaxRedemptions. This
+	// mirrors the atomic-guard contract the real Ent repository provides via a
+	// single conditional UPDATE statement.
+	redemptionMu sync.Mutex
 }
 
 // NewInMemoryCouponStore creates a new in-memory coupon store
@@ -151,10 +161,30 @@ func (s *InMemoryCouponStore) Count(ctx context.Context, filter *types.CouponFil
 	return s.InMemoryStore.Count(ctx, filter, couponFilterFn)
 }
 
-func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string) error {
+// IncrementRedemptions mirrors the atomic-guard semantics of the real Ent
+// repository (internal/repository/ent/coupon.go): when maxRedemptions is
+// non-nil and TotalRedemptions has already reached it, the increment is
+// rejected with a validation-class error instead of silently succeeding.
+// The caller supplies maxRedemptions (from an earlier Get/GetByCode) rather
+// than this store re-reading it, matching the real repository's contract.
+// This keeps the in-memory harness used by service-layer tests consistent
+// with production behavior for the coupon-redemption race-condition fix.
+func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error {
+	s.redemptionMu.Lock()
+	defer s.redemptionMu.Unlock()
+
 	c, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if maxRedemptions != nil && c.TotalRedemptions >= *maxRedemptions {
+		return ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	c.TotalRedemptions++

@@ -92,6 +92,20 @@ clickhouse:
   password: flexprice123
   database: flexprice
   max_memory_usage: 50
+  # Per-process connection pool (0 would fall back to clickhouse-go's defaults: idle 5,
+  # open idle+5 = 10 — a hidden 10-query cap per pod/task that bottlenecks event ingest,
+  # since consumers doing one INSERT per event are bounded by max_open_conns / insert latency).
+  # max_idle_conns stays lower than max_open_conns so the pool bursts under load and releases
+  # when idle: 100 idle x N pods would otherwise hold a permanent connection floor server-side.
+  # Sizing check before raising further: FLEET tasks x max_open_conns must stay under the
+  # server's max_connections (4096 on ClickHouse Cloud), and only helps while the server has
+  # spare admission (system.metrics Query vs max_concurrent_queries).
+  max_open_conns: 100
+  max_idle_conns: 20
+  # dial_timeout also bounds the pool-acquire wait inside the driver; read_timeout bounds
+  # a running query. 0 = built-in defaults (10s / 30s).
+  dial_timeout: 0s
+  read_timeout: 0s
 
 postgres:
   host: 127.0.0.1 # For local mode
@@ -151,6 +165,11 @@ otel:
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
     auth_value: ""
     sample_rate: 1.0
+    # Per-query DB/cache/ClickHouse child spans. Off by default; when on, throttled
+    # per-trace by storage_spans_sample_rate (independent of sample_rate, so server
+    # spans stay 100%). 0.2 caps the fan-out; set 1.0 for full debug fidelity.
+    storage_spans_enabled: false
+    storage_spans_sample_rate: 0.2
     # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
     # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
     capture_exceptions: true
@@ -161,6 +180,17 @@ otel:
     protocol: "" # Empty = inherit top-level grpc.
     auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
     auth_value: ""
+
+  # App-level DB/cache metrics (always-on aggregate signal, unsampled). Service-level
+  # resource only (no per-pod host attrs) to keep metric cardinality — and cost — flat.
+  metrics:
+    enabled: false
+    endpoint: "" # Set via FLEXPRICE_OTEL_METRICS_ENDPOINT
+    protocol: "" # Empty = inherit top-level grpc.
+    auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_METRICS_AUTH_VALUE
+    auth_value: ""
+    interval_seconds: 60
+    temporal_enabled: false
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
@@ -198,6 +228,7 @@ logging:
 
 webhook:
   enabled: true
+  event_cascading_enabled: true
   topic: "flexprice_system_events"
   consumer_group: "system-events-consumer"
   rate_limit: 5
@@ -283,6 +314,23 @@ flexprice_s3_exports:
   aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SECRET_ACCESS_KEY env var
   aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SESSION_TOKEN env var
 
+# Flexprice's own AWS identity — the principal that assumes each tenant's marketplace IAM role.
+# This is the caller named in the tenant's trust policy, NOT the tenant's role (that lives per
+# connection). Required for the AWS Marketplace integration; leave unset to disable it.
+marketplace:
+  aws:
+    region: "" # Set via FLEXPRICE_MARKETPLACE_AWS_REGION env var
+    access_key_id: "" # Set via FLEXPRICE_MARKETPLACE_AWS_ACCESS_KEY_ID env var
+    secret_access_key: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SECRET_ACCESS_KEY env var
+    # session_token only for temporary (ASIA...) keys; leave unset for a long-lived AKIA... key.
+    session_token: "" # Set via FLEXPRICE_MARKETPLACE_AWS_SESSION_TOKEN env var
+  # Not credentials — just the two values rendered into the GCP Marketplace WIF setup script we hand
+  # tenants. Authentication itself is ambient (the worker's own AWS IAM role); these only need to
+  # match that role so the script produces a WIF provider that trusts the right principal.
+  gcp:
+    flexprice_aws_account_id: "" # Set via FLEXPRICE_MARKETPLACE_GCP_FLEXPRICE_AWS_ACCOUNT_ID env var
+    flexprice_aws_role_name: "" # Set via FLEXPRICE_MARKETPLACE_GCP_FLEXPRICE_AWS_ROLE_NAME env var
+
 cache:
   enabled: false
   inmemory:
@@ -324,8 +372,6 @@ meter_usage_tracking:
   spend_alert_webhook_enabled: false
   rejected_event_webhook_enabled: false
   rejected_event_webhook_window: "10m"
-  alert_debounce_enabled: false
-  alert_debounce_window: "5m30s"
 
 meter_usage_tracking_lazy:
   enabled: true
@@ -333,6 +379,13 @@ meter_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service_lazy"
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
+
+# Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
+# per-customer Temporal workflow (spend + entitlement grants + wallet alerts).
+usage_alerts:
+  enabled: false # meter usage pushes the debounce workflow
+  schedule_delay: "5m30s" # workflow StartDelay AND Redis schedule-throttle lock TTL
+  stale_after: "1h" # workflow runs firing later than this yield (ContinueAsNew); also activity ScheduleToStartTimeout
 
 costsheet_usage_tracking:
   enabled: false
@@ -408,6 +461,12 @@ redis:
   # was always *redis.ClusterClient). Set to false when targeting a single-node
   # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
   cluster_mode: true
+  # Sentinel HA: set sentinel_master_name to enable (ignores host/port/cluster_mode).
+  sentinel_master_name: "" # e.g. "mymaster"; FLEXPRICE_REDIS_SENTINEL_MASTER_NAME
+  sentinel_addrs: [] # sentinel endpoints host:port, NOT the master; FLEXPRICE_REDIS_SENTINEL_ADDRS (comma-separated)
+  sentinel_username: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_USERNAME
+  sentinel_password: "" # sentinel auth, optional; FLEXPRICE_REDIS_SENTINEL_PASSWORD
+  route_reads_to_replicas: false # reads to lowest-latency master/replica (NOT sharding); FLEXPRICE_REDIS_ROUTE_READS_TO_REPLICAS
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
@@ -437,3 +496,6 @@ onboarding_events:
 # Checkout base URL for the checkout page
 checkout:
   base_url: ""
+
+onboarding:
+  default_tenant_name: "Flexprice"

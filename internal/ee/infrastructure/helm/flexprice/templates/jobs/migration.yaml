@@ -29,7 +29,9 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      # Dedicated pre-install hook SA (jobs/migration-prereqs.yaml) so this hook,
+      # which runs before the primary SA is created, has an account to run as.
+      serviceAccountName: {{ include "flexprice.fullname" . }}-migration
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -85,7 +87,7 @@ spec:
             - sh
             - -c
             - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
               CLICKHOUSE_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 1 }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
               echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}..."
               until nc -z "${CLICKHOUSE_HOST}" "${CLICKHOUSE_HTTP_PORT}"; do
@@ -216,7 +218,7 @@ spec:
             - sh
             - -c
             - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
               CLICKHOUSE_PORT="{{ if eq .Values.clickhouse.mode "external" }}9000{{ else }}{{ .Values.clickhouse.standalone.service.nativePort | default 9000 }}{{ end }}"
               CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
               CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"

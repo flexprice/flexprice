@@ -166,7 +166,12 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			ExternalCustomerID: c.ExternalID,
 			StartTime:          request.StartTime,
 			EndTime:            request.EndTime,
-			GroupBy:            []string{"source", "feature_id"},
+			GroupBy:            []string{"source", "feature_id"}, // TODO: remove feature_id from group by, we groupBy meter_id by default
+			// Internal flag: keep commitment / true-up cost on bucketed
+			// commitment line items even when they fan out per source.
+			// Without this the per-source rows would carry only raw usage
+			// cost and the export totals would drift from the analytics API.
+			ForceApplyCommitment: true,
 		})
 		if err != nil {
 			failedCount++

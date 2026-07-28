@@ -288,6 +288,36 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 	s.NoError(err)
 }
 
+// TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity verifies that when an
+// inline price has min_quantity=5, sending quantity=0 stores quantity=5 (the min_quantity default).
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity() {
+	ctx := s.GetContext()
+
+	inlinePrice := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+		LookupKey:          "inline_min_quantity_floor",
+		MinQuantity:        lo.ToPtr(int64(5)),
+	}
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		Price:                inlinePrice,
+		Quantity:             decimal.Zero, // zero → should default to min_quantity=5
+		SkipEntitlementCheck: true,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err, "zero quantity with inline price should succeed and default to min_quantity")
+	s.Require().NotNil(resp)
+	s.True(decimal.NewFromInt(5).Equal(resp.Quantity),
+		"quantity should default to min_quantity=5, got %s", resp.Quantity)
+}
+
 // TestAddSubscriptionLineItem_DateBoundsValidation asserts that when sub is passed, date-bounds validation runs:
 // line item start_date cannot be before subscription start date; line item end_date cannot be after subscription end date.
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_DateBoundsValidation() {
@@ -721,7 +751,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 				Quantity:             decimal.NewFromInt(-1),
 				SkipEntitlementCheck: true,
 			},
-			wantErrCont: "quantity must be positive",
+			wantErrCont: "quantity must be non-negative",
 		},
 	}
 
@@ -1586,4 +1616,81 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_BucketVal
 			s.Contains(err.Error(), tc.wantErr, "error should mention %q", tc.wantErr)
 		})
 	}
+}
+
+func (s *SubscriptionLineItemServiceSuite) resetWebhooks() {
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+}
+
+func (s *SubscriptionLineItemServiceSuite) countSubscriptionUpdated() int {
+	n := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionUpdated {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_PublishesSubscriptionUpdated() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	s.resetWebhooks()
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Equal(1, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_PublishesSubscriptionUpdated() {
+	ctx := s.GetContext()
+	s.resetWebhooks()
+	_, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+	s.Equal(1, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_DoesNotPublish() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(15),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	svc := s.service.(*subscriptionService)
+	s.resetWebhooks()
+	_, err := svc.addSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Equal(0, s.countSubscriptionUpdated())
 }

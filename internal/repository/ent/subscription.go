@@ -508,7 +508,7 @@ func (o SubscriptionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, qu
 
 func (o SubscriptionQueryOptions) ApplyStatusFilter(query SubscriptionQuery, status string) SubscriptionQuery {
 	if status == "" {
-		return query.Where(subscription.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(subscription.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(subscription.Status(status))
 }

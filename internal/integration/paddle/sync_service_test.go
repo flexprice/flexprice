@@ -957,6 +957,9 @@ func (m *mockSubscriptionService) GetFeatureUsageBySubscription(ctx context.Cont
 func (m *mockSubscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*apidto.EntitlementResponse, error) {
 	return nil, nil
 }
@@ -982,6 +985,9 @@ func (m *mockSubscriptionService) TriggerSubscriptionWorkflow(ctx context.Contex
 	return nil, nil
 }
 func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts interfaces.DraftAndComputeOptions) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]apidto.Period, error) {

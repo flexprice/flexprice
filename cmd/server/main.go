@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
-	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -154,6 +153,7 @@ func main() {
 			repository.NewInvoiceLineItemRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
+			repository.NewEntitlementGrantRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,
@@ -245,6 +245,7 @@ func main() {
 			service.NewInvoiceService,
 			service.NewFeatureService,
 			service.NewEntitlementService,
+			service.NewEntitlementGrantService,
 			service.NewPaymentService,
 			service.NewPaymentProcessorService,
 			service.NewTaskService,
@@ -396,7 +397,6 @@ func provideHandlers(
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		AIPricing:                v1.NewAIPricingHandler(geminiPricingService, logger),
-		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, integrationFactory, logger),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		Costsheet:                v1.NewCostsheetHandler(costsheetService, logger),
 		RevenueAnalytics:         v1.NewRevenueAnalyticsHandler(revenueAnalyticsService, costsheetUsageTrackingService, cfg, logger),
@@ -461,7 +461,7 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger, tracingSvc *tracing.Service) (client.TemporalClient, error) {
 	log.Info(context.Background(), "Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
 
 	// Use default options and merge with config
@@ -476,6 +476,7 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 		options.APIKey = cfg.APIKey
 	}
 	options.TLS = cfg.TLS
+	options.MetricsHandler = tracingSvc.TemporalMetricsHandler()
 
 	// Create temporal client directly
 	temporalClient, err := client.NewTemporalClient(options, log)
@@ -697,4 +698,3 @@ func provideWalletBalanceAlertPubSub(
 	}
 	return types.WalletBalanceAlertPubSub{PubSub: pubSub}
 }
-

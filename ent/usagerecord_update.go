@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/usagerecord"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -159,6 +160,20 @@ func (uru *UsageRecordUpdate) SetNillableAmount(d *decimal.Decimal) *UsageRecord
 	return uru
 }
 
+// SetCurrency sets the "currency" field.
+func (uru *UsageRecordUpdate) SetCurrency(s string) *UsageRecordUpdate {
+	uru.mutation.SetCurrency(s)
+	return uru
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableCurrency(s *string) *UsageRecordUpdate {
+	if s != nil {
+		uru.SetCurrency(*s)
+	}
+	return uru
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (uru *UsageRecordUpdate) SetPeriodStart(t time.Time) *UsageRecordUpdate {
 	uru.mutation.SetPeriodStart(t)
@@ -187,29 +202,29 @@ func (uru *UsageRecordUpdate) SetNillablePeriodEnd(t *time.Time) *UsageRecordUpd
 	return uru
 }
 
+// SetSynced sets the "synced" field.
+func (uru *UsageRecordUpdate) SetSynced(b bool) *UsageRecordUpdate {
+	uru.mutation.SetSynced(b)
+	return uru
+}
+
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (uru *UsageRecordUpdate) SetNillableSynced(b *bool) *UsageRecordUpdate {
+	if b != nil {
+		uru.SetSynced(*b)
+	}
+	return uru
+}
+
 // SetSyncs sets the "syncs" field.
-func (uru *UsageRecordUpdate) SetSyncs(m map[string]interface{}) *UsageRecordUpdate {
-	uru.mutation.SetSyncs(m)
+func (uru *UsageRecordUpdate) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordUpdate {
+	uru.mutation.SetSyncs(mrse)
 	return uru
 }
 
 // ClearSyncs clears the value of the "syncs" field.
 func (uru *UsageRecordUpdate) ClearSyncs() *UsageRecordUpdate {
 	uru.mutation.ClearSyncs()
-	return uru
-}
-
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (uru *UsageRecordUpdate) SetAllProvidersSynced(b bool) *UsageRecordUpdate {
-	uru.mutation.SetAllProvidersSynced(b)
-	return uru
-}
-
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (uru *UsageRecordUpdate) SetNillableAllProvidersSynced(b *bool) *UsageRecordUpdate {
-	if b != nil {
-		uru.SetAllProvidersSynced(*b)
-	}
 	return uru
 }
 
@@ -271,6 +286,11 @@ func (uru *UsageRecordUpdate) check() error {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.plan_id": %w`, err)}
 		}
 	}
+	if v, ok := uru.mutation.Currency(); ok {
+		if err := usagerecord.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -325,20 +345,23 @@ func (uru *UsageRecordUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := uru.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 	}
+	if value, ok := uru.mutation.Currency(); ok {
+		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
+	}
 	if value, ok := uru.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)
 	}
 	if value, ok := uru.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
+	if value, ok := uru.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+	}
 	if value, ok := uru.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 	}
 	if uru.mutation.SyncsCleared() {
 		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
-	}
-	if value, ok := uru.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, uru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -490,6 +513,20 @@ func (uruo *UsageRecordUpdateOne) SetNillableAmount(d *decimal.Decimal) *UsageRe
 	return uruo
 }
 
+// SetCurrency sets the "currency" field.
+func (uruo *UsageRecordUpdateOne) SetCurrency(s string) *UsageRecordUpdateOne {
+	uruo.mutation.SetCurrency(s)
+	return uruo
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableCurrency(s *string) *UsageRecordUpdateOne {
+	if s != nil {
+		uruo.SetCurrency(*s)
+	}
+	return uruo
+}
+
 // SetPeriodStart sets the "period_start" field.
 func (uruo *UsageRecordUpdateOne) SetPeriodStart(t time.Time) *UsageRecordUpdateOne {
 	uruo.mutation.SetPeriodStart(t)
@@ -518,29 +555,29 @@ func (uruo *UsageRecordUpdateOne) SetNillablePeriodEnd(t *time.Time) *UsageRecor
 	return uruo
 }
 
+// SetSynced sets the "synced" field.
+func (uruo *UsageRecordUpdateOne) SetSynced(b bool) *UsageRecordUpdateOne {
+	uruo.mutation.SetSynced(b)
+	return uruo
+}
+
+// SetNillableSynced sets the "synced" field if the given value is not nil.
+func (uruo *UsageRecordUpdateOne) SetNillableSynced(b *bool) *UsageRecordUpdateOne {
+	if b != nil {
+		uruo.SetSynced(*b)
+	}
+	return uruo
+}
+
 // SetSyncs sets the "syncs" field.
-func (uruo *UsageRecordUpdateOne) SetSyncs(m map[string]interface{}) *UsageRecordUpdateOne {
-	uruo.mutation.SetSyncs(m)
+func (uruo *UsageRecordUpdateOne) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordUpdateOne {
+	uruo.mutation.SetSyncs(mrse)
 	return uruo
 }
 
 // ClearSyncs clears the value of the "syncs" field.
 func (uruo *UsageRecordUpdateOne) ClearSyncs() *UsageRecordUpdateOne {
 	uruo.mutation.ClearSyncs()
-	return uruo
-}
-
-// SetAllProvidersSynced sets the "all_providers_synced" field.
-func (uruo *UsageRecordUpdateOne) SetAllProvidersSynced(b bool) *UsageRecordUpdateOne {
-	uruo.mutation.SetAllProvidersSynced(b)
-	return uruo
-}
-
-// SetNillableAllProvidersSynced sets the "all_providers_synced" field if the given value is not nil.
-func (uruo *UsageRecordUpdateOne) SetNillableAllProvidersSynced(b *bool) *UsageRecordUpdateOne {
-	if b != nil {
-		uruo.SetAllProvidersSynced(*b)
-	}
 	return uruo
 }
 
@@ -615,6 +652,11 @@ func (uruo *UsageRecordUpdateOne) check() error {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.plan_id": %w`, err)}
 		}
 	}
+	if v, ok := uruo.mutation.Currency(); ok {
+		if err := usagerecord.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -686,20 +728,23 @@ func (uruo *UsageRecordUpdateOne) sqlSave(ctx context.Context) (_node *UsageReco
 	if value, ok := uruo.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 	}
+	if value, ok := uruo.mutation.Currency(); ok {
+		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
+	}
 	if value, ok := uruo.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)
 	}
 	if value, ok := uruo.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 	}
+	if value, ok := uruo.mutation.Synced(); ok {
+		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
+	}
 	if value, ok := uruo.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 	}
 	if uruo.mutation.SyncsCleared() {
 		_spec.ClearField(usagerecord.FieldSyncs, field.TypeJSON)
-	}
-	if value, ok := uruo.mutation.AllProvidersSynced(); ok {
-		_spec.SetField(usagerecord.FieldAllProvidersSynced, field.TypeBool, value)
 	}
 	_node = &UsageRecord{config: uruo.config}
 	_spec.Assign = _node.assignValues

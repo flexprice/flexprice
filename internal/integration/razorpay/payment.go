@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -33,6 +34,29 @@ type AutoChargeResult struct {
 	RazorpayPaymentID string // may be empty if the payment was already in-flight (AlreadySubmitted=true)
 	RazorpayOrderID   string // Razorpay order_xxx — always populated when a new or existing order was resolved
 	AlreadySubmitted  bool   // true = payment was previously submitted; webhook will reconcile
+}
+
+// ChargeSavedTokenRequest is the input for PaymentService.ChargeSavedToken.
+type ChargeSavedTokenRequest struct {
+	Customer           *customer.Customer
+	InvoiceID          string
+	Amount             decimal.Decimal
+	Currency           string
+	FlexPricePaymentID string
+	PreferredMethod    types.PaymentMethodType // empty = Card then UPI
+}
+
+// PaymentLinkStatus captures the fields the FlexPrice sync path needs from a
+// Razorpay payment link fetch.
+type PaymentLinkStatus struct {
+	// Status is the Razorpay-native payment link status:
+	// "created" | "partially_paid" | "paid" | "expired" | "cancelled".
+	Status string
+	// RazorpayPaymentID is the pay_xxx of the first captured attempt on the link
+	// (empty when no attempt has been captured yet). Provided so the caller can
+	// backfill gateway_payment_id and cut over to the direct payment-status path
+	// on subsequent syncs.
+	RazorpayPaymentID string
 }
 
 // PaymentService handles Razorpay payment operations
@@ -757,6 +781,88 @@ func extractPaymentMethodID(payment map[string]interface{}, method string) strin
 	return ""
 }
 
+// selectAutoChargeToken finds the first usable token. When preferred is set only
+// that method is tried; otherwise Card then UPI.
+func selectAutoChargeToken(
+	tokens []*interfaces.ProviderPaymentMethod,
+	preferred types.PaymentMethodType,
+	amount decimal.Decimal,
+) (*interfaces.ProviderPaymentMethod, bool) {
+	priority := []types.PaymentMethodType{
+		types.PaymentMethodTypeCard,
+		types.PaymentMethodTypeUPI,
+	}
+	if preferred != "" {
+		priority = []types.PaymentMethodType{preferred}
+	}
+
+	for _, method := range priority {
+		if token, ok := SelectUsableToken(tokens, method, amount); ok {
+			return token, true
+		}
+	}
+
+	return nil, false
+}
+
+// ChargeSavedToken selects a confirmed token for an already-mapped Razorpay
+// customer and submits AutoCharge.
+func (s *PaymentService) ChargeSavedToken(
+	ctx context.Context,
+	req ChargeSavedTokenRequest,
+) (*AutoChargeResult, bool, error) {
+	if s == nil || req.Customer == nil || req.Customer.ID == "" {
+		return nil, false, nil
+	}
+
+	razorpayCustomerID, tokens, err := s.customerSvc.ListConfirmedCustomerTokens(ctx, req.Customer.ID)
+	if err != nil {
+		s.logger.Info(ctx, "charge saved token: list tokens failed",
+			"customer_id", req.Customer.ID, "invoice_id", req.InvoiceID, "error", err)
+		return nil, false, nil
+	}
+
+	token, ok := selectAutoChargeToken(tokens, req.PreferredMethod, req.Amount)
+	if !ok {
+		s.logger.Info(ctx, "charge saved token: no usable token",
+			"customer_id", req.Customer.ID,
+			"invoice_id", req.InvoiceID,
+			"amount", req.Amount.String(),
+			"preferred_method", req.PreferredMethod,
+			"tokens_inspected", len(tokens))
+		return nil, false, nil
+	}
+
+	var contact string
+	if req.Customer.Contact != nil {
+		contact = *req.Customer.Contact
+	}
+
+	result, err := s.AutoCharge(ctx, AutoChargeRequest{
+		InvoiceID:          req.InvoiceID,
+		RazorpayCustomerID: razorpayCustomerID,
+		TokenID:            token.GatewayMethodID,
+		Amount:             req.Amount,
+		Currency:           req.Currency,
+		FlexPricePaymentID: req.FlexPricePaymentID,
+		Contact:            contact,
+		Email:              req.Customer.Email,
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	s.logger.Info(ctx, "charge saved token: submitted",
+		"invoice_id", req.InvoiceID,
+		"token_id", token.GatewayMethodID,
+		"method", token.Method,
+		"razorpay_payment_id", result.RazorpayPaymentID,
+		"already_submitted", result.AlreadySubmitted,
+	)
+
+	return result, true, nil
+}
+
 // AutoCharge submits a server-initiated (off-session) recurring charge against an
 // existing Razorpay UPI mandate token. It uses receipt=invoiceID as a Razorpay-native
 // idempotency key so retries are safe.
@@ -1000,4 +1106,72 @@ func (s *PaymentService) ensureRefunded(ctx context.Context, razorpayPaymentID s
 	}
 	refundID, _ := refundResp["id"].(string)
 	return refundID, nil
+}
+
+// GetPaymentStatus fetches the current status of a Razorpay payment.
+// Returns the raw Razorpay status string: "created", "authorized", "captured", "refunded", "failed".
+func (s *PaymentService) GetPaymentStatus(ctx context.Context, razorpayPaymentID string) (string, error) {
+	if razorpayPaymentID == "" {
+		return "", ierr.NewError("razorpay_payment_id is required").Mark(ierr.ErrValidation)
+	}
+	result, err := s.client.FetchPayment(ctx, razorpayPaymentID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to fetch Razorpay payment status",
+			"razorpay_payment_id", razorpayPaymentID,
+			"error", err)
+		return "", err
+	}
+	status, ok := result["status"].(string)
+	if !ok || status == "" {
+		return "", ierr.NewError("razorpay payment status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay FetchPayment response").
+			WithReportableDetails(map[string]interface{}{
+				"razorpay_payment_id": razorpayPaymentID,
+				"status":              result["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
+	return status, nil
+}
+
+// GetPaymentLinkStatus fetches a Razorpay payment link and returns its status
+// plus the first captured pay_xxx from its payments array, if any.
+func (s *PaymentService) GetPaymentLinkStatus(ctx context.Context, paymentLinkID string) (*PaymentLinkStatus, error) {
+	if paymentLinkID == "" {
+		return nil, ierr.NewError("payment_link_id is required").Mark(ierr.ErrValidation)
+	}
+	result, err := s.client.FetchPaymentLink(ctx, paymentLinkID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to fetch Razorpay payment link",
+			"payment_link_id", paymentLinkID, "error", err)
+		return nil, err
+	}
+	status, ok := result["status"].(string)
+	if !ok || status == "" {
+		return nil, ierr.NewError("razorpay payment link status missing or invalid").
+			WithHint("Expected a non-empty string status in Razorpay FetchPaymentLink response").
+			WithReportableDetails(map[string]interface{}{
+				"payment_link_id": paymentLinkID,
+				"status":          result["status"],
+			}).
+			Mark(ierr.ErrSystem)
+	}
+	out := &PaymentLinkStatus{Status: status}
+	if payments, ok := result["payments"].([]interface{}); ok {
+		for _, entry := range payments {
+			pm, ok := entry.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			pStatus, _ := pm["status"].(string)
+			if pStatus != "captured" {
+				continue
+			}
+			if id, ok := pm["payment_id"].(string); ok && id != "" {
+				out.RazorpayPaymentID = id
+				break
+			}
+		}
+	}
+	return out, nil
 }

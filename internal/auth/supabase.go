@@ -142,10 +142,13 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 			Mark(ierr.ErrPermissionDenied)
 	}
 
+	environmentID, _ := claims["environment_id"].(string)
+
 	return &auth.Claims{
-		UserID:   userID,
-		TenantID: tenantID,
-		Email:    email,
+		UserID:        userID,
+		TenantID:      tenantID,
+		Email:         email,
+		EnvironmentID: environmentID,
 	}, nil
 }
 
@@ -174,9 +177,8 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 }
 
 // GenerateDevToken creates a short-lived JWT that matches the Supabase claim schema so it
-// passes supabaseAuth.ValidateToken: { sub, email, app_metadata.tenant_id }.
-// environmentID is accepted for interface compatibility but not embedded — pass X-Environment-ID header instead.
-func (s *supabaseAuth) GenerateDevToken(tenantID, _, userID, email string, expiryHours int) (string, time.Time, error) {
+// passes supabaseAuth.ValidateToken: { sub, email, app_metadata.tenant_id, environment_id }.
+func (s *supabaseAuth) GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error) {
 	if tenantID == "" {
 		return "", time.Time{}, ierr.NewError("tenantID is required").
 			WithHint("Provide a tenant ID to generate a dev token").
@@ -198,6 +200,9 @@ func (s *supabaseAuth) GenerateDevToken(tenantID, _, userID, email string, expir
 		},
 		"exp": expiresAt.Unix(),
 		"iat": time.Now().Unix(),
+	}
+	if environmentID != "" {
+		claims["environment_id"] = environmentID
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -77,11 +78,24 @@ func matchRecord(r *events.MeterUsage, p *events.MeterUsageQueryParams) bool {
 	if len(p.MeterIDs) > 0 && !containsString(p.MeterIDs, r.MeterID) {
 		return false
 	}
-	if !p.StartTime.IsZero() && r.Timestamp.Before(p.StartTime) {
-		return false
-	}
-	if !p.EndTime.IsZero() && !r.Timestamp.Before(p.EndTime) {
-		return false
+	if len(p.TimeRanges) > 0 {
+		inAny := false
+		for _, tr := range p.TimeRanges {
+			if !r.Timestamp.Before(tr.Start) && r.Timestamp.Before(tr.End) {
+				inAny = true
+				break
+			}
+		}
+		if !inAny {
+			return false
+		}
+	} else {
+		if !p.StartTime.IsZero() && r.Timestamp.Before(p.StartTime) {
+			return false
+		}
+		if !p.EndTime.IsZero() && !r.Timestamp.Before(p.EndTime) {
+			return false
+		}
 	}
 	if p.ExternalCustomerID != "" && r.ExternalCustomerID != p.ExternalCustomerID {
 		return false
@@ -308,6 +322,30 @@ func distinctUniqueHashCount(records []*events.MeterUsage) int {
 // ---------------------------------------------------------------------------
 // GetUsage / GetUsageMultiMeter
 // ---------------------------------------------------------------------------
+
+func (s *InMemoryMeterUsageStore) GetEarliestUsageTimestamp(_ context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	// An empty scope silently matches every tenant here but matches nothing in
+	// real ClickHouse (BuildWhereClause always binds tenant/env) — either way
+	// the request is malformed, so fail loudly and let tests catch it.
+	if params == nil || params.TenantID == "" || params.EnvironmentID == "" {
+		return nil, ierr.NewError("tenant_id and environment_id are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var earliest *time.Time
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		if earliest == nil || r.Timestamp.Before(*earliest) {
+			ts := r.Timestamp
+			earliest = &ts
+		}
+	}
+	return earliest, nil
+}
 
 func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error) {
 	s.mu.RLock()

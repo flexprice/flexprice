@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -40,14 +41,16 @@ const (
 	FieldQuantity = "quantity"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
+	// FieldCurrency holds the string denoting the currency field in the database.
+	FieldCurrency = "currency"
 	// FieldPeriodStart holds the string denoting the period_start field in the database.
 	FieldPeriodStart = "period_start"
 	// FieldPeriodEnd holds the string denoting the period_end field in the database.
 	FieldPeriodEnd = "period_end"
+	// FieldSynced holds the string denoting the synced field in the database.
+	FieldSynced = "synced"
 	// FieldSyncs holds the string denoting the syncs field in the database.
 	FieldSyncs = "syncs"
-	// FieldAllProvidersSynced holds the string denoting the all_providers_synced field in the database.
-	FieldAllProvidersSynced = "all_providers_synced"
 	// Table holds the table name of the usagerecord in the database.
 	Table = "usage_records"
 )
@@ -68,10 +71,11 @@ var Columns = []string{
 	FieldPlanID,
 	FieldQuantity,
 	FieldAmount,
+	FieldCurrency,
 	FieldPeriodStart,
 	FieldPeriodEnd,
+	FieldSynced,
 	FieldSyncs,
-	FieldAllProvidersSynced,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -107,8 +111,12 @@ var (
 	DefaultQuantity decimal.Decimal
 	// DefaultAmount holds the default value on creation for the "amount" field.
 	DefaultAmount decimal.Decimal
-	// DefaultAllProvidersSynced holds the default value on creation for the "all_providers_synced" field.
-	DefaultAllProvidersSynced bool
+	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	CurrencyValidator func(string) error
+	// DefaultSynced holds the default value on creation for the "synced" field.
+	DefaultSynced bool
+	// DefaultSyncs holds the default value on creation for the "syncs" field.
+	DefaultSyncs map[string]types.UsageRecordSyncEntry
 )
 
 // OrderOption defines the ordering options for the UsageRecord queries.
@@ -184,6 +192,11 @@ func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
 }
 
+// ByCurrency orders the results by the currency field.
+func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+}
+
 // ByPeriodStart orders the results by the period_start field.
 func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodStart, opts...).ToFunc()
@@ -194,7 +207,7 @@ func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
-// ByAllProvidersSynced orders the results by the all_providers_synced field.
-func ByAllProvidersSynced(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAllProvidersSynced, opts...).ToFunc()
+// BySynced orders the results by the synced field.
+func BySynced(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSynced, opts...).ToFunc()
 }

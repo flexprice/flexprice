@@ -24,10 +24,18 @@ type GetCostAnalyticsRequest struct {
 
 	// Expand options - specify which entities to expand
 	Expand []string `json:"expand,omitempty"` // "meter", "price"
+	// Property filters to filter the events by the keys in `properties` field of the event
+	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
 
 	// Pagination
 	Limit  int `json:"limit,omitempty"`
 	Offset int `json:"offset,omitempty"`
+
+	// IncludeChildren, when true and ExternalCustomerID belongs to a parent
+	// customer, aggregates every inherited-child customer's usage into the
+	// revenue and cost totals. Default (false) restricts the query to the
+	// customer's own usage — mirrors the meter-usage analytics contract.
+	IncludeChildren bool `json:"include_children,omitempty"`
 }
 
 // Validate validates the cost analytics request and sets defaults

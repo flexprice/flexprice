@@ -89,6 +89,7 @@ const (
 	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
 	PrefixInvoiceLineItem          = "invoice_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
+	PrefixUsageAlertSchedule       = "usage_alert_schedule:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"
 	PrefixWalletRealTimeBalance    = "wallet_realtime_balance:v1:"
@@ -97,6 +98,7 @@ const (
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
 	PrefixPriceSyncLock             = "price_sync:plan:"
 	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
+	PrefixTabsInvoiceSyncLock       = "tabs:invoice_sync:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

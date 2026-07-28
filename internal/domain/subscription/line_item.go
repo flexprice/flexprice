@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -48,6 +49,11 @@ type SubscriptionLineItem struct {
 	CommitmentTimeBuckets   types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
+
+	// Meter is populated when the caller adds "meters" to a subscription-scoped
+	// expand string alongside "subscription_line_items". Only usage line items
+	// (PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.
+	Meter *meter.Meter `json:"meter,omitempty"`
 
 	types.BaseModel
 }

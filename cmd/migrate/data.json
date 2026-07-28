@@ -49,6 +49,10 @@
             "description": "Fired when an entitlement is updated"
         },
         {
+            "name": "entitlement.grant.exhausted",
+            "description": "Fired when a customer's entitlement grant is fully consumed (usage reached the grant's quota for the current window)"
+        },
+        {
             "name": "feature.created",
             "description": "Fired when a new feature is created"
         },

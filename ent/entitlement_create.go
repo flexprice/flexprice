@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // EntitlementCreate is the builder for creating a Entitlement entity.
@@ -283,6 +284,76 @@ func (ec *EntitlementCreate) SetConfigValue(m map[string]interface{}) *Entitleme
 	return ec
 }
 
+// SetGrantMeasure sets the "grant_measure" field.
+func (ec *EntitlementCreate) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementCreate {
+	ec.mutation.SetGrantMeasure(tgm)
+	return ec
+}
+
+// SetNillableGrantMeasure sets the "grant_measure" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableGrantMeasure(tgm *types.EntitlementGrantMeasure) *EntitlementCreate {
+	if tgm != nil {
+		ec.SetGrantMeasure(*tgm)
+	}
+	return ec
+}
+
+// SetGrantDurationValue sets the "grant_duration_value" field.
+func (ec *EntitlementCreate) SetGrantDurationValue(i int) *EntitlementCreate {
+	ec.mutation.SetGrantDurationValue(i)
+	return ec
+}
+
+// SetNillableGrantDurationValue sets the "grant_duration_value" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableGrantDurationValue(i *int) *EntitlementCreate {
+	if i != nil {
+		ec.SetGrantDurationValue(*i)
+	}
+	return ec
+}
+
+// SetGrantDurationUnit sets the "grant_duration_unit" field.
+func (ec *EntitlementCreate) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) *EntitlementCreate {
+	ec.mutation.SetGrantDurationUnit(tgdu)
+	return ec
+}
+
+// SetNillableGrantDurationUnit sets the "grant_duration_unit" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableGrantDurationUnit(tgdu *types.EntitlementGrantDurationUnit) *EntitlementCreate {
+	if tgdu != nil {
+		ec.SetGrantDurationUnit(*tgdu)
+	}
+	return ec
+}
+
+// SetGrantQuota sets the "grant_quota" field.
+func (ec *EntitlementCreate) SetGrantQuota(d decimal.Decimal) *EntitlementCreate {
+	ec.mutation.SetGrantQuota(d)
+	return ec
+}
+
+// SetNillableGrantQuota sets the "grant_quota" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableGrantQuota(d *decimal.Decimal) *EntitlementCreate {
+	if d != nil {
+		ec.SetGrantQuota(*d)
+	}
+	return ec
+}
+
+// SetAggregationMode sets the "aggregation_mode" field.
+func (ec *EntitlementCreate) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementCreate {
+	ec.mutation.SetAggregationMode(tam)
+	return ec
+}
+
+// SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementCreate {
+	if tam != nil {
+		ec.SetAggregationMode(*tam)
+	}
+	return ec
+}
+
 // SetID sets the "id" field.
 func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	ec.mutation.SetID(s)
@@ -356,6 +427,10 @@ func (ec *EntitlementCreate) defaults() {
 		v := entitlement.DefaultDisplayOrder
 		ec.mutation.SetDisplayOrder(v)
 	}
+	if _, ok := ec.mutation.AggregationMode(); !ok {
+		v := entitlement.DefaultAggregationMode
+		ec.mutation.SetAggregationMode(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -411,6 +486,24 @@ func (ec *EntitlementCreate) check() error {
 	}
 	if _, ok := ec.mutation.DisplayOrder(); !ok {
 		return &ValidationError{Name: "display_order", err: errors.New(`ent: missing required field "Entitlement.display_order"`)}
+	}
+	if v, ok := ec.mutation.GrantMeasure(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_measure", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_measure": %w`, err)}
+		}
+	}
+	if v, ok := ec.mutation.GrantDurationUnit(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
+		}
+	}
+	if _, ok := ec.mutation.AggregationMode(); !ok {
+		return &ValidationError{Name: "aggregation_mode", err: errors.New(`ent: missing required field "Entitlement.aggregation_mode"`)}
+	}
+	if v, ok := ec.mutation.AggregationMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
+		}
 	}
 	if v, ok := ec.mutation.ID(); ok {
 		if err := entitlement.IDValidator(v); err != nil {
@@ -535,6 +628,26 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.ConfigValue(); ok {
 		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
 		_node.ConfigValue = value
+	}
+	if value, ok := ec.mutation.GrantMeasure(); ok {
+		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
+		_node.GrantMeasure = value
+	}
+	if value, ok := ec.mutation.GrantDurationValue(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
+		_node.GrantDurationValue = &value
+	}
+	if value, ok := ec.mutation.GrantDurationUnit(); ok {
+		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
+		_node.GrantDurationUnit = value
+	}
+	if value, ok := ec.mutation.GrantQuota(); ok {
+		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
+		_node.GrantQuota = &value
+	}
+	if value, ok := ec.mutation.AggregationMode(); ok {
+		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
+		_node.AggregationMode = value
 	}
 	return _node, _spec
 }

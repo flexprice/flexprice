@@ -79,6 +79,39 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 			return false
 		}
 	}
+	if len(filter.Actions) > 0 {
+		found := false
+		for _, a := range filter.Actions {
+			if session.Action == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if cfg := filter.Configuration; cfg != nil && !cfg.IsEmpty() {
+		sessionCfg := session.Configuration.ToCheckoutConfiguration()
+		if cfg.WalletID != "" {
+			if sessionCfg.WalletTopupParams == nil || sessionCfg.WalletTopupParams.WalletID != cfg.WalletID {
+				return false
+			}
+		}
+		if cfg.SubscriptionID != "" {
+			if sessionCfg.ModifySubscriptionParams == nil || sessionCfg.ModifySubscriptionParams.SubscriptionID != cfg.SubscriptionID {
+				return false
+			}
+		}
+	}
+	// Mirror Ent ApplyStatusFilter: empty status defaults to published.
+	status := filter.GetStatus()
+	if status == "" {
+		status = string(types.StatusPublished)
+	}
+	if session.Status != types.Status(status) {
+		return false
+	}
 	return true
 }
 

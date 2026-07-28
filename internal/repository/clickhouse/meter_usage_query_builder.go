@@ -162,14 +162,24 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		conditions = append(conditions, fmt.Sprintf("meter_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 
-	// Time range
-	if !params.StartTime.IsZero() {
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, params.StartTime.UTC())
-	}
-	if !params.EndTime.IsZero() {
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, params.EndTime.UTC())
+	// Time range: multiple OR'd windows when TimeRanges is set (one query for
+	// disjoint ranges), else the single [StartTime, EndTime) pair.
+	if len(params.TimeRanges) > 0 {
+		rangeClauses := make([]string, 0, len(params.TimeRanges))
+		for _, tr := range params.TimeRanges {
+			rangeClauses = append(rangeClauses, "(timestamp >= ? AND timestamp < ?)")
+			args = append(args, tr.Start.UTC(), tr.End.UTC())
+		}
+		conditions = append(conditions, "("+strings.Join(rangeClauses, " OR ")+")")
+	} else {
+		if !params.StartTime.IsZero() {
+			conditions = append(conditions, "timestamp >= ?")
+			args = append(args, params.StartTime.UTC())
+		}
+		if !params.EndTime.IsZero() {
+			conditions = append(conditions, "timestamp < ?")
+			args = append(args, params.EndTime.UTC())
+		}
 	}
 
 	// COUNT_UNIQUE requires non-empty unique_hash

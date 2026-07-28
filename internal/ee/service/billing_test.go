@@ -2869,6 +2869,115 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_SkipsInactiveLineIt
 	s.True(totalAmount.IsZero(), "Total should be zero: no charges should be attributed to active line items")
 }
 
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_ItemLevelCommitmentAppliedOnceWhenChargeIsSplit() {
+	// A line item can carry its own (flat, non-windowed) commitment independent of the
+	// subscription-level overage split. When the subscription-level split ALSO fires for
+	// this same line item (producing a normal charge + an overage charge sharing one
+	// SubscriptionLineItemID), the item's own commitment floor must be enforced ONCE for
+	// the line item — not once per charge — otherwise a true-up floor gets applied twice.
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	itemCommitmentAmount := decimal.NewFromInt(5)
+	itemOverageFactor := decimal.NewFromFloat(1.2)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "sub_li_item_commit_split",
+		SubscriptionID:          s.testData.subscription.ID,
+		CustomerID:              s.testData.subscription.CustomerID,
+		EntityID:                s.testData.plan.ID,
+		EntityType:              types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:         s.testData.plan.Name,
+		PriceID:                 s.testData.prices.apiCalls.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 s.testData.meters.apiCalls.ID,
+		MeterDisplayName:        s.testData.meters.apiCalls.Name,
+		DisplayName:             "Item-Level Commitment Usage",
+		Quantity:                decimal.Zero,
+		Currency:                s.testData.subscription.Currency,
+		BillingPeriod:           s.testData.subscription.BillingPeriod,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.testData.subscription.StartDate,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &itemCommitmentAmount,
+		CommitmentOverageFactor: &itemOverageFactor,
+		CommitmentTrueUpEnabled: true, // usage below commitment → floor charge up to the commitment amount
+		CommitmentWindowed:      false,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	subCopy := *s.testData.subscription
+	subCopy.LineItems = []*subscription.SubscriptionLineItem{li}
+
+	usage := &dto.GetUsageBySubscriptionResponse{
+		StartTime: subCopy.CurrentPeriodStart,
+		EndTime:   subCopy.CurrentPeriodEnd,
+		Currency:  subCopy.Currency,
+		Charges: []*dto.SubscriptionUsageByMetersResponse{
+			// Both charges are individually below the $5 item commitment, so the true-up
+			// floor would fire on EACH of them if applied per-charge instead of per-item.
+			{SubscriptionLineItemID: li.ID, Price: s.testData.prices.apiCalls, Quantity: 150, Amount: 3, IsOverage: false},
+			{SubscriptionLineItemID: li.ID, Price: s.testData.prices.apiCalls, Quantity: 200, Amount: 4, IsOverage: true, OverageFactor: 2},
+		},
+	}
+
+	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
+		subCopy.CurrentPeriodStart, subCopy.CurrentPeriodEnd, types.UsageSourceInvoiceCreation,
+	)
+
+	s.NoError(err)
+	s.Len(lineItems, 2, "Should still have one line item for the normal slab and one for the overage slab")
+	// Correct: normal charge ($3) floors up to the $5 item commitment (true-up); the
+	// overage charge ($4) passes through unmodified by the item-level commitment —
+	// total = 5 + 4 = 9. Buggy (per-charge double-application): both charges
+	// independently floor to $5 → total = 10.
+	s.True(totalAmount.Equal(decimal.NewFromInt(9)),
+		"item-level commitment must apply once per line item, not once per charge: expected 9, got %s", totalAmount)
+}
+
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_KeepsBothNormalAndOverageChargesForSameLineItem() {
+	// When commitment/overage math splits one line item's usage into a normal (base slab)
+	// charge and an overage charge, both share the same SubscriptionLineItemID. Both must
+	// produce their own invoice line item — the base slab must not be dropped.
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	apiCallsLineItem := s.testData.subscription.LineItems[1]
+
+	usage := &dto.GetUsageBySubscriptionResponse{
+		StartTime: s.testData.subscription.CurrentPeriodStart,
+		EndTime:   s.testData.subscription.CurrentPeriodEnd,
+		Currency:  s.testData.subscription.Currency,
+		Charges: []*dto.SubscriptionUsageByMetersResponse{
+			{
+				SubscriptionLineItemID: apiCallsLineItem.ID,
+				Price:                  s.testData.prices.apiCalls,
+				Quantity:               300,
+				Amount:                 6,
+				IsOverage:              false,
+			},
+			{
+				SubscriptionLineItemID: apiCallsLineItem.ID,
+				Price:                  s.testData.prices.apiCalls,
+				Quantity:               200,
+				Amount:                 8,
+				IsOverage:              true,
+				OverageFactor:          2,
+			},
+		},
+	}
+
+	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+		types.UsageSourceInvoiceCreation,
+	)
+
+	s.NoError(err)
+	s.Len(lineItems, 2, "Should have one invoice line item for the normal slab AND one for the overage slab")
+	s.True(totalAmount.Equal(decimal.NewFromInt(14)), "Total should include both the normal and overage amounts")
+}
+
 func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MatchesActiveLineItemBySubscriptionLineItemID() {
 	// When SubscriptionLineItemID is set and matches an active line item, the charge should be processed.
 	ctx := s.GetContext()
@@ -3119,6 +3228,80 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitmen
 			},
 			currentUsageBase:    12,
 			expectedTotal:       decimal.NewFromInt(14), // 10 within + 4 overage
+			expectedOverageLine: decimal.NewFromInt(4),
+		},
+		{
+			// Same scenario as case1 (prior base 50, commitment 60, overage factor 2), but this
+			// period's usage arrives PRE-SPLIT into a normal charge ($8) and an overage charge
+			// ($8 at 2x, i.e. base-equivalent $4) for the SAME line item — exactly what
+			// GetMeterUsageBySubscription produces when the per-period split fires. Combined
+			// base-equivalent is 8+4=12, identical to case1's single currentUsageBase=12, so the
+			// expected result must be identical: this pins that splitting one line item's usage
+			// into two charges does NOT double-count its contribution to totalCurrentBase.
+			name: "case1_equivalent_but_pre_split_into_normal_and_overage_charges",
+			priorInvoices: []*invoice.Invoice{
+				{
+					ID:             "inv_1",
+					CustomerID:     sub.CustomerID,
+					SubscriptionID: lo.ToPtr(sub.ID),
+					InvoiceType:    types.InvoiceTypeSubscription,
+					InvoiceStatus:  types.InvoiceStatusFinalized,
+					PaymentStatus:  types.PaymentStatusPending,
+					Currency:       "usd",
+					AmountDue:      decimal.NewFromInt(30),
+					PeriodStart:    lo.ToPtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+					PeriodEnd:      lo.ToPtr(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
+					BaseModel:      types.GetDefaultBaseModel(ctx),
+					LineItems: []*invoice.InvoiceLineItem{
+						{
+							ID:             "li_split_1",
+							InvoiceID:      "inv_1",
+							CustomerID:     sub.CustomerID,
+							SubscriptionID: lo.ToPtr(sub.ID),
+							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
+							PriceType:      lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+							Amount:         decimal.NewFromInt(30),
+							Currency:       "usd",
+							PeriodStart:    lo.ToPtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+							PeriodEnd:      lo.ToPtr(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
+							BaseModel:      types.GetDefaultBaseModel(ctx),
+						},
+					},
+				},
+				{
+					ID:             "inv_2",
+					CustomerID:     sub.CustomerID,
+					SubscriptionID: lo.ToPtr(sub.ID),
+					InvoiceType:    types.InvoiceTypeSubscription,
+					InvoiceStatus:  types.InvoiceStatusFinalized,
+					PaymentStatus:  types.PaymentStatusPending,
+					Currency:       "usd",
+					AmountDue:      decimal.NewFromInt(20),
+					PeriodStart:    lo.ToPtr(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
+					PeriodEnd:      lo.ToPtr(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)),
+					BaseModel:      types.GetDefaultBaseModel(ctx),
+					LineItems: []*invoice.InvoiceLineItem{
+						{
+							ID:             "li_split_2",
+							InvoiceID:      "inv_2",
+							CustomerID:     sub.CustomerID,
+							SubscriptionID: lo.ToPtr(sub.ID),
+							PriceID:        lo.ToPtr(s.testData.prices.apiCalls.ID),
+							PriceType:      lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+							Amount:         decimal.NewFromInt(20),
+							Currency:       "usd",
+							PeriodStart:    lo.ToPtr(time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)),
+							PeriodEnd:      lo.ToPtr(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)),
+							BaseModel:      types.GetDefaultBaseModel(ctx),
+						},
+					},
+				},
+			},
+			customCharges: []*dto.SubscriptionUsageByMetersResponse{
+				{SubscriptionLineItemID: apiCallsLineItem.ID, Price: s.testData.prices.apiCalls, Quantity: 400, Amount: 8, IsOverage: false, OverageFactor: 2},
+				{SubscriptionLineItemID: apiCallsLineItem.ID, Price: s.testData.prices.apiCalls, Quantity: 200, Amount: 8, IsOverage: true, OverageFactor: 2},
+			},
+			expectedTotal:       decimal.NewFromInt(14), // Must match case1 exactly: 10 within + 4 overage
 			expectedOverageLine: decimal.NewFromInt(4),
 		},
 		{

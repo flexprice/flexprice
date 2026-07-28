@@ -21,7 +21,6 @@ import (
 // for deferred processing by the cumulative commitment path.
 type meterUsageBaseChargeInfo struct {
 	item                        *subscription.SubscriptionLineItem
-	matchingCharge              *dto.SubscriptionUsageByMetersResponse
 	baseAmount                  decimal.Decimal
 	quantityForCalculation      decimal.Decimal
 	priceUnitAmount             decimal.Decimal
@@ -87,6 +86,14 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
+	// When a line item's meter has grants here, adjustMeterUsageGrants below takes precedence
+	// over adjustMeterUsageEntitlement (grants replace legacy entitlement quota semantics for that feature).
+	// Empty map means "no grants configured on this subscription" — the loop stays on the legacy path.
+	grantsByMeterID, err := s.loadEntitlementGrantsByMeterID(ctx, sub, aggregatedEntitlements.Features, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
 	priceService := NewPriceService(s.ServiceParams)
 
 	meterIDs := make([]string, 0)
@@ -113,9 +120,12 @@ func (s *billingService) CalculateMeterUsageCharges(
 		return nil, decimal.Zero, err
 	}
 
-	chargesByLineItemID := make(map[string]*dto.SubscriptionUsageByMetersResponse)
+	// A line item's usage may be split into multiple charges sharing the same
+	// SubscriptionLineItemID (e.g. a normal/base-slab charge and an overage charge
+	// when commitment pricing is active) — keep all of them, not just the last one.
+	chargesByLineItemID := make(map[string][]*dto.SubscriptionUsageByMetersResponse)
 	for _, charge := range usage.Charges {
-		chargesByLineItemID[charge.SubscriptionLineItemID] = charge
+		chargesByLineItemID[charge.SubscriptionLineItemID] = append(chargesByLineItemID[charge.SubscriptionLineItemID], charge)
 	}
 
 	// --- Per-line-item processing ---
@@ -129,7 +139,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			continue
 		}
 
-		matchingCharge, ok := chargesByLineItemID[item.ID]
+		matchingCharges, ok := chargesByLineItemID[item.ID]
 		if !ok {
 			continue
 		}
@@ -142,137 +152,191 @@ func (s *billingService) CalculateMeterUsageCharges(
 				Mark(ierr.ErrNotFound)
 		}
 
-		quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
+		// Accumulated once per LINE ITEM (not per charge) for the cumulative-commitment
+		// path below: a base+overage split must contribute exactly one combined entry
+		// to baseChargesForCumulative, otherwise the item gets two allocated invoice
+		// lines and its contribution is misattributed between them (see step 3).
+		var cumulativeBaseAmount decimal.Decimal
+		var cumulativeQuantity decimal.Decimal
+		var cumulativePriceUnitAmount decimal.Decimal
+		var cumulativeDisplayName *string
+		var cumulativeMetadata types.Metadata
+		var cumulativeAdjustedEntitlementQty *decimal.Decimal
+		var cumulativePreferredCharge bool // true once a non-overage charge has set the fields above
 
-		// 1. Bucketed meter cost — use pre-fetched result or fallback to direct query
-		var cachedBucketedUsageResult *events.AggregationResult
-		if (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) && matchingCharge.Price != nil {
-			usageResult := matchingCharge.BucketedUsageResult
-			if usageResult == nil {
-				usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
+		for _, matchingCharge := range matchingCharges {
+			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
+
+			// 1. Bucketed meter cost — use pre-fetched result or fallback to direct query
+			var cachedBucketedUsageResult *events.AggregationResult
+			if (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) && matchingCharge.Price != nil {
+				usageResult := matchingCharge.BucketedUsageResult
+				if usageResult == nil {
+					usageResult, err = s.queryBucketedMeterUsageDirect(ctx, m, item, sub, extCustomerIDs, periodStart, periodEnd, querySource)
+					if err != nil {
+						return nil, decimal.Zero, err
+					}
+				}
+				cachedBucketedUsageResult = usageResult
+
+				hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
+				cost := calculateBucketedMeterCost(ctx, priceService, matchingCharge.Price, usageResult, hasGroupBy)
+				matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(cost.Amount, matchingCharge.Price.Currency)
+				matchingCharge.Quantity = cost.Quantity.InexactFloat64()
+				quantityForCalculation = cost.Quantity
+			}
+
+			// 2. Entitlement adjustment — reads windowed usage from meter_usage (not raw events)
+			rawQtyBeforeEntitlement := quantityForCalculation
+			var entitlementAdjustedQty *decimal.Decimal
+			entitlement := entitlementsByMeterID[item.MeterID]
+
+			grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
+			if !matchingCharge.IsOverage {
+				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
+					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs)
+					if err != nil {
+						return nil, decimal.Zero, err
+					}
+				}
+			}
+
+			switch {
+			case grantsApplied:
+				// Grants replaced the legacy entitlement — adjustMeterUsageGrants
+				// already updated matchingCharge (Amount/Quantity). For the
+				// pricer, use the grant-derived quantity; amount-lane grants
+				// return zero here on purpose (already priced).
+				quantityForCalculation = decimal.NewFromFloat(matchingCharge.Quantity)
+				if grantResult.Measure == types.EntitlementGrantMeasureQuantity {
+					adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+				}
+			case !matchingCharge.IsOverage && entitlement != nil && entitlement.IsEnabled:
+				quantityForCalculation, err = s.adjustMeterUsageEntitlement(
+					ctx, item, m, matchingCharge, entitlement, sub, extCustomerIDs,
+					periodStart, periodEnd, priceService, querySource,
+				)
+				if err != nil {
+					return nil, decimal.Zero, err
+				}
+				adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+				entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+			case !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil:
+				// No grant, no entitlement — recalculate cost for non-bucketed meters.
+				adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+				matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
+			}
+
+			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
+
+			// 3. Cumulative commitment — accumulate into ONE combined entry per line
+			// item (appended after the charge loop below), not one per charge.
+			if useCumulativePath {
+				baseAmount := lineItemAmount
+				if matchingCharge.IsOverage && overageFactor.GreaterThan(decimal.Zero) {
+					baseAmount = lineItemAmount.Div(overageFactor)
+				}
+				cumulativeBaseAmount = cumulativeBaseAmount.Add(baseAmount)
+				cumulativeQuantity = cumulativeQuantity.Add(quantityForCalculation)
+				if item.PriceUnit != nil {
+					priceUnit, puErr := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
+					if puErr == nil {
+						converted, convErr := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+						if convErr == nil {
+							cumulativePriceUnitAmount = cumulativePriceUnitAmount.Add(converted)
+						}
+					}
+				}
+				// Prefer the non-overage charge's metadata/display name/entitlement
+				// info for the combined line; only an entirely-overage item (no
+				// non-overage charge at all) keeps the overage charge's info.
+				if !cumulativePreferredCharge || !matchingCharge.IsOverage {
+					cumulativeMetadata = s.buildChargeMetadata(item, matchingCharge, entitlement)
+					cumulativeDisplayName = lo.ToPtr(item.DisplayName)
+					if matchingCharge.IsOverage {
+						cumulativeDisplayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
+					}
+					cumulativeAdjustedEntitlementQty = entitlementAdjustedQty
+					cumulativePreferredCharge = !matchingCharge.IsOverage
+				}
+				continue
+			}
+
+			// 4. Line-item commitment (windowed or flat). Applied once per line item:
+			// when this item's usage was split into a normal + overage charge, only the
+			// non-overage charge goes through it — otherwise a floor/true-up would be
+			// enforced independently on each half instead of once for the item. A
+			// single (unsplit) charge is unaffected, overage or not.
+			var commitmentInfo *types.CommitmentInfo
+			applyItemCommitment := item.HasAnyCommitment() && matchingCharge.Price != nil &&
+				(!matchingCharge.IsOverage || len(matchingCharges) == 1)
+			if applyItemCommitment {
+				lineItemAmount, commitmentInfo, err = s.applyMeterUsageCommitment(
+					ctx, item, m, matchingCharge, cachedBucketedUsageResult,
+					sub, extCustomerIDs, periodStart, periodEnd, asOf,
+					priceService, querySource, meterMap,
+				)
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
 			}
-			cachedBucketedUsageResult = usageResult
 
-			hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
-			cost := calculateBucketedMeterCost(ctx, priceService, matchingCharge.Price, usageResult, hasGroupBy)
-			matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(cost.Amount, matchingCharge.Price.Currency)
-			matchingCharge.Quantity = cost.Quantity.InexactFloat64()
-			quantityForCalculation = cost.Quantity
-		}
+			totalUsageCost = totalUsageCost.Add(lineItemAmount)
 
-		// 2. Entitlement adjustment — reads windowed usage from meter_usage (not raw events)
-		rawQtyBeforeEntitlement := quantityForCalculation
-		var entitlementAdjustedQty *decimal.Decimal
-		entitlement := entitlementsByMeterID[item.MeterID]
-		if !matchingCharge.IsOverage && entitlement != nil && entitlement.IsEnabled {
-			quantityForCalculation, err = s.adjustMeterUsageEntitlement(
-				ctx, item, m, matchingCharge, entitlement, sub, extCustomerIDs,
-				periodStart, periodEnd, priceService, querySource,
-			)
-			if err != nil {
-				return nil, decimal.Zero, err
-			}
-			adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
-			entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
-		} else if !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil {
-			// No entitlement — recalculate cost for non-bucketed meters
-			adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
-			matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
-		}
-
-		lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
-
-		// 3. Cumulative commitment — collect for batch processing after the loop
-		if useCumulativePath {
-			baseAmount := lineItemAmount
-			if matchingCharge.IsOverage && overageFactor.GreaterThan(decimal.Zero) {
-				baseAmount = lineItemAmount.Div(overageFactor)
-			}
 			metadata := s.buildChargeMetadata(item, matchingCharge, entitlement)
 			displayName := lo.ToPtr(item.DisplayName)
 			if matchingCharge.IsOverage {
 				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 			}
+
+			s.Logger.Debug(ctx, "meter usage charges for line item",
+				"amount", matchingCharge.Amount, "quantity", matchingCharge.Quantity,
+				"is_overage", matchingCharge.IsOverage,
+				"subscription_id", sub.ID, "line_item_id", item.ID, "price_id", item.PriceID)
+
 			var priceUnitAmount decimal.Decimal
 			if item.PriceUnit != nil {
 				priceUnit, puErr := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
-				if puErr == nil {
-					converted, convErr := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
-					if convErr == nil {
-						priceUnitAmount = converted
-					}
+				if puErr != nil {
+					return nil, decimal.Zero, puErr
+				}
+				priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+				if err != nil {
+					return nil, decimal.Zero, err
 				}
 			}
-			baseChargesForCumulative = append(baseChargesForCumulative, meterUsageBaseChargeInfo{
-				item: item, matchingCharge: matchingCharge, baseAmount: baseAmount,
-				quantityForCalculation: quantityForCalculation, priceUnitAmount: priceUnitAmount,
-				displayName: displayName, metadata: metadata,
-				adjustedEntitlementQuantity: entitlementAdjustedQty,
+
+			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
+				EntityID:                    lo.ToPtr(item.EntityID),
+				EntityType:                  lo.ToPtr(string(item.EntityType)),
+				PlanDisplayName:             lo.ToPtr(item.PlanDisplayName),
+				PriceType:                   lo.ToPtr(string(item.PriceType)),
+				PriceID:                     lo.ToPtr(item.PriceID),
+				MeterID:                     lo.ToPtr(item.MeterID),
+				MeterDisplayName:            lo.ToPtr(item.MeterDisplayName),
+				PriceUnit:                   item.PriceUnit,
+				PriceUnitAmount:             lo.ToPtr(priceUnitAmount),
+				DisplayName:                 displayName,
+				Amount:                      lineItemAmount,
+				Quantity:                    quantityForCalculation,
+				AdjustedEntitlementQuantity: entitlementAdjustedQty,
+				PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
+				PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+				SubscriptionLineItemID:      lo.ToPtr(item.ID),
+				Metadata:                    metadata,
+				CommitmentInfo:              commitmentInfo,
 			})
-			continue
 		}
 
-		// 4. Line-item commitment (windowed or flat)
-		var commitmentInfo *types.CommitmentInfo
-		if item.HasAnyCommitment() && matchingCharge.Price != nil {
-			lineItemAmount, commitmentInfo, err = s.applyMeterUsageCommitment(
-				ctx, item, m, matchingCharge, cachedBucketedUsageResult,
-				sub, extCustomerIDs, periodStart, periodEnd, asOf,
-				priceService, querySource, meterMap,
-			)
-			if err != nil {
-				return nil, decimal.Zero, err
-			}
+		if useCumulativePath {
+			baseChargesForCumulative = append(baseChargesForCumulative, meterUsageBaseChargeInfo{
+				item: item, baseAmount: cumulativeBaseAmount,
+				quantityForCalculation: cumulativeQuantity, priceUnitAmount: cumulativePriceUnitAmount,
+				displayName: cumulativeDisplayName, metadata: cumulativeMetadata,
+				adjustedEntitlementQuantity: cumulativeAdjustedEntitlementQty,
+			})
 		}
-
-		totalUsageCost = totalUsageCost.Add(lineItemAmount)
-
-		metadata := s.buildChargeMetadata(item, matchingCharge, entitlement)
-		displayName := lo.ToPtr(item.DisplayName)
-		if matchingCharge.IsOverage {
-			displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
-		}
-
-		s.Logger.Debug(ctx, "meter usage charges for line item",
-			"amount", matchingCharge.Amount, "quantity", matchingCharge.Quantity,
-			"is_overage", matchingCharge.IsOverage,
-			"subscription_id", sub.ID, "line_item_id", item.ID, "price_id", item.PriceID)
-
-		var priceUnitAmount decimal.Decimal
-		if item.PriceUnit != nil {
-			priceUnit, puErr := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
-			if puErr != nil {
-				return nil, decimal.Zero, puErr
-			}
-			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
-			if err != nil {
-				return nil, decimal.Zero, err
-			}
-		}
-
-		usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-			EntityID:                    lo.ToPtr(item.EntityID),
-			EntityType:                  lo.ToPtr(string(item.EntityType)),
-			PlanDisplayName:             lo.ToPtr(item.PlanDisplayName),
-			PriceType:                   lo.ToPtr(string(item.PriceType)),
-			PriceID:                     lo.ToPtr(item.PriceID),
-			MeterID:                     lo.ToPtr(item.MeterID),
-			MeterDisplayName:            lo.ToPtr(item.MeterDisplayName),
-			PriceUnit:                   item.PriceUnit,
-			PriceUnitAmount:             lo.ToPtr(priceUnitAmount),
-			DisplayName:                 displayName,
-			Amount:                      lineItemAmount,
-			Quantity:                    quantityForCalculation,
-			AdjustedEntitlementQuantity: entitlementAdjustedQty,
-			PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
-			PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-			SubscriptionLineItemID:      lo.ToPtr(item.ID),
-			Metadata:                    metadata,
-			CommitmentInfo:              commitmentInfo,
-		})
 	}
 
 	// --- Post-loop: cumulative commitment or non-cumulative true-up ---

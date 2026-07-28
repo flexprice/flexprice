@@ -5,6 +5,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
@@ -58,6 +60,7 @@ type cronActivityBundle struct {
 	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
 	marketplaceSnapshot          *marketplaceActivities.SnapshotActivities
 	marketplaceReport            *marketplaceActivities.ReportActivities
+	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -279,7 +282,9 @@ func RegisterWorkflowsAndActivities(
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	// Marketplace activities
 	billingService := service.NewBillingService(params)
-	awsMarketplaceClient := awsmarketplace.NewClient(params.Logger)
+	awsMarketplaceClient := awsmarketplace.NewClient(params.Config, params.Logger)
+	gcpMarketplaceClient := gcpmarketplace.NewClient(params.Config, params.Logger)
+	azureMarketplaceClient := azuremarketplace.NewClient(params.Logger)
 	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(
 		subscriptionService,
 		billingService,
@@ -296,6 +301,8 @@ func RegisterWorkflowsAndActivities(
 		params.UsageRecordRepo,
 		params.EncryptionService,
 		awsMarketplaceClient,
+		gcpMarketplaceClient,
+		azureMarketplaceClient,
 		params.Logger,
 	)
 
@@ -309,6 +316,7 @@ func RegisterWorkflowsAndActivities(
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 		marketplaceSnapshot:          marketplaceSnapshotActivities,
 		marketplaceReport:            marketplaceReportActivities,
+		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -387,6 +395,7 @@ func buildWorkerConfig(
 			workflows.ChargebeeInvoiceSyncWorkflow,
 			workflows.QuickBooksInvoiceSyncWorkflow,
 			workflows.ZohoBooksInvoiceSyncWorkflow,
+			workflows.ZohoBooksInvoiceMarkPaidWorkflow,
 			workflows.TabsInvoiceSyncWorkflow,
 			workflows.StripeCustomerSyncWorkflow,
 			workflows.RazorpayCustomerSyncWorkflow,
@@ -414,6 +423,7 @@ func buildWorkerConfig(
 			chargebeeInvoiceSyncActivities.SyncInvoiceToChargebee,
 			qbInvoiceSyncActivities.SyncInvoiceToQuickBooks,
 			zohoInvoiceSyncActivities.SyncInvoiceToZoho,
+			zohoInvoiceSyncActivities.MarkZohoBooksInvoicePaid,
 			tabsInvoiceSyncActivities.SyncInvoiceToTabs,
 			stripeCustomerSyncActivities.SyncCustomerToStripe,
 			razorpayCustomerSyncActivities.SyncCustomerToRazorpay,
@@ -505,7 +515,6 @@ func buildWorkerConfig(
 			workflows.EnvironmentCloneWorkflow,
 			workflows.UsageAlertWorkflow,
 		)
-		// Customer activities
 		activitiesList = append(activitiesList,
 			customerActivities.CreateCustomerActivity,
 			customerActivities.CreateWalletActivity,
@@ -515,7 +524,7 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
-			alertActs.SpendAlertsActivity,
+			alertActs.SpendAndEntitlementAlertsActivity,
 			alertActs.WalletAlertsActivity,
 		)
 	case types.TemporalTaskQueueReprocessEvents:
@@ -541,6 +550,7 @@ func buildWorkerConfig(
 			cronWorkflows.CheckoutSessionExpiryWorkflow,
 			cronWorkflows.MarketplaceUsageSnapshotWorkflow,
 			cronWorkflows.MarketplaceUsageReportWorkflow,
+			cronWorkflows.DailyDraftAndComputeWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -557,6 +567,17 @@ func buildWorkerConfig(
 			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
 			cron.marketplaceSnapshot.MarketplaceUsageSnapshotActivity,
 			cron.marketplaceReport.MarketplaceUsageReportActivity,
+			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
+		)
+
+	case types.TemporalTaskQueueBilling:
+		// Isolate bulk daily invoice work from interactive requests.
+		workflowsList = append(workflowsList,
+			invoiceWorkflows.DraftAndComputeSubscriptionInvoiceWorkflow,
+		)
+		activitiesList = append(activitiesList,
+			invoiceActs.CreateDraftForCurrentSubscriptionPeriodActivity,
+			invoiceActs.ComputeInvoiceActivity,
 		)
 	}
 	return WorkerConfig{

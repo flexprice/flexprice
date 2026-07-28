@@ -268,7 +268,6 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 	}
 }
 
-
 // WalletResponseFromBalance maps a computed balance into a WalletResponse with real-time fields.
 func WalletResponseFromBalance(b *WalletBalanceResponse) *WalletResponse {
 	if b == nil || b.Wallet == nil {
@@ -345,6 +344,17 @@ type TopUpWalletRequest struct {
 	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
 	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
 	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+	// bonus_credits_expiry_date_utc is the expiry (UTC, full precision) applied to the bonus
+	// credits transaction. Independent of expiry_date_utc, which governs the purchase credits.
+	// Only honored when bonus credits are actually granted (explicit BonusCreditsToAdd or slab).
+	BonusCreditsExpiryDateUTC *time.Time `json:"bonus_credits_expiry_date_utc,omitempty"`
+
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
+
+	// checkout opts into pay-first hosted checkout for PURCHASED_CREDIT_INVOICED top-ups.
+	// When set, credits are applied only after checkout payment succeeds.
+	// Omit for today's pay-later / auto-complete behavior.
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -400,6 +410,26 @@ func (r *TopUpWalletRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+		return ierr.NewError("bonus_credits_expiry_date_utc cannot be in the past").
+			WithHint("Bonus credits expiry date must be in the future").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Checkout != nil {
+		if r.TransactionReason != types.TransactionReasonPurchasedCreditInvoiced {
+			return ierr.NewError("checkout is only supported for PURCHASED_CREDIT_INVOICED").
+				WithHint("Omit checkout, or set transaction_reason to PURCHASED_CREDIT_INVOICED").
+				WithReportableDetails(map[string]interface{}{
+					"transaction_reason": r.TransactionReason,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := r.Checkout.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -411,6 +441,8 @@ type TopUpWalletResponse struct {
 	InvoiceID *string `json:"invoice_id,omitempty"`
 	// Wallet details after the operation
 	Wallet *WalletResponse `json:"wallet"`
+	// CheckoutSession is set when pay-first checkout was requested on top-up.
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // WalletBalanceResponse represents the response for getting wallet balance

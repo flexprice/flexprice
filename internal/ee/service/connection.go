@@ -12,6 +12,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// awsMarketplaceRoleVerificationDuration is how long the STS session used to verify a role ARN at
+// connection-creation time is valid for. These credentials are used once (AssumeRole succeeding is
+// itself the check) and discarded immediately, so this is the shortest session AWS permits: STS
+// rejects any durationSeconds below 900 with a ValidationError, so 15m is the floor, not a choice.
+const awsMarketplaceRoleVerificationDuration = 15 * time.Minute
+
 // ConnectionService defines the interface for connection operations
 type ConnectionService interface {
 	CreateConnection(ctx context.Context, req dto.CreateConnectionRequest) (*dto.ConnectionResponse, error)
@@ -27,7 +33,10 @@ type connectionService struct {
 }
 
 // NewConnectionService creates a new connection service
-func NewConnectionService(params ServiceParams, encryptionService security.EncryptionService) ConnectionService {
+func NewConnectionService(
+	params ServiceParams,
+	encryptionService security.EncryptionService,
+) ConnectionService {
 	return &connectionService{
 		ServiceParams:     params,
 		encryptionService: encryptionService,
@@ -347,11 +356,20 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 		if err != nil {
 			return types.ConnectionMetadata{}, err
 		}
-		encryptedMetadata.Whop = &types.WhopConnectionMetadata{
+		whopMeta := &types.WhopConnectionMetadata{
 			APIKey:    encryptedAPIKey,
 			CompanyID: encryptedCompanyID,
 			ProductID: encryptedSecretData.Whop.ProductID, // not sensitive, stored plain
 		}
+		// Encrypt webhook secret if provided
+		if encryptedSecretData.Whop.WebhookSecret != "" {
+			encryptedWebhookSecret, encErr := s.encryptionService.Encrypt(encryptedSecretData.Whop.WebhookSecret)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			whopMeta.WebhookSecret = encryptedWebhookSecret
+		}
+		encryptedMetadata.Whop = whopMeta
 
 	case types.SecretProviderTabs:
 		if encryptedSecretData.Tabs == nil {
@@ -386,6 +404,46 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 		encryptedMetadata.AWSMarketplace = &types.AWSMarketplaceConnectionSecrets{
 			RoleArn:    encryptedRoleArn,
 			ExternalID: encryptedExternalID,
+		}
+
+	case types.SecretProviderGCPMarketplace:
+		if encryptedSecretData.GCPMarketplace == nil {
+			s.Logger.Info(context.Background(), "GCP Marketplace metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("GCP Marketplace metadata is required").
+				WithHint("GCP Marketplace connection requires encrypted_secret_data with credentials_json").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedCredentialsJSON, err := s.encryptionService.Encrypt(encryptedSecretData.GCPMarketplace.CredentialsJSON)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.GCPMarketplace = &types.GCPMarketplaceConnectionSecrets{
+			CredentialsJSON: encryptedCredentialsJSON,
+		}
+
+	case types.SecretProviderAzureMarketplace:
+		if encryptedSecretData.AzureMarketplace == nil {
+			s.Logger.Info(context.Background(), "Azure Marketplace metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Azure Marketplace metadata is required").
+				WithHint("Azure Marketplace connection requires encrypted_secret_data with tenant_id, client_id and client_secret").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedTenantID, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.TenantID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedClientID, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.ClientID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedClientSecret, err := s.encryptionService.Encrypt(encryptedSecretData.AzureMarketplace.ClientSecret)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.AzureMarketplace = &types.AzureMarketplaceConnectionSecrets{
+			TenantID:     encryptedTenantID,
+			ClientID:     encryptedClientID,
+			ClientSecret: encryptedClientSecret,
 		}
 
 	case types.SecretProviderZohoBooks:
@@ -533,6 +591,116 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.UpdatedAt = time.Now()
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
+
+	// AWS Marketplace: verify the tenant's role_arn/external_id actually work before the
+	// connection is ever persisted. AssumeRole succeeding is the whole check — the credentials
+	// themselves are discarded immediately after, using a short verification-only session
+	// (awsMarketplaceRoleVerificationDuration) rather than the longer duration Cron B uses to
+	// actually report usage.
+	if conn.ProviderType == types.SecretProviderAWSMarketplace {
+		if conn.EncryptedSecretData.AWSMarketplace == nil {
+			return nil, ierr.NewError("aws_marketplace connection requires role_arn and external_id").
+				WithHint("encrypted_secret_data.aws_marketplace with role_arn and external_id is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.AWSMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		// Region selects the AWS Marketplace Metering Service regional endpoint BatchMeterUsage
+		// targets at report time. It must match the region AWS enabled SaaS metering for this product.
+		if conn.SyncConfig == nil || conn.SyncConfig.AWSMarketplace == nil || conn.SyncConfig.AWSMarketplace.Region == "" {
+			return nil, ierr.NewError("aws_marketplace connection requires region").
+				WithHint("sync_config.aws_marketplace.region is required").
+				Mark(ierr.ErrValidation)
+		}
+		awsIntegration, err := s.IntegrationFactory.GetAWSMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Bounded so a slow/unreachable AWS credential chain (e.g. the SDK falling through to an
+		// unreachable EC2 instance-metadata endpoint when Flexprice's own AWS credentials aren't
+		// configured via env vars) can't hang this request indefinitely — there's no other timeout
+		// anywhere in this path otherwise.
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err = awsIntegration.Client.AssumeRole(
+			verifyCtx,
+			conn.EncryptedSecretData.AWSMarketplace.RoleArn,
+			conn.EncryptedSecretData.AWSMarketplace.ExternalID,
+			awsMarketplaceRoleVerificationDuration,
+		)
+		cancel()
+		if err != nil {
+			// err is already redacted of the role ARN and external ID by AssumeRole; everything else
+			// AWS reported is preserved so the failure reason is visible here.
+			s.Logger.Error(ctx, "aws marketplace connection verification failed",
+				"tenant_id", tenantID, "environment_id", environmentID,
+				"region", conn.SyncConfig.AWSMarketplace.Region,
+				"error", err)
+			return nil, ierr.WithError(err).
+				WithHint("Could not assume the provided AWS IAM role. Verify the role ARN, trust policy, and external ID before creating this connection.").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// GCP Marketplace: verify the tenant's Workload Identity Federation credentials actually work
+	// before the connection is ever persisted. WifSession forces the full AWS -> GCP STS ->
+	// service-account-impersonation exchange as its verification — succeeding is the whole check,
+	// mirroring the AWS AssumeRole block above.
+	if conn.ProviderType == types.SecretProviderGCPMarketplace {
+		if conn.EncryptedSecretData.GCPMarketplace == nil {
+			return nil, ierr.NewError("gcp_marketplace connection requires credentials_json").
+				WithHint("encrypted_secret_data.gcp_marketplace with credentials_json is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.GCPMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		gcpIntegration, err := s.IntegrationFactory.GetGCPMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Bounded for the same reason the AWS verification above is: a slow/unreachable credential
+		// chain must not hang this request indefinitely.
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err = gcpIntegration.Client.WifSession(
+			verifyCtx,
+			conn.EncryptedSecretData.GCPMarketplace.CredentialsJSON,
+		)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Azure Marketplace: verify the tenant's Entra app credentials actually work before the
+	// connection is ever persisted. A client_credentials token request is the whole check — whether
+	// this app is also the one registered on the tenant's own offer's Technical Configuration page is
+	// the tenant's responsibility to get right, not something Flexprice checks at connection time.
+	if conn.ProviderType == types.SecretProviderAzureMarketplace {
+		if conn.EncryptedSecretData.AzureMarketplace == nil {
+			return nil, ierr.NewError("azure_marketplace connection requires tenant_id, client_id and client_secret").
+				WithHint("encrypted_secret_data.azure_marketplace with tenant_id, client_id and client_secret is required").
+				Mark(ierr.ErrValidation)
+		}
+		if err := conn.EncryptedSecretData.AzureMarketplace.Validate(); err != nil {
+			return nil, err
+		}
+		azureIntegration, err := s.IntegrationFactory.GetAzureMarketplaceIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err = azureIntegration.Client.GetToken(
+			verifyCtx,
+			conn.EncryptedSecretData.AzureMarketplace.TenantID,
+			conn.EncryptedSecretData.AzureMarketplace.ClientID,
+			conn.EncryptedSecretData.AzureMarketplace.ClientSecret,
+		)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Check if this is a Flexprice-managed S3 connection
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
@@ -706,6 +874,13 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		}
 	}
 
+	// Accept flat encrypted_secret_data (create-style keys) for providers that support
+	// partial secret updates below.
+	if req.EncryptedSecretData == nil && len(req.FlatEncryptedSecretData) > 0 {
+		structured := dto.ConvertFlatMetadataToStructured(req.FlatEncryptedSecretData, conn.ProviderType)
+		req.EncryptedSecretData = &structured
+	}
+
 	// Zoho Books: merge webhook_secret only (plaintext from API → encrypted at rest)
 	if req.EncryptedSecretData != nil && req.EncryptedSecretData.ZohoBooks != nil && req.EncryptedSecretData.ZohoBooks.WebhookSecret != "" {
 		if conn.ProviderType != types.SecretProviderZohoBooks {
@@ -722,6 +897,24 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 			return nil, encErr
 		}
 		conn.EncryptedSecretData.ZohoBooks.WebhookSecret = encWS
+	}
+
+	// Whop: merge webhook_secret only (plaintext from API → encrypted at rest)
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.Whop != nil && req.EncryptedSecretData.Whop.WebhookSecret != "" {
+		if conn.ProviderType != types.SecretProviderWhop {
+			return nil, ierr.NewError("webhook_secret update is only valid for whop connections").
+				Mark(ierr.ErrValidation)
+		}
+		if conn.EncryptedSecretData.Whop == nil {
+			return nil, ierr.NewError("Whop connection metadata is missing").
+				Mark(ierr.ErrValidation)
+		}
+		encWS, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.Whop.WebhookSecret)
+		if encErr != nil {
+			s.Logger.Error(ctx, "failed to encrypt Whop webhook secret", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
 	}
 
 	conn.UpdatedAt = time.Now()

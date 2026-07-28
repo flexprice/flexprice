@@ -307,7 +307,7 @@ func (o TaskQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Task
 
 func (o TaskQueryOptions) ApplyStatusFilter(query TaskQuery, status string) TaskQuery {
 	if status == "" {
-		return query.Where(task.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(task.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(task.Status(status))
 }

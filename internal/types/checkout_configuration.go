@@ -4,11 +4,14 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
 )
 
 type CheckoutConfiguration struct {
 	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
+	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
+	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -23,6 +26,20 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.CreateSubscriptionParams.Validate()
+	case CheckoutActionModifySubscription:
+		if c.ModifySubscriptionParams == nil {
+			return ierr.NewError("modify_subscription_params is required for modify_subscription action").
+				WithHint("Provide modify_subscription_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.ModifySubscriptionParams.Validate()
+	case CheckoutActionWalletTopup:
+		if c.WalletTopupParams == nil {
+			return ierr.NewError("wallet_topup_params is required for wallet_topup action").
+				WithHint("Provide wallet_topup_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.WalletTopupParams.Validate()
 	}
 	return nil
 }
@@ -70,6 +87,68 @@ func (p *CreateSubscriptionParams) Validate() error {
 	}
 
 	return nil
+}
+
+// ModifySubscriptionParams is persisted on checkout sessions for payment-gated
+// subscription modifications (e.g. quantity_change). Applied on payment success.
+type ModifySubscriptionParams struct {
+	SubscriptionID        string                       `json:"subscription_id"`
+	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
+}
+
+// ModifySubscriptionLineItem is one close-and-replace intent for a line item.
+type ModifySubscriptionLineItem struct {
+	LineItemID    string          `json:"line_item_id"`
+	Quantity      decimal.Decimal `json:"quantity" swaggertype:"string"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+}
+
+func (p *ModifySubscriptionParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("modify_subscription_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Provide subscription_id in modify_subscription_params").
+			Mark(ierr.ErrValidation)
+	}
+	if len(p.LineItemModifications) == 0 {
+		return ierr.NewError("line_item_modifications is required").
+			WithHint("Provide at least one line_item_modification").
+			Mark(ierr.ErrValidation)
+	}
+	for i, mod := range p.LineItemModifications {
+		if mod.LineItemID == "" {
+			return ierr.NewError("line_item_id is required").
+				WithHint("Each line_item_modification must have a non-empty line_item_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if mod.Quantity.IsNegative() {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+// WalletTopupParams is persisted on checkout sessions for payment-gated wallet
+// top-ups. Credits are applied on payment success via invoice metadata
+// (wallet_transaction_id), not by re-running top-up from this config.
+type WalletTopupParams struct {
+	WalletID            string `json:"wallet_id" validate:"required"`
+	WalletTransactionID string `json:"wallet_transaction_id,omitempty"`
+}
+
+func (p *WalletTopupParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("wallet_topup_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	return validator.ValidateRequest(p)
 }
 
 // ── JSONB result structs ──────────────────────────────────────────────────────
@@ -131,6 +210,8 @@ func (c *CheckoutPaymentProviderConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
+
+	// PaymentMethod is optional (empty = provider picks / tries saved methods in order).
 	if c.PaymentMethod != "" {
 		if err := c.PaymentMethod.Validate(); err != nil {
 			return err

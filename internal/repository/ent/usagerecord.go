@@ -14,10 +14,6 @@ import (
 )
 
 // usageRecordRepository implements domainUsageRecord.Repository against the Ent client.
-//
-// NOTE: this file references the generated ent.UsageRecord / ent/usagerecord client, which does
-// not exist until `make generate-ent` is run against ent/schema/usagerecord.go. It intentionally
-// will not compile until then — see ent/schema/usagerecord.go and the FLE-981 design doc.
 type usageRecordRepository struct {
 	client postgres.IClient
 	log    *logger.Logger
@@ -49,6 +45,9 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 	if rec.EnvironmentID == "" {
 		rec.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+	if rec.Syncs == nil {
+		rec.Syncs = map[string]types.UsageRecordSyncEntry{}
+	}
 
 	created, err := client.UsageRecord.Create().
 		SetID(rec.ID).
@@ -59,10 +58,11 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 		SetPlanID(rec.PlanID).
 		SetQuantity(rec.Quantity).
 		SetAmount(rec.Amount).
+		SetCurrency(rec.Currency).
 		SetPeriodStart(rec.PeriodStart).
 		SetPeriodEnd(rec.PeriodEnd).
-		SetSyncs(domainUsageRecord.SyncsToMap(rec.Syncs)).
-		SetAllProvidersSynced(rec.AllProvidersSynced).
+		SetSynced(rec.Synced).
+		SetSyncs(rec.Syncs).
 		SetStatus(string(rec.Status)).
 		SetCreatedAt(rec.CreatedAt).
 		SetUpdatedAt(rec.UpdatedAt).
@@ -92,6 +92,38 @@ func (r *usageRecordRepository) Create(ctx context.Context, rec *domainUsageReco
 	return nil
 }
 
+func (r *usageRecordRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+	client := r.client.Reader(ctx)
+
+	span := StartRepositorySpan(ctx, "usage_record", "exists_for_period", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"period_start":    periodStart,
+		"period_end":      periodEnd,
+	})
+	defer FinishSpan(span)
+
+	exists, err := client.UsageRecord.Query().
+		Where(
+			usagerecord.TenantID(types.GetTenantID(ctx)),
+			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
+			usagerecord.SubscriptionID(subscriptionID),
+			usagerecord.PeriodStart(periodStart),
+			usagerecord.PeriodEnd(periodEnd),
+			usagerecord.StatusEQ(string(types.StatusPublished)),
+		).
+		Exist(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).
+			WithHint("Failed to check for an existing usage record").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return exists, nil
+}
+
 func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, environmentID string) ([]*domainUsageRecord.UsageRecord, error) {
 	client := r.client.Reader(ctx)
 
@@ -105,7 +137,7 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 		Where(
 			usagerecord.TenantID(tenantID),
 			usagerecord.EnvironmentID(environmentID),
-			usagerecord.AllProvidersSynced(false),
+			usagerecord.Synced(false),
 			usagerecord.StatusEQ(string(types.StatusPublished)),
 		).
 		All(ctx)
@@ -121,66 +153,40 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 	return domainUsageRecord.FromEntList(records), nil
 }
 
-func (r *usageRecordRepository) UpdateSyncResult(
-	ctx context.Context,
-	id string,
-	marketplace domainUsageRecord.Marketplace,
-	entry domainUsageRecord.MarketplaceSyncEntry,
-	allProvidersSynced bool,
-) error {
+// MarkSynced writes the record's syncs map and the synced flag. Plain read-modify-write is safe:
+// the reporting cron processes records sequentially and Temporal's SKIP overlap policy stops two
+// runs touching the same rows at once, so there are no concurrent writers to race.
+func (r *usageRecordRepository) MarkSynced(ctx context.Context, id string, syncs map[string]types.UsageRecordSyncEntry, synced bool) error {
 	client := r.client.Writer(ctx)
 
-	span := StartRepositorySpan(ctx, "usage_record", "update_sync_result", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "usage_record", "mark_synced", map[string]interface{}{
 		"usage_record_id": id,
-		"marketplace":     marketplace,
 	})
 	defer FinishSpan(span)
 
-	existing, err := client.UsageRecord.Query().
+	if syncs == nil {
+		syncs = map[string]types.UsageRecordSyncEntry{}
+	}
+
+	affected, err := client.UsageRecord.Update().
 		Where(
 			usagerecord.ID(id),
 			usagerecord.TenantID(types.GetTenantID(ctx)),
 			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		Only(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHintf("Usage record with ID %s was not found", id).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to get usage record for sync update").
-			Mark(ierr.ErrDatabase)
-	}
-
-	syncs := domainUsageRecord.FromEnt(existing).Syncs
-	if syncs == nil {
-		syncs = make(map[domainUsageRecord.Marketplace]domainUsageRecord.MarketplaceSyncEntry)
-	}
-	syncs[marketplace] = entry
-
-	_, err = client.UsageRecord.UpdateOneID(id).
-		Where(
-			usagerecord.TenantID(types.GetTenantID(ctx)),
-			usagerecord.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetSyncs(domainUsageRecord.SyncsToMap(syncs)).
-		SetAllProvidersSynced(allProvidersSynced).
-		SetUpdatedAt(time.Now().UTC()).
+		SetSyncs(syncs).
+		SetSynced(synced).
 		Save(ctx)
-
 	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHintf("Usage record with ID %s was not found", id).
-				Mark(ierr.ErrNotFound)
-		}
 		return ierr.WithError(err).
-			WithHint("Failed to update usage record sync result").
+			WithHint("Failed to mark usage record as synced").
 			Mark(ierr.ErrDatabase)
+	}
+	if affected == 0 {
+		return ierr.NewErrorf("usage record %s was not found", id).
+			WithHintf("Usage record with ID %s was not found", id).
+			Mark(ierr.ErrNotFound)
 	}
 
 	SetSpanSuccess(span)

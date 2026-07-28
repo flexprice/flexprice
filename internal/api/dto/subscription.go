@@ -216,15 +216,16 @@ func (c *LineItemCommitmentConfig) Validate() error {
 		}
 	}
 
-	// Rule 3: Overage factor is required and must be greater than 1.0 when commitment is set
+	// Rule 3: Overage factor is required and must be at least 1.0 when commitment is set.
+	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
 	if c.OverageFactor == nil {
 		return ierr.NewError("overage_factor is required when commitment is set").
-			WithHint("Specify an overage_factor greater than 1.0").
+			WithHint("Specify an overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if c.OverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be greater than 1.0").
+	if c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"overage_factor": c.OverageFactor,
@@ -325,6 +326,13 @@ func (r *SubscriptionCouponInput) Validate() error {
 	return nil
 }
 
+// GroupedInvoicingChildRequest creates one grouped_invoicing child under the parent in the same request.
+// Billing period, cycle, anchor, currency, and start_date are inherited from the parent.
+type GroupedInvoicingChildRequest struct {
+	PlanID             string `json:"plan_id" validate:"required"`
+	ExternalCustomerID string `json:"external_customer_id" validate:"required"`
+}
+
 // SubscriptionInheritanceConfig groups all hierarchy and invoicing-routing fields for
 // subscription creation.
 type SubscriptionInheritanceConfig struct {
@@ -343,6 +351,9 @@ type SubscriptionInheritanceConfig struct {
 	// SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
 	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
 	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
+
+	// grouped_invoicing_children_to_create creates new grouped_invoicing children under this parent
+	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
 }
 
 // Validate enforces mutual-exclusivity constraints between inheritance fields.
@@ -383,6 +394,21 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either grouped invoicing conversion or inherited child creation, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Grouped invoicing inline-child creation cannot be combined with existing-subscription conversion.
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && len(c.SubscriptionsIDsForGroupedInvoicing) > 0 {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with subscriptions_ids_for_grouped_invoicing").
+			WithHint("Use either inline child creation or existing-subscription conversion, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Inline children require creating a parent, not attaching under an existing parent.
+	// InvoicingCustomerExternalID is allowed (delegated payer for seat fees).
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with parent_subscription_id").
+			WithHint("grouped_invoicing_children_to_create can only be used when creating a parent subscription").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -737,6 +763,11 @@ type SubscriptionResponse struct {
 
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
+
+	// Entitlements is populated only when the caller adds "entitlements" to
+	// the search filter's expand string. Each entry is a feature with its
+	// aggregated entitlement info (same shape as CustomerEntitlementsResponse.Features).
+	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -1526,16 +1557,8 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil {
-		if r.Quantity.IsNegative() {
-			return ierr.NewError("quantity must be non-negative").
-				WithHint("Override quantity cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"quantity": r.Quantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Get original price - it must be available for validation

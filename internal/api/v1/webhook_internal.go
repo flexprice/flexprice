@@ -20,12 +20,25 @@ var _ = []any{
 	(*webhookDto.PaymentWebhookPayload)(nil),
 	(*webhookDto.FeatureWebhookPayload)(nil),
 	(*webhookDto.AlertWebhookPayload)(nil),
+	(*webhookDto.SpendAlertEvent)(nil),
 	(*webhookDto.EntitlementWebhookPayload)(nil),
 	(*webhookDto.WalletWebhookPayload)(nil),
 	(*webhookDto.TransactionWebhookPayload)(nil),
+	(*webhookDto.TransactionUpdatedWebhookPayload)(nil),
 	(*webhookDto.CreditNoteWebhookPayload)(nil),
+	(*webhookDto.CheckoutSessionWebhookPayload)(nil),
 	(*webhookDto.RejectedEventWebhookPayload)(nil),
 }
+
+// WebhookEventInvoiceCreateDrafted godoc
+// @Summary invoice.create.drafted
+// @Description Fired when a new invoice is created in draft state. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.create.drafted [post]
+func WebhookEventInvoiceCreateDrafted() {}
 
 // WebhookEventInvoiceUpdateFinalized godoc
 // @Summary invoice.update.finalized
@@ -166,6 +179,66 @@ func WebhookEventSubscriptionResumed() {}
 // @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.renewal.due [post]
 func WebhookEventSubscriptionRenewalDue() {}
+
+// WebhookEventSubscriptionSpendThresholdReached godoc
+// @Summary subscription.spend.threshold_reached
+// @Description Fired when a subscription's total metered spend crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.spend.threshold_reached [post]
+func WebhookEventSubscriptionSpendThresholdReached() {}
+
+// WebhookEventSubscriptionSpendThresholdRecovered godoc
+// @Summary subscription.spend.threshold_recovered
+// @Description Fired when a subscription's total metered spend falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.spend.threshold_recovered [post]
+func WebhookEventSubscriptionSpendThresholdRecovered() {}
+
+// WebhookEventSubscriptionLineItemSpendThresholdReached godoc
+// @Summary subscription.line_item_spend.threshold_reached
+// @Description Fired when a subscription line item's metered spend crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.line_item_spend.threshold_reached [post]
+func WebhookEventSubscriptionLineItemSpendThresholdReached() {}
+
+// WebhookEventSubscriptionLineItemSpendThresholdRecovered godoc
+// @Summary subscription.line_item_spend.threshold_recovered
+// @Description Fired when a subscription line item's metered spend falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.line_item_spend.threshold_recovered [post]
+func WebhookEventSubscriptionLineItemSpendThresholdRecovered() {}
+
+// WebhookEventSubscriptionGroupSpendThresholdReached godoc
+// @Summary subscription.group_spend.threshold_reached
+// @Description Fired when a feature group's total metered spend on a subscription crosses an alert threshold (critical, warning, or info) for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.group_spend.threshold_reached [post]
+func WebhookEventSubscriptionGroupSpendThresholdReached() {}
+
+// WebhookEventSubscriptionGroupSpendThresholdRecovered godoc
+// @Summary subscription.group_spend.threshold_recovered
+// @Description Fired when a feature group's total metered spend on a subscription falls back below all configured alert thresholds for the current billing period. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Router /webhook-events/subscription.group_spend.threshold_recovered [post]
+func WebhookEventSubscriptionGroupSpendThresholdRecovered() {}
 
 // WebhookEventSubscriptionPhaseCreated godoc
 // @Summary subscription.phase.created
@@ -466,6 +539,46 @@ func WebhookEventCreditNoteCreated() {}
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.updated [post]
 func WebhookEventCreditNoteUpdated() {}
+
+// WebhookEventCheckoutSessionInitiated godoc
+// @Summary checkout.session.initiated
+// @Description Fired when a Checkout Session is created and a payment URL is returned to the customer. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Router /webhook-events/checkout.session.initiated [post]
+func WebhookEventCheckoutSessionInitiated() {}
+
+// WebhookEventCheckoutSessionCompleted godoc
+// @Summary checkout.session.completed
+// @Description Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Router /webhook-events/checkout.session.completed [post]
+func WebhookEventCheckoutSessionCompleted() {}
+
+// WebhookEventCheckoutSessionFailed godoc
+// @Summary checkout.session.failed
+// @Description Fired when payment fails or the provider cancels the payment link. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Router /webhook-events/checkout.session.failed [post]
+func WebhookEventCheckoutSessionFailed() {}
+
+// WebhookEventCheckoutSessionExpired godoc
+// @Summary checkout.session.expired
+// @Description Fired when a Checkout Session times out without payment; draft records are cleaned up. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Router /webhook-events/checkout.session.expired [post]
+func WebhookEventCheckoutSessionExpired() {}
 
 // WebhookEventEventRejected godoc
 // @Summary event.rejected

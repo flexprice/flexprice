@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/usagerecord"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -45,15 +46,17 @@ type UsageRecord struct {
 	Quantity decimal.Decimal `json:"quantity,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount decimal.Decimal `json:"amount,omitempty"`
+	// Currency holds the value of the "currency" field.
+	Currency string `json:"currency,omitempty"`
 	// PeriodStart holds the value of the "period_start" field.
 	PeriodStart time.Time `json:"period_start,omitempty"`
 	// PeriodEnd holds the value of the "period_end" field.
 	PeriodEnd time.Time `json:"period_end,omitempty"`
+	// Synced holds the value of the "synced" field.
+	Synced bool `json:"synced,omitempty"`
 	// Syncs holds the value of the "syncs" field.
-	Syncs map[string]interface{} `json:"syncs,omitempty"`
-	// AllProvidersSynced holds the value of the "all_providers_synced" field.
-	AllProvidersSynced bool `json:"all_providers_synced,omitempty"`
-	selectValues       sql.SelectValues
+	Syncs        map[string]types.UsageRecordSyncEntry `json:"syncs,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -65,9 +68,9 @@ func (*UsageRecord) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case usagerecord.FieldQuantity, usagerecord.FieldAmount:
 			values[i] = new(decimal.Decimal)
-		case usagerecord.FieldAllProvidersSynced:
+		case usagerecord.FieldSynced:
 			values[i] = new(sql.NullBool)
-		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID:
+		case usagerecord.FieldID, usagerecord.FieldTenantID, usagerecord.FieldStatus, usagerecord.FieldCreatedBy, usagerecord.FieldUpdatedBy, usagerecord.FieldEnvironmentID, usagerecord.FieldCustomerID, usagerecord.FieldCustomerExternalID, usagerecord.FieldSubscriptionID, usagerecord.FieldPlanID, usagerecord.FieldCurrency:
 			values[i] = new(sql.NullString)
 		case usagerecord.FieldCreatedAt, usagerecord.FieldUpdatedAt, usagerecord.FieldPeriodStart, usagerecord.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -170,6 +173,12 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				ur.Amount = *value
 			}
+		case usagerecord.FieldCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field currency", values[i])
+			} else if value.Valid {
+				ur.Currency = value.String
+			}
 		case usagerecord.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
@@ -182,6 +191,12 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				ur.PeriodEnd = value.Time
 			}
+		case usagerecord.FieldSynced:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field synced", values[i])
+			} else if value.Valid {
+				ur.Synced = value.Bool
+			}
 		case usagerecord.FieldSyncs:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field syncs", values[i])
@@ -189,12 +204,6 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &ur.Syncs); err != nil {
 					return fmt.Errorf("unmarshal field syncs: %w", err)
 				}
-			}
-		case usagerecord.FieldAllProvidersSynced:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field all_providers_synced", values[i])
-			} else if value.Valid {
-				ur.AllProvidersSynced = value.Bool
 			}
 		default:
 			ur.selectValues.Set(columns[i], values[i])
@@ -271,17 +280,20 @@ func (ur *UsageRecord) String() string {
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", ur.Amount))
 	builder.WriteString(", ")
+	builder.WriteString("currency=")
+	builder.WriteString(ur.Currency)
+	builder.WriteString(", ")
 	builder.WriteString("period_start=")
 	builder.WriteString(ur.PeriodStart.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("period_end=")
 	builder.WriteString(ur.PeriodEnd.Format(time.ANSIC))
 	builder.WriteString(", ")
+	builder.WriteString("synced=")
+	builder.WriteString(fmt.Sprintf("%v", ur.Synced))
+	builder.WriteString(", ")
 	builder.WriteString("syncs=")
 	builder.WriteString(fmt.Sprintf("%v", ur.Syncs))
-	builder.WriteString(", ")
-	builder.WriteString("all_providers_synced=")
-	builder.WriteString(fmt.Sprintf("%v", ur.AllProvidersSynced))
 	builder.WriteByte(')')
 	return builder.String()
 }

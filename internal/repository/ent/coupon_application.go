@@ -395,7 +395,7 @@ func (o CouponApplicationQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 // ApplyStatusFilter applies status filter to the query
 func (o CouponApplicationQueryOptions) ApplyStatusFilter(query CouponApplicationQuery, status string) CouponApplicationQuery {
 	if status == "" {
-		return query.Where(couponapplication.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(couponapplication.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(couponapplication.Status(status))
 }

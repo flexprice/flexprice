@@ -14,6 +14,18 @@ import (
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
+	resp, err := s.addSubscriptionLineItem(ctx, subscriptionID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	return resp, nil
+}
+
+// addSubscriptionLineItem performs the line-item create mutation.
+// Used by flows that already emit subscription.created (or equivalent).
+func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	// 1. Load subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
@@ -273,6 +285,16 @@ func (s *subscriptionService) applySubscriptionScopedLineItemDefaults(lineItem *
 
 // DeleteSubscriptionLineItem marks a line item as deleted by setting its end date
 func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
+	resp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, req)
+	if err != nil {
+		return nil, err
+	}
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
+	return resp, nil
+}
+
+// deleteSubscriptionLineItem performs the line-item terminate mutation without publishing webhooks.
+func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -491,7 +513,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
 				EffectiveFrom: &endDate,
 			}
-			_, err := s.DeleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
+			_, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 			if err != nil {
 				return err
 			}
@@ -549,6 +571,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"end_date", endDate,
 		)
 
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
 		// Update metadata and commitment fields if provided
@@ -596,6 +619,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"subscription_id", sub.ID,
 			"line_item_id", existingLineItem.ID)
 
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: existingLineItem}, nil
 	}
 }
@@ -676,15 +700,16 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 2: Overage factor must be greater than 1.0 when commitment is set
+	// Rule 2: Overage factor must be at least 1.0 when commitment is set.
+	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
 	if lineItem.CommitmentOverageFactor == nil {
 		return ierr.NewError("commitment_overage_factor is required when commitment is set").
-			WithHint("Specify a commitment_overage_factor greater than 1.0").
+			WithHint("Specify a commitment_overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if lineItem.CommitmentOverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("commitment_overage_factor must be greater than 1.0").
+	if lineItem.CommitmentOverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("commitment_overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"commitment_overage_factor": lineItem.CommitmentOverageFactor,

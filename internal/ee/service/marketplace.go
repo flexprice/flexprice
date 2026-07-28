@@ -33,14 +33,51 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		return nil, err
 	}
 
-	providerType := string(types.SecretProviderAWSMarketplace)
+	// req.Provider is already validated against allowedMarketplaceProviders in Validate() above.
+	providerType := string(req.Provider)
+
+	// Pull the provider-specific identifiers out of whichever block Validate() confirmed is set.
+	// Everything downstream — the uniqueness checks and the three createMappingIfAbsent calls —
+	// consumes these four local values and is otherwise identical for both providers.
+	var planProviderEntityID, subProviderEntityID, custProviderEntityID string
+	var planMetadata map[string]interface{}
+	switch req.Provider {
+	case types.SecretProviderAWSMarketplace:
+		planProviderEntityID = req.AWS.ProductCode
+		planMetadata = map[string]interface{}{
+			"concurrent_agreements": req.AWS.ConcurrentAgreements,
+			"dimension":             req.AWS.Dimension,
+		}
+		subProviderEntityID = req.AWS.LicenseArn
+		custProviderEntityID = req.AWS.CustomerAWSAccountID
+	case types.SecretProviderGCPMarketplace:
+		planProviderEntityID = req.GCP.ServiceName
+		planMetadata = map[string]interface{}{
+			"metric_name": req.GCP.MetricName,
+		}
+		subProviderEntityID = req.GCP.UsageReportingID
+		custProviderEntityID = req.GCP.AccountID
+	case types.SecretProviderAzureMarketplace:
+		planProviderEntityID = req.Azure.PlanID
+		planMetadata = map[string]interface{}{
+			"dimension": req.Azure.Dimension,
+		}
+		subProviderEntityID = req.Azure.ResourceID
+		custProviderEntityID = req.Azure.BeneficiaryAccountID
+	}
 
 	// The subscription must already exist and be active; this endpoint never creates subscriptions.
 	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "get_subscription")
 		return nil, err
 	}
 	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"subscription_status", sub.SubscriptionStatus, "error", "subscription is not active", "stage", "validate_subscription")
 		return nil, ierr.NewError("subscription is not active").
 			WithHintf("Subscription %s must be active to register a marketplace agreement", req.SubscriptionID).
 			WithReportableDetails(map[string]any{
@@ -50,34 +87,48 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 			Mark(ierr.ErrValidation)
 	}
 	if sub.CustomerID != req.CustomerID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "customer_id does not match subscription", "stage", "validate_customer")
 		return nil, ierr.NewError("customer_id does not match subscription").
 			WithHintf("Subscription %s belongs to a different customer", req.SubscriptionID).
 			Mark(ierr.ErrValidation)
 	}
 	if sub.PlanID != req.PlanID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "plan_id does not match subscription", "stage", "validate_plan")
 		return nil, ierr.NewError("plan_id does not match subscription").
 			WithHintf("Subscription %s belongs to a different plan", req.SubscriptionID).
 			Mark(ierr.ErrValidation)
 	}
 
-	// A license_arn maps to exactly one subscription. It is stored as the subscription mapping's
-	// provider_entity_id, so look it up directly by that indexed field.
-	existingByLicense, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
+	// The agreement identifier (license_arn for AWS, usage_reporting_id for GCP) maps to exactly one
+	// subscription. It is stored as the subscription mapping's provider_entity_id, so look it up
+	// directly by that indexed field.
+	existingByAgreementID, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:       types.NewNoLimitPublishedQueryFilter(),
 		EntityType:        types.IntegrationEntityTypeSubscription,
 		ProviderTypes:     []string{providerType},
-		ProviderEntityIDs: []string{req.LicenseArn},
+		ProviderEntityIDs: []string{subProviderEntityID},
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "list_agreement_id_mappings")
 		return nil, err
 	}
-	if len(existingByLicense) > 0 && existingByLicense[0].EntityID != req.SubscriptionID {
-		return nil, ierr.NewError("license_arn already registered").
-			WithHintf("AWS license_arn %s is already registered to a different subscription", req.LicenseArn).
+	if len(existingByAgreementID) > 0 && existingByAgreementID[0].EntityID != req.SubscriptionID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"existing_subscription_id", existingByAgreementID[0].EntityID,
+			"error", "agreement identifier already registered to a different subscription", "stage", "validate_agreement_id_uniqueness")
+		return nil, ierr.NewError("agreement identifier already registered").
+			WithHintf("This marketplace agreement identifier is already registered to a different subscription").
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	// A subscription maps to at most one license_arn; it cannot be re-pointed to a different one.
+	// A subscription maps to at most one agreement identifier; it cannot be re-pointed to a different one.
 	existingSubMapping, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
@@ -85,40 +136,43 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		ProviderTypes: []string{providerType},
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "list_subscription_mappings")
 		return nil, err
 	}
-	if len(existingSubMapping) > 0 && existingSubMapping[0].ProviderEntityID != req.LicenseArn {
-		return nil, ierr.NewError("subscription already mapped to a different license_arn").
-			WithHintf("Subscription %s is already registered against a different AWS license_arn", req.SubscriptionID).
+	if len(existingSubMapping) > 0 && existingSubMapping[0].ProviderEntityID != subProviderEntityID {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", "subscription already mapped to a different agreement identifier", "stage", "validate_subscription_uniqueness")
+		return nil, ierr.NewError("subscription already mapped to a different agreement identifier").
+			WithHintf("Subscription %s is already registered against a different marketplace agreement identifier", req.SubscriptionID).
 			Mark(ierr.ErrAlreadyExists)
 	}
 
 	var planMappingID, subMappingID, custMappingID string
 
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Plan mapping carries the plan-level AWS config (product_code + concurrent_agreements +
-		// dimension). It may already exist if another agreement for the same plan was registered
-		// earlier — created once, never updated.
-		planMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypePlan, req.PlanID, req.ProductCode, map[string]interface{}{
-			"concurrent_agreements": req.ConcurrentAgreements,
-			"dimension":             req.Dimension,
-		})
+		// Plan mapping carries the plan-level provider config (AWS: product_code + dimension +
+		// concurrent_agreements; GCP: service_name + metric_name). It may already exist if another
+		// agreement for the same plan was registered earlier — created once, never updated.
+		planMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypePlan, req.PlanID, planProviderEntityID, planMetadata)
 		if txErr != nil {
 			return txErr
 		}
 		planMappingID = planMapping.ID
 
-		// Subscription mapping: license_arn. A new agreement is always a new subscription, so this
-		// is always a fresh row.
-		subMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeSubscription, req.SubscriptionID, req.LicenseArn, nil)
+		// Subscription mapping: the agreement identifier. A new agreement is always a new subscription,
+		// so this is always a fresh row.
+		subMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeSubscription, req.SubscriptionID, subProviderEntityID, nil)
 		if txErr != nil {
 			return txErr
 		}
 		subMappingID = subMapping.ID
 
-		// Customer mapping: customer_aws_account_id. May already exist if the same customer holds an
-		// earlier agreement — created once, never updated.
-		custMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeCustomer, req.CustomerID, req.CustomerAWSAccountID, nil)
+		// Customer mapping: the buyer's account identifier. May already exist if the same customer
+		// holds an earlier agreement — created once, never updated.
+		custMapping, txErr := s.createMappingIfAbsent(txCtx, providerType, types.IntegrationEntityTypeCustomer, req.CustomerID, custProviderEntityID, nil)
 		if txErr != nil {
 			return txErr
 		}
@@ -127,6 +181,9 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		return nil
 	})
 	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "create_mappings")
 		return nil, err
 	}
 

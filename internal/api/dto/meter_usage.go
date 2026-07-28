@@ -40,6 +40,36 @@ func (r *MeterUsageQueryRequest) ToParams(tenantID, environmentID string) *event
 	}
 }
 
+// UsageTotalRequest queries a meter's aggregated usage total over one or more
+// time windows.
+type UsageTotalRequest struct {
+	TenantID            string
+	EnvironmentID       string
+	ExternalCustomerIDs []string
+	MeterID             string
+	AggregationType     types.AggregationType
+	StartTime           time.Time
+	EndTime             time.Time
+	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
+	// disjoint windows measured in one query.
+	TimeRanges []events.TimeRange
+}
+
+// ToParams converts the request to domain query params (FINAL consistency).
+func (r *UsageTotalRequest) ToParams() *events.MeterUsageQueryParams {
+	return &events.MeterUsageQueryParams{
+		TenantID:            r.TenantID,
+		EnvironmentID:       r.EnvironmentID,
+		ExternalCustomerIDs: r.ExternalCustomerIDs,
+		MeterID:             r.MeterID,
+		StartTime:           r.StartTime,
+		EndTime:             r.EndTime,
+		TimeRanges:          r.TimeRanges,
+		AggregationType:     r.AggregationType,
+		UseFinal:            true,
+	}
+}
+
 // MeterUsageQueryResponse is the response for single-meter query
 type MeterUsageQueryResponse struct {
 	MeterID         string                `json:"meter_id" example:"mtr_abc"`

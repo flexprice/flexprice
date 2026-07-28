@@ -64,11 +64,17 @@ func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
 	}
 
 	changed := make([]dto.ChangedSubscription, 0, len(params.ChildSubscriptionIDs))
+	parentPromoted := false
+	parentWasStandalone := parentSub != nil && parentSub.SubscriptionType == types.SubscriptionTypeStandalone
+
 	err := s.serviceParams.DB.WithTx(ctx, func(txCtx context.Context) error {
 		for _, childID := range params.ChildSubscriptionIDs {
 			var opErr error
 			if params.Action == dto.GroupedInvoicingActionAdd {
 				opErr = subSvc.addToGroupedInvoicing(txCtx, parentSub, childID)
+				if opErr == nil && parentWasStandalone && parentSub.SubscriptionType == types.SubscriptionTypeParent {
+					parentPromoted = true
+				}
 			} else {
 				opErr = subSvc.removeFromGroupedInvoicing(txCtx, childID)
 			}
@@ -85,6 +91,13 @@ func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	for _, c := range changed {
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, c.ID)
+	}
+	if parentPromoted && params.ParentSubscriptionID != "" {
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.ParentSubscriptionID)
 	}
 
 	return &dto.SubscriptionModifyResponse{

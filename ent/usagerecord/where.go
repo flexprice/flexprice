@@ -130,6 +130,11 @@ func Amount(v decimal.Decimal) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldAmount, v))
 }
 
+// Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
+func Currency(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldCurrency, v))
+}
+
 // PeriodStart applies equality check predicate on the "period_start" field. It's identical to PeriodStartEQ.
 func PeriodStart(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldPeriodStart, v))
@@ -140,9 +145,9 @@ func PeriodEnd(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
-// AllProvidersSynced applies equality check predicate on the "all_providers_synced" field. It's identical to AllProvidersSyncedEQ.
-func AllProvidersSynced(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
+// Synced applies equality check predicate on the "synced" field. It's identical to SyncedEQ.
+func Synced(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -930,6 +935,71 @@ func AmountLTE(v decimal.Decimal) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldLTE(FieldAmount, v))
 }
 
+// CurrencyEQ applies the EQ predicate on the "currency" field.
+func CurrencyEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldCurrency, v))
+}
+
+// CurrencyNEQ applies the NEQ predicate on the "currency" field.
+func CurrencyNEQ(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldCurrency, v))
+}
+
+// CurrencyIn applies the In predicate on the "currency" field.
+func CurrencyIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldIn(FieldCurrency, vs...))
+}
+
+// CurrencyNotIn applies the NotIn predicate on the "currency" field.
+func CurrencyNotIn(vs ...string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNotIn(FieldCurrency, vs...))
+}
+
+// CurrencyGT applies the GT predicate on the "currency" field.
+func CurrencyGT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGT(FieldCurrency, v))
+}
+
+// CurrencyGTE applies the GTE predicate on the "currency" field.
+func CurrencyGTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldGTE(FieldCurrency, v))
+}
+
+// CurrencyLT applies the LT predicate on the "currency" field.
+func CurrencyLT(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLT(FieldCurrency, v))
+}
+
+// CurrencyLTE applies the LTE predicate on the "currency" field.
+func CurrencyLTE(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldLTE(FieldCurrency, v))
+}
+
+// CurrencyContains applies the Contains predicate on the "currency" field.
+func CurrencyContains(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContains(FieldCurrency, v))
+}
+
+// CurrencyHasPrefix applies the HasPrefix predicate on the "currency" field.
+func CurrencyHasPrefix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasPrefix(FieldCurrency, v))
+}
+
+// CurrencyHasSuffix applies the HasSuffix predicate on the "currency" field.
+func CurrencyHasSuffix(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldHasSuffix(FieldCurrency, v))
+}
+
+// CurrencyEqualFold applies the EqualFold predicate on the "currency" field.
+func CurrencyEqualFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEqualFold(FieldCurrency, v))
+}
+
+// CurrencyContainsFold applies the ContainsFold predicate on the "currency" field.
+func CurrencyContainsFold(v string) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldContainsFold(FieldCurrency, v))
+}
+
 // PeriodStartEQ applies the EQ predicate on the "period_start" field.
 func PeriodStartEQ(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldEQ(FieldPeriodStart, v))
@@ -1010,6 +1080,16 @@ func PeriodEndLTE(v time.Time) predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldLTE(FieldPeriodEnd, v))
 }
 
+// SyncedEQ applies the EQ predicate on the "synced" field.
+func SyncedEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldEQ(FieldSynced, v))
+}
+
+// SyncedNEQ applies the NEQ predicate on the "synced" field.
+func SyncedNEQ(v bool) predicate.UsageRecord {
+	return predicate.UsageRecord(sql.FieldNEQ(FieldSynced, v))
+}
+
 // SyncsIsNil applies the IsNil predicate on the "syncs" field.
 func SyncsIsNil() predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldIsNull(FieldSyncs))
@@ -1018,16 +1098,6 @@ func SyncsIsNil() predicate.UsageRecord {
 // SyncsNotNil applies the NotNil predicate on the "syncs" field.
 func SyncsNotNil() predicate.UsageRecord {
 	return predicate.UsageRecord(sql.FieldNotNull(FieldSyncs))
-}
-
-// AllProvidersSyncedEQ applies the EQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldEQ(FieldAllProvidersSynced, v))
-}
-
-// AllProvidersSyncedNEQ applies the NEQ predicate on the "all_providers_synced" field.
-func AllProvidersSyncedNEQ(v bool) predicate.UsageRecord {
-	return predicate.UsageRecord(sql.FieldNEQ(FieldAllProvidersSynced, v))
 }
 
 // And groups predicates with the AND operator between them.
