@@ -653,6 +653,50 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 	s.NoError(err)
 }
 
+// TestAddSubscriptionLineItem_PublishesLineItemCreatedEvent guards against regressing the
+// subscription.line_item.created webhook that AddSubscriptionLineItem now publishes directly,
+// now that the underlying addSubscriptionLineItem helper no longer triggers HubSpot sync inline.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_PublishesLineItemCreatedEvent() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(2),
+		SkipEntitlementCheck: true,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var lineItemCreatedEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			lineItemCreatedEvents = append(lineItemCreatedEvents, evt)
+		}
+	}
+	s.Require().Len(lineItemCreatedEvents, 1, "expected exactly 1 subscription.line_item.created event")
+	s.Equal(resp.SubscriptionLineItem.ID, lineItemCreatedEvents[0].EntityID)
+}
+
 // TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity verifies that when an
 // inline price has min_quantity=5, sending quantity=0 stores quantity=5 (the min_quantity default).
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_InlinePriceZeroDefaultsToMinQuantity() {
