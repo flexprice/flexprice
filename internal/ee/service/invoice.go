@@ -26,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -73,6 +74,9 @@ type InvoiceService interface {
 	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	ListAllTenantDraftInvoices(ctx context.Context, batchSize, offset int) ([]*invoice.Invoice, error)
+
+	// ListSubscriptionsDueForDailyDraftCompute returns subscriptions due for daily processing.
+	ListSubscriptionsDueForDailyDraftCompute(ctx context.Context) ([]*subscription.Subscription, error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 
@@ -1119,6 +1123,67 @@ func (s *invoiceService) ListAllTenantDraftInvoices(ctx context.Context, batchSi
 		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
 	}
 	return s.InvoiceRepo.ListAllTenant(ctx, filter)
+}
+
+// ListSubscriptionsDueForDailyDraftCompute skips invalid tenant environments.
+func (s *invoiceService) ListSubscriptionsDueForDailyDraftCompute(
+	ctx context.Context,
+) ([]*subscription.Subscription, error) {
+	tenantEnvConfigs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	const batchSize = 1000
+	var due []*subscription.Subscription
+
+	for _, tenantEnvConfig := range tenantEnvConfigs {
+		cfg, err := utils.ToStruct[types.DraftInvoiceRecomputeConfig](tenantEnvConfig.Config)
+		if err != nil {
+			s.Logger.Info(ctx, "skipping tenant with malformed draft_invoice_recompute_config",
+				"tenant_id", tenantEnvConfig.TenantID,
+				"environment_id", tenantEnvConfig.EnvironmentID,
+				"error", err)
+			continue
+		}
+		if !cfg.Enabled {
+			continue
+		}
+
+		tenantCtx := types.SetTenantID(ctx, tenantEnvConfig.TenantID)
+		tenantCtx = types.SetEnvironmentID(tenantCtx, tenantEnvConfig.EnvironmentID)
+
+		offset := 0
+		for {
+			filter := types.NewSubscriptionFilter()
+			filter.Limit = lo.ToPtr(batchSize)
+			filter.Offset = lo.ToPtr(offset)
+			filter.Status = lo.ToPtr(types.StatusPublished)
+			filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+			subs, err := s.SubRepo.List(tenantCtx, filter)
+			if err != nil {
+				s.Logger.Error(ctx, "failed to list subscriptions for daily draft-and-compute",
+					"tenant_id", tenantEnvConfig.TenantID,
+					"environment_id", tenantEnvConfig.EnvironmentID,
+					"error", err)
+				break
+			}
+			if len(subs) == 0 {
+				break
+			}
+
+			due = append(due, lo.Filter(subs, func(sub *subscription.Subscription, _ int) bool {
+				return !sub.CurrentPeriodStart.IsZero() && !sub.CurrentPeriodEnd.IsZero()
+			})...)
+
+			if len(subs) < batchSize {
+				break
+			}
+			offset += batchSize
+		}
+	}
+
+	return due, nil
 }
 
 // updateMetadata merges the request metadata with the existing invoice metadata.

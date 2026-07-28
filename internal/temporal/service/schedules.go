@@ -113,6 +113,14 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.MarketplaceUsageReportWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDDailyDraftAndCompute,
+			Interval:  24 * time.Hour,
+			Offset:    2 * time.Hour, // fires at 02:00 UTC daily
+			Workflow:  cronWorkflows.DailyDraftAndComputeWorkflow,
+			Input:     models.DailyDraftAndComputeWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 
@@ -134,7 +142,10 @@ func ensureOneSchedule(ctx context.Context, tc client.TemporalClient, cfg types.
 
 	spec := sdkclient.ScheduleSpec{
 		Intervals: []sdkclient.ScheduleIntervalSpec{
-			{Every: cfg.Interval},
+			{
+				Every:  cfg.Interval,
+				Offset: cfg.Offset,
+			},
 		},
 	}
 

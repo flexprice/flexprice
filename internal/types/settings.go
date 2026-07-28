@@ -19,18 +19,19 @@ type SettingConfig interface {
 type SettingKey string
 
 const (
-	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
-	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
-	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
-	SettingKeyTenantConfig             SettingKey = "tenant_config"
-	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
-	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
-	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
-	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
-	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
-	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
-	SettingKeyBonusCreditsTopupConfig  SettingKey = "bonus_credits_topup_config"
-	SettingKeyPaymentMandateLimits     SettingKey = "payment_mandate_limits"
+	SettingKeyInvoiceConfig               SettingKey = "invoice_config"
+	SettingKeySubscriptionConfig          SettingKey = "subscription_config"
+	SettingKeyInvoicePDFConfig            SettingKey = "invoice_pdf_config"
+	SettingKeyTenantConfig                SettingKey = "tenant_config"
+	SettingKeyCustomerOnboarding          SettingKey = "customer_onboarding"
+	SettingKeyWalletBalanceAlertConfig    SettingKey = "wallet_balance_alert_config"
+	SettingKeyPrepareProcessedEvents      SettingKey = "prepare_processed_events_config"
+	SettingKeyCustomAnalytics             SettingKey = "custom_analytics_config"
+	SettingKeyCustomerPortalConfig        SettingKey = "customer_portal_config"
+	SettingKeyEventIngestionFilter        SettingKey = "event_ingestion_filter"
+	SettingKeyBonusCreditsTopupConfig     SettingKey = "bonus_credits_topup_config"
+	SettingKeyPaymentMandateLimits        SettingKey = "payment_mandate_limits"
+	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -48,6 +49,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyEventIngestionFilter,
 		SettingKeyBonusCreditsTopupConfig,
 		SettingKeyPaymentMandateLimits,
+		SettingKeyDraftInvoiceRecomputeConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -497,6 +499,16 @@ func (c PaymentMandateLimits) Validate() error {
 	return nil
 }
 
+// DraftInvoiceRecomputeConfig enables daily draft invoice recomputation.
+type DraftInvoiceRecomputeConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Validate implements SettingConfig.
+func (c DraftInvoiceRecomputeConfig) Validate() error {
+	return nil
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -671,6 +683,14 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultDraftInvoiceRecomputeConfig := DraftInvoiceRecomputeConfig{
+		Enabled: false,
+	}
+	defaultDraftInvoiceRecomputeConfigMap, err := utils.ToMap(defaultDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
@@ -733,6 +753,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyPaymentMandateLimits,
 			DefaultValue: defaultPaymentMandateLimitsMap,
 			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
+		},
+		SettingKeyDraftInvoiceRecomputeConfig: {
+			Key:          SettingKeyDraftInvoiceRecomputeConfig,
+			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
+			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
 		},
 	}, nil
 }
@@ -849,6 +874,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyPaymentMandateLimits:
 		config, err := utils.ToStruct[PaymentMandateLimits](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyDraftInvoiceRecomputeConfig:
+		config, err := utils.ToStruct[DraftInvoiceRecomputeConfig](value)
 		if err != nil {
 			return err
 		}

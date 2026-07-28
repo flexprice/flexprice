@@ -60,6 +60,7 @@ type cronActivityBundle struct {
 	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
 	marketplaceSnapshot          *marketplaceActivities.SnapshotActivities
 	marketplaceReport            *marketplaceActivities.ReportActivities
+	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -315,6 +316,7 @@ func RegisterWorkflowsAndActivities(
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 		marketplaceSnapshot:          marketplaceSnapshotActivities,
 		marketplaceReport:            marketplaceReportActivities,
+		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -548,6 +550,7 @@ func buildWorkerConfig(
 			cronWorkflows.CheckoutSessionExpiryWorkflow,
 			cronWorkflows.MarketplaceUsageSnapshotWorkflow,
 			cronWorkflows.MarketplaceUsageReportWorkflow,
+			cronWorkflows.DailyDraftAndComputeWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -564,6 +567,17 @@ func buildWorkerConfig(
 			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
 			cron.marketplaceSnapshot.MarketplaceUsageSnapshotActivity,
 			cron.marketplaceReport.MarketplaceUsageReportActivity,
+			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
+		)
+
+	case types.TemporalTaskQueueBilling:
+		// Isolate bulk daily invoice work from interactive requests.
+		workflowsList = append(workflowsList,
+			invoiceWorkflows.DraftAndComputeSubscriptionInvoiceWorkflow,
+		)
+		activitiesList = append(activitiesList,
+			invoiceActs.CreateDraftForCurrentSubscriptionPeriodActivity,
+			invoiceActs.ComputeInvoiceActivity,
 		)
 	}
 	return WorkerConfig{

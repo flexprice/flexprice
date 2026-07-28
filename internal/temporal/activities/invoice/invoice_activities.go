@@ -98,6 +98,13 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
 	)
 	if err != nil {
+		if input.SkipIfAlreadyInvoiced && ierr.IsAlreadyExists(err) {
+			s.logger.Info(ctx, "current period already invoiced, skipping (SkipIfAlreadyInvoiced=true)",
+				"subscription_id", input.SubscriptionID)
+			return &invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput{
+				Skipped: true,
+			}, nil
+		}
 		s.logger.Error(ctx, "failed to create draft invoice for subscription current period",
 			"subscription_id", input.SubscriptionID,
 			"error", err)

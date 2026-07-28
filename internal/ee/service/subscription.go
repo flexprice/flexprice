@@ -7158,6 +7158,13 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 
 // TriggerSubscriptionDraftAndComputeWorkflow starts DraftAndComputeSubscriptionInvoiceWorkflow: idempotent draft for the subscription's current period, then compute.
 func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error) {
+	return s.TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx, subscriptionID, interfaces.DraftAndComputeOptions{})
+}
+
+// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
+func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOptions(
+	ctx context.Context, subscriptionID string, opts interfaces.DraftAndComputeOptions,
+) (*dto.TriggerSubscriptionWorkflowResponse, error) {
 	if subscriptionID == "" {
 		return nil, ierr.NewError("subscription_id is required").
 			WithHint("Please provide a valid subscription ID").
@@ -7172,13 +7179,15 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx con
 		"subscription_id", subscriptionID,
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
-		"user_id", userID)
+		"user_id", userID,
+		"skip_if_already_invoiced", opts.SkipIfAlreadyInvoiced)
 
 	workflowInput := invoiceTemporalModels.DraftAndComputeSubscriptionInvoiceWorkflowInput{
-		SubscriptionID: subscriptionID,
-		TenantID:       tenantID,
-		EnvironmentID:  environmentID,
-		UserID:         userID,
+		SubscriptionID:        subscriptionID,
+		TenantID:              tenantID,
+		EnvironmentID:         environmentID,
+		UserID:                userID,
+		SkipIfAlreadyInvoiced: opts.SkipIfAlreadyInvoiced,
 	}
 	if err := workflowInput.Validate(); err != nil {
 		return nil, ierr.WithError(err).WithHint("Invalid workflow input").Mark(ierr.ErrValidation)
