@@ -81,7 +81,7 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
-		RedisCache:                   testutil.NewInMemoryRedis(),
+		RedisCache:                   s.GetRedisCache(),
 		WalletRepo:                   stores.WalletRepo,
 		SubRepo:                      stores.SubscriptionRepo,
 		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,
@@ -2306,7 +2306,10 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			s.setupWallet()
 			// Each case models exactly one entitlement on (plan, feat_api_calls);
 			// the DB allows only one published entitlement per (entity, feature).
+			// These cases write entitlements straight to the repo, so the plan-entitlements
+			// cache (populated by the previous case) has to be dropped by hand.
 			s.GetStores().EntitlementRepo.(*testutil.InMemoryEntitlementStore).Clear()
+			s.GetRedisCache().Flush(s.GetContext())
 			if tt.setupFunc != nil {
 				tt.setupFunc()
 			}
