@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	clickhousego "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -136,25 +137,39 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 	// })
 	// defer FinishSpan(span)
 
-	// split events in batches of 100
-	eventsBatches := lo.Chunk(events, 100)
+	// The async-insert settings go through the driver context, NOT a SETTINGS
+	// clause on the statement. PrepareBatch sends an INSERT header and then
+	// streams row blocks over the native protocol; a trailing SETTINGS clause in
+	// that statement text is never applied as query settings. Verified against
+	// Sarvam production on 2026-07-28 for the identical pattern in
+	// meter_usage.go: system.query_log showed Settings['async_insert'] and
+	// Settings['wait_for_async_insert'] EMPTY on every insert, so the server-level
+	// wait_for_async_insert = 1 applied and each insert blocked on the ack.
+	ctx = clickhousego.Context(ctx, clickhousego.WithSettings(clickhousego.Settings{
+		"async_insert":          1,
+		"wait_for_async_insert": 0,
+	}))
 
-	for _, eventsBatch := range eventsBatches {
-		// Prepare batch statement
-		batch, err := r.store.GetConn().PrepareBatch(ctx, `
+	// One PrepareBatch/Send for the whole slice. This used to chunk at 100 rows
+	// and issue a separate round-trip per chunk, sequentially, which turns a
+	// caller-side batch into N serial round-trips to ClickHouse Cloud over
+	// PrivateLink inside one caller timeout. The driver streams rows into a
+	// single block, so one Send is both correct and the point of bulk insert.
+	batch, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO events (
 			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
-		) SETTINGS async_insert = 1, wait_for_async_insert = 0
+		)
 	`)
-		if err != nil {
-			// SetSpanError(span, err)
-			return ierr.WithError(err).
-				WithHint("Failed to prepare batch for events").
-				Mark(ierr.ErrDatabase)
-		}
+	if err != nil {
+		// SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to prepare batch for events").
+			Mark(ierr.ErrDatabase)
+	}
 
+	{
 		// Validate all events before inserting
-		for _, event := range eventsBatch {
+		for _, event := range events {
 			if err := event.Validate(); err != nil {
 				// SetSpanError(span, err)
 				return err

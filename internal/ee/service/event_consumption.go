@@ -47,6 +47,32 @@ type eventConsumptionService struct {
 	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
+
+	// insertBatchers coalesces raw events from concurrently-processed Kafka
+	// messages into one ClickHouse INSERT, keyed by (tenant, environment) so a
+	// batch never spans tenants. Nil when batching is disabled
+	// (InsertBatchSize <= 1), in which case processEvent inserts directly.
+	//
+	// Without this each Kafka message issued its own INSERT: measured in Sarvam
+	// production on 2026-07-28 at 7,614 inserts/min carrying 1.0 rows each, 3.6x
+	// the insert count of the batched meter_usage path for the same row volume,
+	// which saturated the ClickHouse async-insert buffer (PendingAsyncInsert
+	// 4,903, insert latency 22ms -> 237ms) and slowed both consumers.
+	insertBatchers *batcherGroup[*events.Event]
+}
+
+// insertEvents writes events through the batcher when one is configured, and
+// directly otherwise. Either way it blocks until the rows are durable, so the
+// caller can safely treat a nil return as "safe to ack".
+func (s *eventConsumptionService) insertEvents(ctx context.Context, toInsert []*events.Event) error {
+	if len(toInsert) == 0 {
+		return nil
+	}
+	if s.insertBatchers == nil {
+		return s.eventRepo.BulkInsertEvents(ctx, toInsert)
+	}
+	batchKey := types.GetTenantID(ctx) + ":" + types.GetEnvironmentID(ctx)
+	return s.insertBatchers.Add(ctx, batchKey, toInsert)
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -59,6 +85,30 @@ func NewEventConsumptionService(
 		ServiceParams:  params,
 		eventRepo:      eventRepo,
 		tracingService: tracingService,
+	}
+
+	// batchSize <= 1 keeps the original one-INSERT-per-message behaviour, which
+	// is the escape hatch if batching ever needs to be disabled without a
+	// rollback. Shares MeterUsageTracking's batching knobs so both consumer
+	// paths are tuned by one set of env vars.
+	if batchSize := params.Config.MeterUsageTracking.InsertBatchSize; batchSize > 1 {
+		maxDelay := params.Config.MeterUsageTracking.InsertBatchMaxDelay
+		if maxDelay <= 0 {
+			maxDelay = time.Second
+		}
+		flushTimeout := params.Config.MeterUsageTracking.InsertFlushTimeout
+		ev.insertBatchers = newBatcherGroup(context.Background(), batchSize, maxDelay, flushTimeout,
+			func(ctx context.Context, batch []*events.Event) error {
+				return eventRepo.BulkInsertEvents(ctx, batch)
+			})
+		// Warn, not Info: prod runs at FLEXPRICE_LOGGING_LEVEL=warn, so an Info
+		// line here is invisible exactly where confirming the batching config
+		// matters most.
+		params.Logger.Warn(context.Background(), "event consumption insert batching enabled",
+			"batch_size", batchSize,
+			"max_delay", maxDelay,
+			"flush_timeout", flushTimeout,
+		)
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -386,7 +436,13 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 		"events_to_insert_count", len(eventsToInsert),
 	)
 
-	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+	// When batching is enabled this blocks until the batch containing these
+	// events has actually been written to ClickHouse, and returns that write's
+	// error. That ordering is what keeps delivery at-least-once: the handler only
+	// returns nil (and Watermill only acks, committing the Kafka offset) after
+	// the rows are durable. Batches are keyed by (tenant, environment) so rows
+	// from different tenants are never coalesced into the same INSERT.
+	if err := s.insertEvents(ctx, eventsToInsert); err != nil {
 		s.Logger.Error(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
@@ -459,8 +515,9 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		eventsToInsert = append(eventsToInsert, billingEvent)
 	}
 
-	// Insert events into ClickHouse
-	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+	// Insert events into ClickHouse. Same batching path as processEvent: blocks
+	// until the rows are durable before the caller may ack.
+	if err := s.insertEvents(ctx, eventsToInsert); err != nil {
 		s.Logger.Error(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
