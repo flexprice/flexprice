@@ -16075,22 +16075,21 @@
             ],
             "properties": {
                 "addons": {
-                    "description": "Addons represents addons to be added to the subscription during creation",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/AddAddonToSubscriptionRequest"
                     }
                 },
                 "auto_invoice_threshold": {
-                    "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice mid-period. Set once at creation; cannot be changed later.\nAllowed only when the subscription resolves to type standalone (no parent hierarchy rows).\nPlan line items must be usage-based only (no fixed or other non-usage plan prices).\nNil means auto invoice threshold billing is disabled for this subscription.",
+                    "description": "AutoInvoiceThreshold triggers a mid-period invoice when usage (in subscription currency) exceeds this amount.\nStandalone subscriptions only; all plan prices must be usage-based. Immutable after creation.",
                     "type": "string"
                 },
                 "billing_anchor": {
-                    "description": "BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.\nFor monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date\nis before that day in the month, the first billing period ends on the next occurrence of that\nday in the same month (a shorter first period); subsequent periods follow the usual interval.",
+                    "description": "BillingAnchor overrides the derived anchor for anniversary billing. For monthly billing,\nthe day-of-month defines cycle boundaries (shorter first period if start is before that day).",
                     "type": "string"
                 },
                 "billing_cycle": {
-                    "description": "BillingCycle is the cycle of the billing anchor.\nThis is used to determine the billing date for the subscription (i.e set the billing anchor)\nIf not set, the default value is anniversary. Possible values are anniversary and calendar.\nAnniversary billing means the billing anchor will be the start date of the subscription.\nCalendar billing means the billing anchor will be the appropriate date based on the billing period.\nFor example, if the billing period is month and the start date is 2025-04-15 then in case of\ncalendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.",
+                    "description": "BillingCycle controls the billing anchor. anniversary = start_date; calendar = period boundary\n(e.g. monthly with start 2025-04-15 → calendar anchor is 2025-05-01).",
                     "$ref": "#/definitions/types.BillingCycle"
                 },
                 "billing_period": {
@@ -16101,15 +16100,13 @@
                     "default": 1
                 },
                 "collection_method": {
-                    "description": "collection_method determines how invoices are collected\n\"default_incomplete\" - subscription waits for payment confirmation before activation\n\"send_invoice\" - subscription activates immediately, invoice is sent for payment",
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
-                    "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)",
+                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "coupons": {
@@ -16120,7 +16117,6 @@
                     }
                 },
                 "credit_grants": {
-                    "description": "Credit grants to be applied when subscription is created",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CreateCreditGrantRequest"
@@ -16130,29 +16126,27 @@
                     "type": "string"
                 },
                 "customer_id": {
-                    "description": "customer_id is the flexprice customer id\nand it is prioritized over external_customer_id in case both are provided.",
+                    "description": "CustomerID takes priority over ExternalCustomerID when both are provided.",
                     "type": "string"
                 },
                 "enable_true_up": {
-                    "description": "Enable Commitment True Up Fee",
                     "type": "boolean"
                 },
                 "end_date": {
                     "type": "string"
                 },
                 "external_customer_id": {
-                    "description": "external_customer_id is the customer id in your DB\nand must be same as what you provided as external_id while creating the customer in flexprice.",
                     "type": "string"
                 },
                 "gateway_payment_method_id": {
                     "type": "string"
                 },
                 "inheritance": {
-                    "description": "Inheritance groups all customer-hierarchy fields.\nWhen provided with at least one child ID, the subscription becomes a PARENT type.",
+                    "description": "Inheritance groups customer-hierarchy fields; providing child IDs makes this a PARENT subscription.",
                     "$ref": "#/definitions/SubscriptionInheritanceConfig"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per line item (keyed by price_id)",
+                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -16169,7 +16163,7 @@
                     }
                 },
                 "line_items": {
-                    "description": "LineItems are extra line items to add at creation (each with price_id or price), in addition to plan prices",
+                    "description": "LineItems are extra (non-plan) line items added at creation.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CreateSubscriptionLineItemRequest"
@@ -16185,33 +16179,28 @@
                     }
                 },
                 "overage_factor": {
-                    "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
                     "type": "string"
                 },
                 "override_entitlements": {
-                    "description": "OverrideEntitlements allows customizing specific entitlements for this subscription",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/OverrideEntitlementRequest"
                     }
                 },
                 "override_line_items": {
-                    "description": "OverrideLineItems allows customizing specific prices for this subscription",
+                    "description": "OverrideLineItems overrides specific plan prices for this subscription.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/OverrideLineItemRequest"
                     }
                 },
                 "payment_behavior": {
-                    "description": "Payment behavior configuration",
                     "$ref": "#/definitions/types.PaymentBehavior"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
                     "$ref": "#/definitions/types.PaymentTerms"
                 },
                 "phases": {
-                    "description": "Phases represents subscription phases to be created with the subscription",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SubscriptionPhaseCreateRequest"
@@ -16221,7 +16210,7 @@
                     "type": "string"
                 },
                 "proration_behavior": {
-                    "description": "ProrationBehavior controls how proration is handled.\nIf not set, the default value is none. Possible values are create_prorations and none.\ncreate_prorations means the proration will be calculated and applied.\nnone means the proration will not be calculated.\nThis is IGNORED when the billing cycle is anniversary.",
+                    "description": "ProrationBehavior: create_prorations or none (default). Ignored for anniversary billing.",
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "start_date": {
@@ -16235,22 +16224,20 @@
                     }
                 },
                 "subscription_status": {
-                    "description": "SubscriptionStatus determines the initial status of the subscription\nIf set to \"draft\", the subscription will be created as a draft (skips invoice creation and payment processing)",
+                    "description": "SubscriptionStatus: set to \"draft\" to skip invoice creation and payment on create.",
                     "$ref": "#/definitions/types.SubscriptionStatus"
                 },
                 "tax_rate_overrides": {
-                    "description": "tax_rate_overrides is the tax rate overrides\tto be applied to the subscription",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/TaxRateOverride"
                     }
                 },
                 "timezone": {
-                    "description": "Timezone of the customer.\nIf not set, the default value is UTC.",
                     "type": "string"
                 },
                 "trial_period_days": {
-                    "description": "TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).\n0 = explicitly no trial (overrides catalog). \u003e0 = override duration in days.",
+                    "description": "TrialPeriodDays: nil = inherit from plan prices, 0 = no trial, \u003e0 = override in days.",
                     "type": "integer"
                 }
             }
@@ -18158,11 +18145,103 @@
                 "plan_id"
             ],
             "properties": {
+                "addons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AddAddonToSubscriptionRequest"
+                    }
+                },
+                "commitment_amount": {
+                    "type": "string"
+                },
+                "commitment_duration": {
+                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "credit_grants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateCreditGrantRequest"
+                    }
+                },
+                "enable_true_up": {
+                    "type": "boolean"
+                },
                 "external_customer_id": {
                     "type": "string"
                 },
+                "line_item_commitments": {
+                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/LineItemCommitmentConfig"
+                    }
+                },
+                "line_item_coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "line_items": {
+                    "description": "LineItems are extra (non-plan) line items added at creation.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateSubscriptionLineItemRequest"
+                    }
+                },
+                "overage_factor": {
+                    "type": "string"
+                },
+                "override_entitlements": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/OverrideEntitlementRequest"
+                    }
+                },
+                "override_line_items": {
+                    "description": "OverrideLineItems overrides specific plan prices for this subscription.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/OverrideLineItemRequest"
+                    }
+                },
+                "phases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionPhaseCreateRequest"
+                    }
+                },
                 "plan_id": {
                     "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
+                "tax_rate_overrides": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/TaxRateOverride"
+                    }
+                },
+                "trial_period_days": {
+                    "description": "TrialPeriodDays: nil = inherit from plan prices, 0 = no trial, \u003e0 = override in days.",
+                    "type": "integer"
                 }
             }
         },
@@ -18679,38 +18758,35 @@
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "CommitmentAmount is the minimum amount committed for this line item",
                     "type": "number"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)",
+                    "description": "CommitmentDuration allows a different period than billing (e.g. ANNUAL commitment on MONTHLY billing).",
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "commitment_quantity": {
-                    "description": "CommitmentQuantity is the minimum quantity committed for this line item",
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "CommitmentTimeBuckets defines per-bucket commitment + inline price for\nwindows whose start UTC hour falls within each configured bucket. Each\nbucket carries its own price (materialized by the service). Requires\nIsWindowCommitment=true.",
+                    "description": "CommitmentTimeBuckets scopes commitment to specific UTC-hour windows; requires IsWindowCommitment=true.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_type": {
-                    "description": "CommitmentType specifies whether commitment is based on amount or quantity",
                     "$ref": "#/definitions/types.CommitmentType"
                 },
                 "enable_true_up": {
-                    "description": "EnableTrueUp determines if true-up fee should be applied when usage is below commitment",
+                    "description": "EnableTrueUp charges the shortfall when usage is below commitment.",
                     "type": "boolean"
                 },
                 "is_window_commitment": {
-                    "description": "IsWindowCommitment determines if commitment is applied per window (e.g., per day) rather than per billing period",
+                    "description": "IsWindowCommitment applies commitment per window (e.g. per day) rather than per billing period.",
                     "type": "boolean"
                 },
                 "overage_factor": {
-                    "description": "OverageFactor is a multiplier applied to usage beyond the commitment",
+                    "description": "OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate.",
                     "type": "number"
                 }
             }
@@ -19713,7 +19789,7 @@
                     "type": "string"
                 },
                 "effective_date": {
-                    "description": "EffectiveDate is the date the cancellation takes effect.\nWhen nil the addon is cancelled at the end of the current period.\nWhen provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period\nvalues combined with create_prorations will issue a wallet credit for unused time.",
+                    "description": "EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.",
                     "type": "string"
                 },
                 "proration_behavior": {
@@ -20168,19 +20244,15 @@
             ],
             "properties": {
                 "coupon_code": {
-                    "description": "CouponCode is the coupon's human-readable code (case-insensitive). Required.",
                     "type": "string"
                 },
                 "end_date": {
-                    "description": "EndDate is when the coupon ends; overrides duration_in_periods calculation.",
                     "type": "string"
                 },
                 "price_id": {
-                    "description": "PriceID is the price ID of the line item to target; omit for subscription-level.",
                     "type": "string"
                 },
                 "start_date": {
-                    "description": "StartDate is when the coupon starts; defaults to subscription/phase StartDate.",
                     "type": "string"
                 }
             }
@@ -20206,29 +20278,28 @@
             "type": "object",
             "properties": {
                 "external_customer_ids_to_inherit_subscription": {
-                    "description": "ExternalCustomerIDsToInheritSubscription: child customer external IDs for which\ninherited skeleton subscriptions will be created. Only valid for parent behavior.",
+                    "description": "ExternalCustomerIDsToInheritSubscription creates inherited skeleton subscriptions for child customers. Parent only.",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
                 "grouped_invoicing_children_to_create": {
-                    "description": "grouped_invoicing_children_to_create creates new grouped_invoicing children under this parent",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/GroupedInvoicingChildRequest"
                     }
                 },
                 "invoicing_customer_external_id": {
-                    "description": "InvoicingCustomerExternalID sets a different billing recipient (external ID).\nRequired for delegated; rejected for inherited; optional for others.",
+                    "description": "InvoicingCustomerExternalID routes invoices to a different customer. Required for delegated; rejected for inherited.",
                     "type": "string"
                 },
                 "parent_subscription_id": {
-                    "description": "ParentSubscriptionID links this subscription to an existing parent.\nRequired for inherited and grouped_invoicing; rejected for standalone, delegated, parent.",
+                    "description": "ParentSubscriptionID links to an existing parent. Required for inherited/grouped_invoicing; rejected for standalone/delegated/parent.",
                     "type": "string"
                 },
                 "subscriptions_ids_for_grouped_invoicing": {
-                    "description": "SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to\ngrouped_invoicing under this parent at creation time. Only valid for parent behavior.",
+                    "description": "SubscriptionsIDsForGroupedInvoicing converts existing standalone subscriptions to grouped_invoicing under this parent. Parent only.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -20450,7 +20521,7 @@
                     }
                 },
                 "line_items": {
-                    "description": "LineItems are extra line items to add during this phase, primarily one-time charges.\nEach item's start_date defaults to the phase's start_date when not provided.",
+                    "description": "LineItems are extra (non-plan) line items for this phase; start_date defaults to phase start.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CreateSubscriptionLineItemRequest"
@@ -20463,7 +20534,7 @@
                     }
                 },
                 "override_line_items": {
-                    "description": "OverrideLineItems allows customizing specific prices for this phase\nIf not provided, phase will use the same line items as the subscription (plan prices)",
+                    "description": "OverrideLineItems overrides specific plan prices for this phase.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/OverrideLineItemRequest"
