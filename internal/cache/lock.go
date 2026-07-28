@@ -19,6 +19,45 @@ type Lock interface {
 	Release(ctx context.Context) error
 }
 
+// It returns a nil Lock when locker is nil, and a Lock reporting AcquiredSuccessfully() ==
+// false when every attempt was exhausted; a non-nil error means the locker itself failed.
+// Callers decide whether to skip the work or proceed unserialized.
+func AcquireLockWithRetry(
+	ctx context.Context,
+	locker Locker,
+	key string,
+	ttl time.Duration,
+	attempts int,
+	retryInterval time.Duration,
+) (Lock, error) {
+	if locker == nil {
+		return nil, nil
+	}
+
+	var lock Lock
+	for attempt := 0; attempt < attempts; attempt++ {
+		var err error
+		lock, err = locker.AcquireLock(ctx, key, ttl)
+		if err != nil {
+			return nil, err
+		}
+		if lock.AcquiredSuccessfully() {
+			return lock, nil
+		}
+		if attempt == attempts-1 {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return lock, ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+
+	return lock, nil
+}
+
 type redisLocker struct {
 	client redis.UniversalClient
 }

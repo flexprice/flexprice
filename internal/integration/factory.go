@@ -143,6 +143,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		stripeClient,
 		f.customerRepo,
 		f.entityIntegrationMappingRepo,
+		f.locker,
 		f.logger,
 	)
 
