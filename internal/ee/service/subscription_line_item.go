@@ -20,6 +20,11 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	if resp.SubscriptionLineItem != nil {
+		s.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem}, types.WebhookEventSubscriptionLineItemCreated)
+	}
+
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	return resp, nil
 }
@@ -172,8 +177,6 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 				"line_item_id", lineItem.ID, "error", applyErr)
 		}
 	}
-
-	s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, lineItem.ID, lineItem.PriceType, models.HubSpotLineItemSyncOperationCreated)
 
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
