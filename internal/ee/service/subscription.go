@@ -4664,15 +4664,15 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 }
 
-// publishLineItemEvents publishes a subscription.line_item.created/deleted event for each
-// FIXED-price line item in lineItems. Non-FIXED line items are skipped — HubSpot deal sync
-// (the current consumer of this event) only tracks flat-rate charges, matching the filter
-// triggerHubSpotDealSyncForLineItem currently applies inline.
+// publishLineItemEvents publishes a subscription.line_item.created/deleted webhook event for
+// each FIXED-price line item in lineItems; non-FIXED line items are skipped. The filter mirrors
+// the one triggerHubSpotDealSyncForLineItem applies for its own (separate, Temporal-based)
+// HubSpot deal sync.
 func (s *subscriptionService) publishLineItemEvents(
 	ctx context.Context,
+	eventName types.WebhookEventName,
 	subscriptionID string,
 	lineItems []*subscription.SubscriptionLineItem,
-	eventName types.WebhookEventName,
 ) {
 	for _, li := range lineItems {
 		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
@@ -4690,7 +4690,8 @@ func (s *subscriptionService) publishLineItemEvents(
 
 		webhookPayload, err := json.Marshal(payload)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to marshal line item event payload", "error", err, "line_item_id", li.ID)
+			s.Logger.Error(ctx, "failed to marshal line item event payload",
+				"error", err, "subscription_id", subscriptionID, "line_item_id", li.ID)
 			continue
 		}
 
@@ -4706,7 +4707,8 @@ func (s *subscriptionService) publishLineItemEvents(
 			EntityID:      li.ID,
 		}
 		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-			s.Logger.Error(ctx, "failed to publish line item event", "event_name", eventName, "line_item_id", li.ID, "error", err)
+			s.Logger.Error(ctx, "failed to publish line item event",
+				"event_name", eventName, "subscription_id", subscriptionID, "line_item_id", li.ID, "error", err)
 		}
 	}
 }
