@@ -5197,9 +5197,7 @@ func (s *subscriptionService) persistAddonAttach(ctx context.Context, params *ad
 		return err
 	}
 
-	for _, li := range lineItems {
-		s.triggerHubSpotDealSyncForLineItem(ctx, sub.ID, sub.CustomerID, li.ID, li.PriceType, models.HubSpotLineItemSyncOperationCreated)
-	}
+	s.publishLineItemEvents(ctx, sub.ID, lineItems, types.WebhookEventSubscriptionLineItemCreated)
 
 	return nil
 }
