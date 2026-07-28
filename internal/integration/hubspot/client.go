@@ -742,9 +742,6 @@ func (c *Client) CreateDealLineItem(ctx context.Context, req *DealLineItemCreate
 	return &lineItem, nil
 }
 
-// DeleteDealLineItem deletes a HubSpot line item by ID. A 404 response means the line item
-// is already gone on HubSpot's side; the caller treats that as a not-found error so it can
-// be handled as a no-op (self-healing a stale local mapping) rather than a hard failure.
 func (c *Client) DeleteDealLineItem(ctx context.Context, lineItemID string) error {
 	config, err := c.GetHubSpotConfig(ctx)
 	if err != nil {

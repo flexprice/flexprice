@@ -21,10 +21,7 @@ const (
 	IntegrationEntityTypePrice        IntegrationEntityType = "price"
 	// IntegrationEntityTypeInvoiceLineItem maps a flexprice invoice line item to a provider-side
 	// charge (e.g. a Tabs obligation), used to make per-line-item invoice sync idempotent.
-	IntegrationEntityTypeInvoiceLineItem IntegrationEntityType = "invoice_line_item"
-	// IntegrationEntityTypeSubscriptionLineItem maps a flexprice subscription line item to a
-	// provider-side line item (e.g. a HubSpot deal line item), used to make per-line-item
-	// CRM sync idempotent.
+	IntegrationEntityTypeInvoiceLineItem      IntegrationEntityType = "invoice_line_item"
 	IntegrationEntityTypeSubscriptionLineItem IntegrationEntityType = "subscription_line_item"
 )
 
