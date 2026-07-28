@@ -54,6 +54,8 @@ type Configuration struct {
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
+	BulkEventConsumption       BulkEventConsumptionConfig       `mapstructure:"bulk_event_consumption" validate:"required"`
+	BulkMeterUsageTracking     BulkMeterUsageTrackingConfig     `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
@@ -601,6 +603,31 @@ type RawEventConsumptionConfig struct {
 	OutputTopic   string `mapstructure:"output_topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
+}
+
+// BulkEventConsumptionConfig configures the batch-mode consumer that reads
+// RawEventBatch messages published by POST /events/bulk (batch_source=api_bulk
+// metadata) and bulk-inserts each event into the ClickHouse events table.
+// Shares the raw_events topic with RawEventConsumption (Bento) but a separate
+// consumer group; a metadata filter keeps the two paths from cross-processing.
+type BulkEventConsumptionConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"raw_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_bulk_event_consumption"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
+}
+
+// BulkMeterUsageTrackingConfig is the batch-mode sibling of MeterUsageTracking:
+// it reads the same api_bulk batches from raw_events, extracts per-meter
+// quantity/hash for every event, and bulk-inserts into meter_usage. Distinct
+// consumer group from BulkEventConsumption so the two run in parallel.
+type BulkMeterUsageTrackingConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"raw_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
 }
 
 type OnboardingEventsConfig struct {

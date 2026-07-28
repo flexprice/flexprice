@@ -495,6 +495,26 @@ raw_event_consumption:
   rate_limit: 10
   consumer_group: "v1_raw_event_processing_v4"
 
+# Bulk event consumers — read RawEventBatch messages published by
+# POST /events/bulk (identified via metadata batch_source=api_bulk) and
+# bulk-insert directly. Two parallel consumer groups on the same topic:
+# one writes to events, one extracts meter+qty and writes to meter_usage.
+# Reuses the raw_event_consumption topic; the metadata filter keeps Bento
+# batches on their own path (RawEventConsumptionService).
+bulk_event_consumption:
+  enabled: true
+  topic: "staging_events_backfill"
+  rate_limit: 10
+  consumer_group: "v1_bulk_event_consumption"
+  topic_dlq: "bulk_event_consumption_dlq"
+
+bulk_meter_usage_tracking:
+  enabled: true
+  topic: "staging_events_backfill"
+  rate_limit: 10
+  consumer_group: "v1_bulk_meter_usage_tracking"
+  topic_dlq: "bulk_meter_usage_tracking_dlq"
+
 integration_events:
   enabled: true
   consumer_group: "integration-events-consumer"
