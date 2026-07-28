@@ -2076,6 +2076,29 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Publis
 	s.Equal(1, s.countSubscriptionUpdated())
 }
 
+// TestDeleteSubscriptionLineItem_PublishesLineItemDeletedEvent guards against regressing the
+// subscription.line_item.deleted webhook that DeleteSubscriptionLineItem now publishes directly,
+// now that the underlying deleteSubscriptionLineItem helper no longer triggers HubSpot sync inline.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_PublishesLineItemDeletedEvent() {
+	ctx := s.GetContext()
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	resp, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var lineItemDeletedEvents []*types.WebhookEvent
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			lineItemDeletedEvents = append(lineItemDeletedEvents, evt)
+		}
+	}
+	s.Require().Len(lineItemDeletedEvents, 1, "expected exactly 1 subscription.line_item.deleted event")
+	s.Equal(resp.SubscriptionLineItem.ID, lineItemDeletedEvents[0].EntityID)
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_DoesNotPublish() {
 	ctx := s.GetContext()
 	price2 := &price.Price{
@@ -2100,6 +2123,15 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_D
 		Quantity:             decimal.NewFromInt(1),
 		SkipEntitlementCheck: true,
 	})
+	s.Require().NoError(err)
+	s.Equal(0, s.countSubscriptionUpdated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItemInternal_DoesNotPublish() {
+	ctx := s.GetContext()
+	svc := s.service.(*subscriptionService)
+	s.resetWebhooks()
+	_, err := svc.deleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
 	s.Require().NoError(err)
 	s.Equal(0, s.countSubscriptionUpdated())
 }
