@@ -144,7 +144,7 @@ func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Route
 // in the batch with a single call. Malformed rows inside the batch are
 // skipped so healthy siblings still land in ClickHouse.
 func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *message.Message) error {
-	var batch RawEventBatch
+	var batch events.EventBatch
 	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
 		s.Logger.Error(ctx, "failed to unmarshal bulk event batch",
 			"error", err,
@@ -154,7 +154,7 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 
-	if len(batch.Data) == 0 {
+	if len(batch.Events) == 0 {
 		return nil
 	}
 
@@ -167,28 +167,20 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
-	inserts := make([]*events.Event, 0, len(batch.Data))
-	for i, raw := range batch.Data {
-		var evt events.Event
-		if err := json.Unmarshal(raw, &evt); err != nil {
-			s.Logger.Error(ctx, "skipping malformed event in bulk batch",
-				"error", err,
-				"batch_position", i,
-			)
-			continue
-		}
+	inserts := make([]*events.Event, 0, len(batch.Events))
+	for _, evt := range batch.Events {
 		if evt.TenantID == "" {
 			evt.TenantID = tenantID
 		}
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
 		}
-		inserts = append(inserts, &evt)
+		inserts = append(inserts, evt)
 	}
 
 	if len(inserts) == 0 {
 		s.Logger.Info(ctx, "bulk event batch produced zero valid events, skipping",
-			"batch_size", len(batch.Data),
+			"batch_size", len(batch.Events),
 			"message_uuid", msg.UUID,
 		)
 		return nil

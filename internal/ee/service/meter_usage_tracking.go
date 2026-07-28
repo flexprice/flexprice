@@ -220,7 +220,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 // meters, and issues a single BulkInsertMeterUsage. Malformed rows inside the
 // batch are skipped so healthy siblings still land in ClickHouse.
 func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg *message.Message) error {
-	var batch RawEventBatch
+	var batch events.EventBatch
 	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
 		s.Logger.Error(ctx, "failed to unmarshal bulk meter usage batch",
 			"error", err,
@@ -229,7 +229,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 
-	if len(batch.Data) == 0 {
+	if len(batch.Events) == 0 {
 		return nil
 	}
 
@@ -242,14 +242,9 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
-	records := make([]*events.MeterUsage, 0, len(batch.Data))
-	for i, raw := range batch.Data {
-		var evt events.Event
-		if err := json.Unmarshal(raw, &evt); err != nil {
-			s.Logger.Error(ctx, "skipping malformed event in bulk meter usage batch",
-				"error", err,
-				"batch_position", i,
-			)
+	records := make([]*events.MeterUsage, 0, len(batch.Events))
+	for _, evt := range batch.Events {
+		if evt == nil {
 			continue
 		}
 		if evt.TenantID == "" {
@@ -271,10 +266,10 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		}
 
 		for _, m := range meters {
-			if !s.checkMeterFilters(&evt, m.Filters) {
+			if !s.checkMeterFilters(evt, m.Filters) {
 				continue
 			}
-			qty, err := s.extractQuantity(&evt, m)
+			qty, err := s.extractQuantity(evt, m)
 			if err != nil {
 				s.Logger.Error(ctx, "failed to extract quantity, skipping meter",
 					"event_id", evt.ID,
@@ -287,17 +282,17 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				qty = decimal.Zero
 			}
 			records = append(records, &events.MeterUsage{
-				Event:      evt,
+				Event:      *evt,
 				MeterID:    m.ID,
 				QtyTotal:   qty,
-				UniqueHash: s.generateUniqueHash(&evt, m),
+				UniqueHash: s.generateUniqueHash(evt, m),
 			})
 		}
 	}
 
 	if len(records) == 0 {
 		s.Logger.Debug(ctx, "bulk meter usage batch produced zero records, skipping",
-			"batch_size", len(batch.Data),
+			"batch_size", len(batch.Events),
 			"message_uuid", msg.UUID,
 		)
 		return nil
@@ -314,7 +309,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
-		"batch_size", len(batch.Data),
+		"batch_size", len(batch.Events),
 		"message_uuid", msg.UUID,
 	)
 	return nil
