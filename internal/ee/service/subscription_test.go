@@ -2708,6 +2708,80 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems() {
 	}
 }
 
+// TestCreateSubscriptionWithLineItems_PublishesLineItemCreatedEvent guards against regressing
+// coverage of req.LineItems-created items in CreateSubscription's post-commit publishLineItemEvents
+// call. addSubscriptionLineItem no longer triggers HubSpot sync inline, so these extra items must be
+// fed into sub.LineItems for the subscription.line_item.created event to fire at all.
+//
+// Uses send_invoice collection method so subscription activation goes through
+// handleSendInvoiceMethod, which updates the subscription status in place instead of
+// re-fetching it via a plain SubRepo.Get. That re-fetch is what the in-memory test double's
+// stale per-subscription line-item cache would otherwise clobber sub.LineItems with (it has
+// no bearing on the real Ent-backed repository, which never populates LineItems on a plain
+// Get), which would make this assertion flaky for reasons unrelated to the production code
+// under test.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_PublishesLineItemCreatedEvent() {
+	ctx := s.GetContext()
+	start := s.testData.now
+	end := s.testData.now.Add(90 * 24 * time.Hour)
+
+	inlineAmount := decimal.NewFromInt(5)
+	inlinePriceReq := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             &inlineAmount,
+		LookupKey:          "inline_fixed_publish_test",
+	}
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &start,
+		EndDate:            &end,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		LineItems: []dto.CreateSubscriptionLineItemRequest{
+			{Price: inlinePriceReq},
+		},
+	}
+
+	publisher, ok := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	s.Require().True(ok, "expected *testutil.InMemoryWebhookPublisher")
+	publisher.Reset()
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus)
+
+	got, err := s.service.GetSubscription(ctx, resp.ID)
+	s.Require().NoError(err)
+
+	var inlineLineItemID string
+	for _, li := range got.Subscription.LineItems {
+		if li.EntityType == types.SubscriptionLineItemEntityTypeSubscription {
+			inlineLineItemID = li.ID
+		}
+	}
+	s.Require().NotEmpty(inlineLineItemID, "expected the inline req.LineItems entry to create a subscription-scoped line item")
+
+	var foundEvent bool
+	for _, evt := range publisher.Events() {
+		if evt.EventName == types.WebhookEventSubscriptionLineItemCreated && evt.EntityID == inlineLineItemID {
+			foundEvent = true
+			break
+		}
+	}
+	s.True(foundEvent, "expected a subscription.line_item.created event for the req.LineItems entry")
+}
+
 // TestCreateSubscriptionWithLineItems_ValidationErrors asserts that CreateSubscription fails when LineItems
 // have invalid or out-of-bound values (e.g. start_date before subscription start, end_date after subscription end).
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_ValidationErrors() {
