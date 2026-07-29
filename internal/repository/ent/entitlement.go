@@ -370,9 +370,13 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	existing, _ := r.Get(ctx, id)
+	existing, err := r.Get(ctx, id)
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
 
-	_, err := client.Entitlement.Update().
+	_, err = client.Entitlement.Update().
 		Where(
 			entitlement.ID(id),
 			entitlement.TenantID(types.GetTenantID(ctx)),
@@ -561,6 +565,7 @@ func (r *entitlementRepository) ListByEntity(ctx context.Context, entityType typ
 		EntityType:  lo.ToPtr(entityType),
 		EntityIDs:   []string{entityID},
 	}
+	filter.WithStatus(types.StatusPublished)
 
 	entitlements, err := r.List(ctx, filter)
 	if err != nil {

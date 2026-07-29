@@ -403,7 +403,7 @@ func (r *featureRepository) ListByIDs(ctx context.Context, featureIDs []string) 
 		seen[id] = struct{}{}
 
 		if cached := r.GetCache(ctx, id); cached != nil {
-			if cached.Status == types.StatusPublished {
+			if cached.Status == types.StatusPublished || cached.Status == types.StatusArchived {
 				result = append(result, cached)
 			}
 			continue
