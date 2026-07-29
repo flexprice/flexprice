@@ -396,6 +396,9 @@ usage_alerts:
   enabled: false # meter usage pushes the debounce workflow
   schedule_delay: "5m30s" # workflow StartDelay AND Redis schedule-throttle lock TTL
   stale_after: "1h" # workflow runs firing later than this yield (ContinueAsNew); also activity ScheduleToStartTimeout
+  wallet_alerts_enabled: true
+  spend_alerts_enabled: true
+  entitlement_alerts_enabled: true
 
 costsheet_usage_tracking:
   enabled: false

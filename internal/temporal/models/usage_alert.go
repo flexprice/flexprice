@@ -32,7 +32,10 @@ type UsageAlertWorkflowInput struct {
 	// AlreadyRescheduled marks a run created by the staleness re-schedule — at
 	// most one re-schedule per chain, so a sustained backlog can't livelock on
 	// ContinueAsNew.
-	AlreadyRescheduled bool `json:"already_rescheduled,omitempty"`
+	AlreadyRescheduled       bool `json:"already_rescheduled,omitempty"`
+	WalletAlertsEnabled      bool `json:"wallet_alerts_enabled"`
+	SpendAlertsEnabled       bool `json:"spend_alerts_enabled"`
+	EntitlementAlertsEnabled bool `json:"entitlement_alerts_enabled"`
 }
 
 func (i UsageAlertWorkflowInput) Validate() error {
@@ -50,7 +53,9 @@ func (i UsageAlertWorkflowInput) Validate() error {
 
 // UsageAlertActivityInput is the input to the usage-alert activities.
 type UsageAlertActivityInput struct {
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
-	CustomerID    string `json:"customer_id"`
+	TenantID                 string `json:"tenant_id"`
+	EnvironmentID            string `json:"environment_id"`
+	CustomerID               string `json:"customer_id"`
+	SpendAlertsEnabled       bool   `json:"spend_alerts_enabled"`
+	EntitlementAlertsEnabled bool   `json:"entitlement_alerts_enabled"`
 }

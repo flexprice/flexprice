@@ -39,7 +39,7 @@ type AlertService interface {
 	// alert_logs state, and snapshots the grant. Wallet alerts stay on their
 	// own activity (see EvaluateWalletAlertsForCustomer) — they need a
 	// different query path and their own throttle.
-	EvaluateSpendAndEntitlementAlertsForCustomer(ctx context.Context, cust *customer.Customer) error
+	EvaluateSpendAndEntitlementAlertsForCustomer(ctx context.Context, cust *customer.Customer, withSpendAlerts bool, withEntitlementAlerts bool) error
 
 	// RefreshEntitlementGrantsForCustomer runs one grants-only pass (ensure +
 	// usage refresh + billable-overage ledger accrual) so the materialized

@@ -73,6 +73,12 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 // the workflow-side evaluators each bail on cheap indexed DB reads when there is
 // nothing to do.
 func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Context, cust *customer.Customer) {
+	usageAlertConfig := s.Config.UsageAlerts
+	if !usageAlertConfig.WalletAlertsEnabled && !usageAlertConfig.SpendAlertsEnabled && !usageAlertConfig.EntitlementAlertsEnabled {
+		s.Logger.Debug(ctx, "none of the usage alerts are enabled, skipping", "customer_id", cust.ID)
+		return
+	}
+
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
 		s.Logger.Debug(ctx, "temporal service not available, skipping usage alert workflow",
@@ -81,7 +87,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		return
 	}
 
-	delay := s.Config.UsageAlerts.ScheduleDelay
+	delay := usageAlertConfig.ScheduleDelay
 
 	var throttleLock cache.Lock
 	if s.Locker != nil {
@@ -113,11 +119,14 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		StartDelay: delay,
 	}
 	input := workflowModels.UsageAlertWorkflowInput{
-		TenantID:      tenantID,
-		EnvironmentID: envID,
-		CustomerID:    cust.ID,
-		ScheduledFor:  time.Now().UTC().Add(delay),
-		StaleAfter:    s.Config.UsageAlerts.StaleAfter,
+		TenantID:                 tenantID,
+		EnvironmentID:            envID,
+		CustomerID:               cust.ID,
+		ScheduledFor:             time.Now().UTC().Add(delay),
+		StaleAfter:               usageAlertConfig.StaleAfter,
+		WalletAlertsEnabled:      usageAlertConfig.WalletAlertsEnabled,
+		SpendAlertsEnabled:       usageAlertConfig.SpendAlertsEnabled,
+		EntitlementAlertsEnabled: usageAlertConfig.EntitlementAlertsEnabled,
 	}
 
 	if _, err := temporalSvc.StartWorkflow(ctx, options, types.TemporalUsageAlertWorkflow, input); err != nil {
