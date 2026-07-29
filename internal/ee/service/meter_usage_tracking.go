@@ -219,7 +219,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 // processBulkMessage unmarshals a RawEventBatch, matches every event to its
 // meters, and issues a single BulkInsertMeterUsage. Malformed rows inside the
 // batch are skipped so healthy siblings still land in ClickHouse.
-func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg *message.Message) error {
+func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg *message.Message) (err error) {
 	var batch events.EventBatch
 	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
 		s.Logger.Error(ctx, "failed to unmarshal bulk meter usage batch",
@@ -242,7 +242,27 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
+	// Per-event Redis dedup mirrors the single-event path: acquire an event-ID
+	// keyed lock (TTL = 24h) before doing any work for that event, skip events
+	// whose lock is already held, and release every lock we acquired if the
+	// batch fails downstream so redelivery isn't dedup-skipped until TTL.
+	// Gated by BulkMeterUsageTracking.RedisDeduplicationEnabled so the bulk
+	// consumer can toggle dedup independently of the single-event stream.
+	dedupEnabled := s.Config.BulkMeterUsageTracking.RedisDeduplicationEnabled && s.ServiceParams.Locker != nil
+	var dedupLocks []cache.Lock
+	defer func() {
+		if err == nil {
+			return
+		}
+		for _, lock := range dedupLocks {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release lock on bulk meter usage tracking event", "error", releaseErr)
+			}
+		}
+	}()
+
 	records := make([]*events.MeterUsage, 0, len(batch.Events))
+	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
 	for _, evt := range batch.Events {
 		if evt == nil {
 			continue
@@ -255,6 +275,21 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
 
+		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
+			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
+			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
+			if lockErr != nil {
+				// Fail open: log and continue processing the event so a Redis
+				// blip can't silently drop billing rows.
+				s.Logger.Error(ctx, "failed to acquire lock on bulk meter usage tracking event", "error", lockErr, "event_id", evt.ID)
+			} else if !lock.AcquiredSuccessfully() {
+				s.Logger.Info(ctx, "event already processed, skipping in bulk batch", "event_id", evt.ID)
+				continue
+			} else {
+				dedupLocks = append(dedupLocks, lock)
+			}
+		}
+
 		meters, err := s.MeterRepo.GetMatchingMetersByEventName(ctx, evt.EventName)
 		if err != nil {
 			// Meter-lookup errors are retriable: return so the whole batch is
@@ -265,6 +300,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			continue
 		}
 
+		eventProducedRecord := false
 		for _, m := range meters {
 			if !s.checkMeterFilters(evt, m.Filters) {
 				continue
@@ -287,6 +323,10 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				QtyTotal:   qty,
 				UniqueHash: s.generateUniqueHash(evt, m),
 			})
+			eventProducedRecord = true
+		}
+		if eventProducedRecord {
+			eventsToInsert = append(eventsToInsert, evt)
 		}
 	}
 
@@ -312,6 +352,10 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		"batch_size", len(batch.Events),
 		"message_uuid", msg.UUID,
 	)
+
+	if s.Config.BulkMeterUsageTracking.PostInsertSideEffectsEnabled {
+		s.runBulkMeterUsagePostInsertSideEffects(ctx, eventsToInsert)
+	}
 	return nil
 }
 

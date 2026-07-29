@@ -626,11 +626,13 @@ type BulkEventConsumptionConfig struct {
 // quantity/hash for every event, and bulk-inserts into meter_usage. Distinct
 // consumer group from BulkEventConsumption so the two run in parallel.
 type BulkMeterUsageTrackingConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"raw_events"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
-	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
+	Enabled                      bool   `mapstructure:"enabled" default:"true"`
+	Topic                        string `mapstructure:"topic" default:"raw_events"`
+	RateLimit                    int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup                string `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
+	TopicDLQ                     string `mapstructure:"topic_dlq" default:""`
+	RedisDeduplicationEnabled    bool   `mapstructure:"redis_deduplication_enabled" default:"true"`
+	PostInsertSideEffectsEnabled bool   `mapstructure:"post_insert_side_effects_enabled" default:"true"`
 }
 
 type OnboardingEventsConfig struct {

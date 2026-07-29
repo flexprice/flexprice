@@ -62,6 +62,43 @@ func (s *meterUsageTrackingService) runMeterUsagePostInsertSideEffects(ctx conte
 	}
 }
 
+// runBulkMeterUsagePostInsertSideEffects is the batch-mode sibling of runMeterUsagePostInsertSideEffects.
+// It fans out scheduleUsageAlertWorkflow once per unique external_customer_id in the successfully-inserted event set.
+func (s *meterUsageTrackingService) runBulkMeterUsagePostInsertSideEffects(ctx context.Context, insertedEvents []*events.Event) {
+	// NOTE: we're only running the usage alert workflow for now, so this check is for early return
+	if !s.Config.UsageAlerts.Enabled || len(insertedEvents) == 0 {
+		return
+	}
+
+	seen := make(map[string]struct{}, len(insertedEvents))
+	for _, evt := range insertedEvents {
+		if evt == nil || evt.ExternalCustomerID == "" {
+			continue
+		}
+		if _, ok := seen[evt.ExternalCustomerID]; ok {
+			continue
+		}
+		seen[evt.ExternalCustomerID] = struct{}{}
+
+		cust, err := s.CustomerRepo.GetByLookupKey(ctx, evt.ExternalCustomerID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				continue
+			}
+			s.Logger.Error(ctx, "failed to resolve customer after bulk meter usage insert",
+				"error", err,
+				"external_customer_id", evt.ExternalCustomerID,
+			)
+			continue
+		}
+		if cust == nil {
+			continue
+		}
+
+		s.scheduleUsageAlertWorkflow(ctx, cust)
+	}
+}
+
 // scheduleUsageAlertWorkflow starts a debounced per-customer workflow. WorkflowID
 // is stable per (tenant, env, customer); WorkflowExecutionAlreadyStarted is the
 // dedup safety net on the Temporal side.

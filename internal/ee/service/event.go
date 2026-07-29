@@ -120,10 +120,7 @@ func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.Bul
 
 	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
 		// Accepted-then-published (202): a broker failure is logged, not surfaced, as in CreateEvent.
-		s.logger.With(
-			"event_count", len(domainEvents),
-			"error", err,
-		).Error("failed to publish event batch")
+		s.logger.Error(ctx, "failed to publish event batch", "event_count", len(domainEvents), "error", err)
 	}
 
 	return nil

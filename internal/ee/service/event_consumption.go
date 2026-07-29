@@ -169,6 +169,10 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 
 	inserts := make([]*events.Event, 0, len(batch.Events))
 	for _, evt := range batch.Events {
+		if evt == nil {
+			continue
+		}
+
 		if evt.TenantID == "" {
 			evt.TenantID = tenantID
 		}

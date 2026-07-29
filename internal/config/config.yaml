@@ -513,6 +513,8 @@ bulk_meter_usage_tracking:
   rate_limit: 10
   consumer_group: "v1_bulk_meter_usage_tracking"
   topic_dlq: "staging_meter_usage_tracking_bulk_dlq"
+  redis_deduplication_enabled: true
+  post_insert_side_effects_enabled: true
 
 integration_events:
   enabled: true
