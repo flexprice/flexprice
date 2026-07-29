@@ -307,5 +307,11 @@ func (Price) Indexes() []ent.Index {
 		// To get "what changed since the sub's last synced_price_sequence"
 		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "sequence").
 			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
+		// Covers the subscription-scoped override NOT EXISTS in the plan-price sync
+		// discovery CTE (plan_price_sync_v2.go), which probes by
+		// (entity_id = sub_id, entity_type = 'SUBSCRIPTION', parent_price_id = plan_price_id).
+		// Scoped to SUBSCRIPTION-scoped published rows to keep the index small.
+		index.Fields("tenant_id", "environment_id", "entity_id", "parent_price_id").
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((entity_type)::text = 'SUBSCRIPTION'::text))")),
 	}
 }

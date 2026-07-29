@@ -102,7 +102,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			  AND subscription_status IN ('%s','%s', '%s', '%s')
 			  AND subscription_type IN (%s)
 			  AND synced_price_sequence < $4
-			ORDER BY id
+			-- Order matches the (plan_id, synced_price_sequence, id) partial index key so
+			-- LIMIT $5 becomes an index range scan that stops after $5 rows instead of a
+			-- Top-N sort over every stale sub in the plan.
+			ORDER BY synced_price_sequence, id
 			LIMIT $5
 		),
 		plan_prices AS (

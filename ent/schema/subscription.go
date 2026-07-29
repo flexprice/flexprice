@@ -250,7 +250,10 @@ func (Subscription) Indexes() []ent.Index {
 		// For billing period updates
 		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status", "status"),
 		// Drives the plan-price sync's "which subs are behind?" lookup.
-		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence").
+		// `id` is included so the discovery CTE's `ORDER BY synced_price_sequence, id LIMIT N`
+		// can be served as an index range scan that stops after N rows, instead of
+		// a Top-N sort over the full stale-sub set (see plan_price_sync_v2.go).
+		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence", "id").
 			Annotations(entsql.IndexWhere(
 				"(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))")),
 	}
