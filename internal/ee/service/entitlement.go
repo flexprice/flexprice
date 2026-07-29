@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -174,8 +173,6 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
-	s.deleteEntityEntitlementsCache(ctx, entityType, entityID)
-
 	response := &dto.EntitlementResponse{Entitlement: result}
 
 	// Add expanded fields
@@ -208,7 +205,6 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 	}
 
 	var response *dto.CreateBulkEntitlementResponse
-	entitiesToInvalidate := make(map[types.EntitlementEntityType][]string, 0)
 
 	// Use transaction to ensure all entitlements are created or none
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -234,8 +230,6 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 				entityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
 				entityID = entReq.PlanID
 			}
-
-			entitiesToInvalidate[entityType] = append(entitiesToInvalidate[entityType], entityID)
 
 			// Collect entity IDs by type
 			switch entityType {
@@ -425,18 +419,6 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 		return nil, err
 	}
 
-	for entityType, entityIDs := range entitiesToInvalidate {
-		dedupEntityIDMap := make(map[string]struct{}, 0)
-
-		for _, entityID := range entityIDs {
-			if _, ok := dedupEntityIDMap[entityID]; ok {
-				continue
-			}
-			dedupEntityIDMap[entityID] = struct{}{}
-			s.deleteEntityEntitlementsCache(ctx, entityType, entityID)
-		}
-	}
-
 	return response, nil
 }
 
@@ -507,157 +489,143 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		}
 	}
 
-	response := &dto.ListEntitlementsResponse{
-		Items: make([]*dto.EntitlementResponse, len(entitlements)),
+	items, err := s.hydrateEntitlements(ctx, entitlements, filter.GetExpand())
+	if err != nil {
+		return nil, err
 	}
 
-	// Create maps to store expanded data
+	return &dto.ListEntitlementsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}, nil
+}
+
+func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlements []*entitlement.Entitlement, expand types.Expand) ([]*dto.EntitlementResponse, error) {
+	items := make([]*dto.EntitlementResponse, len(entitlements))
+
 	var featuresByID map[string]*feature.Feature
 	var plansByID map[string]*plan.Plan
 	var metersByID map[string]*meter.Meter
 	var addonsByID map[string]*addon.Addon
 
-	if !filter.GetExpand().IsEmpty() {
-		if filter.GetExpand().Has(types.ExpandFeatures) {
-			// Collect feature IDs
-			featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.FeatureID
-			})
+	if expand.Has(types.ExpandFeatures) {
+		featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+			return e.FeatureID
+		})
 
-			if len(featureIDs) > 0 {
-				featureFilter := types.NewNoLimitFeatureFilter()
-				featureFilter.FeatureIDs = featureIDs
-				features, err := s.FeatureRepo.List(ctx, featureFilter)
-				if err != nil {
-					return nil, err
-				}
+		if len(featureIDs) > 0 {
+			features, err := s.FeatureRepo.ListByIDs(ctx, featureIDs)
+			if err != nil {
+				return nil, err
+			}
 
-				featuresByID = make(map[string]*feature.Feature, len(features))
-				for _, f := range features {
-					featuresByID[f.ID] = f
-				}
+			featuresByID = make(map[string]*feature.Feature, len(features))
+			for _, f := range features {
+				featuresByID[f.ID] = f
+			}
 
-				s.Logger.Debug(ctx, "fetched features for entitlements", "count", len(features))
+			s.Logger.Debug(ctx, "fetched features for entitlements", "count", len(features))
+		}
+	}
+
+	if expand.Has(types.ExpandMeters) {
+		meterIDs := make([]string, 0, len(featuresByID))
+		for _, f := range featuresByID {
+			if f.MeterID != "" {
+				meterIDs = append(meterIDs, f.MeterID)
 			}
 		}
 
-		if filter.GetExpand().Has(types.ExpandMeters) {
-			meterIDs := make([]string, 0, len(featuresByID))
-			for _, f := range featuresByID {
-				if f.MeterID != "" {
-					meterIDs = append(meterIDs, f.MeterID)
-				}
+		if len(meterIDs) > 0 {
+			meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
+			if err != nil {
+				return nil, err
 			}
 
-			if len(meterIDs) > 0 {
-				meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
-				if err != nil {
-					return nil, err
-				}
-
-				metersByID = make(map[string]*meter.Meter, len(meters))
-				for _, m := range meters {
-					metersByID[m.ID] = m
-				}
-
-				s.Logger.Debug(ctx, "fetched meters for entitlements", "count", len(meters))
+			metersByID = make(map[string]*meter.Meter, len(meters))
+			for _, m := range meters {
+				metersByID[m.ID] = m
 			}
+
+			s.Logger.Debug(ctx, "fetched meters for entitlements", "count", len(meters))
 		}
+	}
 
-		if filter.GetExpand().Has(types.ExpandPlans) {
-			// Collect entity IDs for plans
-			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.EntityID
-			})
+	if expand.Has(types.ExpandPlans) {
+		planIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.EntityID, e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN
+		})
 
-			if len(entityIDs) > 0 {
-				planFilter := types.NewNoLimitPlanFilter()
-				planFilter.PlanIDs = entityIDs
-				plans, err := s.PlanRepo.List(ctx, planFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				plansByID = make(map[string]*plan.Plan, len(plans))
-				for _, p := range plans {
-					plansByID[p.ID] = p
-				}
-
-				s.Logger.Debug(ctx, "fetched plans for entitlements", "count", len(plans))
+		if len(planIDs) > 0 {
+			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
+			if err != nil {
+				return nil, err
 			}
+
+			plansByID = make(map[string]*plan.Plan, len(plans))
+			for _, p := range plans {
+				plansByID[p.ID] = p
+			}
+
+			s.Logger.Debug(ctx, "fetched plans for entitlements", "count", len(plans))
 		}
+	}
 
-		if filter.GetExpand().Has(types.ExpandAddons) {
-			// Collect entity IDs for addons
-			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.EntityID
-			})
+	if expand.Has(types.ExpandAddons) {
+		addonIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.EntityID, e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON
+		})
 
-			if len(entityIDs) > 0 {
-				addonFilter := types.NewNoLimitAddonFilter()
-				addonFilter.AddonIDs = entityIDs
-				addons, err := s.AddonRepo.List(ctx, addonFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				addonsByID = make(map[string]*addon.Addon, len(addons))
-				for _, a := range addons {
-					addonsByID[a.ID] = a
-				}
-
-				s.Logger.Debug(ctx, "fetched addons for entitlements", "count", len(addons))
+		if len(addonIDs) > 0 {
+			addonFilter := types.NewNoLimitAddonFilter()
+			addonFilter.AddonIDs = addonIDs
+			addons, err := s.AddonRepo.List(ctx, addonFilter)
+			if err != nil {
+				return nil, err
 			}
+
+			addonsByID = make(map[string]*addon.Addon, len(addons))
+			for _, a := range addons {
+				addonsByID[a.ID] = a
+			}
+
+			s.Logger.Debug(ctx, "fetched addons for entitlements", "count", len(addons))
 		}
 	}
 
 	for i, e := range entitlements {
-		response.Items[i] = &dto.EntitlementResponse{Entitlement: e}
+		items[i] = &dto.EntitlementResponse{Entitlement: e}
 
 		// TODO: !REMOVE after migration
 		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
-			response.Items[i].PlanID = e.EntityID
+			items[i].PlanID = e.EntityID
 		}
 
-		// Add expanded feature if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandFeatures) {
-			if f, ok := featuresByID[e.FeatureID]; ok {
-				response.Items[i].Feature = &dto.FeatureResponse{Feature: f}
-				// Add expanded meter if requested and available
-				if filter.GetExpand().Has(types.ExpandMeters) {
-					if m, ok := metersByID[f.MeterID]; ok {
-						response.Items[i].Feature.Meter = dto.ToMeterResponse(m)
-					}
-				}
+		if f, ok := featuresByID[e.FeatureID]; ok {
+			items[i].Feature = &dto.FeatureResponse{Feature: f}
+			if m, ok := metersByID[f.MeterID]; ok {
+				items[i].Feature.Meter = dto.ToMeterResponse(m)
 			}
 		}
 
-		// Add expanded plan if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
-
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
 			if p, ok := plansByID[e.EntityID]; ok {
-				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
-				// TODO: !REMOVE after migration
-				response.Items[i].PlanID = e.EntityID
+				items[i].Plan = &dto.PlanResponse{Plan: p}
 			}
-
 		}
 
-		// Add expanded addon if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandAddons) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
 			if a, ok := addonsByID[e.EntityID]; ok {
-				response.Items[i].Addon = &dto.AddonResponse{Addon: a}
+				items[i].Addon = &dto.AddonResponse{Addon: a}
 			}
 		}
 	}
 
-	response.Pagination = types.NewPaginationResponse(
-		count,
-		filter.GetLimit(),
-		filter.GetOffset(),
-	)
-
-	return response, nil
+	return items, nil
 }
 
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
@@ -743,8 +711,6 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		return nil, err
 	}
 
-	s.deleteEntityEntitlementsCache(ctx, existing.EntityType, existing.EntityID)
-
 	response := &dto.EntitlementResponse{Entitlement: result}
 
 	// TODO: !REMOVE after migration
@@ -759,16 +725,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 }
 
 func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) error {
-	existing, err := s.EntitlementRepo.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-
 	if err := s.EntitlementRepo.Delete(ctx, id); err != nil {
 		return err
 	}
-
-	s.deleteEntityEntitlementsCache(ctx, existing.EntityType, existing.EntityID)
 
 	// Publish webhook event after successful deletion
 	s.publishSystemEvent(ctx, types.WebhookEventEntitlementDeleted, id)
@@ -777,25 +736,30 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 }
 
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {
-	if cached := s.getEntityEntitlementsCache(ctx, types.ENTITLEMENT_ENTITY_TYPE_PLAN, planID); cached != nil {
-		return cached, nil
-	}
-
-	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
 	filter.WithEntityIDs([]string{planID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandPlans))
 
-	// Use the standard list function to get the entitlements with expansion
-	resp, err := s.ListEntitlements(ctx, filter)
+	entitlements, err := s.EntitlementRepo.ListByEntity(ctx, types.ENTITLEMENT_ENTITY_TYPE_PLAN, planID)
 	if err != nil {
 		return nil, err
 	}
 
-	s.setEntityEntitlementsCache(ctx, types.ENTITLEMENT_ENTITY_TYPE_PLAN, planID, resp)
-	return resp, nil
+	items, err := s.hydrateEntitlements(ctx, entitlements, filter.GetExpand())
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.ListEntitlementsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			len(entitlements),
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}, nil
 }
 
 func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error) {
@@ -849,73 +813,3 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 	}
 }
 
-func (s *entitlementService) entityEntitlementsCacheKey(ctx context.Context, entityType types.EntitlementEntityType, entityID string) string {
-	if s.RedisCache == nil || entityID == "" {
-		return ""
-	}
-
-	switch entityType {
-	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
-		return cache.GenerateKey(ctx, cache.PrefixEntitlement, string(entityType), entityID)
-	default:
-		return ""
-	}
-}
-
-func (s *entitlementService) getEntityEntitlementsCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) *dto.ListEntitlementsResponse {
-	cacheKey := s.entityEntitlementsCacheKey(ctx, entityType, entityID)
-	if cacheKey == "" {
-		return nil
-	}
-
-	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "get", map[string]interface{}{
-		"entity_type": string(entityType),
-		"entity_id":   entityID,
-	})
-	defer cache.FinishSpan(span)
-
-	value, found := s.RedisCache.Get(spanCtx, cacheKey)
-	if !found {
-		cache.SetCacheHit(span, false)
-		return nil
-	}
-
-	cached, ok := cache.UnmarshalCacheValue[dto.ListEntitlementsResponse](value)
-	if !ok {
-		cache.SetCacheHit(span, false)
-		return nil
-	}
-
-	cache.SetCacheHit(span, true)
-	return cached
-}
-
-func (s *entitlementService) setEntityEntitlementsCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string, resp *dto.ListEntitlementsResponse) {
-	cacheKey := s.entityEntitlementsCacheKey(ctx, entityType, entityID)
-	if cacheKey == "" || resp == nil {
-		return
-	}
-
-	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "set", map[string]interface{}{
-		"entity_type": string(entityType),
-		"entity_id":   entityID,
-	})
-	defer cache.FinishSpan(span)
-
-	s.RedisCache.Set(spanCtx, cacheKey, resp, cache.ExpiryDefaultRedis)
-}
-
-func (s *entitlementService) deleteEntityEntitlementsCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) {
-	cacheKey := s.entityEntitlementsCacheKey(ctx, entityType, entityID)
-	if cacheKey == "" {
-		return
-	}
-
-	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "delete", map[string]interface{}{
-		"entity_type": string(entityType),
-		"entity_id":   entityID,
-	})
-	defer cache.FinishSpan(span)
-
-	s.RedisCache.Delete(spanCtx, cacheKey)
-}

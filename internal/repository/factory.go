@@ -160,7 +160,7 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 }
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
-	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache)
+	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

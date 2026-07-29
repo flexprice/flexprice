@@ -279,6 +279,21 @@ func (s *InMemoryEntitlementStore) Clear() {
 	s.InMemoryStore.Clear()
 }
 
+// ListByEntity retrieves all entitlements attached to a single entity
+func (s *InMemoryEntitlementStore) ListByEntity(ctx context.Context, entityType types.EntitlementEntityType, entityID string) ([]*entitlement.Entitlement, error) {
+	if entityID == "" {
+		return []*entitlement.Entitlement{}, nil
+	}
+
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  &entityType,
+		EntityIDs:   []string{entityID},
+	}
+
+	return s.List(ctx, filter)
+}
+
 // ListByPlanIDs retrieves all entitlements for the given plan IDs
 func (s *InMemoryEntitlementStore) ListByPlanIDs(ctx context.Context, planIDs []string) ([]*entitlement.Entitlement, error) {
 	if len(planIDs) == 0 {

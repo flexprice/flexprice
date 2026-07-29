@@ -1066,7 +1066,11 @@ func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
 	s.Len(r3.ConfigValues, 0)
 }
 
-func (s *EntitlementServiceSuite) TestGetPlanEntitlements_CachesByPlanID() {
+// GetPlanEntitlements must never cache the composed response: the payload embeds
+// features, meters and plans, none of which are invalidated by entitlement writes.
+// Each of those is cached by its owning repository instead, so an edit to any of them
+// has to show up on the next call.
+func (s *EntitlementServiceSuite) TestGetPlanEntitlements_ReflectsRelatedEntityUpdates() {
 	ctx := s.GetContext()
 
 	testPlan := &plan.Plan{
@@ -1095,48 +1099,45 @@ func (s *EntitlementServiceSuite) TestGetPlanEntitlements_CachesByPlanID() {
 	first, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
 	s.NoError(err)
 	s.Len(first.Items, 1)
+	s.Require().NotNil(first.Items[0].Feature)
+	s.Equal("Bool", first.Items[0].Feature.Name)
 
-	// Bypass the service so the plan-entitlements cache is not invalidated.
-	extraFeature := &feature.Feature{
+	// Rename the feature without touching any entitlement.
+	boolFeature.Name = "Bool Renamed"
+	s.NoError(s.GetStores().FeatureRepo.Update(ctx, boolFeature))
+
+	testPlan.Name = "Cache Plan Renamed"
+	s.NoError(s.GetStores().PlanRepo.Update(ctx, testPlan))
+
+	afterFeatureUpdate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Require().Len(afterFeatureUpdate.Items, 1)
+	s.Require().NotNil(afterFeatureUpdate.Items[0].Feature)
+	s.Equal("Bool Renamed", afterFeatureUpdate.Items[0].Feature.Name,
+		"a feature rename must not be masked by a cached entitlements response")
+	s.Require().NotNil(afterFeatureUpdate.Items[0].Plan)
+	s.Equal("Cache Plan Renamed", afterFeatureUpdate.Items[0].Plan.Name,
+		"a plan rename must not be masked by a cached entitlements response")
+
+	// A new entitlement on the same plan must show up too.
+	secondFeature := &feature.Feature{
 		ID:        "feat-cache-bool-2",
 		Name:      "Bool 2",
 		Type:      types.FeatureTypeBoolean,
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
-	s.NoError(s.GetStores().FeatureRepo.Create(ctx, extraFeature))
-	_, err = s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
-		ID:          "ent-cache-extra",
-		EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
-		EntityID:    testPlan.ID,
-		FeatureID:   extraFeature.ID,
-		FeatureType: types.FeatureTypeBoolean,
-		IsEnabled:   true,
-		BaseModel:   types.GetDefaultBaseModel(ctx),
-	})
-	s.NoError(err)
-
-	cached, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
-	s.NoError(err)
-	s.Len(cached.Items, 1, "second GetPlanEntitlements should serve the cached plan entitlements")
-
-	thirdFeature := &feature.Feature{
-		ID:        "feat-cache-bool-3",
-		Name:      "Bool 3",
-		Type:      types.FeatureTypeBoolean,
-		BaseModel: types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().FeatureRepo.Create(ctx, thirdFeature))
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, secondFeature))
 	_, err = s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
 		PlanID:      testPlan.ID,
-		FeatureID:   thirdFeature.ID,
+		FeatureID:   secondFeature.ID,
 		FeatureType: types.FeatureTypeBoolean,
 		IsEnabled:   true,
 	})
 	s.NoError(err)
 
-	afterInvalidate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	afterCreate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
 	s.NoError(err)
-	s.Greater(len(afterInvalidate.Items), 1, "cache must be invalidated after CreateEntitlement")
+	s.Len(afterCreate.Items, 2, "a newly created entitlement must be visible immediately")
 }
 
 // A no-limit filter must survive ListEntitlements' limit normalization. GetLimit()

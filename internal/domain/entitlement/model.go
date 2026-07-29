@@ -41,6 +41,20 @@ type Entitlement struct {
 	types.BaseModel
 }
 
+func (e *Entitlement) GetEntityType() types.EntitlementEntityType {
+	if e == nil {
+		return ""
+	}
+	return e.EntityType
+}
+
+func (e *Entitlement) GetEntityID() string {
+	if e == nil {
+		return ""
+	}
+	return e.EntityID
+}
+
 // HasGrantConfig reports whether this entitlement carries a grant config and
 // therefore rolls into entitlement_grants.
 func (e *Entitlement) HasGrantConfig() bool {
