@@ -22,6 +22,27 @@ func TestInternalSubscriptionLineItemEvent_RoundTrip(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
+	var asMap map[string]string
+	if err := json.Unmarshal(b, &asMap); err != nil {
+		t.Fatalf("unmarshal to map: %v", err)
+	}
+	want := map[string]string{
+		"subscription_id": "sub_1",
+		"line_item_id":    "li_1",
+		"customer_id":     "cus_1",
+		"price_type":      string(types.PRICE_TYPE_FIXED),
+		"tenant_id":       "ten_1",
+		"environment_id":  "env_1",
+	}
+	for key, wantVal := range want {
+		if gotVal, ok := asMap[key]; !ok || gotVal != wantVal {
+			t.Fatalf("json key %q: got %q (present=%v), want %q", key, gotVal, ok, wantVal)
+		}
+	}
+	if len(asMap) != len(want) {
+		t.Fatalf("unexpected extra JSON keys: got %d keys %+v, want %d keys %+v", len(asMap), asMap, len(want), want)
+	}
+
 	var out InternalSubscriptionLineItemEvent
 	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
