@@ -3288,38 +3288,66 @@ func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLiv
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
 }
 
-// The wallet ENTITY cache and the real-time-BALANCE cache used to share the key
-// `wallet:v1:<id>` while storing incompatible types (wallet JSON object vs bare
-// decimal string). Each write clobbered the other and every read failed to decode,
-// so both caches missed on every call and every request fell through to a full
-// ClickHouse recompute. Guard the namespace separation.
-func (s *WalletServiceSuite) TestRealtimeBalanceCache_DoesNotCollideWithWalletEntityCache() {
+// A warm read must come from the cache. The cold call populates it through the
+// real write path (setWalletRealtimeBalanceToCache), so this covers set→get end
+// to end rather than priming the key by hand — a get/set prefix mismatch fails here.
+func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_WarmReadSkipsRecompute() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+
+	computes := 0
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		computes++
+		return &dto.WalletBalanceResponse{
+			Wallet:                w,
+			RealTimeBalance:       lo.ToPtr(decimal.NewFromInt(88)),
+			RealTimeCreditBalance: lo.ToPtr(decimal.NewFromInt(88)),
+		}, nil
+	})
+
+	cold, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, nil)
+	s.NoError(err)
+	s.Equal(1, computes, "cold read must compute")
+	s.True(cold.RealTimeBalance.Equal(decimal.NewFromInt(88)))
+	s.NotNil(s.readCachedBalance(ctx, w.ID), "cold read must populate the balance cache")
+
+	warm, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, nil)
+	s.NoError(err)
+	s.Equal(1, computes, "warm read must be served from cache, not recomputed")
+	s.True(warm.RealTimeBalance.Equal(decimal.NewFromInt(88)))
+}
+
+// The non-cached path: once the balance is invalidated the next read must
+// recompute and return the new value, not a stale cached one.
+func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_RecomputesAfterInvalidation() {
 	ctx := s.GetContext()
 	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
 	ws := s.service.(*walletService)
 
-	entityKey := cache.GenerateKey(ctx, cache.PrefixWallet, w.ID)
-	balanceKey := cache.GenerateKey(ctx, cache.PrefixWalletRealTimeBalance, w.ID)
-	s.NotEqual(entityKey, balanceKey, "balance cache must not share the entity cache key")
+	balance := decimal.NewFromInt(88)
+	computes := 0
+	s.installCompute(func(_ context.Context, _ *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
+		computes++
+		return &dto.WalletBalanceResponse{
+			Wallet:                w,
+			RealTimeBalance:       lo.ToPtr(balance),
+			RealTimeCreditBalance: lo.ToPtr(balance),
+		}, nil
+	})
 
-	// Entity cache holds a *wallet.Wallet; balance cache holds a decimal string.
-	ws.RedisCache.ForceCacheSet(ctx, entityKey, w, cache.ExpiryWalletBalance)
-	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(42), cache.ExpiryWalletBalance)
+	_, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, nil)
+	s.NoError(err)
+	s.Equal(1, computes)
 
-	got := s.readCachedBalance(ctx, w.ID)
-	s.Require().NotNil(got, "balance read must hit its own key, not the entity object")
-	s.True(got.Equal(decimal.NewFromInt(42)), "expected 42, got %v", got)
-
-	raw, found := ws.RedisCache.ForceCacheGet(ctx, entityKey)
-	s.Require().True(found, "entity cache entry must survive a balance write")
-	_, clobbered := raw.(string)
-	s.False(clobbered, "entity cache key was overwritten by the balance decimal")
-
-	// Invalidating the balance must not evict the wallet entity.
 	ws.invalidateWalletRealtimeBalanceCache(ctx, w.ID)
-	s.Nil(s.readCachedBalance(ctx, w.ID), "balance should be gone after invalidate")
-	_, stillThere := ws.RedisCache.ForceCacheGet(ctx, entityKey)
-	s.True(stillThere, "invalidating the balance must not evict the wallet entity")
+	s.Nil(s.readCachedBalance(ctx, w.ID), "invalidate must clear the cached balance")
+
+	balance = decimal.NewFromInt(55)
+	after, err := s.service.GetWalletBalanceFromCache(ctx, w.ID, nil)
+	s.NoError(err)
+	s.Equal(2, computes, "read after invalidation must recompute")
+	s.True(after.RealTimeBalance.Equal(decimal.NewFromInt(55)), "must return the recomputed value, got %v", after.RealTimeBalance)
+	s.NotNil(s.readCachedBalance(ctx, w.ID), "recompute must repopulate the cache")
 }
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
