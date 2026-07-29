@@ -507,10 +507,10 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlements []*entitlement.Entitlement, expand types.Expand) ([]*dto.EntitlementResponse, error) {
 	items := make([]*dto.EntitlementResponse, len(entitlements))
 
-	var featuresByID map[string]*feature.Feature
-	var plansByID map[string]*plan.Plan
-	var metersByID map[string]*meter.Meter
-	var addonsByID map[string]*addon.Addon
+	featuresByID := make(map[string]*feature.Feature)
+	plansByID := make(map[string]*plan.Plan)
+	metersByID := make(map[string]*meter.Meter)
+	addonsByID := make(map[string]*addon.Addon)
 
 	if expand.Has(types.ExpandFeatures) {
 		featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
@@ -525,6 +525,9 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 
 			featuresByID = make(map[string]*feature.Feature, len(features))
 			for _, f := range features {
+				if f == nil {
+					continue
+				}
 				featuresByID[f.ID] = f
 			}
 
@@ -548,6 +551,9 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 
 			metersByID = make(map[string]*meter.Meter, len(meters))
 			for _, m := range meters {
+				if m == nil {
+					continue
+				}
 				metersByID[m.ID] = m
 			}
 
@@ -568,6 +574,9 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 
 			plansByID = make(map[string]*plan.Plan, len(plans))
 			for _, p := range plans {
+				if p == nil {
+					continue
+				}
 				plansByID[p.ID] = p
 			}
 
@@ -590,6 +599,9 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 
 			addonsByID = make(map[string]*addon.Addon, len(addons))
 			for _, a := range addons {
+				if a == nil {
+					continue
+				}
 				addonsByID[a.ID] = a
 			}
 
@@ -615,6 +627,8 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
 			if p, ok := plansByID[e.EntityID]; ok {
 				items[i].Plan = &dto.PlanResponse{Plan: p}
+				// TODO: !REMOVE after migration
+				items[i].PlanID = e.EntityID
 			}
 		}
 

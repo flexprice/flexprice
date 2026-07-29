@@ -534,9 +534,6 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 	}
 
 	deleted := domainEntitlement.FromEntList(affected)
-	for _, e := range deleted {
-		r.DeleteCache(ctx, e.ID)
-	}
 	r.invalidateEntityCaches(ctx, deleted)
 
 	return nil
@@ -886,6 +883,9 @@ func (r *entitlementRepository) invalidateEntityCaches(ctx context.Context, enti
 		}
 
 		key := r.entityCacheKey(ctx, e.GetEntityType(), e.GetEntityID())
+		if key == "" {
+			continue
+		}
 		if _, dup := seen[key]; dup {
 			continue
 		}
