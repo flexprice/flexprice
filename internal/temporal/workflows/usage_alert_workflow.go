@@ -70,9 +70,11 @@ func UsageAlertWorkflow(ctx workflow.Context, input models.UsageAlertWorkflowInp
 	)
 
 	activityInput := models.UsageAlertActivityInput{
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		CustomerID:    input.CustomerID,
+		TenantID:                 input.TenantID,
+		EnvironmentID:            input.EnvironmentID,
+		CustomerID:               input.CustomerID,
+		SpendAlertsEnabled:       input.SpendAlertsEnabled,
+		EntitlementAlertsEnabled: input.EntitlementAlertsEnabled,
 	}
 
 	opts := workflow.ActivityOptions{
@@ -89,11 +91,15 @@ func UsageAlertWorkflow(ctx workflow.Context, input models.UsageAlertWorkflowInp
 	}
 	actCtx := workflow.WithActivityOptions(ctx, opts)
 
-	if err := workflow.ExecuteActivity(actCtx, ActivitySpendAndEntitlementAlerts, activityInput).Get(actCtx, nil); err != nil {
-		logger.Error("SpendAndEntitlementAlertsActivity returned error", "error", err)
+	if input.SpendAlertsEnabled || input.EntitlementAlertsEnabled {
+		if err := workflow.ExecuteActivity(actCtx, ActivitySpendAndEntitlementAlerts, activityInput).Get(actCtx, nil); err != nil {
+			logger.Error("SpendAndEntitlementAlertsActivity returned error", "error", err)
+		}
 	}
-	if err := workflow.ExecuteActivity(actCtx, ActivityWalletAlerts, activityInput).Get(actCtx, nil); err != nil {
-		logger.Error("WalletAlertsActivity returned error", "error", err)
+	if input.WalletAlertsEnabled {
+		if err := workflow.ExecuteActivity(actCtx, ActivityWalletAlerts, activityInput).Get(actCtx, nil); err != nil {
+			logger.Error("WalletAlertsActivity returned error", "error", err)
+		}
 	}
 
 	return nil

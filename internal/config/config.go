@@ -568,7 +568,10 @@ type UsageAlertsConfig struct {
 	// than this past its intended time yields once (ContinueAsNew) to the back
 	// of the queue so fresher customers evaluate first, and each activity's
 	// ScheduleToStartTimeout is set to the same value.
-	StaleAfter time.Duration `mapstructure:"stale_after" default:"1h"`
+	StaleAfter               time.Duration `mapstructure:"stale_after" default:"1h"`
+	WalletAlertsEnabled      bool          `mapstructure:"wallet_alerts_enabled" default:"true"`
+	SpendAlertsEnabled       bool          `mapstructure:"spend_alerts_enabled" default:"true"`
+	EntitlementAlertsEnabled bool          `mapstructure:"entitlement_alerts_enabled" default:"true"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that

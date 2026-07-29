@@ -62,7 +62,7 @@ func (a *AlertActivities) SpendAndEntitlementAlertsActivity(ctx context.Context,
 		return nil
 	}
 
-	return service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust)
+	return service.NewAlertService(a.serviceParams).EvaluateSpendAndEntitlementAlertsForCustomer(ctx, cust, input.SpendAlertsEnabled, input.EntitlementAlertsEnabled)
 }
 
 // WalletAlertsActivity evaluates wallet-balance alerts and auto-topup.

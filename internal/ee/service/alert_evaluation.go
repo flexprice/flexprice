@@ -185,6 +185,8 @@ func (s *alertService) EvaluateSpendBreachForEvent(ctx context.Context, event *e
 func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	ctx context.Context,
 	cust *customer.Customer,
+	withSpendAlerts bool,
+	withEntitlementAlerts bool,
 ) error {
 	if cust == nil {
 		return nil
@@ -199,19 +201,27 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 		return nil
 	}
 
-	spendErr := s.evaluateSpendAlertsForSubscriptions(ctx, cust, subs)
-	if spendErr != nil {
-		s.Logger.Error(ctx, "fused evaluator: spend alerts returned error", "error", spendErr, "customer_id", cust.ID)
+	var spendErr error
+	if withSpendAlerts {
+		spendErr = s.evaluateSpendAlertsForSubscriptions(ctx, cust, subs)
+		if spendErr != nil {
+			s.Logger.Error(ctx, "fused evaluator: spend alerts returned error", "error", spendErr, "customer_id", cust.ID)
+		}
 	}
 
-	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-	grants, meta, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
-	if err != nil {
-		return err
-	}
-	grantErr := s.evaluateEntitlementGrantsForCustomer(ctx, cust, meta, grants, at)
-	if grantErr != nil {
-		s.Logger.Error(ctx, "fused evaluator: grant evaluation returned error", "error", grantErr, "customer_id", cust.ID)
+	var grantErr error
+	if withEntitlementAlerts {
+		grantSvc := NewEntitlementGrantService(s.ServiceParams)
+		grants, meta, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
+		if err != nil {
+			s.Logger.Error(ctx, "fused evaluator: entitlement grants returned error", "error", err, "customer_id", cust.ID)
+			return errors.Join(spendErr, err)
+		}
+
+		grantErr = s.evaluateEntitlementGrantsForCustomer(ctx, cust, meta, grants, at)
+		if grantErr != nil {
+			s.Logger.Error(ctx, "fused evaluator: grant evaluation returned error", "error", grantErr, "customer_id", cust.ID)
+		}
 	}
 
 	return errors.Join(spendErr, grantErr)
