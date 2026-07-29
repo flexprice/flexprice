@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -48,13 +48,11 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		return nil, err
 	}
 
-	// Create filter to find expired credits.
+	// Create filter to find expired credits (expired at least 6 hours ago - grace period after expiry).
 	filter := types.NewNoLimitWalletTransactionFilter()
 	filter.Type = lo.ToPtr(types.TransactionTypeCredit)
 	filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
-	// Pick credits already past expiry that still hold available credit. No grace buffer: ExpireCredits
-	// now tries to consume them into invoices first (best-effort), then expires whatever remains.
-	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC())
+	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC().Add(-6 * time.Hour))
 	filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
 
 	result := &cronModels.WalletCreditExpiryWorkflowResult{}
@@ -96,7 +94,14 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 				if expireResult.Expired {
 					result.Succeeded++
 					a.logger.Info(ctx, "expired credits successfully",
-						"transaction_id", tx.ID, "wallet_id", tx.WalletID)
+						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
+					continue
+				}
+				switch expireResult.SkipReason {
+				case types.CreditExpirySkipReasonActiveSubscription:
+					result.SkippedDueToActiveSubscription++
+				case types.CreditExpirySkipReasonActiveInvoice:
+					result.SkippedDueToActiveInvoice++
 				}
 			}
 		}

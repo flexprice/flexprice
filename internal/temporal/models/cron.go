@@ -1,8 +1,6 @@
 package models
 
-import (
-	"time"
-)
+import "time"
 
 // ===================== Credit Grant Processing =====================
 
@@ -33,9 +31,11 @@ type WalletCreditExpiryWorkflowInput struct{}
 
 // WalletCreditExpiryWorkflowResult captures outcome metrics.
 type WalletCreditExpiryWorkflowResult struct {
-	Total     int `json:"total"`
-	Succeeded int `json:"succeeded"`
-	Failed    int `json:"failed"`
+	Total                          int `json:"total"`
+	Succeeded                      int `json:"succeeded"`
+	Failed                         int `json:"failed"`
+	SkippedDueToActiveSubscription int `json:"skipped_due_to_active_subscription"`
+	SkippedDueToActiveInvoice      int `json:"skipped_due_to_active_invoice"`
 }
 
 // SubscriptionBillingPeriodsWorkflowInput is the input for SubscriptionBillingPeriodsWorkflow.

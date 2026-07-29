@@ -99,8 +99,6 @@ const (
 	PrefixPriceSyncLock             = "price_sync:plan:"
 	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
 	PrefixTabsInvoiceSyncLock       = "tabs:invoice_sync:"
-	// PrefixPrepaidCreditApplyLock serializes prepaid-credit application to one invoice.
-	PrefixPrepaidCreditApplyLock = "prepaid_credit_apply:invoice:"
 	// PrefixStripeCustomerSyncLock guards first-time Stripe customer creation for a
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.

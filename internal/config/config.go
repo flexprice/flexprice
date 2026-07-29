@@ -671,11 +671,6 @@ type FeatureFlagConfig struct {
 	//   3. global flag above — applies to everyone else
 	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
 	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
-
-	EnablePreExpiryCreditConsumption bool `mapstructure:"enable_pre_expiry_credit_consumption" validate:"omitempty"`
-
-	// Per-tenant overrides. Resolution order: enabled_tenants > global flag.
-	PreExpiryCreditConsumptionEnabledTenants []string `mapstructure:"pre_expiry_credit_consumption_enabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
@@ -685,21 +680,15 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool 
 		tenantID,
 		c.EnableMeterUsageForBilling,
 		c.MeterUsageForBillingEnabledTenants,
+		c.MeterUsageForBillingDisabledTenants,
 	)
 }
 
-// IsPreExpiryCreditConsumptionEnabled resolves whether pre-expiry credit
-// consumption into draft invoices is enabled for a tenant.
-func (c *FeatureFlagConfig) IsPreExpiryCreditConsumptionEnabled(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnablePreExpiryCreditConsumption,
-		c.PreExpiryCreditConsumptionEnabledTenants,
-	)
-}
-
-func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants []string) bool {
+func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants, disabledTenants []string) bool {
 	if tenantID != "" {
+		if slices.Contains(disabledTenants, tenantID) {
+			return false
+		}
 		if slices.Contains(enabledTenants, tenantID) {
 			return true
 		}
