@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
-	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainMeter "github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -827,114 +826,6 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
 
 	return response, nil
-}
-
-func (s *subscriptionService) resolveHubSpotDealID(ctx context.Context, subscriptionID, customerID string) (string, error) {
-	filter := types.NewNoLimitEntityIntegrationMappingFilter()
-	filter.EntityID = subscriptionID
-	filter.EntityType = types.IntegrationEntityTypeSubscription
-	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
-	filter.Status = lo.ToPtr(types.StatusPublished)
-
-	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
-	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to look up HubSpot deal mapping").
-			Mark(ierr.ErrDatabase)
-	}
-	if len(mappings) > 0 {
-		return mappings[0].ProviderEntityID, nil
-	}
-
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return "", err
-	}
-	dealID, ok := cust.Metadata["hubspot_deal_id"]
-	if !ok || dealID == "" {
-		return "", nil
-	}
-
-	backfill := &entityintegrationmapping.EntityIntegrationMapping{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
-		EntityID:         subscriptionID,
-		EntityType:       types.IntegrationEntityTypeSubscription,
-		ProviderType:     string(types.SecretProviderHubSpot),
-		ProviderEntityID: dealID,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
-	}
-	if err := s.EntityIntegrationMappingRepo.Create(ctx, backfill); err != nil {
-		s.Logger.Error(ctx, "failed to backfill HubSpot deal mapping, continuing anyway",
-			"error", err, "subscription_id", subscriptionID, "deal_id", dealID)
-	}
-
-	return dealID, nil
-}
-
-func (s *subscriptionService) triggerHubSpotDealSyncForLineItem(ctx context.Context, subscriptionID, customerID, lineItemID string, priceType types.PriceType, operation models.HubSpotLineItemSyncOperation) {
-	if priceType != types.PRICE_TYPE_FIXED {
-		return
-	}
-
-	if s.ConnectionRepo == nil {
-		return
-	}
-
-	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
-	if err != nil || conn == nil {
-		return
-	}
-
-	if !conn.IsDealOutboundEnabled() {
-		return
-	}
-
-	dealID, err := s.resolveHubSpotDealID(ctx, subscriptionID, customerID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to resolve HubSpot deal ID, skipping sync",
-			"error", err, "subscription_id", subscriptionID, "customer_id", customerID)
-		return
-	}
-	if dealID == "" {
-		return
-	}
-
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-
-	input := &models.HubSpotDealSyncWorkflowInput{
-		SubscriptionID: subscriptionID,
-		CustomerID:     customerID,
-		DealID:         dealID,
-		LineItemID:     lineItemID,
-		Operation:      operation,
-		TenantID:       tenantID,
-		EnvironmentID:  envID,
-	}
-	if err := input.Validate(); err != nil {
-		s.Logger.Error(ctx, "invalid workflow input for HubSpot deal line item sync",
-			"error", err, "subscription_id", subscriptionID, "line_item_id", lineItemID)
-		return
-	}
-
-	temporalSvc := temporalservice.GetGlobalTemporalService()
-	if temporalSvc == nil {
-		s.Logger.Info(ctx, "temporal service not available for HubSpot deal line item sync",
-			"subscription_id", subscriptionID, "line_item_id", lineItemID)
-		return
-	}
-
-	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalHubSpotDealSyncWorkflow, input)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to start HubSpot deal line item sync workflow",
-			"error", err, "subscription_id", subscriptionID, "line_item_id", lineItemID)
-		return
-	}
-
-	s.Logger.Info(ctx, "HubSpot deal line item sync workflow started successfully",
-		"subscription_id", subscriptionID, "line_item_id", lineItemID,
-		"operation", operation, "workflow_id", workflowRun.GetID())
 }
 
 // triggerHubSpotQuoteSyncWorkflow triggers the Temporal workflow to sync subscription to HubSpot quote
@@ -4724,9 +4615,8 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 }
 
 // publishLineItemEvents publishes a subscription.line_item.created/deleted webhook event for
-// each FIXED-price line item in lineItems; non-FIXED line items are skipped. The filter mirrors
-// the one triggerHubSpotDealSyncForLineItem applies for its own (separate, Temporal-based)
-// HubSpot deal sync.
+// each FIXED-price line item in lineItems; non-FIXED line items are skipped since only fixed
+// charges are synced to HubSpot deal line items.
 func (s *subscriptionService) publishLineItemEvents(
 	ctx context.Context,
 	subscriptionID string,
