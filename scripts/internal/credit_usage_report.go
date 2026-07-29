@@ -235,7 +235,7 @@ func newCreditUsageReportScript() (*creditUsageReportScript, error) {
 	priceRepo := entRepo.NewPriceRepository(client, log, redisCache)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)
 	featureRepo := entRepo.NewFeatureRepository(client, log, cacheClient)
-	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient)
+	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient, redisCache)
 	addonRepo := entRepo.NewAddonRepository(client, log, cacheClient)
 	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, log, redisCache)
 	invoiceRepo := entRepo.NewInvoiceRepository(client, log, redisCache)

@@ -181,6 +181,39 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get subscriptions for customer by external ID
+// @ID getSubscriptionsForCustomer
+// @Description Returns all subscriptions for a customer looked up by external_id, with line-item meters and entitlements attached (no pagination).
+// @Tags Customers
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param external_id path string true "Customer External ID"
+// @Param expand query string false "Comma-separated fields to expand: subscription_line_items, subscription_line_items.meters, entitlements, plan, customer"
+// @Success 200 {object} dto.ListSubscriptionsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/external/{external_id}/subscriptions [get]
+func (h *SubscriptionHandler) GetSubscriptionsForCustomer(c *gin.Context) {
+	externalID := c.Param("external_id")
+	if externalID == "" {
+		c.Error(ierr.NewError("external_id is required").
+			WithHint("Please provide a valid external customer ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetSubscriptionsForCustomer(c.Request.Context(), externalID, types.NewExpand(c.Query("expand")))
+	if err != nil {
+		h.log.Error(c.Request.Context(), "Failed to get subscriptions for customer", "error", err, "external_id", externalID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Search subscription line items
 // @ID querySubscriptionLineItems
 // @Description List subscription line items with a JSON filter (subscription, customer, price, pagination, expand=prices, etc.).

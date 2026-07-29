@@ -81,7 +81,7 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
-		RedisCache:                   testutil.NewInMemoryRedis(),
+		RedisCache:                   s.GetRedisCache(),
 		WalletRepo:                   stores.WalletRepo,
 		SubRepo:                      stores.SubscriptionRepo,
 		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,

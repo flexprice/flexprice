@@ -150,6 +150,32 @@ func (s *InMemoryPlanStore) GetByLookupKey(ctx context.Context, lookupKey string
 		Mark(ierr.ErrNotFound)
 }
 
+// ListByIDs retrieves plans by their IDs
+func (s *InMemoryPlanStore) ListByIDs(ctx context.Context, planIDs []string) ([]*plan.Plan, error) {
+	if len(planIDs) == 0 {
+		return []*plan.Plan{}, nil
+	}
+
+	plans, err := s.List(ctx, types.NewNoLimitPlanFilter())
+	if err != nil {
+		return nil, err
+	}
+
+	wanted := make(map[string]struct{}, len(planIDs))
+	for _, id := range planIDs {
+		wanted[id] = struct{}{}
+	}
+
+	result := make([]*plan.Plan, 0, len(planIDs))
+	for _, p := range plans {
+		if _, ok := wanted[p.ID]; ok {
+			result = append(result, p)
+		}
+	}
+
+	return result, nil
+}
+
 // Clear clears the plan store
 func (s *InMemoryPlanStore) Clear() {
 	s.InMemoryStore.Clear()

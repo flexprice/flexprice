@@ -377,22 +377,63 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListByIDs retrieves features by their IDs
+// ListByIDs retrieves features by their IDs, serving whatever is already cached
+// and querying only the remainder.
 func (r *featureRepository) ListByIDs(ctx context.Context, featureIDs []string) ([]*domainFeature.Feature, error) {
 	if len(featureIDs) == 0 {
 		return []*domainFeature.Feature{}, nil
 	}
 
-	r.log.Debug(ctx, "listing features by IDs", "feature_ids", featureIDs)
+	span := StartRepositorySpan(ctx, "feature", "list_by_ids", map[string]interface{}{
+		"feature_ids_count": len(featureIDs),
+	})
+	defer FinishSpan(span)
 
-	// Create a filter with feature IDs
-	filter := &types.FeatureFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		FeatureIDs:  featureIDs,
+	result := make([]*domainFeature.Feature, 0, len(featureIDs))
+	missing := make([]string, 0, len(featureIDs))
+	seen := make(map[string]struct{}, len(featureIDs))
+
+	for _, id := range featureIDs {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		if cached := r.GetCache(ctx, id); cached != nil {
+			if cached.Status == types.StatusPublished || cached.Status == types.StatusArchived {
+				result = append(result, cached)
+			}
+			continue
+		}
+		missing = append(missing, id)
 	}
 
-	// Use the existing List method
-	return r.List(ctx, filter)
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	filter := &types.FeatureFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		FeatureIDs:  missing,
+	}
+
+	fetched, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	for _, f := range fetched {
+		r.SetCache(ctx, f)
+		result = append(result, f)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
 }
 
 // GetByGroupIDs returns features that belong to any of the given group IDs.

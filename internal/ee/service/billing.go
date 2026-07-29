@@ -73,6 +73,8 @@ type BillingService interface {
 	// GetCustomerEntitlements returns aggregated entitlements for a customer across all subscriptions.
 	GetCustomerEntitlements(ctx context.Context, customerID string, req *dto.GetCustomerEntitlementsRequest) (*dto.CustomerEntitlementsResponse, error)
 
+	GetCustomerEntitlementsForSubscriptions(ctx context.Context, customerID string, subscriptions []*subscription.Subscription, req *dto.GetCustomerEntitlementsRequest) (*dto.CustomerEntitlementsResponse, error)
+
 	// AggregateEntitlements aggregates entitlements from multiple sources into a unified view.
 	// If SubscriptionID is provided in params, it will be used for sources that don't have one set.
 	AggregateEntitlements(params *dto.AggregateEntitlementsParams) []*dto.AggregatedFeature
@@ -2412,6 +2414,24 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	if customerID == "" {
 		return nil, ierr.NewError("customer_id is required").Mark(ierr.ErrValidation)
 	}
+
+	subscriptions, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CustomerID:         customerID,
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+		WithLineItems:      false,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetCustomerEntitlementsForSubscriptions(ctx, customerID, subscriptions, req)
+}
+
+func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Context, customerID string, subscriptions []*subscription.Subscription, req *dto.GetCustomerEntitlementsRequest) (*dto.CustomerEntitlementsResponse, error) {
+	if customerID == "" {
+		return nil, ierr.NewError("customer_id is required").Mark(ierr.ErrValidation)
+	}
 	if req == nil {
 		req = &dto.GetCustomerEntitlementsRequest{}
 	}
@@ -2425,20 +2445,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		Features:      []*dto.AggregatedFeature{},
 	}
 
-	// 1. Get active subscriptions for the customer (without line items — not needed for entitlements)
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	subscriptions, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		CustomerID:  customerID,
-		SubscriptionStatus: []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-		},
-		WithLineItems: false,
-	})
-	if err != nil {
-		return nil, err
-	}
 
 	// Filter subscriptions if IDs are specified
 	if len(req.SubscriptionIDs) > 0 {
@@ -2469,7 +2476,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		}
 
 		// Get all entitlements for this subscription (plan + addons)
-		subEntitlements, err := subscriptionService.GetSubscriptionEntitlements(ctx, sub.ID)
+		subEntitlements, err := subscriptionService.GetSubscriptionEntitlementsForSubscription(ctx, sub)
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get subscription entitlements, skipping",
 				"subscription_id", sub.ID,

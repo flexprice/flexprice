@@ -119,6 +119,16 @@ func (s *InMemoryMeterStore) GetMatchingMetersByEventName(ctx context.Context, e
 	return s.List(ctx, filter)
 }
 
+func (s *InMemoryMeterStore) ListByIDs(ctx context.Context, ids []string) ([]*meter.Meter, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	filter := types.NewNoLimitMeterFilter()
+	filter.MeterIDs = ids
+	return s.List(ctx, filter)
+}
+
 func (s *InMemoryMeterStore) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
 	f := *filter
 	f.QueryFilter = types.NewNoLimitQueryFilter()

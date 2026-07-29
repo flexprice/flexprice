@@ -5051,6 +5051,97 @@ func (s *SubscriptionServiceSuite) TestListSubscriptions_ExpandEntitlements() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestGetSubscriptionsForCustomer() {
+	ctx := s.GetContext()
+	fullExpand := types.NewExpand("subscription_line_items.meters,entitlements")
+
+	_, err := s.service.GetSubscriptionsForCustomer(ctx, "", fullExpand)
+	s.Error(err)
+
+	_, err = s.service.GetSubscriptionsForCustomer(ctx, "missing_external_id", fullExpand)
+	s.Error(err)
+
+	resp, err := s.service.GetSubscriptionsForCustomer(ctx, s.testData.customer.ExternalID, fullExpand)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.NotEmpty(resp.Items)
+
+	for _, item := range resp.Items {
+		s.Equal(s.testData.customer.ID, item.CustomerID)
+		s.Nil(item.Plan, "plan should not be hydrated")
+		s.Nil(item.Customer, "customer should not be hydrated")
+		s.NotNil(item.Entitlements, "entitlements should be populated")
+		if item.Subscription != nil {
+			for _, li := range item.Subscription.LineItems {
+				if li.MeterID != "" {
+					s.NotNil(li.Meter, "usage line items should have meters attached")
+					s.Equal(li.MeterID, li.Meter.ID)
+				}
+			}
+		}
+	}
+}
+
+// TestGetSubscriptionsForCustomer_Expand asserts that expand drives what the endpoint
+// hydrates: nothing is loaded unless asked for, and fields this endpoint cannot
+// hydrate are rejected rather than silently ignored.
+func (s *SubscriptionServiceSuite) TestGetSubscriptionsForCustomer_Expand() {
+	ctx := s.GetContext()
+	externalID := s.testData.customer.ExternalID
+
+	// Line-item loading itself is not asserted here: InMemorySubscriptionStore.List
+	// attaches line items unconditionally, so it cannot model filter.WithLineItems.
+	s.Run("no expand hydrates nothing", func() {
+		resp, err := s.service.GetSubscriptionsForCustomer(ctx, externalID, types.NewExpand(""))
+		s.NoError(err)
+		s.NotEmpty(resp.Items)
+
+		for _, item := range resp.Items {
+			s.Nil(item.Entitlements, "entitlements must stay nil when not expanded")
+			for _, li := range item.Subscription.LineItems {
+				s.Nil(li.Meter, "meters must not hydrate when not expanded")
+			}
+		}
+	})
+
+	s.Run("line items without meters", func() {
+		resp, err := s.service.GetSubscriptionsForCustomer(ctx, externalID,
+			types.NewExpand(string(types.ExpandSubscriptionLineItems)))
+		s.NoError(err)
+		s.NotEmpty(resp.Items)
+
+		sawLineItem := false
+		for _, item := range resp.Items {
+			for _, li := range item.Subscription.LineItems {
+				sawLineItem = true
+				s.Nil(li.Meter, "meters must not hydrate without subscription_line_items.meters")
+			}
+		}
+		s.True(sawLineItem, "seed data must contain at least one line item")
+	})
+
+	s.Run("entitlements only", func() {
+		resp, err := s.service.GetSubscriptionsForCustomer(ctx, externalID,
+			types.NewExpand(string(types.ExpandEntitlements)))
+		s.NoError(err)
+		s.NotEmpty(resp.Items)
+
+		for _, item := range resp.Items {
+			s.NotNil(item.Entitlements, "expand=entitlements should populate Entitlements")
+			for _, li := range item.Subscription.LineItems {
+				s.Nil(li.Meter, "meters must not hydrate when not expanded")
+			}
+		}
+	})
+
+	s.Run("unsupported fields are rejected", func() {
+		for _, field := range []string{"prices", "plan", "customer", "schedule"} {
+			_, err := s.service.GetSubscriptionsForCustomer(ctx, externalID, types.NewExpand(field))
+			s.Error(err, "expand=%s should be rejected", field)
+		}
+	})
+}
+
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// Create a test subscription that's ready for period transition
 	now := time.Now().UTC()

@@ -196,6 +196,63 @@ func (r *planRepository) ListAll(ctx context.Context, filter *types.PlanFilter) 
 	return plans, nil
 }
 
+// ListByIDs retrieves plans by their IDs, serving whatever is already cached and
+// querying only the remainder.
+func (r *planRepository) ListByIDs(ctx context.Context, planIDs []string) ([]*domainPlan.Plan, error) {
+	if len(planIDs) == 0 {
+		return []*domainPlan.Plan{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "plan", "list_by_ids", map[string]interface{}{
+		"plan_ids_count": len(planIDs),
+	})
+	defer FinishSpan(span)
+
+	result := make([]*domainPlan.Plan, 0, len(planIDs))
+	missing := make([]string, 0, len(planIDs))
+	seen := make(map[string]struct{}, len(planIDs))
+
+	for _, id := range planIDs {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		if cached := r.GetCache(ctx, id); cached != nil {
+			if cached.Status == types.StatusPublished {
+				result = append(result, cached)
+			}
+			continue
+		}
+		missing = append(missing, id)
+	}
+
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	filter := types.NewNoLimitPlanFilter()
+	filter.PlanIDs = missing
+
+	fetched, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	for _, p := range fetched {
+		r.SetCache(ctx, p)
+		result = append(result, p)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (int, error) {
 	client := r.client.Reader(ctx)
 

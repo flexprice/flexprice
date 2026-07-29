@@ -17,19 +17,25 @@ import (
 	"github.com/samber/lo"
 )
 
-type entitlementRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts EntitlementQueryOptions
-	cache     cache.InMemoryCache
+var cachedEntityTypes = []types.EntitlementEntityType{
+	types.ENTITLEMENT_ENTITY_TYPE_PLAN,
 }
 
-func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainEntitlement.Repository {
+type entitlementRepository struct {
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  EntitlementQueryOptions
+	cache      cache.InMemoryCache
+	redisCache cache.RedisCache
+}
+
+func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache, redisCache cache.RedisCache) domainEntitlement.Repository {
 	return &entitlementRepository{
-		client:    client,
-		log:       log,
-		queryOpts: EntitlementQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  EntitlementQueryOptions{},
+		cache:      cache,
+		redisCache: redisCache,
 	}
 }
 
@@ -111,6 +117,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.deleteEntityCache(ctx, e.EntityType, e.EntityID)
 	return domainEntitlement.FromEnt(result), nil
 }
 
@@ -344,6 +351,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			Mark(ierr.ErrDatabase)
 	}
 	r.DeleteCache(ctx, e.ID)
+	r.deleteEntityCache(ctx, e.EntityType, e.EntityID)
 	return domainEntitlement.FromEnt(result), nil
 }
 
@@ -362,7 +370,13 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	_, err := client.Entitlement.Update().
+	existing, err := r.Get(ctx, id)
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
+
+	_, err = client.Entitlement.Update().
 		Where(
 			entitlement.ID(id),
 			entitlement.TenantID(types.GetTenantID(ctx)),
@@ -387,6 +401,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	r.DeleteCache(ctx, id)
+	r.deleteEntityCache(ctx, existing.GetEntityType(), existing.GetEntityID())
 	return nil
 }
 
@@ -466,7 +481,9 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainEntitlement.FromEntList(results), nil
+	created := domainEntitlement.FromEntList(results)
+	r.invalidateEntityCaches(ctx, created)
+	return created, nil
 }
 
 func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) error {
@@ -483,7 +500,24 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 
 	r.log.Debug(ctx, "deleting entitlements in bulk", "count", len(ids))
 
-	_, err := r.client.Writer(ctx).Entitlement.Update().
+	// Resolve the owning entities before archiving so their cached lists can be dropped.
+	affected, err := r.client.Writer(ctx).Entitlement.Query().
+		Where(
+			entitlement.IDIn(ids...),
+			entitlement.TenantID(types.GetTenantID(ctx)),
+			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		All(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load entitlements for bulk delete").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(ids),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	_, err = r.client.Writer(ctx).Entitlement.Update().
 		Where(
 			entitlement.IDIn(ids...),
 			entitlement.TenantID(types.GetTenantID(ctx)),
@@ -503,7 +537,45 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	deleted := domainEntitlement.FromEntList(affected)
+	r.invalidateEntityCaches(ctx, deleted)
+
 	return nil
+}
+
+func (r *entitlementRepository) ListByEntity(ctx context.Context, entityType types.EntitlementEntityType, entityID string) ([]*domainEntitlement.Entitlement, error) {
+	if entityID == "" {
+		return []*domainEntitlement.Entitlement{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "entitlement", "list_by_entity", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+		"tenant_id":   types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if cached := r.getEntityCache(ctx, entityType, entityID); cached != nil {
+		SetSpanSuccess(span)
+		return cached, nil
+	}
+
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  lo.ToPtr(entityType),
+		EntityIDs:   []string{entityID},
+	}
+	filter.WithStatus(types.StatusPublished)
+
+	entitlements, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	r.setEntityCache(ctx, entityType, entityID, entitlements)
+	SetSpanSuccess(span)
+	return entitlements, nil
 }
 
 // ListByPlanIDs retrieves all entitlements for the given plan IDs
@@ -755,4 +827,90 @@ func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID s
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlementID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+func (r *entitlementRepository) entityCacheKey(ctx context.Context, entityType types.EntitlementEntityType, entityID string) string {
+	if r.redisCache == nil || entityID == "" || !lo.Contains(cachedEntityTypes, entityType) {
+		return ""
+	}
+
+	return cache.GenerateKey(ctx, cache.PrefixEntitlement, "entity", string(entityType), entityID)
+}
+
+func (r *entitlementRepository) setEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string, entitlements []*domainEntitlement.Entitlement) {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "set", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	r.redisCache.Set(spanCtx, cacheKey, entitlements, cache.ExpiryDefaultRedis)
+}
+
+func (r *entitlementRepository) getEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) []*domainEntitlement.Entitlement {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return nil
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "get", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	value, found := r.redisCache.Get(spanCtx, cacheKey)
+	if !found {
+		cache.SetCacheHit(span, false)
+		return nil
+	}
+
+	entitlements, ok := cache.UnmarshalCacheValue[[]*domainEntitlement.Entitlement](value)
+	if !ok || entitlements == nil {
+		cache.SetCacheHit(span, false)
+		return nil
+	}
+
+	cache.SetCacheHit(span, true)
+	return *entitlements
+}
+
+func (r *entitlementRepository) invalidateEntityCaches(ctx context.Context, entitlements []*domainEntitlement.Entitlement) {
+	seen := make(map[string]struct{}, len(entitlements))
+	for _, e := range entitlements {
+		if e == nil || e.EntityID == "" {
+			continue
+		}
+
+		key := r.entityCacheKey(ctx, e.GetEntityType(), e.GetEntityID())
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		r.deleteEntityCache(ctx, e.GetEntityType(), e.GetEntityID())
+	}
+}
+
+func (r *entitlementRepository) deleteEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "delete", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	r.redisCache.Delete(spanCtx, cacheKey)
 }

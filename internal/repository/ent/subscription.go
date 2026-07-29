@@ -310,7 +310,11 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	if filter.WithLineItems {
 		query = query.WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
 			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
-		}).WithCouponAssociations(func(q *ent.CouponAssociationQuery) {
+		})
+	}
+
+	if filter.WithCouponAssociations {
+		query = query.WithCouponAssociations(func(q *ent.CouponAssociationQuery) {
 			q.Where(couponassociation.Status(string(types.StatusPublished))).
 				WithCoupon(func(cq *ent.CouponQuery) {
 					cq.Where(coupon.Status(string(types.StatusPublished)))
@@ -1106,7 +1110,8 @@ func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerI
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
 		},
-		WithLineItems: true,
+		WithLineItems:          true,
+		WithCouponAssociations: true,
 	}
 
 	// Use the existing List method

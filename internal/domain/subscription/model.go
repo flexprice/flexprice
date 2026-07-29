@@ -149,6 +149,14 @@ type Subscription struct {
 	types.BaseModel
 }
 
+func (s *Subscription) GetLineItems() []*SubscriptionLineItem {
+	if s == nil {
+		return nil
+	}
+
+	return s.LineItems
+}
+
 // GetInvoicingCustomerID returns the invoicing customer ID if available, otherwise falls back to the subscription customer ID.
 // This provides backward compatibility for subscriptions that don't have an invoicing customer ID set.
 func (s *Subscription) GetInvoicingCustomerID() string {

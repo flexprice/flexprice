@@ -2217,6 +2217,13 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		filter.WithLineItems = true
 	}
 
+	// Coupon associations used to be eager-loaded together with line items, so keep
+	// them coupled here to preserve behaviour for every existing caller. Only
+	// GetSubscriptionsForCustomer, which never surfaces them, opts out.
+	if filter.WithLineItems || expand.Has(types.ExpandCouponAssociations) {
+		filter.WithCouponAssociations = true
+	}
+
 	// Resolve external customer ID to internal customer ID if provided
 	if filter.ExternalCustomerID != "" {
 		s.Logger.Debug(ctx, "resolving external customer ID",
@@ -2423,10 +2430,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		}
 
 		if len(meterIDSet) > 0 {
-			meterIDs := lo.Keys(meterIDSet)
-			meterFilter := types.NewNoLimitMeterFilter()
-			meterFilter.MeterIDs = meterIDs
-			meters, err := s.MeterRepo.List(ctx, meterFilter)
+			meters, err := s.MeterRepo.ListByIDs(ctx, lo.Keys(meterIDSet))
 			if err != nil {
 				return nil, err
 			}
@@ -2487,6 +2491,129 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"pagination", response.Pagination)
 
 	return response, nil
+}
+
+func (s *subscriptionService) GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error) {
+	if externalCustomerID == "" {
+		return nil, ierr.NewError("external_customer_id is required").
+			WithHint("Please provide a valid external customer ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := expand.Validate(types.SubscriptionsForCustomerExpandConfig); err != nil {
+		return nil, err
+	}
+
+	response := &dto.ListSubscriptionsResponse{}
+
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, externalCustomerID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve external customer ID",
+			"error", err,
+			"external_customer_id", externalCustomerID)
+		return nil, ierr.WithError(err).
+			WithHintf("Customer with external ID '%s' not found", externalCustomerID).
+			WithReportableDetails(map[string]interface{}{
+				"external_customer_id": externalCustomerID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	filter := &types.SubscriptionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CustomerID:         customer.ID,
+		WithLineItems:      expand.Has(types.ExpandSubscriptionLineItems),
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+	}
+
+	subscriptions, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list subscriptions for customer",
+			"error", err,
+			"customer_id", customer.ID,
+			"external_customer_id", externalCustomerID)
+		return nil, err
+	}
+
+	if len(subscriptions) == 0 {
+		return response, nil
+	}
+
+	if filter.WithLineItems && expand.GetNested(types.ExpandSubscriptionLineItems).Has(types.ExpandMeters) {
+		if err := s.hydrateLineItemMeters(ctx, subscriptions); err != nil {
+			return nil, err
+		}
+	}
+
+	var features []*dto.AggregatedFeature
+	if expand.Has(types.ExpandEntitlements) {
+		billingService := NewBillingService(s.ServiceParams)
+		ents, err := billingService.GetCustomerEntitlementsForSubscriptions(ctx, customer.ID, subscriptions, &dto.GetCustomerEntitlementsRequest{})
+		if err != nil {
+			s.Logger.Error(ctx, "failed to load entitlements for customer",
+				"error", err,
+				"customer_id", customer.ID)
+			return nil, err
+		}
+
+		// Feature meters duplicate the line-item meters already in the response.
+		for _, af := range ents.Features {
+			if af != nil && af.Feature != nil {
+				af.Feature.Meter = nil
+			}
+		}
+		features = ents.Features
+	}
+
+	response.Items = make([]*dto.SubscriptionResponse, len(subscriptions))
+	for i, sub := range subscriptions {
+		if sub == nil {
+			continue
+		}
+
+		response.Items[i] = &dto.SubscriptionResponse{
+			Subscription: sub,
+			Entitlements: features,
+		}
+	}
+
+	return response, nil
+}
+
+func (s *subscriptionService) hydrateLineItemMeters(ctx context.Context, subscriptions []*subscription.Subscription) error {
+	meterIDSet := make(map[string]struct{})
+	for _, sub := range subscriptions {
+		for _, li := range sub.GetLineItems() {
+			if li.GetMeterID() == "" {
+				continue
+			}
+			meterIDSet[li.GetMeterID()] = struct{}{}
+		}
+	}
+
+	if len(meterIDSet) == 0 {
+		return nil
+	}
+
+	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Keys(meterIDSet))
+	if err != nil {
+		return err
+	}
+
+	meterMap := make(map[string]*domainMeter.Meter, len(meters))
+	for _, m := range meters {
+		meterMap[m.ID] = m
+	}
+
+	for _, sub := range subscriptions {
+		for i, li := range sub.GetLineItems() {
+			if m, ok := meterMap[li.GetMeterID()]; ok {
+				sub.GetLineItems()[i].Meter = m
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
@@ -6323,6 +6450,16 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 			Mark(ierr.ErrNotFound)
 	}
 
+	return s.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+}
+
+func (s *subscriptionService) GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*dto.EntitlementResponse, error) {
+	if sub == nil {
+		return nil, ierr.NewError("subscription is required").
+			WithHint("A subscription must be provided to resolve entitlements").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Initialize entitlement service
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
@@ -6332,7 +6469,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get plan entitlements").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
+				"subscription_id": sub.ID,
 				"plan_id":         sub.PlanID,
 			}).
 			Mark(ierr.ErrDatabase)
@@ -6341,7 +6478,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 	// Step 2: Get active addon associations using current period start
 	addonService := NewAddonService(s.ServiceParams)
 	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
-		EntityID:   subscriptionID,
+		EntityID:   sub.ID,
 		EntityType: types.AddonAssociationEntityTypeSubscription,
 		StartDate:  &sub.CurrentPeriodStart,
 		EndDate:    &sub.CurrentPeriodEnd,
@@ -6350,7 +6487,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get active addon associations").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
+				"subscription_id": sub.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -6402,7 +6539,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 
 	// Step 5: Fetch subscription-scoped entitlement overrides
 	subscriptionEntFilter := types.NewNoLimitEntitlementFilter().
-		WithEntityIDs([]string{subscriptionID}).
+		WithEntityIDs([]string{sub.ID}).
 		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
 		WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandAddons))
@@ -6418,7 +6555,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 		planEntitlements.Items,
 		addonEntitlements,
 		subscriptionEntitlements,
-		subscriptionID,
+		sub.ID,
 	)
 
 	return finalEntitlements, nil

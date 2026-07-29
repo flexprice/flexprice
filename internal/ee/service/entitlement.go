@@ -465,7 +465,8 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
 
-	if filter.GetLimit() == 0 {
+	isUnlimited := filter.IsUnlimited()
+	if !isUnlimited && filter.GetLimit() <= 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
@@ -480,163 +481,165 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 		return nil, err
 	}
 
-	count, err := s.EntitlementRepo.Count(ctx, filter)
+	count := len(entitlements)
+	if !isUnlimited {
+		count, err = s.EntitlementRepo.Count(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	items, err := s.hydrateEntitlements(ctx, entitlements, filter.GetExpand())
 	if err != nil {
 		return nil, err
 	}
 
-	response := &dto.ListEntitlementsResponse{
-		Items: make([]*dto.EntitlementResponse, len(entitlements)),
+	return &dto.ListEntitlementsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}, nil
+}
+
+func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlements []*entitlement.Entitlement, expand types.Expand) ([]*dto.EntitlementResponse, error) {
+	items := make([]*dto.EntitlementResponse, len(entitlements))
+
+	featuresByID := make(map[string]*feature.Feature)
+	plansByID := make(map[string]*plan.Plan)
+	metersByID := make(map[string]*meter.Meter)
+	addonsByID := make(map[string]*addon.Addon)
+
+	if expand.Has(types.ExpandFeatures) {
+		featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+			return e.FeatureID
+		})
+
+		if len(featureIDs) > 0 {
+			features, err := s.FeatureRepo.ListByIDs(ctx, featureIDs)
+			if err != nil {
+				return nil, err
+			}
+
+			featuresByID = make(map[string]*feature.Feature, len(features))
+			for _, f := range features {
+				if f == nil {
+					continue
+				}
+				featuresByID[f.ID] = f
+			}
+
+			s.Logger.Debug(ctx, "fetched features for entitlements", "count", len(features))
+		}
 	}
 
-	// Create maps to store expanded data
-	var featuresByID map[string]*feature.Feature
-	var plansByID map[string]*plan.Plan
-	var metersByID map[string]*meter.Meter
-	var addonsByID map[string]*addon.Addon
-
-	if !filter.GetExpand().IsEmpty() {
-		if filter.GetExpand().Has(types.ExpandFeatures) {
-			// Collect feature IDs
-			featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.FeatureID
-			})
-
-			if len(featureIDs) > 0 {
-				featureFilter := types.NewNoLimitFeatureFilter()
-				featureFilter.FeatureIDs = featureIDs
-				features, err := s.FeatureRepo.List(ctx, featureFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				featuresByID = make(map[string]*feature.Feature, len(features))
-				for _, f := range features {
-					featuresByID[f.ID] = f
-				}
-
-				s.Logger.Debug(ctx, "fetched features for entitlements", "count", len(features))
-			}
-		}
-
-		if filter.GetExpand().Has(types.ExpandMeters) {
-			// Collect meter IDs
-			meterIDs := []string{}
-			for _, f := range featuresByID {
+	if expand.Has(types.ExpandMeters) {
+		meterIDs := make([]string, 0, len(featuresByID))
+		for _, f := range featuresByID {
+			if f.MeterID != "" {
 				meterIDs = append(meterIDs, f.MeterID)
 			}
-
-			if len(meterIDs) > 0 {
-				meterFilter := types.NewNoLimitMeterFilter()
-				meterFilter.MeterIDs = meterIDs
-				meters, err := s.MeterRepo.List(ctx, meterFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				metersByID = make(map[string]*meter.Meter, len(meters))
-				for _, m := range meters {
-					metersByID[m.ID] = m
-				}
-
-				s.Logger.Debug(ctx, "fetched meters for entitlements", "count", len(meters))
-			}
 		}
 
-		if filter.GetExpand().Has(types.ExpandPlans) {
-			// Collect entity IDs for plans
-			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.EntityID
-			})
-
-			if len(entityIDs) > 0 {
-				planFilter := types.NewNoLimitPlanFilter()
-				planFilter.PlanIDs = entityIDs
-				plans, err := s.PlanRepo.List(ctx, planFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				plansByID = make(map[string]*plan.Plan, len(plans))
-				for _, p := range plans {
-					plansByID[p.ID] = p
-				}
-
-				s.Logger.Debug(ctx, "fetched plans for entitlements", "count", len(plans))
+		if len(meterIDs) > 0 {
+			meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
+			if err != nil {
+				return nil, err
 			}
+
+			metersByID = make(map[string]*meter.Meter, len(meters))
+			for _, m := range meters {
+				if m == nil {
+					continue
+				}
+				metersByID[m.ID] = m
+			}
+
+			s.Logger.Debug(ctx, "fetched meters for entitlements", "count", len(meters))
 		}
+	}
 
-		if filter.GetExpand().Has(types.ExpandAddons) {
-			// Collect entity IDs for addons
-			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-				return e.EntityID
-			})
+	if expand.Has(types.ExpandPlans) {
+		planIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.EntityID, e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN
+		})
 
-			if len(entityIDs) > 0 {
-				addonFilter := types.NewNoLimitAddonFilter()
-				addonFilter.AddonIDs = entityIDs
-				addons, err := s.AddonRepo.List(ctx, addonFilter)
-				if err != nil {
-					return nil, err
-				}
-
-				addonsByID = make(map[string]*addon.Addon, len(addons))
-				for _, a := range addons {
-					addonsByID[a.ID] = a
-				}
-
-				s.Logger.Debug(ctx, "fetched addons for entitlements", "count", len(addons))
+		if len(planIDs) > 0 {
+			plans, err := s.PlanRepo.ListByIDs(ctx, planIDs)
+			if err != nil {
+				return nil, err
 			}
+
+			plansByID = make(map[string]*plan.Plan, len(plans))
+			for _, p := range plans {
+				if p == nil {
+					continue
+				}
+				plansByID[p.ID] = p
+			}
+
+			s.Logger.Debug(ctx, "fetched plans for entitlements", "count", len(plans))
+		}
+	}
+
+	if expand.Has(types.ExpandAddons) {
+		addonIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.EntityID, e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON
+		})
+
+		if len(addonIDs) > 0 {
+			addonFilter := types.NewNoLimitAddonFilter()
+			addonFilter.AddonIDs = addonIDs
+			addons, err := s.AddonRepo.List(ctx, addonFilter)
+			if err != nil {
+				return nil, err
+			}
+
+			addonsByID = make(map[string]*addon.Addon, len(addons))
+			for _, a := range addons {
+				if a == nil {
+					continue
+				}
+				addonsByID[a.ID] = a
+			}
+
+			s.Logger.Debug(ctx, "fetched addons for entitlements", "count", len(addons))
 		}
 	}
 
 	for i, e := range entitlements {
-		response.Items[i] = &dto.EntitlementResponse{Entitlement: e}
+		items[i] = &dto.EntitlementResponse{Entitlement: e}
 
 		// TODO: !REMOVE after migration
 		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
-			response.Items[i].PlanID = e.EntityID
+			items[i].PlanID = e.EntityID
 		}
 
-		// Add expanded feature if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandFeatures) {
-			if f, ok := featuresByID[e.FeatureID]; ok {
-				response.Items[i].Feature = &dto.FeatureResponse{Feature: f}
-				// Add expanded meter if requested and available
-				if filter.GetExpand().Has(types.ExpandMeters) {
-					if m, ok := metersByID[f.MeterID]; ok {
-						response.Items[i].Feature.Meter = dto.ToMeterResponse(m)
-					}
-				}
+		if f, ok := featuresByID[e.FeatureID]; ok {
+			items[i].Feature = &dto.FeatureResponse{Feature: f}
+			if m, ok := metersByID[f.MeterID]; ok {
+				items[i].Feature.Meter = dto.ToMeterResponse(m)
 			}
 		}
 
-		// Add expanded plan if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandPlans) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
-
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
 			if p, ok := plansByID[e.EntityID]; ok {
-				response.Items[i].Plan = &dto.PlanResponse{Plan: p}
+				items[i].Plan = &dto.PlanResponse{Plan: p}
 				// TODO: !REMOVE after migration
-				response.Items[i].PlanID = e.EntityID
+				items[i].PlanID = e.EntityID
 			}
-
 		}
 
-		// Add expanded addon if requested and available
-		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandAddons) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+		if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
 			if a, ok := addonsByID[e.EntityID]; ok {
-				response.Items[i].Addon = &dto.AddonResponse{Addon: a}
+				items[i].Addon = &dto.AddonResponse{Addon: a}
 			}
 		}
 	}
 
-	response.Pagination = types.NewPaginationResponse(
-		count,
-		filter.GetLimit(),
-		filter.GetOffset(),
-	)
-
-	return response, nil
+	return items, nil
 }
 
 func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, req dto.UpdateEntitlementRequest) (*dto.EntitlementResponse, error) {
@@ -747,15 +750,30 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 }
 
 func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID string) (*dto.ListEntitlementsResponse, error) {
-	// Create a filter for the plan's entitlements
 	filter := types.NewNoLimitEntitlementFilter()
 	filter.WithEntityIDs([]string{planID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
 	filter.WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandPlans))
 
-	// Use the standard list function to get the entitlements with expansion
-	return s.ListEntitlements(ctx, filter)
+	entitlements, err := s.EntitlementRepo.ListByEntity(ctx, types.ENTITLEMENT_ENTITY_TYPE_PLAN, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := s.hydrateEntitlements(ctx, entitlements, filter.GetExpand())
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.ListEntitlementsResponse{
+		Items: items,
+		Pagination: types.NewPaginationResponse(
+			len(entitlements),
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}, nil
 }
 
 func (s *entitlementService) GetPlanFeatureEntitlements(ctx context.Context, planID, featureID string) (*dto.ListEntitlementsResponse, error) {

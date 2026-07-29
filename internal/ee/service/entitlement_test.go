@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -31,15 +32,16 @@ func (s *EntitlementServiceSuite) SetupTest() {
 func (s *EntitlementServiceSuite) setupService() {
 	stores := s.GetStores()
 	s.service = NewEntitlementService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		EntitlementRepo:  stores.EntitlementRepo,
-		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
-		PlanRepo:         stores.PlanRepo,
-		FeatureRepo:      stores.FeatureRepo,
-		MeterRepo:        testutil.NewInMemoryMeterStore(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:               s.GetLogger(),
+		Config:               s.GetConfig(),
+		DB:                   s.GetDB(),
+		EntitlementRepo:      stores.EntitlementRepo,
+		EntitlementGrantRepo: stores.EntitlementGrantRepo,
+		PlanRepo:             stores.PlanRepo,
+		FeatureRepo:          stores.FeatureRepo,
+		MeterRepo:            testutil.NewInMemoryMeterStore(),
+		WebhookPublisher:     s.GetWebhookPublisher(),
+		RedisCache:           s.GetRedisCache(),
 	})
 }
 
@@ -1062,4 +1064,130 @@ func (s *EntitlementServiceSuite) TestAggregateConfigEntitlementsForBilling() {
 	r3 := aggregateConfigEntitlementsForBilling(nil)
 	s.False(r3.IsEnabled)
 	s.Len(r3.ConfigValues, 0)
+}
+
+// GetPlanEntitlements must never cache the composed response: the payload embeds
+// features, meters and plans, none of which are invalidated by entitlement writes.
+// Each of those is cached by its owning repository instead, so an edit to any of them
+// has to show up on the next call.
+func (s *EntitlementServiceSuite) TestGetPlanEntitlements_ReflectsRelatedEntityUpdates() {
+	ctx := s.GetContext()
+
+	testPlan := &plan.Plan{
+		ID:        "plan-cache-1",
+		Name:      "Cache Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, testPlan))
+
+	boolFeature := &feature.Feature{
+		ID:        "feat-cache-bool",
+		Name:      "Bool",
+		Type:      types.FeatureTypeBoolean,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, boolFeature))
+
+	_, err := s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		PlanID:      testPlan.ID,
+		FeatureID:   boolFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true,
+	})
+	s.NoError(err)
+
+	first, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Len(first.Items, 1)
+	s.Require().NotNil(first.Items[0].Feature)
+	s.Equal("Bool", first.Items[0].Feature.Name)
+
+	// Rename the feature without touching any entitlement.
+	boolFeature.Name = "Bool Renamed"
+	s.NoError(s.GetStores().FeatureRepo.Update(ctx, boolFeature))
+
+	testPlan.Name = "Cache Plan Renamed"
+	s.NoError(s.GetStores().PlanRepo.Update(ctx, testPlan))
+
+	afterFeatureUpdate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Require().Len(afterFeatureUpdate.Items, 1)
+	s.Require().NotNil(afterFeatureUpdate.Items[0].Feature)
+	s.Equal("Bool Renamed", afterFeatureUpdate.Items[0].Feature.Name,
+		"a feature rename must not be masked by a cached entitlements response")
+	s.Require().NotNil(afterFeatureUpdate.Items[0].Plan)
+	s.Equal("Cache Plan Renamed", afterFeatureUpdate.Items[0].Plan.Name,
+		"a plan rename must not be masked by a cached entitlements response")
+
+	// A new entitlement on the same plan must show up too.
+	secondFeature := &feature.Feature{
+		ID:        "feat-cache-bool-2",
+		Name:      "Bool 2",
+		Type:      types.FeatureTypeBoolean,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, secondFeature))
+	_, err = s.service.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		PlanID:      testPlan.ID,
+		FeatureID:   secondFeature.ID,
+		FeatureType: types.FeatureTypeBoolean,
+		IsEnabled:   true,
+	})
+	s.NoError(err)
+
+	afterCreate, err := s.service.GetPlanEntitlements(ctx, testPlan.ID)
+	s.NoError(err)
+	s.Len(afterCreate.Items, 2, "a newly created entitlement must be visible immediately")
+}
+
+// A no-limit filter must survive ListEntitlements' limit normalization. GetLimit()
+// returns 0 for unlimited filters, so a naive `GetLimit() == 0` check would clobber the
+// filter with the default page size and silently truncate the result set.
+func (s *EntitlementServiceSuite) TestListEntitlements_NoLimitFilterIsNotTruncated() {
+	ctx := s.GetContext()
+
+	const total = 75 // deliberately above types.GetDefaultFilter().Limit (50)
+
+	testPlan := &plan.Plan{
+		ID:        "plan-no-limit",
+		Name:      "No Limit Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, testPlan))
+
+	for i := 0; i < total; i++ {
+		f := &feature.Feature{
+			ID:        fmt.Sprintf("feat-no-limit-%d", i),
+			Name:      fmt.Sprintf("Feature %d", i),
+			Type:      types.FeatureTypeBoolean,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+
+		_, err := s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{
+			ID:          fmt.Sprintf("ent-no-limit-%d", i),
+			EntityType:  types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+			EntityID:    testPlan.ID,
+			FeatureID:   f.ID,
+			FeatureType: types.FeatureTypeBoolean,
+			IsEnabled:   true,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		})
+		s.NoError(err)
+	}
+
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.WithEntityIDs([]string{testPlan.ID})
+	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
+	filter.WithStatus(types.StatusPublished)
+
+	resp, err := s.service.ListEntitlements(ctx, filter)
+	s.NoError(err)
+	s.Len(resp.Items, total, "no-limit filter must return every entitlement, not just the default page")
+
+	// Total comes from len(items) rather than a COUNT query when the filter is unlimited.
+	s.Equal(total, resp.Pagination.Total)
+
+	// The caller's filter must not be mutated into a limited one.
+	s.True(filter.IsUnlimited(), "ListEntitlements must not clobber a no-limit filter")
 }

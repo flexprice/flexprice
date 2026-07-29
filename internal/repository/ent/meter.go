@@ -137,6 +137,58 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 	return meter, nil
 }
 
+func (r *meterRepository) ListByIDs(ctx context.Context, ids []string) ([]*domainMeter.Meter, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	span := StartRepositorySpan(ctx, "meter", "list_by_ids", map[string]interface{}{
+		"meter_ids_count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	result := make([]*domainMeter.Meter, 0, len(ids))
+	missing := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		if cached := r.GetCache(ctx, id); cached != nil {
+			result = append(result, cached)
+			continue
+		}
+		missing = append(missing, id)
+	}
+
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	filter := types.NewNoLimitMeterFilter()
+	filter.MeterIDs = missing
+	fetched, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	for _, m := range fetched {
+		r.SetCache(ctx, m)
+		result = append(result, m)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) ([]*domainMeter.Meter, error) {
 	span := StartRepositorySpan(ctx, "meter", "list", map[string]interface{}{
 		"filter": filter,
