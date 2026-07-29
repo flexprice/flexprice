@@ -126,6 +126,13 @@ type CustomerResponse struct {
 	Integrations []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
 }
 
+func EmptyCustomerResponse() *CustomerResponse {
+	return &CustomerResponse{
+		Customer: &customer.Customer{},
+		Integrations: []*EntityIntegrationMappingResponse{},
+	}
+}
+
 // ListCustomersResponse represents the response for listing customers
 // @Description Response object for listing customers with pagination
 type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name ListCustomersResponse
