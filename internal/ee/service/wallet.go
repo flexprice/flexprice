@@ -3929,12 +3929,12 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 		return
 	}
 
-	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet_realtime_balance", "set", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWalletRealTimeBalance, walletID)
 	s.RedisCache.ForceCacheSet(spanCtx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
@@ -3942,7 +3942,7 @@ func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context
 	if walletID == "" || s.RedisCache == nil {
 		return
 	}
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWalletRealTimeBalance, walletID)
 	s.RedisCache.ForceCacheDelete(ctx, cacheKey)
 }
 
@@ -3951,12 +3951,12 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 		return nil
 	}
 
-	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "wallet_realtime_balance", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWallet, walletID)
+	cacheKey := cache.GenerateKey(spanCtx, cache.PrefixWalletRealTimeBalance, walletID)
 
 	// When maxLiveSeconds is specified, check cache age via TTL
 	if maxLiveSeconds != nil {

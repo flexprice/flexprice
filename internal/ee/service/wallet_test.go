@@ -133,7 +133,7 @@ func (s *WalletServiceSuite) setupService() {
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
-		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		CouponRepo:               stores.CouponRepo,
 		CouponAssociationRepo:    stores.CouponAssociationRepo,
@@ -2437,7 +2437,7 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
-		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
@@ -2958,7 +2958,7 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		CustomerRepo:             stores.CustomerRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		EntitlementRepo:          stores.EntitlementRepo,
-		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
+		EntitlementGrantRepo:     stores.EntitlementGrantRepo,
 		FeatureRepo:              stores.FeatureRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		SettingsRepo:             stores.SettingsRepo,
@@ -3253,10 +3253,11 @@ func (s *WalletServiceSuite) installCompute(fn func(ctx context.Context, w *wall
 
 // primeCachedBalance writes a balance directly into the injected cache,
 // matching the on-disk format that the wallet service uses (decimal
-// stringified, wrapped via the wallet prefix).
+// stringified, under the dedicated real-time-balance prefix — NOT the wallet
+// entity prefix, which stores a full wallet JSON object).
 func (s *WalletServiceSuite) primeCachedBalance(ctx context.Context, walletID string, balance decimal.Decimal, ttl time.Duration) {
 	ws := s.service.(*walletService)
-	key := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
+	key := cache.GenerateKey(ctx, cache.PrefixWalletRealTimeBalance, walletID)
 	ws.RedisCache.ForceCacheSet(ctx, key, balance.String(), ttl)
 }
 
@@ -3285,6 +3286,40 @@ func (s *WalletServiceSuite) TestGetWalletBalanceFromCache_FallbackIgnoresMaxLiv
 	s.NoError(err)
 	s.True(resp.IsCachedFallback, "expected IsCachedFallback=true")
 	s.True(resp.RealTimeBalance.Equal(decimal.NewFromInt(42)))
+}
+
+// The wallet ENTITY cache and the real-time-BALANCE cache used to share the key
+// `wallet:v1:<id>` while storing incompatible types (wallet JSON object vs bare
+// decimal string). Each write clobbered the other and every read failed to decode,
+// so both caches missed on every call and every request fell through to a full
+// ClickHouse recompute. Guard the namespace separation.
+func (s *WalletServiceSuite) TestRealtimeBalanceCache_DoesNotCollideWithWalletEntityCache() {
+	ctx := s.GetContext()
+	w := s.buildFallbackTestWallet(decimal.NewFromInt(100))
+	ws := s.service.(*walletService)
+
+	entityKey := cache.GenerateKey(ctx, cache.PrefixWallet, w.ID)
+	balanceKey := cache.GenerateKey(ctx, cache.PrefixWalletRealTimeBalance, w.ID)
+	s.NotEqual(entityKey, balanceKey, "balance cache must not share the entity cache key")
+
+	// Entity cache holds a *wallet.Wallet; balance cache holds a decimal string.
+	ws.RedisCache.ForceCacheSet(ctx, entityKey, w, cache.ExpiryWalletBalance)
+	s.primeCachedBalance(ctx, w.ID, decimal.NewFromInt(42), cache.ExpiryWalletBalance)
+
+	got := s.readCachedBalance(ctx, w.ID)
+	s.Require().NotNil(got, "balance read must hit its own key, not the entity object")
+	s.True(got.Equal(decimal.NewFromInt(42)), "expected 42, got %v", got)
+
+	raw, found := ws.RedisCache.ForceCacheGet(ctx, entityKey)
+	s.Require().True(found, "entity cache entry must survive a balance write")
+	_, clobbered := raw.(string)
+	s.False(clobbered, "entity cache key was overwritten by the balance decimal")
+
+	// Invalidating the balance must not evict the wallet entity.
+	ws.invalidateWalletRealtimeBalanceCache(ctx, w.ID)
+	s.Nil(s.readCachedBalance(ctx, w.ID), "balance should be gone after invalidate")
+	_, stillThere := ws.RedisCache.ForceCacheGet(ctx, entityKey)
+	s.True(stillThere, "invalidating the balance must not evict the wallet entity")
 }
 
 func (s *WalletServiceSuite) TestGetWalletBalanceV2_FallsBackToCacheOnTimeout() {
