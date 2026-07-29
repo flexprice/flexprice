@@ -364,6 +364,11 @@ func DispatchHubSpotDealLineItemSync(
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
+		// Deliberate: the old inline trigger swallowed this (logged Info, returned nil).
+		// Temporal being unavailable is a transient infra failure, not a data problem with
+		// this event, so it's propagated as a real error (consistent with every other
+		// Dispatch* function in this file) to get Kafka consumer retry/DLQ instead of
+		// silently dropping the sync.
 		return errTemporalUnavailable
 	}
 
@@ -1118,4 +1123,8 @@ func triggerWhopIfEnabled(
 	return executeWorkflow(ctx, temporalSvc, log, types.TemporalWhopInvoiceSyncWorkflow, input, types.SecretProviderWhop, in.InvoiceID)
 }
 
+// errTemporalUnavailable is returned by every Dispatch* function when the global Temporal
+// service isn't initialized yet. Treated as a retryable infra failure rather than a
+// permanent data problem, so it propagates to the caller (Kafka consumer retry/DLQ) instead
+// of being swallowed.
 var errTemporalUnavailable = fmt.Errorf("integration_events: temporal service not available")
