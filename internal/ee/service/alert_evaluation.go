@@ -202,7 +202,7 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	}
 
 	var spendErr error
-	if spendAlertsEnabled {
+	if withSpendAlerts {
 		spendErr = s.evaluateSpendAlertsForSubscriptions(ctx, cust, subs)
 		if spendErr != nil {
 			s.Logger.Error(ctx, "fused evaluator: spend alerts returned error", "error", spendErr, "customer_id", cust.ID)
@@ -210,7 +210,7 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	}
 
 	var grantErr error
-	if entitlementAlertsEnabled {
+	if withEntitlementAlerts {
 		grantSvc := NewEntitlementGrantService(s.ServiceParams)
 		grants, meta, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
 		if err != nil {
