@@ -782,6 +782,7 @@ func (c *Client) DeleteDealLineItem(ctx context.Context, lineItemID string) erro
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		c.logger.Error(ctx, "hubspot delete line item error",
+			"error", fmt.Sprintf("unexpected status %d", resp.StatusCode),
 			"status", resp.StatusCode,
 			"url", url,
 			"line_item_id", lineItemID)
