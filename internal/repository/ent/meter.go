@@ -235,14 +235,14 @@ func (r *meterRepository) GetMatchingMetersByEventName(ctx context.Context, even
 
 	if cached, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
 		meters, ok := cache.UnmarshalCacheValue[[]*domainMeter.Meter](cached)
-		if !ok {
-			return nil, ierr.WithError(ierr.ErrInternal).
-				WithMessage("failed to unmarshal meters from cache").
-				WithHint("Failed to unmarshal meters from cache").
-				WithReportableDetails(map[string]any{"cache_key": cacheKey}).
-				Mark(ierr.ErrInternal)
+		if ok {
+			return *meters, nil
 		}
-		return *meters, nil
+		r.logger.Info(ctx, "failed to unmarshal meters from cache, treating as miss",
+			"cache_key", cacheKey,
+			"event_name", eventName,
+		)
+		r.cache.ForceCacheDelete(ctx, cacheKey)
 	}
 
 	filter := types.NewNoLimitMeterFilter()
