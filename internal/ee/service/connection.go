@@ -748,6 +748,32 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 			"environment_id", conn.EnvironmentID)
 	}
 
+	// Flexprice-managed GCS connection. Unlike the S3 branch there are no
+	// credentials to inject: the export path authenticates with the deployment's
+	// ambient Workload Identity (see Factory.buildGCSStorage), so only the
+	// destination bucket and tenant-isolating key prefix are set here.
+	if conn.ProviderType == types.SecretProviderGCS && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
+		s.Logger.Info(ctx, "creating flexprice-managed GCS connection",
+			"tenant_id", conn.TenantID,
+			"connection_id", conn.ID)
+
+		if err := s.Config.FlexpriceGCSExports.Validate(); err != nil {
+			return nil, err
+		}
+
+		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceGCSExports.Bucket
+		// Region is meaningless for GCS; a bucket's location is fixed at creation.
+		conn.SyncConfig.Storage.Region = ""
+		// Tenant + Environment isolation: tenant_id/environment_id
+		conn.SyncConfig.Storage.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
+
+		s.Logger.Info(ctx, "configured flexprice-managed GCS destination",
+			"bucket", conn.SyncConfig.Storage.Bucket,
+			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"tenant_id", conn.TenantID,
+			"environment_id", conn.EnvironmentID)
+	}
+
 	// Encrypt metadata
 	s.Logger.Debug(ctx, "encrypting metadata",
 		"provider_type", conn.ProviderType,
