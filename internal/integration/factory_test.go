@@ -195,6 +195,97 @@ func seedGCSConnectionWithEmptyCredentials(ctx context.Context, t *testing.T, st
 	return conn
 }
 
+// seedFlexpriceManagedGCSConnection builds a Flexprice-managed GCS connection. It
+// carries NO service account key on purpose: managed connections authenticate with
+// the deployment's ambient Workload Identity.
+func seedFlexpriceManagedGCSConnection(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore) *connection.Connection {
+	t.Helper()
+
+	conn := &connection.Connection{
+		ID:                  "conn_gcs_managed_test",
+		Name:                "Test Flexprice-Managed GCS Connection",
+		ProviderType:        types.SecretProviderGCS,
+		EncryptedSecretData: types.ConnectionMetadata{},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				IsFlexpriceManaged: true,
+				KeyPrefix:          "tenant_x/env_y",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+// A Flexprice-managed GCS connection must construct without any service account key,
+// taking its bucket from configuration rather than from the connection row.
+func TestFactory_GetStorageProvider_GCSFlexpriceManaged_UsesAmbientCredentials(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "flexprice-managed-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderGCS, got.Provider())
+	require.Equal(t, "gs://flexprice-managed-bucket/k", got.FileURL("k"),
+		"managed connection must use the configured Flexprice bucket")
+}
+
+// Without a configured bucket the managed path must fail loudly rather than
+// constructing a client pointed at an empty bucket name.
+func TestFactory_GetStorageProvider_GCSFlexpriceManagedNoBucket_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+// Regression guard: adding the managed ambient-credential path must not weaken the
+// refusal to fall back to ambient credentials for customer BYO connections, even
+// when a Flexprice bucket happens to be configured.
+func TestFactory_GetStorageProvider_GCSCustomerBYOEmptyCreds_StillRefusesAmbient(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "flexprice-managed-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedGCSConnectionWithEmptyCredentials(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
 func TestFactory_GetStorageProvider_S3EmptyCredentials_ReturnsValidationError(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()

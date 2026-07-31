@@ -48,6 +48,7 @@ type Configuration struct {
 	Storage                StorageConfig                `mapstructure:"storage" validate:"omitempty"`
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
 	FlexpriceS3Exports     FlexpriceS3ExportsConfig     `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	FlexpriceGCSExports    FlexpriceGCSExportsConfig    `mapstructure:"flexprice_gcs_exports" validate:"omitempty"`
 	Marketplace            MarketplaceConfig            `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                  CacheConfig                  `validate:"required"`
 	EventProcessing        EventProcessingConfig        `mapstructure:"event_processing" validate:"required"`
@@ -178,6 +179,35 @@ type StorageConfig struct {
 type GCSConfig struct {
 	Enabled             bool         `mapstructure:"enabled" default:"false"`
 	InvoiceBucketConfig BucketConfig `mapstructure:"invoice" validate:"omitempty"`
+}
+
+// FlexpriceGCSExportsConfig is the GCS counterpart to FlexpriceS3ExportsConfig:
+// the Flexprice-owned bucket that Flexprice-managed export connections write to
+// when the deployment runs on GCP.
+//
+// There is deliberately no service-account-key field. On GCP, Flexprice's own
+// identity comes from Workload Identity (ambient ADC), and projects commonly
+// enforce constraints/iam.disableServiceAccountKeyCreation, which makes exported
+// SA keys unavailable. Customer BYO GCS connections still require an explicit
+// key on the connection row — see Factory.buildGCSStorage.
+type FlexpriceGCSExportsConfig struct {
+	Bucket string `mapstructure:"bucket" validate:"omitempty"`
+	// SignerServiceAccountEmail is the identity used to sign presigned GET URLs.
+	// Under Workload Identity the ambient credentials cannot self-sign, so this
+	// must name a service account the running identity may impersonate
+	// (roles/iam.serviceAccountTokenCreator). Empty disables presigning.
+	SignerServiceAccountEmail string `mapstructure:"signer_service_account_email" validate:"omitempty"`
+}
+
+// Validate ensures the section is usable when a Flexprice-managed GCS export
+// connection actually consumes it.
+func (c *FlexpriceGCSExportsConfig) Validate() error {
+	if c.Bucket == "" {
+		return ierr.NewError("flexprice GCS exports bucket is not configured").
+			WithHint("Set flexprice_gcs_exports.bucket (FLEXPRICE_FLEXPRICE_GCS_EXPORTS_BUCKET) to the Flexprice-owned GCS bucket").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports

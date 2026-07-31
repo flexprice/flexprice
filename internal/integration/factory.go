@@ -1414,6 +1414,32 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 }
 
 func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Flexprice-managed connections write to a Flexprice-owned bucket using the
+	// deployment's own ambient identity (Workload Identity on GKE). No service
+	// account key is involved: GCP projects commonly enforce
+	// constraints/iam.disableServiceAccountKeyCreation, so requiring an exported
+	// key here would make managed GCS exports impossible to operate.
+	//
+	// The strict no-ambient-fallback rule below still applies to customer BYO
+	// connections, where silently using Flexprice's identity after a customer
+	// supplied empty credentials would write to a customer bucket as Flexprice.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
+			return nil, err
+		}
+		return gcsbackend.New(ctx, &gcsbackend.Config{
+			Bucket:                    f.config.FlexpriceGCSExports.Bucket,
+			KeyPrefix:                 jobConfig.KeyPrefix,
+			CompressionGzip:           jobConfig.Compression == types.S3CompressionTypeGzip,
+			SignerServiceAccountEmail: f.config.FlexpriceGCSExports.SignerServiceAccountEmail,
+		}, f.logger)
+	}
+
 	if conn.EncryptedSecretData.GCS == nil {
 		return nil, ierr.NewError("no GCS credentials found on connection").Mark(ierr.ErrValidation)
 	}
@@ -1426,11 +1452,6 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 		return nil, ierr.NewError("empty GCS credentials on connection").
 			WithHint("GCS service account JSON must be non-empty; refusing to fall back to ambient application default credentials").
 			Mark(ierr.ErrValidation)
-	}
-
-	jobConfig := conn.GetSyncConfig().Storage
-	if jobConfig == nil {
-		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
 	return gcsbackend.New(ctx, &gcsbackend.Config{
