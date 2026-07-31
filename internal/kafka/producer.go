@@ -45,12 +45,14 @@ func NewSecondaryProducer(cfg *config.Configuration) (*SecondaryProducer, error)
 func newProducerForCluster(kafkaCfg *config.KafkaConfig, enableDebugLogs bool) (*Producer, error) {
 	// enableDebugLogs allows watermill DEBUG messages in debug mode.
 	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
-	saramaConfig := GetSaramaConfig(kafkaCfg)
-	if saramaConfig != nil {
-		// add producer configs
-		saramaConfig.Producer.Return.Successes = true
-		saramaConfig.Producer.Return.Errors = true
+	saramaConfig, err := GetSaramaConfig(kafkaCfg)
+	if err != nil {
+		return nil, err
 	}
+
+	// add producer configs
+	saramaConfig.Producer.Return.Successes = true
+	saramaConfig.Producer.Return.Errors = true
 
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{

@@ -32,6 +32,11 @@ kafka:
   bulk_max_batch_bytes: 524288
   topic_dlq: "staging_events_dlq"
   tls: false
+  # Path to a PEM CA bundle for verifying the broker cert. Empty = OS trust
+  # store (correct for MSK / Confluent Cloud). Set only for a private or
+  # self-signed broker CA. PEM only — a JKS truststore must be exported first:
+  #   keytool -exportcert -alias <alias> -keystore truststore.jks -rfc -file ca.pem
+  tls_ca_cert_file: ""
   use_sasl: false
   sasl_mechanism: ""
   sasl_user: ""

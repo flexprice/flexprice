@@ -37,11 +37,18 @@ spec:
         topic: {{ .Values.kafkaConfig.topic | quote }}
         lagThreshold: {{ .Values.consumer.keda.lagThreshold | default 1000 | quote }}
         offsetResetPolicy: {{ .Values.consumer.keda.offsetResetPolicy | default "earliest" | quote }}
-        {{- if .Values.kafkaConfig.tls }}
+        {{- if or .Values.kafkaConfig.tls .Values.kafkaConfig.useSASL }}
         tls: enable
         {{- end }}
         {{- if .Values.kafkaConfig.useSASL }}
-        sasl: {{ .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
+        {{- /*
+          KEDA's Kafka scaler names mechanisms differently from sarama: it wants
+          lowercase, underscore-separated values (scram_sha512), not the
+          SCRAM-SHA-512 spelling kafkaConfig.saslMechanism carries. Passing the
+          sarama spelling through makes the scaler fail to authenticate, so map
+          it here rather than asking operators to set the value twice.
+        */}}
+        sasl: {{ get (dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer") .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
         {{- end }}
       {{- with .Values.consumer.keda.authenticationRef }}
       authenticationRef:

@@ -85,6 +85,7 @@ spec:
             {{- end }}
             - name: tmp
               mountPath: /tmp
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -96,6 +97,7 @@ spec:
         {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

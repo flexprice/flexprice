@@ -334,6 +334,40 @@ Uses the temporalio/temporal subchart service name when internal, or user-suppli
 {{- end }}
 
 {{/*
+Kafka broker CA volume. Renders nothing unless kafkaConfig.tlsCASecret.name is
+set, so clusters using publicly-trusted brokers (MSK, Confluent Cloud) are
+untouched.
+
+The Secret is expected to already exist — created by an ExternalSecret, sealed
+secret, or by hand. The chart never renders certificate material itself, which
+keeps PEM bytes out of values files. Its `key` must hold a PEM bundle; JKS/PKCS12
+truststores are not readable by Go and must be exported with
+`keytool -exportcert -rfc` first.
+*/}}
+{{- define "flexprice.kafkaTLSVolume" -}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: kafka-tls-ca
+  secret:
+    secretName: {{ .Values.kafkaConfig.tlsCASecret.name | quote }}
+    items:
+      - key: {{ .Values.kafkaConfig.tlsCASecret.key | default "ca.crt" | quote }}
+        path: {{ .Values.kafkaConfig.tlsCASecret.key | default "ca.crt" | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+Mount for the Kafka broker CA. Path must match FLEXPRICE_KAFKA_TLS_CA_CERT_FILE
+in "flexprice.env".
+*/}}
+{{- define "flexprice.kafkaTLSVolumeMounts" -}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: kafka-tls-ca
+  mountPath: {{ .Values.kafkaConfig.tlsCASecret.mountPath | default "/etc/flexprice/kafka-tls" | quote }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{/*
 Create environment variables from configuration.
 All service addresses are resolved via named templates above so this block stays clean.
 */}}
@@ -417,6 +451,16 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.kafkaConfig.topicLazy | quote }}
 - name: FLEXPRICE_KAFKA_TLS
   value: {{ .Values.kafkaConfig.tls | quote }}
+{{- /*
+  Private/self-signed broker CA. Not gated on useSASL — a plain-TLS broker can
+  present a private CA too. The path must match the mount in
+  `flexprice.kafkaTLSVolumeMounts`. The file must be PEM; a JKS truststore has
+  to be exported first with `keytool -exportcert -rfc`.
+*/}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: FLEXPRICE_KAFKA_TLS_CA_CERT_FILE
+  value: {{ printf "%s/%s" (.Values.kafkaConfig.tlsCASecret.mountPath | default "/etc/flexprice/kafka-tls") (.Values.kafkaConfig.tlsCASecret.key | default "ca.crt") | quote }}
+{{- end }}
 - name: FLEXPRICE_KAFKA_USE_SASL
   value: {{ .Values.kafkaConfig.useSASL | quote }}
 - name: FLEXPRICE_KAFKA_CLIENT_ID

@@ -313,12 +313,18 @@ spec:
               echo "✅ Ent migrations complete"
           env:
             {{- include "flexprice.env" . | nindent 12 }}
-          {{- if not .Values.env }}
+          {{- if or (not .Values.env) .Values.kafkaConfig.tlsCASecret.name }}
           volumeMounts:
+            {{- if not .Values.env }}
             - name: config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
               readOnly: true
+            {{- end }}
+            {{- /* This step receives FLEXPRICE_KAFKA_TLS_CA_CERT_FILE via
+                   "flexprice.env"; mount the CA so the path it names always
+                   resolves, rather than dangling. */}}
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
           {{- end }}
           resources:
             {{- toYaml .Values.migration.resources | nindent 12 }}
@@ -467,6 +473,7 @@ spec:
             {{- end }}
             - name: tools
               mountPath: /tools
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -481,6 +488,7 @@ spec:
         {{- end }}
         - name: tools
           emptyDir: {}
+        {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
         {{- if .Values.migration.steps.clickhouse }}
         - name: migrations
           emptyDir: {}

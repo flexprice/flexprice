@@ -525,6 +525,25 @@ kafkaConfig:
   topic: "events"
   topicLazy: "events_lazy"
   tls: false
+  # Broker CA for private/self-signed Kafka certificates. Leave name empty for
+  # brokers with publicly-trusted certs (MSK, Confluent Cloud) — the pods then
+  # verify against the OS trust store and no volume is mounted.
+  #
+  # The Secret must already exist; create it with an ExternalSecret (or sealed
+  # secret) so certificate material never lands in a values file. Its key must
+  # hold a PEM bundle. A JKS truststore must be converted first:
+  #   keytool -exportcert -alias <alias> -keystore truststore.jks -rfc -file ca.pem
+  #
+  # Setting `name` always mounts the Secret. On the legacy structured-env shape
+  # the chart also emits FLEXPRICE_KAFKA_TLS_CA_CERT_FILE pointing at the
+  # mounted path. On the MIGRATED generic-env shape (`.Values.env` set) the
+  # chart emits no kafkaConfig-derived env vars at all, so set it yourself:
+  #   env:
+  #     FLEXPRICE_KAFKA_TLS_CA_CERT_FILE: "/etc/flexprice/kafka-tls/ca.crt"
+  tlsCASecret:
+    name: ""                              # e.g. "flexprice-kafka-ca" (synced by ExternalSecret)
+    key: "ca.crt"                         # key inside the Secret holding the PEM bundle
+    mountPath: "/etc/flexprice/kafka-tls" # dir the key is mounted into
   useSASL: false
   saslMechanism: ""
   saslUser: ""

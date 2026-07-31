@@ -16,12 +16,14 @@ func NewProducer(cfg *config.Configuration) (*Producer, error) {
 	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
 	enableDebugLogs := cfg.Logging.Level == types.LogLevelDebug
 
-	saramaConfig := GetSaramaConfig(cfg)
-	if saramaConfig != nil {
-		// add producer configs
-		saramaConfig.Producer.Return.Successes = true
-		saramaConfig.Producer.Return.Errors = true
+	saramaConfig, err := GetSaramaConfig(cfg)
+	if err != nil {
+		return nil, err
 	}
+
+	// add producer configs
+	saramaConfig.Producer.Return.Successes = true
+	saramaConfig.Producer.Return.Errors = true
 
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{

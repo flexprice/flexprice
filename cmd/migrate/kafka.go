@@ -60,7 +60,10 @@ func runKafkaMigration(dryRun bool) error {
 		log.Printf("desired topic: %s partitions=%d rf=%d", d.Name, d.Partitions, d.ReplicationFactor)
 	}
 
-	saramaCfg := kafka.GetSaramaConfig(&cfg.Kafka)
+	saramaCfg, err := kafka.GetSaramaConfig(&cfg.Kafka)
+	if err != nil {
+		return fmt.Errorf("build kafka client config: %w", err)
+	}
 
 	admin, err := sarama.NewClusterAdmin(cfg.Kafka.Brokers, saramaCfg)
 	if err != nil {

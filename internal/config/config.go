@@ -206,8 +206,20 @@ type KafkaConfig struct {
 	// TopicDLQ is the global fallback dead-letter Kafka topic used by handlers that
 	// do not define their own per-consumer-group topic_dlq. Empty disables DLQ for
 	// those handlers.
-	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
-	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
+	TLS      bool   `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	// TLSCACertFile is the path to a PEM-encoded CA bundle used to verify the
+	// broker certificate. Empty (the default) means the OS trust store is used,
+	// which is correct for brokers with publicly-trusted certs (MSK, Confluent
+	// Cloud). Set it only when the broker presents a private/self-signed CA.
+	// The CA is applied to the Kafka client alone, so it does not affect other
+	// outbound TLS in the process (Stripe, GCP, webhooks).
+	//
+	// Must be PEM. JKS/PKCS12 truststores are not supported — sarama and Go's
+	// crypto/x509 read PEM only. Convert with:
+	//
+	//	keytool -exportcert -alias <alias> -keystore truststore.jks -rfc -file ca.pem
+	TLSCACertFile string               `mapstructure:"tls_ca_cert_file"`
 	UseSASL       bool                 `mapstructure:"use_sasl"`
 	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
 	SASLUser      string               `mapstructure:"sasl_user"`

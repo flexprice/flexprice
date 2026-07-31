@@ -64,11 +64,13 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 
 func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (message.Publisher, error) {
 	kc := &cfg.Kafka
-	saramaConfig := kafka.GetSaramaConfig(kc)
-	if saramaConfig != nil {
-		saramaConfig.Producer.Return.Successes = true
-		saramaConfig.Producer.Return.Errors = true
+	saramaConfig, err := kafka.GetSaramaConfig(kc)
+	if err != nil {
+		return nil, err
 	}
+
+	saramaConfig.Producer.Return.Successes = true
+	saramaConfig.Producer.Return.Errors = true
 
 	publisher, err := watermillKafka.NewPublisher(
 		watermillKafka.PublisherConfig{

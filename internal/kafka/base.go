@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hash"
 
-	"crypto/tls"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -19,7 +18,10 @@ import (
 // cluster's KafkaConfig directly (rather than the whole Configuration) so the same
 // builder serves both the local cluster (cfg.Kafka) and the optional second cluster
 // (cfg.KafkaSecondary) during the AWS→GCP migration — see infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
-func GetSaramaConfig(kafkaCfg *config.KafkaConfig) *sarama.Config {
+// It returns an error rather than panicking on unusable TLS/SASL material (bad
+// CA path, non-PEM bundle, missing GCP credentials) so a misconfigured deploy
+// surfaces as a normal startup failure instead of a stack trace.
+func GetSaramaConfig(kafkaCfg *config.KafkaConfig) (*sarama.Config, error) {
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Version = sarama.V2_1_0_0
 
@@ -38,20 +40,23 @@ func GetSaramaConfig(kafkaCfg *config.KafkaConfig) *sarama.Config {
 	// When rebalancing happens, use the last committed offset
 	saramaConfig.Consumer.Offsets.Retry.Max = 3
 
-	if kafkaCfg.TLS {
-		saramaConfig.Net.TLS.Enable = true
-		saramaConfig.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: false,
+	// SASL implies TLS: SASL_SSL is the only SASL protocol this app speaks, so
+	// enabling SASL turns TLS on even when kafkaCfg.TLS is false.
+	if kafkaCfg.TLS || kafkaCfg.UseSASL {
+		tlsConfig, err := BuildTLSConfig(kafkaCfg)
+		if err != nil {
+			return nil, err
 		}
+		saramaConfig.Net.TLS.Enable = true
+		saramaConfig.Net.TLS.Config = tlsConfig
 	}
 
 	if !kafkaCfg.UseSASL {
-		return saramaConfig
+		return saramaConfig, nil
 	}
 
 	// SASL specific configs
 	saramaConfig.Net.SASL.Enable = true
-	saramaConfig.Net.TLS.Enable = true
 
 	// sasl configs
 	saramaConfig.Net.SASL.Mechanism = kafkaCfg.SASLMechanism
@@ -63,7 +68,7 @@ func GetSaramaConfig(kafkaCfg *config.KafkaConfig) *sarama.Config {
 		// User/Password are not used.
 		provider, err := newGCPTokenProvider(context.Background(), kafkaCfg.SASLOAuthScopes)
 		if err != nil {
-			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", kafkaCfg.SASLOAuthScopes, err))
+			return nil, fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", kafkaCfg.SASLOAuthScopes, err)
 		}
 		saramaConfig.Net.SASL.TokenProvider = provider
 	case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512:
@@ -78,7 +83,7 @@ func GetSaramaConfig(kafkaCfg *config.KafkaConfig) *sarama.Config {
 		saramaConfig.Net.SASL.Password = kafkaCfg.SASLPassword
 	}
 
-	return saramaConfig
+	return saramaConfig, nil
 }
 
 // XDGSCRAMClient implements sarama.SCRAMClient for SCRAM authentication
