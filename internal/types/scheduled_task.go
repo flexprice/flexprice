@@ -218,6 +218,16 @@ type S3JobConfig struct {
 	EndpointURL          string               `json:"endpoint_url,omitempty"`           // Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
 	UsePathStyle         bool                 `json:"use_path_style,omitempty"`         // Use path-style addressing (required for MinIO)
 	ExportMetadataFields ExportMetadataFields `json:"export_metadata_fields,omitempty"` // Optional user-selected metadata columns
+	// Provider records which object store this job targets. Empty means S3, so
+	// existing rows written before GCS support keep their meaning. It exists
+	// because Validate() is called by Ent without provider context and must not
+	// enforce S3-only rules (notably Region) on a GCS job.
+	Provider SecretProvider `json:"provider,omitempty"`
+}
+
+// isGCS reports whether this job targets Google Cloud Storage.
+func (s *S3JobConfig) isGCS() bool {
+	return s.Provider == SecretProviderGCS
 }
 
 // Validate validates the S3 job configuration
@@ -231,13 +241,23 @@ func (s *S3JobConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Bucket and region are required (should be populated by now)
+	// Bucket is required for every provider (should be populated by now).
 	if s.Bucket == "" {
 		return ierr.NewError("bucket is required").
-			WithHint("S3 bucket name is required").
+			WithHint("Storage bucket name is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.Region == "" {
+
+	// Region is an S3-only concept — a GCS bucket's location is fixed at creation
+	// and is never carried in the job config. This method is also invoked
+	// implicitly by Ent's generated code (ent/schema/scheduledtask.go declares
+	// job_config as field.JSON(&types.S3JobConfig{}), and Ent auto-calls a no-arg
+	// Validate() on JSON field types at Create()/Update() time), which has no
+	// provider context — so requiring a region unconditionally here would reject
+	// every Flexprice-managed GCS scheduled task before it could be persisted,
+	// regardless of what the service layer decided. Callers that do have provider
+	// context should use ValidateForProvider.
+	if s.Region == "" && !s.isGCS() {
 		return ierr.NewError("region is required").
 			WithHint("AWS region is required").
 			Mark(ierr.ErrValidation)

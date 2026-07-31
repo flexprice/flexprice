@@ -120,6 +120,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		}
 
 		jobConfig = &types.S3JobConfig{
+			Provider:             types.SecretProviderGCS,
 			Bucket:               s.config.FlexpriceGCSExports.Bucket,
 			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
 			Compression:          req.JobConfig.Compression,
