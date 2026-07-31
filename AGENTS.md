@@ -671,5 +671,15 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
 
 1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
 2. When updating "domain" entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
-3. Only add comments when some logic or definition is complex to understand or there is an edge case. Don't write comments on generic logic and easy to understand structs and methods.
+3. **Comments.** Default is zero. A comment may only record what the code cannot: an
+invariant, an ordering requirement, an external system's behaviour, or a non-obvious
+failure mode. Test before keeping one — delete it, then ask whether anything is now
+unrecoverable from the code, the type names, and the test names. If not, leave it deleted.
+Never write a comment that only makes sense to someone reading the diff. If it contains
+"now", "previously", "instead of", "used to", "no longer", "rather than", "mirror of",
+or names the old behaviour, it belongs in the commit message.
+
+BAD   // changed to Error, not Info, so it is alertable
+BAD   // Mirror of the add path above
+GOOD  // The association is already committed; a proration failure must not fail the request.
 4. Logging: log only meaningful state changes, failures, and operational decisions, with the relevant IDs and error attached. `Warn` is reserved for bootstrap/setup code; use `Info` for a recovered/skipped condition and `Error` for a failure.

@@ -114,6 +114,128 @@ func TestCreateSubscriptionRequestValidate_BillingAnchorOnOrAfterStartDate(t *te
 	})
 }
 
+// TestCreateSubscriptionRequestValidate_BillingAnchorWithinOneInterval covers the bound that
+// keeps the first billing period from exceeding one interval.
+//
+// Only QUARTERLY, HALF_YEARLY and ANNUAL are bounded, because only those consume the anchor as
+// an absolute instant and return it verbatim as the first period end. MONTHLY, WEEKLY and DAILY
+// read the anchor as a recurring pattern (day-of-month, weekday, clock), so a far-future anchor
+// cannot stretch their first period and must keep validating.
+func TestCreateSubscriptionRequestValidate_BillingAnchorWithinOneInterval(t *testing.T) {
+	start := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name        string
+		period      types.BillingPeriod
+		periodCount int
+		anchor      time.Time
+		wantErr     bool
+	}{
+		{
+			name:    "annual accepts an anchor inside the first year",
+			period:  types.BILLING_PERIOD_ANNUAL,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "annual accepts an anchor exactly one interval out",
+			period:  types.BILLING_PERIOD_ANNUAL,
+			anchor:  time.Date(2027, 3, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "annual rejects an anchor beyond one year",
+			period:  types.BILLING_PERIOD_ANNUAL,
+			anchor:  time.Date(2027, 4, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: true,
+		},
+		{
+			name:    "annual accepts an anchor before start_date, which carries only month and day",
+			period:  types.BILLING_PERIOD_ANNUAL,
+			anchor:  time.Date(2022, 3, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:        "annual bound scales with billing_period_count",
+			period:      types.BILLING_PERIOD_ANNUAL,
+			periodCount: 2,
+			anchor:      time.Date(2027, 9, 2, 0, 0, 0, 0, time.UTC),
+			wantErr:     false,
+		},
+		{
+			name:    "quarterly accepts an anchor inside the first quarter",
+			period:  types.BILLING_PERIOD_QUARTER,
+			anchor:  time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			// Stripe rejects this same request with "billing_cycle_anchor cannot be later
+			// than next natural billing date"; without the bound we produced an
+			// eight-month first period on a quarterly plan.
+			name:    "quarterly rejects an anchor eight months out",
+			period:  types.BILLING_PERIOD_QUARTER,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: true,
+		},
+		{
+			name:    "half yearly accepts an anchor inside the first half year",
+			period:  types.BILLING_PERIOD_HALF_YEAR,
+			anchor:  time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "half yearly rejects an anchor beyond six months",
+			period:  types.BILLING_PERIOD_HALF_YEAR,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: true,
+		},
+		{
+			name:    "monthly is unbounded because the anchor supplies only day-of-month",
+			period:  types.BILLING_PERIOD_MONTHLY,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "weekly is unbounded because the anchor supplies only weekday and clock",
+			period:  types.BILLING_PERIOD_WEEKLY,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "daily is unbounded because the anchor supplies only clock",
+			period:  types.BILLING_PERIOD_DAILY,
+			anchor:  time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.BillingCycle = types.BillingCycleAnniversary
+			req.BillingPeriod = tt.period
+			req.BillingPeriodCount = tt.periodCount
+			req.StartDate = &start
+			anchor := tt.anchor
+			req.BillingAnchor = &anchor
+
+			err := req.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected validation error, got nil")
+				}
+				if !strings.Contains(err.Error(), "more than one billing period") {
+					t.Fatalf("expected the one-interval bound to reject this, got: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestCancelSubscriptionRequest_Validate_BackdatedImmediate(t *testing.T) {
 	now := time.Now().UTC()
 	past := now.Add(-5 * 24 * time.Hour)

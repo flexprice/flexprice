@@ -1,9 +1,77 @@
 package types
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
+
+// TestNextBillingDate_FirstPeriodNeverExceedsOneInterval asserts the invariant that motivated the
+// anchor bound: wherever the anchor sits, the first billing period ends after the period start and
+// no later than one full interval from it.
+//
+// DAILY and WEEKLY are excluded because they re-align the result to the anchor's clock and weekday
+// by design, which can push the first period past a full interval by less than one sub-interval
+// (a start at 08:00 with a 14:30 anchor legitimately yields a 30.5-hour first day). The four period
+// types below treat the anchor as a date-level boundary, so the invariant is exact for them.
+func TestNextBillingDate_FirstPeriodNeverExceedsOneInterval(t *testing.T) {
+	loc := time.UTC
+	start := time.Date(2026, 3, 2, 0, 0, 0, 0, loc)
+
+	periods := []BillingPeriod{
+		BILLING_PERIOD_MONTHLY,
+		BILLING_PERIOD_QUARTER,
+		BILLING_PERIOD_HALF_YEAR,
+		BILLING_PERIOD_ANNUAL,
+	}
+
+	for _, period := range periods {
+		for _, unit := range []int{1, 2} {
+			// One full interval from the start, which is what a self-anchored subscription
+			// produces and therefore the ceiling every other anchor must respect.
+			oneInterval, err := NextBillingDate(&NextBillingDateParams{
+				CurrentPeriodStart: start,
+				BillingAnchor:      start,
+				Unit:               unit,
+				Period:             period,
+				Timezone:           DefaultTimezone,
+			})
+			if err != nil {
+				t.Fatalf("%s unit=%d: computing one interval: %v", period, unit, err)
+			}
+
+			midpoint := start.Add(oneInterval.Sub(start) / 2).Truncate(24 * time.Hour)
+
+			anchors := map[string]time.Time{
+				"anchor equals start":             start,
+				"anchor midway to the boundary":   midpoint,
+				"anchor exactly one interval out": oneInterval,
+				"anchor in the past":              start.AddDate(-4, 0, 0),
+			}
+
+			for name, anchor := range anchors {
+				t.Run(string(period)+"/unit="+strconv.Itoa(unit)+"/"+name, func(t *testing.T) {
+					got, err := NextBillingDate(&NextBillingDateParams{
+						CurrentPeriodStart: start,
+						BillingAnchor:      anchor,
+						Unit:               unit,
+						Period:             period,
+						Timezone:           DefaultTimezone,
+					})
+					if err != nil {
+						t.Fatalf("NextBillingDate() error = %v", err)
+					}
+					if !got.After(start) {
+						t.Errorf("first period must advance: got %v, start %v", got, start)
+					}
+					if got.After(oneInterval) {
+						t.Errorf("first period exceeds one interval: got %v, ceiling %v", got, oneInterval)
+					}
+				})
+			}
+		}
+	}
+}
 
 // TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart documents NextBillingDate when the
 // billing anchor equals the current period start (“same”) versus when the anchor is strictly
@@ -105,7 +173,7 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 			want:    time.Date(2024, 7, 1, 0, 0, 0, 0, loc),
 		},
 
-		// ANNUAL: adds unit years with anchor month/day; same month/day → next year.
+		// ANNUAL: partial first period until the anchor; anchor-aligned start advances +1 year.
 		{
 			name:    "annual_same_anchor_as_start_advances_one_year",
 			period:  BILLING_PERIOD_ANNUAL,
@@ -114,11 +182,14 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 			want:    time.Date(2025, 5, 15, 10, 0, 0, 0, loc),
 		},
 		{
-			name:    "annual_anchor_month_day_after_start_in_year_moves_to_anchor_month_next_year",
+			// The anchor lands five months out, so the first period is a five-month stub
+			// ending on the anchor. Previously this returned the anchor a year later, a
+			// seventeen-month first period.
+			name:    "annual_start_before_anchor_returns_anchor_as_short_first_period",
 			period:  BILLING_PERIOD_ANNUAL,
 			current: time.Date(2024, 1, 15, 0, 0, 0, 0, loc),
 			anchor:  time.Date(2024, 6, 15, 12, 0, 0, 0, loc),
-			want:    time.Date(2025, 6, 15, 12, 0, 0, 0, loc),
+			want:    time.Date(2024, 6, 15, 12, 0, 0, 0, loc),
 		},
 	}
 

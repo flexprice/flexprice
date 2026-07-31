@@ -25,6 +25,20 @@ type Service interface {
 		behavior types.ProrationBehavior,
 	) (ProrationParams, error)
 
+	// CreateProrationParamsForFirstPeriod builds params for pricing a short first (stub)
+	// period as stubDuration/fullIntervalDuration of the full price. Second-based;
+	// independent of mid-cycle proration_behavior.
+	//
+	// Convention: CurrentPeriodStart=stubStart, ProrationDate=stubEnd, CurrentPeriodEnd=fullEnd.
+	CreateProrationParamsForFirstPeriod(
+		subscription *subscription.Subscription,
+		item *subscription.SubscriptionLineItem,
+		price *price.Price,
+		stubStart time.Time,
+		stubEnd time.Time,
+		fullIntervalEnd time.Time,
+	) ProrationParams
+
 	// CreateProrationParamsForLineItemCancellation creates proration parameters for cancellation scenarios
 	CreateProrationParamsForLineItemCancellation(
 		ctx context.Context,

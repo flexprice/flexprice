@@ -921,6 +921,46 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// An anchor after start_date shortens the first billing period. Bound it to one
+	// interval so the first period can never be LONGER than a normal one.
+	//
+	// Only QUARTERLY, HALF_YEARLY and ANNUAL are bounded: those consume the anchor as
+	// an absolute instant and return it verbatim as the first period end, so an anchor
+	// further out stretches the period (an eight-month first period on a quarterly
+	// plan). For MONTHLY, WEEKLY and DAILY the anchor is a recurring pattern -
+	// day-of-month, weekday, clock - and its absolute date never reaches the result,
+	// so there is nothing to bound.
+	if r.BillingAnchor != nil && r.BillingAnchor.After(*r.StartDate) {
+		switch r.BillingPeriod {
+		case types.BILLING_PERIOD_QUARTER, types.BILLING_PERIOD_HALF_YEAR, types.BILLING_PERIOD_ANNUAL:
+			// Derive the ceiling from the same engine that computes real periods, so the
+			// two can never drift apart. A self-anchored call is exactly one interval.
+			maxAnchor, err := types.NextBillingDate(&types.NextBillingDateParams{
+				CurrentPeriodStart: *r.StartDate,
+				BillingAnchor:      *r.StartDate,
+				Unit:               r.BillingPeriodCount,
+				Period:             r.BillingPeriod,
+				Timezone:           r.Timezone,
+			})
+			if err != nil {
+				return err
+			}
+
+			if r.BillingAnchor.After(maxAnchor) {
+				return ierr.NewError("billing_anchor is more than one billing period after start_date").
+					WithHint("billing_anchor must fall within the first billing period, so the first period is never longer than one billing interval").
+					WithReportableDetails(map[string]interface{}{
+						"start_date":           *r.StartDate,
+						"billing_anchor":       *r.BillingAnchor,
+						"max_billing_anchor":   maxAnchor,
+						"billing_period":       r.BillingPeriod,
+						"billing_period_count": r.BillingPeriodCount,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	if r.ProrationBehavior != "" {
 		if err := r.ProrationBehavior.Validate(); err != nil {
 			return err

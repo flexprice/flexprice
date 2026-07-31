@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -81,7 +82,6 @@ type BillingService interface {
 
 	// GetCustomerUsageSummary returns usage summaries for a customer's features.
 	GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
-
 }
 
 type billingService struct {
@@ -1128,7 +1128,6 @@ func (s *billingService) fillBucketedValuesForWindowedCommitment(
 	return bucketedValues, bucketStarts
 }
 
-
 func (s *billingService) CalculateAllCharges(
 	ctx context.Context,
 	params *dto.CalculateAllChargesParams,
@@ -2081,14 +2080,32 @@ func (s *billingService) applyProrationToLineItem(
 	periodEnd *time.Time,
 ) (decimal.Decimal, error) {
 
-	prorationService := NewProrationService(s.ServiceParams)
-	// Check if proration should be applied
-	if sub.ProrationBehavior == types.ProrationBehaviorNone {
+	// If it's a usage charge, don't apply proration (usage is typically calculated for actual usage in the period)
+	if item.PriceType == types.PRICE_TYPE_USAGE {
 		return originalAmount, nil
 	}
 
-	// Mixed billing periods and proration are mutually exclusive.
+	// Mixed billing periods and proration are mutually exclusive, including first-period stubs.
 	if sub.HasMixedBillingPeriods() {
+		return originalAmount, nil
+	}
+
+	prorationService := NewProrationService(s.ServiceParams)
+
+	// First-period stub pricing is pricing correctness, independent of proration_behavior.
+	// Keyed off StartDate rather than CurrentPeriodStart so that arrear invoices and invoice
+	// recalculation — both of which run after the period has advanced — still price the first
+	// period the same way it was originally billed.
+	if periodStart != nil && periodEnd != nil && periodStart.Equal(sub.StartDate) {
+		if amount, applied, err := s.tryApplyFirstPeriodStubPricing(
+			ctx, prorationService, sub, item, priceData, originalAmount, *periodStart, *periodEnd,
+		); applied {
+			return amount, err
+		}
+	}
+
+	// Mid-cycle proration (upgrades, cancellations, etc.) remains gated on proration_behavior.
+	if sub.ProrationBehavior == types.ProrationBehaviorNone {
 		return originalAmount, nil
 	}
 
@@ -2098,11 +2115,6 @@ func (s *billingService) applyProrationToLineItem(
 			// Period doesn't match subscription's current period, don't apply proration
 			return originalAmount, nil
 		}
-	}
-
-	// If it's a usage charge, don't apply proration (usage is typically calculated for actual usage in the period)
-	if item.PriceType == types.PRICE_TYPE_USAGE {
-		return originalAmount, nil
 	}
 
 	action := types.ProrationActionAddItem
@@ -2125,6 +2137,79 @@ func (s *billingService) applyProrationToLineItem(
 		return decimal.Zero, err
 	}
 	return prorationResult.NetAmount, nil
+}
+
+// fullBillingIntervalEnd returns the end of exactly one billing interval starting at
+// periodStart, ignoring the billing anchor and the subscription end date. It is the
+// denominator any "fraction of an interval" price has to be measured against.
+func fullBillingIntervalEnd(sub *subscription.Subscription, periodStart time.Time) (time.Time, error) {
+	return types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: periodStart,
+		BillingAnchor:      periodStart, // self-anchored == exactly one interval
+		Unit:               sub.BillingPeriodCount,
+		Period:             sub.BillingPeriod,
+		Timezone:           sub.Timezone,
+	})
+}
+
+// tryApplyFirstPeriodStubPricing prices a short first period as
+// stubDuration/fullIntervalDuration of the full amount (second-based). Returns
+// applied=false when the period is not an anchor stub.
+//
+// A stub is defined by the billing anchor, not by the length of the invoice period: only a
+// period cut short because the anchor falls inside it qualifies. Periods shortened for any
+// other reason — a subscription end_date, a scheduled cancellation truncating
+// CurrentPeriodEnd — are left to the mid-cycle path, which knows how to credit them.
+func (s *billingService) tryApplyFirstPeriodStubPricing(
+	ctx context.Context,
+	prorationService proration.Service,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	priceData *price.Price,
+	originalAmount decimal.Decimal,
+	periodStart time.Time,
+	periodEnd time.Time,
+) (amount decimal.Decimal, applied bool, err error) {
+	// Both ends are computed with SubscriptionEndDate omitted so neither is clipped by the
+	// contract term; the comparison has to be anchor-vs-interval only.
+	fullEnd, err := fullBillingIntervalEnd(sub, periodStart)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+
+	anchorEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart: periodStart,
+		BillingAnchor:      sub.BillingAnchor,
+		Unit:               sub.BillingPeriodCount,
+		Period:             sub.BillingPeriod,
+		Timezone:           sub.Timezone,
+	})
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+
+	// The anchor yields a full interval — this subscription has no stub first period.
+	if !anchorEnd.Before(fullEnd) {
+		return decimal.Zero, false, nil
+	}
+
+	// The invoice period is not the stub the anchor describes (e.g. a term shorter than the
+	// stub itself). Leave it alone rather than guess.
+	if !periodEnd.Equal(anchorEnd) {
+		return decimal.Zero, false, nil
+	}
+
+	params := prorationService.CreateProrationParamsForFirstPeriod(
+		sub, item, priceData, periodStart, periodEnd, fullEnd,
+	)
+	result, err := prorationService.CalculateProration(ctx, params)
+	if err != nil {
+		return decimal.Zero, true, err
+	}
+	if result == nil {
+		return originalAmount, true, nil
+	}
+	return result.NetAmount, true, nil
 }
 
 // aggregateMeteredEntitlementsForBilling merges the entitlements that target the

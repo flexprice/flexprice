@@ -498,3 +498,106 @@ func TestCalculator_CapCreditAmount(t *testing.T) {
 		})
 	}
 }
+
+// TestCalculator_FirstPeriod covers second-based stub pricing (same granularity as
+// mid-cycle proration). On midnight-aligned boundaries the ratio matches day counts.
+// Param convention: CurrentPeriodStart=stub start, ProrationDate=stub end,
+// CurrentPeriodEnd=full interval end.
+func TestCalculator_FirstPeriod(t *testing.T) {
+	logger, err := logger.NewLogger(config.GetDefaultConfig())
+	require.NoError(t, err)
+	calc := NewCalculator(logger)
+
+	t.Run("annual stub Mar2-Nov2 on $10 equals 6.71", func(t *testing.T) {
+		// 245d / 365d of seconds * 10 = 6.71 at USD precision
+		params := ProrationParams{
+			Action:             types.ProrationActionFirstPeriod,
+			NewPriceID:         "price_annual",
+			NewQuantity:        decimal.NewFromInt(1),
+			NewPricePerUnit:    decimal.NewFromInt(10),
+			CurrentPeriodStart: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC),  // stub start
+			ProrationDate:      time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC), // stub end
+			CurrentPeriodEnd:   time.Date(2027, 3, 2, 0, 0, 0, 0, time.UTC),  // full interval end
+			Timezone:           types.DefaultTimezone,
+			ProrationBehavior:  types.ProrationBehaviorNone, // ignored for first_period
+			ProrationStrategy:  types.StrategySecondBased,
+			Currency:           "usd",
+			PlanDisplayName:    "Annual Plan",
+		}
+
+		result, err := calc.Calculate(context.Background(), params)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, types.ProrationActionFirstPeriod, result.Action)
+		assert.True(t, decimal.NewFromFloat(6.71).Equal(result.NetAmount),
+			"got %s, want 6.71", result.NetAmount)
+		require.Len(t, result.ChargeItems, 1)
+		assert.Equal(t, "Annual Plan", result.ChargeItems[0].Description)
+		assert.True(t, decimal.NewFromFloat(6.71).Equal(result.ChargeItems[0].Amount))
+		assert.Empty(t, result.CreditItems)
+	})
+
+	t.Run("full period is rejected by validateParams", func(t *testing.T) {
+		// stub end == full end is not a stub
+		params := ProrationParams{
+			Action:             types.ProrationActionFirstPeriod,
+			NewPriceID:         "price_annual",
+			NewQuantity:        decimal.NewFromInt(1),
+			NewPricePerUnit:    decimal.NewFromInt(10),
+			CurrentPeriodStart: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC),
+			ProrationDate:      time.Date(2027, 3, 2, 0, 0, 0, 0, time.UTC),
+			CurrentPeriodEnd:   time.Date(2027, 3, 2, 0, 0, 0, 0, time.UTC),
+			Timezone:           types.DefaultTimezone,
+			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+			ProrationStrategy:  types.StrategySecondBased,
+			Currency:           "usd",
+		}
+		_, err := calc.Calculate(context.Background(), params)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "stub end must be before full interval end")
+	})
+
+	t.Run("monthly stub Apr1-Apr15 on $30", func(t *testing.T) {
+		// 14d / 30d of seconds * 30 = 14.00
+		params := ProrationParams{
+			Action:             types.ProrationActionFirstPeriod,
+			NewPriceID:         "price_monthly",
+			NewQuantity:        decimal.NewFromInt(1),
+			NewPricePerUnit:    decimal.NewFromInt(30),
+			CurrentPeriodStart: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+			ProrationDate:      time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
+			CurrentPeriodEnd:   time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			Timezone:           types.DefaultTimezone,
+			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+			ProrationStrategy:  types.StrategySecondBased,
+			Currency:           "usd",
+		}
+		result, err := calc.Calculate(context.Background(), params)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, decimal.NewFromInt(14).Equal(result.NetAmount),
+			"got %s, want 14", result.NetAmount)
+	})
+
+	t.Run("mid-day stub uses wall-clock seconds not whole days", func(t *testing.T) {
+		// Apr 1 12:00 → Apr 15 12:00 over Apr 1 12:00 → May 1 12:00 = exactly 14/30
+		params := ProrationParams{
+			Action:             types.ProrationActionFirstPeriod,
+			NewPriceID:         "price_monthly",
+			NewQuantity:        decimal.NewFromInt(1),
+			NewPricePerUnit:    decimal.NewFromInt(30),
+			CurrentPeriodStart: time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
+			ProrationDate:      time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC),
+			CurrentPeriodEnd:   time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC),
+			Timezone:           types.DefaultTimezone,
+			ProrationBehavior:  types.ProrationBehaviorCreateProrations,
+			ProrationStrategy:  types.StrategySecondBased,
+			Currency:           "usd",
+		}
+		result, err := calc.Calculate(context.Background(), params)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.True(t, decimal.NewFromInt(14).Equal(result.NetAmount),
+			"got %s, want 14", result.NetAmount)
+	})
+}

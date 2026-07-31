@@ -136,12 +136,17 @@ func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, 
 			Mark(ierr.ErrValidation)
 	}
 
-	// For calendar billing with QUARTERLY and HALF_YEARLY periods, the billingAnchor
-	// is set to the start of the next calendar boundary (e.g. April 1 for a
-	// subscription starting mid-Q1). If currentPeriodStart is before the anchor,
-	// we are still in the partial first period and the next billing date IS
-	// the anchor itself.
-	if (period == BILLING_PERIOD_QUARTER || period == BILLING_PERIOD_HALF_YEAR) &&
+	// QUARTERLY, HALF_YEARLY and ANNUAL treat the anchor as an absolute boundary. For
+	// calendar billing it is the next calendar boundary (April 1 for a subscription
+	// starting mid-Q1, January 1 for an annual one); for anniversary billing it is the
+	// caller-supplied anchor. Either way, a currentPeriodStart before the anchor means we
+	// are in the partial first period and the next billing date IS the anchor itself.
+	//
+	// Callers must keep the anchor within one interval of the period start (enforced by
+	// CreateSubscriptionRequest.Validate), otherwise this returns a first period longer
+	// than a normal one.
+	if (period == BILLING_PERIOD_QUARTER || period == BILLING_PERIOD_HALF_YEAR ||
+		period == BILLING_PERIOD_ANNUAL) &&
 		currentPeriodStart.Before(billingAnchor) {
 		if subscriptionEndDate != nil && billingAnchor.After(*subscriptionEndDate) {
 			return *subscriptionEndDate, nil
@@ -191,7 +196,9 @@ func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, 
 		targetY--
 	}
 
-	// For annual billing, preserve the billing anchor month
+	// For annual billing, preserve the billing anchor month. Only reachable once
+	// currentPeriodStart is at or past the anchor, i.e. from the first renewal onward;
+	// an anchor still ahead of the period start is handled by the stub branch above.
 	if period == BILLING_PERIOD_ANNUAL {
 		targetM = billingAnchor.Month()
 	}
