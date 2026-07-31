@@ -50,6 +50,14 @@ spec:
         */}}
         sasl: {{ get (dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer") .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
         {{- end }}
+      {{- /*
+        KEDA's operator dials Kafka itself, so it never sees the CA mounted from
+        kafkaConfig.tlsCASecret into the workload pods. Credentials and a private
+        broker CA both have to reach it through an operator-supplied
+        TriggerAuthentication — and through the SAME one, since a trigger takes a
+        single authenticationRef. See consumer.keda.authenticationRef in
+        values.yaml for the resource shape, including the `ca` parameter.
+      */}}
       {{- with .Values.consumer.keda.authenticationRef }}
       authenticationRef:
         {{- toYaml . | nindent 8 }}

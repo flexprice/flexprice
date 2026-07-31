@@ -231,6 +231,29 @@ consumer:
     # Example:
     #   authenticationRef:
     #     name: kafka-msk-auth
+    #
+    # KEDA's operator connects to Kafka itself, separately from the consumer
+    # pod, so it does NOT see kafkaConfig.tlsCASecret — that Secret is only
+    # mounted into the workloads. A private/self-signed broker CA therefore has
+    # to be repeated here, in the same TriggerAuthentication that carries the
+    # SASL credentials (KEDA accepts one authenticationRef per trigger, so the
+    # CA and the credentials cannot be split across two resources):
+    #
+    #   apiVersion: keda.sh/v1alpha1
+    #   kind: TriggerAuthentication
+    #   metadata:
+    #     name: kafka-scram-auth
+    #   spec:
+    #     secretTargetRef:
+    #       - {parameter: sasl,     name: keda-kafka-secrets, key: sasl}
+    #       - {parameter: username, name: keda-kafka-secrets, key: username}
+    #       - {parameter: password, name: keda-kafka-secrets, key: password}
+    #       - {parameter: tls,      name: keda-kafka-secrets, key: tls}
+    #       - {parameter: ca,       name: keda-kafka-secrets, key: ca}
+    #
+    # The `ca` key holds the same PEM bundle as kafkaConfig.tlsCASecret. Without
+    # it the scaler fails its TLS handshake against a private CA and the
+    # consumer silently stops autoscaling.
     authenticationRef: {}
   podDisruptionBudget:
     enabled: true
