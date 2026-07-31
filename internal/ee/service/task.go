@@ -1221,18 +1221,24 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Check if connection is Flexprice-managed
 	isFlexpriceManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
 
-	// For Flexprice-managed, verify bucket matches config
+	// For Flexprice-managed, verify bucket matches config. The expected bucket is
+	// provider-specific: managed GCS connections write to FlexpriceGCSExports,
+	// managed S3 connections to FlexpriceS3Exports.
 	if isFlexpriceManaged {
-		if bucket != s.Config.FlexpriceS3Exports.Bucket {
+		expectedBucket := s.Config.FlexpriceS3Exports.Bucket
+		if conn.ProviderType == types.SecretProviderGCS {
+			expectedBucket = s.Config.FlexpriceGCSExports.Bucket
+		}
+		if bucket != expectedBucket {
 			s.Logger.Info(ctx, "bucket mismatch for Flexprice-managed export",
-				"expected_bucket", s.Config.FlexpriceS3Exports.Bucket,
+				"expected_bucket", expectedBucket,
 				"actual_bucket", bucket,
 				"task_id", id)
 			return "", ierr.NewError("bucket mismatch").
 				WithHint("File URL bucket does not match Flexprice-managed configuration").
 				WithReportableDetails(map[string]interface{}{
 					"task_id":         id,
-					"expected_bucket": s.Config.FlexpriceS3Exports.Bucket,
+					"expected_bucket": expectedBucket,
 					"actual_bucket":   bucket,
 				}).
 				Mark(ierr.ErrValidation)
