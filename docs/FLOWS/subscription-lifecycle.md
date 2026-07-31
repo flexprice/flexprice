@@ -15,17 +15,6 @@
 5. **Amendments** route through layered services (change vs modification vs schedules) emphasizing non-breaking migration of billing anchors.
 6. **Cancellation & dunning semantics** interplay with alerting (`alert_logs`) and wallets where credits applied.
 
-### Addons across a plan change
-
-A plan change cancels the old subscription and creates a new one, so addons survive only by being re-attached. `SubscriptionChangeRequest.addon_behavior` controls this:
-
-- `carry_over` (default) snapshots the active associations **before** cancellation — cancellation stamps `EndDate` on every association, and that field is the only signal distinguishing a onetime addon from a recurring one — then re-attaches them to the new subscription. An addon that cannot be re-attached (unpublished, no price valid for the new billing period, conflicting metered reset period) fails the whole change rather than silently dropping it.
-- `drop` reproduces the historical behaviour: the addons end with the old subscription.
-
-Both behaviours leave the cancellation proration untouched, so the unused portion of an addon is credited either way. Under `carry_over` the re-attach then charges the new period, which nets out; under `drop` the credit is a refund for coverage the customer no longer has.
-
-`PreviewSubscriptionChange` runs the same three checks against a projected subscription and reports them per addon in `addon_impact`, so callers see a blocking failure before executing.
-
 Dominant hotspot: **`internal/ee/service/subscription.go`** (multi-thousand-line orchestrator—see hotspots doc).
 
 ## Modules touched
