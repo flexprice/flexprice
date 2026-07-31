@@ -233,6 +233,7 @@ func main() {
 			service.NewEventService,
 			service.NewEventConsumptionService,
 			service.NewRawEventsReprocessingService,
+			service.NewDLQReplayService,
 			service.NewRawEventConsumptionService,
 			service.NewCostSheetUsageTrackingService,
 			service.NewMeterUsageTrackingService,
@@ -356,6 +357,7 @@ func provideHandlers(
 	subscriptionModificationService service.SubscriptionModificationService,
 	subscriptionScheduleService service.SubscriptionScheduleService,
 	rawEventsReprocessingService service.RawEventsReprocessingService,
+	dlqReplayService service.DLQReplayService,
 	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
 	alertService service.AlertService,
@@ -376,6 +378,7 @@ func provideHandlers(
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
+		DLQ:                      v1.NewDLQHandler(dlqReplayService, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),

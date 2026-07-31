@@ -17,6 +17,7 @@ import (
 
 type Handlers struct {
 	Events                   *v1.EventsHandler
+	DLQ                      *v1.DLQHandler
 	Meter                    *v1.MeterHandler
 	Auth                     *v1.AuthHandler
 	User                     *v1.UserHandler
@@ -580,7 +581,8 @@ func NewRouter(
 		adminRoutes := v1Private.Group("/admin")
 		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, environmentRepo, logger))
 		{
-			// All admin routes to go here
+			// Drain a dead-letter topic back to origin via the ReplayDLQ workflow.
+			adminRoutes.POST("/dlq/replay", handlers.DLQ.ReplayDLQ)
 		}
 
 		// AI helpers (authenticated; same middleware as other /v1 private routes)
