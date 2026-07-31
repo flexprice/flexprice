@@ -2,6 +2,8 @@ package integration_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -222,9 +224,37 @@ func seedFlexpriceManagedGCSConnection(ctx context.Context, t *testing.T, store 
 	return conn
 }
 
+// stubAmbientGCPCredentials points Application Default Credentials at a throwaway
+// credentials file for the duration of the test. The managed GCS path
+// deliberately resolves credentials ambiently, so without this the test would
+// depend on whoever runs it happening to have real ADC configured — passing on a
+// developer laptop with gcloud and failing in CI.
+//
+// Uses the authorized_user credential shape rather than a service account so no
+// private-key-shaped material appears in the repository (secret scanners flag it,
+// correctly, even when the key is non-functional). Constructing a storage client
+// only parses these credentials; it issues no request, so the placeholder values
+// are never exercised.
+func stubAmbientGCPCredentials(t *testing.T) {
+	t.Helper()
+
+	const fakeADC = `{
+  "type": "authorized_user",
+  "client_id": "test-client-id.apps.googleusercontent.com",
+  "client_secret": "not-a-real-secret",
+  "refresh_token": "not-a-real-refresh-token"
+}`
+
+	path := filepath.Join(t.TempDir(), "adc.json")
+	require.NoError(t, os.WriteFile(path, []byte(fakeADC), 0o600))
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", path)
+}
+
 // A Flexprice-managed GCS connection must construct without any service account key,
 // taking its bucket from configuration rather than from the connection row.
 func TestFactory_GetStorageProvider_GCSFlexpriceManaged_UsesAmbientCredentials(t *testing.T) {
+	stubAmbientGCPCredentials(t)
+
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()
 
