@@ -203,9 +203,26 @@ func (s *FirstPeriodStubSuite) TestAnnualAnchorStubIsProrated() {
 		periodEnd:          jul2_2026,
 		currentPeriodStart: mar2_2026,
 		currentPeriodEnd:   jul2_2026,
-		prorationBehavior:  types.ProrationBehaviorNone,
+		prorationBehavior:  types.ProrationBehaviorCreateProrations,
 		// 1200 * 122/365
 		want: decimal.RequireFromString("401.10"),
+	})
+}
+
+// Stripe-aligned: proration_behavior=none skips charging the short first period.
+func (s *FirstPeriodStubSuite) TestAnnualAnchorStubIsFreeWhenProrationNone() {
+	s.run("annual_stub_free", stubCase{
+		amount:             decimal.NewFromInt(1200),
+		billingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		cadence:            types.InvoiceCadenceAdvance,
+		startDate:          mar2_2026,
+		billingAnchor:      jul2_2026,
+		periodStart:        mar2_2026,
+		periodEnd:          jul2_2026,
+		currentPeriodStart: mar2_2026,
+		currentPeriodEnd:   jul2_2026,
+		prorationBehavior:  types.ProrationBehaviorNone,
+		want:               decimal.Zero,
 	})
 }
 
@@ -266,7 +283,7 @@ func (s *FirstPeriodStubSuite) TestArrearStubPricedAfterPeriodAdvanced() {
 		// The subscription has already rolled into its first full year.
 		currentPeriodStart: jul2_2026,
 		currentPeriodEnd:   jul2_2027,
-		prorationBehavior:  types.ProrationBehaviorNone,
+		prorationBehavior:  types.ProrationBehaviorCreateProrations,
 		want:               decimal.RequireFromString("401.10"),
 	})
 }
@@ -305,9 +322,27 @@ func (s *FirstPeriodStubSuite) TestCalendarMidMonthStartIsProrated() {
 		periodEnd:          aug1,
 		currentPeriodStart: jul15,
 		currentPeriodEnd:   aug1,
-		prorationBehavior:  types.ProrationBehaviorNone,
+		prorationBehavior:  types.ProrationBehaviorCreateProrations,
 		// 100 * 17/31
 		want: decimal.RequireFromString("54.84"),
+	})
+}
+
+func (s *FirstPeriodStubSuite) TestCalendarMidMonthStartIsFreeWhenProrationNone() {
+	jul15 := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	aug1 := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
+	s.run("cal_midmonth_free", stubCase{
+		amount:             decimal.NewFromInt(100),
+		billingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		cadence:            types.InvoiceCadenceAdvance,
+		startDate:          jul15,
+		billingAnchor:      aug1,
+		periodStart:        jul15,
+		periodEnd:          aug1,
+		currentPeriodStart: jul15,
+		currentPeriodEnd:   aug1,
+		prorationBehavior:  types.ProrationBehaviorNone,
+		want:               decimal.Zero,
 	})
 }
 

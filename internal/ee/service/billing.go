@@ -2199,6 +2199,11 @@ func (s *billingService) tryApplyFirstPeriodStubPricing(
 		return decimal.Zero, false, nil
 	}
 
+	// Stripe: proration_behavior=none on create skips charging the short first period.
+	if sub.ProrationBehavior == types.ProrationBehaviorNone {
+		return decimal.Zero, true, nil
+	}
+
 	params := prorationService.CreateProrationParamsForFirstPeriod(
 		sub, item, priceData, periodStart, periodEnd, fullEnd,
 	)
