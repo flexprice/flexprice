@@ -254,16 +254,19 @@ func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) e
 	case StorageAccessModeStaticKey:
 		// Unchanged: static-key credentials are supplied via EncryptedSecretData, not here.
 	case StorageAccessModeAssumeRole:
-		if providerType != SecretProviderS3 {
-			return ierr.NewError("assume_role access mode is only supported for S3").
-				WithHint("assume_role is an AWS STS AssumeRole flow; it is not available for this provider").
-				Mark(ierr.ErrValidation)
-		}
-		if s.RoleARN == "" || s.ExternalID == "" {
-			return ierr.NewError("role_arn and external_id are required for assume_role access mode").
-				WithHint("Provide both role_arn and external_id when access_mode is assume_role").
-				Mark(ierr.ErrValidation)
-		}
+		// Rejected at creation, not just at use: a connection that cannot run is
+		// worse than one that was never created, and accepting it here would
+		// hand customers a trust-policy contract we intend to change.
+		//
+		// The flow is implemented and was verified end to end against a real
+		// cross-account bucket, but it needs a dedicated per-environment
+		// Flexprice IAM principal that does not exist yet — see the long
+		// comment on the assume_role branch in Factory.buildS3Storage for why a
+		// single shared principal is not safe (ExternalId guards the customer's
+		// side, not which Flexprice environment is calling).
+		return ierr.NewError("assume_role access mode is not enabled").
+			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled pending a dedicated per-environment Flexprice IAM principal. Use access_mode 'static_key' with customer-supplied credentials for now.").
+			Mark(ierr.ErrValidation)
 	case StorageAccessModeImpersonation, StorageAccessModeDirectGrant, StorageAccessModeWIF:
 		return ierr.NewError("access mode is not yet supported").
 			WithHintf("access_mode %q is reserved for future GCP BYOB support and is not implemented yet", s.AccessMode).

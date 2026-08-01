@@ -1437,25 +1437,58 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 
 	switch jobConfig.ResolvedAccessMode() {
 	case types.StorageAccessModeAssumeRole:
-		if f.config.Marketplace.AWS.AccessKeyID == "" || f.config.Marketplace.AWS.SecretAccessKey == "" || f.config.Marketplace.AWS.Region == "" {
-			return nil, ierr.NewError("flexprice aws caller identity is not configured").
-				WithHint("assume_role storage connections require Flexprice's own AWS credentials; set marketplace.aws.region, marketplace.aws.access_key_id and marketplace.aws.secret_access_key").
-				Mark(ierr.ErrSystem)
-		}
+		// DISABLED pending a dedicated, per-environment AWS principal.
+		//
+		// The mechanism itself is implemented and was verified end to end
+		// against a real cross-account bucket (connection validation, export
+		// upload, ExternalId enforcement, and secret redaction all behaved
+		// correctly). What is missing is a safe customer-facing contract.
+		//
+		// Two problems, both about WHICH principal the customer is asked to
+		// trust in their own IAM trust policy:
+		//
+		//  1. It borrowed marketplace.aws.* — the identity used for AWS
+		//     Marketplace metering, an unrelated feature. Customers would be
+		//     told to trust a principal whose name and purpose say
+		//     "marketplace", and one compromised key would cover both metering
+		//     and every customer's storage bucket.
+		//
+		//  2. A single shared principal cannot separate environments. Staging
+		//     and production share one AWS account, and ExternalId does NOT
+		//     help here: it guards the customer's side against third parties,
+		//     not against which Flexprice environment is calling. External IDs
+		//     live in sync_config as plaintext and are derived from tenant_id,
+		//     so the same tenant has the SAME id in both environments — and a
+		//     staging database refreshed from a production snapshot would hold
+		//     every production external ID. Staging could then assume a
+		//     customer's production role and write to their production bucket.
+		//     Only a distinct principal per environment is a real boundary.
+		//
+		// To enable: create role/flexprice-storage-access-<env> in the
+		// Flexprice AWS account, trusted by that environment's compute only
+		// (EKS IRSA / ECS task role, or the GCP federated identity when
+		// federation lands), holding sts:AssumeRole and no bucket permissions
+		// of its own. Add a dedicated storage.aws.* config section pointing at
+		// it — never marketplace.aws.* — and document ONLY the production ARN
+		// to customers. Then restore the branch below.
+		return nil, ierr.NewError("assume_role storage connections are not enabled").
+			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled: it requires a dedicated per-environment Flexprice IAM principal that does not exist yet. Use access_mode 'static_key' with customer-supplied credentials for now.").
+			Mark(ierr.ErrValidation)
 
-		return s3backend.New(ctx, &s3backend.Config{
-			Bucket:                        jobConfig.Bucket,
-			Region:                        jobConfig.Region,
-			KeyPrefix:                     jobConfig.KeyPrefix,
-			CompressionGzip:               jobConfig.Compression == types.S3CompressionTypeGzip,
-			ServerSideEncrypt:             string(jobConfig.Encryption),
-			AssumeRoleARN:                 jobConfig.RoleARN,
-			AssumeRoleExternalID:          jobConfig.ExternalID,
-			AssumeRoleBaseAccessKeyID:     f.config.Marketplace.AWS.AccessKeyID,
-			AssumeRoleBaseSecretAccessKey: f.config.Marketplace.AWS.SecretAccessKey,
-			AssumeRoleBaseSessionToken:    f.config.Marketplace.AWS.SessionToken,
-			AssumeRoleBaseRegion:          f.config.Marketplace.AWS.Region,
-		}, f.logger)
+		// Restore once the dedicated principal exists, reading base credentials
+		// from storage.aws.* (falling through to the ambient chain when no
+		// static keys are set, so AWS-hosted deployments need no key at all):
+		//
+		// return s3backend.New(ctx, &s3backend.Config{
+		// 	Bucket:               jobConfig.Bucket,
+		// 	Region:               jobConfig.Region,
+		// 	KeyPrefix:            jobConfig.KeyPrefix,
+		// 	CompressionGzip:      jobConfig.Compression == types.S3CompressionTypeGzip,
+		// 	ServerSideEncrypt:    string(jobConfig.Encryption),
+		// 	AssumeRoleARN:        jobConfig.RoleARN,
+		// 	AssumeRoleExternalID: jobConfig.ExternalID,
+		// 	// ... base credentials from storage.aws.*
+		// }, f.logger)
 
 	default: // types.StorageAccessModeStaticKey and empty (legacy rows)
 		if conn.EncryptedSecretData.S3 == nil {
