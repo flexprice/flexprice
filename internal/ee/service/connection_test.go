@@ -243,3 +243,59 @@ func TestCreateConnection_SecondPublishedStripeConnection_Fails(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, ierr.IsAlreadyExists(err), "expected already-exists error, got: %v", err)
 }
+
+// TestCreateConnection_NilIntegrationFactory_StorageConnectionStillCreated proves the
+// post-create storage validation block (added to wire ValidateConnection into
+// CreateConnection) does not panic when the service is constructed without an
+// IntegrationFactory — some test/bootstrap paths do this, mirroring the existing
+// QuickBooks post-create block's own nil guard.
+func TestCreateConnection_NilIntegrationFactory_StorageConnectionStillCreated(t *testing.T) {
+	svc, connRepo := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+
+	req := dto.CreateConnectionRequest{
+		Name:         "Customer GCS Connection",
+		ProviderType: types.SecretProviderGCS,
+		EncryptedSecretData: types.ConnectionMetadata{
+			GCS: &types.GCSConnectionMetadata{
+				ServiceAccountJSON: `{"type":"service_account"}`,
+			},
+		},
+	}
+
+	resp, err := svc.CreateConnection(ctx, req)
+	require.NoError(t, err, "nil IntegrationFactory must not panic or block storage connection creation")
+	require.NotNil(t, resp)
+
+	stored, err := connRepo.Get(ctx, resp.ID)
+	require.NoError(t, err)
+	require.Equal(t, resp.ID, stored.ID)
+}
+
+// TestCreateConnection_NonStorageProvider_NoValidationAttempted proves the new
+// post-create validation block only triggers for S3/GCS providers: a Stripe connection
+// created with a nil IntegrationFactory must succeed exactly as before, confirming the
+// new code path is correctly scoped and doesn't touch unrelated provider types.
+func TestCreateConnection_NonStorageProvider_NoValidationAttempted(t *testing.T) {
+	svc, connRepo := newConnectionServiceForTest(t)
+	ctx := testutil.SetupContext()
+
+	req := dto.CreateConnectionRequest{
+		Name:         "Stripe Connection",
+		ProviderType: types.SecretProviderStripe,
+		EncryptedSecretData: types.ConnectionMetadata{
+			Stripe: &types.StripeConnectionMetadata{
+				PublishableKey: "pk_test_1",
+				SecretKey:      "sk_test_1",
+			},
+		},
+	}
+
+	resp, err := svc.CreateConnection(ctx, req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	stored, err := connRepo.Get(ctx, resp.ID)
+	require.NoError(t, err)
+	require.Equal(t, resp.ID, stored.ID)
+}

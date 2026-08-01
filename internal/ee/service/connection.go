@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -834,6 +835,46 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 
 	s.Logger.Info(ctx, "connection created successfully", "connection_id", conn.ID)
 
+	// Storage connections (S3/GCS): validate the bucket is actually reachable with the
+	// resolved credentials now that the row exists (Factory.GetStorageProvider resolves the
+	// connection by ID from the DB, so this cannot run before Create). Unlike the QuickBooks
+	// block below, a validation failure here DOES fail connection creation: an unreachable
+	// bucket makes the connection unusable for its only purpose (exports), so we delete the
+	// just-created row rather than leave a known-broken connection persisted.
+	if (conn.ProviderType == types.SecretProviderS3 || conn.ProviderType == types.SecretProviderGCS) && s.IntegrationFactory != nil {
+		var bucket string
+		if conn.SyncConfig != nil && conn.SyncConfig.Storage != nil {
+			bucket = conn.SyncConfig.Storage.Bucket
+		}
+
+		storageProvider, err := s.IntegrationFactory.GetStorageProvider(ctx, conn.ID)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to build storage provider for connection validation",
+				"connection_id", conn.ID,
+				"provider_type", conn.ProviderType,
+				"error", err)
+			return nil, s.cleanupUnvalidatedStorageConnection(ctx, conn, ierr.WithError(err).
+				WithHintf("Could not validate the %s connection for bucket %q. The connection has been removed.", conn.ProviderType, bucket).
+				Mark(ierr.ErrValidation))
+		}
+
+		// Bounded for the same reason the marketplace verifications above are: a slow or
+		// unreachable bucket must not hang this request indefinitely.
+		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		err = storageProvider.ValidateConnection(verifyCtx)
+		cancel()
+		if err != nil {
+			s.Logger.Error(ctx, "storage connection verification failed",
+				"connection_id", conn.ID,
+				"provider_type", conn.ProviderType,
+				"bucket", bucket,
+				"error", err)
+			return nil, s.cleanupUnvalidatedStorageConnection(ctx, conn, ierr.WithError(err).
+				WithHintf("Could not reach bucket %q for the %s connection. Verify credentials and bucket name before retrying.", bucket, conn.ProviderType).
+				Mark(ierr.ErrValidation))
+		}
+	}
+
 	// For QuickBooks connections with auth_code, exchange it immediately for tokens
 	// OAuth 2.0 auth codes expire quickly (typically 10 minutes), so we must exchange them ASAP
 	if conn.ProviderType == types.SecretProviderQuickBooks && s.IntegrationFactory != nil {
@@ -859,6 +900,24 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 
 	return dto.ToConnectionResponse(conn), nil
+}
+
+// cleanupUnvalidatedStorageConnection deletes a just-created storage connection row after its
+// post-create bucket validation failed, so a known-broken connection is not left persisted.
+// It always returns validationErr (the actionable failure for the caller) even if the delete
+// itself fails; the delete failure is only logged.
+func (s *connectionService) cleanupUnvalidatedStorageConnection(ctx context.Context, conn *connection.Connection, validationErr error) error {
+	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
+		s.Logger.Error(ctx, "failed to delete connection after storage validation failure",
+			"connection_id", conn.ID,
+			"provider_type", conn.ProviderType,
+			"error", err)
+	} else {
+		s.Logger.Info(ctx, "deleted connection after storage validation failure",
+			"connection_id", conn.ID,
+			"provider_type", conn.ProviderType)
+	}
+	return validationErr
 }
 
 func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.ConnectionResponse, error) {
