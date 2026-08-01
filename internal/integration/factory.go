@@ -1395,14 +1395,30 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 	// and legacy rows that still carry a credential snapshot in
 	// EncryptedSecretData.S3 (from before this fix) simply have it ignored, since
 	// this branch runs before the decrypt path below.
+	//
+	// The DESTINATION is a different matter from the credentials. A managed
+	// connection records the bucket it was created against, and existing objects
+	// live there; silently retargeting it at whatever the platform config
+	// currently says would strand every prior export the moment that config
+	// drifts. So the row wins, and platform config is only the fallback for rows
+	// created before the bucket was recorded.
 	if jobConfig.IsFlexpriceManaged {
 		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
 			return nil, err
 		}
 
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceS3Exports.Bucket
+		}
+		region := jobConfig.Region
+		if region == "" {
+			region = f.config.FlexpriceS3Exports.Region
+		}
+
 		s3Cfg := &s3backend.Config{
-			Bucket:            f.config.FlexpriceS3Exports.Bucket,
-			Region:            f.config.FlexpriceS3Exports.Region,
+			Bucket:            bucket,
+			Region:            region,
 			KeyPrefix:         jobConfig.KeyPrefix,
 			CompressionGzip:   jobConfig.Compression == types.S3CompressionTypeGzip,
 			ServerSideEncrypt: string(jobConfig.Encryption),
@@ -1539,8 +1555,14 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
 			return nil, err
 		}
+		// Row-recorded bucket wins over platform config; see buildS3Storage for
+		// why the destination is treated differently from the credentials.
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceGCSExports.Bucket
+		}
 		return gcsbackend.New(ctx, &gcsbackend.Config{
-			Bucket:                    f.config.FlexpriceGCSExports.Bucket,
+			Bucket:                    bucket,
 			KeyPrefix:                 jobConfig.KeyPrefix,
 			CompressionGzip:           jobConfig.Compression == types.S3CompressionTypeGzip,
 			SignerServiceAccountEmail: f.config.FlexpriceGCSExports.SignerServiceAccountEmail,
