@@ -2826,6 +2826,20 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 	return topUpResp.WalletTransaction, nil
 }
 
+// balanceComputeTimeout bounds how long computeRealtimeBalance may run: the
+// smaller of the caller's remaining deadline and computeBalanceTimeout. This
+// makes a slow real-time balance compute trip our own deadline instead of
+// running unbounded until the client gives up (which otherwise surfaces as a
+// 500 on whatever query is in flight when the caller cancels).
+func (s *walletService) balanceComputeTimeout(ctx context.Context) time.Duration {
+	if deadline, ok := ctx.Deadline(); ok && !deadline.IsZero() {
+		if remaining := time.Until(deadline); remaining < s.computeBalanceTimeout {
+			return remaining
+		}
+	}
+	return s.computeBalanceTimeout
+}
+
 func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
 	if walletID == "" {
 		return nil, ierr.NewError("wallet_id is required").
@@ -2872,16 +2886,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
 
 	if cached != nil {
-		// Calculate the timeout duration based on the context deadline
-		var timeoutDuration time.Duration
-		currentTimeout, ok := ctx.Deadline()
-		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
-			timeoutDuration = time.Until(currentTimeout)
-		} else {
-			timeoutDuration = s.computeBalanceTimeout
-		}
-
-		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		computeCtx, cancel := context.WithTimeout(ctx, s.balanceComputeTimeout(ctx))
 		defer cancel()
 
 		resp, err := s.computeRealtimeBalance(computeCtx, w)
@@ -2907,9 +2912,14 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		return resp, nil
 	}
 
-	// if no cached balance, compute the real-time balance and set the cache
+	// No cached balance to fall back to, but still bound the compute so a slow
+	// dependency fails fast at our own deadline instead of running unbounded
+	// until the caller gives up (which otherwise surfaces as a 500 on the
+	// in-flight query when the client cancels).
+	computeCtx, cancel := context.WithTimeout(ctx, s.balanceComputeTimeout(ctx))
+	defer cancel()
 
-	resp, err := s.computeRealtimeBalance(ctx, w)
+	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err != nil {
 		return nil, err
 	}
@@ -3100,16 +3110,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
 
 	if cached != nil {
-		// Calculate the timeout duration based on the context deadline
-		var timeoutDuration time.Duration
-		currentTimeout, ok := ctx.Deadline()
-		if ok && !currentTimeout.IsZero() && time.Until(currentTimeout) < s.computeBalanceTimeout {
-			timeoutDuration = time.Until(currentTimeout)
-		} else {
-			timeoutDuration = s.computeBalanceTimeout
-		}
-
-		computeCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+		computeCtx, cancel := context.WithTimeout(ctx, s.balanceComputeTimeout(ctx))
 		defer cancel()
 
 		resp, err := s.computeRealtimeBalance(computeCtx, w)
@@ -3135,9 +3136,14 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return resp, nil
 	}
 
-	// if no cached balance, compute the real-time balance and set the cache
+	// No cached balance to fall back to, but still bound the compute so a slow
+	// dependency fails fast at our own deadline instead of running unbounded
+	// until the caller gives up (which otherwise surfaces as a 500 on the
+	// in-flight query when the client cancels).
+	computeCtx, cancel := context.WithTimeout(ctx, s.balanceComputeTimeout(ctx))
+	defer cancel()
 
-	resp, err := s.computeRealtimeBalance(ctx, w)
+	resp, err := s.computeRealtimeBalance(computeCtx, w)
 	if err != nil {
 		return nil, err
 	}
