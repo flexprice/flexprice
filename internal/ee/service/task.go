@@ -1249,7 +1249,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
-	store, err := s.IntegrationFactory.GetStorageProvider(ctx, scheduledTask.ConnectionID)
+	store, err := s.StorageResolver.ForConnection(ctx, scheduledTask.ConnectionID)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to get storage provider", "error", err)
 		return "", ierr.WithError(err).

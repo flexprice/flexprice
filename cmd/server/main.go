@@ -72,16 +72,20 @@ func init() {
 	time.Local = time.UTC
 }
 
-// provideInvoiceStorage constructs the platform Storage instance used for
-// Flexprice-owned invoice PDFs, wrapping storage.NewPlatformStorage with the
-// invoice-specific bucket/region from config so fx can provide it directly.
-func provideInvoiceStorage(cfg *config.Configuration, log *logger.Logger) (storage.Storage, error) {
+// provideStorageResolver constructs the Resolver that answers every storage
+// lookup in the application: platform buckets (invoice PDFs, Flexprice-managed
+// exports) and customer bring-your-own-bucket connections.
+//
+// The integration Factory supplies the connection half. fx resolves providers
+// by type rather than declaration order, so depending on it here is safe even
+// though integration.NewFactory is registered further down the graph.
+func provideStorageResolver(cfg *config.Configuration, factory *integration.Factory, log *logger.Logger) storage.Resolver {
 	// context.Background() is appropriate here: this runs once at fx DI-graph
 	// construction / application bootstrap time, not on a per-request path,
 	// so there is no caller-supplied context (cancellation/deadline/trace) to
 	// propagate — this call site is the root of the chain, not an
 	// intermediate hop dropping a context it was given.
-	return storage.NewPlatformStorage(context.Background(), cfg, cfg.S3.InvoiceBucketConfig.Bucket, cfg.S3.Region, log)
+	return storage.NewResolver(context.Background(), cfg, factory, log)
 }
 
 func main() {
@@ -107,7 +111,7 @@ func main() {
 			rbac.NewRBACService,
 
 			// storage
-			provideInvoiceStorage,
+			provideStorageResolver,
 
 			// Monitoring
 			tracing.NewService,

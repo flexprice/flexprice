@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -29,6 +30,7 @@ type ExportActivity struct {
 	customerRepo             customer.Repository
 	connectionRepo           connection.Repository
 	integrationFactory       *integration.Factory
+	storageResolver          storage.Resolver
 	config                   *config.Configuration
 	logger                   *logger.Logger
 	usageAnalyticsGetter     syncExport.UsageAnalyticsGetter
@@ -46,6 +48,7 @@ func NewExportActivity(
 	customerRepo customer.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	usageAnalyticsGetter syncExport.UsageAnalyticsGetter,
@@ -61,6 +64,7 @@ func NewExportActivity(
 		customerRepo:             customerRepo,
 		connectionRepo:           connectionRepo,
 		integrationFactory:       integrationFactory,
+		storageResolver:          storageResolver,
 		config:                   cfg,
 		logger:                   logger,
 		usageAnalyticsGetter:     usageAnalyticsGetter,
@@ -112,7 +116,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo)
+	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
