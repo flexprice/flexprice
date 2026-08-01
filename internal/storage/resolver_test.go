@@ -130,6 +130,58 @@ func TestResolver_BucketConfigFor_UnknownPurpose(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported storage purpose")
 }
 
+func TestResolver_SignerFor(t *testing.T) {
+	cfg := testConfig()
+	cfg.GCS.SignerServiceAccountEmail = "invoice-signer@flexprice-project.iam.gserviceaccount.com"
+	cfg.FlexpriceGCSExports.SignerServiceAccountEmail = "export-signer@flexprice-project.iam.gserviceaccount.com"
+
+	tests := []struct {
+		name       string
+		provider   Provider
+		purpose    Purpose
+		wantSigner string
+	}{
+		{"gcs invoice uses GCS.SignerServiceAccountEmail", ProviderGCS, PurposeInvoice, "invoice-signer@flexprice-project.iam.gserviceaccount.com"},
+		{"gcs export uses FlexpriceGCSExports.SignerServiceAccountEmail", ProviderGCS, PurposeExport, "export-signer@flexprice-project.iam.gserviceaccount.com"},
+		{"s3 invoice has no signer", ProviderS3, PurposeInvoice, ""},
+		{"s3 export has no signer", ProviderS3, PurposeExport, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newTestResolver(t, tt.provider, cfg)
+			signer, err := r.signerFor(tt.purpose)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantSigner, signer)
+		})
+	}
+}
+
+// TestResolver_SignerFor_GCSInvoiceEmptySigner proves an unset GCS invoice
+// signer fails loud and names the env var, rather than silently resolving
+// to a resolver that can upload but never presign a download link.
+func TestResolver_SignerFor_GCSInvoiceEmptySigner(t *testing.T) {
+	cfg := testConfig() // GCS.SignerServiceAccountEmail left empty
+	r := newTestResolver(t, ProviderGCS, cfg)
+
+	signer, err := r.signerFor(PurposeInvoice)
+	require.Error(t, err)
+	assert.Empty(t, signer)
+	assert.Contains(t, err.Error(), "FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL")
+}
+
+// TestResolver_ForPlatform_GCSInvoiceEmptySigner proves ForPlatform surfaces
+// the signer error end to end (not just the unexported signerFor helper).
+func TestResolver_ForPlatform_GCSInvoiceEmptySigner(t *testing.T) {
+	cfg := testConfig() // GCS.SignerServiceAccountEmail left empty
+	r := newTestResolver(t, ProviderGCS, cfg)
+
+	s, err := r.ForPlatform(context.Background(), PurposeInvoice)
+	require.Error(t, err)
+	assert.Nil(t, s)
+	assert.Contains(t, err.Error(), "FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL")
+}
+
 func TestResolver_ForPlatform_Caches(t *testing.T) {
 	cfg := testConfig()
 	r := newTestResolver(t, ProviderS3, cfg)
