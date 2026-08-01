@@ -29,16 +29,22 @@ func ResolveProvider(ctx context.Context, cfg *config.Configuration) Provider {
 }
 
 // NewPlatformStorage constructs the Storage instance used for Flexprice-owned
-// buckets (invoice PDFs, Flexprice-managed exports). provider/bucket/region are
-// passed explicitly because invoice storage and export storage may use
-// different buckets even though both are platform-owned, and because provider
-// detection must happen once at bootstrap (see ResolveProvider) rather than on
-// each construction.
-func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider Provider, bucket, region string, log *logger.Logger) (Storage, error) {
+// buckets (invoice PDFs, Flexprice-managed exports). provider/bucket/region and
+// signerEmail are passed explicitly because invoice storage and export storage
+// may use different buckets and different signing identities even though both
+// are platform-owned, and because provider detection must happen once at
+// bootstrap (see ResolveProvider) rather than on each construction.
+//
+// signerEmail applies to GCS only and is ignored for S3, where presigned URLs
+// are signed with the request credentials themselves. Mapping a purpose to its
+// signer is the Resolver's job, which is why this takes a plain string rather
+// than a Purpose.
+func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider Provider, bucket, region, signerEmail string, log *logger.Logger) (Storage, error) {
 	switch provider {
 	case ProviderGCS:
 		return gcsbackend.New(ctx, &gcsbackend.Config{
-			Bucket: bucket,
+			Bucket:                    bucket,
+			SignerServiceAccountEmail: signerEmail,
 		}, log)
 	case ProviderS3:
 		// FlexpriceS3Exports.Validate() is not invoked anywhere on the boot path

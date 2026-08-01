@@ -257,6 +257,13 @@ type StorageConfig struct {
 type GCSConfig struct {
 	Enabled             bool         `mapstructure:"enabled" default:"false"`
 	InvoiceBucketConfig BucketConfig `mapstructure:"invoice" validate:"omitempty"`
+	// SignerServiceAccountEmail is the identity used to sign presigned GET URLs
+	// for invoice PDFs. Under Workload Identity the ambient credentials cannot
+	// self-sign, so this must name a service account the running identity may
+	// impersonate (roles/iam.serviceAccountTokenCreator). Empty means invoice
+	// PDFs upload fine but every presigned download link fails, so the resolver
+	// rejects an empty value when the resolved provider is GCS.
+	SignerServiceAccountEmail string `mapstructure:"signer_service_account_email" validate:"omitempty"`
 }
 
 // FlexpriceGCSExportsConfig is the GCS counterpart to FlexpriceS3ExportsConfig:

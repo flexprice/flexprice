@@ -94,7 +94,12 @@ func (r *resolver) ForPlatform(ctx context.Context, purpose Purpose) (Storage, e
 		return nil, err
 	}
 
-	s, err := NewPlatformStorage(ctx, r.cfg, r.provider, bucket, region, r.logger)
+	signerEmail, err := r.signerFor(purpose)
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := NewPlatformStorage(ctx, r.cfg, r.provider, bucket, region, signerEmail, r.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +115,43 @@ func (r *resolver) ForConnection(ctx context.Context, connectionID string) (Stor
 			Mark(ierr.ErrSystem)
 	}
 	return r.connSvc.GetStorageProvider(ctx, connectionID)
+}
+
+// signerFor selects the signing identity for a purpose under the resolved
+// provider. GCS presigned GET URLs need a service account the ambient
+// Workload Identity credentials can impersonate (they cannot self-sign);
+// invoice and export buckets can be signed by different identities even
+// though both are platform-owned, so this mirrors platformBucket/
+// BucketConfigFor's purpose-to-config mapping rather than living in
+// NewPlatformStorage. S3 returns empty: presigned S3 URLs are signed with the
+// request credentials themselves, with no separate signer identity.
+//
+// GCS+invoice with an empty signer is rejected here rather than left to fail
+// silently at first presign: uploads would succeed (no signer needed to PUT),
+// but every presigned GET for an invoice PDF would fail, which otherwise only
+// surfaces the first time a customer clicks a download link.
+func (r *resolver) signerFor(purpose Purpose) (string, error) {
+	if r.provider != ProviderGCS {
+		return "", nil
+	}
+
+	switch purpose {
+	case PurposeInvoice:
+		signer := r.cfg.GCS.SignerServiceAccountEmail
+		if signer == "" {
+			// The env var name goes in the message, not just the hint: ierr's
+			// Error() renders only "Code: Message", so a hint-only name is
+			// invisible in logs and in any error string a caller inspects.
+			return "", ierr.NewError("no GCS signer service account configured for invoice storage; set FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL").
+				WithHint("Set gcs.signer_service_account_email (FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL) to a service account with roles/iam.serviceAccountTokenCreator; uploads would succeed but every presigned invoice PDF download link would fail without it").
+				Mark(ierr.ErrValidation)
+		}
+		return signer, nil
+	case PurposeExport:
+		return r.cfg.FlexpriceGCSExports.SignerServiceAccountEmail, nil
+	default:
+		return "", unsupportedPurpose(purpose)
+	}
 }
 
 // platformBucket selects the bucket and region for a purpose under the resolved
