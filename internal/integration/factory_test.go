@@ -277,6 +277,34 @@ func TestFactory_GetStorageProvider_GCSFlexpriceManaged_UsesAmbientCredentials(t
 		"managed connection must use the configured Flexprice bucket")
 }
 
+// GCS counterpart of
+// TestFactory_GetStorageProvider_S3FlexpriceManaged_RowBucketWinsOverPlatformConfig.
+// buildGCSStorage had the same defect and is fixed the same way.
+func TestFactory_GetStorageProvider_GCSFlexpriceManaged_RowBucketWinsOverPlatformConfig(t *testing.T) {
+	stubAmbientGCPCredentials(t)
+
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "platform-config-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+	conn.SyncConfig.Storage.Bucket = "bucket-recorded-at-creation"
+	require.NoError(t, connRepo.Update(ctx, conn))
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.Equal(t, "gs://bucket-recorded-at-creation/k", got.FileURL("k"),
+		"managed GCS export must use the bucket recorded on the connection, not current platform config")
+}
+
 // Without a configured bucket the managed path must fail loudly rather than
 // constructing a client pointed at an empty bucket name.
 func TestFactory_GetStorageProvider_GCSFlexpriceManagedNoBucket_ReturnsValidationError(t *testing.T) {
@@ -585,6 +613,69 @@ func TestFactory_GetStorageProvider_S3FlexpriceManaged_IgnoresLegacyCredentialSn
 	require.NoError(t, err, "managed branch must ignore any legacy credential snapshot on the connection row")
 	require.NotNil(t, got)
 	require.Equal(t, storage.ProviderS3, got.Provider())
+}
+
+// Verified live against AWS staging on 2026-08-01: a managed connection created
+// on the pre-branch image recorded bucket "…-a-ass1" in sync_config, and after
+// deploying this branch with FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET pointing at
+// "…-b-ass1", the very same connection — untouched, updated_at unchanged —
+// exported to bucket B. Three other tenants' scheduled exports were redirected
+// the same way. Ignoring the credential snapshot is intended; silently moving
+// the DESTINATION is not, because prior exports live in the recorded bucket.
+func TestFactory_GetStorageProvider_S3FlexpriceManaged_RowBucketWinsOverPlatformConfig(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "platform-config-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo)
+	conn.SyncConfig.Storage.Bucket = "bucket-recorded-at-creation"
+	conn.SyncConfig.Storage.Region = "ap-south-1"
+	require.NoError(t, connRepo.Update(ctx, conn))
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Contains(t, got.FileURL("some/key.csv"), "bucket-recorded-at-creation",
+		"managed export must write to the bucket recorded on the connection, not the current platform config")
+	require.NotContains(t, got.FileURL("some/key.csv"), "platform-config-bucket")
+}
+
+// Rows created before the bucket was recorded carry an empty Bucket; those must
+// still resolve, falling back to platform config.
+func TestFactory_GetStorageProvider_S3FlexpriceManaged_EmptyRowBucketFallsBackToConfig(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "platform-config-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	// seedFlexpriceManagedS3Connection records no bucket.
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.Contains(t, got.FileURL("some/key.csv"), "platform-config-bucket",
+		"a managed row with no recorded bucket must fall back to platform config")
 }
 
 // Regression guard: adding the managed ambient-credential path must not weaken the
