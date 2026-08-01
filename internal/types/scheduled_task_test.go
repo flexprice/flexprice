@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -105,6 +106,50 @@ func TestStorageExportConfig_ResolvedAccessMode(t *testing.T) {
 			assert.Equal(t, tt.want, tt.cfg.ResolvedAccessMode())
 		})
 	}
+}
+
+func TestS3JobConfig_ResolvedAccessMode(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *S3JobConfig
+		want StorageAccessMode
+	}{
+		{"empty resolves to static_key", &S3JobConfig{}, StorageAccessModeStaticKey},
+		{"explicit static_key passes through", &S3JobConfig{AccessMode: StorageAccessModeStaticKey}, StorageAccessModeStaticKey},
+		{"explicit assume_role passes through", &S3JobConfig{AccessMode: StorageAccessModeAssumeRole}, StorageAccessModeAssumeRole},
+		{"nil resolves to static_key", nil, StorageAccessModeStaticKey},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.ResolvedAccessMode())
+		})
+	}
+}
+
+// S3JobConfig (scheduled_tasks.job_config) and StorageExportConfig
+// (connections.sync_config) describe the same storage destination in two
+// places. When assume-role support was added to StorageExportConfig only,
+// S3JobConfig silently dropped access_mode/role_arn/external_id: the API
+// accepted them on a scheduled task and discarded them, with no error. This
+// asserts the round-trip so the two shapes cannot drift apart again unnoticed.
+func TestS3JobConfig_AccessModeFieldsRoundTrip(t *testing.T) {
+	in := &S3JobConfig{
+		Bucket:     "customer-bucket",
+		Region:     "ap-south-1",
+		AccessMode: StorageAccessModeAssumeRole,
+		RoleARN:    "arn:aws:iam::123456789012:role/customer-role",
+		ExternalID: "ext-id-abc123",
+	}
+
+	raw, err := json.Marshal(in)
+	assert.NoError(t, err)
+
+	var out S3JobConfig
+	assert.NoError(t, json.Unmarshal(raw, &out))
+
+	assert.Equal(t, StorageAccessModeAssumeRole, out.AccessMode, "access_mode must survive the round-trip")
+	assert.Equal(t, in.RoleARN, out.RoleARN, "role_arn must survive the round-trip")
+	assert.Equal(t, in.ExternalID, out.ExternalID, "external_id must survive the round-trip")
 }
 
 func TestStorageExportConfig_ValidateForProvider_AssumeRole(t *testing.T) {

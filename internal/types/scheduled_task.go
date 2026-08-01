@@ -292,6 +292,25 @@ type S3JobConfig struct {
 	// because Validate() is called by Ent without provider context and must not
 	// enforce S3-only rules (notably Region) on a GCS job.
 	Provider SecretProvider `json:"provider,omitempty"`
+	// AccessMode/RoleARN/ExternalID mirror the same fields on
+	// StorageExportConfig. Credentials are always resolved from the CONNECTION
+	// (Factory.buildS3Storage reads conn.GetSyncConfig().Storage), never from
+	// this struct — these exist so a job config round-trips what the caller sent
+	// instead of silently discarding it, and so the values are visible when
+	// inspecting a scheduled task. Empty AccessMode means static_key, keeping
+	// rows written before assume-role support unchanged.
+	AccessMode StorageAccessMode `json:"access_mode,omitempty"`
+	RoleARN    string            `json:"role_arn,omitempty"`
+	ExternalID string            `json:"external_id,omitempty"`
+}
+
+// ResolvedAccessMode returns the effective access mode, treating empty as
+// static_key so pre-existing rows keep their behavior.
+func (s *S3JobConfig) ResolvedAccessMode() StorageAccessMode {
+	if s == nil || s.AccessMode == "" {
+		return StorageAccessModeStaticKey
+	}
+	return s.AccessMode
 }
 
 // isGCS reports whether this job targets Google Cloud Storage.
