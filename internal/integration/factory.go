@@ -1362,6 +1362,50 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 }
 
 func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Flexprice-managed connections write to a Flexprice-owned bucket using the
+	// deployment's own ambient/static/federated identity, resolved from PLATFORM
+	// config at runtime — not from any credential snapshot on the connection row.
+	// This mirrors buildGCSStorage's managed branch: rotating the platform
+	// credential source takes effect immediately for every managed connection,
+	// and legacy rows that still carry a credential snapshot in
+	// EncryptedSecretData.S3 (from before this fix) simply have it ignored, since
+	// this branch runs before the decrypt path below.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
+			return nil, err
+		}
+
+		s3Cfg := &s3backend.Config{
+			Bucket:            f.config.FlexpriceS3Exports.Bucket,
+			Region:            f.config.FlexpriceS3Exports.Region,
+			KeyPrefix:         jobConfig.KeyPrefix,
+			CompressionGzip:   jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt: string(jobConfig.Encryption),
+		}
+
+		switch f.config.FlexpriceS3Exports.ResolvedCredentialSource() {
+		case config.CredentialSourceStatic:
+			s3Cfg.AWSAccessKeyID = f.config.FlexpriceS3Exports.AWSAccessKeyID
+			s3Cfg.AWSSecretAccessKey = f.config.FlexpriceS3Exports.AWSSecretAccessKey
+			s3Cfg.AWSSessionToken = f.config.FlexpriceS3Exports.AWSSessionToken
+		case config.CredentialSourceAmbient:
+			// Deliberately leave credentials empty: s3backend.New falls through to
+			// the AWS default credential chain (EKS IRSA / EKS Pod Identity / ECS
+			// task role / EC2 instance profile).
+		case config.CredentialSourceFederation:
+			// FederationTokenSource is wired once the GCP->AWS federation token
+			// source implementation lands; only the role ARN is set for now.
+			s3Cfg.FederationRoleARN = f.config.FlexpriceS3Exports.FederationRoleARN
+		}
+
+		return s3backend.New(ctx, s3Cfg, f.logger)
+	}
+
 	if conn.EncryptedSecretData.S3 == nil {
 		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
 	}
@@ -1385,11 +1429,6 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		if err != nil {
 			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
 		}
-	}
-
-	jobConfig := conn.GetSyncConfig().Storage // bucket/region/prefix/compression/encryption/endpoint come from sync config
-	if jobConfig == nil {
-		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
 	}
 
 	return s3backend.New(ctx, &s3backend.Config{
