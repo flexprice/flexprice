@@ -130,6 +130,28 @@ func (e S3EncryptionType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
+// StorageAccessMode selects how Flexprice authenticates to a customer-owned (BYOB) storage
+// bucket. Empty behaves exactly as StorageAccessModeStaticKey so every existing row (written
+// before this type existed) keeps its original meaning — always resolve through
+// ResolvedAccessMode() rather than comparing AccessMode directly against "".
+type StorageAccessMode string
+
+const (
+	// StorageAccessModeStaticKey is the long-standing default: the tenant pastes static IAM
+	// (S3) or service-account JSON (GCS) credentials, stored encrypted on the connection.
+	StorageAccessModeStaticKey StorageAccessMode = "static_key"
+	// StorageAccessModeAssumeRole is S3-only: the tenant creates an IAM role trusting
+	// Flexprice's AWS account, and Flexprice calls sts:AssumeRole with RoleARN+ExternalID
+	// instead of storing any secret.
+	StorageAccessModeAssumeRole StorageAccessMode = "assume_role"
+	// StorageAccessModeImpersonation, StorageAccessModeDirectGrant, and StorageAccessModeWIF
+	// are reserved for future GCP BYOB keyless quadrants. They are documented here so the
+	// enum is discoverable but are NOT implemented — ValidateForProvider rejects them.
+	StorageAccessModeImpersonation StorageAccessMode = "impersonation"
+	StorageAccessModeDirectGrant   StorageAccessMode = "direct_grant"
+	StorageAccessModeWIF           StorageAccessMode = "wif"
+)
+
 // StorageExportConfig represents cloud storage export configuration (non-sensitive settings).
 // This goes in the sync_config column. Cloud-agnostic: used for both S3 and GCS connections.
 type StorageExportConfig struct {
@@ -139,6 +161,29 @@ type StorageExportConfig struct {
 	Compression        S3CompressionType `json:"compression,omitempty"`          // Compression type: "gzip", "none" (default: "none")
 	Encryption         S3EncryptionType  `json:"encryption,omitempty"`           // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
 	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed storage credentials instead of user-provided
+	// AccessMode selects how Flexprice authenticates to a customer-owned (BYOB) bucket.
+	// Non-secret identifier, so it lives here (sync_config, plaintext) rather than in
+	// EncryptedSecretData. Always read via ResolvedAccessMode(), not this field directly.
+	AccessMode StorageAccessMode `json:"access_mode,omitempty"`
+	// RoleARN is the tenant's IAM role Flexprice assumes when AccessMode is assume_role.
+	// Not a secret by itself (it names a resource, not a credential) — same treatment as
+	// AWSMarketplaceConnectionSecrets.RoleArn.
+	RoleARN string `json:"role_arn,omitempty"`
+	// ExternalID is tenant-supplied, exactly like AWSMarketplaceConnectionSecrets.ExternalID:
+	// the frontend derives it deterministically from tenant_id and displays it inline with
+	// the trust-policy template the tenant pastes into their own AWS account. Flexprice never
+	// generates this value.
+	ExternalID string `json:"external_id,omitempty"`
+}
+
+// ResolvedAccessMode returns the effective access mode, treating empty (every row written
+// before this field existed) as StorageAccessModeStaticKey. Prefer this over reading
+// AccessMode directly so callers never need to special-case the empty string.
+func (s *StorageExportConfig) ResolvedAccessMode() StorageAccessMode {
+	if s == nil || s.AccessMode == "" {
+		return StorageAccessModeStaticKey
+	}
+	return s.AccessMode
 }
 
 // Validate validates the storage export configuration without provider context.
@@ -201,6 +246,30 @@ func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) e
 	if providerType != SecretProviderGCS && s.Region == "" {
 		return ierr.NewError("region is required").
 			WithHint("AWS region is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	switch s.ResolvedAccessMode() {
+	case StorageAccessModeStaticKey:
+		// Unchanged: static-key credentials are supplied via EncryptedSecretData, not here.
+	case StorageAccessModeAssumeRole:
+		if providerType != SecretProviderS3 {
+			return ierr.NewError("assume_role access mode is only supported for S3").
+				WithHint("assume_role is an AWS STS AssumeRole flow; it is not available for this provider").
+				Mark(ierr.ErrValidation)
+		}
+		if s.RoleARN == "" || s.ExternalID == "" {
+			return ierr.NewError("role_arn and external_id are required for assume_role access mode").
+				WithHint("Provide both role_arn and external_id when access_mode is assume_role").
+				Mark(ierr.ErrValidation)
+		}
+	case StorageAccessModeImpersonation, StorageAccessModeDirectGrant, StorageAccessModeWIF:
+		return ierr.NewError("access mode is not yet supported").
+			WithHintf("access_mode %q is reserved for future GCP BYOB support and is not implemented yet", s.AccessMode).
+			Mark(ierr.ErrValidation)
+	default:
+		return ierr.NewError("invalid access_mode").
+			WithHintf("access_mode %q is not recognized", s.AccessMode).
 			Mark(ierr.ErrValidation)
 	}
 

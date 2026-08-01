@@ -71,3 +71,151 @@ func TestStorageExportConfig_ValidateForProvider_RegionRequirement(t *testing.T)
 		assert.NoError(t, cfg.Validate())
 	})
 }
+
+func TestStorageExportConfig_ResolvedAccessMode(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *StorageExportConfig
+		want StorageAccessMode
+	}{
+		{
+			name: "empty access mode resolves to static_key",
+			cfg:  &StorageExportConfig{},
+			want: StorageAccessModeStaticKey,
+		},
+		{
+			name: "explicit static_key passes through",
+			cfg:  &StorageExportConfig{AccessMode: StorageAccessModeStaticKey},
+			want: StorageAccessModeStaticKey,
+		},
+		{
+			name: "explicit assume_role passes through",
+			cfg:  &StorageExportConfig{AccessMode: StorageAccessModeAssumeRole},
+			want: StorageAccessModeAssumeRole,
+		},
+		{
+			name: "nil config resolves to static_key",
+			cfg:  nil,
+			want: StorageAccessModeStaticKey,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.ResolvedAccessMode())
+		})
+	}
+}
+
+func TestStorageExportConfig_ValidateForProvider_AssumeRole(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *StorageExportConfig
+		provider    SecretProvider
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "assume_role with role_arn and external_id passes for S3",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				Region:     "us-west-2",
+				AccessMode: StorageAccessModeAssumeRole,
+				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
+				ExternalID: "ext-tenant-abc",
+			},
+			provider: SecretProviderS3,
+			wantErr:  false,
+		},
+		{
+			name: "assume_role without role_arn fails",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				Region:     "us-west-2",
+				AccessMode: StorageAccessModeAssumeRole,
+				ExternalID: "ext-tenant-abc",
+			},
+			provider:    SecretProviderS3,
+			wantErr:     true,
+			errContains: "role_arn",
+		},
+		{
+			name: "assume_role without external_id fails",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				Region:     "us-west-2",
+				AccessMode: StorageAccessModeAssumeRole,
+				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
+			},
+			provider:    SecretProviderS3,
+			wantErr:     true,
+			errContains: "external_id",
+		},
+		{
+			name: "assume_role rejected for GCS",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				AccessMode: StorageAccessModeAssumeRole,
+				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
+				ExternalID: "ext-tenant-abc",
+			},
+			provider:    SecretProviderGCS,
+			wantErr:     true,
+			errContains: "S3",
+		},
+		{
+			name: "static_key unchanged (no role/external id needed)",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				Region:     "us-west-2",
+				AccessMode: StorageAccessModeStaticKey,
+			},
+			provider: SecretProviderS3,
+			wantErr:  false,
+		},
+		{
+			name: "reserved impersonation mode rejected",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				AccessMode: StorageAccessModeImpersonation,
+			},
+			provider:    SecretProviderGCS,
+			wantErr:     true,
+			errContains: "not yet supported",
+		},
+		{
+			name: "reserved direct_grant mode rejected",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				AccessMode: StorageAccessModeDirectGrant,
+			},
+			provider:    SecretProviderGCS,
+			wantErr:     true,
+			errContains: "not yet supported",
+		},
+		{
+			name: "reserved wif mode rejected",
+			cfg: &StorageExportConfig{
+				Bucket:     "my-bucket",
+				AccessMode: StorageAccessModeWIF,
+			},
+			provider:    SecretProviderGCS,
+			wantErr:     true,
+			errContains: "not yet supported",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.ValidateForProvider(tt.provider)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
