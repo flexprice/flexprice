@@ -784,6 +784,15 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 	conn.EncryptedSecretData = encryptedMetadata
 
+	// Storage connections (S3/GCS): validate the bucket is actually reachable with the
+	// resolved credentials BEFORE the row is ever persisted. This must run after
+	// encryption above, since buildS3Storage/buildGCSStorage decrypt
+	// conn.EncryptedSecretData. A validation failure here means nothing was ever
+	// written, so there is nothing to roll back.
+	if err := s.validateStorageReachable(ctx, conn); err != nil {
+		return nil, err
+	}
+
 	// Create the connection
 	if err := s.ConnectionRepo.Create(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to create connection", "error", err)
@@ -791,46 +800,6 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 
 	s.Logger.Info(ctx, "connection created successfully", "connection_id", conn.ID)
-
-	// Storage connections (S3/GCS): validate the bucket is actually reachable with the
-	// resolved credentials now that the row exists (Factory.GetStorageProvider resolves the
-	// connection by ID from the DB, so this cannot run before Create). Unlike the QuickBooks
-	// block below, a validation failure here DOES fail connection creation: an unreachable
-	// bucket makes the connection unusable for its only purpose (exports), so we delete the
-	// just-created row rather than leave a known-broken connection persisted.
-	if (conn.ProviderType == types.SecretProviderS3 || conn.ProviderType == types.SecretProviderGCS) && s.IntegrationFactory != nil {
-		var bucket string
-		if conn.SyncConfig != nil && conn.SyncConfig.Storage != nil {
-			bucket = conn.SyncConfig.Storage.Bucket
-		}
-
-		storageProvider, err := s.IntegrationFactory.GetStorageProvider(ctx, conn.ID)
-		if err != nil {
-			s.Logger.Error(ctx, "failed to build storage provider for connection validation",
-				"connection_id", conn.ID,
-				"provider_type", conn.ProviderType,
-				"error", err)
-			return nil, s.cleanupUnvalidatedStorageConnection(ctx, conn, ierr.WithError(err).
-				WithHintf("Could not validate the %s connection for bucket %q. The connection has been removed.", conn.ProviderType, bucket).
-				Mark(ierr.ErrValidation))
-		}
-
-		// Bounded for the same reason the marketplace verifications above are: a slow or
-		// unreachable bucket must not hang this request indefinitely.
-		verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		err = storageProvider.ValidateConnection(verifyCtx)
-		cancel()
-		if err != nil {
-			s.Logger.Error(ctx, "storage connection verification failed",
-				"connection_id", conn.ID,
-				"provider_type", conn.ProviderType,
-				"bucket", bucket,
-				"error", err)
-			return nil, s.cleanupUnvalidatedStorageConnection(ctx, conn, ierr.WithError(err).
-				WithHintf("Could not reach bucket %q for the %s connection. Verify credentials and bucket name before retrying.", bucket, conn.ProviderType).
-				Mark(ierr.ErrValidation))
-		}
-	}
 
 	// For QuickBooks connections with auth_code, exchange it immediately for tokens
 	// OAuth 2.0 auth codes expire quickly (typically 10 minutes), so we must exchange them ASAP
@@ -859,22 +828,56 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	return dto.ToConnectionResponse(conn), nil
 }
 
-// cleanupUnvalidatedStorageConnection deletes a just-created storage connection row after its
-// post-create bucket validation failed, so a known-broken connection is not left persisted.
-// It always returns validationErr (the actionable failure for the caller) even if the delete
-// itself fails; the delete failure is only logged.
-func (s *connectionService) cleanupUnvalidatedStorageConnection(ctx context.Context, conn *connection.Connection, validationErr error) error {
-	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
-		s.Logger.Error(ctx, "failed to delete connection after storage validation failure",
+// validateStorageReachable checks that an S3/GCS connection's bucket is actually
+// reachable with the resolved credentials, building the storage backend from the
+// in-memory conn (via Factory.GetStorageProviderForConnection) rather than a
+// persisted row. This lets both CreateConnection and UpdateConnection validate
+// before writing: a failure here means the DB was never touched, so neither
+// caller needs a rollback.
+//
+// Returns nil for non-storage providers and when IntegrationFactory is nil
+// (some test/bootstrap paths construct the service without one).
+func (s *connectionService) validateStorageReachable(ctx context.Context, conn *connection.Connection) error {
+	if conn.ProviderType != types.SecretProviderS3 && conn.ProviderType != types.SecretProviderGCS {
+		return nil
+	}
+	if s.IntegrationFactory == nil {
+		return nil
+	}
+
+	var bucket string
+	if conn.SyncConfig != nil && conn.SyncConfig.Storage != nil {
+		bucket = conn.SyncConfig.Storage.Bucket
+	}
+
+	storageProvider, err := s.IntegrationFactory.GetStorageProviderForConnection(ctx, conn)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to build storage provider for connection validation",
 			"connection_id", conn.ID,
 			"provider_type", conn.ProviderType,
 			"error", err)
-	} else {
-		s.Logger.Info(ctx, "deleted connection after storage validation failure",
-			"connection_id", conn.ID,
-			"provider_type", conn.ProviderType)
+		return ierr.WithError(err).
+			WithHintf("Could not validate the %s connection for bucket %q.", conn.ProviderType, bucket).
+			Mark(ierr.ErrValidation)
 	}
-	return validationErr
+
+	// Bounded so a slow/unreachable bucket can't hang this request indefinitely —
+	// there's no other timeout anywhere in this path otherwise.
+	verifyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	err = storageProvider.ValidateConnection(verifyCtx)
+	cancel()
+	if err != nil {
+		s.Logger.Error(ctx, "storage connection verification failed",
+			"connection_id", conn.ID,
+			"provider_type", conn.ProviderType,
+			"bucket", bucket,
+			"error", err)
+		return ierr.WithError(err).
+			WithHintf("Could not reach bucket %q for the %s connection. Verify credentials and bucket name before retrying.", bucket, conn.ProviderType).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.ConnectionResponse, error) {
@@ -1011,6 +1014,15 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	conn.UpdatedAt = time.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
+
+	// Storage connections (S3/GCS): validate the (possibly updated) bucket is actually
+	// reachable BEFORE the update is persisted, same as CreateConnection. Since this
+	// validates the in-memory conn before ConnectionRepo.Update runs, a failure here
+	// means the DB row is untouched — no snapshot of the pre-update state, no revert,
+	// no rollback needed.
+	if err := s.validateStorageReachable(ctx, conn); err != nil {
+		return nil, err
+	}
 
 	// Update the connection
 	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {

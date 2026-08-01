@@ -1349,6 +1349,26 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 		return nil, err
 	}
 
+	return f.GetStorageProviderForConnection(ctx, conn)
+}
+
+// GetStorageProviderForConnection builds a Storage from an in-memory connection
+// rather than fetching one by ID.
+//
+// This exists so a connection's storage config can be verified BEFORE it is
+// persisted: connection create and update both need to know whether the bucket
+// is actually reachable with the supplied credentials, and validating the
+// already-stored row would only prove the previous config still works. Building
+// from the proposed connection means a bad config is rejected without ever
+// being written, so neither path needs a rollback.
+//
+// The connection is only read here — nothing is persisted.
+func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	if conn == nil {
+		return nil, ierr.NewError("connection is required for storage").
+			Mark(ierr.ErrValidation)
+	}
+
 	switch conn.ProviderType {
 	case types.SecretProviderS3:
 		return f.buildS3Storage(ctx, conn)
