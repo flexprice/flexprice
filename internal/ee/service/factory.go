@@ -63,12 +63,12 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger        *logger.Logger
-	Config        *config.Configuration
-	DB            postgres.IClient
-	PDFGenerator  pdf.Generator
-	Storage       storage.Storage
-	TracingSvc    *tracing.Service
+	Logger          *logger.Logger
+	Config          *config.Configuration
+	DB              postgres.IClient
+	PDFGenerator    pdf.Generator
+	StorageResolver storage.Resolver
+	TracingSvc      *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
@@ -197,7 +197,7 @@ func NewServiceParams(
 	couponApplicationRepo coupon_application.Repository,
 	eventPublisher publisher.EventPublisher,
 	webhookPublisher webhookPublisher.WebhookPublisher,
-	storageSvc storage.Storage,
+	storageResolver storage.Resolver,
 	client httpclient.Client,
 	addonRepo addon.Repository,
 	addonAssociationRepo addonassociation.Repository,
@@ -264,7 +264,7 @@ func NewServiceParams(
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
 		WebhookPublisher:             webhookPublisher,
-		Storage:                      storageSvc,
+		StorageResolver:              storageResolver,
 		Client:                       client,
 		CouponRepo:                   couponRepo,
 		CouponAssociationRepo:        couponAssociationRepo,

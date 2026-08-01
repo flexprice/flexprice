@@ -40,6 +40,7 @@ type ExportService struct {
 	usageAnalyticsGetter     UsageAnalyticsGetter
 	connectionRepo           connection.Repository
 	integrationFactory       *integration.Factory
+	storageResolver          storage.Resolver
 	config                   *config.Configuration
 	logger                   *logger.Logger
 	eventRepo                events.Repository
@@ -53,6 +54,7 @@ func NewExportService(
 	invoiceRepo invoice.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	eventRepo events.Repository,
@@ -64,6 +66,7 @@ func NewExportService(
 		walletRepo:         nil,
 		connectionRepo:     connectionRepo,
 		integrationFactory: integrationFactory,
+		storageResolver:    storageResolver,
 		config:             cfg,
 		logger:             logger,
 		eventRepo:          eventRepo,
@@ -80,6 +83,7 @@ func NewExportServiceWithWallet(
 	customerRepo customer.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
+	storageResolver storage.Resolver,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	usageAnalyticsGetter UsageAnalyticsGetter,
@@ -95,6 +99,7 @@ func NewExportServiceWithWallet(
 		customerRepo:             customerRepo,
 		connectionRepo:           connectionRepo,
 		integrationFactory:       integrationFactory,
+		storageResolver:          storageResolver,
 		config:                   cfg,
 		logger:                   logger,
 		usageAnalyticsGetter:     usageAnalyticsGetter,
@@ -183,7 +188,7 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 		"bucket", request.JobConfig.Bucket,
 		"region", request.JobConfig.Region)
 
-	store, err := s.integrationFactory.GetStorageProvider(ctx, request.ConnectionID)
+	store, err := s.storageResolver.ForConnection(ctx, request.ConnectionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get storage provider from factory").

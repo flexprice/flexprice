@@ -2629,15 +2629,19 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 		return lo.FromPtr(inv.InvoicePDFURL), nil
 	}
 
-	if s.Storage == nil {
-		return "", ierr.NewError("storage is not enabled").
-			WithHint("storage is not enabled but is required to generate invoice pdf url.").
-			Mark(ierr.ErrSystem)
+	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
+	if err != nil {
+		return "", err
 	}
 
-	key := storage.ObjectKey(s.Config.S3.InvoiceBucketConfig.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
+	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeInvoice)
+	if err != nil {
+		return "", err
+	}
 
-	presignExpiry, parseErr := time.ParseDuration(s.Config.S3.InvoiceBucketConfig.PresignExpiryDuration)
+	key := storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
+
+	presignExpiry, parseErr := time.ParseDuration(bc.PresignExpiryDuration)
 	if parseErr != nil {
 		return "", ierr.WithError(parseErr).
 			WithHint("Invalid invoice PDF presign expiry duration").
@@ -2646,12 +2650,12 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 
 	if !forceGenerate {
 		// Check if the file already exists in storage and return a presigned URL without regenerating
-		exists, err := s.Storage.Exists(ctx, key)
+		exists, err := store.Exists(ctx, key)
 		if err != nil {
 			return "", err
 		}
 		if exists {
-			return s.Storage.PresignGet(ctx, key, presignExpiry)
+			return store.PresignGet(ctx, key, presignExpiry)
 		}
 	}
 
@@ -2661,7 +2665,7 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 		return "", err
 	}
 
-	_, err = s.Storage.Upload(ctx, &storage.UploadRequest{
+	_, err = store.Upload(ctx, &storage.UploadRequest{
 		Key:    key,
 		Data:   data,
 		Format: storage.UploadFormatPDF,
@@ -2670,7 +2674,7 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string, forceG
 		return "", err
 	}
 
-	return s.Storage.PresignGet(ctx, key, presignExpiry)
+	return store.PresignGet(ctx, key, presignExpiry)
 }
 
 // GetInvoicePDF implements InvoiceService.
