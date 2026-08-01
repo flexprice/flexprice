@@ -10,23 +10,31 @@ import (
 	"github.com/flexprice/flexprice/internal/storage/s3backend"
 )
 
-// NewPlatformStorage constructs the Storage instance used for Flexprice-owned
-// buckets (invoice PDFs, Flexprice-managed exports). bucket/region are passed
-// explicitly per call because invoice storage and export storage may use
-// different buckets even though both are platform-owned.
+// ResolveProvider determines which backend platform storage uses: an explicit
+// cfg.Storage.Provider wins, otherwise CloudDetector probes the cloud metadata
+// endpoints, falling back to S3 when detection is inconclusive (local dev, bare
+// metal).
 //
-// Backend selection: explicit cfg.Storage.Provider wins; otherwise CloudDetector
-// picks a default. Platform storage stays on S3 in this rollout — GCS backend
-// is available here but not yet the default for any platform bucket.
-func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, bucket, region string, log *logger.Logger) (Storage, error) {
-	provider := Provider(cfg.Storage.Provider)
-	if provider == "" {
-		provider = NewDefaultCloudDetector().Detect(ctx)
-		if provider == "" {
-			provider = ProviderS3 // default when detection is inconclusive (local dev, bare metal)
-		}
+// Detection performs blocking HTTP probes (500ms timeout each), so callers must
+// resolve once at bootstrap and pass the result down rather than calling this
+// per request. Resolver does exactly that.
+func ResolveProvider(ctx context.Context, cfg *config.Configuration) Provider {
+	if provider := Provider(cfg.Storage.Provider); provider != "" {
+		return provider
 	}
+	if provider := NewDefaultCloudDetector().Detect(ctx); provider != "" {
+		return provider
+	}
+	return ProviderS3
+}
 
+// NewPlatformStorage constructs the Storage instance used for Flexprice-owned
+// buckets (invoice PDFs, Flexprice-managed exports). provider/bucket/region are
+// passed explicitly because invoice storage and export storage may use
+// different buckets even though both are platform-owned, and because provider
+// detection must happen once at bootstrap (see ResolveProvider) rather than on
+// each construction.
+func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider Provider, bucket, region string, log *logger.Logger) (Storage, error) {
 	switch provider {
 	case ProviderGCS:
 		return gcsbackend.New(ctx, &gcsbackend.Config{
