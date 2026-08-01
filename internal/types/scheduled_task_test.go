@@ -160,8 +160,13 @@ func TestStorageExportConfig_ValidateForProvider_AssumeRole(t *testing.T) {
 		wantErr     bool
 		errContains string
 	}{
+		// assume_role is implemented but DISABLED pending a dedicated
+		// per-environment Flexprice IAM principal — see the branch comment in
+		// Factory.buildS3Storage. It must be rejected at creation regardless of
+		// how well-formed the request is, so no customer is handed a
+		// trust-policy contract we intend to change.
 		{
-			name: "assume_role with role_arn and external_id passes for S3",
+			name: "assume_role rejected even when fully specified for S3",
 			cfg: &StorageExportConfig{
 				Bucket:     "my-bucket",
 				Region:     "us-west-2",
@@ -169,32 +174,9 @@ func TestStorageExportConfig_ValidateForProvider_AssumeRole(t *testing.T) {
 				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
 				ExternalID: "ext-tenant-abc",
 			},
-			provider: SecretProviderS3,
-			wantErr:  false,
-		},
-		{
-			name: "assume_role without role_arn fails",
-			cfg: &StorageExportConfig{
-				Bucket:     "my-bucket",
-				Region:     "us-west-2",
-				AccessMode: StorageAccessModeAssumeRole,
-				ExternalID: "ext-tenant-abc",
-			},
 			provider:    SecretProviderS3,
 			wantErr:     true,
-			errContains: "role_arn",
-		},
-		{
-			name: "assume_role without external_id fails",
-			cfg: &StorageExportConfig{
-				Bucket:     "my-bucket",
-				Region:     "us-west-2",
-				AccessMode: StorageAccessModeAssumeRole,
-				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
-			},
-			provider:    SecretProviderS3,
-			wantErr:     true,
-			errContains: "external_id",
+			errContains: "not enabled",
 		},
 		{
 			name: "assume_role rejected for GCS",
@@ -206,7 +188,7 @@ func TestStorageExportConfig_ValidateForProvider_AssumeRole(t *testing.T) {
 			},
 			provider:    SecretProviderGCS,
 			wantErr:     true,
-			errContains: "S3",
+			errContains: "not enabled",
 		},
 		{
 			name: "static_key unchanged (no role/external id needed)",

@@ -348,7 +348,13 @@ func seedS3AssumeRoleConnection(ctx context.Context, t *testing.T, store *testut
 
 // assume_role dispatch must succeed without any EncryptedSecretData.S3 present, as long as
 // Flexprice's own Marketplace.AWS caller identity is configured.
-func TestFactory_GetStorageProvider_S3AssumeRole_BuildsWithoutEncryptedSecretData(t *testing.T) {
+// assume_role is implemented but DISABLED pending a dedicated per-environment
+// Flexprice IAM principal (see the branch comment in Factory.buildS3Storage).
+// A legacy row that already carries assume_role must fail closed rather than
+// build a backend against a shared principal — including when Flexprice's own
+// AWS caller identity IS configured, so this cannot silently re-enable itself
+// as a side effect of unrelated config.
+func TestFactory_GetStorageProvider_S3AssumeRole_IsDisabled(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()
 
@@ -367,25 +373,9 @@ func TestFactory_GetStorageProvider_S3AssumeRole_BuildsWithoutEncryptedSecretDat
 	conn := seedS3AssumeRoleConnection(ctx, t, connRepo)
 
 	got, err := factory.GetStorageProvider(ctx, conn.ID)
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	require.Equal(t, storage.ProviderS3, got.Provider())
-}
-
-// Without Flexprice's own Marketplace.AWS caller identity configured, assume_role must fail
-// loudly rather than attempt AssumeRole with no base credentials (which would otherwise fall
-// through to the ambient AWS chain — see s3backend.Config's AssumeRoleBase* doc comment).
-func TestFactory_GetStorageProvider_S3AssumeRole_NoMarketplaceCallerIdentity_ReturnsError(t *testing.T) {
-	ctx := buildFactoryTestContext()
-	connRepo := testutil.NewInMemoryConnectionStore()
-	factory, _ := buildStorageTestFactory(connRepo) // no Marketplace.AWS configured
-
-	conn := seedS3AssumeRoleConnection(ctx, t, connRepo)
-
-	got, err := factory.GetStorageProvider(ctx, conn.ID)
 	require.Error(t, err)
 	require.Nil(t, got)
-	require.True(t, ierr.IsSystem(err) || ierr.IsValidation(err), "expected system or validation error, got: %v", err)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
 }
 
 func TestFactory_GetStorageProvider_S3EmptyCredentials_ReturnsValidationError(t *testing.T) {
