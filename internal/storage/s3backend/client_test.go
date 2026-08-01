@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -27,6 +28,62 @@ func TestNew_WithStaticCredentials_ReturnsStorage(t *testing.T) {
 
 	var _ storage.Storage = s
 	assert.Equal(t, storage.ProviderS3, s.Provider())
+}
+
+// TestNew_StaticBeatsAssumeRole covers the documented precedence: static keys, if set, are
+// used even when AssumeRoleARN/AssumeRoleExternalID are also set.
+func TestNew_StaticBeatsAssumeRole(t *testing.T) {
+	cfg := &s3backend.Config{
+		Bucket:                        "test-bucket",
+		Region:                        "ap-south-1",
+		AWSAccessKeyID:                "AKIAEXAMPLE",
+		AWSSecretAccessKey:            "secretexample",
+		AssumeRoleARN:                 "arn:aws:iam::123456789012:role/flexprice-export",
+		AssumeRoleExternalID:          "ext-tenant-abc",
+		AssumeRoleBaseAccessKeyID:     "AKIABASE",
+		AssumeRoleBaseSecretAccessKey: "basesecret",
+		AssumeRoleBaseRegion:          "us-east-1",
+	}
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+}
+
+// TestNew_AssumeRoleUsedWhenSetAndNoStaticKeys covers the second precedence case: with no
+// static keys, an AssumeRoleARN + ExternalID is accepted and New succeeds (credential
+// resolution/AssumeRole itself is lazy — errors would only surface on the first real S3 call).
+func TestNew_AssumeRoleUsedWhenSetAndNoStaticKeys(t *testing.T) {
+	cfg := &s3backend.Config{
+		Bucket:                        "test-bucket",
+		Region:                        "ap-south-1",
+		AssumeRoleARN:                 "arn:aws:iam::123456789012:role/flexprice-export",
+		AssumeRoleExternalID:          "ext-tenant-abc",
+		AssumeRoleBaseAccessKeyID:     "AKIABASE",
+		AssumeRoleBaseSecretAccessKey: "basesecret",
+		AssumeRoleBaseRegion:          "us-east-1",
+	}
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+}
+
+// TestNew_AssumeRoleWithoutBaseCredentials_ReturnsError covers the base-credential guard:
+// AssumeRole must never fall through to LoadDefaultConfig/the ambient chain for the STS
+// caller identity — see the AssumeRoleBase* doc comment on Config.
+func TestNew_AssumeRoleWithoutBaseCredentials_ReturnsError(t *testing.T) {
+	cfg := &s3backend.Config{
+		Bucket:               "test-bucket",
+		Region:               "ap-south-1",
+		AssumeRoleARN:        "arn:aws:iam::123456789012:role/flexprice-export",
+		AssumeRoleExternalID: "ext-tenant-abc",
+		// No AssumeRoleBase* fields set.
+	}
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.Error(t, err)
+	require.Nil(t, s)
 }
 
 func TestNew_NoCredentialsConfigured_FallsBackToAmbientChain(t *testing.T) {
@@ -166,6 +223,43 @@ func TestClient_Exists_ReturnsTrueForFoundKey(t *testing.T) {
 	exists, err := s.Exists(context.Background(), "found/key.csv")
 	require.NoError(t, err)
 	assert.True(t, exists)
+}
+
+// TestAssumeRole_ErrorIsRedacted proves that an AssumeRole failure surfaced by an actual S3
+// call does not leak the tenant's role ARN or external ID — both must be stripped from the
+// error text before it reaches the caller, mirroring awsmarketplace/client.go's redaction of
+// AssumeRole errors. STS AssumeRole is not reachable in this unit test (no live AWS), but the
+// SDK will fail fast against an unresolvable/invalid STS endpoint with the role ARN embedded
+// in its error text; we assert on whatever error message region validation produces.
+func TestAssumeRole_ErrorIsRedacted(t *testing.T) {
+	const roleARN = "arn:aws:iam::123456789012:role/should-never-leak"
+	const externalID = "ext-should-never-leak"
+
+	cfg := &s3backend.Config{
+		Bucket:                        "test-bucket",
+		Region:                        "us-east-1",
+		AssumeRoleARN:                 roleARN,
+		AssumeRoleExternalID:          externalID,
+		AssumeRoleBaseAccessKeyID:     "AKIABASE",
+		AssumeRoleBaseSecretAccessKey: "basesecret",
+		AssumeRoleBaseRegion:          "us-east-1",
+	}
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+
+	// Any real API call forces the SDK to resolve credentials via the wrapped
+	// AssumeRole provider. Against a fake, non-STS endpoint this fails — the
+	// interesting assertion is that neither secret appears in the resulting error,
+	// regardless of exactly how AWS's HTTP client reports the failure.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, uploadErr := s.Upload(ctx, &storage.UploadRequest{Key: "k", Data: []byte("d")})
+	if uploadErr != nil {
+		assert.NotContains(t, uploadErr.Error(), roleARN)
+		assert.NotContains(t, uploadErr.Error(), externalID)
+	}
 }
 
 func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {

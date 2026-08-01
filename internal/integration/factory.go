@@ -1415,41 +1415,65 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		return s3backend.New(ctx, s3Cfg, f.logger)
 	}
 
-	if conn.EncryptedSecretData.S3 == nil {
-		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
-	}
-
-	accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
-	if err != nil {
-		return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
-	}
-	secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
-	if err != nil {
-		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
-	}
-	if accessKey == "" || secretKey == "" {
-		return nil, ierr.NewError("empty S3 credentials on connection").
-			WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
-			Mark(ierr.ErrValidation)
-	}
-	var sessionToken string
-	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
-		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
-		if err != nil {
-			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+	switch jobConfig.ResolvedAccessMode() {
+	case types.StorageAccessModeAssumeRole:
+		if f.config.Marketplace.AWS.AccessKeyID == "" || f.config.Marketplace.AWS.SecretAccessKey == "" || f.config.Marketplace.AWS.Region == "" {
+			return nil, ierr.NewError("flexprice aws caller identity is not configured").
+				WithHint("assume_role storage connections require Flexprice's own AWS credentials; set marketplace.aws.region, marketplace.aws.access_key_id and marketplace.aws.secret_access_key").
+				Mark(ierr.ErrSystem)
 		}
-	}
 
-	return s3backend.New(ctx, &s3backend.Config{
-		Bucket:             jobConfig.Bucket,
-		Region:             jobConfig.Region,
-		KeyPrefix:          jobConfig.KeyPrefix,
-		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
-		ServerSideEncrypt:  string(jobConfig.Encryption),
-		AWSAccessKeyID:     accessKey,
-		AWSSecretAccessKey: secretKey,
-		AWSSessionToken:    sessionToken,
-	}, f.logger)
+		return s3backend.New(ctx, &s3backend.Config{
+			Bucket:                        jobConfig.Bucket,
+			Region:                        jobConfig.Region,
+			KeyPrefix:                     jobConfig.KeyPrefix,
+			CompressionGzip:               jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt:             string(jobConfig.Encryption),
+			AssumeRoleARN:                 jobConfig.RoleARN,
+			AssumeRoleExternalID:          jobConfig.ExternalID,
+			AssumeRoleBaseAccessKeyID:     f.config.Marketplace.AWS.AccessKeyID,
+			AssumeRoleBaseSecretAccessKey: f.config.Marketplace.AWS.SecretAccessKey,
+			AssumeRoleBaseSessionToken:    f.config.Marketplace.AWS.SessionToken,
+			AssumeRoleBaseRegion:          f.config.Marketplace.AWS.Region,
+		}, f.logger)
+
+	default: // types.StorageAccessModeStaticKey and empty (legacy rows)
+		if conn.EncryptedSecretData.S3 == nil {
+			return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
+		}
+
+		accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
+		}
+		secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
+		}
+		if accessKey == "" || secretKey == "" {
+			return nil, ierr.NewError("empty S3 credentials on connection").
+				WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
+				Mark(ierr.ErrValidation)
+		}
+		var sessionToken string
+		if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
+			sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
+			if err != nil {
+				return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+			}
+		}
+
+		return s3backend.New(ctx, &s3backend.Config{
+			Bucket:             jobConfig.Bucket,
+			Region:             jobConfig.Region,
+			KeyPrefix:          jobConfig.KeyPrefix,
+			CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt:  string(jobConfig.Encryption),
+			AWSAccessKeyID:     accessKey,
+			AWSSecretAccessKey: secretKey,
+			AWSSessionToken:    sessionToken,
+		}, f.logger)
+	}
 }
 
 func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {

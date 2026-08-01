@@ -316,6 +316,78 @@ func TestFactory_GetStorageProvider_GCSCustomerBYOEmptyCreds_StillRefusesAmbient
 	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
 }
 
+// seedS3AssumeRoleConnection builds a customer BYOB S3 connection using assume_role access
+// mode. It carries NO EncryptedSecretData.S3 on purpose: assume_role has no secret to store,
+// only the tenant-supplied role ARN and external ID in sync_config.
+func seedS3AssumeRoleConnection(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore) *connection.Connection {
+	t.Helper()
+
+	conn := &connection.Connection{
+		ID:                  "conn_s3_assume_role_test",
+		Name:                "Test S3 AssumeRole Connection",
+		ProviderType:        types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				Bucket:     "test-bucket",
+				Region:     "us-east-1",
+				AccessMode: types.StorageAccessModeAssumeRole,
+				RoleARN:    "arn:aws:iam::123456789012:role/flexprice-export",
+				ExternalID: "ext-tenant-abc",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+// assume_role dispatch must succeed without any EncryptedSecretData.S3 present, as long as
+// Flexprice's own Marketplace.AWS caller identity is configured.
+func TestFactory_GetStorageProvider_S3AssumeRole_BuildsWithoutEncryptedSecretData(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.Marketplace.AWS.Region = "us-east-1"
+	cfg.Marketplace.AWS.AccessKeyID = "AKIAMARKETPLACE"
+	cfg.Marketplace.AWS.SecretAccessKey = "marketplace-secret"
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedS3AssumeRoleConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+}
+
+// Without Flexprice's own Marketplace.AWS caller identity configured, assume_role must fail
+// loudly rather than attempt AssumeRole with no base credentials (which would otherwise fall
+// through to the ambient AWS chain — see s3backend.Config's AssumeRoleBase* doc comment).
+func TestFactory_GetStorageProvider_S3AssumeRole_NoMarketplaceCallerIdentity_ReturnsError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo) // no Marketplace.AWS configured
+
+	conn := seedS3AssumeRoleConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsSystem(err) || ierr.IsValidation(err), "expected system or validation error, got: %v", err)
+}
+
 func TestFactory_GetStorageProvider_S3EmptyCredentials_ReturnsValidationError(t *testing.T) {
 	ctx := buildFactoryTestContext()
 	connRepo := testutil.NewInMemoryConnectionStore()
