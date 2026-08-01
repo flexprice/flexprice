@@ -757,36 +757,31 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
-	// Check if this is a Flexprice-managed S3 connection
+	// Flexprice-managed S3 connection. Like the GCS branch below, no credentials
+	// are stored on the connection row: the export path resolves credentials from
+	// PLATFORM config at runtime (see Factory.buildS3Storage), which may be
+	// static keys, the ambient AWS credential chain (EKS IRSA / EKS Pod Identity /
+	// ECS task role / EC2 instance profile), or GCP->AWS federation. Only the
+	// destination bucket/region and the tenant-isolating key prefix are set here.
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged {
 		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",
 			"tenant_id", conn.TenantID,
 			"connection_id", conn.ID)
 
-		// Validate that Flexprice config has required credentials
-		if s.Config.FlexpriceS3Exports.AWSAccessKeyID == "" || s.Config.FlexpriceS3Exports.AWSSecretAccessKey == "" {
-			return nil, ierr.NewError("flexprice S3 exports not configured").
-				WithHint("FlexpriceS3Exports credentials are missing from configuration").
-				Mark(ierr.ErrSystem)
+		if err := s.Config.FlexpriceS3Exports.Validate(); err != nil {
+			return nil, err
 		}
 
-		// Inject Flexprice credentials from config
-		conn.EncryptedSecretData.S3 = &types.S3ConnectionMetadata{
-			AWSAccessKeyID:     s.Config.FlexpriceS3Exports.AWSAccessKeyID,
-			AWSSecretAccessKey: s.Config.FlexpriceS3Exports.AWSSecretAccessKey,
-			AWSSessionToken:    s.Config.FlexpriceS3Exports.AWSSessionToken,
-		}
-
-		// Set bucket and region from config
 		conn.SyncConfig.Storage.Bucket = s.Config.FlexpriceS3Exports.Bucket
 		conn.SyncConfig.Storage.Region = s.Config.FlexpriceS3Exports.Region
 		// Tenant + Environment isolation: tenant_id/environment_id
 		conn.SyncConfig.Storage.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
 
-		s.Logger.Info(ctx, "injected flexprice S3 credentials",
+		s.Logger.Info(ctx, "configured flexprice-managed S3 destination",
 			"bucket", conn.SyncConfig.Storage.Bucket,
 			"region", conn.SyncConfig.Storage.Region,
 			"key_prefix", conn.SyncConfig.Storage.KeyPrefix,
+			"credential_source", s.Config.FlexpriceS3Exports.ResolvedCredentialSource(),
 			"tenant_id", conn.TenantID,
 			"environment_id", conn.EnvironmentID)
 	}

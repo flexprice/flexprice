@@ -126,6 +126,21 @@ type BucketConfig struct {
 	KeyPrefix             string `mapstructure:"key_prefix" validate:"omitempty"`
 }
 
+// Credential source constants for FlexpriceS3ExportsConfig.CredentialSource /
+// ResolvedCredentialSource(). Exactly one value is active per deployment.
+const (
+	// CredentialSourceStatic uses explicit AWSAccessKeyID/AWSSecretAccessKey.
+	CredentialSourceStatic = "static"
+	// CredentialSourceAmbient covers ALL ambient-credential deployment shapes —
+	// EKS IRSA, EKS Pod Identity, ECS task roles, EC2 instance profiles — which
+	// all resolve through the same AWS default credential chain
+	// (awsConfig.LoadDefaultConfig) with no explicit credentials configured here.
+	// There is deliberately no per-mechanism value or config.
+	CredentialSourceAmbient = "ambient"
+	// CredentialSourceFederation uses GCP-to-AWS OIDC federation (AssumeRoleWithWebIdentity).
+	CredentialSourceFederation = "federation"
+)
+
 type FlexpriceS3ExportsConfig struct {
 	Bucket             string `mapstructure:"bucket" validate:"required"`
 	Region             string `mapstructure:"region" validate:"required"`
@@ -136,35 +151,98 @@ type FlexpriceS3ExportsConfig struct {
 	// in place of static keys. Empty means federation is not configured.
 	FederationRoleARN string `mapstructure:"federation_role_arn,omitempty"`
 	FederationEnabled bool   `mapstructure:"federation_enabled" default:"false"`
+	// CredentialSource selects how AWS credentials are obtained: "static" (explicit
+	// keys), "ambient" (EKS IRSA / EKS Pod Identity / ECS task role / EC2 instance
+	// profile — all resolved by the AWS default credential chain), or "federation"
+	// (GCP-to-AWS OIDC). Empty is derived for backward compatibility.
+	CredentialSource string `mapstructure:"credential_source" validate:"omitempty,oneof=static ambient federation"`
 }
 
-// Validate ensures at least one credential source is configured: static keys or
-// federation. Config-load time can't know whether the process is running on AWS-native
-// compute (where the ambient IRSA/instance-profile credential chain would otherwise
-// apply), so this method intentionally does NOT special-case "nothing configured" as
-// implicitly fine — callers wanting to rely on the ambient chain must not use this
-// section at all, or must call Validate only when the section is actually in use.
+// ResolvedCredentialSource derives the effective credential source so no existing
+// deployment must change config to keep working:
+//   - CredentialSource, if explicitly set, always wins.
+//   - Otherwise FederationEnabled=true, or a FederationRoleARN is present (the
+//     historic signal, predating the FederationEnabled flag), means "federation".
+//   - Otherwise both static keys present means "static".
+//   - Otherwise "ambient" — this is the mode that lets a managed connection run with
+//     no credentials configured at all (EKS IRSA / Pod Identity / ECS task role / EC2
+//     instance profile), rather than treating "nothing configured" as an error.
+func (c *FlexpriceS3ExportsConfig) ResolvedCredentialSource() string {
+	if c.CredentialSource != "" {
+		return c.CredentialSource
+	}
+	if c.FederationEnabled || c.FederationRoleARN != "" {
+		return CredentialSourceFederation
+	}
+	if c.AWSAccessKeyID != "" && c.AWSSecretAccessKey != "" {
+		return CredentialSourceStatic
+	}
+	return CredentialSourceAmbient
+}
+
+// Validate enforces the requirements of the resolved credential source (see
+// ResolvedCredentialSource). "ambient" is a first-class mode here: when explicitly
+// selected (CredentialSource == "ambient"), it deliberately requires no credentials
+// at all, because that is the entire point of the AWS default credential chain
+// (EKS IRSA / EKS Pod Identity / ECS task role / EC2 instance profile) —
+// config-load time cannot and should not require secrets that ambient compute
+// identity supplies for free.
 //
-// NOTE: this method is not currently invoked from Configuration.Validate() — see
+// Backward compatibility: when CredentialSource is left empty AND neither static
+// keys nor federation are configured, this preserves the historic behavior of
+// erroring ("no credential source configured") rather than silently resolving to
+// ambient. That keeps existing deployments that rely on this error (e.g. to catch
+// a genuinely unconfigured section) failing exactly as before. Ambient must be
+// requested explicitly via credential_source: "ambient" to skip the credential
+// requirement — callers that intentionally run ambient (e.g. the managed-S3
+// factory/connection-create paths) set that explicitly.
+//
+// NOTE: this method is not invoked from Configuration.Validate() — see
 // task-6-report.md for why (Configuration.Validate() is dead code on the real boot
 // path; NewValidatedConfig() deliberately skips it after a prior incident where dormant
-// `validate:"required"` tags crashlooped non-local pods). Task 7 (platform storage
-// wiring) should call FlexpriceS3Exports.Validate() explicitly wherever this section is
-// actually consumed.
+// `validate:"required"` tags crashlooped non-local pods). Callers that actually consume
+// this section (platform storage bootstrap, the managed-S3 factory branch, managed-S3
+// connection creation) call FlexpriceS3Exports.Validate() explicitly themselves.
 func (c *FlexpriceS3ExportsConfig) Validate() error {
-	hasStaticKeys := c.AWSAccessKeyID != "" && c.AWSSecretAccessKey != ""
-	hasFederation := c.FederationRoleARN != ""
-
-	if c.FederationEnabled && !hasFederation {
-		return ierr.NewError("federation_enabled is true but federation_role_arn is not set").
-			WithHint("Set flexprice_s3_exports.federation_role_arn when enabling federation").
+	if c.Bucket == "" {
+		return ierr.NewError("flexprice S3 exports bucket is not configured").
+			WithHint("Set flexprice_s3_exports.bucket (FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET)").
+			Mark(ierr.ErrValidation)
+	}
+	if c.Region == "" {
+		return ierr.NewError("flexprice S3 exports region is not configured").
+			WithHint("Set flexprice_s3_exports.region (FLEXPRICE_FLEXPRICE_S3_EXPORTS_REGION)").
 			Mark(ierr.ErrValidation)
 	}
 
-	if !hasStaticKeys && !hasFederation {
-		return ierr.NewError("no credential source configured for flexprice_s3_exports").
-			WithHint("Set either aws_access_key_id/aws_secret_access_key or federation_role_arn").
-			Mark(ierr.ErrValidation)
+	hasStaticKeys := c.AWSAccessKeyID != "" && c.AWSSecretAccessKey != ""
+	hasFederation := c.FederationRoleARN != ""
+
+	switch c.ResolvedCredentialSource() {
+	case CredentialSourceFederation:
+		if !hasFederation {
+			return ierr.NewError("federation_enabled is true but federation_role_arn is not set").
+				WithHint("Set flexprice_s3_exports.federation_role_arn when enabling federation").
+				Mark(ierr.ErrValidation)
+		}
+	case CredentialSourceAmbient:
+		if c.CredentialSource != CredentialSourceAmbient {
+			// Nothing configured and ambient was not explicitly requested: preserve
+			// the historic error rather than silently falling back to the AWS
+			// default credential chain.
+			return ierr.NewError("no credential source configured for flexprice_s3_exports").
+				WithHint("Set either aws_access_key_id/aws_secret_access_key, federation_role_arn, or credential_source: \"ambient\" to explicitly use the AWS default credential chain").
+				Mark(ierr.ErrValidation)
+		}
+		// Explicitly requested ambient: no credential requirement. The AWS default
+		// credential chain supplies them (EKS IRSA / EKS Pod Identity / ECS task
+		// role / EC2 instance profile).
+	case CredentialSourceStatic:
+		if !hasStaticKeys {
+			return ierr.NewError("no credential source configured for flexprice_s3_exports").
+				WithHint("Set both aws_access_key_id and aws_secret_access_key (FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_ACCESS_KEY_ID / FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_SECRET_ACCESS_KEY), or set credential_source to \"ambient\" or \"federation\"").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

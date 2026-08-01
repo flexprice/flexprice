@@ -375,6 +375,183 @@ func (r *erroringConnectionRepo) Get(ctx context.Context, id string) (*connectio
 	return nil, r.getErr
 }
 
+// seedFlexpriceManagedS3Connection builds a Flexprice-managed S3 connection. It
+// carries NO credential snapshot on purpose: managed connections resolve
+// credentials from platform config at runtime (see Factory.buildS3Storage).
+func seedFlexpriceManagedS3Connection(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore) *connection.Connection {
+	t.Helper()
+
+	conn := &connection.Connection{
+		ID:                  "conn_s3_managed_test",
+		Name:                "Test Flexprice-Managed S3 Connection",
+		ProviderType:        types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				IsFlexpriceManaged: true,
+				KeyPrefix:          "tenant_x/env_y",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+// seedFlexpriceManagedS3ConnectionWithLegacySnapshot mirrors
+// seedFlexpriceManagedS3Connection but also carries a legacy credential
+// snapshot in EncryptedSecretData.S3 — the shape connection.CreateConnection
+// used to persist before the fix. The managed branch in buildS3Storage must run
+// before the decrypt path and ignore this snapshot entirely, using platform
+// config instead.
+func seedFlexpriceManagedS3ConnectionWithLegacySnapshot(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore, encSvc security.EncryptionService) *connection.Connection {
+	t.Helper()
+
+	accessKey, err := encSvc.Encrypt("AKIALEGACYSNAPSHOT")
+	require.NoError(t, err)
+	secretKey, err := encSvc.Encrypt("legacy-secret")
+	require.NoError(t, err)
+
+	conn := &connection.Connection{
+		ID:           "conn_s3_managed_legacy_test",
+		Name:         "Test Flexprice-Managed S3 Connection With Legacy Snapshot",
+		ProviderType: types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{
+				AWSAccessKeyID:     accessKey,
+				AWSSecretAccessKey: secretKey,
+			},
+		},
+		SyncConfig: &types.SyncConfig{
+			Storage: &types.StorageExportConfig{
+				IsFlexpriceManaged: true,
+				KeyPrefix:          "tenant_x/env_y",
+			},
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+// A Flexprice-managed S3 connection configured for static platform credentials
+// must construct an s3backend using the PLATFORM config's bucket/region/keys,
+// not anything from the connection row.
+func TestFactory_GetStorageProvider_S3FlexpriceManaged_Static(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "flexprice-managed-s3-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.AWSAccessKeyID = "AKIAPLATFORMKEY"
+	cfg.FlexpriceS3Exports.AWSSecretAccessKey = "platform-secret"
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+}
+
+// A Flexprice-managed S3 connection with credential_source "ambient" and no
+// static keys configured at all must still construct successfully — this is
+// the entire point of the fix: ambient AWS credential chains (EKS IRSA / EKS Pod
+// Identity / ECS task role / EC2 instance profile) supply nothing explicit here.
+func TestFactory_GetStorageProvider_S3FlexpriceManaged_Ambient(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "flexprice-managed-s3-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+	// No AWSAccessKeyID / AWSSecretAccessKey configured at all.
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err, "ambient managed S3 must construct without any configured credentials")
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+}
+
+// A managed row that still carries a legacy credential snapshot (from before
+// this fix) must succeed and use platform config, ignoring the snapshot.
+func TestFactory_GetStorageProvider_S3FlexpriceManaged_IgnoresLegacyCredentialSnapshot(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "flexprice-managed-s3-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3ConnectionWithLegacySnapshot(ctx, t, connRepo, encSvc)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.NoError(t, err, "managed branch must ignore any legacy credential snapshot on the connection row")
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+}
+
+// Regression guard: adding the managed ambient-credential path must not weaken the
+// refusal to fall back to ambient credentials for customer BYO S3 connections, even
+// when the platform's managed S3 config happens to be fully configured.
+func TestFactory_GetStorageProvider_S3CustomerBYOEmptyCreds_StillRefusesAmbient(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "flexprice-managed-s3-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedS3ConnectionWithEmptyCredentials(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProvider(ctx, conn.ID)
+	require.Error(t, err)
+	require.Nil(t, got)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
 func TestFactory_GetStorageProvider_RepositoryFailure_PreservesOriginalErrorKind(t *testing.T) {
 	ctx := buildFactoryTestContext()
 
