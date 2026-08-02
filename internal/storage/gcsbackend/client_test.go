@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"mime"
@@ -355,4 +359,88 @@ func TestClient_Exists_ReturnsTrueForFoundKey(t *testing.T) {
 	exists, err := s.Exists(context.Background(), "found/key.csv")
 	require.NoError(t, err)
 	assert.True(t, exists)
+}
+
+// TestNew_UsesServiceAccountJSON_WhenProvided covers the BYOB → customer GCS
+// path: a customer supplies an exported service account key on the connection
+// and Factory.buildGCSStorage passes it here as ServiceAccountJSON, which must
+// be used *instead of* ambient Application Default Credentials.
+//
+// Unlike the ambient-credential tests above, this one deliberately does NOT set
+// EndpointURL: EndpointURL makes New use option.WithoutAuthentication(), which
+// would skip credential handling entirely and make the assertion vacuous. With
+// no endpoint set, cloud.google.com/go/storage resolves credentials eagerly at
+// construction, so a successful New proves the supplied JSON was parsed and
+// accepted as the credential source — reaching real ADC is impossible here
+// because a syntactically valid but non-existent service account is used.
+//
+// This is a wiring test, not a live BYOB verification: minting a real customer
+// SA key is blocked by constraints/iam.disableServiceAccountKeyCreation, which
+// is enforced at the flexprice.io organization node.
+func TestNew_UsesServiceAccountJSON_WhenProvided(t *testing.T) {
+	// A syntactically valid, structurally complete SA key with a real (throwaway)
+	// RSA private key. The credentials library parses and validates the PEM at
+	// construction time, so a placeholder string would fail for the wrong reason.
+	saJSON := syntheticServiceAccountJSON(t)
+
+	cfg := &gcsbackend.Config{
+		Bucket:             "customer-bucket",
+		ServiceAccountJSON: saJSON,
+	}
+
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err, "explicit service account JSON must be accepted as the credential source")
+	require.NotNil(t, s)
+
+	var _ storage.Storage = s
+	assert.Equal(t, storage.ProviderGCS, s.Provider())
+	assert.Equal(t, "gs://customer-bucket/exports/report.csv", s.FileURL("exports/report.csv"))
+}
+
+// TestNew_RejectsMalformedServiceAccountJSON proves the SA JSON is genuinely
+// parsed rather than stored and ignored: malformed credentials must fail at
+// construction, not silently fall back to ambient ADC (which, on a customer
+// bucket, would mean acting as Flexprice's own identity).
+func TestNew_RejectsMalformedServiceAccountJSON(t *testing.T) {
+	cfg := &gcsbackend.Config{
+		Bucket:             "customer-bucket",
+		ServiceAccountJSON: []byte(`{"type":"service_account","private_key":"not-a-pem"`),
+	}
+
+	_, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.Error(t, err, "malformed service account JSON must not fall back to ambient credentials")
+}
+
+// syntheticServiceAccountJSON builds a service_account key file with a freshly
+// generated RSA key, so the test depends on no real credential and no network.
+func syntheticServiceAccountJSON(t *testing.T) []byte {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: func() []byte {
+			b, err := x509.MarshalPKCS8PrivateKey(key)
+			require.NoError(t, err)
+			return b
+		}(),
+	})
+
+	sa := map[string]string{
+		"type":                        "service_account",
+		"project_id":                  "customer-project",
+		"private_key_id":              "0123456789abcdef0123456789abcdef01234567",
+		"private_key":                 string(pemBytes),
+		"client_email":                "flexprice-exports@customer-project.iam.gserviceaccount.com",
+		"client_id":                   "123456789012345678901",
+		"auth_uri":                    "https://accounts.google.com/o/oauth2/auth",
+		"token_uri":                   "https://oauth2.googleapis.com/token",
+		"auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+		"client_x509_cert_url":        "https://www.googleapis.com/robot/v1/metadata/x509/flexprice-exports%40customer-project.iam.gserviceaccount.com",
+	}
+	out, err := json.Marshal(sa)
+	require.NoError(t, err)
+	return out
 }
