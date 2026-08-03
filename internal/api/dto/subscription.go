@@ -812,6 +812,25 @@ type SubscriptionResponse struct {
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
+// ToWebhookPayload returns a shallow copy of the subscription trimmed for outbound webhook
+// delivery: Plan, CreditGrants, Phases, and CouponAssociations are independently re-fetchable via
+// IDs already present on the subscription, so they're dropped. LatestInvoice is always dropped
+// regardless of event type — it circularly embeds InvoiceResponse.Subscription, and a consumer
+// holding this subscription can always fetch its latest invoice via GET /invoices/{id}.
+func (r *SubscriptionResponse) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponse {
+	if r == nil {
+		return nil
+	}
+
+	cp := *r
+	cp.Plan = nil
+	cp.CreditGrants = nil
+	cp.Phases = nil
+	cp.CouponAssociations = nil
+	cp.LatestInvoice = nil
+	return &cp
+}
+
 // ListSubscriptionsResponse represents the response for listing subscriptions
 type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse] // @name ListSubscriptionsResponse
 
@@ -846,6 +865,18 @@ type SubscriptionResponseV2 struct {
 	// is behind the plan's current max prices.sequence — i.e. plan-price
 	// changes have not yet been reconciled into this subscription's line items.
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
+}
+
+// ToWebhookPayload returns a shallow copy of the subscription. Unlike SubscriptionResponse,
+// SubscriptionResponseV2's nested fields (Plan, Customer, LineItems, etc.) are already
+// expand-gated at fetch time via GetSubscriptionV2's expand parameter, so there is nothing left
+// to trim here — callers control payload size by passing a minimal expand set.
+func (r *SubscriptionResponseV2) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponseV2 {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	return &cp
 }
 
 func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {

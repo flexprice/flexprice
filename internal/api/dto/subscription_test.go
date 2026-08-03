@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
@@ -458,4 +459,59 @@ func TestCreateSubscriptionRequestValidate_ChildPhasesAllowedWithoutCheckout(t *
 	if err := req.Validate(); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
+}
+
+func TestSubscriptionResponse_ToWebhookPayload(t *testing.T) {
+	newSub := func() *SubscriptionResponse {
+		return &SubscriptionResponse{
+			Plan:               &PlanResponse{},
+			CreditGrants:       []*CreditGrantResponse{{}},
+			Phases:             []*SubscriptionPhaseResponse{{}},
+			CouponAssociations: []*CouponAssociationResponse{{}},
+			LatestInvoice:      &InvoiceResponse{LineItems: []*InvoiceLineItemResponse{{}}},
+			Customer:           &CustomerResponse{},
+		}
+	}
+
+	t.Run("nils Plan, CreditGrants, Phases, CouponAssociations, LatestInvoice", func(t *testing.T) {
+		sub := newSub()
+		out := sub.ToWebhookPayload(types.WebhookEventSubscriptionUpdated)
+		assert.Nil(t, out.Plan)
+		assert.Nil(t, out.CreditGrants)
+		assert.Nil(t, out.Phases)
+		assert.Nil(t, out.CouponAssociations)
+		assert.Nil(t, out.LatestInvoice)
+		assert.NotNil(t, out.Customer, "small terminal Customer is kept")
+	})
+
+	t.Run("LatestInvoice is nil regardless of event type", func(t *testing.T) {
+		sub := newSub()
+		out := sub.ToWebhookPayload(types.WebhookEventSubscriptionCreated)
+		assert.Nil(t, out.LatestInvoice)
+	})
+
+	t.Run("does not mutate the receiver", func(t *testing.T) {
+		sub := newSub()
+		_ = sub.ToWebhookPayload(types.WebhookEventSubscriptionUpdated)
+		assert.NotNil(t, sub.Plan, "original subscription must be untouched")
+		assert.NotNil(t, sub.LatestInvoice)
+	})
+
+	t.Run("nil receiver returns nil", func(t *testing.T) {
+		var sub *SubscriptionResponse
+		assert.Nil(t, sub.ToWebhookPayload(types.WebhookEventSubscriptionUpdated))
+	})
+}
+
+func TestSubscriptionResponseV2_ToWebhookPayload(t *testing.T) {
+	t.Run("returns an untrimmed copy since fields are already expand-gated", func(t *testing.T) {
+		sub := &SubscriptionResponseV2{Plan: &PlanResponse{}}
+		out := sub.ToWebhookPayload(types.WebhookEventEntitlementGrantExhausted)
+		assert.NotNil(t, out.Plan)
+	})
+
+	t.Run("nil receiver returns nil", func(t *testing.T) {
+		var sub *SubscriptionResponseV2
+		assert.Nil(t, sub.ToWebhookPayload(types.WebhookEventEntitlementGrantExhausted))
+	})
 }
