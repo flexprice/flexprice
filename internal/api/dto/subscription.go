@@ -812,11 +812,8 @@ type SubscriptionResponse struct {
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the subscription trimmed for outbound webhook
-// delivery: Plan, CreditGrants, Phases, and CouponAssociations are independently re-fetchable via
-// IDs already present on the subscription, so they're dropped. LatestInvoice is always dropped
-// regardless of event type — it circularly embeds InvoiceResponse.Subscription, and a consumer
-// holding this subscription can always fetch its latest invoice via GET /invoices/{id}.
+// ToWebhookPayload nils Plan, CreditGrants, Phases, CouponAssociations, and always LatestInvoice
+// (breaks its circular reference back to InvoiceResponse.Subscription).
 func (r *SubscriptionResponse) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponse {
 	if r == nil {
 		return nil
@@ -867,10 +864,7 @@ type SubscriptionResponseV2 struct {
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
 }
 
-// ToWebhookPayload returns a shallow copy of the subscription. Unlike SubscriptionResponse,
-// SubscriptionResponseV2's nested fields (Plan, Customer, LineItems, etc.) are already
-// expand-gated at fetch time via GetSubscriptionV2's expand parameter, so there is nothing left
-// to trim here — callers control payload size by passing a minimal expand set.
+// ToWebhookPayload is a no-op copy: fields are already expand-gated at fetch time.
 func (r *SubscriptionResponseV2) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponseV2 {
 	if r == nil {
 		return nil

@@ -56,8 +56,7 @@ type GroupResponse struct {
 	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
-// ToWebhookPayload returns a shallow copy of the group. GroupResponse is fully flat (no nested
-// response-DTO fields), so there is nothing to trim.
+// ToWebhookPayload is a no-op copy: GroupResponse has nothing to trim.
 func (r *GroupResponse) ToWebhookPayload(eventType types.WebhookEventName) *GroupResponse {
 	if r == nil {
 		return nil

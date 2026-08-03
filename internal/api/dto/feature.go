@@ -123,8 +123,7 @@ type FeatureResponse struct {
 	Group *GroupResponse `json:"group,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the feature. Meter is small and flat (no further
-// nesting) and is kept as-is; Group is trimmed via recursive delegation.
+// ToWebhookPayload keeps Meter as-is and delegates trimming to the nested Group.
 func (r *FeatureResponse) ToWebhookPayload(eventType types.WebhookEventName) *FeatureResponse {
 	if r == nil {
 		return nil

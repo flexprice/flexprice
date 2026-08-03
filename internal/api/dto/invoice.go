@@ -994,9 +994,7 @@ type InvoiceResponse struct {
 	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the invoice trimmed for outbound webhook delivery.
-// Line items are dropped for all invoice events except finalized/voided, where external
-// accounting/ERP integrations rely on synchronous line-item detail.
+// ToWebhookPayload drops line items except on finalized/voided events.
 func (r *InvoiceResponse) ToWebhookPayload(eventType types.WebhookEventName) *InvoiceResponse {
 	if r == nil {
 		return nil

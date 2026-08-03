@@ -264,9 +264,8 @@ type CheckoutSessionResponse struct {
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the checkout session. Sensitive/large fields
-// (ProviderResult, Result, Configuration, PaymentProviderConfig) are already stripped by
-// ToCheckoutSessionResponse at construction time, so there is nothing further to trim here.
+// ToWebhookPayload is a no-op copy: sensitive/large fields are already stripped by
+// ToCheckoutSessionResponse.
 func (r *CheckoutSessionResponse) ToWebhookPayload(eventType types.WebhookEventName) *CheckoutSessionResponse {
 	if r == nil {
 		return nil

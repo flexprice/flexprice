@@ -145,11 +145,7 @@ type CreditNoteResponse struct {
 	Customer *customer.Customer `json:"customer,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the credit note, trimming its embedded Invoice and
-// Subscription via recursive delegation. This is the fix for CreditNoteResponse currently
-// carrying a fully unmitigated InvoiceResponse and SubscriptionResponse in every credit note
-// webhook — no credit-note-specific stripping logic is needed once Invoice/Subscription each trim
-// themselves.
+// ToWebhookPayload delegates trimming to the nested Invoice and Subscription.
 func (r *CreditNoteResponse) ToWebhookPayload(eventType types.WebhookEventName) *CreditNoteResponse {
 	if r == nil {
 		return nil

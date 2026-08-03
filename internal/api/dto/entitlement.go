@@ -181,9 +181,7 @@ type EntitlementResponse struct {
 	PlanID string `json:"plan_id,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the entitlement. Plan and Addon are independently
-// re-fetchable via PlanID/the entitlement's own IDs and are dropped; Feature is trimmed via
-// recursive delegation since FeatureResponse is itself an in-scope webhook DTO.
+// ToWebhookPayload nils Plan and Addon and delegates trimming to the nested Feature.
 func (r *EntitlementResponse) ToWebhookPayload(eventType types.WebhookEventName) *EntitlementResponse {
 	if r == nil {
 		return nil

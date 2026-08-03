@@ -89,8 +89,7 @@ type SubscriptionPhaseResponse struct {
 	*subscription.SubscriptionPhase
 }
 
-// ToWebhookPayload returns a shallow copy of the phase. SubscriptionPhaseResponse only embeds the
-// domain phase struct with no further response-DTO nesting, so there is nothing to trim.
+// ToWebhookPayload is a no-op copy: SubscriptionPhaseResponse has nothing to trim.
 func (r *SubscriptionPhaseResponse) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionPhaseResponse {
 	if r == nil {
 		return nil

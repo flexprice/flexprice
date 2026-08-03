@@ -127,8 +127,7 @@ type CustomerResponse struct {
 	Integrations []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
 }
 
-// ToWebhookPayload returns a shallow copy of the customer. CustomerResponse is already small and
-// terminal (no further response-DTO nesting), so there is nothing to trim.
+// ToWebhookPayload is a no-op copy: CustomerResponse has nothing to trim.
 func (r *CustomerResponse) ToWebhookPayload(eventType types.WebhookEventName) *CustomerResponse {
 	if r == nil {
 		return nil
