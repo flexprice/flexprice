@@ -651,12 +651,20 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	client := r.client.Reader(ctx)
 	query := client.Invoice.Query().
 		WithCouponApplications(func(q *ent.CouponApplicationQuery) {
-			q.Where(couponapplication.Status(string(types.StatusPublished)))
+			q.Where(
+				couponapplication.TenantID(types.GetTenantID(ctx)),
+				couponapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
+				couponapplication.Status(string(types.StatusPublished)),
+			)
 		})
 
 	if !filter.SkipLineItems {
 		query = query.WithLineItems(func(q *ent.InvoiceLineItemQuery) {
-			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
+			q.Where(
+				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+				invoicelineitem.Status(string(types.StatusPublished)),
+			)
 		})
 	}
 
