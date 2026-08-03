@@ -257,6 +257,16 @@ type WalletResponse struct {
 	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 }
 
+// ToWebhookPayload returns a shallow copy of the wallet. WalletResponse has no nested response-DTO
+// fields, so there is nothing to trim.
+func (r *WalletResponse) ToWebhookPayload(eventType types.WebhookEventName) *WalletResponse {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	return &cp
+}
+
 // ToWalletResponse converts domain Wallet to WalletResponse
 func FromWallet(w *wallet.Wallet) *WalletResponse {
 	if w == nil {
@@ -289,6 +299,18 @@ type WalletTransactionResponse struct {
 	Customer      *CustomerResponse `json:"customer,omitempty"`
 	CreatedByUser *UserResponse     `json:"created_by_user,omitempty"`
 	Wallet        *WalletResponse   `json:"wallet,omitempty"`
+}
+
+// ToWebhookPayload returns a shallow copy of the transaction, trimming its nested Customer and
+// Wallet via recursive delegation.
+func (r *WalletTransactionResponse) ToWebhookPayload(eventType types.WebhookEventName) *WalletTransactionResponse {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	cp.Customer = r.Customer.ToWebhookPayload(eventType)
+	cp.Wallet = r.Wallet.ToWebhookPayload(eventType)
+	return &cp
 }
 
 // FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse
