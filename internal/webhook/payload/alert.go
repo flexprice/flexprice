@@ -27,13 +27,13 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 	}
 
 	if internalEvent.EntityType == types.AlertEntityTypeEntitlementGrant {
-		return b.buildEntitlementGrantAlertPayload(ctx, internalEvent)
+		return b.buildEntitlementGrantAlertPayload(ctx, internalEvent, eventType)
 	}
 
 	// Subscription/line-item/group spend alert (alert_settings table): resolve the owning
 	// subscription fresh, so currency and period start reflect its state as of delivery.
 	if internalEvent.EntityType != "" {
-		return b.buildSpendAlertPayload(ctx, internalEvent)
+		return b.buildSpendAlertPayload(ctx, internalEvent, eventType)
 	}
 
 	// Fetch customer data if customer_id is provided
@@ -66,9 +66,9 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 
 		// Build the complete alert webhook payload with both entities and customer
 		payload := webhookDto.NewAlertWebhookPayload(
-			feature,
-			wallet,
-			customer,
+			feature.ToWebhookPayload(eventType),
+			wallet.ToWebhookPayload(eventType),
+			customer.ToWebhookPayload(eventType),
 			internalEvent.AlertType,   // alert_type from internal event
 			internalEvent.AlertStatus, // alert_status from internal event
 			eventType,
@@ -85,7 +85,7 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 // webhook payload: subscription, customer, entitlement (the EC) and the grant,
 // each flat — nested expansions are stripped. entity_id is the grant;
 // parent_entity_id is the subscription.
-func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent) (json.RawMessage, error) {
+func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent, eventType types.WebhookEventName) (json.RawMessage, error) {
 	if internalEvent.ParentEntityID == "" {
 		return nil, ierr.NewError("entitlement grant alert missing subscription id").
 			WithReportableDetails(map[string]any{"entitlement_grant_id": internalEvent.EntityID}).
@@ -113,9 +113,9 @@ func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Cont
 	}
 
 	payload := &webhookDto.EntitlementGrantAlertEvent{
-		Subscription:     sub,
-		Customer:         customer,
-		Entitlement:      ec,
+		Subscription:     sub.ToWebhookPayload(eventType),
+		Customer:         customer.ToWebhookPayload(eventType),
+		Entitlement:      ec.ToWebhookPayload(eventType),
 		EntitlementGrant: grant,
 		AlertType:        internalEvent.AlertType,
 		AlertStatus:      internalEvent.AlertStatus,
@@ -127,7 +127,7 @@ func (b *AlertPayloadBuilder) buildEntitlementGrantAlertPayload(ctx context.Cont
 
 // buildSpendAlertPayload resolves an InternalAlertEvent carrying a subscription/line-item/group
 // spend alert into its final webhook payload.
-func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent) (json.RawMessage, error) {
+func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, internalEvent webhookDto.InternalAlertEvent, eventType types.WebhookEventName) (json.RawMessage, error) {
 	// A line-item or group alert's entity_id is the line item/group itself; the subscription it
 	// rolls up to is parent_entity_id. A subscription-level alert has no parent, so entity_id is
 	// already the subscription.
@@ -140,11 +140,9 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 	if err != nil {
 		return nil, err
 	}
-	// Same bloat workaround SubscriptionPayloadBuilder already applies to this same type.
-	sub.Plan = nil
 
 	payload := &webhookDto.SpendAlertEvent{
-		Subscription:  sub,
+		Subscription:  sub.ToWebhookPayload(eventType),
 		AlertType:     internalEvent.AlertType,
 		AlertStatus:   internalEvent.AlertStatus,
 		AlertSettings: internalEvent.AlertInfo.AlertSettings,
@@ -173,7 +171,7 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 		if err != nil {
 			return nil, err
 		}
-		payload.Group = grp
+		payload.Group = grp.ToWebhookPayload(eventType)
 	}
 
 	return json.Marshal(payload)
