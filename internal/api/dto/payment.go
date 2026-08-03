@@ -77,6 +77,17 @@ type PaymentResponse struct {
 	EnvironmentID          string                       `json:"environment_id"`
 }
 
+// ToWebhookPayload returns a shallow copy of the payment. PaymentResponse is flat with no nested
+// response-DTO fields (Attempts is a list of small, terminal PaymentAttemptResponse entries), so
+// there is nothing to trim.
+func (r *PaymentResponse) ToWebhookPayload(eventType types.WebhookEventName) *PaymentResponse {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	return &cp
+}
+
 func (p *PaymentResponse) ToPayment() *payment.Payment {
 	return &payment.Payment{
 		ID:                p.ID,
