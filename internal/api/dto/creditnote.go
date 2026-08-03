@@ -144,5 +144,20 @@ type CreditNoteResponse struct {
 	Customer *customer.Customer `json:"customer,omitempty"`
 }
 
+// ToWebhookPayload returns a shallow copy of the credit note, trimming its embedded Invoice and
+// Subscription via recursive delegation. This is the fix for CreditNoteResponse currently
+// carrying a fully unmitigated InvoiceResponse and SubscriptionResponse in every credit note
+// webhook — no credit-note-specific stripping logic is needed once Invoice/Subscription each trim
+// themselves.
+func (r *CreditNoteResponse) ToWebhookPayload(eventType types.WebhookEventName) *CreditNoteResponse {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	cp.Invoice = r.Invoice.ToWebhookPayload(eventType)
+	cp.Subscription = r.Subscription.ToWebhookPayload(eventType)
+	return &cp
+}
+
 // ListCreditNotesResponse represents the paginated response for listing credit notes
 type ListCreditNotesResponse = types.ListResponse[*CreditNoteResponse]
