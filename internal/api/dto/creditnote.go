@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -153,10 +154,10 @@ func (r *CreditNoteResponse) ToWebhookPayload(eventType types.WebhookEventName) 
 	if r == nil {
 		return nil
 	}
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Invoice = r.Invoice.ToWebhookPayload(eventType)
 	cp.Subscription = r.Subscription.ToWebhookPayload(eventType)
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // ListCreditNotesResponse represents the paginated response for listing credit notes

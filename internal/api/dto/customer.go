@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 // IntegrationEntityMapping represents a provider integration mapping
@@ -132,13 +133,12 @@ func (r *CustomerResponse) ToWebhookPayload(eventType types.WebhookEventName) *C
 	if r == nil {
 		return nil
 	}
-	cp := *r
-	return &cp
+	return lo.ToPtr(lo.FromPtr(r))
 }
 
 func EmptyCustomerResponse() *CustomerResponse {
 	return &CustomerResponse{
-		Customer: &customer.Customer{},
+		Customer:     &customer.Customer{},
 		Integrations: []*EntityIntegrationMappingResponse{},
 	}
 }

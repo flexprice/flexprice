@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -187,11 +188,11 @@ func (r *EntitlementResponse) ToWebhookPayload(eventType types.WebhookEventName)
 	if r == nil {
 		return nil
 	}
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Feature = r.Feature.ToWebhookPayload(eventType)
 	cp.Plan = nil
 	cp.Addon = nil
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // ListEntitlementsResponse represents a paginated list of entitlements

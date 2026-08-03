@@ -84,8 +84,7 @@ func (r *PaymentResponse) ToWebhookPayload(eventType types.WebhookEventName) *Pa
 	if r == nil {
 		return nil
 	}
-	cp := *r
-	return &cp
+	return lo.ToPtr(lo.FromPtr(r))
 }
 
 func (p *PaymentResponse) ToPayment() *payment.Payment {

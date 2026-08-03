@@ -129,9 +129,9 @@ func (r *FeatureResponse) ToWebhookPayload(eventType types.WebhookEventName) *Fe
 	if r == nil {
 		return nil
 	}
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Group = r.Group.ToWebhookPayload(eventType)
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // ListFeaturesResponse represents a paginated list of features

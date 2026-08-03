@@ -822,13 +822,13 @@ func (r *SubscriptionResponse) ToWebhookPayload(eventType types.WebhookEventName
 		return nil
 	}
 
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Plan = nil
 	cp.CreditGrants = nil
 	cp.Phases = nil
 	cp.CouponAssociations = nil
 	cp.LatestInvoice = nil
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -875,8 +875,7 @@ func (r *SubscriptionResponseV2) ToWebhookPayload(eventType types.WebhookEventNa
 	if r == nil {
 		return nil
 	}
-	cp := *r
-	return &cp
+	return lo.ToPtr(lo.FromPtr(r))
 }
 
 func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {

@@ -1002,17 +1002,18 @@ func (r *InvoiceResponse) ToWebhookPayload(eventType types.WebhookEventName) *In
 		return nil
 	}
 
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Subscription = r.Subscription.ToWebhookPayload(eventType)
 
-	switch eventType {
-	case types.WebhookEventInvoiceUpdateFinalized, types.WebhookEventInvoiceUpdateVoided:
-		// keep line items
-	default:
+	keepLineItems := lo.Contains([]types.WebhookEventName{
+		types.WebhookEventInvoiceUpdateFinalized,
+		types.WebhookEventInvoiceUpdateVoided,
+	}, eventType)
+	if !keepLineItems {
 		cp.LineItems = nil
 	}
 
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item

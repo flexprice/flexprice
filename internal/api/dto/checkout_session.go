@@ -264,6 +264,16 @@ type CheckoutSessionResponse struct {
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
 }
 
+// ToWebhookPayload returns a shallow copy of the checkout session. Sensitive/large fields
+// (ProviderResult, Result, Configuration, PaymentProviderConfig) are already stripped by
+// ToCheckoutSessionResponse at construction time, so there is nothing further to trim here.
+func (r *CheckoutSessionResponse) ToWebhookPayload(eventType types.WebhookEventName) *CheckoutSessionResponse {
+	if r == nil {
+		return nil
+	}
+	return lo.ToPtr(lo.FromPtr(r))
+}
+
 // ListCheckoutSessionsResponse is the paginated list response.
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 

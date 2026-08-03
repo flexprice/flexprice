@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 // CreateGroupRequest represents the request to create a group
@@ -61,8 +62,7 @@ func (r *GroupResponse) ToWebhookPayload(eventType types.WebhookEventName) *Grou
 	if r == nil {
 		return nil
 	}
-	cp := *r
-	return &cp
+	return lo.ToPtr(lo.FromPtr(r))
 }
 
 // ListGroupsResponse represents the response for listing groups

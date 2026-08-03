@@ -263,8 +263,7 @@ func (r *WalletResponse) ToWebhookPayload(eventType types.WebhookEventName) *Wal
 	if r == nil {
 		return nil
 	}
-	cp := *r
-	return &cp
+	return lo.ToPtr(lo.FromPtr(r))
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -307,10 +306,10 @@ func (r *WalletTransactionResponse) ToWebhookPayload(eventType types.WebhookEven
 	if r == nil {
 		return nil
 	}
-	cp := *r
+	cp := lo.FromPtr(r)
 	cp.Customer = r.Customer.ToWebhookPayload(eventType)
 	cp.Wallet = r.Wallet.ToWebhookPayload(eventType)
-	return &cp
+	return lo.ToPtr(cp)
 }
 
 // FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse
