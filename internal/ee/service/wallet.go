@@ -132,7 +132,7 @@ type WalletService interface {
 // GetWalletBalanceV2 / GetWalletBalanceFromCache. On exceedance the wrapper
 // falls back to the last cached balance (if any), otherwise surfaces the
 // timeout as the original error.
-const walletBalanceComputeTimeout = 80 * time.Second
+const walletBalanceComputeTimeout = 8 * time.Second
 
 type walletService struct {
 	ServiceParams
