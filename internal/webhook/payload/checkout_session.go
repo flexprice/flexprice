@@ -36,5 +36,5 @@ func (b *CheckoutSessionPayloadBuilder) BuildPayload(ctx context.Context, eventT
 		return nil, err
 	}
 
-	return json.Marshal(webhookDto.NewCheckoutSessionWebhookPayload(session, eventType))
+	return json.Marshal(webhookDto.NewCheckoutSessionWebhookPayload(session.ToWebhookPayload(eventType), eventType))
 }

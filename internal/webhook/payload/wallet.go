@@ -79,7 +79,7 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 	}
 
 	// Create webhook payload with alert info and customer if present
-	payload := webhookDto.NewWalletWebhookPayload(walletData, customerData, parsedPayload.Alert, eventType)
+	payload := webhookDto.NewWalletWebhookPayload(walletData.ToWebhookPayload(eventType), customerData.ToWebhookPayload(eventType), parsedPayload.Alert, eventType)
 
 	// Marshal payload
 	return json.Marshal(payload)
@@ -121,11 +121,15 @@ func (b TransactionPayloadBuilder) BuildPayload(
 		}
 	}
 
+	trimmedTransaction := transactionData.ToWebhookPayload(eventType)
+	trimmedWallet := walletData.ToWebhookPayload(eventType)
+	trimmedCustomer := customerData.ToWebhookPayload(eventType)
+
 	var payload any
 	if eventType == types.WebhookEventWalletTransactionUpdated {
-		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, walletData, customerData, eventType)
+		payload = webhookDto.NewTransactionUpdatedWebhookPayload(trimmedTransaction, trimmedWallet, trimmedCustomer, eventType)
 	} else {
-		payload = webhookDto.NewTransactionWebhookPayload(transactionData, walletData, customerData, eventType)
+		payload = webhookDto.NewTransactionWebhookPayload(trimmedTransaction, trimmedWallet, trimmedCustomer, eventType)
 	}
 
 	return json.Marshal(payload)
