@@ -55,6 +55,16 @@ type GroupResponse struct {
 	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
+// ToWebhookPayload returns a shallow copy of the group. GroupResponse is fully flat (no nested
+// response-DTO fields), so there is nothing to trim.
+func (r *GroupResponse) ToWebhookPayload(eventType types.WebhookEventName) *GroupResponse {
+	if r == nil {
+		return nil
+	}
+	cp := *r
+	return &cp
+}
+
 // ListGroupsResponse represents the response for listing groups
 type ListGroupsResponse = types.ListResponse[*GroupResponse] // @name ListGroupsResponse
 
