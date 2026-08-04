@@ -265,7 +265,7 @@ func NewRouter(
 			plan.PUT("/:id", write(types.EntityPlan, types.ActionWrite), handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", write(types.EntityPlan, types.ActionWrite), handlers.Plan.DeletePlan)
 			plan.POST("/:id/clone", write(types.EntityPlan, types.ActionWrite), handlers.Plan.ClonePlan)
-			plan.POST("/:id/sync/subscriptions", write(types.EntityPlan, types.ActionWrite), handlers.Plan.SyncPlanPrices)
+			plan.POST("/:id/sync/subscriptions", write(types.EntityPlan, types.ActionWrite), handlers.Plan.SyncPlanPricesV2)
 			plan.POST("/:id/sync/subscriptions/v2", write(types.EntityPlan, types.ActionWrite), handlers.Plan.SyncPlanPricesV2)
 
 			// entitlement routes
