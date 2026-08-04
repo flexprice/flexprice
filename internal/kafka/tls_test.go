@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -167,6 +168,108 @@ func TestBuildTLSConfig_NonPEMFileErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "JKS") {
 		t.Errorf("error %q should point the operator at the JKS→PEM conversion", err)
+	}
+}
+
+// The realistic operator mistakes after the JKS case: a file that is valid PEM
+// but carries no certificate, and a file that is a private key rather than the
+// CA certificate. Both reach AppendCertsFromPEM == false and must be rejected at
+// startup rather than producing a pool that silently verifies nothing.
+func TestBuildTLSConfig_PEMWithoutCertificateErrors(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	der, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatalf("marshal key: %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		filename string
+		contents []byte
+	}{
+		{"empty file", "empty.pem", nil},
+		{"no PEM blocks", "notes.pem", []byte("# CA goes here\n")},
+		{
+			"private key instead of certificate",
+			"ca-key.pem",
+			pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), c.filename)
+			if err := os.WriteFile(path, c.contents, 0o600); err != nil {
+				t.Fatalf("write file: %v", err)
+			}
+
+			_, err := BuildTLSConfig(&config.KafkaConfig{TLSCACertFile: path})
+			if err == nil {
+				t.Fatal("BuildTLSConfig() error = nil, want an error when no certificate parses")
+			}
+			if !strings.Contains(err.Error(), "no certificates parsed") {
+				t.Errorf("error %q should say no certificates were parsed", err)
+			}
+		})
+	}
+}
+
+// A directory path is an easy misconfiguration when the CA is mounted from a
+// Secret: pointing at the mount root rather than the key inside it.
+func TestBuildTLSConfig_DirectoryPathErrors(t *testing.T) {
+	_, err := BuildTLSConfig(&config.KafkaConfig{TLSCACertFile: t.TempDir()})
+	if err == nil {
+		t.Fatal("BuildTLSConfig() error = nil, want an error when the CA path is a directory")
+	}
+	if !strings.Contains(err.Error(), "read CA file") {
+		t.Errorf("error %q should name the failure as reading the CA file", err)
+	}
+}
+
+// TLS policy must hold on both paths — with and without a configured CA.
+func TestBuildTLSConfig_SetsMinVersionTLS12(t *testing.T) {
+	dir := t.TempDir()
+	path, _ := writeTestCA(t, dir, "ca")
+
+	for _, c := range []struct {
+		name string
+		cfg  *config.KafkaConfig
+	}{
+		{"no CA file", &config.KafkaConfig{}},
+		{"with CA file", &config.KafkaConfig{TLSCACertFile: path}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tlsCfg, err := BuildTLSConfig(c.cfg)
+			if err != nil {
+				t.Fatalf("BuildTLSConfig() error = %v, want nil", err)
+			}
+			if tlsCfg.MinVersion != tls.VersionTLS12 {
+				t.Errorf("MinVersion = %#x, want %#x (TLS 1.2)", tlsCfg.MinVersion, tls.VersionTLS12)
+			}
+		})
+	}
+}
+
+// ServerName defaults to empty so Go verifies against the dial address; it is
+// carried through only when the operator overrides it for an SNI mismatch.
+func TestBuildTLSConfig_ServerNameOverride(t *testing.T) {
+	tlsCfg, err := BuildTLSConfig(&config.KafkaConfig{})
+	if err != nil {
+		t.Fatalf("BuildTLSConfig() error = %v, want nil", err)
+	}
+	if tlsCfg.ServerName != "" {
+		t.Errorf("ServerName = %q, want empty so verification uses the dial address", tlsCfg.ServerName)
+	}
+
+	tlsCfg, err = BuildTLSConfig(&config.KafkaConfig{TLSServerName: "broker.internal"})
+	if err != nil {
+		t.Fatalf("BuildTLSConfig() error = %v, want nil", err)
+	}
+	if tlsCfg.ServerName != "broker.internal" {
+		t.Errorf("ServerName = %q, want %q", tlsCfg.ServerName, "broker.internal")
 	}
 }
 

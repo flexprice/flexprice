@@ -20,6 +20,8 @@ func TestAutoBindEnvCategories(t *testing.T) {
 	t.Setenv("FLEXPRICE_OTEL_TRACES_ENDPOINT", "ingest.example.com:443")  // deep nested underscore
 	t.Setenv("FLEXPRICE_DEPLOYMENT_MODE", "consumer")                     // per-pod
 	t.Setenv("FLEXPRICE_KAFKA_SASL_PASSWORD", "scram-pw")                 // secret, nested
+	t.Setenv("FLEXPRICE_KAFKA_TLS_CA_CERT_FILE", "/etc/kafka-ca/ca.crt")  // no default tag
+	t.Setenv("FLEXPRICE_KAFKA_TLS_SERVER_NAME", "broker.internal")        // no default tag
 	t.Setenv("FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP", "gmk-dualwrite") // pointer struct field
 
 	cfg, err := NewConfig()
@@ -37,6 +39,11 @@ func TestAutoBindEnvCategories(t *testing.T) {
 		{"otel.traces.endpoint", cfg.Otel.Traces.Endpoint, "ingest.example.com:443"},
 		{"deployment.mode", string(cfg.Deployment.Mode), string(types.ModeConsumer)},
 		{"kafka.sasl_password", cfg.Kafka.SASLPassword, "scram-pw"},
+		// The Helm chart sets these two purely from the environment, so a missing
+		// binding would leave the private CA unused and TLS silently verifying
+		// against the OS trust store instead.
+		{"kafka.tls_ca_cert_file", cfg.Kafka.TLSCACertFile, "/etc/kafka-ca/ca.crt"},
+		{"kafka.tls_server_name", cfg.Kafka.TLSServerName, "broker.internal"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

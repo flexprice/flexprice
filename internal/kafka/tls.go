@@ -23,6 +23,11 @@ import (
 func BuildTLSConfig(kafkaCfg *config.KafkaConfig) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: false,
+		MinVersion:         tls.VersionTLS12,
+		// ServerName empty means Go verifies against the dial address, which is
+		// the broker's advertised listener. A private CA issuing a cert whose SAN
+		// does not match that name needs TLSServerName set to override it.
+		ServerName: kafkaCfg.TLSServerName,
 	}
 
 	if kafkaCfg.TLSCACertFile == "" {
@@ -37,9 +42,17 @@ func BuildTLSConfig(kafkaCfg *config.KafkaConfig) (*tls.Config, error) {
 	// Start from the system pool so a private CA augments the public roots
 	// rather than replacing them. A broker chaining to a public root keeps
 	// working even when a CA file is supplied.
+	//
+	// Failing here rather than falling back to an empty pool is deliberate: a
+	// silent fallback would leave RootCAs holding ONLY the private CA, so every
+	// publicly-trusted broker in the same bundle would stop verifying with no
+	// indication why.
 	pool, err := x509.SystemCertPool()
-	if err != nil || pool == nil {
-		pool = x509.NewCertPool()
+	if err != nil {
+		return nil, fmt.Errorf("kafka tls: load system cert pool: %w", err)
+	}
+	if pool == nil {
+		return nil, fmt.Errorf("kafka tls: system cert pool unavailable; cannot augment it with %q", kafkaCfg.TLSCACertFile)
 	}
 
 	if !pool.AppendCertsFromPEM(pemBytes) {

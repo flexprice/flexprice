@@ -219,7 +219,13 @@ type KafkaConfig struct {
 	// crypto/x509 read PEM only. Convert with:
 	//
 	//	keytool -exportcert -alias <alias> -keystore truststore.jks -rfc -file ca.pem
-	TLSCACertFile string               `mapstructure:"tls_ca_cert_file"`
+	TLSCACertFile string `mapstructure:"tls_ca_cert_file"`
+	// TLSServerName overrides the hostname the broker certificate is verified
+	// against. Empty (the default) verifies against the dial address, i.e. the
+	// broker's advertised listener, which is correct almost always. Set it only
+	// when a private CA issues a certificate whose SAN does not match that name
+	// — a broker behind an SNI-mismatched load balancer, typically.
+	TLSServerName string               `mapstructure:"tls_server_name"`
 	UseSASL       bool                 `mapstructure:"use_sasl"`
 	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
 	SASLUser      string               `mapstructure:"sasl_user"`

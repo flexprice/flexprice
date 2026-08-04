@@ -47,8 +47,18 @@ spec:
           SCRAM-SHA-512 spelling kafkaConfig.saslMechanism carries. Passing the
           sarama spelling through makes the scaler fail to authenticate, so map
           it here rather than asking operators to set the value twice.
+
+          An unmapped mechanism fails the render instead of defaulting to
+          plaintext: a silent default produces a scaler that cannot authenticate
+          and reports a misleading error, which is the exact bug this mapping
+          exists to prevent.
         */}}
-        sasl: {{ get (dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer") .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
+        {{- $saslMap := dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer" }}
+        {{- $mechanism := .Values.kafkaConfig.saslMechanism | default "PLAIN" }}
+        {{- if not (hasKey $saslMap $mechanism) }}
+        {{- fail (printf "kafkaConfig.saslMechanism %q has no KEDA equivalent; the KEDA Kafka scaler supports only: %s. Set the sarama spelling (e.g. SCRAM-SHA-512), or disable consumer.keda.enabled." $mechanism (join ", " (keys $saslMap | sortAlpha))) }}
+        {{- end }}
+        sasl: {{ get $saslMap $mechanism | quote }}
         {{- end }}
       {{- /*
         KEDA's operator dials Kafka itself, so it never sees the CA mounted from
