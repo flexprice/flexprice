@@ -971,6 +971,95 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	return nil
 }
 
+// AddLineItemRequest represents the request payload for adding a new line item to a draft invoice
+type AddLineItemRequest struct {
+	DisplayName string          `json:"display_name" validate:"required"`
+	Amount      decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
+	Quantity    decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
+}
+
+func (r *AddLineItemRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// UpdateLineItemRequest represents the request payload for partially updating an existing line item on a draft invoice.
+// DisplayName, Amount, and Quantity are independent optional overrides - setting one never implies or derives another.
+type UpdateLineItemRequest struct {
+	DisplayName *string          `json:"display_name,omitempty"`
+	Amount      *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+}
+
+func (r *UpdateLineItemRequest) Validate() error {
+	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil {
+		return ierr.NewError("at least one field must be provided").
+			WithHint("at least one of display_name, amount, or quantity must be provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Amount != nil && r.Amount.IsNegative() {
+		return ierr.NewError("amount must be non-negative").
+			WithHint("amount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Quantity != nil && r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"quantity": r.Quantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ApplyCouponRequest represents the request payload for applying a coupon to a draft invoice.
+// A nil LineItemID applies the coupon at the invoice level; a non-nil LineItemID scopes it to that line item.
+type ApplyCouponRequest struct {
+	CouponID   string  `json:"coupon_id" validate:"required"`
+	LineItemID *string `json:"line_item_id,omitempty"`
+}
+
+func (r *ApplyCouponRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// ApplyTaxRequest represents the request payload for applying a tax rate to a draft invoice
+type ApplyTaxRequest struct {
+	TaxRateID string `json:"tax_rate_id" validate:"required"`
+}
+
+func (r *ApplyTaxRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	invoice.Invoice
