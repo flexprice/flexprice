@@ -243,3 +243,25 @@ func (s *UpdateLineItemSuite) TestRejectsLineItemFromDifferentInvoice() {
 	s.Error(err)
 	s.True(ierr.IsNotFound(err))
 }
+
+func (s *UpdateLineItemSuite) TestRejectsEditOnAlreadyArchivedLineItem() {
+	ctx := s.GetContext()
+	inv, v1 := s.createDraftInvoiceWithLineItem(ctx, decimal.NewFromInt(100), decimal.NewFromInt(10))
+
+	name2 := "v2"
+	_, err := s.service.UpdateLineItem(ctx, inv.ID, v1.ID, dto.UpdateLineItemRequest{DisplayName: &name2})
+	s.Require().NoError(err)
+
+	// v1 is now archived - editing it again (instead of its replacement) must be rejected,
+	// otherwise the lineage chain would branch instead of extending linearly (CR-06a).
+	name3 := "v3-via-stale-id"
+	_, err = s.service.UpdateLineItem(ctx, inv.ID, v1.ID, dto.UpdateLineItemRequest{DisplayName: &name3})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+
+	// Exactly one published row remains, unaffected by the rejected call.
+	published, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID)
+	s.NoError(err)
+	s.Require().Len(published, 1)
+	s.Equal(name2, lo.FromPtr(published[0].DisplayName))
+}

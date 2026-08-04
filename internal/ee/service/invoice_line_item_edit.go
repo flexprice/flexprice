@@ -67,6 +67,13 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 				WithHintf("line item %s does not belong to invoice %s", lineItemID, invoiceID).
 				Mark(ierr.ErrNotFound)
 		}
+		if existingItem.Status != types.StatusPublished {
+			// Editing an already-archived/deleted row would branch the lineage
+			// chain (CR-06a) instead of extending it, or resurrect a removed item.
+			return ierr.NewError("line item is not editable").
+				WithHintf("line item %s has status %s and is not the current version", lineItemID, existingItem.Status).
+				Mark(ierr.ErrValidation)
+		}
 
 		// Copy every field forward unchanged, then override only the editable ones.
 		newItem := *existingItem
