@@ -414,6 +414,12 @@ clickhouse:
 
   # Shared connection settings (used by all modes)
   tls: false
+  # Skip server certificate/hostname verification on the TLS connection. Only has
+  # an effect when tls is true. This is the "SSL on, SSL_MODE none" combination —
+  # use it for dev ClickHouse serving a self-signed cert with no CA to distribute.
+  # It removes MITM protection, so keep it false in staging/production and trust
+  # the issuing CA instead (mount the bundle and point SSL_CERT_FILE at it).
+  tlsSkipVerify: false
   username: "default"
   password: "" # Set via secret or secrets.existingSecret key: clickhouse-password
   database: "flexprice"

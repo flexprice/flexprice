@@ -253,14 +253,20 @@ type ClickHouseConfig struct {
 	// (clickhouse.go acquire() waits on a semaphore of MaxOpenConns slots for DialTimeout),
 	// so it cannot be tuned for pool pressure without also changing dial failover — see
 	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
-	DialTimeout    time.Duration `mapstructure:"dial_timeout"`
-	ReadTimeout    time.Duration `mapstructure:"read_timeout"`
-	Address        string        `mapstructure:"address" validate:"required"`
-	TLS            bool          `mapstructure:"tls"`
-	Username       string        `mapstructure:"username" validate:"required"`
-	Password       string        `mapstructure:"password" validate:"required"`
-	Database       string        `mapstructure:"database" validate:"required"`
-	MaxMemoryUsage int64         `mapstructure:"max_memory_usage" validate:"required"`
+	DialTimeout time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout time.Duration `mapstructure:"read_timeout"`
+	Address     string        `mapstructure:"address" validate:"required"`
+	TLS         bool          `mapstructure:"tls"`
+	// TLSSkipVerify disables server certificate and hostname verification on the
+	// TLS connection. It only takes effect when TLS is true. Intended for dev
+	// environments whose ClickHouse serves a self-signed certificate (equivalent to
+	// SSL=true with SSL_MODE=NONE); it removes MITM protection, so leave it false
+	// everywhere else and trust the CA instead.
+	TLSSkipVerify  bool   `mapstructure:"tls_skip_verify"`
+	Username       string `mapstructure:"username" validate:"required"`
+	Password       string `mapstructure:"password" validate:"required"`
+	Database       string `mapstructure:"database" validate:"required"`
+	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
 }
 
 type LoggingConfig struct {
@@ -1051,7 +1057,7 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
-		options.TLS = &tls.Config{}
+		options.TLS = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
 	}
 
 	maxMemoryUsageBytes := c.MaxMemoryUsage * int64(1024) * int64(1024) * int64(1024)

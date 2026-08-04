@@ -342,6 +342,8 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.clickhouse.database | quote }}
 - name: FLEXPRICE_CLICKHOUSE_TLS
   value: {{ .Values.clickhouse.tls | quote }}
+- name: FLEXPRICE_CLICKHOUSE_TLS_SKIP_VERIFY
+  value: {{ .Values.clickhouse.tlsSkipVerify | default false | quote }}
 - name: FLEXPRICE_CLICKHOUSE_MAX_MEMORY_USAGE
   value: {{ .Values.clickhouse.maxMemoryUsageGB | default 90 | quote }}
 {{- /* ---- Kafka ---- */}}
