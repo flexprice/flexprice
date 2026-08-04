@@ -94,6 +94,11 @@ type InvoiceService interface {
 	// UpdateLineItem, there is no prior row to archive - ParentLineItemID is nil.
 	// Draft-only.
 	AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error)
+
+	// RemoveLineItem soft-deletes a line item on a draft invoice (status=deleted, see
+	// CR-07 in specs/invoice-draft-editing/spec.md). Unlike UpdateLineItem, there is no
+	// replacement row - the item is simply gone from totals and future listings. Draft-only.
+	RemoveLineItem(ctx context.Context, invoiceID, lineItemID string) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {

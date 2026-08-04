@@ -184,3 +184,63 @@ func (s *invoiceService) AddLineItem(ctx context.Context, invoiceID string, req 
 	lockedInv.LineItems = publishedLineItems
 	return dto.NewInvoiceResponse(lockedInv), nil
 }
+
+// RemoveLineItem soft-deletes a line item on a draft invoice. Unlike UpdateLineItem,
+// there is no replacement row - the item is just gone (status=deleted, CR-07), so
+// there is no lineage to preserve. Reuses the existing InvoiceRepo.RemoveLineItems,
+// which sets status=deleted rather than hard-deleting. That repository call matches
+// on tenant + invoice + IDs and silently no-ops if nothing matches, so the existence
+// and ownership check below is done explicitly to surface a clear not-found error.
+func (s *invoiceService) RemoveLineItem(ctx context.Context, invoiceID, lineItemID string) (*dto.InvoiceResponse, error) {
+	var lockedInv *invoice.Invoice
+	var publishedLineItems []*invoice.InvoiceLineItem
+
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		if inv.InvoiceStatus != types.InvoiceStatusDraft {
+			return ierr.NewError("invoice is not in draft status").
+				WithHint("invoice must be in draft status to be edited").
+				Mark(ierr.ErrValidation)
+		}
+		lockedInv = inv
+
+		existingItem, err := s.InvoiceLineItemRepo.Get(txCtx, lineItemID)
+		if err != nil {
+			return err
+		}
+		if existingItem.InvoiceID != invoiceID {
+			return ierr.NewError("line item not found").
+				WithHintf("line item %s does not belong to invoice %s", lineItemID, invoiceID).
+				Mark(ierr.ErrNotFound)
+		}
+		if existingItem.Status != types.StatusPublished {
+			return ierr.NewError("line item is not removable").
+				WithHintf("line item %s has status %s and is not the current version", lineItemID, existingItem.Status).
+				Mark(ierr.ErrValidation)
+		}
+
+		if err := s.InvoiceRepo.RemoveLineItems(txCtx, invoiceID, []string{lineItemID}); err != nil {
+			return err
+		}
+
+		lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		publishedLineItems = lineItems
+
+		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
+		lockedInv.IsManuallyEdited = true
+
+		return s.InvoiceRepo.Update(txCtx, lockedInv)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	lockedInv.LineItems = publishedLineItems
+	return dto.NewInvoiceResponse(lockedInv), nil
+}
