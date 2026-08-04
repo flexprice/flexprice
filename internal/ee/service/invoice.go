@@ -527,6 +527,17 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		computed = true
 
+		// A manually edited invoice is locked from automatic recompute: line items,
+		// coupons, taxes, and totals were hand-set via AddLineItem/UpdateLineItem/
+		// RemoveLineItem and must not be clobbered by a subsequent compute (from the
+		// API, a Temporal workflow, or the daily schedule). Reset computed to false so
+		// the no-op doesn't fire the downstream "invoice updated" system event below.
+		if inv.IsManuallyEdited {
+			s.Logger.Info(txCtx, "skipping compute: invoice has manual line-item edits", "invoice_id", inv.ID)
+			computed = false
+			return nil
+		}
+
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {
 			reconciledItems, err := s.reconcileLineItems(txCtx, inv, applyReq.LineItems)
