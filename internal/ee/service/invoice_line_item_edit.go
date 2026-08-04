@@ -1,7 +1,12 @@
 package service
 
 import (
+	"context"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -24,4 +29,89 @@ func (s *invoiceService) recalculateTotalsFromLineItems(inv *invoice.Invoice, li
 	if inv.AmountRemaining.IsNegative() {
 		inv.AmountRemaining = decimal.Zero
 	}
+}
+
+// UpdateLineItem edits a line item's display_name/amount/quantity on a draft invoice.
+// This is archive-and-replace, not an in-place update (CR-06): the existing row is
+// marked archived and a new row is created carrying forward every other field
+// unchanged, with parent_line_item_id pointing at the archived row. Editing a line
+// item that is itself the result of a prior edit therefore naturally chains the
+// lineage back through each intermediate row (CR-06a), since the new row always
+// points at whatever row was just fetched.
+func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var lockedInv *invoice.Invoice
+	var publishedLineItems []*invoice.InvoiceLineItem
+
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		if inv.InvoiceStatus != types.InvoiceStatusDraft {
+			return ierr.NewError("invoice is not in draft status").
+				WithHint("invoice must be in draft status to be edited").
+				Mark(ierr.ErrValidation)
+		}
+		lockedInv = inv
+
+		existingItem, err := s.InvoiceLineItemRepo.Get(txCtx, lineItemID)
+		if err != nil {
+			return err
+		}
+		if existingItem.InvoiceID != invoiceID {
+			return ierr.NewError("line item not found").
+				WithHintf("line item %s does not belong to invoice %s", lineItemID, invoiceID).
+				Mark(ierr.ErrNotFound)
+		}
+
+		// Copy every field forward unchanged, then override only the editable ones.
+		newItem := *existingItem
+		newItem.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
+		newItem.ParentLineItemID = &existingItem.ID
+		newItem.BaseModel = types.GetDefaultBaseModel(txCtx)
+
+		if req.DisplayName != nil {
+			newItem.DisplayName = req.DisplayName
+		}
+		if req.Amount != nil {
+			newItem.Amount = *req.Amount
+		}
+		if req.Quantity != nil {
+			newItem.Quantity = *req.Quantity
+		}
+
+		if err := newItem.Validate(); err != nil {
+			return err
+		}
+
+		existingItem.Status = types.StatusArchived
+		if err := s.InvoiceLineItemRepo.Update(txCtx, existingItem); err != nil {
+			return err
+		}
+
+		if err := s.InvoiceLineItemRepo.Create(txCtx, &newItem); err != nil {
+			return err
+		}
+
+		lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		publishedLineItems = lineItems
+
+		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
+		lockedInv.IsManuallyEdited = true
+
+		return s.InvoiceRepo.Update(txCtx, lockedInv)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	lockedInv.LineItems = publishedLineItems
+	return dto.NewInvoiceResponse(lockedInv), nil
 }

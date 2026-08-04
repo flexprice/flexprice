@@ -84,6 +84,11 @@ type InvoiceService interface {
 	// RecalculateTaxesOnInvoice applies subscription auto-apply taxes and updates
 	// total_tax / total / amount_due. Idempotent via tax-applied records.
 	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error)
+
+	// UpdateLineItem archives the existing line item and creates its replacement with
+	// display_name/quantity/amount updated (archive-and-replace, see CR-06 in
+	// specs/invoice-draft-editing/spec.md). Draft-only.
+	UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {
