@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -101,6 +102,67 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 		}
 
 		if err := s.InvoiceLineItemRepo.Create(txCtx, &newItem); err != nil {
+			return err
+		}
+
+		lineItems, err := s.InvoiceLineItemRepo.ListByInvoiceID(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		publishedLineItems = lineItems
+
+		s.recalculateTotalsFromLineItems(lockedInv, publishedLineItems)
+		lockedInv.IsManuallyEdited = true
+
+		return s.InvoiceRepo.Update(txCtx, lockedInv)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	lockedInv.LineItems = publishedLineItems
+	return dto.NewInvoiceResponse(lockedInv), nil
+}
+
+// AddLineItem creates a brand-new line item on a draft invoice. Currency and
+// CustomerID are inherited from the invoice - AddLineItemRequest carries neither.
+// ParentLineItemID stays nil: nothing preceded this row.
+func (s *invoiceService) AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var lockedInv *invoice.Invoice
+	var publishedLineItems []*invoice.InvoiceLineItem
+
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		inv, err := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+		if err != nil {
+			return err
+		}
+		if inv.InvoiceStatus != types.InvoiceStatusDraft {
+			return ierr.NewError("invoice is not in draft status").
+				WithHint("invoice must be in draft status to be edited").
+				Mark(ierr.ErrValidation)
+		}
+		lockedInv = inv
+
+		newItem := &invoice.InvoiceLineItem{
+			ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			InvoiceID:   inv.ID,
+			CustomerID:  inv.CustomerID,
+			DisplayName: lo.ToPtr(req.DisplayName),
+			Amount:      req.Amount,
+			Quantity:    req.Quantity,
+			Currency:    inv.Currency,
+			BaseModel:   types.GetDefaultBaseModel(txCtx),
+		}
+
+		if err := newItem.Validate(); err != nil {
+			return err
+		}
+
+		if err := s.InvoiceLineItemRepo.Create(txCtx, newItem); err != nil {
 			return err
 		}
 

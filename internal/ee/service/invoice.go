@@ -89,6 +89,11 @@ type InvoiceService interface {
 	// display_name/quantity/amount updated (archive-and-replace, see CR-06 in
 	// specs/invoice-draft-editing/spec.md). Draft-only.
 	UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error)
+
+	// AddLineItem creates a brand-new line item on a draft invoice. Unlike
+	// UpdateLineItem, there is no prior row to archive - ParentLineItemID is nil.
+	// Draft-only.
+	AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {
