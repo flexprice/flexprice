@@ -15,9 +15,6 @@ type PlanWebhookPayload struct {
 	Description  string         `json:"description,omitempty"`
 	DisplayOrder *int           `json:"display_order,omitempty"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
-	Status       string         `json:"status"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
 }
 
 // NewPlanWebhookPayload returns nil if resp is nil, so callers can assign the
@@ -33,8 +30,5 @@ func NewPlanWebhookPayload(resp *dto.PlanResponse) *PlanWebhookPayload {
 		Description:  resp.Description,
 		DisplayOrder: resp.DisplayOrder,
 		Metadata:     resp.Metadata,
-		Status:       string(resp.Status),
-		CreatedAt:    resp.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    resp.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
