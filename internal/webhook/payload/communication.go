@@ -4,11 +4,21 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
+
+type CommunicationWebhookPayload struct {
+	EventType types.WebhookEventName `json:"event_type"`
+	Invoice   *Invoice               `json:"invoice"`
+}
+
+func NewCommunicationWebhookPayload(invoice *dto.InvoiceResponse, eventType types.WebhookEventName) *CommunicationWebhookPayload {
+	return &CommunicationWebhookPayload{EventType: eventType, Invoice: NewInvoice(invoice, eventType)}
+}
 
 type CommunicationPayloadBuilder struct {
 	services *Services
@@ -55,7 +65,7 @@ func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventTyp
 	}
 	invoice.InvoicePDFURL = lo.ToPtr(pdfUrl)
 
-	payload := webhookDto.NewCommunicationWebhookPayload(invoice, eventType)
+	payload := NewCommunicationWebhookPayload(invoice, eventType)
 
 	// Return the communication payload
 	return json.Marshal(payload)

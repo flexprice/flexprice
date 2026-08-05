@@ -2,32 +2,32 @@ package v1
 
 import (
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
-	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/flexprice/flexprice/internal/webhook/payload"
 )
 
 // Doc-only webhook event stubs for OpenAPI / SDK generation. These handlers are not registered on the router.
-// Payload types live in internal/webhook/dto (package webhookDto).
+// Payload types live in internal/webhook/payload (package payload).
 //
-// Anchor webhookDto types so swag can resolve @Success references in this file.
+// Anchor payload types so swag can resolve @Success references in this file.
 var _ = []any{
 	(*apidto.RetryOutboundWebhookRequest)(nil),
 	(*apidto.RetryOutboundWebhookResponse)(nil),
-	(*webhookDto.InvoiceWebhookPayload)(nil),
-	(*webhookDto.CommunicationWebhookPayload)(nil),
-	(*webhookDto.SubscriptionWebhookPayload)(nil),
-	(*webhookDto.SubscriptionPhaseWebhookPayload)(nil),
-	(*webhookDto.CustomerWebhookPayload)(nil),
-	(*webhookDto.PaymentWebhookPayload)(nil),
-	(*webhookDto.FeatureWebhookPayload)(nil),
-	(*webhookDto.AlertWebhookPayload)(nil),
-	(*webhookDto.SpendAlertEvent)(nil),
-	(*webhookDto.EntitlementWebhookPayload)(nil),
-	(*webhookDto.WalletWebhookPayload)(nil),
-	(*webhookDto.TransactionWebhookPayload)(nil),
-	(*webhookDto.TransactionUpdatedWebhookPayload)(nil),
-	(*webhookDto.CreditNoteWebhookPayload)(nil),
-	(*webhookDto.CheckoutSessionWebhookPayload)(nil),
-	(*webhookDto.RejectedEventWebhookPayload)(nil),
+	(*payload.InvoiceWebhookPayload)(nil),
+	(*payload.CommunicationWebhookPayload)(nil),
+	(*payload.SubscriptionWebhookPayload)(nil),
+	(*payload.SubscriptionPhaseWebhookPayload)(nil),
+	(*payload.CustomerWebhookPayload)(nil),
+	(*payload.PaymentWebhookPayload)(nil),
+	(*payload.FeatureWebhookPayload)(nil),
+	(*payload.AlertWebhookPayload)(nil),
+	(*payload.SpendAlertEvent)(nil),
+	(*payload.EntitlementWebhookPayload)(nil),
+	(*payload.WalletWebhookPayload)(nil),
+	(*payload.TransactionWebhookPayload)(nil),
+	(*payload.TransactionUpdatedWebhookPayload)(nil),
+	(*payload.CreditNoteWebhookPayload)(nil),
+	(*payload.CheckoutSessionWebhookPayload)(nil),
+	(*payload.RejectedEventWebhookPayload)(nil),
 }
 
 // WebhookEventInvoiceCreateDrafted godoc
@@ -36,7 +36,7 @@ var _ = []any{
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.create.drafted [post]
 func WebhookEventInvoiceCreateDrafted() {}
 
@@ -46,7 +46,7 @@ func WebhookEventInvoiceCreateDrafted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.update.finalized [post]
 func WebhookEventInvoiceUpdateFinalized() {}
 
@@ -56,7 +56,7 @@ func WebhookEventInvoiceUpdateFinalized() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.update.voided [post]
 func WebhookEventInvoiceUpdateVoided() {}
 
@@ -66,7 +66,7 @@ func WebhookEventInvoiceUpdateVoided() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.update.payment [post]
 func WebhookEventInvoiceUpdatePayment() {}
 
@@ -76,7 +76,7 @@ func WebhookEventInvoiceUpdatePayment() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.update [post]
 func WebhookEventInvoiceUpdate() {}
 
@@ -86,7 +86,7 @@ func WebhookEventInvoiceUpdate() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.InvoiceWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.payment.overdue [post]
 func WebhookEventInvoicePaymentOverdue() {}
 
@@ -96,7 +96,7 @@ func WebhookEventInvoicePaymentOverdue() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CommunicationWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CommunicationWebhookPayload "Webhook payload"
 // @Router /webhook-events/invoice.communication.triggered [post]
 func WebhookEventInvoiceCommunicationTriggered() {}
 
@@ -106,7 +106,7 @@ func WebhookEventInvoiceCommunicationTriggered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.created [post]
 func WebhookEventSubscriptionCreated() {}
 
@@ -116,7 +116,7 @@ func WebhookEventSubscriptionCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.draft.created [post]
 func WebhookEventSubscriptionDraftCreated() {}
 
@@ -126,7 +126,7 @@ func WebhookEventSubscriptionDraftCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.activated [post]
 func WebhookEventSubscriptionActivated() {}
 
@@ -136,7 +136,7 @@ func WebhookEventSubscriptionActivated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.updated [post]
 func WebhookEventSubscriptionUpdated() {}
 
@@ -146,7 +146,7 @@ func WebhookEventSubscriptionUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.paused [post]
 func WebhookEventSubscriptionPaused() {}
 
@@ -156,7 +156,7 @@ func WebhookEventSubscriptionPaused() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.cancelled [post]
 func WebhookEventSubscriptionCancelled() {}
 
@@ -166,7 +166,7 @@ func WebhookEventSubscriptionCancelled() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.resumed [post]
 func WebhookEventSubscriptionResumed() {}
 
@@ -176,7 +176,7 @@ func WebhookEventSubscriptionResumed() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.renewal.due [post]
 func WebhookEventSubscriptionRenewalDue() {}
 
@@ -186,7 +186,7 @@ func WebhookEventSubscriptionRenewalDue() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.spend.threshold_reached [post]
 func WebhookEventSubscriptionSpendThresholdReached() {}
 
@@ -196,7 +196,7 @@ func WebhookEventSubscriptionSpendThresholdReached() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.spend.threshold_recovered [post]
 func WebhookEventSubscriptionSpendThresholdRecovered() {}
 
@@ -206,7 +206,7 @@ func WebhookEventSubscriptionSpendThresholdRecovered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.line_item_spend.threshold_reached [post]
 func WebhookEventSubscriptionLineItemSpendThresholdReached() {}
 
@@ -216,7 +216,7 @@ func WebhookEventSubscriptionLineItemSpendThresholdReached() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.line_item_spend.threshold_recovered [post]
 func WebhookEventSubscriptionLineItemSpendThresholdRecovered() {}
 
@@ -226,7 +226,7 @@ func WebhookEventSubscriptionLineItemSpendThresholdRecovered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.group_spend.threshold_reached [post]
 func WebhookEventSubscriptionGroupSpendThresholdReached() {}
 
@@ -236,7 +236,7 @@ func WebhookEventSubscriptionGroupSpendThresholdReached() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SpendAlertEvent "Webhook payload"
+// @Success 200 {object} payload.SpendAlertEvent "Webhook payload"
 // @Router /webhook-events/subscription.group_spend.threshold_recovered [post]
 func WebhookEventSubscriptionGroupSpendThresholdRecovered() {}
 
@@ -246,7 +246,7 @@ func WebhookEventSubscriptionGroupSpendThresholdRecovered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionPhaseWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.phase.created [post]
 func WebhookEventSubscriptionPhaseCreated() {}
 
@@ -256,7 +256,7 @@ func WebhookEventSubscriptionPhaseCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionPhaseWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.phase.updated [post]
 func WebhookEventSubscriptionPhaseUpdated() {}
 
@@ -266,7 +266,7 @@ func WebhookEventSubscriptionPhaseUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.SubscriptionPhaseWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.SubscriptionPhaseWebhookPayload "Webhook payload"
 // @Router /webhook-events/subscription.phase.deleted [post]
 func WebhookEventSubscriptionPhaseDeleted() {}
 
@@ -276,7 +276,7 @@ func WebhookEventSubscriptionPhaseDeleted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CustomerWebhookPayload "Webhook payload"
 // @Router /webhook-events/customer.created [post]
 func WebhookEventCustomerCreated() {}
 
@@ -286,7 +286,7 @@ func WebhookEventCustomerCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CustomerWebhookPayload "Webhook payload"
 // @Router /webhook-events/customer.updated [post]
 func WebhookEventCustomerUpdated() {}
 
@@ -296,7 +296,7 @@ func WebhookEventCustomerUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CustomerWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CustomerWebhookPayload "Webhook payload"
 // @Router /webhook-events/customer.deleted [post]
 func WebhookEventCustomerDeleted() {}
 
@@ -306,7 +306,7 @@ func WebhookEventCustomerDeleted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.PaymentWebhookPayload "Webhook payload"
 // @Router /webhook-events/payment.created [post]
 func WebhookEventPaymentCreated() {}
 
@@ -316,7 +316,7 @@ func WebhookEventPaymentCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.PaymentWebhookPayload "Webhook payload"
 // @Router /webhook-events/payment.updated [post]
 func WebhookEventPaymentUpdated() {}
 
@@ -326,7 +326,7 @@ func WebhookEventPaymentUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.PaymentWebhookPayload "Webhook payload"
 // @Router /webhook-events/payment.success [post]
 func WebhookEventPaymentSuccess() {}
 
@@ -336,7 +336,7 @@ func WebhookEventPaymentSuccess() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.PaymentWebhookPayload "Webhook payload"
 // @Router /webhook-events/payment.failed [post]
 func WebhookEventPaymentFailed() {}
 
@@ -346,7 +346,7 @@ func WebhookEventPaymentFailed() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.PaymentWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.PaymentWebhookPayload "Webhook payload"
 // @Router /webhook-events/payment.pending [post]
 func WebhookEventPaymentPending() {}
 
@@ -356,7 +356,7 @@ func WebhookEventPaymentPending() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.FeatureWebhookPayload "Webhook payload"
 // @Router /webhook-events/feature.created [post]
 func WebhookEventFeatureCreated() {}
 
@@ -366,7 +366,7 @@ func WebhookEventFeatureCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.FeatureWebhookPayload "Webhook payload"
 // @Router /webhook-events/feature.updated [post]
 func WebhookEventFeatureUpdated() {}
 
@@ -376,7 +376,7 @@ func WebhookEventFeatureUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.FeatureWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.FeatureWebhookPayload "Webhook payload"
 // @Router /webhook-events/feature.deleted [post]
 func WebhookEventFeatureDeleted() {}
 
@@ -386,7 +386,7 @@ func WebhookEventFeatureDeleted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.AlertWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.AlertWebhookPayload "Webhook payload"
 // @Router /webhook-events/feature.wallet_balance.alert [post]
 func WebhookEventFeatureWalletBalanceAlert() {}
 
@@ -396,7 +396,7 @@ func WebhookEventFeatureWalletBalanceAlert() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.EntitlementWebhookPayload "Webhook payload"
 // @Router /webhook-events/entitlement.created [post]
 func WebhookEventEntitlementCreated() {}
 
@@ -406,7 +406,7 @@ func WebhookEventEntitlementCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.EntitlementWebhookPayload "Webhook payload"
 // @Router /webhook-events/entitlement.updated [post]
 func WebhookEventEntitlementUpdated() {}
 
@@ -416,7 +416,7 @@ func WebhookEventEntitlementUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.EntitlementWebhookPayload "Webhook payload"
 // @Router /webhook-events/entitlement.deleted [post]
 func WebhookEventEntitlementDeleted() {}
 
@@ -426,7 +426,7 @@ func WebhookEventEntitlementDeleted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.created [post]
 func WebhookEventWalletCreated() {}
 
@@ -436,7 +436,7 @@ func WebhookEventWalletCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.updated [post]
 func WebhookEventWalletUpdated() {}
 
@@ -446,7 +446,7 @@ func WebhookEventWalletUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.terminated [post]
 func WebhookEventWalletTerminated() {}
 
@@ -456,7 +456,7 @@ func WebhookEventWalletTerminated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.TransactionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.TransactionWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.transaction.created [post]
 func WebhookEventWalletTransactionCreated() {}
 
@@ -466,7 +466,7 @@ func WebhookEventWalletTransactionCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.TransactionUpdatedWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.TransactionUpdatedWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.transaction.updated [post]
 func WebhookEventWalletTransactionUpdated() {}
 
@@ -476,7 +476,7 @@ func WebhookEventWalletTransactionUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.credit_balance.dropped [post]
 func WebhookEventWalletCreditBalanceDropped() {}
 
@@ -486,7 +486,7 @@ func WebhookEventWalletCreditBalanceDropped() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.credit_balance.recovered [post]
 func WebhookEventWalletCreditBalanceRecovered() {}
 
@@ -496,7 +496,7 @@ func WebhookEventWalletCreditBalanceRecovered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.ongoing_balance.dropped [post]
 func WebhookEventWalletOngoingBalanceDropped() {}
 
@@ -506,7 +506,7 @@ func WebhookEventWalletOngoingBalanceDropped() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.ongoing_balance.recovered [post]
 func WebhookEventWalletOngoingBalanceRecovered() {}
 
@@ -516,7 +516,7 @@ func WebhookEventWalletOngoingBalanceRecovered() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.WalletWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.WalletWebhookPayload "Webhook payload"
 // @Router /webhook-events/wallet.ongoing_balance.updated [post]
 func WebhookEventWalletOngoingBalanceUpdated() {}
 
@@ -526,7 +526,7 @@ func WebhookEventWalletOngoingBalanceUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.created [post]
 func WebhookEventCreditNoteCreated() {}
 
@@ -536,7 +536,7 @@ func WebhookEventCreditNoteCreated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.updated [post]
 func WebhookEventCreditNoteUpdated() {}
 
@@ -546,7 +546,7 @@ func WebhookEventCreditNoteUpdated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CheckoutSessionWebhookPayload "Webhook payload"
 // @Router /webhook-events/checkout.session.initiated [post]
 func WebhookEventCheckoutSessionInitiated() {}
 
@@ -556,7 +556,7 @@ func WebhookEventCheckoutSessionInitiated() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CheckoutSessionWebhookPayload "Webhook payload"
 // @Router /webhook-events/checkout.session.completed [post]
 func WebhookEventCheckoutSessionCompleted() {}
 
@@ -566,7 +566,7 @@ func WebhookEventCheckoutSessionCompleted() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CheckoutSessionWebhookPayload "Webhook payload"
 // @Router /webhook-events/checkout.session.failed [post]
 func WebhookEventCheckoutSessionFailed() {}
 
@@ -576,7 +576,7 @@ func WebhookEventCheckoutSessionFailed() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.CheckoutSessionWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.CheckoutSessionWebhookPayload "Webhook payload"
 // @Router /webhook-events/checkout.session.expired [post]
 func WebhookEventCheckoutSessionExpired() {}
 
@@ -586,6 +586,6 @@ func WebhookEventCheckoutSessionExpired() {}
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
-// @Success 200 {object} webhookDto.RejectedEventWebhookPayload "Webhook payload"
+// @Success 200 {object} payload.RejectedEventWebhookPayload "Webhook payload"
 // @Router /webhook-events/event.rejected [post]
 func WebhookEventEventRejected() {}

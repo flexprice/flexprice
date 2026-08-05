@@ -9,6 +9,21 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
+// RejectedEventWebhookPayload is the outbound payload delivered to subscribers.
+type RejectedEventWebhookPayload struct {
+	EventType types.WebhookEventName       `json:"event_type"`
+	Reason    types.RejectedEventReason    `json:"reason"`
+	Event     webhookDto.RejectedEventData `json:"event"`
+}
+
+func NewRejectedEventWebhookPayload(internal *webhookDto.InternalRejectedEvent, eventType types.WebhookEventName) *RejectedEventWebhookPayload {
+	return &RejectedEventWebhookPayload{
+		EventType: eventType,
+		Reason:    internal.Reason,
+		Event:     internal.Event,
+	}
+}
+
 // RejectedEventPayloadBuilder builds the event.rejected payload. Pass-through:
 // the event snapshot is already in the message, so no re-fetch.
 type RejectedEventPayloadBuilder struct {
@@ -37,5 +52,5 @@ func (b *RejectedEventPayloadBuilder) BuildPayload(ctx context.Context, eventTyp
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	return json.Marshal(webhookDto.NewRejectedEventWebhookPayload(&internal, eventType))
+	return json.Marshal(NewRejectedEventWebhookPayload(&internal, eventType))
 }

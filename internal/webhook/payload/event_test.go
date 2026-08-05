@@ -30,7 +30,7 @@ func TestRejectedEventPayloadBuilder_BuildPayload(t *testing.T) {
 	out, err := b.BuildPayload(context.Background(), types.WebhookEventEventRejected, data)
 	require.NoError(t, err)
 
-	var payload webhookDto.RejectedEventWebhookPayload
+	var payload RejectedEventWebhookPayload
 	require.NoError(t, json.Unmarshal(out, &payload))
 
 	assert.Equal(t, types.WebhookEventEventRejected, payload.EventType)

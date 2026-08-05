@@ -23,18 +23,3 @@ type InternalRejectedEvent struct {
 	Reason types.RejectedEventReason `json:"reason"`
 	Event  RejectedEventData         `json:"event"`
 }
-
-// RejectedEventWebhookPayload is the outbound payload delivered to subscribers.
-type RejectedEventWebhookPayload struct {
-	EventType types.WebhookEventName    `json:"event_type"`
-	Reason    types.RejectedEventReason `json:"reason"`
-	Event     RejectedEventData         `json:"event"`
-}
-
-func NewRejectedEventWebhookPayload(internal *InternalRejectedEvent, eventType types.WebhookEventName) *RejectedEventWebhookPayload {
-	return &RejectedEventWebhookPayload{
-		EventType: eventType,
-		Reason:    internal.Reason,
-		Event:     internal.Event,
-	}
-}
