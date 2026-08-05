@@ -18,11 +18,6 @@ func newTestFileProcessor(t *testing.T) *FileProcessor {
 	if err != nil {
 		t.Fatalf("failed to build logger: %v", err)
 	}
-	// DownloadFile/DownloadFileStream/GetFileSize each issue a single
-	// request (fp.Client.Send or a plain http.Client.Do) -- no
-	// retryablehttp.Client is involved, so no retry-backoff tuning is
-	// needed here (contrast with streaming_processor_test.go, which does
-	// exercise RetryClient).
 	return NewFileProcessor(log)
 }
 

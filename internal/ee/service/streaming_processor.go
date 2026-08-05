@@ -34,9 +34,7 @@ type StreamingProcessor struct {
 }
 
 // NewStreamingProcessor creates a new streaming processor. file_url is
-// caller-supplied, so every outbound download goes through a shared
-// SSRF-safe transport that blocks connections to loopback/link-local/
-// private/unspecified/multicast addresses -- see httpclient.SSRFSafeTransport.
+// caller-supplied, so downloads go through httpclient.SSRFSafeTransport.
 func NewStreamingProcessor(logger *logger.Logger) *StreamingProcessor {
 	base := httpclient.SSRFSafeTransport()
 	transport := httpclient.OtelTransport(base)

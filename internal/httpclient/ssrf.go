@@ -8,11 +8,8 @@ import (
 	"time"
 )
 
-// IsPublicIP reports whether ip is a globally routable address -- i.e. not
-// loopback, link-local (including the 169.254.169.254 cloud metadata
-// address), private (RFC1918/RFC4193), unspecified, or multicast. It
-// correctly handles IPv4-mapped IPv6 forms since net.IP's classifiers
-// normalize via To4() internally.
+// IsPublicIP reports whether ip is globally routable (not loopback,
+// link-local incl. 169.254.169.254, private, unspecified, or multicast).
 func IsPublicIP(ip net.IP) bool {
 	switch {
 	case ip.IsLoopback(),
@@ -26,11 +23,8 @@ func IsPublicIP(ip net.IP) bool {
 	return true
 }
 
-// controlBlockNonPublic is a net.Dialer.Control callback. The Go runtime
-// invokes it on the actual resolved address immediately before the TCP
-// connect() syscall -- for the initial connection, every redirect hop, and
-// every candidate IP a hostname resolves to -- so validating here can't be
-// bypassed by a check-then-connect DNS-rebinding race.
+// controlBlockNonPublic runs on the resolved IP right before connect(), for
+// every dial including redirects -- so it can't be bypassed by DNS rebinding.
 func controlBlockNonPublic(_ string, address string, _ syscall.RawConn) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -49,9 +43,8 @@ func controlBlockNonPublic(_ string, address string, _ syscall.RawConn) error {
 	return nil
 }
 
-// SSRFSafeTransport returns an *http.Transport that refuses to connect to
-// non-public IP addresses. Use it as the base transport (wrapped with
-// OtelTransport) for any HTTP client that fetches a caller-supplied URL.
+// SSRFSafeTransport blocks connections to non-public IPs. Use as the base
+// transport (wrapped with OtelTransport) for clients fetching caller URLs.
 func SSRFSafeTransport() *http.Transport {
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,

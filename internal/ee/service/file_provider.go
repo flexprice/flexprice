@@ -185,9 +185,7 @@ func (p *GitHubProvider) GetProviderName() FileProviderType {
 	return FileProviderTypeGitHub
 }
 
-// allowedSchemes restricts outbound file fetches to http/https, rejecting
-// schemes like file://, ftp://, or gopher:// that could be used to reach
-// non-HTTP resources.
+// allowedSchemes restricts outbound file fetches to http/https.
 var allowedSchemes = map[string]bool{"http": true, "https": true}
 
 // parseAllowedURL parses fileURL and ensures its scheme is http or https.
@@ -255,9 +253,8 @@ func (r *FileProviderRegistry) GetProvider(fileURL string) FileProvider {
 		host = strings.ToLower(u.Hostname())
 	}
 
-	// Check for specific providers based on the parsed hostname (not the raw
-	// URL string) so a value like "https://evil.com/?x=drive.google.com" or
-	// "https://drive.google.com.evil.com" can't be misclassified.
+	// Match on the parsed hostname, not the raw URL, so a value like
+	// "evil.com/?x=drive.google.com" can't be misclassified.
 	if matchesHost(host, "drive.google.com") {
 		return r.providers[FileProviderTypeGoogleDrive]
 	}
