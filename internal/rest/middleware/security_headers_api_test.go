@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/rest/middleware"
@@ -34,10 +35,18 @@ func TestSecurityHeadersDoNotAffectAPIClients(t *testing.T) {
 	t.Run("CORS preflight still permissive", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodOptions, "/v1/events", nil)
 		req.Header.Set("Origin", "https://customer-dashboard.example.com")
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		req.Header.Set("Access-Control-Request-Headers", "x-api-key, content-type")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 			t.Errorf("ACAO = %q, want * — browser clients would break", got)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodPost) {
+			t.Errorf("ACAM = %q, want it to include POST", got)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Headers"); got != "*" {
+			t.Errorf("ACAH = %q, want * — x-api-key must be allowed", got)
 		}
 		if w.Code != http.StatusOK {
 			t.Errorf("preflight status = %d, want 200", w.Code)
