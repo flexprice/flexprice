@@ -114,7 +114,7 @@ type CreditGrantApplicationFilter struct {
 	ScheduledFor        *time.Time          `json:"scheduled_for,omitempty" form:"scheduled_for" validate:"omitempty"`
 	AppliedAt           *time.Time          `json:"applied_at,omitempty" form:"applied_at" validate:"omitempty"`
 	ApplicationStatuses []ApplicationStatus `json:"application_statuses,omitempty" form:"application_statuses" validate:"omitempty"`
-	ScheduledAfter      *time.Time          `json:"scheduled_after,omitempty" form:"scheduled_after" validate:"omitempty"`
+	ScheduledFrom       *time.Time          `json:"scheduled_from,omitempty" form:"scheduled_from" validate:"omitempty"`
 }
 
 // NewCreditGrantApplicationFilter creates a new CreditGrantApplicationFilter with default values

@@ -196,8 +196,8 @@ func creditGrantApplicationFilterFn(ctx context.Context, cga *creditgrantapplica
 		return false
 	}
 
-	// Check scheduled after filter (strictly after, matching the Ent repository's ScheduledForGT)
-	if f.ScheduledAfter != nil && !cga.ScheduledFor.After(*f.ScheduledAfter) {
+	// Check scheduled from filter (at or after, matching the Ent repository's ScheduledForGTE)
+	if f.ScheduledFrom != nil && cga.ScheduledFor.Before(*f.ScheduledFrom) {
 		return false
 	}
 

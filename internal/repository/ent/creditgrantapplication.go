@@ -516,8 +516,8 @@ func (o CreditGrantApplicationQueryOptions) applyEntityQueryOptions(_ context.Co
 		query = query.Where(cga.ScheduledFor(*f.ScheduledFor))
 	}
 
-	if f.ScheduledAfter != nil {
-		query = query.Where(cga.ScheduledForGT(lo.FromPtr(f.ScheduledAfter)))
+	if f.ScheduledFrom != nil {
+		query = query.Where(cga.ScheduledForGTE(lo.FromPtr(f.ScheduledFrom)))
 	}
 
 	if f.AppliedAt != nil {

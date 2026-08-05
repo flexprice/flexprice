@@ -1312,8 +1312,8 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 			types.ApplicationStatusPending,
 			types.ApplicationStatusFailed,
 		},
-		ScheduledAfter: &effectiveDate,
-		QueryFilter:    types.NewNoLimitQueryFilter(),
+		ScheduledFrom: &effectiveDate,
+		QueryFilter:   types.NewNoLimitQueryFilter(),
 	}
 
 	applications, err := s.CreditGrantApplicationRepo.List(ctx, pendingFilter)

@@ -897,7 +897,7 @@ func (s *CreditGrantServiceTestSuite) TestDeleteCreditGrant_OnlyCancelsApplicati
 
 	gotAtCutoff, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), atCutoffApp.ID)
 	s.NoError(err)
-	s.Equal(types.ApplicationStatusPending, gotAtCutoff.ApplicationStatus, "application scheduled exactly at the effective date must remain untouched (strictly-after cutoff)")
+	s.Equal(types.ApplicationStatusCancelled, gotAtCutoff.ApplicationStatus, "application scheduled exactly at the effective date must be cancelled (inclusive cutoff)")
 
 	gotAfter, err := s.GetStores().CreditGrantApplicationRepo.Get(s.GetContext(), afterApp.ID)
 	s.NoError(err)

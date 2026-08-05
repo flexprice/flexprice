@@ -33,7 +33,19 @@ func TestCalculateCreditGrantProration(t *testing.T) {
 			strategy:        types.StrategySecondBased,
 			credits:         decimal.NewFromInt(100),
 			wantCoefficient: "0.3870967741935484",
-			wantCredits:     "38.71",
+			wantCredits:     "38.70967742",
+		},
+		{
+			// A zero-credit application fails the wallet top-up, which rolls back the
+			// transaction that would have created the next period — so a stub must never
+			// round down to nothing.
+			name:          "a stub of a few seconds still grants something",
+			periodStart:   jan1,
+			periodEnd:     feb1,
+			prorationDate: feb1.Add(-30 * time.Second),
+			strategy:      types.StrategySecondBased,
+			credits:       decimal.NewFromInt(1),
+			wantCredits:   "0.0000112",
 		},
 		{
 			name:          "exactly on period start grants everything",
