@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/samber/lo"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
 )
@@ -119,7 +120,7 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (url
 
 // SendMessage sends a webhook message to the given application.
 // Returns the Svix message id on success (empty string when Svix is disabled or the app doesn't exist).
-func (c *Client) SendMessage(ctx context.Context, applicationID string, eventType string, payload interface{}) (string, error) {
+func (c *Client) SendMessage(ctx context.Context, applicationID, eventID, eventType string, payload interface{}) (string, error) {
 	if !c.enabled || c.client == nil {
 		return "", nil
 	}
@@ -156,11 +157,14 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		}
 	}
 
+	idempotencyKey := fmt.Sprintf("%s_%s", eventID, eventType)
 	payloadMap["event_type"] = eventType
 	out, err := c.client.Message.Create(ctx, applicationID, models.MessageIn{
 		EventType: eventType,
 		Payload:   payloadMap,
-	}, &svix.MessageCreateOptions{})
+	}, &svix.MessageCreateOptions{
+		IdempotencyKey: lo.ToPtr(idempotencyKey),
+	})
 	if err != nil {
 		if err.Error() == "application not found" {
 			return "", nil
