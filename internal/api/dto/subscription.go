@@ -1798,6 +1798,64 @@ type SubscriptionUsageByMetersResponse struct {
 	// BucketedUsageResult holds per-bucket usage data for bucketed meters (MAX/SUM with bucket_size).
 	// Populated by GetMeterUsageBySubscription so CalculateMeterUsageCharges doesn't re-query ClickHouse.
 	BucketedUsageResult *events.AggregationResult `json:"-"`
+
+	// Exact carriers for billing math. JSON amount/quantity remain float64 for API
+	// compatibility; invoice calculation must use AmountDecimal/QuantityDecimal so
+	// values never round-trip through float64 (can flip currency rounding at boundaries).
+	amountExact      decimal.Decimal
+	hasAmountExact   bool
+	quantityExact    decimal.Decimal
+	hasQuantityExact bool
+}
+
+// SetAmountDecimal stores the billing amount exactly and mirrors float64 for the API.
+func (c *SubscriptionUsageByMetersResponse) SetAmountDecimal(amount decimal.Decimal) {
+	if c == nil {
+		return
+	}
+	c.amountExact = amount
+	c.hasAmountExact = true
+	c.Amount = amount.InexactFloat64()
+}
+
+// SetAmountWithCurrencyPrecision rounds to currency precision, then SetAmountDecimal.
+func (c *SubscriptionUsageByMetersResponse) SetAmountWithCurrencyPrecision(amount decimal.Decimal, currency string) {
+	if c == nil {
+		return
+	}
+	c.SetAmountDecimal(types.RoundToCurrencyPrecision(amount, currency))
+}
+
+// AmountDecimal returns the exact billing amount when set; otherwise reconstructs from the API float.
+func (c *SubscriptionUsageByMetersResponse) AmountDecimal() decimal.Decimal {
+	if c == nil {
+		return decimal.Zero
+	}
+	if c.hasAmountExact {
+		return c.amountExact
+	}
+	return decimal.NewFromFloat(c.Amount)
+}
+
+// SetQuantityDecimal stores the billing quantity exactly and mirrors float64 for the API.
+func (c *SubscriptionUsageByMetersResponse) SetQuantityDecimal(quantity decimal.Decimal) {
+	if c == nil {
+		return
+	}
+	c.quantityExact = quantity
+	c.hasQuantityExact = true
+	c.Quantity = quantity.InexactFloat64()
+}
+
+// QuantityDecimal returns the exact billing quantity when set; otherwise reconstructs from the API float.
+func (c *SubscriptionUsageByMetersResponse) QuantityDecimal() decimal.Decimal {
+	if c == nil {
+		return decimal.Zero
+	}
+	if c.hasQuantityExact {
+		return c.quantityExact
+	}
+	return decimal.NewFromFloat(c.Quantity)
 }
 
 type SubscriptionUpdatePeriodResponse struct {

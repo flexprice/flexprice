@@ -3031,12 +3031,12 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 		for _, charge := range usageOnlyCharges {
 			// Get charge amount as decimal for precise calculations
-			chargeAmount := decimal.NewFromFloat(charge.Amount)
+			chargeAmount := charge.AmountDecimal()
 			pricePerUnit := decimal.Zero
 			if charge.Price != nil && charge.Price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
 				pricePerUnit = charge.Price.Amount
 			} else if charge.Quantity > 0 {
-				pricePerUnit = chargeAmount.Div(decimal.NewFromFloat(charge.Quantity))
+				pricePerUnit = chargeAmount.Div(charge.QuantityDecimal())
 			}
 
 			// Normal price covers all of this charge
@@ -3065,15 +3065,15 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 				// Create the normal charge
 				if normalQuantityDecimal.GreaterThan(decimal.Zero) {
 					normalCharge := *charge // Create a copy
-					normalCharge.Quantity = normalQuantityDecimal.InexactFloat64()
-					normalCharge.Amount = price.FormatAmountToFloat64WithPrecision(normalAmountDecimal, subscription.Currency)
+					normalCharge.SetQuantityDecimal(normalQuantityDecimal)
+					normalCharge.SetAmountWithCurrencyPrecision(normalAmountDecimal, subscription.Currency)
 					normalCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(normalAmountDecimal, subscription.Currency)
 					normalCharge.IsOverage = false
 					response.Charges = append(response.Charges, &normalCharge)
 				}
 
 				// Calculate overage quantity and amount
-				overageQuantityDecimal := decimal.NewFromFloat(charge.Quantity).Sub(normalQuantityDecimal)
+				overageQuantityDecimal := charge.QuantityDecimal().Sub(normalQuantityDecimal)
 
 				// Create the overage charge only if there's actual overage
 				if overageQuantityDecimal.GreaterThan(decimal.Zero) {
@@ -3081,8 +3081,8 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 					totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
 					overageCharge := *charge // Create a copy
-					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
-					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.SetQuantityDecimal(overageQuantityDecimal)
+					overageCharge.SetAmountWithCurrencyPrecision(overageAmountDecimal, subscription.Currency)
 					overageCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(overageAmountDecimal, subscription.Currency)
 					overageCharge.IsOverage = true
 					overageCharge.OverageFactor = overageFactorFloat
@@ -3099,7 +3099,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			overageAmountDecimal := chargeAmount.Mul(overageFactor)
 			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
-			charge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
+			charge.SetAmountWithCurrencyPrecision(overageAmountDecimal, subscription.Currency)
 			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
 			charge.IsOverage = true
 			charge.OverageFactor = overageFactorFloat
@@ -3889,17 +3889,16 @@ func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost 
 		return nil
 	}
 
-	finalAmount := price.FormatAmountToFloat64WithPrecision(cost, priceObj.Currency)
-
-	return &dto.SubscriptionUsageByMetersResponse{
-		Amount:           finalAmount,
+	charge := &dto.SubscriptionUsageByMetersResponse{
 		Currency:         priceObj.Currency,
 		DisplayAmount:    price.GetDisplayAmountWithPrecision(cost, priceObj.Currency),
-		Quantity:         quantity.InexactFloat64(),
 		MeterID:          priceObj.MeterID,
 		MeterDisplayName: meterDisplayName,
 		Price:            priceObj,
 	}
+	charge.SetAmountWithCurrencyPrecision(cost, priceObj.Currency)
+	charge.SetQuantityDecimal(quantity)
+	return charge
 }
 
 // filterValidPricesForSubscription filters prices that are valid for a subscription.
@@ -6452,12 +6451,12 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 		totalOverageAmount := decimal.Zero
 
 		for _, charge := range usageOnlyCharges {
-			chargeAmount := decimal.NewFromFloat(charge.Amount)
+			chargeAmount := charge.AmountDecimal()
 			pricePerUnit := decimal.Zero
 			if charge.Price != nil && charge.Price.BillingModel == types.BILLING_MODEL_FLAT_FEE {
 				pricePerUnit = charge.Price.Amount
 			} else if charge.Quantity > 0 {
-				pricePerUnit = chargeAmount.Div(decimal.NewFromFloat(charge.Quantity))
+				pricePerUnit = chargeAmount.Div(charge.QuantityDecimal())
 			}
 
 			if remainingCommitment.GreaterThanOrEqual(chargeAmount) {
@@ -6476,21 +6475,21 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 
 				if normalQuantityDecimal.GreaterThan(decimal.Zero) {
 					normalCharge := *charge
-					normalCharge.Quantity = normalQuantityDecimal.InexactFloat64()
-					normalCharge.Amount = price.FormatAmountToFloat64WithPrecision(normalAmountDecimal, sub.Currency)
+					normalCharge.SetQuantityDecimal(normalQuantityDecimal)
+					normalCharge.SetAmountWithCurrencyPrecision(normalAmountDecimal, sub.Currency)
 					normalCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(normalAmountDecimal, sub.Currency)
 					normalCharge.IsOverage = false
 					finalCharges = append(finalCharges, &normalCharge)
 				}
 
-				overageQuantityDecimal := decimal.NewFromFloat(charge.Quantity).Sub(normalQuantityDecimal)
+				overageQuantityDecimal := charge.QuantityDecimal().Sub(normalQuantityDecimal)
 				if overageQuantityDecimal.GreaterThan(decimal.Zero) {
 					overageAmountDecimal := overageQuantityDecimal.Mul(pricePerUnit).Mul(overageFactor)
 					totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
 					overageCharge := *charge
-					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
-					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, sub.Currency)
+					overageCharge.SetQuantityDecimal(overageQuantityDecimal)
+					overageCharge.SetAmountWithCurrencyPrecision(overageAmountDecimal, sub.Currency)
 					overageCharge.DisplayAmount = price.GetDisplayAmountWithPrecision(overageAmountDecimal, sub.Currency)
 					overageCharge.IsOverage = true
 					overageCharge.OverageFactor = overageFactorFloat
@@ -6505,7 +6504,7 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 			overageAmountDecimal := chargeAmount.Mul(overageFactor)
 			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
-			charge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, sub.Currency)
+			charge.SetAmountWithCurrencyPrecision(overageAmountDecimal, sub.Currency)
 			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
 			charge.IsOverage = true
 			charge.OverageFactor = overageFactorFloat

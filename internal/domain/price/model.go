@@ -235,16 +235,17 @@ func (p *Price) FormatAmountToStringWithPrecision() string {
 	return p.Amount.Round(config.Precision).String()
 }
 
-// FormatAmountToFloat64 formats the amount to float64
+// FormatAmountToFloat64 formats the amount to float64 for API responses.
+// Do not use the result as an input to further billing math — keep decimal.Decimal.
 func (p *Price) FormatAmountToFloat64() float64 {
 	return p.Amount.InexactFloat64()
 }
 
-// FormatAmountToFloat64WithPrecision formats the amount to float64
-// It rounds off the amount according to currency precision
+// FormatAmountToFloat64WithPrecision formats the amount to float64 for API responses.
+// It rounds to currency precision first. Do not feed the result back into billing math
+// via float→decimal conversion; use FormatAmountWithPrecision / decimal throughout.
 func (p *Price) FormatAmountToFloat64WithPrecision() float64 {
-	config := types.GetCurrencyConfig(p.Currency)
-	return p.Amount.Round(config.Precision).InexactFloat64()
+	return FormatAmountToFloat64WithPrecision(p.Amount, p.Currency)
 }
 
 // GetDisplayAmount returns the amount in the currency ex $12.00
@@ -297,10 +298,16 @@ func FormatAmountToStringWithPrecision(amount decimal.Decimal, currency string) 
 	return amount.Round(config.Precision).String()
 }
 
-// FormatAmountToFloat64WithPrecision formats the amount to float64
-// It rounds off the amount according to currency precision
+// FormatAmountWithPrecision rounds amount to the currency's decimal places.
+func FormatAmountWithPrecision(amount decimal.Decimal, currency string) decimal.Decimal {
+	return amount.Round(types.GetCurrencyPrecision(currency))
+}
+
+// FormatAmountToFloat64WithPrecision formats a currency-rounded amount for API/JSON float fields.
+// Billing calculations must keep decimal.Decimal end-to-end; converting through float64 can
+// change currency rounding at boundaries (e.g. 0.014999… → 0.02 instead of 0.01).
 func FormatAmountToFloat64WithPrecision(amount decimal.Decimal, currency string) float64 {
-	return amount.Round(types.GetCurrencyPrecision(currency)).InexactFloat64()
+	return FormatAmountWithPrecision(amount, currency).InexactFloat64()
 }
 
 // PriceTransform is the quantity transformation in case of PACKAGE billing model

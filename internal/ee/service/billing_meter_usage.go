@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -165,7 +164,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		var cumulativePreferredCharge bool // true once a non-overage charge has set the fields above
 
 		for _, matchingCharge := range matchingCharges {
-			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
+			quantityForCalculation := matchingCharge.QuantityDecimal()
 
 			// 1. Bucketed meter cost — use pre-fetched result or fallback to direct query
 			var cachedBucketedUsageResult *events.AggregationResult
@@ -181,8 +180,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 				hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
 				cost := calculateBucketedMeterCost(ctx, priceService, matchingCharge.Price, usageResult, hasGroupBy)
-				matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(cost.Amount, matchingCharge.Price.Currency)
-				matchingCharge.Quantity = cost.Quantity.InexactFloat64()
+				matchingCharge.SetAmountWithCurrencyPrecision(cost.Amount, matchingCharge.Price.Currency)
+				matchingCharge.SetQuantityDecimal(cost.Quantity)
 				quantityForCalculation = cost.Quantity
 			}
 
@@ -207,7 +206,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 				// already updated matchingCharge (Amount/Quantity). For the
 				// pricer, use the grant-derived quantity; amount-lane grants
 				// return zero here on purpose (already priced).
-				quantityForCalculation = decimal.NewFromFloat(matchingCharge.Quantity)
+				quantityForCalculation = matchingCharge.QuantityDecimal()
 				if grantResult.Measure == types.EntitlementGrantMeasureQuantity {
 					adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
 					entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
@@ -225,10 +224,10 @@ func (s *billingService) CalculateMeterUsageCharges(
 			case !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil:
 				// No grant, no entitlement — recalculate cost for non-bucketed meters.
 				adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
-				matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
+				matchingCharge.SetAmountWithCurrencyPrecision(adjustedAmount, matchingCharge.Price.Currency)
 			}
 
-			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
+			lineItemAmount := matchingCharge.AmountDecimal()
 
 			// 3. Cumulative commitment — accumulate into ONE combined entry per line
 			// item (appended after the charge loop below), not one per charge.
@@ -396,7 +395,7 @@ func (s *billingService) adjustMeterUsageEntitlement(
 	priceService PriceService,
 	querySource types.UsageSource,
 ) (decimal.Decimal, error) {
-	quantity := decimal.NewFromFloat(matchingCharge.Quantity)
+	quantity := matchingCharge.QuantityDecimal()
 
 	// Bucketed meters: simple limit subtraction
 	if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
@@ -404,18 +403,18 @@ func (s *billingService) adjustMeterUsageEntitlement(
 			allowed := decimal.NewFromFloat(float64(*ent.UsageLimit))
 			adjusted := decimal.Max(quantity.Sub(allowed), decimal.Zero)
 			if !adjusted.Equal(quantity) && matchingCharge.Price != nil {
-				matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(
+				matchingCharge.SetAmountWithCurrencyPrecision(
 					priceService.CalculateCost(ctx, matchingCharge.Price, adjusted), matchingCharge.Price.Currency)
 			}
 			return adjusted, nil
 		}
-		matchingCharge.Amount = 0
+		matchingCharge.SetAmountDecimal(decimal.Zero)
 		return decimal.Zero, nil
 	}
 
 	// Non-bucketed meters
 	if ent.UsageLimit == nil {
-		matchingCharge.Amount = 0
+		matchingCharge.SetAmountDecimal(decimal.Zero)
 		return decimal.Zero, nil
 	}
 
@@ -501,7 +500,7 @@ func (s *billingService) adjustMeterUsageEntitlement(
 	}
 
 	if matchingCharge.Price != nil {
-		matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(
+		matchingCharge.SetAmountWithCurrencyPrecision(
 			priceService.CalculateCost(ctx, matchingCharge.Price, adjusted), matchingCharge.Price.Currency)
 	}
 	return adjusted, nil
@@ -535,7 +534,7 @@ func (s *billingService) applyMeterUsageCommitment(
 	querySource types.UsageSource,
 	meterMap map[string]*meter.Meter,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
-	lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
+	lineItemAmount := matchingCharge.AmountDecimal()
 	commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
 
 	if !item.CommitmentWindowed {
@@ -543,7 +542,7 @@ func (s *billingService) applyMeterUsageCommitment(
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
-		matchingCharge.Amount = adjustedAmount.InexactFloat64()
+		matchingCharge.SetAmountDecimal(adjustedAmount)
 		return adjustedAmount, info, nil
 	}
 
@@ -576,7 +575,7 @@ func (s *billingService) applyMeterUsageCommitment(
 	if err != nil {
 		return decimal.Zero, nil, err
 	}
-	matchingCharge.Amount = adjustedAmount.InexactFloat64()
+	matchingCharge.SetAmountDecimal(adjustedAmount)
 	return adjustedAmount, info, nil
 }
 

@@ -139,21 +139,21 @@ func (s *billingService) adjustMeterUsageGrants(
 
 	switch measure {
 	case types.EntitlementGrantMeasureQuantity:
-		matchingCharge.Quantity = res.Overage.InexactFloat64()
+		matchingCharge.SetQuantityDecimal(res.Overage)
 		if matchingCharge.Price != nil {
 			cost := priceService.CalculateCost(ctx, matchingCharge.Price, res.Overage)
-			matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(cost, matchingCharge.Price.Currency)
+			matchingCharge.SetAmountWithCurrencyPrecision(cost, matchingCharge.Price.Currency)
 		} else {
-			matchingCharge.Amount = 0
+			matchingCharge.SetAmountDecimal(decimal.Zero)
 		}
 	case types.EntitlementGrantMeasureAmount:
 		// Already money — zero the qty so aggregation doesn't double-count.
 		if matchingCharge.Price != nil {
-			matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(res.Overage, matchingCharge.Price.Currency)
+			matchingCharge.SetAmountWithCurrencyPrecision(res.Overage, matchingCharge.Price.Currency)
 		} else {
-			matchingCharge.Amount = res.Overage.InexactFloat64()
+			matchingCharge.SetAmountDecimal(res.Overage)
 		}
-		matchingCharge.Quantity = 0
+		matchingCharge.SetQuantityDecimal(decimal.Zero)
 	}
 	return res, true, nil
 }

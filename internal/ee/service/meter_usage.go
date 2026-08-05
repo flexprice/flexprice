@@ -2204,15 +2204,15 @@ func (s *meterUsageService) ConvertToBillingCharges(
 
 		charge := &dto.SubscriptionUsageByMetersResponse{
 			SubscriptionLineItemID: lu.LineItem.ID,
-			Amount:                 cost.InexactFloat64(),
 			Currency:               lu.Price.Currency,
-			DisplayAmount:          fmt.Sprintf("%.2f %s", cost.InexactFloat64(), lu.Price.Currency),
-			Quantity:               quantity.InexactFloat64(),
+			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, lu.Price.Currency),
 			FilterValues:           make(price.JSONBFilters),
 			MeterID:                lu.MeterID,
 			Price:                  lu.Price,
 			BucketedUsageResult:    lu.BucketedResult,
 		}
+		charge.SetAmountWithCurrencyPrecision(cost, lu.Price.Currency)
+		charge.SetQuantityDecimal(quantity)
 
 		if lu.Meter != nil {
 			charge.MeterDisplayName = lu.Meter.Name
