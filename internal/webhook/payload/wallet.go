@@ -64,24 +64,8 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 		}
 	}
 
-	// Fetch customer data
-	var customerData *dto.CustomerResponse
-	if walletData.CustomerID != "" {
-		customer, err := b.services.CustomerService.GetCustomer(ctx, walletData.CustomerID)
-		if err != nil {
-			// Log error but don't fail the webhook if customer fetch fails
-			// Customer is optional in the payload
-			b.services.Tracing.CaptureException(ctx, err)
-			customerData = nil
-		} else {
-			customerData = customer
-		}
-	}
+	payload := webhookDto.NewWalletWebhookPayload(walletData, parsedPayload.Alert, eventType)
 
-	// Create webhook payload with alert info and customer if present
-	payload := webhookDto.NewWalletWebhookPayload(walletData, customerData, parsedPayload.Alert, eventType)
-
-	// Marshal payload
 	return json.Marshal(payload)
 }
 
@@ -105,27 +89,11 @@ func (b TransactionPayloadBuilder) BuildPayload(
 		return nil, err
 	}
 
-	walletData, err := b.services.WalletService.GetWalletByID(ctx, transactionData.WalletID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Fetch customer data (best-effort — customer is optional in the payload)
-	var customerData *dto.CustomerResponse
-	if walletData.CustomerID != "" {
-		customer, cerr := b.services.CustomerService.GetCustomer(ctx, walletData.CustomerID)
-		if cerr != nil {
-			b.services.Tracing.CaptureException(ctx, cerr)
-		} else {
-			customerData = customer
-		}
-	}
-
 	var payload any
 	if eventType == types.WebhookEventWalletTransactionUpdated {
-		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, walletData, customerData, eventType)
+		payload = webhookDto.NewTransactionUpdatedWebhookPayload(transactionData, eventType)
 	} else {
-		payload = webhookDto.NewTransactionWebhookPayload(transactionData, walletData, customerData, eventType)
+		payload = webhookDto.NewTransactionWebhookPayload(transactionData, eventType)
 	}
 
 	return json.Marshal(payload)

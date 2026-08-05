@@ -7,7 +7,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/flexprice/flexprice/internal/webhook/outbound"
 )
 
 type SubscriptionPhasePayloadBuilder struct {
@@ -38,7 +37,7 @@ func (b *SubscriptionPhasePayloadBuilder) BuildPayload(ctx context.Context, even
 		return nil, err
 	}
 
-	payload := webhookDto.NewSubscriptionPhaseWebhookPayload(outbound.NewSubscriptionPhaseWebhookPayload(phase), eventType)
+	payload := webhookDto.NewSubscriptionPhaseWebhookPayload(webhookDto.NewSubscriptionPhase(phase), eventType)
 
 	return json.Marshal(payload)
 }
