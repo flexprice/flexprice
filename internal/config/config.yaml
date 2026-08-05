@@ -464,6 +464,7 @@ customer_portal:
 redis:
   host: "localhost" # Redis server hostname
   port: 6379 # Redis server port
+  username: "" # Redis data-node ACL user (optional); FLEXPRICE_REDIS_USERNAME
   password: "" # Redis password (optional)
   db: 0 # Redis database number
   use_tls: false # Use TLS for Redis connection

@@ -79,6 +79,79 @@ func TestResolveRedisMode(t *testing.T) {
 	}
 }
 
+// TestBuildOptions_CredentialSplit locks the two independent credential sets:
+// Username/Password auth the data nodes, SentinelUsername/SentinelPassword auth
+// the sentinels. Crossing them only fails against a real auth-enabled cluster.
+func TestBuildOptions_CredentialSplit(t *testing.T) {
+	cfg := config.RedisConfig{
+		Host:               "redis.internal",
+		Port:               6379,
+		Username:           "app-user",
+		Password:           "data-pw",
+		SentinelMasterName: "mymaster",
+		SentinelAddrs:      []string{"s1:26379"},
+		SentinelUsername:   "sentinel-user",
+		SentinelPassword:   "sentinel-pw",
+	}
+
+	opts, mode, err := buildOptions(cfg)
+	if err != nil {
+		t.Fatalf("buildOptions() unexpected error: %v", err)
+	}
+	if mode != modeSentinel {
+		t.Fatalf("mode = %q, want %q", mode, modeSentinel)
+	}
+	checks := []struct {
+		field, got, want string
+	}{
+		{"Username", opts.Username, "app-user"},
+		{"Password", opts.Password, "data-pw"},
+		{"SentinelUsername", opts.SentinelUsername, "sentinel-user"},
+		{"SentinelPassword", opts.SentinelPassword, "sentinel-pw"},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("opts.%s = %q, want %q", c.field, c.got, c.want)
+		}
+	}
+
+	// Failover() is what actually reaches go-redis in Sentinel mode.
+	fo := opts.Failover()
+	if fo.Username != "app-user" || fo.Password != "data-pw" {
+		t.Errorf("Failover() data-node creds = %q/%q, want app-user/data-pw", fo.Username, fo.Password)
+	}
+	if fo.SentinelUsername != "sentinel-user" || fo.SentinelPassword != "sentinel-pw" {
+		t.Errorf("Failover() sentinel creds = %q/%q, want sentinel-user/sentinel-pw", fo.SentinelUsername, fo.SentinelPassword)
+	}
+}
+
+// TestBuildOptions_UsernameOptional guards backward compatibility: an unset
+// Username must stay empty so go-redis keeps using plain AUTH <password>.
+func TestBuildOptions_UsernameOptional(t *testing.T) {
+	modes := []struct {
+		name string
+		cfg  config.RedisConfig
+	}{
+		{"standalone", config.RedisConfig{Host: "h", Port: 6379, Password: "pw"}},
+		{"cluster", config.RedisConfig{Host: "h", Port: 6379, Password: "pw", ClusterMode: true}},
+		{"sentinel", config.RedisConfig{Password: "pw", SentinelMasterName: "m", SentinelAddrs: []string{"s1:26379"}}},
+	}
+	for _, m := range modes {
+		t.Run(m.name, func(t *testing.T) {
+			opts, _, err := buildOptions(m.cfg)
+			if err != nil {
+				t.Fatalf("buildOptions() unexpected error: %v", err)
+			}
+			if opts.Username != "" {
+				t.Errorf("opts.Username = %q, want empty (requirepass-style auth)", opts.Username)
+			}
+			if opts.Password != "pw" {
+				t.Errorf("opts.Password = %q, want %q", opts.Password, "pw")
+			}
+		})
+	}
+}
+
 // TestNewClient_SentinelMissingAddrsErrors verifies that a misconfigured Sentinel
 // setup fails loudly rather than panicking, hanging, or (worse) silently
 // connecting to go-redis's 127.0.0.1:26379 default when addrs are empty.

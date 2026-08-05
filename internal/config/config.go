@@ -741,8 +741,10 @@ type CustomerPortalConfig struct {
 
 // RedisConfig holds configuration for Redis
 type RedisConfig struct {
-	Host      string        `mapstructure:"host" default:"localhost"`
-	Port      int           `mapstructure:"port" default:"6379"`
+	Host string `mapstructure:"host" default:"localhost"`
+	Port int    `mapstructure:"port" default:"6379"`
+	// Username is the data-node ACL user; leave empty for requirepass-style auth.
+	Username  string        `mapstructure:"username" default:""`
 	Password  string        `mapstructure:"password" default:""`
 	DB        int           `mapstructure:"db" default:"0"`
 	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
@@ -758,8 +760,8 @@ type RedisConfig struct {
 
 	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
 	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
-	// SentinelAddrs are the sentinel endpoints, NOT the master. Password (above)
-	// auths the data nodes; SentinelUsername/Password auth the sentinels.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Username/Password
+	// (above) auth the data nodes; SentinelUsername/Password auth the sentinels.
 	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
 	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
 	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
