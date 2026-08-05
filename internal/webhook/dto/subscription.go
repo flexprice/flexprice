@@ -39,7 +39,6 @@ type Subscription struct {
 	PauseStatus          types.PauseStatus        `json:"pause_status"`
 	SubscriptionType     types.SubscriptionType   `json:"subscription_type"`
 	ParentSubscriptionID *string                  `json:"parent_subscription_id,omitempty"`
-	Plan                 *Plan                    `json:"plan,omitempty"`
 }
 
 func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
@@ -68,7 +67,6 @@ func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 		PauseStatus:          resp.PauseStatus,
 		SubscriptionType:     resp.SubscriptionType,
 		ParentSubscriptionID: resp.ParentSubscriptionID,
-		Plan:                 NewPlan(resp.Plan),
 	}
 }
 
@@ -98,7 +96,6 @@ func NewSubscriptionFromV2(resp *dto.SubscriptionResponseV2) *Subscription {
 		PauseStatus:          resp.PauseStatus,
 		SubscriptionType:     resp.SubscriptionType,
 		ParentSubscriptionID: resp.ParentSubscriptionID,
-		Plan:                 NewPlan(resp.Plan),
 	}
 }
 
