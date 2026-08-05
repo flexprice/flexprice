@@ -44,6 +44,30 @@ type CreateCreditGrantRequest struct {
 	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
 	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
+
+	// FirstPeriodProration, when set, scales the first application's credits to the
+	// portion of the billing period the grant actually covers. Server-computed only:
+	// json:"-" keeps API clients from supplying their own coefficient.
+	FirstPeriodProration *FirstPeriodProration `json:"-"`
+}
+
+// FirstPeriodProration describes the billing period a mid-cycle grant lands in.
+// It is consumed once, when the first credit grant application is created, and is
+// deliberately never persisted on the grant: every later period is a whole period
+// and must grant the full amount.
+type FirstPeriodProration struct {
+	// PeriodStart/PeriodEnd bound the subscription billing period containing the grant.
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+
+	// ProrationDate is when coverage begins, e.g. the addon attach date.
+	ProrationDate time.Time
+
+	Timezone string
+	Strategy types.ProrationStrategy
+
+	// Source labels the trigger in audit metadata, e.g. "addon_attach".
+	Source string
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
@@ -399,6 +423,7 @@ type CreateCreditGrantApplicationRequest struct {
 	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason"`
 	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application"`
 	IdempotencyKey                  string                             `json:"idempotency_key"`
+	Metadata                        types.Metadata                     `json:"metadata,omitempty"`
 }
 
 // Validate validates the create credit grant application request
@@ -461,6 +486,7 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 		SubscriptionStatusAtApplication: r.SubscriptionStatusAtApplication,
 		Credits:                         r.Credits,
 		IdempotencyKey:                  r.IdempotencyKey,
+		Metadata:                        r.Metadata,
 		RetryCount:                      0,
 		FailureReason:                   nil,
 		EnvironmentID:                   types.GetEnvironmentID(ctx),

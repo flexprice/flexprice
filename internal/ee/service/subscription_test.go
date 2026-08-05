@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
+	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -19,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
@@ -242,6 +244,382 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeAddonCapsGr
 	s.NotNil(materialized.EndDate, "addon-sourced grant must have a bounded end date")
 	s.WithinDuration(expectedEnd, lo.FromPtr(materialized.EndDate), time.Second,
 		"grant end date must equal the addon association end date, not the subscription end")
+}
+
+// setupCreditGrantAddon registers an addon carrying a single credit grant template
+// plus a price, and gives the customer a wallet for the grant to land in.
+func (s *SubscriptionServiceSuite) setupCreditGrantAddon(
+	addonID string,
+	credits int64,
+	cadence types.CreditGrantCadence,
+) {
+	s.setupCreditGrantAddonFull(addonID, credits, cadence, types.CREDIT_GRANT_PERIOD_MONTHLY)
+}
+
+// setupCreditGrantAddonWithPeriod registers a recurring grant on a non-monthly period.
+func (s *SubscriptionServiceSuite) setupCreditGrantAddonWithPeriod(
+	addonID string,
+	credits int64,
+	period types.CreditGrantPeriod,
+) {
+	s.setupCreditGrantAddonFull(addonID, credits, types.CreditGrantCadenceRecurring, period)
+}
+
+func (s *SubscriptionServiceSuite) setupCreditGrantAddonFull(
+	addonID string,
+	credits int64,
+	cadence types.CreditGrantCadence,
+	period types.CreditGrantPeriod,
+) {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	s.NoError(subService.AddonRepo.Create(ctx, &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Credit Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID:                 "price_" + addonID,
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}))
+
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, &wallet.Wallet{
+		ID:                  "wallet_" + addonID,
+		CustomerID:          s.testData.customer.ID,
+		Name:                "Test Wallet",
+		Currency:            "usd",
+		WalletStatus:        types.WalletStatusActive,
+		ConversionRate:      decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}))
+
+	req := dto.CreateCreditGrantRequest{
+		Name:           "Addon Credits",
+		Scope:          types.CreditGrantScopeAddon,
+		AddonID:        &addonID,
+		Credits:        decimal.NewFromInt(credits),
+		Cadence:        cadence,
+		ExpirationType: types.CreditGrantExpiryTypeBillingCycle,
+		Priority:       lo.ToPtr(1),
+	}
+	if cadence == types.CreditGrantCadenceRecurring {
+		req.Period = lo.ToPtr(period)
+		req.PeriodCount = lo.ToPtr(1)
+	}
+
+	_, err := NewCreditGrantService(subService.ServiceParams).CreateCreditGrant(ctx, req)
+	s.NoError(err)
+}
+
+// materializedAddonGrant returns the SUBSCRIPTION-scoped grant cloned from addonID.
+func (s *SubscriptionServiceSuite) materializedAddonGrant(addonID string) *creditgrant.CreditGrant {
+	subService := s.service.(*subscriptionService)
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	grants, err := subService.CreditGrantRepo.List(s.GetContext(), filter)
+	s.NoError(err)
+
+	for _, g := range grants {
+		if g.AddonID != nil && *g.AddonID == addonID && g.Scope == types.CreditGrantScopeSubscription {
+			return g
+		}
+	}
+	return nil
+}
+
+// firstApplicationFor returns the earliest application created for a grant.
+func (s *SubscriptionServiceSuite) firstApplicationFor(grantID string) *creditgrantapplication.CreditGrantApplication {
+	subService := s.service.(*subscriptionService)
+	apps, err := subService.CreditGrantApplicationRepo.List(s.GetContext(), &types.CreditGrantApplicationFilter{
+		CreditGrantIDs: []string{grantID},
+		QueryFilter:    types.NewNoLimitQueryFilter(),
+	})
+	s.NoError(err)
+
+	var first *creditgrantapplication.CreditGrantApplication
+	for _, a := range apps {
+		if first == nil || a.PeriodStart.Before(first.PeriodStart) {
+			first = a
+		}
+	}
+	return first
+}
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCreditGrantApplication() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	now := s.testData.now
+
+	addonID := "addon_cg_prorate"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
+
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &now,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+
+	// Re-anchoring onto the subscription's period boundary is what makes the grant
+	// chain align with invoicing instead of drifting from the attach date.
+	s.WithinDuration(sub.CurrentPeriodEnd, lo.FromPtr(grant.CreditGrantAnchor), time.Second)
+
+	// The first application must end where the subscription period ends, not a full
+	// period after the attach date.
+	firstApp := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(firstApp)
+	s.Require().NotNil(firstApp.PeriodEnd)
+	s.WithinDuration(sub.CurrentPeriodEnd, lo.FromPtr(firstApp.PeriodEnd), time.Second)
+
+	// The fixture's period is [now-24h, now+6d) and the addon attaches at `now`,
+	// leaving 6 of 7 days.
+	expected, err := proration.CalculateCreditGrantProration(proration.CreditGrantProrationParams{
+		PeriodStart:     sub.CurrentPeriodStart,
+		PeriodEnd:       sub.CurrentPeriodEnd,
+		ProrationDate:   now,
+		Timezone:        sub.Timezone,
+		Strategy:        types.StrategySecondBased,
+		OriginalCredits: decimal.NewFromInt(100),
+	})
+	s.NoError(err)
+	s.True(expected.ProratedCredits.LessThan(decimal.NewFromInt(100)),
+		"sanity: a mid-period attach must yield less than the full grant")
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal(expected.ProratedCredits.String(), app.Credits.String())
+	s.Equal("true", app.Metadata["proration_applied"])
+	s.Equal("100", app.Metadata["proration_original_credits"])
+	s.Equal("addon_attach", app.Metadata["proration_source"])
+
+	// Computing the right amount is worthless if the credits never reach the wallet.
+	// Re-anchoring puts the anchor in the future, so the eager-apply gate must key off
+	// the application's schedule rather than the anchor.
+	s.Equal(types.ApplicationStatusApplied, app.ApplicationStatus,
+		"credits must land at attach time, not wait for the 15-minute cron")
+	s.assertWalletToppedUpBy(grant.ID, expected.ProratedCredits.String())
+}
+
+// assertWalletToppedUpBy checks a wallet transaction carrying the grant's provenance
+// actually credited the expected amount.
+func (s *SubscriptionServiceSuite) assertWalletToppedUpBy(grantID, credits string) {
+	subService := s.service.(*subscriptionService)
+	txns, err := subService.WalletRepo.ListAllWalletTransactions(
+		s.GetContext(), types.NewNoLimitWalletTransactionFilter())
+	s.Require().NoError(err)
+	for _, t := range txns {
+		if t.Metadata != nil && t.Metadata["grant_id"] == grantID {
+			s.Equal(credits, t.CreditAmount.String(), "wallet top-up amount")
+			return
+		}
+	}
+	s.Failf("no wallet top-up found", "no transaction carrying grant_id=%s", grantID)
+}
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProrationBehaviorNoneGrantsFullCredits() {
+	ctx := s.GetContext()
+	now := s.testData.now
+
+	addonID := "addon_cg_no_prorate"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
+
+	_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &now,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+	s.WithinDuration(now, lo.FromPtr(grant.CreditGrantAnchor), time.Second,
+		"opting out of proration must leave the attach-date anchoring untouched")
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal("100", app.Credits.String())
+	s.Empty(app.Metadata["proration_applied"])
+}
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeGrantNotProrated() {
+	ctx := s.GetContext()
+	now := s.testData.now
+
+	addonID := "addon_cg_onetime"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceOneTime)
+
+	_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &now,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+
+	// A onetime grant is a fixed lump, not a per-period allowance, so it keeps both
+	// its full credits and its attach-date anchoring.
+	s.WithinDuration(now, lo.FromPtr(grant.CreditGrantAnchor), time.Second)
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal("100", app.Credits.String())
+	s.Empty(app.Metadata["proration_applied"])
+}
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_AttachOnPeriodStartGrantsFullCredits() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	periodStart := sub.CurrentPeriodStart
+
+	addonID := "addon_cg_boundary"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
+
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &periodStart,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal("100", app.Credits.String(),
+		"attaching exactly on a period boundary covers the whole period")
+	s.Empty(app.Metadata["proration_applied"])
+}
+
+// A grant recurring on a different rhythm than the billing cycle keeps its own
+// cadence: snapping a monthly allowance to an annual boundary would stretch the
+// first period across the whole year.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_GrantPeriodMismatchNotRealigned() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	now := s.testData.now
+
+	sub.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+	sub.CurrentPeriodEnd = sub.CurrentPeriodStart.AddDate(1, 0, 0)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	addonID := "addon_cg_period_mismatch"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
+
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &now,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+	s.WithinDuration(now, lo.FromPtr(grant.CreditGrantAnchor), time.Second,
+		"a monthly grant on an annual subscription keeps its attach-date anchoring")
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal("100", app.Credits.String())
+	s.Empty(app.Metadata["proration_applied"])
+}
+
+// NextBillingDate has no short-first-period rule for annual cycles, so the first
+// period end must be pinned to the subscription boundary rather than derived.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_AnnualCycleFirstPeriodEndsOnBoundary() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+
+	// Period spans a calendar year boundary and the addon attaches on the far side
+	// of it — the case where deriving the end from an anchor overshoots by a year.
+	sub.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+	sub.CurrentPeriodStart = time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC)
+	sub.CurrentPeriodEnd = time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC)
+	sub.BillingAnchor = sub.CurrentPeriodStart
+	sub.StartDate = sub.CurrentPeriodStart
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	attach := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+
+	addonID := "addon_cg_annual"
+	s.setupCreditGrantAddonWithPeriod(addonID, 100, types.CREDIT_GRANT_PERIOD_ANNUAL)
+
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &attach,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err)
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Require().NotNil(app.PeriodEnd)
+	s.WithinDuration(sub.CurrentPeriodEnd, lo.FromPtr(app.PeriodEnd), time.Second,
+		"first period must end at the subscription boundary, not a year later")
+}
+
+// FindPeriodForDate only walks forward, so an attach dated into an already-closed
+// period cannot be resolved. Proration must degrade to full credits rather than
+// rejecting the attach outright.
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachStillSucceeds() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+	now := s.testData.now
+
+	sub.BillingPeriod = types.BILLING_PERIOD_MONTHLY
+	sub.StartDate = now.AddDate(0, -3, 0)
+	sub.BillingAnchor = sub.StartDate
+	sub.CurrentPeriodStart = now.AddDate(0, -1, 0)
+	sub.CurrentPeriodEnd = now.AddDate(0, 0, 5)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	addonID := "addon_cg_backdated"
+	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
+
+	backdated := now.AddDate(0, -2, 0).Add(72 * time.Hour)
+	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID:           addonID,
+		Cadence:           types.AddonCadenceRecurring,
+		StartDate:         &backdated,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	})
+	s.NoError(err, "an unresolvable period must not fail the addon attach")
+
+	grant := s.materializedAddonGrant(addonID)
+	s.Require().NotNil(grant)
+
+	app := s.firstApplicationFor(grant.ID)
+	s.Require().NotNil(app)
+	s.Equal("100", app.Credits.String())
+	s.Empty(app.Metadata["proration_applied"])
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
