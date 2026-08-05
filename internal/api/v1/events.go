@@ -99,6 +99,11 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 		return
 	}
 
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
 	err := h.eventService.BulkCreateEvents(ctx, &req)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to bulk ingest events", "error", err)
