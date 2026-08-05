@@ -616,6 +616,15 @@ api:
     company.io/tier: edge
 ```
 
+### Reserved keys
+
+`app.kubernetes.io/name`, `app.kubernetes.io/instance`, and
+`app.kubernetes.io/component` are owned by the chart and cannot be set through
+`labels` or `podLabels`. The chart emits them last, so a value supplied for one
+of these keys is silently discarded. This is deliberate: overriding them on a pod
+would leave it unmatched by its own Deployment selector, Service, PDB, and
+NetworkPolicy.
+
 ### Selectors are never touched
 
 These labels are deliberately excluded from `spec.selector.matchLabels` on

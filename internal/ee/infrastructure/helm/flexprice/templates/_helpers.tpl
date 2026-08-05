@@ -58,10 +58,14 @@ Object labels for a component's Kubernetes resources (Deployment, Service, HPA,
 PDB, Ingress, ServiceAccount, ...).
 Usage: include "flexprice.componentLabels" (dict "ctx" . "component" "api")
 
-Emits the common labels, the component label, and finally any operator-supplied
-labels from `.Values.<component>.labels`. Chart-owned keys win over user keys is
-NOT the behavior here — user keys are emitted last so an operator can override
-e.g. app.kubernetes.io/version if they really mean to.
+Emits the common labels, then operator-supplied labels from
+`.Values.<component>.labels`, then the component key.
+
+The component key goes last so it can't be overridden from values — several
+resources (PDB, NetworkPolicy, Service) build selectors from it, and a Service
+whose object labels disagree with the pods it targets is a debugging trap. The
+remaining common labels stay overridable, so an operator who really wants their
+own `app.kubernetes.io/version` can still set it.
 
 Never use this for `spec.selector.matchLabels`: selectors are immutable on
 Deployments and StatefulSets, so a user adding a label would break every
@@ -74,32 +78,39 @@ subsequent `helm upgrade` with "field is immutable". Selectors stay on
        so resolve the component block with `index` and guard it being unset. */ -}}
 {{- $cfg := index $ctx.Values .component | default dict -}}
 {{ include "flexprice.labels" $ctx }}
-app.kubernetes.io/component: {{ .component }}
 {{- with (get $cfg "labels") }}
-{{ toYaml . }}
-{{- end }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
+app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
 {{/*
 Pod template labels for a component.
 Usage: include "flexprice.componentPodLabels" (dict "ctx" . "component" "api")
 
-Selector labels + component, then global `.Values.podLabels`, then
-`.Values.<component>.podLabels`. Pod labels are mutable, so adding one here only
+Global `.Values.podLabels`, then `.Values.<component>.podLabels`, and finally the
+selector labels + component key. Pod labels are mutable, so adding one here only
 triggers a normal rolling update. This is the hook log shippers (Filebeat/ELK,
 Fluent Bit, Datadog) should target, since they enrich from pod metadata.
+
+The selector-owned keys (app.kubernetes.io/name, /instance, /component) are
+emitted LAST on purpose. YAML resolves duplicate keys to the final occurrence, so
+this makes them impossible to override from values: a user who sets
+`podLabels.app.kubernetes.io/component` gets their value silently discarded
+rather than a pod that no longer matches its own Deployment selector, Service,
+PDB, and NetworkPolicy. Reordering these lines reintroduces that bug.
 */}}
 {{- define "flexprice.componentPodLabels" -}}
 {{- $ctx := .ctx -}}
 {{- $cfg := index $ctx.Values .component | default dict -}}
-{{ include "flexprice.selectorLabels" $ctx }}
-app.kubernetes.io/component: {{ .component }}
 {{- with $ctx.Values.podLabels }}
-{{ toYaml . }}
-{{- end }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
 {{- with (get $cfg "podLabels") }}
-{{ toYaml . }}
-{{- end }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
+{{- include "flexprice.selectorLabels" $ctx }}
+app.kubernetes.io/component: {{ .component }}
 {{- end }}
 
 {{/*

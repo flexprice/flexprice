@@ -37,6 +37,11 @@ FlexPrice app release.
   immutable on Deployments, so changing these values stays `helm upgrade`-safe.
   Rendering with default values is byte-identical to 1.1.0.
 
+  The selector-owned keys (`app.kubernetes.io/name`, `/instance`, `/component`)
+  cannot be overridden from these values. Setting them is silently ignored
+  rather than producing pods that no longer match their own Deployment selector,
+  Service, PDB, and NetworkPolicy.
+
 ## [1.1.0] - 2026-06-11
 
 ### Added
