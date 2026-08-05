@@ -10,9 +10,6 @@ type InternalCustomerEvent struct {
 	TenantID   string `json:"tenant_id"`
 }
 
-// Customer is the minimal webhook representation of a customer. Top-level only —
-// every other payload that references a customer carries customer_id instead of
-// embedding this type.
 type Customer struct {
 	ID                string `json:"id"`
 	ExternalID        string `json:"external_id"`

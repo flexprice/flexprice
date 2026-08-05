@@ -17,10 +17,6 @@ type InternalSubscriptionEvent struct {
 	EnvironmentID    string                 `json:"environment_id"`
 }
 
-// Subscription is the minimal webhook representation of a subscription. Built from either
-// dto.SubscriptionResponse or dto.SubscriptionResponseV2 — the two constructors below — so
-// every subscription payload has this one shape regardless of which internal API response
-// variant produced it.
 type Subscription struct {
 	ID                   string                   `json:"id"`
 	CustomerID           string                   `json:"customer_id"`
@@ -46,8 +42,6 @@ type Subscription struct {
 	Plan                 *Plan                    `json:"plan,omitempty"`
 }
 
-// NewSubscription builds the minimal payload from the V1 subscription response (used by
-// every subscription.* event today).
 func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 	if resp == nil || resp.Subscription == nil {
 		return nil
@@ -78,8 +72,6 @@ func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 	}
 }
 
-// NewSubscriptionFromV2 builds the minimal payload from the V2 subscription response (used
-// by the entitlement-grant-exhaustion alert path, which calls GetSubscriptionV2).
 func NewSubscriptionFromV2(resp *dto.SubscriptionResponseV2) *Subscription {
 	if resp == nil || resp.Subscription == nil {
 		return nil

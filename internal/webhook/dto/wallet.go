@@ -22,7 +22,6 @@ type InternalTransactionEvent struct {
 	TenantID      string                 `json:"tenant_id"`
 }
 
-// Wallet is the minimal webhook representation of a wallet.
 type Wallet struct {
 	ID             string             `json:"id"`
 	CustomerID     string             `json:"customer_id"`
@@ -52,7 +51,6 @@ func NewWallet(resp *dto.WalletResponse) *Wallet {
 	}
 }
 
-// WalletTransaction is the minimal webhook representation of a wallet transaction.
 type WalletTransaction struct {
 	ID                  string                      `json:"id"`
 	WalletID            string                      `json:"wallet_id"`

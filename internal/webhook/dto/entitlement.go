@@ -10,7 +10,6 @@ type InternalEntitlementEvent struct {
 	TenantID      string `json:"tenant_id"`
 }
 
-// Entitlement is the minimal webhook representation of an entitlement.
 type Entitlement struct {
 	ID               string                            `json:"id"`
 	EntityType       types.EntitlementEntityType       `json:"entity_type"`

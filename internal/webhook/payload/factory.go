@@ -68,7 +68,6 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewSubscriptionPayloadBuilder(f.services)
 	}
 
-	// subscription phase builders
 	f.builders[types.WebhookEventSubscriptionPhaseCreated] = func() PayloadBuilder {
 		return NewSubscriptionPhasePayloadBuilder(f.services)
 	}

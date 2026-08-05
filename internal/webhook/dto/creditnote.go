@@ -13,7 +13,6 @@ type InternalCreditNoteEvent struct {
 	TenantID     string `json:"tenant_id"`
 }
 
-// CreditNote is the minimal webhook representation of a credit note.
 type CreditNote struct {
 	ID               string                 `json:"id"`
 	CreditNoteNumber string                 `json:"credit_note_number,omitempty"`

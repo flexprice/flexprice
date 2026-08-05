@@ -13,9 +13,6 @@ type InternalInvoiceEvent struct {
 	TenantID  string `json:"tenant_id"`
 }
 
-// InvoiceLineItem is the minimal webhook representation of an invoice line item. Only ever
-// populated on invoice.update.finalized / invoice.update.voided — see NewInvoice's eventType
-// branch below.
 type InvoiceLineItem struct {
 	ID              string          `json:"id"`
 	PriceID         *string         `json:"price_id,omitempty"`
@@ -27,7 +24,6 @@ type InvoiceLineItem struct {
 	PeriodEnd       *time.Time      `json:"period_end,omitempty"`
 }
 
-// Invoice is the minimal webhook representation of an invoice.
 type Invoice struct {
 	ID              string              `json:"id"`
 	CustomerID      string              `json:"customer_id"`
@@ -70,10 +66,6 @@ func newInvoiceLineItem(item *dto.InvoiceLineItemResponse) *InvoiceLineItem {
 	}
 }
 
-// NewInvoice builds the minimal payload. Line items are included in full only for
-// invoice.update.finalized and invoice.update.voided — the two events where a consumer
-// actually needs the itemized breakdown — matching the original root-cause finding that line
-// items were the dominant driver of the >3MB payloads that motivated this whole rework.
 func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *Invoice {
 	if resp == nil {
 		return nil

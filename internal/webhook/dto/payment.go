@@ -13,7 +13,6 @@ type InternalPaymentEvent struct {
 	TenantID  string `json:"tenant_id"`
 }
 
-// Payment is the minimal webhook representation of a payment.
 type Payment struct {
 	ID                string                       `json:"id"`
 	DestinationType   types.PaymentDestinationType `json:"destination_type"`

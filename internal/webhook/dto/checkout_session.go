@@ -14,7 +14,6 @@ type InternalCheckoutSessionEvent struct {
 	TenantID  string `json:"tenant_id"`
 }
 
-// CheckoutSession is the minimal webhook representation of a checkout session.
 type CheckoutSession struct {
 	ID                string                        `json:"id"`
 	CustomerID        string                        `json:"customer_id"`

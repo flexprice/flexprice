@@ -10,7 +10,6 @@ type InternalFeatureEvent struct {
 	TenantID  string `json:"tenant_id"`
 }
 
-// Feature is the minimal webhook representation of a feature.
 type Feature struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`

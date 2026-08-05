@@ -12,7 +12,6 @@ type InternalSubscriptionPhaseEvent struct {
 	TenantID string `json:"tenant_id"`
 }
 
-// SubscriptionPhase is the minimal webhook representation of a subscription phase.
 type SubscriptionPhase struct {
 	ID             string     `json:"id"`
 	SubscriptionID string     `json:"subscription_id"`
