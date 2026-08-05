@@ -21,7 +21,6 @@ type CreditGrantProrationParams struct {
 	// ProrationDate is where coverage actually begins (the numerator start).
 	ProrationDate time.Time
 
-	Timezone        string
 	Strategy        types.ProrationStrategy
 	OriginalCredits decimal.Decimal
 }
@@ -47,18 +46,11 @@ func CalculateCreditGrantProration(params CreditGrantProrationParams) (*CreditGr
 		strategy = types.StrategySecondBased
 	}
 
-	// Timezone is validated at the API boundary; fall back to UTC rather than
-	// failing, matching types.loadTimezone.
-	loc, err := time.LoadLocation(types.ResolveTimezone(params.Timezone))
-	if err != nil {
-		loc = time.UTC
-	}
-
 	coefficient, err := calculateProrationCoefficient(
 		params.PeriodStart,
 		params.PeriodEnd,
 		params.ProrationDate,
-		loc,
+		time.UTC,
 		strategy,
 	)
 	if err != nil {

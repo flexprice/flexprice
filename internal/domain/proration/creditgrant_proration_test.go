@@ -19,7 +19,6 @@ func TestCalculateCreditGrantProration(t *testing.T) {
 		periodStart     time.Time
 		periodEnd       time.Time
 		prorationDate   time.Time
-		timezone        string
 		strategy        types.ProrationStrategy
 		credits         decimal.Decimal
 		wantCoefficient string
@@ -75,21 +74,10 @@ func TestCalculateCreditGrantProration(t *testing.T) {
 			wantCredits:   "0",
 		},
 		{
-			name:          "empty timezone falls back to UTC instead of erroring",
+			name:          "mid period halves the credits",
 			periodStart:   jan1,
 			periodEnd:     feb1,
 			prorationDate: time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC),
-			timezone:      "",
-			strategy:      types.StrategySecondBased,
-			credits:       decimal.NewFromInt(100),
-			wantCredits:   "50",
-		},
-		{
-			name:          "non-UTC timezone is accepted",
-			periodStart:   jan1,
-			periodEnd:     feb1,
-			prorationDate: time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC),
-			timezone:      "Asia/Kolkata",
 			strategy:      types.StrategySecondBased,
 			credits:       decimal.NewFromInt(100),
 			wantCredits:   "50",
@@ -103,11 +91,10 @@ func TestCalculateCreditGrantProration(t *testing.T) {
 			wantCredits:   "50",
 		},
 		{
-			name:          "day based crossing a DST boundary",
+			name:          "day based at period start grants everything",
 			periodStart:   time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
 			periodEnd:     time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC),
 			prorationDate: time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
-			timezone:      "America/New_York",
 			strategy:      types.StrategyDayBased,
 			credits:       decimal.NewFromInt(100),
 			wantCredits:   "100",
@@ -120,7 +107,6 @@ func TestCalculateCreditGrantProration(t *testing.T) {
 				PeriodStart:     tt.periodStart,
 				PeriodEnd:       tt.periodEnd,
 				ProrationDate:   tt.prorationDate,
-				Timezone:        tt.timezone,
 				Strategy:        tt.strategy,
 				OriginalCredits: tt.credits,
 			})

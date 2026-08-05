@@ -1523,31 +1523,6 @@ func (s *subscriptionService) handleCreditGrants(
 	return s.handleCreditGrantsWithStart(ctx, subscription, creditGrantRequests, startDate, nil, nil)
 }
 
-// creditGrantMatchesBillingCycle reports whether a grant recurs on the same rhythm as
-// the subscription's billing cycle. Snapping a grant to a billing boundary is only
-// meaningful when the two coincide: a monthly grant on an annual subscription is
-// supposed to keep recurring monthly inside the billing period, not stretch to it.
-func creditGrantMatchesBillingCycle(
-	sub *subscription.Subscription,
-	grantReq dto.CreateCreditGrantRequest,
-) bool {
-	if grantReq.Period == nil {
-		return false
-	}
-
-	grantPeriod, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grantReq.Period))
-	if err != nil {
-		return false
-	}
-
-	grantPeriodCount := 1
-	if grantReq.PeriodCount != nil {
-		grantPeriodCount = lo.FromPtr(grantReq.PeriodCount)
-	}
-
-	return grantPeriod == sub.BillingPeriod && grantPeriodCount == sub.BillingPeriodCount
-}
-
 // addonCreditGrantProration resolves the billing period containing startDate so a
 // mid-cycle grant can be scaled to the part of that period it actually covers.
 // Returns nil when proration does not apply, in which case the grant keeps its full
@@ -1599,7 +1574,6 @@ func (s *subscriptionService) addonCreditGrantProration(
 		PeriodStart:   p.Start,
 		PeriodEnd:     p.End,
 		ProrationDate: startDate,
-		Timezone:      sub.Timezone,
 		Strategy:      types.StrategySecondBased,
 		Source:        "addon_attach",
 	}
@@ -1682,11 +1656,25 @@ func (s *subscriptionService) handleCreditGrantsWithStart(
 		// Use subscription start date as the anchor for the credit grant chain
 		grantReq.CreditGrantAnchor = lo.ToPtr(startDate)
 
-		// Prorating a mid-cycle grant only makes sense for a recurring allowance; a
-		// onetime grant is a fixed lump with no period to scale against.
+		// Prorating a mid-cycle grant only makes sense for a recurring allowance that
+		// shares the subscription's billing rhythm; a onetime grant is a fixed lump,
+		// and a monthly grant on an annual subscription should keep recurring monthly
+		// rather than stretch to the billing period.
+		grantPeriod := types.BillingPeriod("")
+		if grantReq.Period != nil {
+			period, err := types.GetBillingPeriodFromCreditGrantPeriod(lo.FromPtr(grantReq.Period))
+			if err != nil {
+				s.Logger.Error(ctx, "failed to get billing period from credit grant period",
+					"subscription_id", subscription.ID,
+					"credit_grant_period", grantReq.Period,
+					"error", err)
+			}
+			grantPeriod = period
+		}
+
 		if prorationCfg != nil &&
 			grantReq.Cadence == types.CreditGrantCadenceRecurring &&
-			creditGrantMatchesBillingCycle(subscription, grantReq) {
+			grantPeriod == subscription.BillingPeriod {
 			// Anchor on the subscription's period boundary rather than the attach date, so
 			// every period after the short first one lands on an invoicing boundary instead
 			// of drifting. Chaining stays correct because createNextPeriodApplication feeds

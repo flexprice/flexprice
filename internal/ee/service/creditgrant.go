@@ -333,7 +333,6 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(
 			PeriodStart:     prorationCfg.PeriodStart,
 			PeriodEnd:       prorationCfg.PeriodEnd,
 			ProrationDate:   prorationCfg.ProrationDate,
-			Timezone:        prorationCfg.Timezone,
 			Strategy:        prorationCfg.Strategy,
 			OriginalCredits: cg.Credits,
 		})
@@ -754,17 +753,11 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		}
 	}
 
-	// Prepare top-up request
-	topupMetadata := map[string]string{
+	topupMetadata := lo.Assign(map[string]string{
 		"grant_id":        grant.ID,
 		"subscription_id": subscription.ID,
 		"cga_id":          cga.ID,
-	}
-	// Carry any proration audit trail onto the wallet transaction so a prorated
-	// top-up explains itself without joining back to the application.
-	for k, v := range cga.Metadata {
-		topupMetadata[k] = v
-	}
+	}, cga.Metadata)
 
 	topupReq := &dto.TopUpWalletRequest{
 		CreditsToAdd:      cga.Credits,

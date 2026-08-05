@@ -62,7 +62,6 @@ type FirstPeriodProration struct {
 	// ProrationDate is when coverage begins, e.g. the addon attach date.
 	ProrationDate time.Time
 
-	Timezone string
 	Strategy types.ProrationStrategy
 
 	// Source labels the trigger in audit metadata, e.g. "addon_attach".
