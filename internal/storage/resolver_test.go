@@ -213,6 +213,52 @@ func TestResolver_ForPlatform_InvoiceWorksWithoutExportsConfig(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestResolver_ForPlatform_InvoiceRespectsEnabledFlag pins the s3.enabled /
+// gcs.enabled kill switch for invoice PDFs.
+//
+// Before the storage refactor, s3.NewService returned nil when s3.enabled was
+// false and GetInvoicePDFUrl failed fast with "s3 is not enabled". Routing
+// invoice PDFs through the Resolver dropped that gate, so a deployment that had
+// deliberately turned storage off would construct a live backend and issue real
+// bucket calls against whatever bucket the config defaults named.
+func TestResolver_ForPlatform_InvoiceRespectsEnabledFlag(t *testing.T) {
+	t.Run("s3 disabled rejects invoice storage", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.S3.Enabled = false
+		r := newTestResolver(t, ProviderS3, cfg)
+
+		s, err := r.ForPlatform(context.Background(), PurposeInvoice)
+		require.Error(t, err)
+		assert.Nil(t, s)
+		assert.Contains(t, err.Error(), "s3 is not enabled")
+	})
+
+	t.Run("gcs disabled rejects invoice storage", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.GCS.Enabled = false
+		cfg.GCS.SignerServiceAccountEmail = "signer@example.iam.gserviceaccount.com"
+		r := newTestResolver(t, ProviderGCS, cfg)
+
+		s, err := r.ForPlatform(context.Background(), PurposeInvoice)
+		require.Error(t, err)
+		assert.Nil(t, s)
+		assert.Contains(t, err.Error(), "gcs is not enabled")
+	})
+
+	// Exports were never covered by s3.enabled — they are governed by their own
+	// flexprice_*_exports config. Gating them on this flag would disable working
+	// export deployments that never set it.
+	t.Run("s3 disabled does not block exports", func(t *testing.T) {
+		cfg := testConfig()
+		cfg.S3.Enabled = false
+		r := newTestResolver(t, ProviderS3, cfg)
+
+		s, err := r.ForPlatform(context.Background(), PurposeExport)
+		require.NoError(t, err)
+		require.NotNil(t, s)
+	})
+}
+
 func TestResolver_ForPlatform_Caches(t *testing.T) {
 	cfg := testConfig()
 	r := newTestResolver(t, ProviderS3, cfg)

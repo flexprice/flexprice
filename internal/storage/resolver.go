@@ -89,6 +89,10 @@ func (r *resolver) ForPlatform(ctx context.Context, purpose Purpose) (Storage, e
 		return s, nil
 	}
 
+	if err := r.checkProviderEnabled(purpose); err != nil {
+		return nil, err
+	}
+
 	bucket, region, err := r.platformBucket(purpose)
 	if err != nil {
 		return nil, err
@@ -152,6 +156,43 @@ func (r *resolver) signerFor(purpose Purpose) (string, error) {
 	default:
 		return "", unsupportedPurpose(purpose)
 	}
+}
+
+// checkProviderEnabled enforces the s3.enabled / gcs.enabled kill switch for
+// invoice storage.
+//
+// Before the storage refactor, s3.NewService returned a nil Service when
+// s3.enabled was false and GetInvoicePDFUrl failed fast with "s3 is not
+// enabled". Routing invoice PDFs through the Resolver dropped that gate, so a
+// deployment that had deliberately turned storage off would instead construct a
+// live backend and issue real bucket calls against whatever bucket the config
+// defaults happened to name.
+//
+// Scoped to PurposeInvoice: the flag has only ever gated invoice PDFs. Exports
+// are governed by their own flexprice_*_exports config and by whether an export
+// connection exists, and were never covered by s3.enabled — gating them here
+// would disable working export deployments that never set the flag.
+func (r *resolver) checkProviderEnabled(purpose Purpose) error {
+	if purpose != PurposeInvoice {
+		return nil
+	}
+
+	switch r.provider {
+	case ProviderS3:
+		if !r.cfg.S3.Enabled {
+			return ierr.NewError("s3 is not enabled").
+				WithHint("s3 is not enabled but is required to generate invoice pdf url.").
+				Mark(ierr.ErrSystem)
+		}
+	case ProviderGCS:
+		if !r.cfg.GCS.Enabled {
+			return ierr.NewError("gcs is not enabled").
+				WithHint("gcs is not enabled but is required to generate invoice pdf url.").
+				Mark(ierr.ErrSystem)
+		}
+	}
+
+	return nil
 }
 
 // platformBucket selects the bucket and region for a purpose under the resolved
