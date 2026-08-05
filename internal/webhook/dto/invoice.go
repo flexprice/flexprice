@@ -73,7 +73,7 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 	}
 
 	var lineItems []*InvoiceLineItem
-	if eventType == types.WebhookEventInvoiceUpdateFinalized || eventType == types.WebhookEventInvoiceUpdateVoided {
+	if eventType == types.WebhookEventInvoiceUpdateFinalized {
 		lineItems = make([]*InvoiceLineItem, 0, len(resp.LineItems))
 		for _, item := range resp.LineItems {
 			if li := newInvoiceLineItem(item); li != nil {
