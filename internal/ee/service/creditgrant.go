@@ -49,7 +49,7 @@ type CreditGrantService interface {
 
 	// InitializeCreditGrantWorkflow initializes the workflow for a credit grant
 	// This creates the first CGA and triggers eager application if applicable
-	InitializeCreditGrantWorkflow(ctx context.Context, cg creditgrant.CreditGrant) (*creditgrant.CreditGrant, error)
+	InitializeCreditGrantWorkflow(ctx context.Context, cg creditgrant.CreditGrant, prorationCfg *dto.FirstPeriodProration) (*creditgrant.CreditGrant, error)
 
 	// ProcessCreditGrantApplication processes a single credit grant application
 	// Use this to manually trigger processing of a pending/failed application
@@ -266,7 +266,7 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 
 	// Initialize workflow
 	if cg.Scope == types.CreditGrantScopeSubscription {
-		cg, err = s.initializeCreditGrantWorkflow(ctx, lo.FromPtr(cg), req.FirstPeriodProration)
+		cg, err = s.InitializeCreditGrantWorkflow(ctx, lo.FromPtr(cg), req.FirstPeriodProration)
 		if err != nil {
 			return nil, err
 		}
@@ -276,15 +276,11 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 	return response, nil
 }
 
-func (s *creditGrantService) InitializeCreditGrantWorkflow(ctx context.Context, cg creditgrant.CreditGrant) (*creditgrant.CreditGrant, error) {
-	return s.initializeCreditGrantWorkflow(ctx, cg, nil)
-}
-
 // initializeCreditGrantWorkflow creates the grant's first application. When
 // prorationCfg is set, that first application covers only part of a billing period
 // and its credits are scaled accordingly; later periods are whole and always grant
 // the full amount, which is why the config is never persisted on the grant.
-func (s *creditGrantService) initializeCreditGrantWorkflow(
+func (s *creditGrantService) InitializeCreditGrantWorkflow(
 	ctx context.Context,
 	cg creditgrant.CreditGrant,
 	prorationCfg *dto.FirstPeriodProration,
@@ -355,9 +351,6 @@ func (s *creditGrantService) initializeCreditGrantWorkflow(
 			"prorated_credits", credits.String())
 	}
 
-	// The idempotency key stays keyed on (grant, period) only. Folding the amount in
-	// would let a future change to the coefficient mint a second application for a
-	// period that was already granted.
 	cgaReq := dto.CreateCreditGrantApplicationRequest{
 		CreditGrantID:                   cg.ID,
 		SubscriptionID:                  lo.FromPtr(cg.SubscriptionID),
@@ -382,9 +375,7 @@ func (s *creditGrantService) initializeCreditGrantWorkflow(
 	}
 
 	// 6. Eager application: if the application is due now or in the past, process it
-	// immediately. Keyed on ScheduledFor rather than the anchor — the anchor is a cycle
-	// reference and may legitimately sit in the future (a prorated grant anchors on the
-	// period boundary it aligns to), which would otherwise defer the credits to the cron.
+	// immediately.
 	if !cga.ScheduledFor.After(time.Now()) {
 		// Use a background context or a sub-context to avoid blocking the main creation if processing fails
 		// Though for initialization, we might want it to be synchronous if it fails due to validation

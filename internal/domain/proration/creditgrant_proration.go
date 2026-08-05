@@ -7,9 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// creditGrantCreditsScale matches the numeric(20,8) precision of
-// credit_grant_applications.credits.
-const creditGrantCreditsScale = 8
+const creditGrantCreditsScale = 2
 
 // CreditGrantProrationParams describes the window a credit grant's first
 // application covers relative to the full billing period it sits in.
@@ -41,10 +39,6 @@ type CreditGrantProrationResult struct {
 
 // CalculateCreditGrantProration scales OriginalCredits by the fraction of the
 // billing period remaining at ProrationDate.
-//
-// Unlike price proration this returns a quantity rather than money, but it must
-// use the same coefficient so granted credits and the invoiced stub cover the
-// identical window.
 func CalculateCreditGrantProration(params CreditGrantProrationParams) (*CreditGrantProrationResult, error) {
 	strategy := params.Strategy
 	if strategy == "" {

@@ -408,7 +408,6 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 	s.Equal(expected.ProratedCredits.String(), app.Credits.String())
 	s.Equal("true", app.Metadata["proration_applied"])
 	s.Equal("100", app.Metadata["proration_original_credits"])
-	s.Equal("addon_attach", app.Metadata["proration_source"])
 
 	// Computing the right amount is worthless if the credits never reach the wallet.
 	// Re-anchoring puts the anchor in the future, so the eager-apply gate must key off

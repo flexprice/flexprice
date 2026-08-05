@@ -46,8 +46,7 @@ type CreateCreditGrantRequest struct {
 	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
 
 	// FirstPeriodProration, when set, scales the first application's credits to the
-	// portion of the billing period the grant actually covers. Server-computed only:
-	// json:"-" keeps API clients from supplying their own coefficient.
+	// portion of the billing period the grant actually covers.
 	FirstPeriodProration *FirstPeriodProration `json:"-"`
 }
 
