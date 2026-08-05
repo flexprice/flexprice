@@ -299,25 +299,33 @@ func (s *billingService) CalculateFixedCharges(
 	// capped per line, and keep total consistent.
 	if params.OpeningInvoiceAdjustmentAmount != nil {
 		adj := lo.FromPtr(params.OpeningInvoiceAdjustmentAmount)
-		fixedCostLineItems = applyOpeningInvoiceAdjustmentToLineItems(fixedCostLineItems, adj)
-		fixedCost = fixedCost.Sub(adj)
+		var applied decimal.Decimal
+		fixedCostLineItems, applied = applyOpeningInvoiceAdjustmentToLineItems(fixedCostLineItems, adj)
+		fixedCost = fixedCost.Sub(applied)
+		if applied.LessThan(adj) {
+			s.Logger.Info(ctx, "opening invoice adjustment exceeds fixed charges, excess credit not applied to this invoice",
+				"subscription_id", sub.ID,
+				"requested_adjustment", adj,
+				"applied_adjustment", applied,
+				"unapplied_excess", adj.Sub(applied))
+		}
 	}
 
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
 }
 
-// applyOpeningInvoiceAdjustmentToLineItems reduces line Amounts in slice order: for each line,
-// take min(remaining credit, line amount). Each take is capped by the line, so total reduction
-// cannot exceed the sum of line amounts even when credit is larger.
+// applyOpeningInvoiceAdjustmentToLineItems reduces line Amounts in slice order: for each line, take min(remaining credit, line amount).
+// Returns the adjusted items and the total amount actually applied — which is min(creditsToAdjust, sum(items.Amount)), never more.
+// Callers must subtract the returned applied amount (not the requested credit) from any running total they keep alongside the line items.
 func applyOpeningInvoiceAdjustmentToLineItems(
 	items []dto.CreateInvoiceLineItemRequest,
 	creditsToAdjust decimal.Decimal,
-) []dto.CreateInvoiceLineItemRequest {
+) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal) {
 	if len(items) == 0 || !creditsToAdjust.GreaterThan(decimal.Zero) {
-		return slices.Clone(items)
+		return slices.Clone(items), decimal.Zero
 	}
 	remaining := creditsToAdjust
-	return lo.Map(items, func(item dto.CreateInvoiceLineItemRequest, _ int) dto.CreateInvoiceLineItemRequest {
+	adjusted := lo.Map(items, func(item dto.CreateInvoiceLineItemRequest, _ int) dto.CreateInvoiceLineItemRequest {
 		if remaining.IsZero() {
 			return item
 		}
@@ -326,6 +334,7 @@ func applyOpeningInvoiceAdjustmentToLineItems(
 		remaining = remaining.Sub(take)
 		return item
 	})
+	return adjusted, creditsToAdjust.Sub(remaining)
 }
 
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that

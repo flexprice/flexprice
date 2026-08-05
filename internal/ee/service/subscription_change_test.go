@@ -1691,59 +1691,67 @@ func (s *SubscriptionChangeServiceTestSuite) TestApplyOpeningInvoiceAdjustmentTo
 	}
 
 	cases := []struct {
-		name     string
-		credit   decimal.Decimal
-		items    []dto.CreateInvoiceLineItemRequest
-		wantAmts []float64 // expected Amount per output item
+		name        string
+		credit      decimal.Decimal
+		items       []dto.CreateInvoiceLineItemRequest
+		wantAmts    []float64 // expected Amount per output item
+		wantApplied float64   // expected total actually applied
 	}{
 		{
-			name:     "credit_smaller_than_single_item",
-			credit:   decimal.NewFromFloat(300),
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(2000)},
-			wantAmts: []float64{1700},
+			name:        "credit_smaller_than_single_item",
+			credit:      decimal.NewFromFloat(300),
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(2000)},
+			wantAmts:    []float64{1700},
+			wantApplied: 300,
 		},
 		{
-			name:     "credit_spans_two_items_exhausts_first",
-			credit:   decimal.NewFromFloat(300),
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
-			wantAmts: []float64{0, 100},
+			name:        "credit_spans_two_items_exhausts_first",
+			credit:      decimal.NewFromFloat(300),
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts:    []float64{0, 100},
+			wantApplied: 300,
 		},
 		{
-			name:     "credit_equals_total",
-			credit:   decimal.NewFromFloat(400),
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
-			wantAmts: []float64{0, 0},
+			name:        "credit_equals_total",
+			credit:      decimal.NewFromFloat(400),
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts:    []float64{0, 0},
+			wantApplied: 400,
 		},
 		{
-			name:     "credit_exceeds_total_capped_at_zero",
-			credit:   decimal.NewFromFloat(500),
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
-			wantAmts: []float64{0, 0},
+			name:        "credit_exceeds_total_capped_at_zero",
+			credit:      decimal.NewFromFloat(500),
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts:    []float64{0, 0},
+			wantApplied: 400, // applied MUST equal sum(items), NOT the requested 500
 		},
 		{
-			name:     "zero_credit_leaves_items_unchanged",
-			credit:   decimal.Zero,
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
-			wantAmts: []float64{200},
+			name:        "zero_credit_leaves_items_unchanged",
+			credit:      decimal.Zero,
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts:    []float64{200},
+			wantApplied: 0,
 		},
 		{
-			name:     "empty_items_returns_empty",
-			credit:   decimal.NewFromFloat(300),
-			items:    []dto.CreateInvoiceLineItemRequest{},
-			wantAmts: []float64{},
+			name:        "empty_items_returns_empty",
+			credit:      decimal.NewFromFloat(300),
+			items:       []dto.CreateInvoiceLineItemRequest{},
+			wantAmts:    []float64{},
+			wantApplied: 0,
 		},
 		{
-			name:     "negative_credit_treated_as_zero",
-			credit:   decimal.NewFromInt(-100),
-			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
-			wantAmts: []float64{200}, // unchanged
+			name:        "negative_credit_treated_as_zero",
+			credit:      decimal.NewFromInt(-100),
+			items:       []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts:    []float64{200}, // unchanged
+			wantApplied: 0,
 		},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		s.Run(tc.name, func() {
-			result := applyOpeningInvoiceAdjustmentToLineItems(tc.items, tc.credit)
+			result, applied := applyOpeningInvoiceAdjustmentToLineItems(tc.items, tc.credit)
 			require.Len(s.T(), result, len(tc.wantAmts),
 				"result length mismatch for case %q", tc.name)
 			for i, wantF := range tc.wantAmts {
@@ -1753,6 +1761,25 @@ func (s *SubscriptionChangeServiceTestSuite) TestApplyOpeningInvoiceAdjustmentTo
 				assert.False(s.T(), result[i].Amount.IsNegative(),
 					"item[%d] must not be negative", i)
 			}
+
+			wantApplied := decimal.NewFromFloat(tc.wantApplied)
+			assert.True(s.T(), applied.Equal(wantApplied),
+				"applied: want %s got %s", wantApplied, applied)
+
+			// Invariant: applied MUST equal sum(items_before) - sum(items_after).
+			// This is what keeps the caller's fixedCost in lock-step with the
+			// line items after adjustment. Guards against re-introducing the
+			// divergence bug (fixedCost.Sub(requested_adj) with adj > sum).
+			var sumBefore, sumAfter decimal.Decimal
+			for _, it := range tc.items {
+				sumBefore = sumBefore.Add(it.Amount)
+			}
+			for _, it := range result {
+				sumAfter = sumAfter.Add(it.Amount)
+			}
+			assert.True(s.T(), applied.Equal(sumBefore.Sub(sumAfter)),
+				"applied (%s) must equal sum_before (%s) - sum_after (%s)",
+				applied, sumBefore, sumAfter)
 		})
 	}
 }
