@@ -65,6 +65,20 @@ func TestNewClientWithConfig_IsInstrumented(t *testing.T) {
 	}
 }
 
+type stubTransport struct{}
+
+func (stubTransport) RoundTrip(*http.Request) (*http.Response, error) { return nil, nil }
+
+func TestNewClientWithConfig_CustomTransport(t *testing.T) {
+	c, ok := NewClientWithConfig(ClientConfig{Transport: stubTransport{}}).(*DefaultClient)
+	if !ok {
+		t.Fatal("NewClientWithConfig did not return *DefaultClient")
+	}
+	if _, ok := c.client.Transport.(*otelhttp.Transport); !ok {
+		t.Fatalf("expected otel-wrapped transport, got %T", c.client.Transport)
+	}
+}
+
 // TestSend_RecordsClientSpan verifies that an outbound request through the
 // instrumented client produces exactly one CLIENT-kind span carrying the HTTP
 // semantic attributes that SigNoz External API Monitoring relies on, and that

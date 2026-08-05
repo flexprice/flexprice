@@ -33,6 +33,9 @@ type Client interface {
 // ClientConfig holds configuration for the HTTP client
 type ClientConfig struct {
 	Timeout time.Duration
+	// Transport overrides the base (pre-instrumentation) transport used by
+	// the client. Nil preserves the default (http.DefaultTransport).
+	Transport http.RoundTripper
 }
 
 // NewClientWithConfig creates a new DefaultClient with custom configuration
@@ -45,7 +48,7 @@ func NewClientWithConfig(config ClientConfig) Client {
 	return &DefaultClient{
 		client: &http.Client{
 			Timeout:   timeout,
-			Transport: OtelTransport(nil),
+			Transport: OtelTransport(config.Transport),
 		},
 	}
 }
