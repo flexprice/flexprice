@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -244,4 +245,41 @@ func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_GuardConditions()
 			s.Equal(tt.status, result.PaymentStatus)
 		})
 	}
+}
+
+// TestCreatePayment_CustomerDestination_ValidatesCustomer covers the VAPT fix:
+// CUSTOMER destination must now verify the customer exists in this tenant/env,
+// so bogus/foreign customer_ids fail-fast at CreatePayment rather than producing
+// an orphaned payment row (which would go on to fail later in ProcessPayment).
+func (s *PaymentServiceSuite) TestCreatePayment_CustomerDestination_ValidatesCustomer() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	s.Run("missing_customer_rejected", func() {
+		req := &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeCustomer,
+			DestinationID:     "cust_does_not_exist",
+			PaymentMethodType: types.PaymentMethodTypeCard,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+		}
+		_, err := s.service.CreatePayment(ctx, req)
+		s.Require().Error(err, "unknown customer_id must be rejected")
+		s.True(ierr.IsValidation(err), "expected validation-class error (not 500), got: %v", err)
+	})
+
+	s.Run("existing_customer_ok", func() {
+		req := &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeCustomer,
+			DestinationID:     s.testData.customer.ID,
+			PaymentMethodType: types.PaymentMethodTypeCard,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+		}
+		resp, err := s.service.CreatePayment(ctx, req)
+		s.Require().NoError(err, "existing customer must be accepted")
+		s.Equal(types.PaymentDestinationTypeCustomer, resp.DestinationType)
+		s.Equal(s.testData.customer.ID, resp.DestinationID)
+	})
 }

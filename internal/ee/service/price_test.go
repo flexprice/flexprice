@@ -2669,3 +2669,103 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 		s.Len(resp.Items, 2)
 	})
 }
+
+// TestCreateBulkPrice_EntityExistenceValidation covers the VAPT fix: bulk
+// creation must reject items whose entity_id doesn't exist (mirroring the
+// single CreatePrice path), except when SkipEntityValidation is set — which
+// preserves the escape hatch used by generic-integration and internal callers.
+func (s *PriceServiceSuite) TestCreateBulkPrice_EntityExistenceValidation() {
+	// Fresh price/plan stores so nothing bleeds in from earlier tests.
+	s.priceRepo = testutil.NewInMemoryPriceStore()
+	s.planRepo = testutil.NewInMemoryPlanStore()
+	s.priceService = NewPriceService(ServiceParams{
+		PriceRepo:     s.priceRepo,
+		MeterRepo:     s.meterRepo,
+		PlanRepo:      s.planRepo,
+		AddonRepo:     s.addonRepo,
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+		PriceUnitRepo: s.priceUnitRepo,
+		Logger:        s.logger,
+		DB:            testutil.NewMockPostgresClient(s.logger),
+	})
+
+	// Only plan-existing gets created; plan-missing is intentionally absent.
+	planExisting := &plan.Plan{
+		ID:        "plan-existing",
+		Name:      "Existing Plan",
+		BaseModel: types.GetDefaultBaseModel(s.ctx),
+	}
+	s.NoError(s.planRepo.Create(s.ctx, planExisting))
+
+	amount := decimal.RequireFromString("100")
+	mkItem := func(entityID string, skipValidation bool) dto.CreatePriceRequest {
+		return dto.CreatePriceRequest{
+			Amount:               &amount,
+			Currency:             "usd",
+			EntityType:           types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:             entityID,
+			Type:                 types.PRICE_TYPE_FIXED,
+			PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+			BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount:   1,
+			BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+			InvoiceCadence:       types.InvoiceCadenceAdvance,
+			SkipEntityValidation: skipValidation,
+		}
+	}
+
+	s.Run("missing_entity_rejected", func() {
+		req := dto.CreateBulkPriceRequest{
+			Items: []dto.CreatePriceRequest{mkItem("plan-missing", false)},
+		}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.Require().Error(err, "bulk create for non-existent entity must be rejected")
+		s.Nil(resp)
+		s.Contains(err.Error(), "plan not found")
+
+		// Nothing persisted.
+		filter := types.NewNoLimitPriceFilter().WithEntityIDs([]string{"plan-missing"})
+		count, cerr := s.priceRepo.Count(s.ctx, filter)
+		s.NoError(cerr)
+		s.Equal(0, count, "no price row should exist for the missing entity")
+	})
+
+	s.Run("mixed_batch_missing_entity_rejects_whole_batch", func() {
+		// One existing + one missing. Whole batch must fail (tx wrapping).
+		req := dto.CreateBulkPriceRequest{
+			Items: []dto.CreatePriceRequest{
+				mkItem("plan-existing", false),
+				mkItem("plan-missing", false),
+			},
+		}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.Require().Error(err)
+		s.Nil(resp)
+
+		// No prices persisted for either entity — validation runs before tx.
+		filter := types.NewNoLimitPriceFilter().WithEntityIDs([]string{"plan-existing", "plan-missing"})
+		count, cerr := s.priceRepo.Count(s.ctx, filter)
+		s.NoError(cerr)
+		s.Equal(0, count)
+	})
+
+	s.Run("skip_entity_validation_bypasses_check", func() {
+		req := dto.CreateBulkPriceRequest{
+			Items: []dto.CreatePriceRequest{mkItem("plan-missing", true)},
+		}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.Require().NoError(err, "SkipEntityValidation must still bypass the check for internal callers")
+		s.Require().NotNil(resp)
+		s.Len(resp.Items, 1)
+	})
+
+	s.Run("existing_entity_ok", func() {
+		req := dto.CreateBulkPriceRequest{
+			Items: []dto.CreatePriceRequest{mkItem("plan-existing", false)},
+		}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.Require().NoError(err)
+		s.Require().NotNil(resp)
+		s.Len(resp.Items, 1)
+	})
+}

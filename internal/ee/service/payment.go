@@ -55,9 +55,10 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	}
 
 	// For INVOICE destination, validate the invoice and its payment eligibility.
-	// AUTH destination uses customer_id as DestinationID — no invoice lookup.
+	// For CUSTOMER destination validate the customer exists.
 	var invoice *invoice.Invoice
-	if p.DestinationType == types.PaymentDestinationTypeInvoice {
+	switch p.DestinationType {
+	case types.PaymentDestinationTypeInvoice:
 		invoice, err = s.InvoiceRepo.Get(ctx, p.DestinationID)
 		if err != nil {
 			return nil, ierr.WithError(err).
@@ -71,6 +72,15 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		// validate the invoice payment eligibility
 		if err := s.validateInvoicePaymentEligibility(ctx, invoice, req); err != nil {
 			return nil, err
+		}
+	case types.PaymentDestinationTypeCustomer:
+		if _, err := s.CustomerRepo.Get(ctx, p.DestinationID); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to validate customer").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": p.DestinationID,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 

@@ -266,9 +266,14 @@ func (s *priceService) validateEntityExists(ctx context.Context, entityType type
 	return nil
 }
 
-// validateBulkPriceEntityLimits validates that entities don't exceed the maximum number of active prices
-// when creating bulk prices. It checks each unique entity and ensures that the total count of existing
-// plus new prices doesn't exceed MAX_ACTIVE_PRICES.
+// validateBulkPriceEntityLimits validates for each unique entity in the bulk request:
+//  1. the entity actually exists (tenant-scoped lookup) — mirrors CreatePrice, without
+//     which bulk creation would silently persist prices pointing at non-existent or
+//     cross-tenant entity IDs.
+//  2. the total count of existing plus new prices doesn't exceed MAX_ACTIVE_PRICES.
+//
+// SkipEntityValidation on the first item of an entity group opts out of both checks
+// (same semantic as the single-CreatePrice path).
 func (s *priceService) validateBulkPriceEntityLimits(ctx context.Context, items []dto.CreatePriceRequest) error {
 	// Create a map of entityID -> entityType using lo
 	entityIDToType := lo.SliceToMap(items, func(priceReq dto.CreatePriceRequest) (string, types.PriceEntityType) {
@@ -280,7 +285,7 @@ func (s *priceService) validateBulkPriceEntityLimits(ctx context.Context, items 
 		return priceReq.EntityID
 	})
 
-	// Validate price limit for each unique entity
+	// Validate each unique entity: existence first, then price-count limit.
 	for entityID, entityType := range entityIDToType {
 		// Check if we should skip validation (check first item with this entityID)
 		itemsForEntity := entityGroups[entityID]
@@ -288,6 +293,13 @@ func (s *priceService) validateBulkPriceEntityLimits(ctx context.Context, items 
 		firstItem := itemsForEntity[0]
 		if firstItem.SkipEntityValidation {
 			continue
+		}
+
+		// Verify the entity exists in this tenant/env before counting prices —
+		// otherwise the Count below returns 0 for a non-existent entity and
+		// bulk creation proceeds with an orphaned entity_id.
+		if err := s.validateEntityExists(ctx, entityType, entityID); err != nil {
+			return err
 		}
 
 		// Count existing active prices for this entity
