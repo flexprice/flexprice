@@ -10,7 +10,7 @@
 //
 // Example usage:
 //
-//	processor := NewFileProcessor(httpClient, logger)
+//	processor := NewFileProcessor(logger)
 //	content, err := processor.DownloadFile(ctx, &task.Task{FileURL: "https://drive.google.com/file/d/123/view"})
 //	if err != nil {
 //	    // Handle error - simple error message, no complex error objects
@@ -56,9 +56,8 @@ const (
 type DirectURLProvider struct{}
 
 func (p *DirectURLProvider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
-	// Validate URL
-	_, err := url.Parse(fileURL)
-	if err != nil {
+	// Validate URL and restrict to http/https
+	if _, err := parseAllowedURL(fileURL); err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Invalid URL").
 			Mark(ierr.ErrValidation)
@@ -107,8 +106,7 @@ type S3Provider struct{}
 func (p *S3Provider) GetDownloadURL(ctx context.Context, fileURL string) (string, error) {
 	// S3 URLs are typically already in the correct format for direct download
 	// but we can add presigned URL logic here if needed
-	_, err := url.Parse(fileURL)
-	if err != nil {
+	if _, err := parseAllowedURL(fileURL); err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Invalid S3 URL").
 			Mark(ierr.ErrValidation)
@@ -151,8 +149,7 @@ func (p *DropboxProvider) GetDownloadURL(ctx context.Context, fileURL string) (s
 		fileURL += "?dl=1"
 	}
 
-	_, err := url.Parse(fileURL)
-	if err != nil {
+	if _, err := parseAllowedURL(fileURL); err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Invalid Dropbox URL").
 			Mark(ierr.ErrValidation)
@@ -176,8 +173,7 @@ func (p *GitHubProvider) GetDownloadURL(ctx context.Context, fileURL string) (st
 		fileURL = strings.Replace(fileURL, "/blob/", "/", 1)
 	}
 
-	_, err := url.Parse(fileURL)
-	if err != nil {
+	if _, err := parseAllowedURL(fileURL); err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Invalid GitHub URL").
 			Mark(ierr.ErrValidation)
@@ -187,6 +183,23 @@ func (p *GitHubProvider) GetDownloadURL(ctx context.Context, fileURL string) (st
 
 func (p *GitHubProvider) GetProviderName() FileProviderType {
 	return FileProviderTypeGitHub
+}
+
+// allowedSchemes restricts outbound file fetches to http/https, rejecting
+// schemes like file://, ftp://, or gopher:// that could be used to reach
+// non-HTTP resources.
+var allowedSchemes = map[string]bool{"http": true, "https": true}
+
+// parseAllowedURL parses fileURL and ensures its scheme is http or https.
+func parseAllowedURL(fileURL string) (*url.URL, error) {
+	u, err := url.Parse(fileURL)
+	if err != nil {
+		return nil, err
+	}
+	if !allowedSchemes[strings.ToLower(u.Scheme)] {
+		return nil, fmt.Errorf("unsupported URL scheme %q: only http and https are allowed", u.Scheme)
+	}
+	return u, nil
 }
 
 // extractOneDriveFileID extracts file ID from OneDrive URL
@@ -237,23 +250,35 @@ func (r *FileProviderRegistry) RegisterProvider(provider FileProvider) {
 
 // GetProvider returns the appropriate provider for a given URL
 func (r *FileProviderRegistry) GetProvider(fileURL string) FileProvider {
-	// Check for specific providers based on URL patterns
-	if strings.Contains(fileURL, "drive.google.com") {
+	host := ""
+	if u, err := url.Parse(fileURL); err == nil {
+		host = strings.ToLower(u.Hostname())
+	}
+
+	// Check for specific providers based on the parsed hostname (not the raw
+	// URL string) so a value like "https://evil.com/?x=drive.google.com" or
+	// "https://drive.google.com.evil.com" can't be misclassified.
+	if matchesHost(host, "drive.google.com") {
 		return r.providers[FileProviderTypeGoogleDrive]
 	}
-	if strings.Contains(fileURL, "amazonaws.com") || strings.Contains(fileURL, "s3.") {
+	if matchesHost(host, "amazonaws.com") || strings.Contains(host, "s3.") {
 		return r.providers[FileProviderTypeS3]
 	}
-	if strings.Contains(fileURL, "onedrive.live.com") || strings.Contains(fileURL, "1drv.ms") {
+	if matchesHost(host, "onedrive.live.com") || matchesHost(host, "1drv.ms") {
 		return r.providers[FileProviderTypeOneDrive]
 	}
-	if strings.Contains(fileURL, "dropbox.com") {
+	if matchesHost(host, "dropbox.com") {
 		return r.providers[FileProviderTypeDropbox]
 	}
-	if strings.Contains(fileURL, "github.com") {
+	if matchesHost(host, "github.com") {
 		return r.providers[FileProviderTypeGitHub]
 	}
 
 	// Default to direct URL provider
 	return r.providers[FileProviderTypeDirect]
+}
+
+// matchesHost reports whether host equals domain or is a subdomain of it.
+func matchesHost(host, domain string) bool {
+	return host == domain || strings.HasSuffix(host, "."+domain)
 }
