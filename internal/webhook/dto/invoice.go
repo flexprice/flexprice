@@ -49,6 +49,7 @@ type Invoice struct {
 	Subscription    *Subscription       `json:"subscription,omitempty"`
 	Customer        *Customer           `json:"customer,omitempty"`
 	LineItems       []*InvoiceLineItem  `json:"line_items,omitempty"`
+	Metadata        types.Metadata      `json:"metadata,omitempty"`
 }
 
 func newInvoiceLineItem(item *dto.InvoiceLineItemResponse) *InvoiceLineItem {
@@ -112,6 +113,7 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 		Subscription:    NewSubscription(resp.Subscription),
 		Customer:        customer,
 		LineItems:       lineItems,
+		Metadata:        resp.Metadata,
 	}
 }
 

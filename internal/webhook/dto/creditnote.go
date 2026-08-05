@@ -27,6 +27,7 @@ type CreditNote struct {
 	TotalAmount      decimal.Decimal        `json:"total_amount" swaggertype:"string"`
 	VoidedAt         *time.Time             `json:"voided_at,omitempty"`
 	FinalizedAt      *time.Time             `json:"finalized_at,omitempty"`
+	Metadata         types.Metadata         `json:"metadata,omitempty"`
 }
 
 func NewCreditNote(resp *dto.CreditNoteResponse) *CreditNote {
@@ -47,6 +48,7 @@ func NewCreditNote(resp *dto.CreditNoteResponse) *CreditNote {
 		TotalAmount:      resp.TotalAmount,
 		VoidedAt:         resp.VoidedAt,
 		FinalizedAt:      resp.FinalizedAt,
+		Metadata:         resp.Metadata,
 	}
 }
 

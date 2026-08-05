@@ -67,6 +67,7 @@ type WalletTransaction struct {
 	ExpiryDate          *time.Time                  `json:"expiry_date,omitempty"`
 	TransactionReason   types.TransactionReason     `json:"transaction_reason"`
 	Currency            string                      `json:"currency"`
+	Metadata            types.Metadata              `json:"metadata,omitempty"`
 }
 
 func NewWalletTransaction(resp *dto.WalletTransactionResponse) *WalletTransaction {
@@ -89,6 +90,7 @@ func NewWalletTransaction(resp *dto.WalletTransactionResponse) *WalletTransactio
 		ExpiryDate:          resp.ExpiryDate,
 		TransactionReason:   resp.TransactionReason,
 		Currency:            resp.Currency,
+		Metadata:            resp.Metadata,
 	}
 }
 

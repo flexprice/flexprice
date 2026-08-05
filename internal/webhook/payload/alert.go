@@ -131,7 +131,7 @@ func (b *AlertPayloadBuilder) buildSpendAlertPayload(ctx context.Context, intern
 	payload := webhookDto.NewSpendAlertEvent(
 		sub, lineItemID, groupID,
 		internalEvent.AlertType, internalEvent.AlertStatus,
-		internalEvent.AlertInfo.ValueAtTime.String(), internalEvent.AlertInfo.Timestamp,
+		internalEvent.AlertInfo.ValueAtTime.String(), internalEvent.AlertInfo.AlertSettings, internalEvent.AlertInfo.Timestamp,
 	)
 
 	return json.Marshal(payload)

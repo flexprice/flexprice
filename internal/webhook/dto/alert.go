@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type InternalAlertEvent struct {
@@ -59,10 +60,30 @@ type SpendAlertEvent struct {
 	AlertType              types.AlertType  `json:"alert_type"`
 	AlertStatus            types.AlertState `json:"alert_status"`
 	CurrentSpend           string           `json:"current_spend"`
+	Threshold              *decimal.Decimal `json:"threshold,omitempty" swaggertype:"string"`
 	TriggeredAt            time.Time        `json:"triggered_at"`
 }
 
-func NewSpendAlertEvent(sub *dto.SubscriptionResponse, lineItemID, groupID string, alertType types.AlertType, alertStatus types.AlertState, currentSpend string, triggeredAt time.Time) *SpendAlertEvent {
+func thresholdForAlertStatus(settings *types.AlertSettings, status types.AlertState) *decimal.Decimal {
+	if settings == nil {
+		return nil
+	}
+	var t *types.AlertThreshold
+	switch status {
+	case types.AlertStateInAlarm:
+		t = settings.Critical
+	case types.AlertStateWarning:
+		t = settings.Warning
+	case types.AlertStateInfo:
+		t = settings.Info
+	}
+	if t == nil {
+		return nil
+	}
+	return &t.Threshold
+}
+
+func NewSpendAlertEvent(sub *dto.SubscriptionResponse, lineItemID, groupID string, alertType types.AlertType, alertStatus types.AlertState, currentSpend string, alertSettings *types.AlertSettings, triggeredAt time.Time) *SpendAlertEvent {
 	return &SpendAlertEvent{
 		Subscription:           NewSubscription(sub),
 		SubscriptionLineItemID: lineItemID,
@@ -70,6 +91,7 @@ func NewSpendAlertEvent(sub *dto.SubscriptionResponse, lineItemID, groupID strin
 		AlertType:              alertType,
 		AlertStatus:            alertStatus,
 		CurrentSpend:           currentSpend,
+		Threshold:              thresholdForAlertStatus(alertSettings, alertStatus),
 		TriggeredAt:            triggeredAt,
 	}
 }

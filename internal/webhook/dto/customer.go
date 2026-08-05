@@ -11,17 +11,18 @@ type InternalCustomerEvent struct {
 }
 
 type Customer struct {
-	ID                string `json:"id"`
-	ExternalID        string `json:"external_id"`
-	Name              string `json:"name"`
-	Email             string `json:"email,omitempty"`
-	AddressLine1      string `json:"address_line1,omitempty"`
-	AddressLine2      string `json:"address_line2,omitempty"`
-	AddressCity       string `json:"address_city,omitempty"`
-	AddressState      string `json:"address_state,omitempty"`
-	AddressPostalCode string `json:"address_postal_code,omitempty"`
-	AddressCountry    string `json:"address_country,omitempty"`
-	Timezone          string `json:"timezone,omitempty"`
+	ID                string            `json:"id"`
+	ExternalID        string            `json:"external_id"`
+	Name              string            `json:"name"`
+	Email             string            `json:"email,omitempty"`
+	AddressLine1      string            `json:"address_line1,omitempty"`
+	AddressLine2      string            `json:"address_line2,omitempty"`
+	AddressCity       string            `json:"address_city,omitempty"`
+	AddressState      string            `json:"address_state,omitempty"`
+	AddressPostalCode string            `json:"address_postal_code,omitempty"`
+	AddressCountry    string            `json:"address_country,omitempty"`
+	Timezone          string            `json:"timezone,omitempty"`
+	Metadata          map[string]string `json:"metadata,omitempty"`
 }
 
 func NewCustomer(resp *dto.CustomerResponse) *Customer {
@@ -40,6 +41,7 @@ func NewCustomer(resp *dto.CustomerResponse) *Customer {
 		AddressPostalCode: resp.AddressPostalCode,
 		AddressCountry:    resp.AddressCountry,
 		Timezone:          resp.Timezone,
+		Metadata:          resp.Metadata,
 	}
 }
 
