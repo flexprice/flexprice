@@ -395,7 +395,6 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 		PeriodStart:     sub.CurrentPeriodStart,
 		PeriodEnd:       sub.CurrentPeriodEnd,
 		ProrationDate:   now,
-		Timezone:        sub.Timezone,
 		Strategy:        types.StrategySecondBased,
 		OriginalCredits: decimal.NewFromInt(100),
 	})
@@ -2745,19 +2744,19 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			StartDate:          &start,
-			EndDate:            &end,
-			Currency:           "usd",
-			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
-				LineItems: tt.lineItems,
-			},
-		}
+			req := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          &start,
+				EndDate:            &end,
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+					LineItems: tt.lineItems,
+				},
+			}
 			_, err := s.service.CreateSubscription(ctx, req)
 			s.Error(err)
 			s.Contains(err.Error(), tt.wantErrCont)
@@ -7116,17 +7115,17 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
 			// Create subscription request with overrides
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			Currency:           "usd",
-			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
-				OverrideLineItems: tc.overrideLineItems,
-			},
-		}
+			req := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+					OverrideLineItems: tc.overrideLineItems,
+				},
+			}
 
 			// Create subscription
 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
@@ -7701,17 +7700,17 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideIntegration() {
 		subscriptionIDs := make([]string, len(overrideScenarios))
 
 		for i, override := range overrideScenarios {
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			Currency:           "usd",
-			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
-				OverrideLineItems: []dto.OverrideLineItemRequest{override},
-			},
-		}
+			req := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+					OverrideLineItems: []dto.OverrideLineItemRequest{override},
+				},
+			}
 
 			resp, err := s.service.CreateSubscription(s.GetContext(), req)
 			s.NoError(err, "Failed to create subscription %d with overrides", i+1)
