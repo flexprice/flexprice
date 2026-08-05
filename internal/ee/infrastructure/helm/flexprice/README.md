@@ -592,13 +592,18 @@ output with default values is unchanged from chart 1.1.0.
 
 | Value | Applies to |
 |---|---|
-| `labels` | Every Kubernetes object the chart renders |
+| `labels` | Every object this chart renders itself — app workloads, in-cluster ClickHouse/Kafka/Redis, the migration and bootstrap Jobs |
 | `podLabels` | Every FlexPrice pod (api, consumer, worker, frontend) |
 | `<component>.labels` | That component's objects — Deployment, Service, HPA, PDB, Ingress, ServiceAccount |
 | `<component>.podLabels` | That component's pods only |
 
 `<component>` is one of `api`, `consumer`, `worker`, `frontend`. Per-component
 values merge on top of the global ones and win on key collisions.
+
+Resources created by the bundled **subcharts** (Bitnami PostgreSQL, Kafka, Redis
+and Temporal) are outside this chart's templates, so `labels` does not reach
+them. Use each subchart's own mechanism instead — for the Bitnami charts that is
+`postgresql.commonLabels`, `kafka.commonLabels`, and so on.
 
 The common case is tagging pods for a log shipper (Filebeat/ELK, Fluent Bit,
 Datadog), all of which enrich log records from pod metadata:
