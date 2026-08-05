@@ -47,6 +47,7 @@ type Invoice struct {
 	InvoicePDFURL   *string             `json:"invoice_pdf_url,omitempty"`
 	BillingReason   string              `json:"billing_reason,omitempty"`
 	Subscription    *Subscription       `json:"subscription,omitempty"`
+	Customer        *Customer           `json:"customer,omitempty"`
 	LineItems       []*InvoiceLineItem  `json:"line_items,omitempty"`
 }
 
@@ -81,6 +82,11 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 		}
 	}
 
+	var customer *Customer
+	if eventType == types.WebhookEventInvoiceUpdateFinalized {
+		customer = NewCustomer(resp.Customer)
+	}
+
 	return &Invoice{
 		ID:              resp.ID,
 		CustomerID:      resp.CustomerID,
@@ -104,6 +110,7 @@ func NewInvoice(resp *dto.InvoiceResponse, eventType types.WebhookEventName) *In
 		InvoicePDFURL:   resp.InvoicePDFURL,
 		BillingReason:   resp.BillingReason,
 		Subscription:    NewSubscription(resp.Subscription),
+		Customer:        customer,
 		LineItems:       lineItems,
 	}
 }
