@@ -54,5 +54,8 @@ func SSRFSafeTransport() *http.Transport {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DialContext = dialer.DialContext
+	// Disable env-configured proxying: routing through a proxy would make the
+	// dial guard validate the proxy's IP, not the caller-supplied destination.
+	transport.Proxy = nil
 	return transport
 }

@@ -42,6 +42,20 @@ func TestIsPublicIP(t *testing.T) {
 	}
 }
 
+func TestSSRFSafeTransport_IgnoresProxyEnv(t *testing.T) {
+	// http.DefaultTransport (which SSRFSafeTransport clones) defaults Proxy to
+	// ProxyFromEnvironment. If left in place, an HTTP_PROXY/HTTPS_PROXY env var
+	// would make the dial guard validate only the proxy's IP while the proxy
+	// itself forwards to whatever internal address the caller-supplied URL
+	// names -- bypassing the guard entirely.
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:9")
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+
+	if SSRFSafeTransport().Proxy != nil {
+		t.Fatal("expected SSRFSafeTransport to disable proxying so the dial guard always sees the real destination")
+	}
+}
+
 func TestSSRFSafeTransport_BlocksLoopback(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
