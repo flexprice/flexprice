@@ -9,6 +9,34 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.2.0] - 2026-08-05
+
+### Added
+- Custom labels per component. Every workload block (`api`, `consumer`,
+  `worker`, `frontend`) now accepts:
+  - `<component>.labels` — extra labels on that component's Kubernetes objects
+    (Deployment, Service, HPA, PDB, Ingress, ServiceAccount).
+  - `<component>.podLabels` — extra labels on that component's pods only.
+- Global `podLabels`, applied to every FlexPrice pod. Per-component
+  `podLabels` merge on top of it.
+- The pre-existing global `labels` value is now documented in `values.yaml`.
+
+  Intended for log shippers (Filebeat/ELK, Fluent Bit, Datadog) that enrich from
+  pod metadata, so operators no longer have to fork the templates to add an
+  index or team label:
+
+  ```yaml
+  podLabels:
+    logging.company.io/index: flexprice
+  api:
+    podLabels:
+      logging.company.io/index: flexprice-api
+  ```
+
+  Labels are never added to `spec.selector.matchLabels` — selectors are
+  immutable on Deployments, so changing these values stays `helm upgrade`-safe.
+  Rendering with default values is byte-identical to 1.1.0.
+
 ## [1.1.0] - 2026-06-11
 
 ### Added

@@ -4,8 +4,7 @@ kind: Ingress
 metadata:
   name: {{ include "flexprice.fullname" . }}-api
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -47,8 +46,7 @@ kind: Ingress
 metadata:
   name: {{ include "flexprice.fullname" . }}-frontend
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: frontend
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
   {{- with .Values.frontendIngress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}

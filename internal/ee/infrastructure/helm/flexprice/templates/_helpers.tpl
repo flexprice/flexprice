@@ -54,6 +54,55 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Object labels for a component's Kubernetes resources (Deployment, Service, HPA,
+PDB, Ingress, ServiceAccount, ...).
+Usage: include "flexprice.componentLabels" (dict "ctx" . "component" "api")
+
+Emits the common labels, the component label, and finally any operator-supplied
+labels from `.Values.<component>.labels`. Chart-owned keys win over user keys is
+NOT the behavior here — user keys are emitted last so an operator can override
+e.g. app.kubernetes.io/version if they really mean to.
+
+Never use this for `spec.selector.matchLabels`: selectors are immutable on
+Deployments and StatefulSets, so a user adding a label would break every
+subsequent `helm upgrade` with "field is immutable". Selectors stay on
+`flexprice.selectorLabels` + the component key.
+*/}}
+{{- define "flexprice.componentLabels" -}}
+{{- $ctx := .ctx -}}
+{{- /* `dig` can't walk .Values (chartutil.Values, not map[string]interface{}),
+       so resolve the component block with `index` and guard it being unset. */ -}}
+{{- $cfg := index $ctx.Values .component | default dict -}}
+{{ include "flexprice.labels" $ctx }}
+app.kubernetes.io/component: {{ .component }}
+{{- with (get $cfg "labels") }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Pod template labels for a component.
+Usage: include "flexprice.componentPodLabels" (dict "ctx" . "component" "api")
+
+Selector labels + component, then global `.Values.podLabels`, then
+`.Values.<component>.podLabels`. Pod labels are mutable, so adding one here only
+triggers a normal rolling update. This is the hook log shippers (Filebeat/ELK,
+Fluent Bit, Datadog) should target, since they enrich from pod metadata.
+*/}}
+{{- define "flexprice.componentPodLabels" -}}
+{{- $ctx := .ctx -}}
+{{- $cfg := index $ctx.Values .component | default dict -}}
+{{ include "flexprice.selectorLabels" $ctx }}
+app.kubernetes.io/component: {{ .component }}
+{{- with $ctx.Values.podLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- with (get $cfg "podLabels") }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Default ServiceAccount name (shared across components when per-workload SAs are off).
 */}}
 {{- define "flexprice.serviceAccountName" -}}

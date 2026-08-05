@@ -4,8 +4,7 @@ kind: Deployment
 metadata:
   name: {{ include "flexprice.fullname" . }}-consumer
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: consumer
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "consumer") | nindent 4 }}
 spec:
   replicas: {{ .Values.consumer.replicaCount }}
   {{- with .Values.consumer.strategy }}
@@ -27,8 +26,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "flexprice.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: consumer
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "consumer") | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

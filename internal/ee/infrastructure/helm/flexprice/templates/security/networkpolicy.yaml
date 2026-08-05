@@ -18,8 +18,7 @@ kind: NetworkPolicy
 metadata:
   name: {{ include "flexprice.fullname" . }}-api
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
 spec:
   podSelector:
     matchLabels:

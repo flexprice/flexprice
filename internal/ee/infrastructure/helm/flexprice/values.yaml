@@ -144,6 +144,13 @@ securityContext:
 api:
   enabled: true
   replicaCount: 1
+  # Extra labels for this component's Kubernetes objects (Deployment, Service,
+  # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
+  # Not applied to spec.selector.matchLabels — selectors are immutable.
+  labels: {}
+  # Extra labels for this component's pods only. Merged on top of the global
+  # `podLabels`. This is what log shippers (Filebeat/ELK, Fluent Bit) read.
+  podLabels: {}
   resources:
     requests:
       cpu: "500m"
@@ -184,6 +191,13 @@ api:
 consumer:
   enabled: true
   replicaCount: 1
+  # Extra labels for this component's Kubernetes objects (Deployment, Service,
+  # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
+  # Not applied to spec.selector.matchLabels — selectors are immutable.
+  labels: {}
+  # Extra labels for this component's pods only. Merged on top of the global
+  # `podLabels`. This is what log shippers (Filebeat/ELK, Fluent Bit) read.
+  podLabels: {}
   # Consumer-only env overrides (rendered after the shared flexprice.env, so these
   # win for duplicate keys). For settings that differ on the consumer vs api/worker —
   # e.g. FLEXPRICE_CACHE_ENABLED (cache enabled on the consumer only).
@@ -245,6 +259,13 @@ consumer:
 worker:
   enabled: true
   replicaCount: 1
+  # Extra labels for this component's Kubernetes objects (Deployment, Service,
+  # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
+  # Not applied to spec.selector.matchLabels — selectors are immutable.
+  labels: {}
+  # Extra labels for this component's pods only. Merged on top of the global
+  # `podLabels`. This is what log shippers (Filebeat/ELK, Fluent Bit) read.
+  podLabels: {}
   resources:
     requests:
       cpu: "375m"
@@ -299,6 +320,13 @@ ingress:
 frontend:
   enabled: false
   replicaCount: 1
+  # Extra labels for this component's Kubernetes objects (Deployment, Service,
+  # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
+  # Not applied to spec.selector.matchLabels — selectors are immutable.
+  labels: {}
+  # Extra labels for this component's pods only. Merged on top of the global
+  # `podLabels`. This is what log shippers (Filebeat/ELK, Fluent Bit) read.
+  podLabels: {}
   image:
     repository: flexprice-frontend
     tag: "local"
@@ -1032,6 +1060,13 @@ envAccess:
 # Pod annotations
 podAnnotations: {}
 
+# Pod labels applied to every flexprice pod (api, consumer, worker, frontend).
+# Per-component additions go under `<component>.podLabels`.
+# Example — tag pods for an ELK ingest pipeline:
+#   podLabels:
+#     logging.company.io/index: flexprice
+podLabels: {}
+
 # ---------------------------------------------------------------------------
 # Node placement — nodeSelector, tolerations, affinity
 # ---------------------------------------------------------------------------
@@ -1150,7 +1185,10 @@ extraVolumeMounts: []
 # - name: extra-volume
 #   mountPath: /extra
 
-# Resource labels
+# Labels applied to every Kubernetes object the chart renders.
+# Per-component additions go under `<component>.labels`.
+# Never lands on spec.selector.matchLabels — those are immutable on
+# Deployments, so changing this value stays upgrade-safe.
 labels: {}
 
 # ---------------------------------------------------------------------------

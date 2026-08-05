@@ -4,8 +4,7 @@ kind: Deployment
 metadata:
   name: {{ include "flexprice.fullname" . }}-frontend
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: frontend
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
 spec:
   replicas: {{ .Values.frontend.replicaCount }}
   selector:
@@ -15,8 +14,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "flexprice.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: frontend
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "frontend") | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -89,8 +87,7 @@ kind: Service
 metadata:
   name: {{ include "flexprice.fullname" . }}-frontend
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: frontend
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
 spec:
   type: ClusterIP
   ports:

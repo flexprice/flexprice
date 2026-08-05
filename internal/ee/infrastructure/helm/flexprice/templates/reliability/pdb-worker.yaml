@@ -4,8 +4,7 @@ kind: PodDisruptionBudget
 metadata:
   name: {{ include "flexprice.fullname" . }}-worker
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: worker
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "worker") | nindent 4 }}
 spec:
   {{- if .Values.worker.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.worker.podDisruptionBudget.minAvailable }}
