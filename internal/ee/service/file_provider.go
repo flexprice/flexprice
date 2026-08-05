@@ -197,6 +197,9 @@ func parseAllowedURL(fileURL string) (*url.URL, error) {
 	if !allowedSchemes[strings.ToLower(u.Scheme)] {
 		return nil, fmt.Errorf("unsupported URL scheme %q: only http and https are allowed", u.Scheme)
 	}
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("URL must include a host")
+	}
 	return u, nil
 }
 
@@ -258,7 +261,7 @@ func (r *FileProviderRegistry) GetProvider(fileURL string) FileProvider {
 	if matchesHost(host, "drive.google.com") {
 		return r.providers[FileProviderTypeGoogleDrive]
 	}
-	if matchesHost(host, "amazonaws.com") || strings.Contains(host, "s3.") {
+	if isS3Host(host) {
 		return r.providers[FileProviderTypeS3]
 	}
 	if matchesHost(host, "onedrive.live.com") || matchesHost(host, "1drv.ms") {
@@ -278,4 +281,20 @@ func (r *FileProviderRegistry) GetProvider(fileURL string) FileProvider {
 // matchesHost reports whether host equals domain or is a subdomain of it.
 func matchesHost(host, domain string) bool {
 	return host == domain || strings.HasSuffix(host, "."+domain)
+}
+
+// isS3Host reports whether host is an S3 endpoint, e.g. "s3.amazonaws.com",
+// "s3.us-east-1.amazonaws.com", or "my-bucket.s3.amazonaws.com" -- not just
+// any *.amazonaws.com service (ec2, lambda, ...) or an unrelated domain that
+// happens to contain "s3.".
+func isS3Host(host string) bool {
+	if !matchesHost(host, "amazonaws.com") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "s3" || strings.HasPrefix(label, "s3-") {
+			return true
+		}
+	}
+	return false
 }

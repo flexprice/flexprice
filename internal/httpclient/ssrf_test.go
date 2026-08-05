@@ -25,6 +25,13 @@ func TestIsPublicIP(t *testing.T) {
 		{"unspecified v6", "::", false},
 		{"multicast v4", "224.0.0.1", false},
 		{"ipv4-mapped loopback", "::ffff:127.0.0.1", false},
+		{"shared address space (CGNAT)", "100.64.0.1", false},
+		{"documentation TEST-NET-1", "192.0.2.1", false},
+		{"documentation TEST-NET-2", "198.51.100.1", false},
+		{"documentation TEST-NET-3", "203.0.113.1", false},
+		{"benchmarking", "198.18.0.1", false},
+		{"limited broadcast", "255.255.255.255", false},
+		{"ipv6 documentation", "2001:db8::1", false},
 		{"public v4", "8.8.8.8", true},
 		{"public v6", "2606:4700:4700::1111", true},
 	}

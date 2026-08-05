@@ -14,6 +14,8 @@ func TestParseAllowedURL_Scheme(t *testing.T) {
 		{"ftp scheme rejected", "ftp://example.com/file.csv", true},
 		{"gopher scheme rejected", "gopher://example.com/file.csv", true},
 		{"no scheme rejected", "example.com/file.csv", true},
+		{"empty host rejected", "http://", true},
+		{"opaque http rejected", "http:opaque", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -41,6 +43,9 @@ func TestFileProviderRegistry_GetProvider(t *testing.T) {
 		{"direct url", "https://example.com/file.csv", FileProviderTypeDirect},
 		{"spoofed host in query is not misclassified", "https://evil.com/?x=drive.google.com", FileProviderTypeDirect},
 		{"spoofed host as suffix is not misclassified", "https://drive.google.com.evil.com/file.csv", FileProviderTypeDirect},
+		{"s3 with region", "https://s3.us-east-1.amazonaws.com/my-bucket/file.csv", FileProviderTypeS3},
+		{"non-s3 aws service is not misclassified as s3", "https://ec2.amazonaws.com/file.csv", FileProviderTypeDirect},
+		{"non-s3 domain containing s3. substring is not misclassified", "https://not-s3.example.com/file.csv", FileProviderTypeDirect},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
