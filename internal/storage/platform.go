@@ -37,9 +37,12 @@ func ResolveProvider(ctx context.Context, cfg *config.Configuration) Provider {
 //
 // signerEmail applies to GCS only and is ignored for S3, where presigned URLs
 // are signed with the request credentials themselves. Mapping a purpose to its
-// signer is the Resolver's job, which is why this takes a plain string rather
-// than a Purpose.
-func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider Provider, bucket, region, signerEmail string, log *logger.Logger) (Storage, error) {
+// signer is the Resolver's job, which is why signerEmail is a plain string.
+//
+// purpose is taken separately because credential validation is purpose-scoped:
+// only PurposeExport reads the flexprice_s3_exports section, so only it may
+// enforce that section's requirements (see the S3 branch).
+func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider Provider, purpose Purpose, bucket, region, signerEmail string, log *logger.Logger) (Storage, error) {
 	switch provider {
 	case ProviderGCS:
 		return gcsbackend.New(ctx, &gcsbackend.Config{
@@ -53,8 +56,16 @@ func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider
 		// actually validated. Must run before constructing s3Cfg so a
 		// misconfigured credential source fails loudly here rather than lazily
 		// inside the AWS SDK's ambient credential chain resolution.
-		if err := cfg.FlexpriceS3Exports.Validate(); err != nil {
-			return nil, err
+		//
+		// Scoped to PurposeExport deliberately. Invoice storage draws its bucket
+		// and region from cfg.S3 and never reads flexprice_s3_exports, so
+		// validating that section for PurposeInvoice would break every existing
+		// deployment that serves invoice PDFs without having enabled exports —
+		// the section is legitimately empty there.
+		if purpose == PurposeExport {
+			if err := cfg.FlexpriceS3Exports.Validate(); err != nil {
+				return nil, err
+			}
 		}
 
 		s3Cfg := &s3backend.Config{
@@ -66,7 +77,7 @@ func NewPlatformStorage(ctx context.Context, cfg *config.Configuration, provider
 			s3Cfg.AWSSecretAccessKey = cfg.FlexpriceS3Exports.AWSSecretAccessKey
 			s3Cfg.AWSSessionToken = cfg.FlexpriceS3Exports.AWSSessionToken
 		}
-		if cfg.FlexpriceS3Exports.FederationEnabled {
+		if purpose == PurposeExport && cfg.FlexpriceS3Exports.FederationEnabled {
 			// FederationTokenSource is wired in Plan 2 once the companion
 			// Terraform+Go GCP-identity-token-minting implementation exists.
 			// Until then there is no way to actually federate, and letting

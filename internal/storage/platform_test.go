@@ -29,7 +29,7 @@ func TestNewPlatformStorage_S3Provider_ExplicitOverride(t *testing.T) {
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeInvoice, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, storage.ProviderS3, s.Provider())
@@ -56,7 +56,7 @@ func TestNewPlatformStorage_GCSProvider(t *testing.T) {
 		Storage: config.StorageConfig{Provider: "gcs"},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderGCS, "flexprice-invoices", "", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderGCS, storage.PurposeInvoice, "flexprice-invoices", "", "", logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, storage.ProviderGCS, s.Provider())
@@ -76,7 +76,7 @@ func TestNewPlatformStorage_GCSProvider_WithSigner(t *testing.T) {
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderGCS, "flexprice-invoices", "", cfg.GCS.SignerServiceAccountEmail, logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderGCS, storage.PurposeInvoice, "flexprice-invoices", "", cfg.GCS.SignerServiceAccountEmail, logger.NewNoopLogger())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 	require.Equal(t, storage.ProviderGCS, s.Provider())
@@ -87,7 +87,7 @@ func TestNewPlatformStorage_UnsupportedProvider_ReturnsError(t *testing.T) {
 		Storage: config.StorageConfig{Provider: "azure"},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.Provider("azure"), "bucket", "region", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.Provider("azure"), storage.PurposeInvoice, "bucket", "region", "", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 }
@@ -116,7 +116,7 @@ func TestNewPlatformStorage_S3Provider_InvalidFlexpriceS3ExportsCreds(t *testing
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeExport, "flexprice-exports", "ap-south-1", "", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "no credential source configured")
@@ -144,7 +144,7 @@ func TestNewPlatformStorage_S3Provider_FederationEnabledWithoutRoleARN(t *testin
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeExport, "flexprice-exports", "ap-south-1", "", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "federation_enabled is true but federation_role_arn is not set")
@@ -179,8 +179,68 @@ func TestNewPlatformStorage_S3Provider_FederationEnabledWithRoleARN_FailsLoud(t 
 		},
 	}
 
-	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeExport, "flexprice-exports", "ap-south-1", "", logger.NewNoopLogger())
 	require.Error(t, err)
 	require.Nil(t, s)
 	require.Contains(t, err.Error(), "OIDC federation is enabled but not yet fully wired")
+}
+
+// TestNewPlatformStorage_S3Provider_InvoiceIgnoresEmptyExportsConfig is the
+// regression guard for a backward-compatibility break: invoice storage draws its
+// bucket from cfg.S3 and its region from cfg.S3.Region, and never reads
+// flexprice_s3_exports at all. Validating that section for PurposeInvoice broke
+// every pre-existing AWS deployment that serves invoice PDFs but never enabled
+// exports — a legitimately empty section made GetInvoicePDFUrl fail with
+// "flexprice S3 exports bucket is not configured".
+//
+// The failure was lazy rather than at boot (Resolver caches per purpose), so it
+// surfaced only on the first invoice-PDF request.
+func TestNewPlatformStorage_S3Provider_InvoiceIgnoresEmptyExportsConfig(t *testing.T) {
+	cfg := &config.Configuration{
+		Storage: config.StorageConfig{Provider: "s3"},
+		S3: config.S3Config{
+			Enabled: true,
+			Region:  "ap-south-1",
+			InvoiceBucketConfig: config.BucketConfig{
+				Bucket:                "flexprice-invoices",
+				PresignExpiryDuration: "1h",
+			},
+		},
+		// FlexpriceS3Exports deliberately zero-valued: exports never enabled.
+	}
+
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeInvoice, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	require.Equal(t, storage.ProviderS3, s.Provider())
+}
+
+// TestNewPlatformStorage_S3Provider_InvoiceIgnoresFederationEnabled pins the
+// other half of the same scoping rule: federation is an exports-credential
+// concern, so a federation setting left over in config must not make the invoice
+// path fail loud. Without the purpose scope this returned "OIDC federation is
+// enabled but not yet fully wired" for invoice PDFs.
+func TestNewPlatformStorage_S3Provider_InvoiceIgnoresFederationEnabled(t *testing.T) {
+	cfg := &config.Configuration{
+		Storage: config.StorageConfig{Provider: "s3"},
+		S3: config.S3Config{
+			Enabled: true,
+			Region:  "ap-south-1",
+			InvoiceBucketConfig: config.BucketConfig{
+				Bucket:                "flexprice-invoices",
+				PresignExpiryDuration: "1h",
+			},
+		},
+		FlexpriceS3Exports: config.FlexpriceS3ExportsConfig{
+			Bucket:            "flexprice-exports",
+			Region:            "ap-south-1",
+			FederationEnabled: true,
+			FederationRoleARN: "arn:aws:iam::123456789012:role/flexprice-gke-federation",
+		},
+	}
+
+	s, err := storage.NewPlatformStorage(context.Background(), cfg, storage.ProviderS3, storage.PurposeInvoice, "flexprice-invoices", "ap-south-1", "", logger.NewNoopLogger())
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	require.Equal(t, storage.ProviderS3, s.Provider())
 }

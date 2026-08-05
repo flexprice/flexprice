@@ -182,6 +182,37 @@ func TestResolver_ForPlatform_GCSInvoiceEmptySigner(t *testing.T) {
 	assert.Contains(t, err.Error(), "FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL")
 }
 
+// TestResolver_ForPlatform_InvoiceWorksWithoutExportsConfig exercises the real
+// call path that regressed: an existing AWS deployment with invoice S3 fully
+// configured and flexprice_s3_exports never set. ForPlatform(PurposeInvoice)
+// must construct successfully, because invoice storage does not read that
+// section. Previously it failed with "flexprice S3 exports bucket is not
+// configured" on the first invoice-PDF request.
+func TestResolver_ForPlatform_InvoiceWorksWithoutExportsConfig(t *testing.T) {
+	cfg := &config.Configuration{
+		S3: config.S3Config{
+			Enabled: true,
+			Region:  "us-east-1",
+			InvoiceBucketConfig: config.BucketConfig{
+				Bucket:                "s3-invoice-bucket",
+				PresignExpiryDuration: "15m",
+			},
+		},
+		// FlexpriceS3Exports deliberately zero-valued.
+	}
+	r := newTestResolver(t, ProviderS3, cfg)
+
+	s, err := r.ForPlatform(context.Background(), PurposeInvoice)
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	assert.Equal(t, ProviderS3, s.Provider())
+
+	// The export purpose still enforces the exports config, so a deployment that
+	// actually uses exports keeps failing loud instead of silently misresolving.
+	_, err = r.ForPlatform(context.Background(), PurposeExport)
+	require.Error(t, err)
+}
+
 func TestResolver_ForPlatform_Caches(t *testing.T) {
 	cfg := testConfig()
 	r := newTestResolver(t, ProviderS3, cfg)

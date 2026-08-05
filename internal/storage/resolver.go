@@ -99,7 +99,7 @@ func (r *resolver) ForPlatform(ctx context.Context, purpose Purpose) (Storage, e
 		return nil, err
 	}
 
-	s, err := NewPlatformStorage(ctx, r.cfg, r.provider, bucket, region, signerEmail, r.logger)
+	s, err := NewPlatformStorage(ctx, r.cfg, r.provider, purpose, bucket, region, signerEmail, r.logger)
 	if err != nil {
 		return nil, err
 	}
