@@ -12,20 +12,21 @@ import (
 // previously read .Sentry should use .Tracing. The field name is kept short
 // because builders only use it for CaptureException today.
 type Services struct {
-	InvoiceService         service.InvoiceService
-	PlanService            service.PlanService
-	PriceService           service.PriceService
-	EntitlementService     service.EntitlementService
-	FeatureService         service.FeatureService
-	SubscriptionService    service.SubscriptionService
-	WalletService          service.WalletService
-	CustomerService        service.CustomerService
-	PaymentService         service.PaymentService
-	Tracing                *tracing.Service
-	CreditNoteService      service.CreditNoteService
-	CheckoutSessionService interfaces.CheckoutSessionService
-	GroupService           service.GroupService
-	EntitlementGrantSvc    service.EntitlementGrantService
+	InvoiceService           service.InvoiceService
+	PlanService              service.PlanService
+	PriceService             service.PriceService
+	EntitlementService       service.EntitlementService
+	FeatureService           service.FeatureService
+	SubscriptionService      service.SubscriptionService
+	SubscriptionPhaseService service.SubscriptionPhaseService
+	WalletService            service.WalletService
+	CustomerService          service.CustomerService
+	PaymentService           service.PaymentService
+	Tracing                  *tracing.Service
+	CreditNoteService        service.CreditNoteService
+	CheckoutSessionService   interfaces.CheckoutSessionService
+	GroupService             service.GroupService
+	EntitlementGrantSvc      service.EntitlementGrantService
 }
 
 // NewServices creates a new Services container
@@ -36,6 +37,7 @@ func NewServices(
 	entitlementService service.EntitlementService,
 	featureService service.FeatureService,
 	subscriptionService service.SubscriptionService,
+	subscriptionPhaseService service.SubscriptionPhaseService,
 	walletService service.WalletService,
 	customerService service.CustomerService,
 	paymentService service.PaymentService,
@@ -46,19 +48,20 @@ func NewServices(
 	entitlementGrantSvc service.EntitlementGrantService,
 ) *Services {
 	return &Services{
-		InvoiceService:         invoiceService,
-		PlanService:            planService,
-		PriceService:           priceService,
-		EntitlementService:     entitlementService,
-		FeatureService:         featureService,
-		SubscriptionService:    subscriptionService,
-		WalletService:          walletService,
-		CustomerService:        customerService,
-		PaymentService:         paymentService,
-		Tracing:                tracingSvc,
-		CreditNoteService:      creditNoteService,
-		CheckoutSessionService: checkoutSessionService,
-		GroupService:           groupService,
-		EntitlementGrantSvc:    entitlementGrantSvc,
+		InvoiceService:           invoiceService,
+		PlanService:              planService,
+		PriceService:             priceService,
+		EntitlementService:       entitlementService,
+		FeatureService:           featureService,
+		SubscriptionService:      subscriptionService,
+		SubscriptionPhaseService: subscriptionPhaseService,
+		WalletService:            walletService,
+		CustomerService:          customerService,
+		PaymentService:           paymentService,
+		Tracing:                  tracingSvc,
+		CreditNoteService:        creditNoteService,
+		CheckoutSessionService:   checkoutSessionService,
+		GroupService:             groupService,
+		EntitlementGrantSvc:      entitlementGrantSvc,
 	}
 }

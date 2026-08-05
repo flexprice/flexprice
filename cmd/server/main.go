@@ -241,6 +241,7 @@ func main() {
 			service.NewCustomerService,
 			service.NewPlanService,
 			service.NewSubscriptionService,
+			service.NewSubscriptionPhaseService,
 			service.NewWalletService,
 			service.NewInvoiceService,
 			service.NewFeatureService,

@@ -68,6 +68,17 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewSubscriptionPayloadBuilder(f.services)
 	}
 
+	// subscription phase builders
+	f.builders[types.WebhookEventSubscriptionPhaseCreated] = func() PayloadBuilder {
+		return NewSubscriptionPhasePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionPhaseUpdated] = func() PayloadBuilder {
+		return NewSubscriptionPhasePayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionPhaseDeleted] = func() PayloadBuilder {
+		return NewSubscriptionPhasePayloadBuilder(f.services)
+	}
+
 	// Register feature builders
 	f.builders[types.WebhookEventFeatureCreated] = func() PayloadBuilder {
 		return NewFeaturePayloadBuilder(f.services)
