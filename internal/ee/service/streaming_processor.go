@@ -25,6 +25,7 @@ import (
 // StreamingProcessor handles streaming processing of large files
 type StreamingProcessor struct {
 	Client           httpclient.Client
+	Transport        http.RoundTripper // SSRF-safe, Otel-instrumented; shared by FileProcessor's ad-hoc clients
 	Logger           *logger.Logger
 	ProviderRegistry *FileProviderRegistry
 	CSVProcessor     *CSVProcessor
@@ -32,19 +33,25 @@ type StreamingProcessor struct {
 	RetryClient      *retryablehttp.Client
 }
 
-// NewStreamingProcessor creates a new streaming processor
-func NewStreamingProcessor(client httpclient.Client, logger *logger.Logger) *StreamingProcessor {
+// NewStreamingProcessor creates a new streaming processor. file_url is
+// caller-supplied, so every outbound download goes through a shared
+// SSRF-safe transport that blocks connections to loopback/link-local/
+// private/unspecified/multicast addresses -- see httpclient.SSRFSafeTransport.
+func NewStreamingProcessor(logger *logger.Logger) *StreamingProcessor {
+	base := httpclient.SSRFSafeTransport()
+	transport := httpclient.OtelTransport(base)
+
 	// Configure retryable HTTP client
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = 3
 	retryClient.RetryWaitMin = 1 * time.Second
 	retryClient.RetryWaitMax = 30 * time.Second
 	retryClient.Logger = logger.GetRetryableHTTPLogger()
-	// Instrument outbound file downloads for SigNoz External API Monitoring.
-	retryClient.HTTPClient.Transport = httpclient.OtelTransport(retryClient.HTTPClient.Transport)
+	retryClient.HTTPClient.Transport = transport
 
 	return &StreamingProcessor{
-		Client:           client,
+		Client:           httpclient.NewClientWithConfig(httpclient.ClientConfig{Transport: base}),
+		Transport:        transport,
 		Logger:           logger,
 		ProviderRegistry: NewFileProviderRegistry(),
 		RetryClient:      retryClient,
