@@ -6,7 +6,7 @@
 #   validate — static checks + engine unit tests + coverage summary.
 #              Runs on PRs into develop and main. No secrets needed.
 #   run      — executes sanity-tagged journeys against staging.
-#              Runs on PRs into main (develop→main promotions: deploy.yml
+#              Runs on develop→main release PRs only (deploy.yml
 #              keeps staging deployed from develop, so the release PR is
 #              verified against the exact code being promoted), nightly,
 #              and on manual dispatch.
@@ -64,9 +64,13 @@ jobs:
   run:
     name: Run journeys against staging
     needs: validate
-    # Release PRs (into main), nightly, and manual runs — not suite-only PRs
-    # into other branches.
-    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    # Release PRs (develop→main only), nightly, and manual runs. PR runs are
+    # restricted to head develop so this job never executes unreviewed PR code
+    # with secrets — an arbitrary same-repo branch targeting main must not be
+    # able to run a modified runner that could exfiltrate INTEGRATION_TARGETS_JSON.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.base_ref == 'main' && github.head_ref == 'develop')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
