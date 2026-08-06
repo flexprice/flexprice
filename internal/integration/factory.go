@@ -37,7 +37,6 @@ import (
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
-	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/tabs"
@@ -47,6 +46,9 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/gcsbackend"
+	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -70,9 +72,6 @@ type Factory struct {
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
 	locker                       cache.Locker
-
-	// Storage clients (cached for reuse)
-	s3Client *s3.Client
 
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
@@ -1334,32 +1333,262 @@ func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasTabsConnection(ctx)
 }
 
-// GetStorageProvider returns an S3 storage client for the given connection
-// Currently only S3 is supported. In the future, Azure Blob Storage, Google Cloud Storage,
-// and other providers can be added by checking the connection's provider type.
-func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+// GetStorageProvider returns a cloud-agnostic Storage for the given connection,
+// dispatching to the S3 or GCS backend based on the connection's provider type.
+// This is the only entrypoint for customer BYO storage — callers never see a
+// concrete backend type.
+func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (storage.Storage, error) {
+	if connectionID == "" {
+		return nil, ierr.NewError("connection ID is required for storage").
+			WithHint("Provide a connection_id; multiple storage connections are supported per environment").
+			Mark(ierr.ErrValidation)
 	}
 
-	return f.s3Client, nil
+	conn, err := f.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
-// GetS3Client returns the S3 client directly (for backward compatibility)
-// Deprecated: Use GetStorageProvider instead for future-proof code
-func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
-	if f.s3Client == nil {
-		f.s3Client = s3.NewClient(
-			f.connectionRepo,
-			f.encryptionService,
-			f.logger,
-		)
+// GetStorageProviderForConnection builds a Storage from an in-memory connection
+// rather than fetching one by ID.
+//
+// This exists so a connection's storage config can be verified BEFORE it is
+// persisted: connection create and update both need to know whether the bucket
+// is actually reachable with the supplied credentials, and validating the
+// already-stored row would only prove the previous config still works. Building
+// from the proposed connection means a bad config is rejected without ever
+// being written, so neither path needs a rollback.
+//
+// The connection is only read here — nothing is persisted.
+func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	if conn == nil {
+		return nil, ierr.NewError("connection is required for storage").
+			Mark(ierr.ErrValidation)
 	}
-	return f.s3Client, nil
+
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		return f.buildS3Storage(ctx, conn)
+	case types.SecretProviderGCS:
+		return f.buildGCSStorage(ctx, conn)
+	default:
+		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
+			WithHint("Supported storage provider types: s3, gcs").
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Flexprice-managed connections write to a Flexprice-owned bucket using the
+	// deployment's own ambient/static/federated identity, resolved from PLATFORM
+	// config at runtime — not from any credential snapshot on the connection row.
+	// This mirrors buildGCSStorage's managed branch: rotating the platform
+	// credential source takes effect immediately for every managed connection,
+	// and legacy rows that still carry a credential snapshot in
+	// EncryptedSecretData.S3 (from before this fix) simply have it ignored, since
+	// this branch runs before the decrypt path below.
+	//
+	// The DESTINATION is a different matter from the credentials. A managed
+	// connection records the bucket it was created against, and existing objects
+	// live there; silently retargeting it at whatever the platform config
+	// currently says would strand every prior export the moment that config
+	// drifts. So the row wins, and platform config is only the fallback for rows
+	// created before the bucket was recorded.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceS3Exports.Validate(); err != nil {
+			return nil, err
+		}
+
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceS3Exports.Bucket
+		}
+		region := jobConfig.Region
+		if region == "" {
+			region = f.config.FlexpriceS3Exports.Region
+		}
+
+		s3Cfg := &s3backend.Config{
+			Bucket:            bucket,
+			Region:            region,
+			KeyPrefix:         jobConfig.KeyPrefix,
+			CompressionGzip:   jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt: string(jobConfig.Encryption),
+		}
+
+		switch f.config.FlexpriceS3Exports.ResolvedCredentialSource() {
+		case config.CredentialSourceStatic:
+			s3Cfg.AWSAccessKeyID = f.config.FlexpriceS3Exports.AWSAccessKeyID
+			s3Cfg.AWSSecretAccessKey = f.config.FlexpriceS3Exports.AWSSecretAccessKey
+			s3Cfg.AWSSessionToken = f.config.FlexpriceS3Exports.AWSSessionToken
+		case config.CredentialSourceAmbient:
+			// Deliberately leave credentials empty: s3backend.New falls through to
+			// the AWS default credential chain (EKS IRSA / EKS Pod Identity / ECS
+			// task role / EC2 instance profile).
+		case config.CredentialSourceFederation:
+			// FederationTokenSource is wired once the GCP->AWS federation token
+			// source implementation lands; only the role ARN is set for now.
+			s3Cfg.FederationRoleARN = f.config.FlexpriceS3Exports.FederationRoleARN
+		}
+
+		return s3backend.New(ctx, s3Cfg, f.logger)
+	}
+
+	switch jobConfig.ResolvedAccessMode() {
+	case types.StorageAccessModeAssumeRole:
+		// DISABLED pending a dedicated, per-environment AWS principal.
+		//
+		// The mechanism itself is implemented and was verified end to end
+		// against a real cross-account bucket (connection validation, export
+		// upload, ExternalId enforcement, and secret redaction all behaved
+		// correctly). What is missing is a safe customer-facing contract.
+		//
+		// Two problems, both about WHICH principal the customer is asked to
+		// trust in their own IAM trust policy:
+		//
+		//  1. It borrowed marketplace.aws.* — the identity used for AWS
+		//     Marketplace metering, an unrelated feature. Customers would be
+		//     told to trust a principal whose name and purpose say
+		//     "marketplace", and one compromised key would cover both metering
+		//     and every customer's storage bucket.
+		//
+		//  2. A single shared principal cannot separate environments. Staging
+		//     and production share one AWS account, and ExternalId does NOT
+		//     help here: it guards the customer's side against third parties,
+		//     not against which Flexprice environment is calling. External IDs
+		//     live in sync_config as plaintext and are derived from tenant_id,
+		//     so the same tenant has the SAME id in both environments — and a
+		//     staging database refreshed from a production snapshot would hold
+		//     every production external ID. Staging could then assume a
+		//     customer's production role and write to their production bucket.
+		//     Only a distinct principal per environment is a real boundary.
+		//
+		// To enable: create role/flexprice-storage-access-<env> in the
+		// Flexprice AWS account, trusted by that environment's compute only
+		// (EKS IRSA / ECS task role, or the GCP federated identity when
+		// federation lands), holding sts:AssumeRole and no bucket permissions
+		// of its own. Add a dedicated storage.aws.* config section pointing at
+		// it — never marketplace.aws.* — and document ONLY the production ARN
+		// to customers. Then restore the branch below.
+		return nil, ierr.NewError("assume_role storage connections are not enabled").
+			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled: it requires a dedicated per-environment Flexprice IAM principal that does not exist yet. Use access_mode 'static_key' with customer-supplied credentials for now.").
+			Mark(ierr.ErrValidation)
+
+		// Restore once the dedicated principal exists, reading base credentials
+		// from storage.aws.* (falling through to the ambient chain when no
+		// static keys are set, so AWS-hosted deployments need no key at all):
+		//
+		// return s3backend.New(ctx, &s3backend.Config{
+		// 	Bucket:               jobConfig.Bucket,
+		// 	Region:               jobConfig.Region,
+		// 	KeyPrefix:            jobConfig.KeyPrefix,
+		// 	CompressionGzip:      jobConfig.Compression == types.S3CompressionTypeGzip,
+		// 	ServerSideEncrypt:    string(jobConfig.Encryption),
+		// 	AssumeRoleARN:        jobConfig.RoleARN,
+		// 	AssumeRoleExternalID: jobConfig.ExternalID,
+		// 	// ... base credentials from storage.aws.*
+		// }, f.logger)
+
+	default: // types.StorageAccessModeStaticKey and empty (legacy rows)
+		if conn.EncryptedSecretData.S3 == nil {
+			return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
+		}
+
+		accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
+		}
+		secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
+		if err != nil {
+			return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
+		}
+		if accessKey == "" || secretKey == "" {
+			return nil, ierr.NewError("empty S3 credentials on connection").
+				WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
+				Mark(ierr.ErrValidation)
+		}
+		var sessionToken string
+		if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
+			sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
+			if err != nil {
+				return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+			}
+		}
+
+		return s3backend.New(ctx, &s3backend.Config{
+			Bucket:             jobConfig.Bucket,
+			Region:             jobConfig.Region,
+			KeyPrefix:          jobConfig.KeyPrefix,
+			CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
+			ServerSideEncrypt:  string(jobConfig.Encryption),
+			AWSAccessKeyID:     accessKey,
+			AWSSecretAccessKey: secretKey,
+			AWSSessionToken:    sessionToken,
+		}, f.logger)
+	}
+}
+
+func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+	jobConfig := conn.GetSyncConfig().Storage
+	if jobConfig == nil {
+		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+	}
+
+	// Flexprice-managed connections write to a Flexprice-owned bucket using the
+	// deployment's own ambient identity (Workload Identity on GKE). No service
+	// account key is involved: GCP projects commonly enforce
+	// constraints/iam.disableServiceAccountKeyCreation, so requiring an exported
+	// key here would make managed GCS exports impossible to operate.
+	//
+	// The strict no-ambient-fallback rule below still applies to customer BYO
+	// connections, where silently using Flexprice's identity after a customer
+	// supplied empty credentials would write to a customer bucket as Flexprice.
+	if jobConfig.IsFlexpriceManaged {
+		if err := f.config.FlexpriceGCSExports.Validate(); err != nil {
+			return nil, err
+		}
+		// Row-recorded bucket wins over platform config; see buildS3Storage for
+		// why the destination is treated differently from the credentials.
+		bucket := jobConfig.Bucket
+		if bucket == "" {
+			bucket = f.config.FlexpriceGCSExports.Bucket
+		}
+		return gcsbackend.New(ctx, &gcsbackend.Config{
+			Bucket:                    bucket,
+			KeyPrefix:                 jobConfig.KeyPrefix,
+			CompressionGzip:           jobConfig.Compression == types.S3CompressionTypeGzip,
+			SignerServiceAccountEmail: f.config.FlexpriceGCSExports.SignerServiceAccountEmail,
+		}, f.logger)
+	}
+
+	if conn.EncryptedSecretData.GCS == nil {
+		return nil, ierr.NewError("no GCS credentials found on connection").Mark(ierr.ErrValidation)
+	}
+
+	saJSON, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.GCS.ServiceAccountJSON)
+	if err != nil {
+		return nil, ierr.NewError("failed to decrypt GCS service account JSON").Mark(ierr.ErrInternal)
+	}
+	if saJSON == "" {
+		return nil, ierr.NewError("empty GCS credentials on connection").
+			WithHint("GCS service account JSON must be non-empty; refusing to fall back to ambient application default credentials").
+			Mark(ierr.ErrValidation)
+	}
+
+	return gcsbackend.New(ctx, &gcsbackend.Config{
+		Bucket:             jobConfig.Bucket,
+		KeyPrefix:          jobConfig.KeyPrefix,
+		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
+		ServiceAccountJSON: []byte(saJSON),
+	}, f.logger)
 }
 
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.

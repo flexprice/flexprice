@@ -327,12 +327,49 @@ s3:
     presign_expiry_duration: "1h"
     key_prefix: ""
 
+storage:
+  # provider: "" auto-detects via CloudDetector (GCP metadata -> gcs, AWS metadata -> s3).
+  # Set explicitly ("s3" or "gcs") to override detection.
+  provider: ""
+
+gcs:
+  enabled: false
+  invoice:
+    bucket: "" # Set via FLEXPRICE_GCS_INVOICE_BUCKET env var
+    presign_expiry_duration: "1h"
+    key_prefix: ""
+  # Identity used to sign presigned invoice PDF links. Ambient Workload Identity
+  # credentials cannot self-sign, so this must name a service account the workload
+  # may impersonate (roles/iam.serviceAccountTokenCreator). Required when the
+  # resolved storage provider is GCS — without it PDFs upload but every download
+  # link fails.
+  signer_service_account_email: "" # Set via FLEXPRICE_GCS_SIGNER_SERVICE_ACCOUNT_EMAIL
+
 flexprice_s3_exports:
   bucket: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET env var
   region: "ap-south-1"
-  aws_access_key_id: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_ACCESS_KEY_ID env var
-  aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SECRET_ACCESS_KEY env var
-  aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SESSION_TOKEN env var
+  aws_access_key_id: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_ACCESS_KEY_ID env var (optional if federation_role_arn is set)
+  aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_SECRET_ACCESS_KEY env var (optional if federation_role_arn is set)
+  aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_AWS_SESSION_TOKEN env var
+  federation_enabled: false # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_FEDERATION_ENABLED — GKE->AWS OIDC federation (see infrastructure repo s3-federation module)
+  federation_role_arn: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_FEDERATION_ROLE_ARN
+  # credential_source: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_CREDENTIAL_SOURCE — one of
+  # "static" (use aws_access_key_id/aws_secret_access_key), "ambient" (EKS IRSA / EKS Pod
+  # Identity / ECS task role / EC2 instance profile — all resolved via the AWS default
+  # credential chain, no per-mechanism config), or "federation" (GCP->AWS OIDC via
+  # federation_role_arn). Left empty, it is derived: federation_enabled=true -> "federation",
+  # both AWS keys set -> "static", otherwise -> "ambient".
+
+# GCS counterpart of flexprice_s3_exports, used when the deployment runs on GCP.
+# Authentication is ambient Workload Identity — there is deliberately no service
+# account key setting (projects commonly enforce
+# constraints/iam.disableServiceAccountKeyCreation).
+flexprice_gcs_exports:
+  bucket: "" # Set via FLEXPRICE_FLEXPRICE_GCS_EXPORTS_BUCKET env var
+  # Identity used to sign presigned GET URLs. Ambient Workload Identity credentials
+  # cannot self-sign, so this must name a service account the workload may
+  # impersonate (roles/iam.serviceAccountTokenCreator). Empty disables presigning.
+  signer_service_account_email: "" # Set via FLEXPRICE_FLEXPRICE_GCS_EXPORTS_SIGNER_SERVICE_ACCOUNT_EMAIL
 
 # Flexprice's own AWS identity — the principal that assumes each tenant's marketplace IAM role.
 # This is the caller named in the tenant's trust policy, NOT the tenant's role (that lives per

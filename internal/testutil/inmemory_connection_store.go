@@ -237,9 +237,9 @@ func cloneSyncConfig(sc *types.SyncConfig) *types.SyncConfig {
 	clone.Deal = cloneEntitySyncConfig(sc.Deal)
 	clone.Quote = cloneEntitySyncConfig(sc.Quote)
 
-	if sc.S3 != nil {
-		s3Clone := *sc.S3
-		clone.S3 = &s3Clone
+	if sc.Storage != nil {
+		storageClone := *sc.Storage
+		clone.Storage = &storageClone
 	}
 	if sc.InvoiceSyncSettings != nil {
 		settingsClone := *sc.InvoiceSyncSettings

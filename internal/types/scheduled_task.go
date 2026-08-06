@@ -130,19 +130,75 @@ func (e S3EncryptionType) Validate() error {
 		Mark(ierr.ErrValidation)
 }
 
-// S3ExportConfig represents S3 export configuration (non-sensitive settings)
-// This goes in the sync_config column
-type S3ExportConfig struct {
-	Bucket             string            `json:"bucket"`                         // S3 bucket name
-	Region             string            `json:"region"`                         // AWS region (e.g., "us-west-2")
-	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for S3 keys (e.g., "flexprice-exports/")
+// StorageAccessMode selects how Flexprice authenticates to a customer-owned (BYOB) storage
+// bucket. Empty behaves exactly as StorageAccessModeStaticKey so every existing row (written
+// before this type existed) keeps its original meaning — always resolve through
+// ResolvedAccessMode() rather than comparing AccessMode directly against "".
+type StorageAccessMode string
+
+const (
+	// StorageAccessModeStaticKey is the long-standing default: the tenant pastes static IAM
+	// (S3) or service-account JSON (GCS) credentials, stored encrypted on the connection.
+	StorageAccessModeStaticKey StorageAccessMode = "static_key"
+	// StorageAccessModeAssumeRole is S3-only: the tenant creates an IAM role trusting
+	// Flexprice's AWS account, and Flexprice calls sts:AssumeRole with RoleARN+ExternalID
+	// instead of storing any secret.
+	StorageAccessModeAssumeRole StorageAccessMode = "assume_role"
+	// StorageAccessModeImpersonation, StorageAccessModeDirectGrant, and StorageAccessModeWIF
+	// are reserved for future GCP BYOB keyless quadrants. They are documented here so the
+	// enum is discoverable but are NOT implemented — ValidateForProvider rejects them.
+	StorageAccessModeImpersonation StorageAccessMode = "impersonation"
+	StorageAccessModeDirectGrant   StorageAccessMode = "direct_grant"
+	StorageAccessModeWIF           StorageAccessMode = "wif"
+)
+
+// StorageExportConfig represents cloud storage export configuration (non-sensitive settings).
+// This goes in the sync_config column. Cloud-agnostic: used for both S3 and GCS connections.
+type StorageExportConfig struct {
+	Bucket             string            `json:"bucket"`                         // Storage bucket name
+	Region             string            `json:"region"`                         // Cloud region (e.g., "us-west-2"); unused for GCS
+	KeyPrefix          string            `json:"key_prefix,omitempty"`           // Optional prefix for object keys (e.g., "flexprice-exports/")
 	Compression        S3CompressionType `json:"compression,omitempty"`          // Compression type: "gzip", "none" (default: "none")
 	Encryption         S3EncryptionType  `json:"encryption,omitempty"`           // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed S3 credentials instead of user-provided
+	IsFlexpriceManaged bool              `json:"is_flexprice_managed,omitempty"` // If true, use Flexprice-managed storage credentials instead of user-provided
+	// AccessMode selects how Flexprice authenticates to a customer-owned (BYOB) bucket.
+	// Non-secret identifier, so it lives here (sync_config, plaintext) rather than in
+	// EncryptedSecretData. Always read via ResolvedAccessMode(), not this field directly.
+	AccessMode StorageAccessMode `json:"access_mode,omitempty"`
+	// RoleARN is the tenant's IAM role Flexprice assumes when AccessMode is assume_role.
+	// Not a secret by itself (it names a resource, not a credential) — same treatment as
+	// AWSMarketplaceConnectionSecrets.RoleArn.
+	RoleARN string `json:"role_arn,omitempty"`
+	// ExternalID is tenant-supplied, exactly like AWSMarketplaceConnectionSecrets.ExternalID:
+	// the frontend derives it deterministically from tenant_id and displays it inline with
+	// the trust-policy template the tenant pastes into their own AWS account. Flexprice never
+	// generates this value.
+	ExternalID string `json:"external_id,omitempty"`
 }
 
-// Validate validates the S3 export configuration
-func (s *S3ExportConfig) Validate() error {
+// ResolvedAccessMode returns the effective access mode, treating empty (every row written
+// before this field existed) as StorageAccessModeStaticKey. Prefer this over reading
+// AccessMode directly so callers never need to special-case the empty string.
+func (s *StorageExportConfig) ResolvedAccessMode() StorageAccessMode {
+	if s == nil || s.AccessMode == "" {
+		return StorageAccessModeStaticKey
+	}
+	return s.AccessMode
+}
+
+// Validate validates the storage export configuration without provider context.
+//
+// NOTE: this method is also invoked implicitly by Ent's generated code, because
+// ent/schema/connection.go declares sync_config as field.JSON(&types.SyncConfig{}),
+// and Ent's codegen auto-detects and calls a no-arg Validate() error method on any
+// JSON field type at Create()/Update() time (see ent/connection_create.go,
+// ent/connection_update.go check()). That call site has no provider-type context
+// available, so this method intentionally does NOT enforce the S3-only Region
+// requirement — it only checks provider-agnostic invariants (bucket presence,
+// compression/encryption enum validity). Callers that DO have provider context
+// (i.e. the connection service, which knows req.ProviderType / conn.ProviderType)
+// must call ValidateForProvider instead to get the stricter, correct check.
+func (s *StorageExportConfig) Validate() error {
 	if s == nil {
 		return nil
 	}
@@ -154,11 +210,6 @@ func (s *S3ExportConfig) Validate() error {
 	if s.Bucket == "" {
 		return ierr.NewError("bucket is required").
 			WithHint("S3 bucket name is required").
-			Mark(ierr.ErrValidation)
-	}
-	if s.Region == "" {
-		return ierr.NewError("region is required").
-			WithHint("AWS region is required").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -175,6 +226,59 @@ func (s *S3ExportConfig) Validate() error {
 	return nil
 }
 
+// ValidateForProvider validates the storage export configuration for the given
+// connection provider type. Region is required for S3 (AWS regions are mandatory)
+// but not for GCS (GCS buckets in this codebase's usage don't carry a region
+// requirement — see gcsbackend.Config, which has no Region field at all).
+//
+// Prefer this over the plain Validate() wherever the caller has provider-type
+// context (e.g. connection create/update); Validate() alone cannot enforce the
+// region-for-S3 rule because it is also invoked by Ent's generated code, which
+// has no provider-type context to pass in.
+func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	if s == nil || s.IsFlexpriceManaged {
+		return nil
+	}
+
+	if providerType != SecretProviderGCS && s.Region == "" {
+		return ierr.NewError("region is required").
+			WithHint("AWS region is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	switch s.ResolvedAccessMode() {
+	case StorageAccessModeStaticKey:
+		// Unchanged: static-key credentials are supplied via EncryptedSecretData, not here.
+	case StorageAccessModeAssumeRole:
+		// Rejected at creation, not just at use: a connection that cannot run is
+		// worse than one that was never created, and accepting it here would
+		// hand customers a trust-policy contract we intend to change.
+		//
+		// The flow is implemented and was verified end to end against a real
+		// cross-account bucket, but it needs a dedicated per-environment
+		// Flexprice IAM principal that does not exist yet — see the long
+		// comment on the assume_role branch in Factory.buildS3Storage for why a
+		// single shared principal is not safe (ExternalId guards the customer's
+		// side, not which Flexprice environment is calling).
+		return ierr.NewError("assume_role access mode is not enabled").
+			WithHint("Cross-account AssumeRole for customer buckets is implemented but disabled pending a dedicated per-environment Flexprice IAM principal. Use access_mode 'static_key' with customer-supplied credentials for now.").
+			Mark(ierr.ErrValidation)
+	case StorageAccessModeImpersonation, StorageAccessModeDirectGrant, StorageAccessModeWIF:
+		return ierr.NewError("access mode is not yet supported").
+			WithHintf("access_mode %q is reserved for future GCP BYOB support and is not implemented yet", s.AccessMode).
+			Mark(ierr.ErrValidation)
+	default:
+		return ierr.NewError("invalid access_mode").
+			WithHintf("access_mode %q is not recognized", s.AccessMode).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // S3JobConfig represents the configuration for an S3 export job
 // This is stored in the job_config JSON field of scheduled_tasks table
 type S3JobConfig struct {
@@ -186,6 +290,35 @@ type S3JobConfig struct {
 	EndpointURL          string               `json:"endpoint_url,omitempty"`           // Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
 	UsePathStyle         bool                 `json:"use_path_style,omitempty"`         // Use path-style addressing (required for MinIO)
 	ExportMetadataFields ExportMetadataFields `json:"export_metadata_fields,omitempty"` // Optional user-selected metadata columns
+	// Provider records which object store this job targets. Empty means S3, so
+	// existing rows written before GCS support keep their meaning. It exists
+	// because Validate() is called by Ent without provider context and must not
+	// enforce S3-only rules (notably Region) on a GCS job.
+	Provider SecretProvider `json:"provider,omitempty"`
+	// AccessMode/RoleARN/ExternalID mirror the same fields on
+	// StorageExportConfig. Credentials are always resolved from the CONNECTION
+	// (Factory.buildS3Storage reads conn.GetSyncConfig().Storage), never from
+	// this struct — these exist so a job config round-trips what the caller sent
+	// instead of silently discarding it, and so the values are visible when
+	// inspecting a scheduled task. Empty AccessMode means static_key, keeping
+	// rows written before assume-role support unchanged.
+	AccessMode StorageAccessMode `json:"access_mode,omitempty"`
+	RoleARN    string            `json:"role_arn,omitempty"`
+	ExternalID string            `json:"external_id,omitempty"`
+}
+
+// ResolvedAccessMode returns the effective access mode, treating empty as
+// static_key so pre-existing rows keep their behavior.
+func (s *S3JobConfig) ResolvedAccessMode() StorageAccessMode {
+	if s == nil || s.AccessMode == "" {
+		return StorageAccessModeStaticKey
+	}
+	return s.AccessMode
+}
+
+// isGCS reports whether this job targets Google Cloud Storage.
+func (s *S3JobConfig) isGCS() bool {
+	return s.Provider == SecretProviderGCS
 }
 
 // Validate validates the S3 job configuration
@@ -199,13 +332,23 @@ func (s *S3JobConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Bucket and region are required (should be populated by now)
+	// Bucket is required for every provider (should be populated by now).
 	if s.Bucket == "" {
 		return ierr.NewError("bucket is required").
-			WithHint("S3 bucket name is required").
+			WithHint("Storage bucket name is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.Region == "" {
+
+	// Region is an S3-only concept — a GCS bucket's location is fixed at creation
+	// and is never carried in the job config. This method is also invoked
+	// implicitly by Ent's generated code (ent/schema/scheduledtask.go declares
+	// job_config as field.JSON(&types.S3JobConfig{}), and Ent auto-calls a no-arg
+	// Validate() on JSON field types at Create()/Update() time), which has no
+	// provider context — so requiring a region unconditionally here would reject
+	// every Flexprice-managed GCS scheduled task before it could be persisted,
+	// regardless of what the service layer decided. Callers that do have provider
+	// context should use ValidateForProvider.
+	if s.Region == "" && !s.isGCS() {
 		return ierr.NewError("region is required").
 			WithHint("AWS region is required").
 			Mark(ierr.ErrValidation)
