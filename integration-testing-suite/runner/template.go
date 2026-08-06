@@ -129,7 +129,10 @@ func (c *RenderCtx) RenderString(s string) (any, error) {
 	}
 	var sb strings.Builder
 	if err := t.Execute(&sb, c.data); err != nil {
-		if strings.Contains(err.Error(), "map has no entry for key") {
+		// Only a missing .steps.* capture is a dependency skip; a missing key
+		// under .vars/.env/.target is an authoring error and must fail loudly.
+		if strings.Contains(err.Error(), "map has no entry for key") &&
+			strings.Contains(err.Error(), "<.steps.") {
 			return nil, &ErrMissingDependency{inner: err}
 		}
 		return nil, err

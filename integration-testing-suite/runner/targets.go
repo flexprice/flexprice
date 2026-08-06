@@ -30,14 +30,20 @@ func (t Target) host() string {
 	return h
 }
 
-// serverURL builds the full base URL. localhost/127.0.0.1 use http.
+// serverURL builds the full base URL. An explicitly configured scheme is
+// preserved; otherwise localhost/127.0.0.1 default to http, all else https.
 func (t Target) serverURL() string {
-	h := t.host()
-	scheme := "https://"
-	if strings.HasPrefix(h, "localhost") || strings.HasPrefix(h, "127.0.0.1") {
-		scheme = "http://"
+	h := t.APIHost
+	if h == "" {
+		h = defaultAPIHost
 	}
-	return scheme + h
+	if strings.HasPrefix(h, "http://") || strings.HasPrefix(h, "https://") {
+		return h
+	}
+	if strings.HasPrefix(h, "localhost") || strings.HasPrefix(h, "127.0.0.1") {
+		return "http://" + h
+	}
+	return "https://" + h
 }
 
 // label returns the display name.

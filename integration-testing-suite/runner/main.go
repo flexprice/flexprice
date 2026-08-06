@@ -39,6 +39,7 @@ func main() {
 		junitPath   = flag.String("junit", "", "write a JUnit XML report to this path")
 		stepTimeout = flag.Duration("step-timeout", 2*time.Minute, "timeout for a single API call")
 		jTimeout    = flag.Duration("journey-timeout", 15*time.Minute, "timeout for one full journey")
+		tdTimeout   = flag.Duration("teardown-timeout", 5*time.Minute, "extra time budget for teardown after the journey deadline")
 	)
 	flag.Parse()
 
@@ -103,7 +104,7 @@ func main() {
 			strings.Repeat("█", 62), ti+1, len(targets), target.label(), target.host(), target.maskedKey(),
 			strings.Repeat("█", 62))
 
-		reports = append(reports, runTarget(target, selected, *parallel, *stepTimeout, *jTimeout))
+		reports = append(reports, runTarget(target, selected, *parallel, *stepTimeout, *jTimeout, *tdTimeout))
 	}
 
 	// A requested report artifact that cannot be written is a CI contract
@@ -136,7 +137,7 @@ func main() {
 }
 
 // runTarget executes the selected journeys (in parallel) against one target.
-func runTarget(target Target, journeys []*Journey, parallelism int, stepTimeout, journeyTimeout time.Duration) *TargetReport {
+func runTarget(target Target, journeys []*Journey, parallelism int, stepTimeout, journeyTimeout, teardownTimeout time.Duration) *TargetReport {
 	serverURL := target.serverURL()
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
@@ -146,10 +147,11 @@ func runTarget(target Target, journeys []*Journey, parallelism int, stepTimeout,
 	targetDispatcher := NewDispatcher(client)
 
 	exec := &Executor{
-		Dispatcher:  targetDispatcher,
-		Raw:         NewRawClient(serverURL, target.APIKey),
-		TargetName:  target.label(),
-		StepTimeout: stepTimeout,
+		Dispatcher:      targetDispatcher,
+		Raw:             NewRawClient(serverURL, target.APIKey),
+		TargetName:      target.label(),
+		StepTimeout:     stepTimeout,
+		TeardownTimeout: teardownTimeout,
 	}
 
 	start := time.Now()

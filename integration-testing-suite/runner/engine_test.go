@@ -328,6 +328,71 @@ steps:
 	}
 }
 
+func TestServerURLPreservesExplicitScheme(t *testing.T) {
+	cases := map[string]string{
+		"":                            "https://api.cloud.flexprice.io/v1",
+		"http://dev.internal:8080/v1": "http://dev.internal:8080/v1",
+		"https://api.example.com/v1":  "https://api.example.com/v1",
+		"api.example.com/v1":          "https://api.example.com/v1",
+		"localhost:8080/v1":           "http://localhost:8080/v1",
+		"127.0.0.1:8080/v1":           "http://127.0.0.1:8080/v1",
+	}
+	for in, want := range cases {
+		if got := (Target{APIHost: in}).serverURL(); got != want {
+			t.Errorf("serverURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMissingKeyClassification(t *testing.T) {
+	rc := NewRenderCtx(map[string]any{"known": "v"}, "test")
+
+	_, err := rc.RenderString("{{ .steps.never.id }}")
+	if err == nil {
+		t.Fatal("missing step capture should error")
+	}
+	if _, ok := err.(*ErrMissingDependency); !ok {
+		t.Fatalf("missing step capture should be ErrMissingDependency, got %T: %v", err, err)
+	}
+
+	_, err = rc.RenderString("{{ .vars.typo }}")
+	if err == nil {
+		t.Fatal("missing var should error")
+	}
+	if _, ok := err.(*ErrMissingDependency); ok {
+		t.Fatalf("missing .vars key must fail loudly, not skip as a dependency: %v", err)
+	}
+}
+
+const deadlineJourney = `
+journey: deadline
+steps:
+  - id: customer
+    call: Customers.CreateCustomer
+    with: { external_id: "e-{{ .run.id }}", name: "First" }
+teardown:
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: cust_1
+`
+
+func TestTeardownRunsAfterJourneyDeadline(t *testing.T) {
+	fake, ts := newFakeAPI(t)
+	exec := newTestExecutor(ts.URL)
+	j := loadJourneyFromString(t, deadlineJourney)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // journey deadline already exhausted before any step runs
+	res := exec.RunJourney(ctx, j)
+
+	if !res.Failed() {
+		t.Fatal("main steps should fail under an expired journey context")
+	}
+	if !fake.deleted.Load() {
+		t.Error("teardown should still run on its own detached context")
+	}
+}
+
 func TestExpectErrorStatusUnavailableFails(t *testing.T) {
 	rc := NewRenderCtx(nil, "test")
 	ee := &ErrorExpectation{Status: 409}

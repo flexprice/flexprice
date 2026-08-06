@@ -77,6 +77,9 @@ type Executor struct {
 	TargetName string
 	// StepTimeout bounds a single non-polling call (default 2m).
 	StepTimeout time.Duration
+	// TeardownTimeout bounds the teardown phase independently of the journey
+	// deadline, so cleanup still runs when steps exhaust it (default 5m).
+	TeardownTimeout time.Duration
 	// PollTimeout / PollInterval are defaults for until: steps.
 	PollTimeout  time.Duration
 	PollInterval time.Duration
@@ -87,6 +90,13 @@ func (e *Executor) stepTimeout() time.Duration {
 		return e.StepTimeout
 	}
 	return 2 * time.Minute
+}
+
+func (e *Executor) teardownTimeout() time.Duration {
+	if e.TeardownTimeout > 0 {
+		return e.TeardownTimeout
+	}
+	return 5 * time.Minute
 }
 
 func (e *Executor) pollDefaults() (time.Duration, time.Duration) {
@@ -129,8 +139,12 @@ func (e *Executor) RunJourney(ctx context.Context, j *Journey) *JourneyResult {
 
 	// Teardown always runs; steps whose dependencies were never created are
 	// skipped (ErrMissingDependency), the rest are attempted independently.
+	// Cleanup gets its own deadline detached from the journey context so it
+	// still executes when the main steps consumed the full journey timeout.
+	tdCtx, tdCancel := context.WithTimeout(context.WithoutCancel(ctx), e.teardownTimeout())
+	defer tdCancel()
 	for _, step := range j.Teardown {
-		sr := e.runStep(ctx, rc, step, "teardown")
+		sr := e.runStep(tdCtx, rc, step, "teardown")
 		if sr.Status == StatusFail && step.Optional {
 			sr.Status = StatusPass
 			sr.Warned = true
