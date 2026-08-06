@@ -280,7 +280,16 @@ type ClickHouseConfig struct {
 	// environments whose ClickHouse serves a self-signed certificate (equivalent to
 	// SSL=true with SSL_MODE=NONE); it removes MITM protection, so leave it false
 	// everywhere else and trust the CA instead.
-	TLSSkipVerify  bool   `mapstructure:"tls_skip_verify"`
+	TLSSkipVerify bool `mapstructure:"tls_skip_verify"`
+	// Protocol selects the ClickHouse wire protocol: "native" (default) or "http".
+	// The two protocols listen on different ports and are not interchangeable — a
+	// native client pointed at an HTTP port fails with
+	// "[handshake] unexpected packet [72] from server" (72 is 'H' of "HTTP/1.1").
+	// Ports: native 9000 / 9440 (TLS), http 8123 / 8443 (TLS). Set this to "http"
+	// when ClickHouse is only reachable through an HTTP(S) endpoint, e.g. behind a
+	// TLS-terminating load balancer that exposes 8443. Empty means native so
+	// existing deployments keep their current behaviour.
+	Protocol       string `mapstructure:"protocol" validate:"omitempty,oneof=native http"`
 	Username       string `mapstructure:"username" validate:"required"`
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
@@ -1049,6 +1058,16 @@ func GetDefaultConfig() *Configuration {
 	}
 }
 
+// protocol maps the configured protocol name onto the driver's enum. An unset or
+// unrecognised value yields clickhouse.Native, which is both the driver's zero
+// value and the behaviour every deployment had before this field existed.
+func (c ClickHouseConfig) protocol() clickhouse.Protocol {
+	if strings.EqualFold(c.Protocol, "http") {
+		return clickhouse.HTTP
+	}
+	return clickhouse.Native
+}
+
 func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 	options := &clickhouse.Options{
 		Addr: []string{c.Address},
@@ -1079,6 +1098,7 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 	if c.TLS {
 		options.TLS = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
 	}
+	options.Protocol = c.protocol()
 
 	maxMemoryUsageBytes := c.MaxMemoryUsage * int64(1024) * int64(1024) * int64(1024)
 	options.Settings = clickhouse.Settings{
