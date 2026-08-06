@@ -346,12 +346,14 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		// Deduped by coupon_id so a coupon that appears on both a line item and at
 		// invoice level (or twice at line-item level) counts as one redemption per
 		// invoice, matching the "one use of the code" semantic.
-		// Idempotency: skip increment if a CouponApplication for this
-		// (invoice_id, coupon_id) already exists — protects against ComputeInvoice
-		// retries after a failed FinalizeInvoice (line-item discounts get reset by
-		// reconcileLineItems but CouponApplication rows persist; without this,
-		// retries would over-count redemptions).
+		// Idempotency: skip increment AND persistence if a CouponApplication for
+		// this (invoice_id, coupon_id) already exists — protects against
+		// ComputeInvoice retries after a failed FinalizeInvoice (line-item
+		// discounts get reset by reconcileLineItems but CouponApplication rows
+		// persist; without this, retries would over-count redemptions and insert
+		// duplicate application rows).
 		seen := make(map[string]bool)
+		alreadyPersisted := make(map[string]bool)
 		for _, ca := range appliedCoupons {
 			if ca.CouponApplication.CouponAssociationID != "" {
 				continue
@@ -375,6 +377,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 				return countErr
 			}
 			if existing > 0 {
+				alreadyPersisted[couponID] = true
 				continue
 			}
 
@@ -387,8 +390,13 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			}
 		}
 
-		// Persist coupon applications
+		// Persist coupon applications. Skip one-off entries whose (invoice_id,
+		// coupon_id) already has rows from a prior compute — otherwise a retry
+		// would insert duplicates.
 		for _, ca := range appliedCoupons {
+			if ca.CouponApplication.CouponAssociationID == "" && alreadyPersisted[ca.CouponApplication.CouponID] {
+				continue
+			}
 			if err := s.CouponApplicationRepo.Create(txCtx, ca.CouponApplication); err != nil {
 				s.Logger.Error(ctx, "failed to create coupon application",
 					"coupon_application_id", ca.CouponApplication.ID,

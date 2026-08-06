@@ -252,7 +252,10 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_SubscriptionAs
 // TestApplyCouponsToInvoice_RepeatedCompute_NoDoubleIncrement confirms
 // idempotency: if ComputeInvoice is retried on the same one-off Draft (e.g.
 // after a prior successful compute but failed finalize), the second apply
-// must not double-count the redemption.
+// must not double-count the redemption OR persist duplicate CouponApplication
+// rows. This is the persistence-level guard requested by review: the earlier
+// fix protected TotalRedemptions but the persistence loop was still inserting
+// new rows on every retry.
 func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_RepeatedCompute_NoDoubleIncrement() {
 	ctx := s.GetContext()
 
@@ -275,6 +278,13 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_RepeatedComput
 	s.Require().NoError(err)
 	s.Equal(1, afterFirst.TotalRedemptions)
 
+	appFilter := types.NewNoLimitCouponApplicationFilter()
+	appFilter.InvoiceIDs = []string{inv.ID}
+	appFilter.CouponIDs = []string{c.ID}
+	firstRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(firstRows, 1, "first apply should persist exactly one CouponApplication")
+
 	// Second apply on same invoice (recompute retry). Reset the line-item
 	// discount as reconcileLineItems would; the CouponApplication row from
 	// the first apply persists.
@@ -290,4 +300,8 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_RepeatedComput
 	afterSecond, err := s.GetStores().CouponRepo.Get(ctx, c.ID)
 	s.Require().NoError(err)
 	s.Equal(1, afterSecond.TotalRedemptions, "recompute of same invoice must not double-count redemption")
+
+	secondRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
+	s.Require().NoError(err)
+	s.Len(secondRows, 1, "recompute must not persist duplicate CouponApplication rows for the same (invoice, coupon)")
 }
