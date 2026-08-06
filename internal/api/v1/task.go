@@ -4,10 +4,9 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/ee/service"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -44,36 +43,36 @@ func NewTaskHandler(
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks [post]
-func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var req dto.CreateTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
+// func (h *TaskHandler) CreateTask(c *gin.Context) {
+// 	var req dto.CreateTaskRequest
+// 	if err := c.ShouldBindJSON(&req); err != nil {
+// 		c.Error(ierr.WithError(err).
+// 			WithHint("Invalid request format").
+// 			Mark(ierr.ErrValidation))
+// 		return
+// 	}
 
-	resp, err := h.service.CreateTask(c.Request.Context(), req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
+// 	resp, err := h.service.CreateTask(c.Request.Context(), req)
+// 	if err != nil {
+// 		c.Error(err)
+// 		return
+// 	}
 
-	// Start the temporal workflow for async processing using the unified method
-	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
+// 	// Start the temporal workflow for async processing using the unified method
+// 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalTaskProcessingWorkflow, resp.ID)
 
-	if err != nil {
-		h.log.Error(c.Request.Context(), "failed to start temporal workflow", "error", err, "task_id", resp.ID)
-		c.Error(err)
-		return
-	}
+// 	if err != nil {
+// 		h.log.Error(c.Request.Context(), "failed to start temporal workflow", "error", err, "task_id", resp.ID)
+// 		c.Error(err)
+// 		return
+// 	}
 
-	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
-		Message:    "task processing workflow started successfully",
-		WorkflowID: workflowRun.GetID(),
-		RunID:      workflowRun.GetRunID(),
-	})
-}
+// 	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
+// 		Message:    "task processing workflow started successfully",
+// 		WorkflowID: workflowRun.GetID(),
+// 		RunID:      workflowRun.GetRunID(),
+// 	})
+// }
 
 // @Summary Get a task
 // @ID getTask
