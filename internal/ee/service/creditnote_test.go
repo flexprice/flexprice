@@ -1193,12 +1193,14 @@ func (s *CreditNoteServiceSuite) TestProcessDraftCreditNote() {
 
 func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() {
 	// Two drafts, each individually valid (100 <= 110 max), whose combined total (200)
-	// exceeds what the invoice can actually refund.
-	draftReq := func() *dto.CreateCreditNoteRequest {
+	// exceeds what the invoice can actually refund. Distinct idempotency keys —
+	// identical keyless requests would dedupe to a single credit note.
+	draftReq := func(key string) *dto.CreateCreditNoteRequest {
 		return &dto.CreateCreditNoteRequest{
 			InvoiceID:         s.testData.invoices.finalized.ID,
 			Reason:            types.CreditNoteReasonUnsatisfactory,
 			ProcessCreditNote: false,
+			IdempotencyKey:    &key,
 			LineItems: []dto.CreateCreditNoteLineItemRequest{
 				{InvoiceLineItemID: "line_1", Amount: decimal.NewFromFloat(50.00)},
 				{InvoiceLineItemID: "line_2", Amount: decimal.NewFromFloat(50.00)},
@@ -1206,11 +1208,11 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() 
 		}
 	}
 
-	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq("refund-recheck-1"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteStatusDraft, first.CreditNoteStatus)
 
-	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq("refund-recheck-2"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteStatusDraft, second.CreditNoteStatus)
 
@@ -1238,23 +1240,25 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() 
 
 func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_AdjustmentCapacityRecheck() {
 	// Same race as the refund case, but for ADJUSTMENT type, which has no wallet
-	// idempotency backstop against a double-applied recalculation.
-	draftReq := func() *dto.CreateCreditNoteRequest {
+	// idempotency backstop against a double-applied recalculation. Distinct
+	// idempotency keys — identical keyless requests would dedupe to one note.
+	draftReq := func(key string) *dto.CreateCreditNoteRequest {
 		return &dto.CreateCreditNoteRequest{
 			InvoiceID:         s.testData.invoices.pending.ID,
 			Reason:            types.CreditNoteReasonBillingError,
 			ProcessCreditNote: false,
+			IdempotencyKey:    &key,
 			LineItems: []dto.CreateCreditNoteLineItemRequest{
 				{InvoiceLineItemID: "line_3", Amount: decimal.NewFromFloat(80.00)},
 			},
 		}
 	}
 
-	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq("adjustment-recheck-1"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteTypeAdjustment, first.CreditNoteType)
 
-	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq("adjustment-recheck-2"))
 	s.NoError(err)
 
 	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID))
