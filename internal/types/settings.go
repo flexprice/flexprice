@@ -19,16 +19,19 @@ type SettingConfig interface {
 type SettingKey string
 
 const (
-	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
-	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
-	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
-	SettingKeyTenantConfig             SettingKey = "tenant_config"
-	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
-	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
-	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
-	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
-	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
-	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
+	SettingKeyInvoiceConfig               SettingKey = "invoice_config"
+	SettingKeySubscriptionConfig          SettingKey = "subscription_config"
+	SettingKeyInvoicePDFConfig            SettingKey = "invoice_pdf_config"
+	SettingKeyTenantConfig                SettingKey = "tenant_config"
+	SettingKeyCustomerOnboarding          SettingKey = "customer_onboarding"
+	SettingKeyWalletBalanceAlertConfig    SettingKey = "wallet_balance_alert_config"
+	SettingKeyPrepareProcessedEvents      SettingKey = "prepare_processed_events_config"
+	SettingKeyCustomAnalytics             SettingKey = "custom_analytics_config"
+	SettingKeyCustomerPortalConfig        SettingKey = "customer_portal_config"
+	SettingKeyEventIngestionFilter        SettingKey = "event_ingestion_filter"
+	SettingKeyBonusCreditsTopupConfig     SettingKey = "bonus_credits_topup_config"
+	SettingKeyPaymentMandateLimits        SettingKey = "payment_mandate_limits"
+	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -44,6 +47,9 @@ func (s *SettingKey) Validate() error {
 		SettingKeyCustomAnalytics,
 		SettingKeyCustomerPortalConfig,
 		SettingKeyEventIngestionFilter,
+		SettingKeyBonusCreditsTopupConfig,
+		SettingKeyPaymentMandateLimits,
+		SettingKeyDraftInvoiceRecomputeConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -358,6 +364,151 @@ func (c EventIngestionFilterConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
+// BonusValueType controls whether a slab's bonus is a fixed credit amount or a percentage of
+// the credits being purchased.
+type BonusValueType string
+
+const (
+	BonusValueTypeFlat       BonusValueType = "flat"
+	BonusValueTypePercentage BonusValueType = "percentage"
+)
+
+// BonusValue is the bonus a matched slab grants.
+type BonusValue struct {
+	Type  BonusValueType  `json:"type" validate:"required"`
+	Value decimal.Decimal `json:"value" validate:"required"`
+}
+
+// BonusCreditsSlab: if credits_to_add <Operator> Threshold, grant Bonus. Slabs are evaluated in
+// list order and the FIRST match wins, so they must be stored sorted DESCENDING by Threshold —
+// the highest bracket a purchase clears is the one that applies.
+//
+// Operator reuses the existing FilterOperatorType instead of minting a new type. Only
+// GREATER_THAN_EQUAL is accepted for now, enforced in BonusCreditsTopupConfig.Validate against
+// the actual constant (not a duplicated string literal in a struct tag).
+type BonusCreditsSlab struct {
+	Threshold decimal.Decimal    `json:"threshold" validate:"required"`
+	Operator  FilterOperatorType `json:"operator" validate:"required"`
+	Bonus     BonusValue         `json:"bonus" validate:"required"`
+	// ExpirationDuration + ExpirationDurationUnit optionally set the bonus tx expiry when this
+	// slab resolves the bonus (expiry = now + duration). Both must be set together, or neither.
+	// Skipped if the caller passes bonus_credits_expiry_date_utc explicitly on the top-up request.
+	ExpirationDuration     *int                           `json:"expiration_duration,omitempty"`
+	ExpirationDurationUnit *CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
+}
+
+// BonusCreditsTopupConfig defines slab-based bonus-credit rules applied to a purchased wallet top-up.
+type BonusCreditsTopupConfig struct {
+	Enabled bool               `json:"enabled"`
+	Slabs   []BonusCreditsSlab `json:"slabs" validate:"omitempty,dive"`
+}
+
+// Validate implements SettingConfig interface.
+func (c BonusCreditsTopupConfig) Validate() error {
+	if c.Enabled && len(c.Slabs) == 0 {
+		return ierr.NewError("bonus_credits_topup_config: enabled is true but slabs is empty").
+			WithHint("Add at least one slab, or set enabled=false").
+			Mark(ierr.ErrValidation)
+	}
+	for i, slab := range c.Slabs {
+		if slab.Operator != GREATER_THAN_EQUAL {
+			return ierr.NewErrorf("bonus_credits_topup_config: slab operator must be %s", GREATER_THAN_EQUAL).
+				WithHint("Only the gte operator is supported for bonus credit slabs").
+				WithReportableDetails(map[string]any{
+					"operator": slab.Operator,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if slab.Threshold.LessThan(decimal.Zero) {
+			return ierr.NewError("bonus_credits_topup_config: slab threshold cannot be negative").
+				WithHint("Threshold must be zero or positive").
+				WithReportableDetails(map[string]any{
+					"threshold": slab.Threshold,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if slab.Bonus.Type != BonusValueTypeFlat && slab.Bonus.Type != BonusValueTypePercentage {
+			return ierr.NewErrorf("bonus_credits_topup_config: bonus type must be %s or %s", BonusValueTypeFlat, BonusValueTypePercentage).
+				WithHint("Only flat or percentage bonus types are supported").
+				WithReportableDetails(map[string]any{
+					"bonus_type": slab.Bonus.Type,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if slab.Bonus.Value.LessThan(decimal.Zero) {
+			return ierr.NewError("bonus_credits_topup_config: bonus value cannot be negative").
+				WithHint("Bonus value must be zero or positive").
+				WithReportableDetails(map[string]any{
+					"bonus_value": slab.Bonus.Value,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if (slab.ExpirationDuration == nil) != (slab.ExpirationDurationUnit == nil) {
+			return ierr.NewError("bonus_credits_topup_config: expiration_duration and expiration_duration_unit must be set together").
+				WithHint("Provide both fields, or neither (bonus never expires)").
+				Mark(ierr.ErrValidation)
+		}
+		if slab.ExpirationDuration != nil {
+			if *slab.ExpirationDuration <= 0 {
+				return ierr.NewError("bonus_credits_topup_config: expiration_duration must be greater than 0").
+					WithHint("Duration must be a positive integer").
+					Mark(ierr.ErrValidation)
+			}
+			if err := slab.ExpirationDurationUnit.Validate(); err != nil {
+				return err
+			}
+		}
+		if i > 0 && !c.Slabs[i-1].Threshold.GreaterThan(slab.Threshold) {
+			return ierr.NewError("bonus_credits_topup_config: slabs must be sorted descending by threshold").
+				WithHint("Slabs must be sorted in strictly descending order by threshold, the highest bracket first").
+				WithReportableDetails(map[string]any{
+					"index":     i,
+					"threshold": slab.Threshold,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return validator.ValidateRequest(c)
+}
+
+// PaymentMandateLimits holds per-rail auto-charge ceilings (keyed by PaymentMethodType).
+// This is a safety ceiling, not the auto-charge opt-in — that lives in the checkout request.
+type PaymentMandateLimits struct {
+	MandateLimits map[PaymentMethodType]MandateLimit `json:"mandate_limits"`
+}
+
+type MandateLimit struct {
+	MaxAmount decimal.Decimal `json:"max_amount" swaggertype:"string"`
+	Currency  string          `json:"currency,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c PaymentMandateLimits) Validate() error {
+	for rail, limit := range c.MandateLimits {
+		if limit.MaxAmount.IsNegative() {
+			return ierr.NewErrorf("max_amount for rail %q must not be negative", rail).
+				Mark(ierr.ErrValidation)
+		}
+		if strings.TrimSpace(limit.Currency) != "" && len(strings.TrimSpace(limit.Currency)) != 3 {
+			return ierr.NewErrorf("currency for rail %q must be a 3-letter code", rail).
+				WithHint("Provide a valid 3-letter currency code (e.g. INR)").
+				WithReportableDetails(map[string]any{"rail": rail, "currency": limit.Currency}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+// DraftInvoiceRecomputeConfig enables daily draft invoice recomputation.
+type DraftInvoiceRecomputeConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Validate implements SettingConfig.
+func (c DraftInvoiceRecomputeConfig) Validate() error {
+	return nil
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -366,7 +517,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		InvoiceNumberPrefix:                    "INV",
 		InvoiceNumberFormat:                    InvoiceNumberFormatYYYYMM,
 		InvoiceNumberStartSequence:             1,
-		InvoiceNumberTimezone:                  "UTC",
+		InvoiceNumberTimezone:                  DefaultTimezone,
 		InvoiceNumberSeparator:                 "-",
 		InvoiceNumberSuffixLength:              5,
 		DueDateDays:                            lo.ToPtr(1),
@@ -513,6 +664,33 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultBonusCreditsTopupConfig := BonusCreditsTopupConfig{
+		Enabled: false,
+		Slabs:   []BonusCreditsSlab{},
+	}
+	defaultBonusCreditsTopupConfigMap, err := utils.ToMap(defaultBonusCreditsTopupConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultPaymentMandateLimits := PaymentMandateLimits{
+		MandateLimits: map[PaymentMethodType]MandateLimit{
+			PaymentMethodTypeUPI: {MaxAmount: decimal.NewFromInt(100000), Currency: "INR"},
+		},
+	}
+	defaultPaymentMandateLimitsMap, err := utils.ToMap(defaultPaymentMandateLimits)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultDraftInvoiceRecomputeConfig := DraftInvoiceRecomputeConfig{
+		Enabled: false,
+	}
+	defaultDraftInvoiceRecomputeConfigMap, err := utils.ToMap(defaultDraftInvoiceRecomputeConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
 			Key:          SettingKeyInvoiceConfig,
@@ -565,6 +743,21 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyEventIngestionFilter,
 			DefaultValue: defaultEventIngestionFilterConfigMap,
 			Description:  "Controls which external customer IDs are forwarded from raw events to the events pipeline (pilot allowlist)",
+		},
+		SettingKeyBonusCreditsTopupConfig: {
+			Key:          SettingKeyBonusCreditsTopupConfig,
+			DefaultValue: defaultBonusCreditsTopupConfigMap,
+			Description:  "Slab-based bonus credit rules applied automatically to purchased wallet top-ups",
+		},
+		SettingKeyPaymentMandateLimits: {
+			Key:          SettingKeyPaymentMandateLimits,
+			DefaultValue: defaultPaymentMandateLimitsMap,
+			Description:  "Per-rail auto-charge ceilings (e.g. UPI Autopay) used to cap mandate amounts; not an opt-in switch",
+		},
+		SettingKeyDraftInvoiceRecomputeConfig: {
+			Key:          SettingKeyDraftInvoiceRecomputeConfig,
+			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
+			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
 		},
 	}, nil
 }
@@ -672,12 +865,38 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
+	case SettingKeyBonusCreditsTopupConfig:
+		config, err := utils.ToStruct[BonusCreditsTopupConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyPaymentMandateLimits:
+		config, err := utils.ToStruct[PaymentMandateLimits](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyDraftInvoiceRecomputeConfig:
+		config, err := utils.ToStruct[DraftInvoiceRecomputeConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
 	}
 }
+
+// DefaultTimezone is the fallback IANA timezone used when a customer has no
+// timezone set. All billing-period math and reset-window math degrade to UTC
+// when the timezone is empty or equal to this value.
+const DefaultTimezone = "UTC"
 
 // timezoneAbbreviationMap maps common three-letter timezone abbreviations to IANA timezone identifiers
 var timezoneAbbreviationMap = map[string]string{

@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestProcessMessage_IgnoresUnknownEvent(t *testing.T) {
 	b, _ := json.Marshal(ev)
 	msg := message.NewMessage("msg-1", b)
 
-	if err := h.processMessage(msg); err != nil {
+	if err := h.processMessage(context.Background(), msg); err != nil {
 		t.Fatalf("expected nil error for unknown event, got %v", err)
 	}
 }
@@ -58,7 +59,7 @@ func TestProcessMessage_CustomerCreatedDispatchError(t *testing.T) {
 	b, _ := json.Marshal(ev)
 	msg := message.NewMessage("msg-2", b)
 
-	if err := h.processMessage(msg); err == nil {
+	if err := h.processMessage(context.Background(), msg); err == nil {
 		t.Fatalf("expected error when temporal service is unavailable")
 	}
 }

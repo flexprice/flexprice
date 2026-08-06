@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -76,7 +76,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 				return nil, err
 			}
 
-			a.logger.Info(ctx, "found expired credits", "count", len(transactions.Items))
+			a.logger.Debug(ctx, "found expired credits", "count", len(transactions.Items))
 
 			for i, tx := range transactions.Items {
 				if i%100 == 0 {

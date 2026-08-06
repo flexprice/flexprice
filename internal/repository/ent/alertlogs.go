@@ -3,11 +3,11 @@ package ent
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainAlertLogs "github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,15 +22,13 @@ type alertLogsRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts AlertLogQueryOptions
-	cache     cache.Cache
 }
 
-func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainAlertLogs.Repository {
+func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger) domainAlertLogs.Repository {
 	return &alertLogsRepository{
 		client:    client,
 		log:       log,
 		queryOpts: AlertLogQueryOptions{},
-		cache:     cache,
 	}
 }
 
@@ -117,6 +115,9 @@ func (r *alertLogsRepository) Create(ctx context.Context, al *domainAlertLogs.Al
 	// Set customer ID if provided
 	if al.CustomerID != nil {
 		createQuery = createQuery.SetCustomerID(*al.CustomerID)
+	}
+	if al.AlertSettingID != nil {
+		createQuery = createQuery.SetAlertSettingID(*al.AlertSettingID)
 	}
 
 	_, err := createQuery.Save(ctx)
@@ -255,7 +256,9 @@ func (r *alertLogsRepository) Count(ctx context.Context, filter *types.AlertLogF
 // All parameters except entityType and entityID are optional
 // If alertType is nil, searches across all alert types
 // If parentEntityType and parentEntityID are provided, filters by those as well
-func (r *alertLogsRepository) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string) (*domainAlertLogs.AlertLog, error) {
+// If alertSettingID is provided, the lookup is scoped to that alert_settings row and restricted
+// to created_at >= periodStart, so a previous billing period's alert can't suppress a new one.
+func (r *alertLogsRepository) GetLatestAlert(ctx context.Context, entityType types.AlertEntityType, entityID string, alertType *types.AlertType, parentEntityType *string, parentEntityID *string, alertSettingID *string, periodStart *time.Time) (*domainAlertLogs.AlertLog, error) {
 	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
@@ -265,6 +268,7 @@ func (r *alertLogsRepository) GetLatestAlert(ctx context.Context, entityType typ
 		"alert_type":         alertType,
 		"parent_entity_type": parentEntityType,
 		"parent_entity_id":   parentEntityID,
+		"alert_setting_id":   alertSettingID,
 	})
 	defer FinishSpan(span)
 
@@ -283,6 +287,12 @@ func (r *alertLogsRepository) GetLatestAlert(ctx context.Context, entityType typ
 	}
 	if parentEntityID != nil {
 		query = query.Where(alertlogs.ParentEntityIDEQ(*parentEntityID))
+	}
+	if alertSettingID != nil {
+		query = query.Where(alertlogs.AlertSettingIDEQ(*alertSettingID))
+	}
+	if periodStart != nil {
+		query = query.Where(alertlogs.CreatedAtGTE(*periodStart))
 	}
 
 	// Order by creation time descending to get the latest
@@ -411,7 +421,7 @@ func (o AlertLogQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query 
 
 func (o AlertLogQueryOptions) ApplyStatusFilter(query AlertLogQuery, status string) AlertLogQuery {
 	if status == "" {
-		return query.Where(alertlogs.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(alertlogs.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(alertlogs.Status(status))
 }

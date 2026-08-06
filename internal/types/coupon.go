@@ -2,6 +2,8 @@ package types
 
 import (
 	"time"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // CouponType represents the type of coupon discount (fixed or percentage)
@@ -29,9 +31,10 @@ const (
 type CouponFilter struct {
 	*QueryFilter
 
-	Filters   []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort      []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	CouponIDs []string           `json:"coupon_ids,omitempty" form:"coupon_ids" validate:"omitempty"`
+	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	CouponIDs   []string           `json:"coupon_ids,omitempty" form:"coupon_ids" validate:"omitempty"`
+	CouponCodes []string           `json:"coupon_codes,omitempty" form:"coupon_codes" validate:"omitempty"`
 }
 
 // NewCouponFilter creates a new CouponFilter with default values
@@ -113,6 +116,13 @@ func (f *CouponAssociationFilter) Validate() error {
 		if err := sort.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if len(f.SubscriptionIDs) > 100 {
+		return ierr.NewError("subscription_ids exceeds maximum of 100 items").Mark(ierr.ErrValidation)
+	}
+	if len(f.CouponIDs) > 100 {
+		return ierr.NewError("coupon_ids exceeds maximum of 100 items").Mark(ierr.ErrValidation)
 	}
 
 	return nil

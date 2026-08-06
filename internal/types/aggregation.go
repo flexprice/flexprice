@@ -40,3 +40,20 @@ func (t AggregationType) RequiresField() bool {
 		return true
 	}
 }
+
+// SupportsExpression returns true if the aggregation type can accept a
+// CEL expression to compute per-event quantity. Types that require a
+// string discriminator (COUNT_UNIQUE), have no per-event quantity at all
+// (COUNT), or carry their own multi-field semantics
+// (SUM_WITH_MULTIPLIER, WEIGHTED_SUM) reject expressions.
+func (t AggregationType) SupportsExpression() bool {
+	switch t {
+	case AggregationSum,
+		AggregationAvg,
+		AggregationMax,
+		AggregationLatest:
+		return true
+	default:
+		return false
+	}
+}

@@ -44,6 +44,14 @@ type WalletOperation struct {
 	// For Expiry Credits, this is the ID of the parent credit transaction
 	// so that we can use the same credits for the expiry debit transaction
 	ParentCreditTxID string `json:"-"`
+	// BonusCreditAmount, when set and greater than zero on a credit operation, creates a second
+	// wallet_transaction row (reason PURCHASED_CREDIT_BONUS, parent_transaction_id = this
+	// operation's transaction ID) crediting this many bonus credits in the same DB transaction.
+	// nil for every caller except TopUpWallet's direct-purchase branch.
+	BonusCreditAmount *decimal.Decimal `json:"-"`
+	// BonusExpiryDate is the expiry timestamp applied to the bonus tx (independent of the
+	// purchase tx's ExpiryDate/ExpiryDateTime). nil means the bonus never expires.
+	BonusExpiryDate *time.Time `json:"-"`
 }
 
 func (w *WalletOperation) Validate() error {
@@ -78,6 +86,15 @@ func (w *WalletOperation) Validate() error {
 			WithHint("Credit amount must be zero or positive").
 			WithReportableDetails(map[string]interface{}{
 				"credit_amount": w.CreditAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if w.BonusCreditAmount != nil && w.BonusCreditAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("bonus_credit_amount cannot be negative").
+			WithHint("Bonus credit amount must be zero or positive").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_credit_amount": w.BonusCreditAmount,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -118,6 +135,15 @@ func (w *WalletOperation) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(time.Now().UTC()) {
+		return ierr.NewError("bonus expiry date cannot be in the past").
+			WithHint("Bonus expiry date must be in the future").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_expiry_date": w.BonusExpiryDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

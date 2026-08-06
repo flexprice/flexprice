@@ -129,7 +129,7 @@ req := dto.CreateInvoiceRequest{
 
 ## Coupon Validation System
 
-The validation system (`internal/service/coupon_validation.go`) implements comprehensive checks:
+The validation system (`internal/ee/service/coupon_validation.go`) implements comprehensive checks:
 
 ### 1. Basic Validation
 - Coupon exists and is published
@@ -246,7 +246,7 @@ coupon_snapshot jsonb -- Immutable coupon state
 ## Key Integration Points
 
 ### 1. Invoice Service Integration
-- **Location**: `internal/service/invoice.go:1350-1409`
+- **Location**: `internal/ee/service/invoice.go:1350-1409`
 - **Method**: `applyCouponsToInvoice`
 - **Triggers**: During invoice creation for subscription invoices or direct coupon application
 

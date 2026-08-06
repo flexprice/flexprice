@@ -286,6 +286,20 @@ func (pc *PaymentCreate) SetNillableRefundedAt(t *time.Time) *PaymentCreate {
 	return pc
 }
 
+// SetVoidedAt sets the "voided_at" field.
+func (pc *PaymentCreate) SetVoidedAt(t time.Time) *PaymentCreate {
+	pc.mutation.SetVoidedAt(t)
+	return pc
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (pc *PaymentCreate) SetNillableVoidedAt(t *time.Time) *PaymentCreate {
+	if t != nil {
+		pc.SetVoidedAt(*t)
+	}
+	return pc
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (pc *PaymentCreate) SetRecordedAt(t time.Time) *PaymentCreate {
 	pc.mutation.SetRecordedAt(t)
@@ -594,6 +608,10 @@ func (pc *PaymentCreate) createSpec() (*Payment, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.RefundedAt(); ok {
 		_spec.SetField(payment.FieldRefundedAt, field.TypeTime, value)
 		_node.RefundedAt = &value
+	}
+	if value, ok := pc.mutation.VoidedAt(); ok {
+		_spec.SetField(payment.FieldVoidedAt, field.TypeTime, value)
+		_node.VoidedAt = &value
 	}
 	if value, ok := pc.mutation.RecordedAt(); ok {
 		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)

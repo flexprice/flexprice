@@ -118,7 +118,7 @@ type Subscription struct {
 
 	CouponAssociations []*coupon_association.CouponAssociation `json:"coupon_associations,omitempty"`
 
-	CustomerTimezone string `json:"customer_timezone"`
+	Timezone string `json:"timezone"`
 
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
 
@@ -147,6 +147,14 @@ type Subscription struct {
 	SyncedPriceSequence int64 `db:"synced_price_sequence" json:"synced_price_sequence,omitempty"`
 
 	types.BaseModel
+}
+
+func (s *Subscription) GetLineItems() []*SubscriptionLineItem {
+	if s == nil {
+		return nil
+	}
+
+	return s.LineItems
 }
 
 // GetInvoicingCustomerID returns the invoicing customer ID if available, otherwise falls back to the subscription customer ID.
@@ -260,7 +268,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		CouponAssociations:   couponAssociations,
 		Pauses:               pauses,
 		Phases:               phases,
-		CustomerTimezone:     sub.CustomerTimezone,
+		Timezone:             sub.Timezone,
 		ProrationBehavior:    types.ProrationBehavior(sub.ProrationBehavior),
 		EnableTrueUp:         sub.EnableTrueUp,
 		InvoicingCustomerID:  sub.InvoicingCustomerID,

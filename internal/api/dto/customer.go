@@ -28,10 +28,13 @@ type CreateCustomerRequest struct {
 	ExternalID string `json:"external_id" validate:"required"`
 
 	// name is the full name or company name of the customer
-	Name string `json:"name"`
+	Name string `json:"name" validate:"required,max=255"`
 
 	// email is the customer's email address and must be a valid email format if provided
 	Email string `json:"email" validate:"omitempty,email"`
+
+	// contact is an optional contact number for the customer (e.g. phone)
+	Contact *string `json:"contact,omitempty" validate:"omitempty,max=20"`
 
 	// address_line1 is the primary address line with maximum 255 characters
 	AddressLine1 string `json:"address_line1" validate:"omitempty,max=255"`
@@ -51,6 +54,10 @@ type CreateCustomerRequest struct {
 	// address_country is the two-letter ISO 3166-1 alpha-2 country code
 	AddressCountry string `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
 
+	// timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata", "America/New_York")
+	// Defaults to "UTC" if not provided
+	Timezone string `json:"timezone" validate:"omitempty,timezone"`
+
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -58,6 +65,9 @@ type CreateCustomerRequest struct {
 	// This is used internally when a customer is created via a workflow to prevent infinite loops
 	// Default: false
 	SkipOnboardingWorkflow bool `json:"skip_onboarding_workflow,omitempty"`
+
+	// onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer
+	OnboardingWorkflowName string `json:"onboarding_workflow_name,omitempty"`
 
 	// tax_rate_overrides contains tax rate configurations to be linked to this customer
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
@@ -78,6 +88,9 @@ type UpdateCustomerRequest struct {
 	// email is the updated email address and must be a valid email format if provided
 	Email *string `json:"email" validate:"omitempty,email"`
 
+	// contact is the updated contact number for the customer (e.g. phone)
+	Contact *string `json:"contact" validate:"omitempty,max=20"`
+
 	// address_line1 is the updated primary address line with maximum 255 characters
 	AddressLine1 *string `json:"address_line1" validate:"omitempty,max=255"`
 
@@ -96,6 +109,9 @@ type UpdateCustomerRequest struct {
 	// address_country is the updated two-letter ISO 3166-1 alpha-2 country code
 	AddressCountry *string `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
 
+	// timezone is the updated IANA timezone name for the customer (e.g. "Asia/Kolkata", "America/New_York")
+	Timezone *string `json:"timezone" validate:"omitempty,timezone"`
+
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -110,6 +126,13 @@ type CustomerResponse struct {
 	Integrations []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
 }
 
+func EmptyCustomerResponse() *CustomerResponse {
+	return &CustomerResponse{
+		Customer: &customer.Customer{},
+		Integrations: []*EntityIntegrationMappingResponse{},
+	}
+}
+
 // ListCustomersResponse represents the response for listing customers
 // @Description Response object for listing customers with pagination
 type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name ListCustomersResponse
@@ -117,6 +140,15 @@ type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name List
 func (r *CreateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != "" && r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate tax rate overrides if provided
@@ -145,17 +177,23 @@ func (r *CreateCustomerRequest) Validate() error {
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
+	tz := r.Timezone
+	if tz == "" {
+		tz = types.DefaultTimezone
+	}
 	return &customer.Customer{
 		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
 		ExternalID:        r.ExternalID,
 		Name:              r.Name,
 		Email:             r.Email,
+		Contact:           r.Contact,
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
 		AddressCity:       r.AddressCity,
 		AddressState:      r.AddressState,
 		AddressPostalCode: r.AddressPostalCode,
 		AddressCountry:    r.AddressCountry,
+		Timezone:          tz,
 		Metadata:          r.Metadata,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
@@ -165,6 +203,15 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Validate timezone is a valid IANA timezone name
+	if r.Timezone != nil && *r.Timezone != "" && *r.Timezone != types.DefaultTimezone {
+		if _, err := time.LoadLocation(*r.Timezone); err != nil {
+			return ierr.NewError("invalid timezone").
+				WithHint("Timezone must be a valid IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

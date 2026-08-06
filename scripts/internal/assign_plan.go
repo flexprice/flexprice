@@ -14,11 +14,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -187,16 +187,17 @@ func newAssignPlanScript() (*assignPlanScript, error) {
 	}
 	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
 	// Create repositories
-	customerRepo := entRepo.NewCustomerRepository(client, log, cacheClient)
+	customerRepo := entRepo.NewCustomerRepository(client, log, redisCache)
 	planRepo := entRepo.NewPlanRepository(client, log, cacheClient)
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, cacheClient)
-	priceRepo := entRepo.NewPriceRepository(client, log, cacheClient)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, log, redisCache)
+	priceRepo := entRepo.NewPriceRepository(client, log, redisCache)
 	meterRepo := entRepo.NewMeterRepository(client, log, cacheClient)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, log, cacheClient)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, log, redisCache)
 	featureRepo := entRepo.NewFeatureRepository(client, log, cacheClient)
-	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient)
+	entitlementRepo := entRepo.NewEntitlementRepository(client, log, cacheClient, redisCache)
 	eventRepo := chRepo.NewEventRepository(chStore, log)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
 

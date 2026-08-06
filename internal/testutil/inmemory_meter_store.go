@@ -111,6 +111,24 @@ func (s *InMemoryMeterStore) List(ctx context.Context, filter *types.MeterFilter
 	return meters, nil
 }
 
+func (s *InMemoryMeterStore) GetMatchingMetersByEventName(ctx context.Context, eventName string) ([]*meter.Meter, error) {
+	filter := types.NewNoLimitMeterFilter()
+	filter.EventName = eventName
+	statusPublished := types.StatusPublished
+	filter.Status = &statusPublished
+	return s.List(ctx, filter)
+}
+
+func (s *InMemoryMeterStore) ListByIDs(ctx context.Context, ids []string) ([]*meter.Meter, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	filter := types.NewNoLimitMeterFilter()
+	filter.MeterIDs = ids
+	return s.List(ctx, filter)
+}
+
 func (s *InMemoryMeterStore) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
 	f := *filter
 	f.QueryFilter = types.NewNoLimitQueryFilter()
@@ -219,8 +237,12 @@ func meterFilterFn(ctx context.Context, m *meter.Meter, filter interface{}) bool
 		return false
 	}
 
-	// Apply status filter
-	if f.Status != nil && m.Status != *f.Status {
+	// Apply status filter — empty status mirrors Ent ApplyStatusFilter (published + archived).
+	if f.GetStatus() == "" {
+		if m.Status != types.StatusPublished && m.Status != types.StatusArchived {
+			return false
+		}
+	} else if string(m.Status) != f.GetStatus() {
 		return false
 	}
 

@@ -350,7 +350,7 @@ go get github.com/casbin/ent-adapter
 ### Step 2: Create Authorization Service
 
 ```go
-// internal/service/authz.go
+// internal/ee/service/authz.go
 package service
 
 import (
@@ -585,7 +585,7 @@ package middleware
 import (
     "net/http"
     "github.com/gin-gonic/gin"
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
     "github.com/flexprice/flexprice/internal/types"
 )
 
@@ -629,7 +629,7 @@ func HandlerAuthzMiddleware(authzService service.AuthzInterface) gin.HandlerFunc
 ### Step 4: Implement Service Level Authorization
 
 ```go
-// internal/service/invoice.go (example)
+// internal/ee/service/invoice.go (example)
 package service
 
 import (
@@ -723,7 +723,7 @@ func (s *invoiceService) Update(ctx context.Context, id string, updates *invoice
 ### Step 5: Policy Seeding and Management
 
 ```go
-// internal/service/policy_seeder.go
+// internal/ee/service/policy_seeder.go
 package service
 
 func (s *AuthzService) SeedPolicies(policySet PolicySet) error {
@@ -882,7 +882,7 @@ package v1
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
 )
 
 func NewInvoiceHandler(
@@ -940,7 +940,7 @@ func (h *InvoiceHandler) RegisterRoutes(r *gin.RouterGroup, authzMiddleware gin.
 ### Unit Tests
 
 ```go
-// internal/service/authz_test.go
+// internal/ee/service/authz_test.go
 func TestAuthzService_CanAccessEndpoint(t *testing.T) {
     tests := []struct {
         name     string

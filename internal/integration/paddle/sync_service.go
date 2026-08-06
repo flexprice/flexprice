@@ -1039,7 +1039,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 // extractFlexSubIDFromCustomData reads flexprice_subscription_id from a Paddle custom_data map.
 // Checks both snake_case ("flexprice_subscription_id") and camelCase ("flexpriceSubscriptionId")
 // because Paddle may preserve or convert key casing depending on the API version / context.
-func extractFlexSubIDFromCustomData(customData map[string]any) string {
+func (s *PaddleSyncService) ExtractFlexSubIDFromCustomData(customData map[string]any) string {
 	if id, ok := customData["flexprice_subscription_id"].(string); ok && id != "" {
 		return id
 	}
@@ -1059,7 +1059,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 ) error {
 	paddleSubID := data.ID
 
-	flexSubID := extractFlexSubIDFromCustomData(data.CustomData)
+	flexSubID := s.ExtractFlexSubIDFromCustomData(data.CustomData)
 	if flexSubID == "" {
 		s.logger.Info(context.Background(), "subscription.activated: no flexprice_subscription_id in custom_data — skipping",
 			"paddle_sub_id", paddleSubID)

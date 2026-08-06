@@ -34,6 +34,8 @@ type User struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Email holds the value of the "email" field.
 	Email *string `json:"email,omitempty"`
+	// Name holds the value of the "name" field.
+	Name *string `json:"name,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
 	// Roles holds the value of the "roles" field.
@@ -48,7 +50,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldMetadata, user.FieldRoles:
 			values[i] = new([]byte)
-		case user.FieldID, user.FieldTenantID, user.FieldStatus, user.FieldCreatedBy, user.FieldUpdatedBy, user.FieldEmail, user.FieldType:
+		case user.FieldID, user.FieldTenantID, user.FieldStatus, user.FieldCreatedBy, user.FieldUpdatedBy, user.FieldEmail, user.FieldName, user.FieldType:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -124,6 +126,13 @@ func (u *User) assignValues(columns []string, values []any) error {
 				u.Email = new(string)
 				*u.Email = value.String
 			}
+		case user.FieldName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name", values[i])
+			} else if value.Valid {
+				u.Name = new(string)
+				*u.Name = value.String
+			}
 		case user.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
@@ -197,6 +206,11 @@ func (u *User) String() string {
 	builder.WriteString(", ")
 	if v := u.Email; v != nil {
 		builder.WriteString("email=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := u.Name; v != nil {
+		builder.WriteString("name=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

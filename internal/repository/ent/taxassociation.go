@@ -16,19 +16,19 @@ import (
 )
 
 type taxAssociationRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts TaxAssociationQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  TaxAssociationQueryOptions
+	redisCache cache.RedisCache
 }
 
 // NewTaxAssociationRepository creates a new tax association repository
-func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainTaxConfig.Repository {
+func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainTaxConfig.Repository {
 	return &taxAssociationRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: TaxAssociationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  TaxAssociationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -64,6 +64,8 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetCreatedBy(t.CreatedBy).
 		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
+		SetStartDate(t.StartDate).
+		SetNillableEndDate(t.EndDate).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -77,7 +79,7 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 					"entity_type":        t.EntityType,
 					"entity_id":          t.EntityID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 
 		return ierr.WithError(err).
@@ -145,7 +147,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxAssociation.Update().
+	update := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -156,8 +158,10 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetAutoApply(t.AutoApply).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetMetadata(t.Metadata).
-		Save(ctx)
+		SetNillableEndDate(t.EndDate).
+		SetMetadata(t.Metadata)
+
+	_, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -278,44 +282,41 @@ func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxA
 
 // Cache operations
 func (r *taxAssociationRepository) SetCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "set", map[string]interface{}{
 		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
-	r.cache.Set(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, t.ID)
+	r.redisCache.Set(ctx, cacheKey, t, cache.ExpiryDefaultRedis)
 }
 
-func (r *taxAssociationRepository) GetCache(ctx context.Context, key string) *domainTaxConfig.TaxAssociation {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
-		"tax_association_id": key,
+func (r *taxAssociationRepository) GetCache(ctx context.Context, id string) *domainTaxConfig.TaxAssociation {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "get", map[string]interface{}{
+		"tax_association_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if tc, ok := value.(*domainTaxConfig.TaxAssociation); ok {
-			return tc
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	tc, ok := cache.UnmarshalCacheValue[domainTaxConfig.TaxAssociation](value)
+	if !ok {
+		return nil
+	}
+	return tc
 }
 
 func (r *taxAssociationRepository) DeleteCache(ctx context.Context, t *domainTaxConfig.TaxAssociation) {
-	span := cache.StartCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "taxassociation", "delete", map[string]interface{}{
 		"tax_association_id": t.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixTaxAssociation, tenantID, environmentID, t.ID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixTaxAssociation, t.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 type TaxAssociationQuery = *ent.TaxAssociationQuery
@@ -336,7 +337,7 @@ func (o TaxAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, 
 
 func (o TaxAssociationQueryOptions) ApplyStatusFilter(query TaxAssociationQuery, status string) TaxAssociationQuery {
 	if status == "" {
-		return query.Where(entTaxConfig.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entTaxConfig.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entTaxConfig.Status(status))
 }
@@ -399,6 +400,15 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 		if f.TimeRangeFilter.EndTime != nil {
 			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
+	}
+	if f.StartDate != nil && f.EndDate != nil {
+		query = query.Where(
+			entTaxConfig.StartDateLTE(lo.FromPtr(f.EndDate)),
+			entTaxConfig.Or(
+				entTaxConfig.EndDateIsNil(),
+				entTaxConfig.EndDateGT(lo.FromPtr(f.StartDate)),
+			),
+		)
 	}
 	return query, nil
 }

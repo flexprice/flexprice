@@ -378,7 +378,7 @@ func (CreditNoteItem) Edges() []ent.Edge {
 ### Credit Note Service Interface
 
 ```go
-// internal/service/creditnote.go
+// internal/ee/service/creditnote.go
 package service
 
 type CreditNoteInterface interface {

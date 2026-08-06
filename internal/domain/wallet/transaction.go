@@ -31,6 +31,10 @@ type Transaction struct {
 	Priority            *int                        `db:"priority" json:"priority"`
 	Currency            string                      `db:"currency" json:"currency"`
 
+	// ParentTransactionID is the ID of the parent wallet_transaction this row was earned from
+	// (the purchase tx, for a bonus grant). Empty for ordinary transactions.
+	ParentTransactionID string `db:"parent_transaction_id" json:"parent_transaction_id,omitempty"`
+
 	// conversion_rate is the conversion rate for the transaction to the currency
 	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
 
@@ -101,6 +105,7 @@ func (t *Transaction) ToEnt() *ent.WalletTransaction {
 		Currency:            t.Currency,
 		ConversionRate:      t.ConversionRate,
 		TopupConversionRate: t.TopupConversionRate,
+		ParentTransactionID: t.ParentTransactionID,
 		EnvironmentID:       t.EnvironmentID,
 		TenantID:            t.TenantID,
 		Status:              string(t.Status),
@@ -139,6 +144,7 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 		Priority:            e.Priority,
 		ConversionRate:      e.ConversionRate,
 		TopupConversionRate: e.TopupConversionRate,
+		ParentTransactionID: e.ParentTransactionID,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,

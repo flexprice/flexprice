@@ -585,6 +585,62 @@ Passwords are injected once in Step 1 as a Kubernetes Secret (`<release>-secrets
 
 ---
 
+## Custom labels
+
+The chart applies labels at three scopes. All default to `{}`, so the rendered
+output with default values is unchanged from chart 1.1.0.
+
+| Value | Applies to |
+|---|---|
+| `labels` | Every object this chart renders itself — app workloads, in-cluster ClickHouse/Kafka/Redis, the migration and bootstrap Jobs |
+| `podLabels` | Every FlexPrice pod (api, consumer, worker, frontend) |
+| `<component>.labels` | That component's objects — Deployment, Service, HPA, PDB, Ingress, ServiceAccount |
+| `<component>.podLabels` | That component's pods only |
+
+`<component>` is one of `api`, `consumer`, `worker`, `frontend`. Per-component
+values merge on top of the global ones and win on key collisions.
+
+Resources created by the bundled **subcharts** (Bitnami PostgreSQL, Kafka, Redis
+and Temporal) are outside this chart's templates, so `labels` does not reach
+them. Use each subchart's own mechanism instead — for the Bitnami charts that is
+`postgresql.commonLabels`, `kafka.commonLabels`, and so on.
+
+The common case is tagging pods for a log shipper (Filebeat/ELK, Fluent Bit,
+Datadog), all of which enrich log records from pod metadata:
+
+```yaml
+# Everything lands in one index...
+podLabels:
+  logging.company.io/index: flexprice
+
+# ...except the API, which gets its own.
+api:
+  podLabels:
+    logging.company.io/index: flexprice-api
+  labels:
+    company.io/tier: edge
+```
+
+### Reserved keys
+
+`app.kubernetes.io/name`, `app.kubernetes.io/instance`, and
+`app.kubernetes.io/component` are owned by the chart and cannot be set through
+`labels` or `podLabels`. The chart emits them last, so a value supplied for one
+of these keys is silently discarded. This is deliberate: overriding them on a pod
+would leave it unmatched by its own Deployment selector, Service, PDB, and
+NetworkPolicy.
+
+### Selectors are never touched
+
+These labels are deliberately excluded from `spec.selector.matchLabels` on
+Deployments and from Service `spec.selector`. Deployment selectors are immutable
+in the Kubernetes API: if a user-supplied label ended up there, the next
+`helm upgrade` would fail with `field is immutable` and the release would need to
+be deleted and reinstalled. Object labels and pod labels are both mutable —
+changing `podLabels` triggers an ordinary rolling update.
+
+---
+
 ## Node groups (EKS)
 
 This Helm chart deploys workloads onto existing nodes — it does **not** create node groups. Node groups are AWS EC2 Auto Scaling Groups registered with EKS and must be provisioned before `helm install`.

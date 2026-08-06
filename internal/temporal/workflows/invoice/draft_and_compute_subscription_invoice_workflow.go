@@ -49,16 +49,27 @@ func DraftAndComputeSubscriptionInvoiceWorkflow(
 
 	var draftOut invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput
 	draftIn := invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityInput{
-		SubscriptionID: input.SubscriptionID,
-		TenantID:       input.TenantID,
-		EnvironmentID:  input.EnvironmentID,
-		UserID:         input.UserID,
+		SubscriptionID:        input.SubscriptionID,
+		TenantID:              input.TenantID,
+		EnvironmentID:         input.EnvironmentID,
+		UserID:                input.UserID,
+		SkipIfAlreadyInvoiced: input.SkipIfAlreadyInvoiced,
 	}
 	if err := workflow.ExecuteActivity(ctx, ActivityCreateDraftForCurrentSubscriptionPeriod, draftIn).Get(ctx, &draftOut); err != nil {
 		logger.Error("Failed to create draft for current subscription period",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return nil, err
+	}
+
+	if draftOut.Skipped {
+		logger.Info("Draft-and-compute subscription invoice workflow skipped: current period already invoiced",
+			"subscription_id", input.SubscriptionID)
+		return &invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowResult{
+			ComputeSkipped: true,
+			Success:        true,
+			CompletedAt:    workflow.Now(ctx),
+		}, nil
 	}
 
 	var computeOut invoiceModels.ComputeInvoiceActivityOutput

@@ -9,13 +9,13 @@ import (
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -115,6 +115,39 @@ func (s *inMemoryMappingService) DeleteEntityIntegrationMapping(ctx context.Cont
 
 func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
 	return nil, nil
+}
+
+func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.SuccessResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      req.EntityID,
+		EntityType:    req.EntityType,
+		ProviderTypes: []string{req.ProviderType},
+	}
+	mappings, err := s.repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no entity integration mapping found to delink").
+			WithHint("No active mapping exists for the given entity and provider").
+			Mark(ierr.ErrNotFound)
+	}
+
+	for _, mapping := range mappings {
+		if err := s.repo.Delete(ctx, mapping); err != nil {
+			return nil, err
+		}
+	}
+
+	return &apidto.SuccessResponse{
+		Message: "Integration mapping delinked successfully",
+	}, nil
 }
 
 func toTestMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
@@ -405,6 +438,55 @@ func TestEnsureCustomerSynced_AlreadyMapped(t *testing.T) {
 
 	// The critical assertion: CreateCustomer must NOT have been called.
 	assert.False(t, mockClient.createCustomerCalled, "CreateCustomer must NOT be called when customer is already mapped")
+}
+
+// TestDelinkIntegrationMapping_ArchivesExistingMappings verifies that delinking an
+// entity→provider mapping removes every matching mapping and reports the archived count.
+func TestDelinkIntegrationMapping_ArchivesExistingMappings(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	const customerID = "cust_to_delink"
+
+	// Seed a mapping for the customer → Paddle.
+	seedMapping(ctx, t, mappingStore, customerID, types.IntegrationEntityTypeCustomer, "ctm_existing", nil)
+
+	resp, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     customerID,
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Integration mapping delinked successfully", resp.Message)
+
+	// The mapping must no longer be returned by a published-only query.
+	remaining, err := mappingStore.List(ctx, &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      customerID,
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, remaining, "delinked mapping should not remain active")
+}
+
+// TestDelinkIntegrationMapping_NotFound verifies that delinking when no mapping exists
+// returns a not-found error rather than a success with zero archived.
+func TestDelinkIntegrationMapping_NotFound(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	_, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     "cust_missing",
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.Error(t, err)
+	assert.True(t, ierr.IsNotFound(err), "expected a not-found error")
 }
 
 // TestEnsureSubscriptionSynced_AlreadyMapped verifies that when a subscription→Paddle mapping
@@ -808,6 +890,9 @@ func (m *mockSubscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx co
 func (m *mockSubscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*apidto.ListSubscriptionsResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*apidto.ListSubscriptionsResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
 	return nil, nil
 }
@@ -841,7 +926,7 @@ func (m *mockSubscriptionService) CalculateResumeImpact(ctx context.Context, sub
 func (m *mockSubscriptionService) ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, sub *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*apidto.PriceResponse, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, subscriptionID string, req *apidto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error) {
+func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, req *apidto.AddAddonRequest) (*apidto.AddAddonToSubscriptionResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *apidto.RemoveAddonRequest) error {
@@ -874,7 +959,16 @@ func (m *mockSubscriptionService) GetFeatureUsageBySubscription(ctx context.Cont
 func (m *mockSubscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*apidto.EntitlementResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*apidto.EntitlementResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
@@ -901,6 +995,9 @@ func (m *mockSubscriptionService) TriggerSubscriptionWorkflow(ctx context.Contex
 func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts interfaces.DraftAndComputeOptions) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]apidto.Period, error) {
 	return nil, nil
 }
@@ -917,6 +1014,9 @@ func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context
 	return nil, nil
 }
 func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+}
+func (m *mockSubscriptionService) TerminateSubscriptionResources(ctx context.Context, req apidto.TerminateSubscriptionResourcesRequest) error {
+	return nil
 }
 
 // --- ProcessSubscriptionActivatedWebhook tests ---

@@ -21,7 +21,7 @@
 
 - `internal/rest/middleware` — primary logic
 - `internal/auth` — provider abstraction / config key validation helpers
-- `internal/service` (secret/auth services) — API key persistence & verification paths
+- `internal/ee/service` (secret/auth services) — API key persistence & verification paths
 - `internal/rbac` + permission middleware (`RequirePermission` on granular routes such as `/v1/events`)
 
 ## Database operations

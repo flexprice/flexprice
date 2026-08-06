@@ -79,9 +79,16 @@ func (s *RBACService) HasPermission(roles []string, entity string, action string
 
 	// Check each role - if ANY role grants permission, allow
 	for _, role := range roles {
-		if s.permissions[role] != nil &&
-			s.permissions[role][entity] != nil &&
-			s.permissions[role][entity][action] {
+		permissions := s.permissions[role]
+		if permissions == nil {
+			continue
+		}
+		// Wildcard entity ("*") grants access to all entities
+		if permissions["*"] != nil && (permissions["*"]["*"] || permissions["*"][action]) {
+			return true
+		}
+		// Check specific entity with wildcard action or exact action
+		if permissions[entity] != nil && (permissions[entity]["*"] || permissions[entity][action]) {
 			return true
 		}
 	}

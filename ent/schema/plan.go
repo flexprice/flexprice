@@ -64,7 +64,7 @@ func (Plan) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
 			StorageKey(Idx_tenant_environment_lookup_key).
-			Annotations(entsql.IndexWhere("status = 'published'" + " AND lookup_key IS NOT NULL AND lookup_key != ''")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (lookup_key IS NOT NULL) AND ((lookup_key)::text <> ''::text))")),
 		index.Fields("tenant_id", "environment_id"),
 	}
 }

@@ -12,9 +12,12 @@ type CreateConnectionRequest struct {
 	Name                string                   `json:"name" validate:"required,max=255"`
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
-	// Metadata holds provider-specific non-secret settings. For Paddle: use {"redirect_url": "https://..."}
-	// as the success URL where customers are redirected after payment. Backend appends &_success=<redirect_url>
-	// to Paddle checkout URLs before storing/sending them.
+	// Metadata holds provider-specific non-secret settings.
+	// For Paddle: use {"redirect_url": "https://..."} as the success URL where customers
+	// are redirected after payment. Backend appends &_success=<redirect_url> to Paddle
+	// checkout URLs before storing/sending them.
+	// For Moyasar: use {"success_url": "...", "cancel_url": "..."} to control where
+	// customers land after paying or cancelling on Moyasar's hosted invoice page.
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }
@@ -201,6 +204,59 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			Nomod: nomodMetadata,
 		}
 
+	case types.SecretProviderTabs:
+		tabsMetadata := &types.TabsConnectionMetadata{}
+
+		if apiKey, ok := flatMetadata["api_key"].(string); ok {
+			tabsMetadata.APIKey = apiKey
+		}
+
+		return types.ConnectionMetadata{
+			Tabs: tabsMetadata,
+		}
+
+	case types.SecretProviderAWSMarketplace:
+		awsMarketplaceSecrets := &types.AWSMarketplaceConnectionSecrets{}
+
+		if roleArn, ok := flatMetadata["role_arn"].(string); ok {
+			awsMarketplaceSecrets.RoleArn = roleArn
+		}
+		if externalID, ok := flatMetadata["external_id"].(string); ok {
+			awsMarketplaceSecrets.ExternalID = externalID
+		}
+
+		return types.ConnectionMetadata{
+			AWSMarketplace: awsMarketplaceSecrets,
+		}
+
+	case types.SecretProviderGCPMarketplace:
+		gcpMarketplaceSecrets := &types.GCPMarketplaceConnectionSecrets{}
+
+		if credentialsJSON, ok := flatMetadata["credentials_json"].(string); ok {
+			gcpMarketplaceSecrets.CredentialsJSON = credentialsJSON
+		}
+
+		return types.ConnectionMetadata{
+			GCPMarketplace: gcpMarketplaceSecrets,
+		}
+
+	case types.SecretProviderAzureMarketplace:
+		azureMarketplaceSecrets := &types.AzureMarketplaceConnectionSecrets{}
+
+		if tenantID, ok := flatMetadata["tenant_id"].(string); ok {
+			azureMarketplaceSecrets.TenantID = tenantID
+		}
+		if clientID, ok := flatMetadata["client_id"].(string); ok {
+			azureMarketplaceSecrets.ClientID = clientID
+		}
+		if clientSecret, ok := flatMetadata["client_secret"].(string); ok {
+			azureMarketplaceSecrets.ClientSecret = clientSecret
+		}
+
+		return types.ConnectionMetadata{
+			AzureMarketplace: azureMarketplaceSecrets,
+		}
+
 	case types.SecretProviderMoyasar:
 		moyasarMetadata := &types.MoyasarConnectionMetadata{}
 
@@ -245,6 +301,9 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 		}
 		if v, ok := flatMetadata["product_id"].(string); ok {
 			whopMetadata.ProductID = v
+		}
+		if v, ok := flatMetadata["webhook_secret"].(string); ok {
+			whopMetadata.WebhookSecret = v
 		}
 		return types.ConnectionMetadata{
 			Whop: whopMetadata,
@@ -325,7 +384,7 @@ type UpdateConnectionRequest struct {
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
 	return cm.Stripe != nil || cm.S3 != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
 		cm.Chargebee != nil || cm.QuickBooks != nil || cm.Nomod != nil || cm.Moyasar != nil ||
-		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Generic != nil || cm.Settings != nil
+		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Tabs != nil || cm.AWSMarketplace != nil || cm.GCPMarketplace != nil || cm.Generic != nil || cm.Settings != nil
 }
 
 // UnmarshalJSON accepts either nested encrypted_secret_data (e.g. {"zoho_books":{"webhook_secret":"..."}})

@@ -20,10 +20,10 @@ type planRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PlanQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPlan.Repository {
+func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPlan.Repository {
 	return &planRepository{
 		client:    client,
 		log:       log,
@@ -196,6 +196,63 @@ func (r *planRepository) ListAll(ctx context.Context, filter *types.PlanFilter) 
 	return plans, nil
 }
 
+// ListByIDs retrieves plans by their IDs, serving whatever is already cached and
+// querying only the remainder.
+func (r *planRepository) ListByIDs(ctx context.Context, planIDs []string) ([]*domainPlan.Plan, error) {
+	if len(planIDs) == 0 {
+		return []*domainPlan.Plan{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "plan", "list_by_ids", map[string]interface{}{
+		"plan_ids_count": len(planIDs),
+	})
+	defer FinishSpan(span)
+
+	result := make([]*domainPlan.Plan, 0, len(planIDs))
+	missing := make([]string, 0, len(planIDs))
+	seen := make(map[string]struct{}, len(planIDs))
+
+	for _, id := range planIDs {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		if cached := r.GetCache(ctx, id); cached != nil {
+			if cached.Status == types.StatusPublished {
+				result = append(result, cached)
+			}
+			continue
+		}
+		missing = append(missing, id)
+	}
+
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	filter := types.NewNoLimitPlanFilter()
+	filter.PlanIDs = missing
+
+	fetched, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	for _, p := range fetched {
+		r.SetCache(ctx, p)
+		result = append(result, p)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
@@ -236,11 +293,7 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 	defer FinishSpan(span)
 	r.log.Debug(ctx, "getting plan by lookup key", "lookup_key", lookupKey)
 
-	// Try to get from cache first
-	if cachedPlan := r.GetCache(ctx, lookupKey); cachedPlan != nil {
-		return cachedPlan, nil
-	}
-
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	plan, err := r.client.Writer(ctx).Plan.Query().
 		Where(
 			plan.LookupKey(lookupKey),
@@ -269,9 +322,7 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 	}
 
 	SetSpanSuccess(span)
-	planData := domainPlan.FromEnt(plan)
-	r.SetCache(ctx, planData)
-	return planData, nil
+	return domainPlan.FromEnt(plan), nil
 }
 
 func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
@@ -406,7 +457,7 @@ func (o PlanQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Plan
 
 func (o PlanQueryOptions) ApplyStatusFilter(query PlanQuery, status string) PlanQuery {
 	if status == "" {
-		return query.Where(plan.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(plan.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(plan.Status(status))
 }
@@ -506,44 +557,39 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 }
 
 func (r *planRepository) SetCache(ctx context.Context, plan *domainPlan.Plan) {
-
-	span := cache.StartCacheSpan(ctx, "plan", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "set", map[string]interface{}{
 		"plan_id": plan.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, plan.ID)
 	r.cache.Set(ctx, cacheKey, plan, cache.ExpiryDefaultInMemory)
 }
 
-func (r *planRepository) GetCache(ctx context.Context, key string) *domainPlan.Plan {
-
-	span := cache.StartCacheSpan(ctx, "plan", "get", map[string]interface{}{
-		"plan_id": key,
+func (r *planRepository) GetCache(ctx context.Context, id string) *domainPlan.Plan {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "get", map[string]interface{}{
+		"plan_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPlan.Plan)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPlan.Plan](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *planRepository) DeleteCache(ctx context.Context, plan *domainPlan.Plan) {
-	span := cache.StartCacheSpan(ctx, "plan", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "plan", "delete", map[string]interface{}{
 		"plan_id": plan.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.ID)
-	lookupCacheKey := cache.GenerateKey(cache.PrefixPlan, tenantID, environmentID, plan.LookupKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPlan, plan.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.cache.Delete(ctx, lookupCacheKey)
 }

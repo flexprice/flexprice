@@ -210,6 +210,20 @@ func (sc *SecretCreate) SetNillableUserType(s *string) *SecretCreate {
 	return sc
 }
 
+// SetUserID sets the "user_id" field.
+func (sc *SecretCreate) SetUserID(s string) *SecretCreate {
+	sc.mutation.SetUserID(s)
+	return sc
+}
+
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (sc *SecretCreate) SetNillableUserID(s *string) *SecretCreate {
+	if s != nil {
+		sc.SetUserID(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SecretCreate) SetID(s string) *SecretCreate {
 	sc.mutation.SetID(s)
@@ -422,6 +436,10 @@ func (sc *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.UserType(); ok {
 		_spec.SetField(secret.FieldUserType, field.TypeString, value)
 		_node.UserType = value
+	}
+	if value, ok := sc.mutation.UserID(); ok {
+		_spec.SetField(secret.FieldUserID, field.TypeString, value)
+		_node.UserID = value
 	}
 	return _node, _spec
 }

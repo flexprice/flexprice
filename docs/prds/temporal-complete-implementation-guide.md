@@ -132,7 +132,7 @@ Let's implement a **User Data Export** workflow following the exact patterns use
 
 ### **Step 1: Define Business Logic in Service Layer**
 
-#### File: `internal/service/user_service.go`
+#### File: `internal/ee/service/user_service.go`
 
 ```go
 package service
@@ -453,7 +453,7 @@ import (
     "context"
 
     "github.com/flexprice/flexprice/internal/api/dto"
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
     "github.com/flexprice/flexprice/internal/temporal/models"
     "github.com/flexprice/flexprice/internal/types"
     ierr "github.com/flexprice/flexprice/internal/errors"
@@ -557,7 +557,7 @@ import (
 
     "github.com/flexprice/flexprice/internal/api/dto"
     "github.com/flexprice/flexprice/internal/logger"
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
     temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
     "github.com/flexprice/flexprice/internal/types"
     ierr "github.com/flexprice/flexprice/internal/errors"

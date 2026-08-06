@@ -18,11 +18,11 @@ import (
 type groupRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 	queryOpts GroupQueryOptions
 }
 
-func NewGroupRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainGroup.Repository {
+func NewGroupRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainGroup.Repository {
 	return &groupRepository{
 		client:    client,
 		log:       log,
@@ -55,10 +55,14 @@ func (r *groupRepository) Create(ctx context.Context, grp *domainGroup.Group) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, grp.ID)
 	return nil
 }
 
 func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Group, error) {
+	if cached := r.GetCache(ctx, id); cached != nil {
+		return cached, nil
+	}
 	client := r.client.Reader(ctx)
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -83,7 +87,9 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 			Mark(ierr.ErrDatabase)
 	}
 
-	return r.toDomainGroup(entGroup), nil
+	result := r.toDomainGroup(entGroup)
+	r.SetCache(ctx, result)
+	return result, nil
 }
 
 func (r *groupRepository) GetByLookupKey(ctx context.Context, lookupKey string) (*domainGroup.Group, error) {
@@ -206,6 +212,7 @@ func (r *groupRepository) Update(ctx context.Context, grp *domainGroup.Group) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, grp.ID)
 	return nil
 }
 
@@ -231,7 +238,46 @@ func (r *groupRepository) Delete(ctx context.Context, id string) error {
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.DeleteCache(ctx, id)
 	return nil
+}
+
+func (r *groupRepository) SetCache(ctx context.Context, grp *domainGroup.Group) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "set", map[string]interface{}{
+		"group_id": grp.ID,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, grp.ID)
+	r.cache.Set(ctx, cacheKey, grp, cache.ExpiryDefaultInMemory)
+}
+
+func (r *groupRepository) GetCache(ctx context.Context, id string) *domainGroup.Group {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "get", map[string]interface{}{
+		"group_id": id,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+	g, ok := cache.UnmarshalCacheValue[domainGroup.Group](value)
+	if !ok {
+		return nil
+	}
+	return g
+}
+
+func (r *groupRepository) DeleteCache(ctx context.Context, id string) {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "group", "delete", map[string]interface{}{
+		"group_id": id,
+	})
+	defer cache.FinishSpan(span)
+
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixGroup, id)
+	r.cache.Delete(ctx, cacheKey)
 }
 
 func (r *groupRepository) toDomainGroup(entGroup *ent.Group) *domainGroup.Group {
@@ -272,7 +318,7 @@ func (o GroupQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Gro
 
 func (o GroupQueryOptions) ApplyStatusFilter(query GroupQuery, status string) GroupQuery {
 	if status == "" {
-		return query.Where(group.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(group.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(group.Status(status))
 }

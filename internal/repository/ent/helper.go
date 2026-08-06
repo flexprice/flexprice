@@ -6,17 +6,29 @@ import (
 	"github.com/flexprice/flexprice/internal/tracing"
 )
 
+// tracingSvc is wired once at startup via SetTracingService (see
+// internal/repository.InitTracing), letting every repository method emit a
+// span without threading *tracing.Service through each constructor.
+var tracingSvc *tracing.Service
+
+// SetTracingService wires the tracing service used by StartRepositorySpan.
+// Must be called once during app startup before any repository method runs.
+func SetTracingService(svc *tracing.Service) {
+	tracingSvc = svc
+}
+
 // StartRepositorySpan creates a span for an Ent/Postgres repository operation.
 //
-// Currently a no-op at the repository level; Postgres transaction-level spans
-// are enabled via TracingClient.WithTx when
-// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true.
+// Gated by FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (same flag as the
+// lower-level per-statement Postgres spans). Emitted as a SpanKindClient span
+// with db.system=postgresql so it is recognized as a database call by trace
+// backends (e.g. SigNoz's Database Calls tab).
 func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *tracing.Span {
-	_ = ctx
-	_ = repository
-	_ = operation
-	_ = params
-	return nil
+	if tracingSvc == nil {
+		return nil
+	}
+	span, _ := tracingSvc.StartRepositorySpan(ctx, "postgresql", repository, operation, params)
+	return span
 }
 
 // FinishSpan safely finishes a span, handling nil spans.

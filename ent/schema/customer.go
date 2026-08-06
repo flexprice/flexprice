@@ -49,6 +49,13 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
+
+		field.String("contact").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
 		// Address fields
 		field.String("address_line1").
 			SchemaType(map[string]string{
@@ -80,6 +87,12 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(2)",
 			}).
 			Optional(),
+		field.String("timezone").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default("UTC").
+			Optional(),
 	}
 }
 
@@ -93,12 +106,12 @@ func (Customer) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "external_id").
 			Unique().
-			Annotations(entsql.IndexWhere("(external_id IS NOT NULL AND external_id != '') AND status = 'published'")).
+			Annotations(entsql.IndexWhere("((external_id IS NOT NULL) AND ((external_id)::text <> ''::text) AND ((status)::text = 'published'::text))")).
 			StorageKey(Idx_tenant_environment_external_id_unique),
 		index.Fields("tenant_id", "environment_id"),
 		// Add email index for efficient email-based lookups
 		index.Fields("tenant_id", "environment_id", "email").
-			Annotations(entsql.IndexWhere("email IS NOT NULL AND email != '' AND status = 'published'")).
+			Annotations(entsql.IndexWhere("((email IS NOT NULL) AND ((email)::text <> ''::text) AND ((status)::text = 'published'::text))")).
 			StorageKey("idx_customer_tenant_environment_email"),
 		// GIN index for efficient JSONB containment queries on metadata (@> operator)
 		index.Fields("metadata").

@@ -401,7 +401,7 @@ func NewFactory(client *ent.Client, clickhouseClient *clickhouse.Client) *Factor
 
 ## 6. Create Service Layer
 
-**File: `/internal/service/report.go`**
+**File: `/internal/ee/service/report.go`**
 ```go
 package service
 
@@ -484,7 +484,7 @@ func (s *reportService) DeleteReport(ctx context.Context, id, tenantID, environm
 }
 ```
 
-**File: `/internal/service/report_test.go`**
+**File: `/internal/ee/service/report_test.go`**
 ```go
 package service
 
@@ -571,7 +571,7 @@ func TestCreateReport(t *testing.T) {
 
 ## 7. Update Service Factory
 
-**File: `/internal/service/factory.go`**
+**File: `/internal/ee/service/factory.go`**
 ```go
 // Add to imports
 reportDomain "github.com/yourusername/flexprice/internal/domain/report"
@@ -752,7 +752,7 @@ import (
 	"github.com/yourusername/flexprice/internal/api/dto"
 	"github.com/yourusername/flexprice/internal/domain/errors"
 	reportDomain "github.com/yourusername/flexprice/internal/domain/report"
-	"github.com/yourusername/flexprice/internal/service"
+	"github.com/yourusername/flexprice/internal/ee/service"
 )
 
 // ReportHandler handles HTTP requests for reports

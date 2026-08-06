@@ -208,7 +208,7 @@ type S3ExportConfig struct {
 
 ### 3. Connection Creation Logic
 
-**Update CreateConnection** (`internal/service/connection.go`):
+**Update CreateConnection** (`internal/ee/service/connection.go`):
 ```go
 func (s *connectionService) CreateConnection(ctx context.Context, req *dto.CreateConnectionRequest) (*connection.Connection, error) {
     // ... existing validation code
@@ -310,7 +310,7 @@ func (h *TaskHandler) DownloadTaskFile(c *gin.Context) {
 }
 ```
 
-**Service Implementation** (`internal/service/task.go`):
+**Service Implementation** (`internal/ee/service/task.go`):
 ```go
 func (s *taskService) GenerateDownloadURL(ctx context.Context, task *task.Task) (string, error) {
     if task.FileURL == "" {
@@ -596,9 +596,9 @@ A: No limit in v1. Storage quotas planned for Q2 2025.
 - `internal/config/config.go` - Add FlexpriceS3Config
 - `internal/types/sync_config.go` - Add S3 field to SyncConfig
 - `internal/types/scheduled_task.go` - Add IsFlexpriceManaged flag
-- `internal/service/connection.go` - Add credential injection logic
+- `internal/ee/service/connection.go` - Add credential injection logic
 - `internal/api/v1/task.go` - Add download endpoint
-- `internal/service/task.go` - Add download URL generation
+- `internal/ee/service/task.go` - Add download URL generation
 
 ### Configuration Reference
 ```yaml

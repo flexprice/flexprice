@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -44,7 +44,7 @@ func (s *InvoiceActivities) ComputeInvoiceActivity(
 	ctx = types.SetUserID(ctx, input.UserID)
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := invoiceService.ComputeInvoice(ctx, input.InvoiceID, nil)
+	_, skipped, err := invoiceService.ComputeInvoice(ctx, input.InvoiceID, nil)
 	if err != nil {
 		s.logger.Error(ctx, "failed to compute invoice",
 			"invoice_id", input.InvoiceID,
@@ -98,6 +98,13 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
 	)
 	if err != nil {
+		if input.SkipIfAlreadyInvoiced && ierr.IsAlreadyExists(err) {
+			s.logger.Info(ctx, "current period already invoiced, skipping (SkipIfAlreadyInvoiced=true)",
+				"subscription_id", input.SubscriptionID)
+			return &invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput{
+				Skipped: true,
+			}, nil
+		}
 		s.logger.Error(ctx, "failed to create draft invoice for subscription current period",
 			"subscription_id", input.SubscriptionID,
 			"error", err)

@@ -22,6 +22,11 @@ const (
 	ScheduleIDSubscriptionAutoInvoiceThresholdBilling ScheduleID = "subscription-auto-invoice-threshold-billing"
 	ScheduleIDOutboundWebhookStaleRetry               ScheduleID = "webhook-stale-retry"
 	ScheduleIDPaddleInvoicePullSync                   ScheduleID = "paddle-invoice-pull-sync"
+	ScheduleIDMoyasarAuthPaymentSettlement            ScheduleID = "moyasar-auth-payment-settlement"
+	ScheduleIDCheckoutSessionExpiry                   ScheduleID = "checkout-session-expiry"
+	ScheduleIDMarketplaceUsageSnapshot                ScheduleID = "marketplace-usage-snapshot"
+	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
+	ScheduleIDDailyDraftAndCompute                    ScheduleID = "daily-draft-and-compute"
 )
 
 // String returns the raw schedule id.
@@ -40,6 +45,11 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDSubscriptionAutoInvoiceThresholdBilling,
 		ScheduleIDOutboundWebhookStaleRetry,
 		ScheduleIDPaddleInvoicePullSync,
+		ScheduleIDMoyasarAuthPaymentSettlement,
+		ScheduleIDCheckoutSessionExpiry,
+		ScheduleIDMarketplaceUsageSnapshot,
+		ScheduleIDMarketplaceUsageReport,
+		ScheduleIDDailyDraftAndCompute,
 	}
 }
 
@@ -61,8 +71,10 @@ func (id ScheduleID) Validate() error {
 
 // ScheduleConfig is everything needed to create or update one Temporal server schedule.
 type ScheduleConfig struct {
-	ID        ScheduleID
-	Interval  time.Duration
+	ID       ScheduleID
+	Interval time.Duration
+	// Offset is applied within each interval.
+	Offset    time.Duration
 	Workflow  interface{}
 	Input     interface{}
 	TaskQueue TemporalTaskQueue

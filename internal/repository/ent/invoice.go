@@ -24,18 +24,18 @@ import (
 )
 
 type invoiceRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts InvoiceQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  InvoiceQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainInvoice.Repository {
 	return &invoiceRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: InvoiceQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  InvoiceQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -439,7 +439,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 
 	// TODO: This is done to ensure backwards compatibility with the old repository.
 	// We should remove this once we migrate all callers to use the new repository.
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		r.logger.Error(ctx, "failed to get invoice line items", "error", err)
@@ -504,7 +504,7 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 	result := domainInvoice.FromEnt(inv)
 
 	// Fetch line items separately (consistent with Get pattern)
-	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
@@ -651,12 +651,20 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	client := r.client.Reader(ctx)
 	query := client.Invoice.Query().
 		WithCouponApplications(func(q *ent.CouponApplicationQuery) {
-			q.Where(couponapplication.Status(string(types.StatusPublished)))
+			q.Where(
+				couponapplication.TenantID(types.GetTenantID(ctx)),
+				couponapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
+				couponapplication.Status(string(types.StatusPublished)),
+			)
 		})
 
 	if !filter.SkipLineItems {
 		query = query.WithLineItems(func(q *ent.InvoiceLineItemQuery) {
-			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
+			q.Where(
+				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+				invoicelineitem.Status(string(types.StatusPublished)),
+			)
 		})
 	}
 
@@ -781,11 +789,8 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 		"idempotency_key": key,
 	})
 	defer FinishSpan(span)
-	// Try to get from cache first
-	if cachedInvoice := r.GetCache(ctx, key); cachedInvoice != nil {
-		return cachedInvoice, nil
-	}
 
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	inv, err := r.client.Writer(ctx).Invoice.Query().
 		Where(
 			invoice.IdempotencyKeyEQ(key),
@@ -802,9 +807,7 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 		return nil, ierr.WithError(err).WithHint("failed to get invoice by idempotency key").Mark(ierr.ErrDatabase)
 	}
 
-	invoiceData := domainInvoice.FromEnt(inv)
-	r.SetCache(ctx, invoiceData)
-	return invoiceData, nil
+	return domainInvoice.FromEnt(inv), nil
 }
 
 func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
@@ -995,7 +998,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		return 0, ierr.WithError(err).WithHint("billing sequence generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Info(ctx, "generated billing sequence",
+	r.logger.Debug(ctx, "generated billing sequence",
 		"tenant_id", tenantID,
 		"subscription_id", subscriptionID,
 		"sequence", lastSequence)
@@ -1023,7 +1026,7 @@ func (o InvoiceQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query I
 
 func (o InvoiceQueryOptions) ApplyStatusFilter(query InvoiceQuery, status string) InvoiceQuery {
 	if status == "" {
-		return query.Where(invoice.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(invoice.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(invoice.Status(status))
 }
@@ -1161,56 +1164,41 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Invoice) {
-	span := cache.StartCacheSpan(ctx, "invoice", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "set", map[string]interface{}{
 		"invoice_id": inv.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.ID)
-	r.cache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultInMemory)
-
-	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.IdempotencyKey)
-	r.cache.Set(ctx, idempotencyKey, inv, cache.ExpiryDefaultInMemory)
-
-	r.logger.Debug(ctx, "set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, inv.ID)
+	r.redisCache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
 }
 
-func (r *invoiceRepository) GetCache(ctx context.Context, key string) *domainInvoice.Invoice {
-	span := cache.StartCacheSpan(ctx, "invoice", "get", map[string]interface{}{
-		"invoice_id": key,
+func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "get", map[string]interface{}{
+		"invoice_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainInvoice.Invoice)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	inv, ok := cache.UnmarshalCacheValue[domainInvoice.Invoice](value)
+	if !ok {
+		return nil
+	}
+	return inv
 }
 
 func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
 		"invoice_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, key)
-	r.cache.Delete(ctx, cacheKey)
-
-	// get idempotency key
-	invoice, err := r.Get(ctx, key)
-	if err != nil {
-		r.logger.Error(ctx, "failed to get invoice by idempotency key", "error", err)
-		return
-	}
-	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
-	r.cache.Delete(ctx, idempotencyKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, key)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination

@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/samber/lo"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
 )
@@ -92,10 +93,14 @@ func (c *Client) GetOrCreateApplication(ctx context.Context, tenantID, environme
 	return app.Id, nil
 }
 
-// GetDashboardURL gets the dashboard URL for the given application
-func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (string, error) {
+// GetDashboardURL returns the Svix app-portal access url and token for the
+// given application. Hosted Svix returns a real usable portal `url`; Svix OSS
+// returns a docs stub url plus the app-scoped JWT `token`, consumed by
+// svix-react in the browser. Callers should branch on the url to decide
+// which to use.
+func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (url string, token string, err error) {
 	if !c.enabled || c.client == nil {
-		return "", nil
+		return "", "", nil
 	}
 
 	span, ctx := c.startSpan(ctx, "get_dashboard_url", map[string]interface{}{
@@ -107,15 +112,15 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (str
 
 	dashboard, err := c.client.Authentication.AppPortalAccess(ctx, applicationID, models.AppPortalAccessIn{}, &svix.AuthenticationAppPortalAccessOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to get dashboard access: %w", err)
+		return "", "", fmt.Errorf("failed to get dashboard access: %w", err)
 	}
 
-	return dashboard.Url, nil
+	return dashboard.Url, dashboard.Token, nil
 }
 
 // SendMessage sends a webhook message to the given application.
 // Returns the Svix message id on success (empty string when Svix is disabled or the app doesn't exist).
-func (c *Client) SendMessage(ctx context.Context, applicationID string, eventType string, payload interface{}) (string, error) {
+func (c *Client) SendMessage(ctx context.Context, applicationID, eventID, eventType string, payload interface{}) (string, error) {
 	if !c.enabled || c.client == nil {
 		return "", nil
 	}
@@ -152,11 +157,14 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		}
 	}
 
+	idempotencyKey := fmt.Sprintf("%s_%s", eventID, eventType)
 	payloadMap["event_type"] = eventType
 	out, err := c.client.Message.Create(ctx, applicationID, models.MessageIn{
 		EventType: eventType,
 		Payload:   payloadMap,
-	}, &svix.MessageCreateOptions{})
+	}, &svix.MessageCreateOptions{
+		IdempotencyKey: lo.ToPtr(idempotencyKey),
+	})
 	if err != nil {
 		if err.Error() == "application not found" {
 			return "", nil

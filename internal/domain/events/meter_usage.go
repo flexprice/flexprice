@@ -25,21 +25,36 @@ type MeterUsage struct {
 }
 
 // MeterUsageQueryParams defines filters for querying the meter_usage table
+// TimeRange is a half-open [Start, End) window.
+type TimeRange struct {
+	Start time.Time
+	End   time.Time
+}
+
 type MeterUsageQueryParams struct {
 	TenantID           string
 	EnvironmentID      string
 	ExternalCustomerID string
 	// ExternalCustomerIDs supports multi-customer queries (e.g. inherited subscriptions)
 	ExternalCustomerIDs []string
-	MeterID             string
-	MeterIDs            []string
-	StartTime           time.Time
-	EndTime             time.Time
-	AggregationType     types.AggregationType
+	MeterID  string
+	MeterIDs []string
+	StartTime time.Time
+	EndTime   time.Time
+	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
+	// OR'd half-open [Start, End) windows — one query for disjoint ranges.
+	TimeRanges      []TimeRange
+	AggregationType types.AggregationType
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
-	// GroupByProperty is the JSON property key for group-by aggregation (e.g. for bucketed MAX meters)
-	GroupByProperty string
+	// Timezone is the customer's IANA timezone name. See UsageParams.Timezone.
+	Timezone string
+	// GroupBy is the group_by dimension list. Allowed entries:
+	//   - "source"        — group by event source column
+	//   - "properties.X"  — group by JSON property X
+	// Naming matches UsageAnalyticsParams.GroupBy (feature-usage). Billing
+	// callers populating from meter.Aggregation.GroupBy wrap as "properties.<X>".
+	GroupBy []string
 	// UseFinal enables FINAL for ReplacingMergeTree deduplication (use for billing queries)
 	UseFinal bool
 	// PropertyFilters restrict events whose properties match. e.g. {"model": ["gpt-4"]}
@@ -84,11 +99,25 @@ type MeterUsageDetailedAnalyticsParams struct {
 	WindowSize       types.WindowSize
 	BillingAnchor    *time.Time
 	UseFinal         bool
+	// Timezone is the IANA timezone used to bucket the time-series, auto-derived
+	// server-side from the primary customer's record (never from the request).
+	// Empty falls back to UTC bucketing.
+	Timezone string
 	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
 	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
 	Expand []string
 	// IncludeChildren mirrors dto.GetUsageAnalyticsRequest.IncludeChildren.
 	IncludeChildren bool
+	// BreakdownBucket mirrors dto.GetUsageAnalyticsRequest.BreakdownBucket: when
+	// true, each point is stamped with its BucketID/PriceID and per-bucket
+	// summaries are appended. Requires WindowSize to be set.
+	BreakdownBucket bool
+	// ForceApplyCommitment overrides the per-item skip that calculateCosts
+	// normally applies to fanned-out analytics (Source or Properties set).
+	// Internal-only — set by the CSV export pipeline so bucketed commitment
+	// line items keep their true-up / overage cost even when the export
+	// requests group_by=source. NEVER wire this into a user-facing DTO field.
+	ForceApplyCommitment bool
 }
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination
@@ -133,9 +162,26 @@ type MeterUsageRepository interface {
 	// Returns *AggregationResult (shared type with feature_usage) for compatibility with calculateBucketedMeterCost.
 	GetUsageForBucketedMeters(ctx context.Context, params *MeterUsageQueryParams) (*AggregationResult, error)
 
+	// GetUsageForBucketedMetersDetailed is the analytics-side variant: returns one
+	// MeterUsageDetailedResult per (source, properties) combo when UserGroupBy is
+	// set, with per-combo TotalUsage / EventCount / Points pre-rolled by SQL —
+	// mirrors feature_usage's getMaxBucketTotals + getAnalyticsPoints shape.
+	GetUsageForBucketedMetersDetailed(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterUsageDetailedResult, error)
+
+	// GetSourcesForBucketedMeter returns the distinct source values for a bucketed meter
+	// using the same WHERE conditions as GetUsageForBucketedMeters. Used by the analytics
+	// path to populate expand:"source" without polluting MeterUsageQueryParams with an
+	// analytics-only concern.
+	GetSourcesForBucketedMeter(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.
 	GetDistinctMeterIDs(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
+	// GetEarliestUsageTimestamp returns the earliest event timestamp matching the
+	// params' filters within [StartTime, EndTime), or nil when no events match.
+	// Used to anchor entitlement grant windows at the first uncovered usage.
+	GetEarliestUsageTimestamp(ctx context.Context, params *MeterUsageQueryParams) (*time.Time, error)
 
 	// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data
 	GetDetailedAnalytics(ctx context.Context, params *MeterUsageDetailedAnalyticsParams) ([]*MeterUsageDetailedResult, error)

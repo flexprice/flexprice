@@ -128,6 +128,26 @@ func (cu *CustomerUpdate) ClearEmail() *CustomerUpdate {
 	return cu
 }
 
+// SetContact sets the "contact" field.
+func (cu *CustomerUpdate) SetContact(s string) *CustomerUpdate {
+	cu.mutation.SetContact(s)
+	return cu
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableContact(s *string) *CustomerUpdate {
+	if s != nil {
+		cu.SetContact(*s)
+	}
+	return cu
+}
+
+// ClearContact clears the value of the "contact" field.
+func (cu *CustomerUpdate) ClearContact() *CustomerUpdate {
+	cu.mutation.ClearContact()
+	return cu
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (cu *CustomerUpdate) SetAddressLine1(s string) *CustomerUpdate {
 	cu.mutation.SetAddressLine1(s)
@@ -248,6 +268,26 @@ func (cu *CustomerUpdate) ClearAddressCountry() *CustomerUpdate {
 	return cu
 }
 
+// SetTimezone sets the "timezone" field.
+func (cu *CustomerUpdate) SetTimezone(s string) *CustomerUpdate {
+	cu.mutation.SetTimezone(s)
+	return cu
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableTimezone(s *string) *CustomerUpdate {
+	if s != nil {
+		cu.SetTimezone(*s)
+	}
+	return cu
+}
+
+// ClearTimezone clears the value of the "timezone" field.
+func (cu *CustomerUpdate) ClearTimezone() *CustomerUpdate {
+	cu.mutation.ClearTimezone()
+	return cu
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cu *CustomerUpdate) Mutation() *CustomerMutation {
 	return cu.mutation
@@ -352,6 +392,12 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cu.mutation.EmailCleared() {
 		_spec.ClearField(customer.FieldEmail, field.TypeString)
 	}
+	if value, ok := cu.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+	}
+	if cu.mutation.ContactCleared() {
+		_spec.ClearField(customer.FieldContact, field.TypeString)
+	}
 	if value, ok := cu.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
 	}
@@ -387,6 +433,12 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cu.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+	}
+	if cu.mutation.TimezoneCleared() {
+		_spec.ClearField(customer.FieldTimezone, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -508,6 +560,26 @@ func (cuo *CustomerUpdateOne) ClearEmail() *CustomerUpdateOne {
 	return cuo
 }
 
+// SetContact sets the "contact" field.
+func (cuo *CustomerUpdateOne) SetContact(s string) *CustomerUpdateOne {
+	cuo.mutation.SetContact(s)
+	return cuo
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableContact(s *string) *CustomerUpdateOne {
+	if s != nil {
+		cuo.SetContact(*s)
+	}
+	return cuo
+}
+
+// ClearContact clears the value of the "contact" field.
+func (cuo *CustomerUpdateOne) ClearContact() *CustomerUpdateOne {
+	cuo.mutation.ClearContact()
+	return cuo
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (cuo *CustomerUpdateOne) SetAddressLine1(s string) *CustomerUpdateOne {
 	cuo.mutation.SetAddressLine1(s)
@@ -625,6 +697,26 @@ func (cuo *CustomerUpdateOne) SetNillableAddressCountry(s *string) *CustomerUpda
 // ClearAddressCountry clears the value of the "address_country" field.
 func (cuo *CustomerUpdateOne) ClearAddressCountry() *CustomerUpdateOne {
 	cuo.mutation.ClearAddressCountry()
+	return cuo
+}
+
+// SetTimezone sets the "timezone" field.
+func (cuo *CustomerUpdateOne) SetTimezone(s string) *CustomerUpdateOne {
+	cuo.mutation.SetTimezone(s)
+	return cuo
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableTimezone(s *string) *CustomerUpdateOne {
+	if s != nil {
+		cuo.SetTimezone(*s)
+	}
+	return cuo
+}
+
+// ClearTimezone clears the value of the "timezone" field.
+func (cuo *CustomerUpdateOne) ClearTimezone() *CustomerUpdateOne {
+	cuo.mutation.ClearTimezone()
 	return cuo
 }
 
@@ -762,6 +854,12 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	if cuo.mutation.EmailCleared() {
 		_spec.ClearField(customer.FieldEmail, field.TypeString)
 	}
+	if value, ok := cuo.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+	}
+	if cuo.mutation.ContactCleared() {
+		_spec.ClearField(customer.FieldContact, field.TypeString)
+	}
 	if value, ok := cuo.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
 	}
@@ -797,6 +895,12 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cuo.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+	}
+	if cuo.mutation.TimezoneCleared() {
+		_spec.ClearField(customer.FieldTimezone, field.TypeString)
 	}
 	_node = &Customer{config: cuo.config}
 	_spec.Assign = _node.assignValues

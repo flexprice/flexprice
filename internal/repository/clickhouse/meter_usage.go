@@ -36,7 +36,13 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 
 // BulkInsertMeterUsage inserts meter usage records in batches of 100
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
+	span := StartRepositorySpan(ctx, "meter_usage", "bulk_insert", map[string]interface{}{
+		"record_count": len(records),
+	})
+	defer FinishSpan(span)
+
 	if len(records) == 0 {
+		SetSpanSuccess(span)
 		return nil
 	}
 
@@ -50,6 +56,7 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 			)
 		`)
 		if err != nil {
+			SetSpanError(span, err)
 			return ierr.WithError(err).
 				WithHint("Failed to prepare batch for meter_usage insert").
 				Mark(ierr.ErrDatabase)
@@ -72,6 +79,7 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 				propsStr,
 			)
 			if err != nil {
+				SetSpanError(span, err)
 				return ierr.WithError(err).
 					WithHint("Failed to append row to meter_usage batch").
 					WithReportableDetails(map[string]interface{}{"event_id": record.ID}).
@@ -80,17 +88,24 @@ func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records
 		}
 
 		if err := stmt.Send(); err != nil {
+			SetSpanError(span, err)
 			return ierr.WithError(err).
 				WithHint("Failed to send meter_usage batch").
 				Mark(ierr.ErrDatabase)
 		}
 	}
 
+	SetSpanSuccess(span)
 	return nil
 }
 
 // IsDuplicate checks if a meter usage record with the given unique_hash already exists
 func (r *MeterUsageRepository) IsDuplicate(ctx context.Context, meterID, uniqueHash string) (bool, error) {
+	span := StartRepositorySpan(ctx, "meter_usage", "is_duplicate", map[string]interface{}{
+		"meter_id": meterID,
+	})
+	defer FinishSpan(span)
+
 	query := `
 		SELECT 1
 		FROM meter_usage
@@ -104,13 +119,16 @@ func (r *MeterUsageRepository) IsDuplicate(ctx context.Context, meterID, uniqueH
 	if err != nil {
 		// If no rows, it means no duplicate
 		if err.Error() == "sql: no rows in result set" {
+			SetSpanSuccess(span)
 			return false, nil
 		}
+		SetSpanError(span, err)
 		return false, ierr.WithError(err).
 			WithHint("Failed to check for duplicate meter usage event").
 			Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
 	return exists == 1, nil
 }
 
@@ -120,16 +138,72 @@ func (r *MeterUsageRepository) GetUsage(ctx context.Context, params *events.Mete
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
 
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage", map[string]interface{}{
+		"meter_id":         params.MeterID,
+		"aggregation_type": params.AggregationType,
+		"window_size":      params.WindowSize,
+	})
+	defer FinishSpan(span)
+
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	query := aggregator.GetQuery(ctx, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
 
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
+	var (
+		result *events.MeterUsageAggregationResult
+		err    error
+	)
 	if windowExpr != "" {
-		return r.executeWindowedQuery(ctx, query, args, params)
+		result, err = r.executeWindowedQuery(ctx, query, args, params)
+	} else {
+		result, err = r.executeScalarQuery(ctx, query, args, params)
+	}
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
+	return result, nil
+}
+
+// GetEarliestUsageTimestamp returns the earliest event timestamp matching the
+// params' filters within [StartTime, EndTime), or nil when no events match.
+// No FINAL: ReplacingMergeTree duplicates share the timestamp, so min() is unaffected.
+func (r *MeterUsageRepository) GetEarliestUsageTimestamp(ctx context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
 
-	return r.executeScalarQuery(ctx, query, args, params)
+	span := StartRepositorySpan(ctx, "meter_usage", "get_earliest_usage_timestamp", map[string]interface{}{
+		"meter_id":             params.MeterID,
+		"external_customer_id": params.ExternalCustomerID,
+	})
+	defer FinishSpan(span)
+
+	where, args := r.qb.BuildWhereClause(params)
+	query := fmt.Sprintf(`
+		SELECT min(timestamp) AS earliest, count() AS event_count
+		FROM meter_usage
+		WHERE %s
+		SETTINGS max_memory_usage = 96636764160
+	`, where)
+
+	var earliest time.Time
+	var eventCount uint64
+	if err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&earliest, &eventCount); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query earliest meter usage timestamp").
+			Mark(ierr.ErrDatabase)
+	}
+	if eventCount == 0 {
+		SetSpanSuccess(span)
+		return nil, nil
+	}
+	earliest = earliest.UTC()
+	SetSpanSuccess(span)
+	return &earliest, nil
 }
 
 // GetUsageMultiMeter queries aggregated usage for multiple meters, grouped by meter_id
@@ -138,18 +212,35 @@ func (r *MeterUsageRepository) GetUsageMultiMeter(ctx context.Context, params *e
 		return nil, ierr.NewError("params with meter_ids are required").Mark(ierr.ErrValidation)
 	}
 
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_multi_meter", map[string]interface{}{
+		"meter_ids_count":  len(params.MeterIDs),
+		"aggregation_type": params.AggregationType,
+		"window_size":      params.WindowSize,
+	})
+	defer FinishSpan(span)
+
 	aggregator := GetMeterUsageAggregator(params.AggregationType)
 	// Extract aggregation expressions from the aggregator type
 	aggExpr, countExpr := getMeterUsageAggExprs(aggregator)
 	query := BuildMultiMeterQuery(aggExpr, countExpr, params, r.qb)
 	_, args := r.qb.BuildWhereClause(params)
 
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
+	var (
+		results []*events.MeterUsageAggregationResult
+		err     error
+	)
 	if windowExpr != "" {
-		return r.executeMultiMeterWindowedQuery(ctx, query, args, params)
+		results, err = r.executeMultiMeterWindowedQuery(ctx, query, args, params)
+	} else {
+		results, err = r.executeMultiMeterScalarQuery(ctx, query, args, params)
 	}
-
-	return r.executeMultiMeterScalarQuery(ctx, query, args, params)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
+	return results, nil
 }
 
 // --- Private execution helpers ---
@@ -285,16 +376,24 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
 
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_for_bucketed_meters", map[string]interface{}{
+		"meter_id":    params.MeterID,
+		"window_size": params.WindowSize,
+		"group_by":    params.GroupBy,
+	})
+	defer FinishSpan(span)
+
 	query, args := r.qb.BuildBucketedQuery(params)
 
 	r.logger.Debug(ctx, "executing bucketed meter usage query",
 		"meter_id", params.MeterID,
 		"window_size", params.WindowSize,
-		"group_by", params.GroupByProperty,
+		"group_by", params.GroupBy,
 	)
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to execute bucketed meter usage query").
 			WithReportableDetails(map[string]interface{}{
@@ -309,41 +408,227 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 	result.Type = params.AggregationType
 	result.MeterID = params.MeterID
 
-	hasGroupBy := params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty)
-
+	// Both no-group and grouped SQL paths emit the same 5 columns: total,
+	// total_event_count, timestamp, value, event_count. Per-row dim values
+	// are no longer surfaced — no consumer reads them.
 	for rows.Next() {
 		var total decimal.Decimal
+		var totalEventCount uint64
 		var windowStart time.Time
 		var value decimal.Decimal
+		var eventCount uint64
 
-		if hasGroupBy {
-			var groupKey string
-			if err := rows.Scan(&total, &windowStart, &value, &groupKey); err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan bucketed meter usage row (with group_key)").
-					Mark(ierr.ErrDatabase)
+		if err := rows.Scan(&total, &totalEventCount, &windowStart, &value, &eventCount); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed meter usage row").
+				Mark(ierr.ErrDatabase)
+		}
+		result.Value = total
+		result.EventCount = totalEventCount
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: windowStart,
+			Value:      value,
+			EventCount: eventCount,
+		})
+	}
+	// rows.Next() returns false on both end-of-rows and iteration error.
+	// Without this check we'd silently return partial results as success and
+	// downstream billing totals would be wrong.
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed meter usage rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return &result, nil
+}
+
+// GetSourcesForBucketedMeter returns distinct source values for a bucketed meter using
+// the same WHERE conditions as GetUsageForBucketedMeters. Called by the analytics service
+// layer when expand:"source" is requested, keeping MeterUsageQueryParams free of analytics concerns.
+func (r *MeterUsageRepository) GetSourcesForBucketedMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_sources_for_bucketed_meter", map[string]interface{}{
+		"meter_id": params.MeterID,
+	})
+	defer FinishSpan(span)
+
+	where, args := r.qb.BuildWhereClause(params)
+	query := fmt.Sprintf("SELECT groupUniqArray(source) FROM meter_usage WHERE %s", where)
+
+	var sources []string
+	if err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&sources); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to collect distinct sources for bucketed meter").
+			WithReportableDetails(map[string]interface{}{"meter_id": params.MeterID}).
+			Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return sources, nil
+}
+
+// GetUsageForBucketedMetersDetailed runs the analytics-side bucketed query:
+// 1) the aggregate query returns one row per (source, properties) combo with
+// per-combo TotalUsage / EventCount; 2) for each combo, a follow-up query
+// fetches per-bucket Points. Matches feature_usage's two-query pattern so the
+// service layer doesn't have to re-group rows in Go.
+//
+// Callers MUST set params.GroupBy; otherwise an empty slice is returned (no
+// combos to enumerate). For the no-grouping case use GetUsageForBucketedMeters.
+func (r *MeterUsageRepository) GetUsageForBucketedMetersDetailed(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageDetailedResult, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_for_bucketed_meters_detailed", map[string]interface{}{
+		"meter_id":    params.MeterID,
+		"window_size": params.WindowSize,
+		"group_by":    params.GroupBy,
+	})
+	defer FinishSpan(span)
+
+	aggQuery, aggArgs, dims := r.qb.BuildBucketedAggregateQuery(params)
+	if aggQuery == "" {
+		SetSpanSuccess(span)
+		return nil, nil
+	}
+
+	r.logger.Debug(ctx, "executing bucketed detailed aggregate query",
+		"meter_id", params.MeterID,
+		"window_size", params.WindowSize,
+		"group_by", params.GroupBy,
+	)
+
+	rows, err := r.store.GetConn().Query(ctx, aggQuery, aggArgs...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute bucketed detailed aggregate query").
+			WithReportableDetails(map[string]interface{}{
+				"meter_id":    params.MeterID,
+				"window_size": params.WindowSize,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	// Each row carries (dim values..., group_total, group_event_count).
+	results := make([]*events.MeterUsageDetailedResult, 0)
+	for rows.Next() {
+		dimVals := make([]string, len(dims))
+		var groupTotal decimal.Decimal
+		var groupEC uint64
+
+		scanArgs := make([]interface{}, 0, len(dims)+2)
+		for i := range dimVals {
+			scanArgs = append(scanArgs, &dimVals[i])
+		}
+		scanArgs = append(scanArgs, &groupTotal, &groupEC)
+
+		if err := rows.Scan(scanArgs...); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed detailed aggregate row").
+				Mark(ierr.ErrDatabase)
+		}
+
+		res := &events.MeterUsageDetailedResult{
+			MeterID:    params.MeterID,
+			Properties: make(map[string]string),
+			TotalUsage: groupTotal,
+			EventCount: groupEC,
+		}
+		// MAX bucketed meters also surface MaxUsage = TotalUsage for response parity.
+		if params.AggregationType != types.AggregationSum {
+			res.MaxUsage = groupTotal
+		}
+		for i, d := range dims {
+			if d.IsSource() {
+				res.Source = dimVals[i]
+			} else if d.IsProperty() && dimVals[i] != "" {
+				// Drop missing-key dims (JSONExtractString returns "" when the key isn't present)
+				res.Properties[d.PropertyName] = dimVals[i]
 			}
-			result.Value = total
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: windowStart,
-				Value:      value,
-				GroupKey:   groupKey,
-			})
-		} else {
-			if err := rows.Scan(&total, &windowStart, &value); err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan bucketed meter usage row").
-					Mark(ierr.ErrDatabase)
+		}
+		results = append(results, res)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed detailed aggregate rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Fetch Points per combo (one query each) when the caller asked for a
+	// window_size. Skip the round-trips when no time-series is needed.
+	if params.WindowSize != "" {
+		for _, res := range results {
+			pts, err := r.fetchBucketedComboPoints(ctx, params, dims, res.Source, res.Properties, params.AggregationType)
+			if err != nil {
+				SetSpanError(span, err)
+				return nil, err
 			}
-			result.Value = total
-			result.Results = append(result.Results, events.UsageResult{
-				WindowSize: windowStart,
-				Value:      value,
-			})
+			res.Points = pts
 		}
 	}
 
-	return &result, nil
+	SetSpanSuccess(span)
+	return results, nil
+}
+
+// fetchBucketedComboPoints runs BuildBucketedPointsQuery for one combo and
+// converts the bucket rows into the MeterUsageDetailedPoint shape the response
+// builder consumes.
+func (r *MeterUsageRepository) fetchBucketedComboPoints(
+	ctx context.Context,
+	params *events.MeterUsageQueryParams,
+	dims []BucketedGroupByDim,
+	comboSource string,
+	comboProps map[string]string,
+	aggType types.AggregationType,
+) ([]events.MeterUsageDetailedPoint, error) {
+	query, args := r.qb.BuildBucketedPointsQuery(params, dims, comboSource, comboProps)
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute bucketed combo points query").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	pts := make([]events.MeterUsageDetailedPoint, 0)
+	for rows.Next() {
+		var bucketStart time.Time
+		var bucketValue decimal.Decimal
+		var bucketEC uint64
+		if err := rows.Scan(&bucketStart, &bucketValue, &bucketEC); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan bucketed combo points row").
+				Mark(ierr.ErrDatabase)
+		}
+		p := events.MeterUsageDetailedPoint{
+			WindowStart: bucketStart,
+			TotalUsage:  bucketValue,
+			EventCount:  bucketEC,
+		}
+		if aggType != types.AggregationSum {
+			p.MaxUsage = bucketValue
+		}
+		pts = append(pts, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed combo points rows").
+			Mark(ierr.ErrDatabase)
+	}
+	return pts, nil
 }
 
 // GetDistinctMeterIDs returns the set of meter_ids that have data in meter_usage
@@ -352,6 +637,12 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 	if params == nil {
 		return nil, nil
 	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_distinct_meter_ids", map[string]interface{}{
+		"external_customer_id":  params.ExternalCustomerID,
+		"external_customer_ids": len(params.ExternalCustomerIDs),
+	})
+	defer FinishSpan(span)
 
 	where, args := r.qb.BuildWhereClause(params)
 	finalClause, settings := r.qb.BuildFinalClause(params.UseFinal)
@@ -366,6 +657,7 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query distinct meter_ids from meter_usage").
 			Mark(ierr.ErrDatabase)
@@ -376,6 +668,7 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 	for rows.Next() {
 		var meterID string
 		if err := rows.Scan(&meterID); err != nil {
+			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan distinct meter_id").
 				Mark(ierr.ErrDatabase)
@@ -383,6 +676,7 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 		meterIDs = append(meterIDs, meterID)
 	}
 
+	SetSpanSuccess(span)
 	return meterIDs, nil
 }
 
@@ -392,9 +686,19 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
 
+	span := StartRepositorySpan(ctx, "meter_usage", "get_detailed_analytics", map[string]interface{}{
+		"external_customer_id":   params.ExternalCustomerID,
+		"meter_ids_count":        len(params.MeterIDs),
+		"group_by":               params.GroupBy,
+		"property_filters_count": len(params.PropertyFilters),
+		"window_size":            params.WindowSize,
+	})
+	defer FinishSpan(span)
+
 	// Parse and validate group-by columns
 	groupByResult, err := r.qb.BuildDetailedGroupByColumns(params)
 	if err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Invalid group_by configuration").
 			Mark(ierr.ErrValidation)
@@ -447,6 +751,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to execute detailed meter usage analytics query").
 			Mark(ierr.ErrDatabase)
@@ -485,6 +790,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
+			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan detailed meter usage analytics row").
 				Mark(ierr.ErrDatabase)
@@ -503,7 +809,9 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
 					start := len("JSONExtractString(properties, '")
 					end := strings.Index(col[start:], "'")
-					if end > 0 {
+					if end > 0 && value != "" {
+						// Skip missing-key dims so the response doesn't carry
+						// stray empty entries — matches feature-side parity.
 						propName := col[start : start+end]
 						result.Properties[propName] = value
 					}
@@ -515,6 +823,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 		if params.WindowSize != "" {
 			points, err := r.getDetailedAnalyticsPoints(ctx, params, result, groupByResult)
 			if err != nil {
+				SetSpanError(span, err)
 				return nil, err
 			}
 			result.Points = points
@@ -524,11 +833,13 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 	}
 
 	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Error iterating detailed meter usage analytics rows").
 			Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
 	return results, nil
 }
 
@@ -666,6 +977,16 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
+	span := StartRepositorySpan(ctx, "meter_usage", "get_meter_usage_for_export", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"batch_size":     batchSize,
+		"offset":         offset,
+		"start_time":     startTime,
+		"end_time":       endTime,
+	})
+	defer FinishSpan(span)
+
 	query := `
 		SELECT
 			id,
@@ -692,6 +1013,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 
 	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, startTime, endTime, batchSize, offset)
 	if err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query meter_usage for export in batch").
 			WithReportableDetails(map[string]interface{}{
@@ -721,6 +1043,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 			&usage.QtyTotal,
 			&usage.UniqueHash,
 		); err != nil {
+			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
 				WithHint("Failed to scan meter_usage row").
 				Mark(ierr.ErrDatabase)
@@ -739,6 +1062,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 	}
 
 	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Error iterating meter_usage rows").
 			Mark(ierr.ErrDatabase)
@@ -751,11 +1075,19 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 		"offset", offset,
 		"records_in_batch", len(results))
 
+	SetSpanSuccess(span)
 	return results, nil
 }
 
 // GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
 func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+	span := StartRepositorySpan(ctx, "meter_usage", "get_by_event_id", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"event_id":       eventID,
+	})
+	defer FinishSpan(span)
+
 	query := `
 		SELECT
 			id,
@@ -797,8 +1129,10 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 	)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
+			SetSpanSuccess(span)
 			return nil, nil
 		}
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query meter_usage by event ID").
 			Mark(ierr.ErrDatabase)
@@ -811,5 +1145,6 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 		}
 	}
 
+	SetSpanSuccess(span)
 	return &usage, nil
 }

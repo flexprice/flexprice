@@ -22,6 +22,8 @@ type CreateCouponAssociationRequest struct {
 // CouponAssociationResponse represents the response for coupon association data
 type CouponAssociationResponse struct {
 	*couponAssociation.CouponAssociation `json:",inline"`
+	Coupon               *CouponResponse               `json:"coupon,omitempty"`
+	SubscriptionLineItem *SubscriptionLineItemResponse `json:"subscription_line_item,omitempty"`
 }
 
 // ListCouponAssociationsResponse represents the response for listing coupon associations

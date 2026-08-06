@@ -73,8 +73,10 @@ type WalletTransaction struct {
 	// TransactionReason holds the value of the "transaction_reason" field.
 	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty"`
 	// Lower number indicates higher priority. Nil values are treated as lowest priority.
-	Priority     *int `json:"priority,omitempty"`
-	selectValues sql.SelectValues
+	Priority *int `json:"priority,omitempty"`
+	// ParentTransactionID holds the value of the "parent_transaction_id" field.
+	ParentTransactionID string `json:"parent_transaction_id,omitempty"`
+	selectValues        sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -90,7 +92,7 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case wallettransaction.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldCustomerID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldCurrency, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason:
+		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldCustomerID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldCurrency, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason, wallettransaction.FieldParentTransactionID:
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt, wallettransaction.FieldExpiryDate:
 			values[i] = new(sql.NullTime)
@@ -284,6 +286,12 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 				wt.Priority = new(int)
 				*wt.Priority = int(value.Int64)
 			}
+		case wallettransaction.FieldParentTransactionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_transaction_id", values[i])
+			} else if value.Valid {
+				wt.ParentTransactionID = value.String
+			}
 		default:
 			wt.selectValues.Set(columns[i], values[i])
 		}
@@ -410,6 +418,9 @@ func (wt *WalletTransaction) String() string {
 		builder.WriteString("priority=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("parent_transaction_id=")
+	builder.WriteString(wt.ParentTransactionID)
 	builder.WriteByte(')')
 	return builder.String()
 }

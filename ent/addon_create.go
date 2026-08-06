@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/addon"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/entitlement"
 )
 
@@ -162,6 +163,21 @@ func (ac *AddonCreate) AddEntitlements(e ...*Entitlement) *AddonCreate {
 		ids[i] = e[i].ID
 	}
 	return ac.AddEntitlementIDs(ids...)
+}
+
+// AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
+func (ac *AddonCreate) AddCreditGrantIDs(ids ...string) *AddonCreate {
+	ac.mutation.AddCreditGrantIDs(ids...)
+	return ac
+}
+
+// AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
+func (ac *AddonCreate) AddCreditGrants(c ...*CreditGrant) *AddonCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return ac.AddCreditGrantIDs(ids...)
 }
 
 // Mutation returns the AddonMutation object of the builder.
@@ -340,6 +356,22 @@ func (ac *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := ac.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   addon.CreditGrantsTable,
+			Columns: []string{addon.CreditGrantsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

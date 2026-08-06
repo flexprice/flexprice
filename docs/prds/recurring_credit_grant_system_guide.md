@@ -156,7 +156,7 @@ type Repository interface {
 }
 ```
 
-### Service Layer (`internal/service/`)
+### Service Layer (`internal/ee/service/`)
 
 #### Enhanced Credit Grant Service
 
@@ -503,7 +503,7 @@ go test ./internal/repository/ent -v -run TestCreditGrantApplication
 #### Day 1-2: Subscription State Handler
 
 ```go
-internal/service/subscription_state_handler.go:
+internal/ee/service/subscription_state_handler.go:
 - SubscriptionStateHandler struct
 - DetermineAction() method
 - State transition logic
@@ -512,7 +512,7 @@ internal/service/subscription_state_handler.go:
 #### Day 3-5: Enhanced Credit Grant Service
 
 ```go
-internal/service/creditgrant.go:
+internal/ee/service/creditgrant.go:
 - ProcessRecurringGrants()
 - processRecurringGrant()
 - processGrantForSubscription()
@@ -523,8 +523,8 @@ internal/service/creditgrant.go:
 
 ```bash
 # Service layer tests
-go test ./internal/service -v -run TestCreditGrantService_ProcessRecurring
-go test ./internal/service -v -run TestSubscriptionStateHandler
+go test ./internal/ee/service -v -run TestCreditGrantService_ProcessRecurring
+go test ./internal/ee/service -v -run TestSubscriptionStateHandler
 ```
 
 ### Phase 3: Integration and Scheduling (Week 3)
@@ -532,7 +532,7 @@ go test ./internal/service -v -run TestSubscriptionStateHandler
 #### Day 1-2: Subscription Service Integration
 
 ```go
-internal/service/subscription.go:
+internal/ee/service/subscription.go:
 - ProcessRecurringCreditGrants()
 - ProcessSubscriptionRecurringGrants()
 - HandleSubscriptionStateChange()
@@ -542,7 +542,7 @@ internal/service/subscription.go:
 #### Day 3-4: Cron Job Implementation
 
 ```go
-internal/service/credit_grant_cron.go:
+internal/ee/service/credit_grant_cron.go:
 - CreditGrantCronJob struct
 - Scheduling logic
 - Error handling and recovery
@@ -576,12 +576,12 @@ internal/handlers/subscription.go:
 
 ```go
 // Add metrics and tracing
-internal/service/creditgrant.go:
+internal/ee/service/creditgrant.go:
 - Prometheus metrics
 - Distributed tracing
 - Error alerting
 
-internal/service/credit_grant_cron.go:
+internal/ee/service/credit_grant_cron.go:
 - Success/failure metrics
 - Processing duration tracking
 ```

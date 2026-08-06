@@ -34,7 +34,7 @@ Other useful Makefile targets from project docs:
 
 - `make test-verbose`
 - `make test-coverage`
-- Single-package stress: `go test -race ./internal/service -run TestName`
+- Single-package stress: `go test -race ./internal/ee/service -run TestName`
 
 ## When changing code
 

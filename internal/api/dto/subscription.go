@@ -16,29 +16,28 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// SubscriptionPhaseCreateRequest represents the request to create a subscription phase
 type SubscriptionPhaseCreateRequest struct {
 	StartDate time.Time  `json:"start_date" validate:"required"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	// Coupons represents subscription-level coupons to be applied to this phase
+	// SubscriptionCoupons is the preferred way to attach coupons to this phase.
+	SubscriptionCoupons []SubscriptionCouponInput `json:"subscription_coupons,omitempty"`
+
+	// Deprecated: use SubscriptionCoupons instead.
 	Coupons []string `json:"coupons,omitempty"`
 
-	// LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)
+	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
-	// OverrideLineItems allows customizing specific prices for this phase
-	// If not provided, phase will use the same line items as the subscription (plan prices)
+	// OverrideLineItems overrides specific plan prices for this phase.
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
-	// LineItems are extra line items to add during this phase, primarily one-time charges.
-	// Each item's start_date defaults to the phase's start_date when not provided.
+	// LineItems are extra (non-plan) line items for this phase; start_date defaults to phase start.
 	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
 
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// Validate validates the SubscriptionPhaseCreateRequest
 func (r *SubscriptionPhaseCreateRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
@@ -50,9 +49,7 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate each nested line item (price/price_id presence, date ordering, etc.)
-	// Price and subscription context are not available here; full business-rule
-	// validation is deferred to createPhaseExtraLineItems in the service layer.
+	// Full business-rule validation (price context, dates) is deferred to the service layer.
 	for i, li := range r.LineItems {
 		if err := li.Validate(nil, nil); err != nil {
 			return ierr.NewErrorf("invalid line_item at index %d: %s", i, err.Error()).
@@ -63,8 +60,6 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 
 	return nil
 }
-
-// ToSubscriptionPhase converts the request to a domain SubscriptionPhase
 
 func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context, subscriptionID string) *subscription.SubscriptionPhase {
 	return &subscription.SubscriptionPhase{
@@ -78,36 +73,26 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 	}
 }
 
-// LineItemCommitmentConfig represents commitment configuration for a line item
 type LineItemCommitmentConfig struct {
-	// CommitmentAmount is the minimum amount committed for this line item
-	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
-
-	// CommitmentQuantity is the minimum quantity committed for this line item
-	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
-
-	// CommitmentType specifies whether commitment is based on amount or quantity
-	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
-
-	// OverageFactor is a multiplier applied to usage beyond the commitment
+	CommitmentAmount   *decimal.Decimal     `json:"commitment_amount,omitempty"`
+	CommitmentQuantity *decimal.Decimal     `json:"commitment_quantity,omitempty"`
+	CommitmentType     types.CommitmentType `json:"commitment_type,omitempty"`
+	// OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate.
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
-
-	// EnableTrueUp determines if true-up fee should be applied when usage is below commitment
+	// EnableTrueUp charges the shortfall when usage is below commitment.
 	EnableTrueUp *bool `json:"enable_true_up,omitempty"`
-
-	// IsWindowCommitment determines if commitment is applied per window (e.g., per day) rather than per billing period
+	// IsWindowCommitment applies commitment per window (e.g. per day) rather than per billing period.
 	IsWindowCommitment *bool `json:"is_window_commitment,omitempty"`
-
-	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
+	// CommitmentDuration allows a different period than billing (e.g. ANNUAL commitment on MONTHLY billing).
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
-
-	// CommitmentTimeBuckets restricts commitment treatment to windows whose start
-	// UTC hour falls within one of the configured buckets. Empty/omitted = no
-	// restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
-	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	// CommitmentTimeBuckets scopes commitment to specific UTC-hour windows; requires IsWindowCommitment=true.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
-// validateLineItemCommitments validates a map of price_id -> commitment configuration.
+func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
+	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
+}
+
 func validateLineItemCommitments(commitments map[string]*LineItemCommitmentConfig) error {
 	if len(commitments) == 0 {
 		return nil
@@ -143,18 +128,32 @@ func validateLineItemCommitments(commitments map[string]*LineItemCommitmentConfi
 	return nil
 }
 
-// Validate validates the line item commitment configuration
+func validateNoDuplicateOverridePriceIDs(overrides []OverrideLineItemRequest) error {
+	priceIDsSeen := make(map[string]bool)
+	for i, override := range overrides {
+		if priceIDsSeen[override.PriceID] {
+			return ierr.NewError(fmt.Sprintf("duplicate price_id in override line items at index %d", i)).
+				WithHint("Each price can only be overridden once per subscription").
+				WithReportableDetails(map[string]interface{}{
+					"price_id": override.PriceID,
+					"index":    i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		priceIDsSeen[override.PriceID] = true
+	}
+	return nil
+}
+
 func (c *LineItemCommitmentConfig) Validate() error {
 	hasAmountCommitment := c.CommitmentAmount != nil && c.CommitmentAmount.GreaterThan(decimal.Zero)
 	hasQuantityCommitment := c.CommitmentQuantity != nil && c.CommitmentQuantity.GreaterThan(decimal.Zero)
 	hasCommitment := hasAmountCommitment || hasQuantityCommitment
 
 	if !hasCommitment {
-		// No commitment configured, nothing to validate
 		return nil
 	}
 
-	// Rule 1: Cannot set both commitment_amount and commitment_quantity
 	if hasAmountCommitment && hasQuantityCommitment {
 		return ierr.NewError("cannot set both commitment_amount and commitment_quantity").
 			WithHint("Specify either commitment_amount or commitment_quantity, not both").
@@ -165,7 +164,6 @@ func (c *LineItemCommitmentConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 2: Commitment type must be valid and match the provided field
 	if c.CommitmentType != "" && !c.CommitmentType.Validate() {
 		return ierr.NewError("invalid commitment_type").
 			WithHint("Commitment type must be either 'amount' or 'quantity'").
@@ -175,7 +173,6 @@ func (c *LineItemCommitmentConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Auto-set commitment type if not provided
 	if c.CommitmentType == "" {
 		if hasAmountCommitment {
 			c.CommitmentType = types.COMMITMENT_TYPE_AMOUNT
@@ -183,7 +180,6 @@ func (c *LineItemCommitmentConfig) Validate() error {
 			c.CommitmentType = types.COMMITMENT_TYPE_QUANTITY
 		}
 	} else {
-		// Validate commitment type matches the provided field
 		if hasAmountCommitment && c.CommitmentType != types.COMMITMENT_TYPE_AMOUNT {
 			return ierr.NewError("commitment_type mismatch").
 				WithHint("When commitment_amount is set, commitment_type must be 'amount'").
@@ -205,15 +201,15 @@ func (c *LineItemCommitmentConfig) Validate() error {
 		}
 	}
 
-	// Rule 3: Overage factor is required and must be greater than 1.0 when commitment is set
+	// overage_factor is required; 1.0 means usage beyond commitment bills at the base rate.
 	if c.OverageFactor == nil {
 		return ierr.NewError("overage_factor is required when commitment is set").
-			WithHint("Specify an overage_factor greater than 1.0").
+			WithHint("Specify an overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if c.OverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be greater than 1.0").
+	if c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"overage_factor": c.OverageFactor,
@@ -221,7 +217,6 @@ func (c *LineItemCommitmentConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 4: Validate commitment values are positive
 	if hasAmountCommitment && c.CommitmentAmount.IsNegative() {
 		return ierr.NewError("commitment_amount must be non-negative").
 			WithHint("Commitment amount cannot be negative").
@@ -240,8 +235,6 @@ func (c *LineItemCommitmentConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 5: commitment_time_buckets only constrains the per-window application
-	// path — it has no meaning without is_window_commitment=true.
 	if len(c.CommitmentTimeBuckets) > 0 {
 		if c.IsWindowCommitment == nil || !*c.IsWindowCommitment {
 			return ierr.NewError("commitment_time_buckets requires is_window_commitment=true").
@@ -256,9 +249,7 @@ func (c *LineItemCommitmentConfig) Validate() error {
 	return nil
 }
 
-// SubscriptionCouponRequest represents a coupon to be applied to a subscription
-// If LineItemID is provided, the coupon is applied to that specific line item
-// If LineItemID is omitted, the coupon is applied at the subscription level
+// SubscriptionCouponRequest applies a coupon at subscription level or to a specific line item.
 type SubscriptionCouponRequest struct {
 	CouponID            string     `json:"coupon_id" validate:"required"`
 	StartDate           time.Time  `json:"start_date" validate:"required"`
@@ -267,14 +258,11 @@ type SubscriptionCouponRequest struct {
 	SubscriptionPhaseID *string    `json:"subscription_phase_id,omitempty"`
 }
 
-// Validate validates the SubscriptionCouponRequest
 func (r *SubscriptionCouponRequest) Validate() error {
-
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
 
-	// Validate date range if EndDate is provided
 	if r.EndDate != nil {
 		if r.EndDate.Before(r.StartDate) {
 			return ierr.NewError("end_date cannot be before start_date").
@@ -286,68 +274,101 @@ func (r *SubscriptionCouponRequest) Validate() error {
 	return nil
 }
 
-// SubscriptionInheritanceConfig groups all hierarchy and invoicing-routing fields for
-// subscription creation.
-type SubscriptionInheritanceConfig struct {
-	// ExternalCustomerIDsToInheritSubscription: child customer external IDs for which
-	// inherited skeleton subscriptions will be created. Only valid for parent behavior.
-	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
-
-	// ParentSubscriptionID links this subscription to an existing parent.
-	// Required for inherited and grouped_invoicing; rejected for standalone, delegated, parent.
-	ParentSubscriptionID string `json:"parent_subscription_id,omitempty"`
-
-	// InvoicingCustomerExternalID sets a different billing recipient (external ID).
-	// Required for delegated; rejected for inherited; optional for others.
-	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
-
-	// SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
-	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
-	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
+// SubscriptionCouponInput is the preferred coupon attachment request (by coupon_code, not ID).
+// Optionally targets a specific line item via price_id; omit for subscription-level.
+type SubscriptionCouponInput struct {
+	CouponCode string     `json:"coupon_code" validate:"required"`
+	StartDate  *time.Time `json:"start_date,omitempty"`
+	EndDate    *time.Time `json:"end_date,omitempty"`
+	PriceID    *string    `json:"price_id,omitempty"`
 }
 
-// Validate enforces mutual-exclusivity constraints between inheritance fields.
+func (r *SubscriptionCouponInput) Validate() error {
+	if r.CouponCode == "" {
+		return ierr.NewError("coupon_code is required").
+			WithHint("Provide a valid coupon code").
+			Mark(ierr.ErrValidation)
+	}
+	if r.EndDate != nil && r.StartDate != nil && r.EndDate.Before(*r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// GroupedInvoicingChildRequest creates a grouped_invoicing child inline with the parent request.
+// Billing schedule fields (period, cycle, anchor, currency, start_date) are inherited from the parent.
+type GroupedInvoicingChildRequest struct {
+	PlanID             string `json:"plan_id" validate:"required"`
+	ExternalCustomerID string `json:"external_customer_id" validate:"required"`
+	SubscriptionCreationConfig
+}
+
+// SubscriptionInheritanceConfig holds all customer-hierarchy and invoicing-routing fields.
+type SubscriptionInheritanceConfig struct {
+	// ExternalCustomerIDsToInheritSubscription creates inherited skeleton subscriptions for child customers. Parent only.
+	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+
+	// ParentSubscriptionID links to an existing parent. Required for inherited/grouped_invoicing; rejected for standalone/delegated/parent.
+	ParentSubscriptionID string `json:"parent_subscription_id,omitempty"`
+
+	// InvoicingCustomerExternalID routes invoices to a different customer. Required for delegated; rejected for inherited.
+	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
+
+	// SubscriptionsIDsForGroupedInvoicing converts existing standalone subscriptions to grouped_invoicing under this parent. Parent only.
+	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
+
+	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
+}
+
 func (c *SubscriptionInheritanceConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
 
-	// Cannot combine explicit parent link with "create inherited children".
 	if c.ParentSubscriptionID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set parent_subscription_id together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either a parent subscription link or child customers to inherit, not both").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Cannot delegate invoicing while also creating inherited children.
 	if c.InvoicingCustomerExternalID != nil && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set invoicing_customer_external_id together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either invoicing_customer_external_id or external_customer_ids_to_inherit_subscription, not both").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Grouped invoicing conversions only make sense when creating a parent (no parent link).
 	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.ParentSubscriptionID != "" {
 		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with parent_subscription_id").
 			WithHint("subscriptions_ids_for_grouped_invoicing can only be used when creating a parent subscription").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Grouped invoicing conversions cannot be combined with delegated invoicing.
 	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.InvoicingCustomerExternalID != nil {
 		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with invoicing_customer_external_id").
 			WithHint("Use either grouped invoicing conversion or delegated invoicing, not both").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Grouped invoicing conversions cannot be combined with inherited child creation.
 	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either grouped invoicing conversion or inherited child creation, not both").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate that no element in SubscriptionsIDsForGroupedInvoicing is empty.
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && len(c.SubscriptionsIDsForGroupedInvoicing) > 0 {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with subscriptions_ids_for_grouped_invoicing").
+			WithHint("Use either inline child creation or existing-subscription conversion, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// InvoicingCustomerExternalID is still allowed here (delegated payer for seat fees).
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set grouped_invoicing_children_to_create together with parent_subscription_id").
+			WithHint("grouped_invoicing_children_to_create can only be used when creating a parent subscription").
+			Mark(ierr.ErrValidation)
+	}
+
 	for i, id := range c.SubscriptionsIDsForGroupedInvoicing {
 		if id == "" {
 			return ierr.NewError("subscriptions_ids_for_grouped_invoicing cannot contain empty values").
@@ -359,20 +380,130 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 	return nil
 }
 
+// SubscriptionCreationConfig holds optional configuration shared by CreateSubscriptionRequest and
+// GroupedInvoicingChildRequest, using identical JSON fields and validation for both.
+type SubscriptionCreationConfig struct {
+	// TrialPeriodDays: nil = inherit from plan prices, 0 = no trial, >0 = override in days.
+	TrialPeriodDays *int `json:"trial_period_days,omitempty"`
+
+	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
+
+	// CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+
+	OverageFactor    *decimal.Decimal   `json:"overage_factor,omitempty" swaggertype:"string"`
+	EnableTrueUp     bool               `json:"enable_true_up"`
+	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
+
+	// SubscriptionCoupons is the preferred way to attach coupons at creation.
+	// Accepts coupon_code; optionally targets a line item via price_id.
+	SubscriptionCoupons []SubscriptionCouponInput `json:"subscription_coupons,omitempty"`
+
+	// Deprecated: use SubscriptionCoupons instead.
+	Coupons []string `json:"coupons,omitempty"`
+
+	// Deprecated: use SubscriptionCoupons instead.
+	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
+
+	// LineItemCommitments sets per-line-item commitment config, keyed by price_id.
+	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
+
+	// OverrideLineItems overrides specific plan prices for this subscription.
+	OverrideLineItems    []OverrideLineItemRequest       `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+	OverrideEntitlements []OverrideEntitlementRequest    `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
+	Addons               []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
+	// LineItems are extra (non-plan) line items added at creation.
+	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
+	Phases    []SubscriptionPhaseCreateRequest    `json:"phases,omitempty" validate:"omitempty,dive"`
+}
+
+func (c *SubscriptionCreationConfig) Validate() error {
+	if c.CommitmentAmount != nil && c.CommitmentAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("commitment_amount must be non-negative").
+			WithHint("Commitment amount must be greater than or equal to 0").
+			WithReportableDetails(map[string]interface{}{
+				"commitment_amount": *c.CommitmentAmount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if c.OverageFactor != nil && c.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
+			WithHint("Overage factor must be greater than or equal to 1.0").
+			WithReportableDetails(map[string]interface{}{
+				"overage_factor": *c.OverageFactor,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(c.CreditGrants) > 0 {
+		for i, grant := range c.CreditGrants {
+			// Grants created with a subscription must have SUBSCRIPTION scope.
+			if grant.Scope != types.CreditGrantScopeSubscription {
+				return ierr.NewError("invalid credit grant scope").
+					WithHint("Credit grants created with a subscription must have SUBSCRIPTION scope").
+					WithReportableDetails(map[string]interface{}{
+						"grant_scope": grant.Scope,
+						"grant_index": i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	if len(c.TaxRateOverrides) > 0 {
+		for _, taxRateOverride := range c.TaxRateOverrides {
+			if err := taxRateOverride.Validate(); err != nil {
+				return ierr.NewError("invalid tax rate override").
+					WithHint("Tax rate override validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"error":             err.Error(),
+						"tax_rate_override": taxRateOverride,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	if err := validateLineItemCommitments(c.LineItemCommitments); err != nil {
+		return err
+	}
+
+	if err := validateNoDuplicateOverridePriceIDs(c.OverrideLineItems); err != nil {
+		return err
+	}
+
+	const maxLineItems = 100
+	if len(c.LineItems) > maxLineItems {
+		return ierr.NewError("line_items exceeds maximum allowed").
+			WithHint(fmt.Sprintf("At most %d line items can be added at subscription creation", maxLineItems)).
+			WithReportableDetails(map[string]interface{}{
+				"count": len(c.LineItems),
+				"max":   maxLineItems,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	for i, item := range c.LineItems {
+		if err := item.Validate(nil, nil); err != nil {
+			return ierr.WithError(err).
+				WithHint(fmt.Sprintf("Line item validation failed at index %d", i)).
+				WithReportableDetails(map[string]interface{}{"line_item_index": i}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 type CreateSubscriptionRequest struct {
-	// ID is an optional pre-generated subscription ID for internal use only.
-	// This exists as a temporary patch to allow Paddle entity mapping to be created
-	// before the subscription row is written, so both share the same transaction.
+	// ID is pre-generated for internal use (e.g. Paddle mapping before write). Never from external JSON.
 	// TODO: Remove once plan-change integration carryover is handled generically.
-	// Never populated from external JSON.
 	ID string `json:"-"`
 
-	// customer_id is the flexprice customer id
-	// and it is prioritized over external_customer_id in case both are provided.
-	CustomerID string `json:"customer_id"`
-
-	// external_customer_id is the customer id in your DB
-	// and must be same as what you provided as external_id while creating the customer in flexprice.
+	// CustomerID takes priority over ExternalCustomerID when both are provided.
+	CustomerID         string `json:"customer_id"`
 	ExternalCustomerID string `json:"external_customer_id"`
 
 	PlanID    string     `json:"plan_id" validate:"required"`
@@ -381,11 +512,7 @@ type CreateSubscriptionRequest struct {
 	StartDate *time.Time `json:"start_date,omitempty"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	// TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
-	// 0 = explicitly no trial (overrides catalog). >0 = override duration in days.
-	TrialPeriodDays *int `json:"trial_period_days,omitempty"`
-
-	// TrialStart/TrialEnd are for internal integrations only (e.g. Stripe sync); not accepted from public JSON.
+	// TrialStart/TrialEnd are for internal integrations (e.g. Stripe sync); not accepted from public JSON.
 	TrialStart *time.Time `json:"-"`
 	TrialEnd   *time.Time `json:"-"`
 
@@ -394,122 +521,83 @@ type CreateSubscriptionRequest struct {
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
 
-	// BillingCycle is the cycle of the billing anchor.
-	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
-	// If not set, the default value is anniversary. Possible values are anniversary and calendar.
-	// Anniversary billing means the billing anchor will be the start date of the subscription.
-	// Calendar billing means the billing anchor will be the appropriate date based on the billing period.
-	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
-	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
+	// BillingCycle controls the billing anchor. anniversary = start_date; calendar = period boundary
+	// (e.g. monthly with start 2025-04-15 → calendar anchor is 2025-05-01).
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
 
-	// Credit grants to be applied when subscription is created
-	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
-
-	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
-	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
-
-	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
-	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
-
-	// OverageFactor is a multiplier applied to usage beyond the commitment amount
-	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
-
-	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
-	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
-
-	Coupons []string `json:"coupons,omitempty"`
-
-	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
-
-	// LineItemCommitments allows setting commitment configuration per line item (keyed by price_id)
-	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
-
-	// OverrideLineItems allows customizing specific prices for this subscription
-	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
-	// OverrideEntitlements allows customizing specific entitlements for this subscription
-	OverrideEntitlements []OverrideEntitlementRequest `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
-	// Addons represents addons to be added to the subscription during creation
-	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
-
-	// LineItems are extra line items to add at creation (each with price_id or price), in addition to plan prices
-	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
-
-	// Phases represents subscription phases to be created with the subscription
-	Phases []SubscriptionPhaseCreateRequest `json:"phases,omitempty" validate:"omitempty,dive"`
-
-	// Payment behavior configuration
-	PaymentBehavior        *types.PaymentBehavior `json:"payment_behavior,omitempty"`
-	GatewayPaymentMethodID *string                `json:"gateway_payment_method_id,omitempty"`
-
-	// collection_method determines how invoices are collected
-	// "default_incomplete" - subscription waits for payment confirmation before activation
-	// "send_invoice" - subscription activates immediately, invoice is sent for payment
-	CollectionMethod *types.CollectionMethod `json:"collection_method,omitempty"`
-
-	// ProrationBehavior controls how proration is handled.
-	// If not set, the default value is none. Possible values are create_prorations and none.
-	// create_prorations means the proration will be calculated and applied.
-	// none means the proration will not be calculated.
-	// This is IGNORED when the billing cycle is anniversary.
+	PaymentBehavior        *types.PaymentBehavior  `json:"payment_behavior,omitempty"`
+	GatewayPaymentMethodID *string                 `json:"gateway_payment_method_id,omitempty"`
+	CollectionMethod       *types.CollectionMethod `json:"collection_method,omitempty"`
+	// ProrationBehavior: create_prorations or none (default). Ignored for anniversary billing.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
-
-	// Timezone of the customer.
-	// If not set, the default value is UTC.
-	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
-
-	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
-	// For monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date
-	// is before that day in the month, the first billing period ends on the next occurrence of that
-	// day in the same month (a shorter first period); subsequent periods follow the usual interval.
+	Timezone          string                  `json:"timezone" validate:"omitempty,timezone"`
+	// BillingAnchor overrides the derived anchor for anniversary billing. For monthly billing,
+	// the day-of-month defines cycle boundaries (shorter first period if start is before that day).
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
-	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
 
-	// SubscriptionStatus determines the initial status of the subscription
-	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
+	// SubscriptionStatus: set to "draft" to skip invoice creation and payment on create.
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
+	PaymentTerms       *types.PaymentTerms      `json:"payment_terms,omitempty"`
 
-	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
-	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
-
-	// Enable Commitment True Up Fee
-	EnableTrueUp bool `json:"enable_true_up"`
-
-	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
-	// an intermediate invoice mid-period. Set once at creation; cannot be changed later.
-	// Allowed only when the subscription resolves to type standalone (no parent hierarchy rows).
-	// Plan line items must be usage-based only (no fixed or other non-usage plan prices).
-	// Nil means auto invoice threshold billing is disabled for this subscription.
+	// AutoInvoiceThreshold triggers a mid-period invoice when usage (in subscription currency) exceeds this amount.
+	// Standalone subscriptions only; all plan prices must be usage-based. Immutable after creation.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 
-	// Inheritance groups all customer-hierarchy fields.
-	// When provided with at least one child ID, the subscription becomes a PARENT type.
+	// Inheritance groups customer-hierarchy fields; providing child IDs makes this a PARENT subscription.
 	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
 
 	// SubscriptionType is set internally by the service layer.
 	SubscriptionType types.SubscriptionType `json:"-"`
 
-	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit to net the new subscription's first (opening) invoice (e.g. CancelSubscriptionResponse.TotalCreditAmount on immediate plan change). Not in public JSON.
+	// OpeningInvoiceAdjustmentAmount nets the opening invoice against a proration/cancel credit (e.g. on plan change). Internal only.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+
+	SubscriptionCreationConfig
 }
 
-// AddAddonRequest is used by body-based endpoint /subscriptions/addon
 type AddAddonRequest struct {
-	SubscriptionID                string `json:"subscription_id" validate:"required"`
+	SubscriptionID                string          `json:"subscription_id" validate:"required"`
+	Checkout                      *CheckoutParams `json:"checkout,omitempty"`
 	AddAddonToSubscriptionRequest `json:",inline"`
 }
 
-// RemoveAddonRequest is used by body-based endpoint /subscriptions/addon (DELETE)
+func (r *AddAddonRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if err := r.AddAddonToSubscriptionRequest.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.Checkout.Validate(); err != nil {
+		return err
+	}
+
+	if r.Checkout != nil {
+		if len(r.OverrideLineItems) > 0 {
+			return ierr.NewError("override_line_items is not supported with checkout").
+				WithHint("Remove checkout to use override_line_items, or remove override_line_items to gate this addon behind payment").
+				Mark(ierr.ErrValidation)
+		}
+
+		if len(r.LineItemCommitments) > 0 {
+			return ierr.NewError("line_item_commitments is not supported with checkout").
+				WithHint("Remove checkout to use line_item_commitments, or remove line_item_commitments to gate this addon behind payment").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 type RemoveAddonRequest struct {
 	AddonAssociationID string                  `json:"addon_association_id" validate:"required"`
 	Reason             string                  `json:"reason,omitempty"`
 	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
-	// EffectiveDate is the date the cancellation takes effect.
-	// When nil the addon is cancelled at the end of the current period.
-	// When provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period
-	// values combined with create_prorations will issue a wallet credit for unused time.
+	// EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
 
@@ -603,6 +691,17 @@ type ProrationDetail struct {
 	Description    string          `json:"description,omitempty"`
 }
 
+type TerminateSubscriptionResourcesRequest struct {
+	SubscriptionID     string    `json:"subscription_id" binding:"required"`
+	EffectiveDate      time.Time `json:"effective_date" binding:"required"`
+	CancellationReason string    `json:"cancellation_reason,omitempty"`
+}
+
+// Validate validates the terminate subscription resources request
+func (r *TerminateSubscriptionResourcesRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 // Validate validates the cancellation request
 func (r *CancelSubscriptionRequest) Validate() error {
 	// Validate cancellation type
@@ -681,6 +780,11 @@ type SubscriptionResponse struct {
 
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
+
+	// Entitlements is populated only when the caller adds "entitlements" to
+	// the search filter's expand string. Each entry is a feature with its
+	// aggregated entitlement info (same shape as CustomerEntitlementsResponse.Features).
+	Entitlements []*AggregatedFeature `json:"entitlements,omitempty"`
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -947,98 +1051,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	// Validate commitment amount and overage factor
-	if r.CommitmentAmount != nil && r.CommitmentAmount.LessThan(decimal.Zero) {
-		return ierr.NewError("commitment_amount must be non-negative").
-			WithHint("Commitment amount must be greater than or equal to 0").
-			WithReportableDetails(map[string]interface{}{
-				"commitment_amount": *r.CommitmentAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.OverageFactor != nil && r.OverageFactor.LessThan(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be at least 1.0").
-			WithHint("Overage factor must be greater than or equal to 1.0").
-			WithReportableDetails(map[string]interface{}{
-				"overage_factor": *r.OverageFactor,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate credit grants if provided
-	if len(r.CreditGrants) > 0 {
-		for i, grant := range r.CreditGrants {
-
-			// Force scope to SUBSCRIPTION for all grants added this way
-			if grant.Scope != types.CreditGrantScopeSubscription {
-				return ierr.NewError("invalid credit grant scope").
-					WithHint("Credit grants created with a subscription must have SUBSCRIPTION scope").
-					WithReportableDetails(map[string]interface{}{
-						"grant_scope": grant.Scope,
-						"grant_index": i,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
-
-	// taxrate overrides validation
-	if len(r.TaxRateOverrides) > 0 {
-		for _, taxRateOverride := range r.TaxRateOverrides {
-			if err := taxRateOverride.Validate(); err != nil {
-				return ierr.NewError("invalid tax rate override").
-					WithHint("Tax rate override validation failed").
-					WithReportableDetails(map[string]interface{}{
-						"error":             err.Error(),
-						"tax_rate_override": taxRateOverride,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
-
-	// Validate line item commitments if provided
-	if err := validateLineItemCommitments(r.LineItemCommitments); err != nil {
+	if err := r.SubscriptionCreationConfig.Validate(); err != nil {
 		return err
-	}
-
-	// Validate override line items if provided
-	if len(r.OverrideLineItems) > 0 {
-		priceIDsSeen := make(map[string]bool)
-		for i, override := range r.OverrideLineItems {
-			// Check for duplicate price IDs
-			if priceIDsSeen[override.PriceID] {
-				return ierr.NewError(fmt.Sprintf("duplicate price_id in override line items at index %d", i)).
-					WithHint("Each price can only be overridden once per subscription").
-					WithReportableDetails(map[string]interface{}{
-						"price_id": override.PriceID,
-						"index":    i,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			priceIDsSeen[override.PriceID] = true
-		}
-	}
-
-	// Validate line_items if provided (each must have exactly one of price_id or price)
-	const maxLineItems = 100
-	if len(r.LineItems) > maxLineItems {
-		return ierr.NewError("line_items exceeds maximum allowed").
-			WithHint(fmt.Sprintf("At most %d line items can be added at subscription creation", maxLineItems)).
-			WithReportableDetails(map[string]interface{}{
-				"count": len(r.LineItems),
-				"max":   maxLineItems,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	for i, item := range r.LineItems {
-		if err := item.Validate(nil, nil); err != nil {
-			return ierr.WithError(err).
-				WithHint(fmt.Sprintf("Line item validation failed at index %d", i)).
-				WithReportableDetails(map[string]interface{}{"line_item_index": i}).
-				Mark(ierr.ErrValidation)
-		}
 	}
 
 	// Validate phases continuity if provided
@@ -1231,8 +1245,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		initialStatus = types.SubscriptionStatusActive
 	}
 
-	if r.CustomerTimezone == "" {
-		r.CustomerTimezone = "UTC"
+	if r.Timezone == "" {
+		r.Timezone = types.DefaultTimezone
 	}
 
 	// Determine subscription start and end dates based on phases
@@ -1301,7 +1315,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		BillingCycle:       r.BillingCycle,
-		CustomerTimezone:   r.CustomerTimezone,
+		Timezone:           r.Timezone,
 		ProrationBehavior:  r.ProrationBehavior,
 
 		// New payment behavior fields
@@ -1406,6 +1420,9 @@ type OverrideEntitlementRequest struct {
 
 	// StaticValue is the static value for static features
 	StaticValue *string `json:"static_value,omitempty"`
+
+	// ConfigValue is the config value for config features
+	ConfigValue map[string]interface{} `json:"config_value,omitempty"`
 }
 
 // Validate validates the entitlement override request
@@ -1467,16 +1484,8 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil {
-		if r.Quantity.IsNegative() {
-			return ierr.NewError("quantity must be non-negative").
-				WithHint("Override quantity cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"quantity": r.Quantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+	if err := price.ValidateQuantityNonNegative(r.Quantity); err != nil {
+		return err
 	}
 
 	// Get original price - it must be available for validation
@@ -1820,6 +1829,64 @@ type SubscriptionUsageByMetersResponse struct {
 	// BucketedUsageResult holds per-bucket usage data for bucketed meters (MAX/SUM with bucket_size).
 	// Populated by GetMeterUsageBySubscription so CalculateMeterUsageCharges doesn't re-query ClickHouse.
 	BucketedUsageResult *events.AggregationResult `json:"-"`
+
+	// Exact carriers for billing math. JSON amount/quantity remain float64 for API
+	// compatibility; invoice calculation must use AmountDecimal/QuantityDecimal so
+	// values never round-trip through float64 (can flip currency rounding at boundaries).
+	amountExact      decimal.Decimal
+	hasAmountExact   bool
+	quantityExact    decimal.Decimal
+	hasQuantityExact bool
+}
+
+// SetAmountDecimal stores the billing amount exactly and mirrors float64 for the API.
+func (c *SubscriptionUsageByMetersResponse) SetAmountDecimal(amount decimal.Decimal) {
+	if c == nil {
+		return
+	}
+	c.amountExact = amount
+	c.hasAmountExact = true
+	c.Amount = amount.InexactFloat64()
+}
+
+// SetAmountWithCurrencyPrecision rounds to currency precision, then SetAmountDecimal.
+func (c *SubscriptionUsageByMetersResponse) SetAmountWithCurrencyPrecision(amount decimal.Decimal, currency string) {
+	if c == nil {
+		return
+	}
+	c.SetAmountDecimal(types.RoundToCurrencyPrecision(amount, currency))
+}
+
+// AmountDecimal returns the exact billing amount when set; otherwise reconstructs from the API float.
+func (c *SubscriptionUsageByMetersResponse) AmountDecimal() decimal.Decimal {
+	if c == nil {
+		return decimal.Zero
+	}
+	if c.hasAmountExact {
+		return c.amountExact
+	}
+	return decimal.NewFromFloat(c.Amount)
+}
+
+// SetQuantityDecimal stores the billing quantity exactly and mirrors float64 for the API.
+func (c *SubscriptionUsageByMetersResponse) SetQuantityDecimal(quantity decimal.Decimal) {
+	if c == nil {
+		return
+	}
+	c.quantityExact = quantity
+	c.hasQuantityExact = true
+	c.Quantity = quantity.InexactFloat64()
+}
+
+// QuantityDecimal returns the exact billing quantity when set; otherwise reconstructs from the API float.
+func (c *SubscriptionUsageByMetersResponse) QuantityDecimal() decimal.Decimal {
+	if c == nil {
+		return decimal.Zero
+	}
+	if c.hasQuantityExact {
+		return c.quantityExact
+	}
+	return decimal.NewFromFloat(c.Quantity)
 }
 
 type SubscriptionUpdatePeriodResponse struct {

@@ -2,27 +2,35 @@ package v1
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
+	flexpricejwt "github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
 type SetupIntentHandler struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	config             *config.Configuration
 	log                *logger.Logger
 }
 
-func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, log *logger.Logger) *SetupIntentHandler {
+func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
 	return &SetupIntentHandler{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		config:             cfg,
 		log:                log,
 	}
 }
@@ -58,17 +66,86 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 		return
 	}
 
-	// Get Stripe integration
-	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
-	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
+	switch req.Provider {
+	case types.SecretProviderMoyasar:
+		h.createMoyasarSetupIntent(c, customerID, &req)
+	default:
+		h.createStripeSetupIntent(c, customerID, &req)
+	}
+}
+
+func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
+	ctx := c.Request.Context()
+
+	if _, err := h.customerService.GetCustomer(ctx, customerID); err != nil {
+		h.log.Error(ctx, "Customer not found for Moyasar tokenization", "customer_id", customerID, "error", err)
 		c.Error(err)
 		return
 	}
 
-	resp, err := stripeIntegration.PaymentSvc.SetupIntent(c.Request.Context(), customerID, &req, h.customerService)
+	moyasarIntegration, err := h.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to create Setup Intent", "error", err)
+		h.log.Error(ctx, "Failed to get Moyasar integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	flexpricePaymentID, publishableKey, err := moyasarIntegration.InitiateTokenization(ctx, customerID)
+	if err != nil {
+		h.log.Error(ctx, "Failed to initiate Moyasar tokenization", "error", err)
+		c.Error(err)
+		return
+	}
+
+	// given_id is a deterministic UUID v5 derived from the Flexprice payment ID.
+	// Moyasar requires a UUID for idempotency; ULIDs are not valid UUIDs.
+	givenID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(flexpricePaymentID)).String()
+
+	// success_url is where the checkout page redirects after the card save completes.
+	// Falls back to the customer overview page when not provided by the caller.
+	appBaseURL := h.config.Checkout.BaseURL
+	var successURL string
+	if req.SuccessURL != "" {
+		successURL = req.SuccessURL
+	}
+
+	authProvider := flexpricejwt.NewProvider(h.config)
+	checkoutToken, err := authProvider.GenerateCheckoutToken(map[string]interface{}{
+		"publishable_key":      publishableKey,
+		"flexprice_payment_id": flexpricePaymentID,
+		"given_id":             givenID,
+		"success_url":          successURL,
+	})
+	if err != nil {
+		h.log.Error(ctx, "Failed to generate checkout token", "error", err)
+		c.Error(err)
+		return
+	}
+
+	// JWT is embedded in the checkout URL — the checkout page decodes it client-side.
+	checkoutURL := fmt.Sprintf("%s/checkout?provider=moyasar&token=%s", appBaseURL, checkoutToken)
+
+	c.JSON(http.StatusCreated, dto.SetupIntentResponse{
+		Status:      "pending_card_entry",
+		CustomerID:  customerID,
+		CheckoutURL: checkoutURL,
+	})
+}
+
+func (h *SetupIntentHandler) createStripeSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
+	ctx := c.Request.Context()
+
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.log.Error(ctx, "Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.SetupIntent(ctx, customerID, req, h.customerService)
+	if err != nil {
+		h.log.Error(ctx, "Failed to create Setup Intent", "error", err)
 		c.Error(err)
 		return
 	}

@@ -261,7 +261,7 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 		Customer:    stripe.String(customerID),
 		Invoice:     stripe.String(stripeInvoiceID),
 		Currency:    stripe.String(strings.ToLower(lineItem.Currency)),
-		Description: stripe.String(lo.FromPtr(lineItem.DisplayName)),
+		Description: stripe.String(lineItem.GetDescription()),
 		Metadata: map[string]string{
 			"flexprice_line_item_id": lineItem.ID,
 			"flexprice_price_id":     lo.FromPtr(lineItem.PriceID),

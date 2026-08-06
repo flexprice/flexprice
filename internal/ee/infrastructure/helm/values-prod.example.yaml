@@ -222,9 +222,16 @@ kafkaConfig:
   brokers: "REPLACE-WITH-KAFKA-BROKERS.example.invalid:9094"
   useSASL: true
   saslMechanism: "SCRAM-SHA-512"
-  saslUsername: "flexprice"
+  saslUser: "flexprice"
   # saslPassword comes from existingSecret key: kafka-sasl-password
   tls: true
+  # Only needed when the broker presents a private/self-signed CA. Brokers with
+  # publicly-trusted certs (MSK, Confluent Cloud) verify against the OS trust
+  # store — leave name empty. The Secret is expected to be synced by an
+  # ExternalSecret; its key must hold a PEM bundle, not a JKS truststore.
+  # tlsCASecret:
+  #   name: "flexprice-kafka-ca"
+  #   key: "ca.crt"
 
 # ── Redis — EXTERNAL (ElastiCache / MemoryDB / Upstash) ───────────────────────
 redis:

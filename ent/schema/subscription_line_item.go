@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -217,5 +218,12 @@ func (SubscriptionLineItem) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
 		index.Fields("start_date", "end_date"),
 		index.Fields("subscription_id", "status"),
+		// Covers the "line item already exists?" NOT EXISTS guard in the plan-price
+		// sync discovery CTE (plan_price_sync_v2.go): keyed on (subscription_id,
+		// price_id, entity_type) so the probe with entity_type='plan' is index-only.
+		// entity_type is a trailing key column (not in the partial predicate) so this
+		// index also serves lookups for entity_type='addon' and 'subscription'.
+		index.Fields("tenant_id", "environment_id", "subscription_id", "price_id", "entity_type").
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }

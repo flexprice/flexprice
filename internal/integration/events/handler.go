@@ -66,6 +66,18 @@ func NewHandler(deps Deps) Handler {
 				msg.UUID,
 			)
 		},
+		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			// invoice.update is Tabs-only; other providers sync on invoice.update.finalized.
+			return DispatchTabsInvoiceVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
 		types.WebhookEventSubscriptionCreated: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
 			return DispatchSubscriptionVendorSync(
 				ctx,
@@ -110,6 +122,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	router.AddNoPublishHandler(
 		"integration_events_handler",
 		topic,
+		h.deps.Config.Kafka.TopicDLQ,
 		h.deps.PubSub,
 		h.processMessage,
 	)
@@ -145,11 +158,10 @@ func (h *handler) processIntegrationError(err error, event *types.WebhookEvent, 
 
 // processMessage unmarshals types.WebhookEvent (same envelope as customer webhooks).
 // It dispatches to event-specific processors; unknown events are ACKed and ignored.
-func (h *handler) processMessage(msg *message.Message) error {
-	ctx := msg.Context()
+func (h *handler) processMessage(ctx context.Context, msg *message.Message) error {
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		h.deps.Logger.Error(context.Background(), "integration_events: failed to unmarshal WebhookEvent, dropping message",
+		h.deps.Logger.Error(ctx, "integration_events: failed to unmarshal WebhookEvent, dropping message",
 			"message_uuid", msg.UUID,
 			"error", err,
 		)
@@ -165,7 +177,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
-	h.deps.Logger.Debug(context.Background(), "integration_events: consumed webhook-shaped system event",
+	h.deps.Logger.Debug(ctx, "integration_events: consumed webhook-shaped system event",
 		"message_uuid", msg.UUID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,

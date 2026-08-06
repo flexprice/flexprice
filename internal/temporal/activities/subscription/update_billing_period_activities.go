@@ -8,8 +8,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -312,6 +312,22 @@ func (s *BillingActivities) CheckCancellationActivity(
 				return err
 			}
 
+			// Terminate line items, addon associations, and credit grants now that the
+			// previously scheduled cancellation has actually fired. Gated on
+			// CancelAtPeriodEnd+CancelAt (set only by CancelSubscription's end_of_period/
+			// scheduled_date path), matching processSubscriptionPeriod's equivalent hook in
+			// internal/ee/service/subscription.go — never fires for a bare EndDate set through
+			// some other path that never had termination deferred in the first place.
+			if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+				if err := subscriptionService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+					SubscriptionID:     sub.ID,
+					EffectiveDate:      *sub.CancelAt,
+					CancellationReason: sub.Metadata["cancellation_reason"],
+				}); err != nil {
+					return err
+				}
+			}
+
 			// Update the cancellation schedule status to executed
 			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
 				s.logger.Error(ctx, "failed to mark cancellation schedule as executed",
@@ -396,7 +412,7 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 
 	// No pending schedule, nothing to do
 	if schedule == nil {
-		s.logger.Info(ctx, "no pending plan change found",
+		s.logger.Debug(ctx, "no pending plan change found",
 			"subscription_id", sub.ID)
 		return &subscriptionModels.ProcessPendingPlanChangesActivityOutput{
 			Success:    true,

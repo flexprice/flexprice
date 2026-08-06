@@ -362,7 +362,7 @@ func (r *creditGrantApplicationRepository) CancelFutureApplications(ctx context.
 **Add to existing CreditGrantService:**
 
 ```go
-// Add to internal/service/creditgrant.go
+// Add to internal/ee/service/creditgrant.go
 
 // ProcessRecurringGrants processes all recurring credit grants
 func (s *creditGrantService) ProcessRecurringGrants(ctx context.Context) error {
@@ -525,7 +525,7 @@ func (s *creditGrantService) applyRecurringGrant(ctx context.Context, grant *cre
 
 #### 2. Subscription State Handler
 
-**Add new file: internal/service/subscription_state_handler.go**
+**Add new file: internal/ee/service/subscription_state_handler.go**
 
 ```go
 package service
@@ -588,7 +588,7 @@ func (h *SubscriptionStateHandler) DetermineAction() (StateAction, string) {
 **Add to existing SubscriptionService:**
 
 ```go
-// Add to internal/service/subscription.go
+// Add to internal/ee/service/subscription.go
 
 // ProcessRecurringCreditGrants processes recurring credit grants for all subscriptions
 func (s *subscriptionService) ProcessRecurringCreditGrants(ctx context.Context) error {
@@ -692,7 +692,7 @@ func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subs
 
 #### 4. Cron Job Implementation
 
-**Create new file: internal/service/credit_grant_cron.go**
+**Create new file: internal/ee/service/credit_grant_cron.go**
 
 ```go
 package service

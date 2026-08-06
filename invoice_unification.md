@@ -72,7 +72,7 @@ Both paths: **create draft → populate draft**. Single populate implementation.
 
 ## Exact Changes by File
 
-### 1. [internal/service/invoice.go](internal/service/invoice.go)
+### 1. [internal/ee/service/invoice.go](internal/ee/service/invoice.go)
 
 **1a. Add `CreateDraftInvoiceForSubscription` to InvoiceService**
 
@@ -112,7 +112,7 @@ Keep as-is; it already implements the single populate path with `GetForUpdate`. 
 
 **1d. Implement `CreateDraftInvoiceForSubscription` in invoice service**
 
-Implement same logic as in [internal/service/subscription.go](internal/service/subscription.go) (lines 5765–5826):
+Implement same logic as in [internal/ee/service/subscription.go](internal/ee/service/subscription.go) (lines 5765–5826):
 
 - `ExistsForPeriod(subscriptionID, period.Start, period.End)`
 - If exists: `List` by subscription+period, return existing (DRAFT or FINALIZED)
@@ -120,7 +120,7 @@ Implement same logic as in [internal/service/subscription.go](internal/service/s
 
 ---
 
-### 2. [internal/service/subscription.go](internal/service/subscription.go)
+### 2. [internal/ee/service/subscription.go](internal/ee/service/subscription.go)
 
 **2a. Change `CreateDraftInvoiceForSubscription`** (lines 5765–5826)
 
@@ -137,7 +137,7 @@ This keeps the interface (`CreateDraftInvoiceForSubscription` on subscription se
 
 **2b. Add `CreateDraftInvoiceForSubscription` to InvoiceService interface**
 
-In [internal/service/invoice.go](internal/service/invoice.go) interface and [internal/interfaces/service.go](internal/interfaces/service.go) if used there.
+In [internal/ee/service/invoice.go](internal/ee/service/invoice.go) interface and [internal/interfaces/service.go](internal/interfaces/service.go) if used there.
 
 ---
 
@@ -213,8 +213,8 @@ Simplest: after `CalculateAndPopulateInvoice` returns `(false, nil)`, fetch the 
 
 | File                                                                     | Change                                                                                                                                       |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| [internal/service/invoice.go](internal/service/invoice.go)               | Add `CreateDraftInvoiceForSubscription`; refactor `CreateSubscriptionInvoice` to draft-first (create draft → populate → ProcessDraftInvoice) |
-| [internal/service/subscription.go](internal/service/subscription.go)     | Delegate `CreateDraftInvoiceForSubscription` to invoice service                                                                              |
+| [internal/ee/service/invoice.go](internal/ee/service/invoice.go)               | Add `CreateDraftInvoiceForSubscription`; refactor `CreateSubscriptionInvoice` to draft-first (create draft → populate → ProcessDraftInvoice) |
+| [internal/ee/service/subscription.go](internal/ee/service/subscription.go)     | Delegate `CreateDraftInvoiceForSubscription` to invoice service                                                                              |
 | [internal/repository/ent/invoice.go](internal/repository/ent/invoice.go) | Add `SetNillableInvoiceNumber` to `Update`                                                                                                   |
 
 

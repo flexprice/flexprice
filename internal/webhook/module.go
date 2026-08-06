@@ -2,15 +2,18 @@ package webhook
 
 import (
 	"context"
+
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	kafkaProducerPkg "github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
+	cascaderules "github.com/flexprice/flexprice/internal/webhook/handler/cascade_rules"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"go.uber.org/fx"
@@ -26,11 +29,24 @@ var Module = fx.Options(
 	// Webhook components
 	fx.Provide(
 		provideWebhookPublisher,
+		provideEventCascader,
 		handler.NewHandler,
 		providePayloadBuilderFactory,
 		NewWebhookService,
 	),
 )
+
+func provideEventCascader(
+	entitlementService service.EntitlementService,
+	logger *logger.Logger,
+	webhookPublisher publisher.WebhookPublisher,
+) handler.EventCascader {
+	return handler.NewEventCascader(
+		logger,
+		webhookPublisher,
+		cascaderules.NewEntitlementCascadeRule(entitlementService, logger),
+	)
+}
 
 // providePayloadBuilderFactory creates a new payload builder factory with all required services
 func providePayloadBuilderFactory(
@@ -45,6 +61,9 @@ func providePayloadBuilderFactory(
 	paymentService service.PaymentService,
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
+	checkoutSessionService interfaces.CheckoutSessionService,
+	groupService service.GroupService,
+	entitlementGrantService service.EntitlementGrantService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -58,6 +77,9 @@ func providePayloadBuilderFactory(
 		paymentService,
 		tracingSvc,
 		creditNoteService,
+		checkoutSessionService,
+		groupService,
+		entitlementGrantService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

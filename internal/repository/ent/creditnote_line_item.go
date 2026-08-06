@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainCreditNote "github.com/flexprice/flexprice/internal/domain/creditnote"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -18,16 +17,14 @@ type creditnoteLineItemRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts CreditNoteLineItemQueryOptions
-	cache     cache.Cache
 }
 
 // NewCreditNoteLineItemRepository creates a new credit note line item repository
-func NewCreditNoteLineItemRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCreditNote.CreditNoteLineItemRepository {
+func NewCreditNoteLineItemRepository(client postgres.IClient, log *logger.Logger) domainCreditNote.CreditNoteLineItemRepository {
 	return &creditnoteLineItemRepository{
 		client:    client,
 		log:       log,
 		queryOpts: CreditNoteLineItemQueryOptions{},
-		cache:     cache,
 	}
 }
 
@@ -413,7 +410,7 @@ func (o CreditNoteLineItemQueryOptions) ApplyEnvironmentFilter(ctx context.Conte
 
 func (o CreditNoteLineItemQueryOptions) ApplyStatusFilter(query CreditNoteLineItemQuery, status string) CreditNoteLineItemQuery {
 	if status == "" {
-		return query.Where(creditnotelineitem.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditnotelineitem.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(creditnotelineitem.Status(status))
 }

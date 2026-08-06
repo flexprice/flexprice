@@ -43,6 +43,7 @@ type WebhookHandler struct {
 	planService                     interfaces.PlanService
 	subscriptionService             interfaces.SubscriptionService
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
+	checkoutSessionService          interfaces.CheckoutSessionService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
 }
@@ -59,6 +60,7 @@ func NewWebhookHandler(
 	planService interfaces.PlanService,
 	subscriptionService interfaces.SubscriptionService,
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
+	checkoutSessionService interfaces.CheckoutSessionService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
 ) *WebhookHandler {
@@ -73,6 +75,7 @@ func NewWebhookHandler(
 		planService:                     planService,
 		subscriptionService:             subscriptionService,
 		entityIntegrationMappingService: entityIntegrationMappingService,
+		checkoutSessionService:          checkoutSessionService,
 		db:                              db,
 		webhookService:                  webhookService,
 	}
@@ -103,10 +106,10 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 		return
 	}
 
-	// Get dashboard URL
-	url, err := h.svixClient.GetDashboardURL(c.Request.Context(), appID)
+	// Get app-portal access url and token
+	url, token, err := h.svixClient.GetDashboardURL(c.Request.Context(), appID)
 	if err != nil {
-		h.logger.Error(c.Request.Context(), "failed to get Svix dashboard URL",
+		h.logger.Error(c.Request.Context(), "failed to get Svix app-portal token",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -117,8 +120,10 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"url":          url,
 		"svix_enabled": true,
+		"url":          url,
+		"token":        token,
+		"app_id":       appID,
 	})
 }
 
@@ -242,6 +247,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -404,6 +410,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -504,6 +511,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -846,10 +854,11 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &nomodwebhook.ServiceDependencies{
-		CustomerService: h.customerService,
-		PaymentService:  h.paymentService,
-		InvoiceService:  h.invoiceService,
-		PlanService:     h.planService,
+		CustomerService:        h.customerService,
+		PaymentService:         h.paymentService,
+		InvoiceService:         h.invoiceService,
+		PlanService:            h.planService,
+		CheckoutSessionService: h.checkoutSessionService,
 	}
 
 	// Handle the event
@@ -993,6 +1002,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutSessionService:          h.checkoutSessionService,
 		DB:                              h.db,
 	}
 
@@ -1195,35 +1205,82 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
 	if tenantID == "" || environmentID == "" {
-		h.logger.Info(context.Background(), "missing tenant_id or environment_id in Whop webhook URL")
+		h.logger.Info(c.Request.Context(), "missing tenant_id or environment_id in Whop webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
 		return
 	}
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to read Whop webhook body", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to read Whop webhook body", "error", err)
 		return
 	}
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
-
-	var event whopwebhook.WhopWebhookEvent
-	if err := json.Unmarshal(body, &event); err != nil {
-		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
-		return
-	}
-
-	h.logger.Info(context.Background(), "received Whop webhook",
-		"type", event.Type,
-		"tenant_id", tenantID,
-		"environment_id", environmentID)
+	c.Request = c.Request.WithContext(ctx)
 
 	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
+		h.logger.Error(ctx, "failed to get Whop integration", "error", err)
 		return
 	}
+
+	// Get connection to check if webhook secret is configured
+	conn, err := whopIntegration.Client.GetConnection(ctx)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get Whop connection", "error", err)
+		return
+	}
+
+	// Check if webhook secret is configured in FlexPrice
+	hasWebhookSecretConfigured := conn.EncryptedSecretData.Whop != nil &&
+		conn.EncryptedSecretData.Whop.WebhookSecret != ""
+
+	// Verify the signature on the raw body if configured (same optional-secret
+	// pattern as Moyasar), before the payload is parsed, so a forged/malformed
+	// payload is never unmarshaled ahead of authentication.
+	if hasWebhookSecretConfigured {
+		webhookID := c.GetHeader("webhook-id")
+		timestamp := c.GetHeader("webhook-timestamp")
+		signature := c.GetHeader("webhook-signature")
+		if webhookID == "" || timestamp == "" || signature == "" {
+			h.logger.Info(ctx, "Whop webhook secret configured but signature headers missing - rejecting request",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+
+		if err := whopIntegration.Client.VerifyWebhookSignature(ctx, body, webhookID, timestamp, signature); err != nil {
+			h.logger.Info(ctx, "Whop webhook signature verification failed - rejecting request",
+				"error", err,
+				"tenant_id", tenantID,
+				"environment_id", environmentID,
+				"note", "signature does not match configured webhook_secret")
+			return
+		}
+
+		h.logger.Info(ctx, "Whop webhook signature verified successfully",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	} else {
+		// No webhook secret configured - allow with warning
+		h.logger.Info(ctx, "Whop webhook received without secret verification",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	}
+
+	var event whopwebhook.WhopWebhookEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		h.logger.Error(ctx, "failed to parse Whop webhook payload", "error", err)
+		return
+	}
+
+	h.logger.Info(ctx, "received Whop webhook",
+		"type", event.Type,
+		"tenant_id", tenantID,
+		"environment_id", environmentID)
 
 	serviceDeps := &whopwebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,
@@ -1236,7 +1293,7 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	}
 
 	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
-		h.logger.Error(context.Background(), "failed to handle Whop webhook event",
+		h.logger.Error(ctx, "failed to handle Whop webhook event",
 			"error", err,
 			"type", event.Type)
 	}

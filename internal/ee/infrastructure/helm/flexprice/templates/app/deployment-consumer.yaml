@@ -4,8 +4,7 @@ kind: Deployment
 metadata:
   name: {{ include "flexprice.fullname" . }}-consumer
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: consumer
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "consumer") | nindent 4 }}
 spec:
   replicas: {{ .Values.consumer.replicaCount }}
   {{- with .Values.consumer.strategy }}
@@ -19,14 +18,15 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if not .Values.env }}
         checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        {{- end }}
         checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "flexprice.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: consumer
+        {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "consumer") | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -55,6 +55,13 @@ spec:
               value: "consumer"
             - name: TMPDIR
               value: "/tmp"
+            {{- /* consumer-only env overrides — rendered AFTER flexprice.env so these
+                   win over the global .Values.extraEnv for duplicate keys (k8s last-wins).
+                   Used for settings that differ on the consumer vs api/worker, e.g.
+                   FLEXPRICE_CACHE_ENABLED (cache is on for the consumer only). */}}
+            {{- with .Values.consumer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- if and .Values.consumer.preStop .Values.consumer.preStop.enabled }}
           lifecycle:
             preStop:
@@ -63,40 +70,34 @@ spec:
                 # Kafka consumer-group rebalance kicks off the new owner.
                 command: ["/bin/sh", "-c", "sleep {{ .Values.consumer.preStop.sleepSeconds | default 15 }}"]
           {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+          # No HTTP probes: this runs in deployment.mode=consumer and serves no HTTP
+          # server, so an httpGet /health probe always fails and crashloops the pod.
+          # No Service routes to it either, so readiness is moot. (Matches the AWS ECS
+          # consumer, which runs with no health checks.)
           resources:
             {{- toYaml .Values.consumer.resources | nindent 12 }}
           volumeMounts:
+            {{- if not .Values.env }}
             - name: config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
               readOnly: true
+            {{- end }}
             - name: tmp
               mountPath: /tmp
+            {{- include "flexprice.kafkaTLSVolumeMounts" . | nindent 12 }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
+        {{- if not .Values.env }}
         - name: config
           configMap:
             name: {{ include "flexprice.fullname" . }}-config
+        {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -44,6 +45,8 @@ type CreditGrant struct {
 	PlanID *string `json:"plan_id,omitempty"`
 	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
+	// AddonID holds the value of the "addon_id" field.
+	AddonID *string `json:"addon_id,omitempty"`
 	// Credits holds the value of the "credits" field.
 	Credits decimal.Decimal `json:"credits,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
@@ -84,9 +87,11 @@ type CreditGrantEdges struct {
 	Plan *Plan `json:"plan,omitempty"`
 	// Subscription holds the value of the subscription edge.
 	Subscription *Subscription `json:"subscription,omitempty"`
+	// Addon holds the value of the addon edge.
+	Addon *Addon `json:"addon,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // PlanOrErr returns the Plan value or an error if the edge
@@ -111,6 +116,17 @@ func (e CreditGrantEdges) SubscriptionOrErr() (*Subscription, error) {
 	return nil, &NotLoadedError{edge: "subscription"}
 }
 
+// AddonOrErr returns the Addon value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e CreditGrantEdges) AddonOrErr() (*Addon, error) {
+	if e.Addon != nil {
+		return e.Addon, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: addon.Label}
+	}
+	return nil, &NotLoadedError{edge: "addon"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -124,7 +140,7 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case creditgrant.FieldPeriodCount, creditgrant.FieldExpirationDuration, creditgrant.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpirationType, creditgrant.FieldExpirationDurationUnit:
+		case creditgrant.FieldID, creditgrant.FieldTenantID, creditgrant.FieldStatus, creditgrant.FieldCreatedBy, creditgrant.FieldUpdatedBy, creditgrant.FieldEnvironmentID, creditgrant.FieldName, creditgrant.FieldScope, creditgrant.FieldPlanID, creditgrant.FieldSubscriptionID, creditgrant.FieldAddonID, creditgrant.FieldCadence, creditgrant.FieldPeriod, creditgrant.FieldExpirationType, creditgrant.FieldExpirationDurationUnit:
 			values[i] = new(sql.NullString)
 		case creditgrant.FieldCreatedAt, creditgrant.FieldUpdatedAt, creditgrant.FieldStartDate, creditgrant.FieldEndDate, creditgrant.FieldCreditGrantAnchor:
 			values[i] = new(sql.NullTime)
@@ -216,6 +232,13 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				cg.SubscriptionID = new(string)
 				*cg.SubscriptionID = value.String
+			}
+		case creditgrant.FieldAddonID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field addon_id", values[i])
+			} else if value.Valid {
+				cg.AddonID = new(string)
+				*cg.AddonID = value.String
 			}
 		case creditgrant.FieldCredits:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
@@ -336,6 +359,11 @@ func (cg *CreditGrant) QuerySubscription() *SubscriptionQuery {
 	return NewCreditGrantClient(cg.config).QuerySubscription(cg)
 }
 
+// QueryAddon queries the "addon" edge of the CreditGrant entity.
+func (cg *CreditGrant) QueryAddon() *AddonQuery {
+	return NewCreditGrantClient(cg.config).QueryAddon(cg)
+}
+
 // Update returns a builder for updating this CreditGrant.
 // Note that you need to call CreditGrant.Unwrap() before calling this method if this CreditGrant
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -393,6 +421,11 @@ func (cg *CreditGrant) String() string {
 	builder.WriteString(", ")
 	if v := cg.SubscriptionID; v != nil {
 		builder.WriteString("subscription_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := cg.AddonID; v != nil {
+		builder.WriteString("addon_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

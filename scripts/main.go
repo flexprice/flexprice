@@ -69,19 +69,9 @@ var commands = []Command{
 		Run:         internal.ImportPricing,
 	},
 	{
-		Name:        "reprocess-events",
-		Description: "Reprocess events",
-		Run:         internal.ReprocessFeatureUsageTrackingFromEnv,
-	},
-	{
 		Name:        "assign-plan",
 		Description: "Assign a specific plan to customers who don't already have it",
 		Run:         internal.AssignPlanToCustomers,
-	},
-	{
-		Name:        "bulk-reprocess-events",
-		Description: "Bulk reprocess events for all customers in a tenant",
-		Run:         runBulkReprocessEventsCommand,
 	},
 	{
 		Name:        "add-new-user",
@@ -139,36 +129,6 @@ var commands = []Command{
 		Description: "Create CUSTOMER_COUNT demo customers (default 1), each with subscription, $100 wallet top-up, and 500 meter events (Postgres + Kafka)",
 		Run:         internal.SetupDummyBillingCustomer,
 	},
-}
-
-// runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters
-func runBulkReprocessEventsCommand() error {
-	tenantID := os.Getenv("TENANT_ID")
-	environmentID := os.Getenv("ENVIRONMENT_ID")
-	eventName := os.Getenv("EVENT_NAME")
-	batchSizeStr := os.Getenv("BATCH_SIZE")
-	externalCustomerID := os.Getenv("EXTERNAL_CUSTOMER_ID")
-
-	if tenantID == "" || environmentID == "" {
-		return fmt.Errorf("TENANT_ID and ENVIRONMENT_ID are required")
-	}
-
-	batchSize := 100 // default
-	if batchSizeStr != "" {
-		if _, err := fmt.Sscanf(batchSizeStr, "%d", &batchSize); err != nil {
-			return fmt.Errorf("invalid BATCH_SIZE, must be an integer: %w", err)
-		}
-	}
-
-	params := internal.BulkReprocessEventsParams{
-		TenantID:           tenantID,
-		EnvironmentID:      environmentID,
-		EventName:          eventName,
-		BatchSize:          batchSize,
-		ExternalCustomerID: externalCustomerID,
-	}
-
-	return internal.BulkReprocessEvents(params)
 }
 
 func main() {

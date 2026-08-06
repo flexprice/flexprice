@@ -64,6 +64,9 @@ func (Secret) Fields() []ent.Field {
 			Optional().
 			Default("user").
 			Comment("User type copied from user at API key creation time"),
+		field.String("user_id").
+			Optional().
+			Comment("ID of the user or service account this key belongs to"),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -223,4 +224,176 @@ func TestTimeOfDayBuckets_ContainsTime(t *testing.T) {
 func TestTimeOfDayBuckets_ContainsTime_EmptySlice(t *testing.T) {
 	var buckets TimeOfDayBuckets
 	assert.False(t, buckets.ContainsTime(time.Date(2026, time.June, 2, 12, 0, 0, 0, time.UTC)))
+}
+
+func TestTimeOfDayBucket_Validate(t *testing.T) {
+	overageOK := decimal.NewFromFloat(1.5)
+	one := decimal.NewFromInt(1)
+	negOne := decimal.NewFromInt(-1)
+	tests := []struct {
+		name    string
+		bucket  TimeOfDayBucket
+		wantErr bool
+		errSub  string
+	}{
+		{
+			name: "valid amount commitment",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor: &overageOK,
+			},
+			wantErr: false,
+		},
+		{
+			name: "start equals end",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{9, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &overageOK,
+			},
+			wantErr: true, errSub: "start must differ from end",
+		},
+		{
+			name: "invalid commitment type",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: CommitmentType("bogus"), CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &overageOK,
+			},
+			wantErr: true, errSub: "commitment_type",
+		},
+		{
+			name: "missing commitment type (filter-only bucket rejected)",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor:   &overageOK,
+			},
+			wantErr: true, errSub: "commitment_type is required",
+		},
+		{
+			name: "negative commitment value",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: negOne,
+				OverageFactor: &overageOK,
+			},
+			wantErr: true, errSub: "commitment_value",
+		},
+		{
+			name: "zero commitment value",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.Zero,
+				OverageFactor: &overageOK,
+			},
+			wantErr: true, errSub: "commitment_value must be > 0",
+		},
+		{
+			name: "missing overage factor",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+			},
+			wantErr: true, errSub: "overage_factor is required",
+		},
+		{
+			// Exactly 1.0 is valid: overage bills at base rate (no premium).
+			name: "overage factor equals 1.0 accepted",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &one,
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative overage factor",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &negOne,
+			},
+			wantErr: true, errSub: "overage_factor",
+		},
+		{
+			name: "midnight-wrapping valid",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{22, 0}, End: Bucket{6, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &overageOK,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bucket.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSub)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTimeOfDayBucket_HasCommitment(t *testing.T) {
+	tests := []struct {
+		name   string
+		bucket TimeOfDayBucket
+		want   bool
+	}{
+		{
+			name:   "no commitment value",
+			bucket: TimeOfDayBucket{Start: Bucket{9, 0}, End: Bucket{10, 0}},
+			want:   false,
+		},
+		{
+			name: "amount commitment",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(100),
+			},
+			want: true,
+		},
+		{
+			name: "quantity commitment",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(1000),
+			},
+			want: true,
+		},
+		{
+			name: "type set but value zero",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.Zero,
+			},
+			want: false,
+		},
+		{
+			name: "type empty but value positive",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentValue: decimal.NewFromInt(50),
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.bucket.HasCommitment())
+		})
+	}
 }

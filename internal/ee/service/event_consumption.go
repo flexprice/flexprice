@@ -1,0 +1,497 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/pubsub/kafka"
+	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
+	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/flexprice/flexprice/internal/types"
+)
+
+// EventConsumptionService handles consuming raw events from Kafka and inserting them into ClickHouse
+type EventConsumptionService interface {
+	// Register message handler with the router
+	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// Register message handler with the router
+	RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// Register replay handler with the router
+	RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// RegisterBulkHandler registers a batch-mode consumer that reads
+	// RawEventBatch messages published by the bulk-ingest API path and
+	// bulk-inserts every event in the batch into the events table in one call.
+	RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// Process a raw event payload (used for AWS Lambda and direct processing)
+	ProcessRawEvent(ctx context.Context, payload []byte) error
+}
+
+type eventConsumptionService struct {
+	ServiceParams
+	pubSub         pubsub.PubSub
+	lazyPubSub     pubsub.PubSub
+	replayPubSub   pubsub.PubSub
+	bulkPubSub     pubsub.PubSub
+	eventRepo      events.Repository
+	tracingService *tracing.Service
+}
+
+// NewEventConsumptionService creates a new event consumption service
+func NewEventConsumptionService(
+	params ServiceParams,
+	eventRepo events.Repository,
+	tracingService *tracing.Service,
+) EventConsumptionService {
+	ev := &eventConsumptionService{
+		ServiceParams:  params,
+		eventRepo:      eventRepo,
+		tracingService: tracingService,
+	}
+
+	pubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.EventProcessing.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create pubsub", "error", err)
+		return nil
+	}
+	ev.pubSub = pubSub
+
+	lazyPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.EventProcessingLazy.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create lazy pubsub", "error", err)
+		return nil
+	}
+	ev.lazyPubSub = lazyPubSub
+
+	replayPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.EventProcessingReplay.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create replay pubsub", "error", err)
+		return nil
+	}
+	ev.replayPubSub = replayPubSub
+
+	bulkPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.BulkEventConsumption.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatal(context.Background(), "failed to create bulk pubsub", "error", err)
+		return nil
+	}
+	ev.bulkPubSub = bulkPubSub
+
+	return ev
+}
+
+// RegisterBulkHandler subscribes the bulk consumer group to the bulk-events
+// topic. One Kafka message = one RawEventBatch = one bulk-insert into the
+// events ClickHouse table.
+func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.BulkEventConsumption.Enabled {
+		s.Logger.Info(context.Background(), "bulk event consumption handler disabled by configuration")
+		return
+	}
+
+	throttle := middleware.NewThrottle(cfg.BulkEventConsumption.RateLimit, time.Second)
+
+	dlq := cfg.BulkEventConsumption.TopicDLQ
+	if dlq == "" {
+		dlq = cfg.Kafka.TopicDLQ
+	}
+
+	router.AddNoPublishHandler(
+		"bulk_event_consumption_handler",
+		cfg.BulkEventConsumption.Topic,
+		dlq,
+		s.bulkPubSub,
+		s.processBulkMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered bulk event consumption handler",
+		"topic", cfg.BulkEventConsumption.Topic,
+		"consumer_group", cfg.BulkEventConsumption.ConsumerGroup,
+		"rate_limit", cfg.BulkEventConsumption.RateLimit,
+	)
+}
+
+// processBulkMessage unmarshals a RawEventBatch and bulk-inserts every event
+// in the batch with a single call. Malformed rows inside the batch are
+// skipped so healthy siblings still land in ClickHouse.
+func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *message.Message) error {
+	var batch events.EventBatch
+	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal bulk event batch",
+			"error", err,
+			"message_uuid", msg.UUID,
+		)
+		s.tracingService.CaptureException(ctx, err)
+		return fmt.Errorf("non-retriable unmarshal error: %w", err)
+	}
+
+	if len(batch.Events) == 0 {
+		return nil
+	}
+
+	tenantID := batch.TenantID
+	environmentID := batch.EnvironmentID
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	inserts := make([]*events.Event, 0, len(batch.Events))
+	for _, evt := range batch.Events {
+		if evt == nil {
+			continue
+		}
+
+		if evt.TenantID == "" {
+			evt.TenantID = tenantID
+		}
+		if evt.EnvironmentID == "" {
+			evt.EnvironmentID = environmentID
+		}
+		inserts = append(inserts, evt)
+	}
+
+	if len(inserts) == 0 {
+		s.Logger.Info(ctx, "bulk event batch produced zero valid events, skipping",
+			"batch_size", len(batch.Events),
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
+	if err := s.eventRepo.BulkInsertEvents(ctx, inserts); err != nil {
+		s.Logger.Error(ctx, "bulk event batch insert failed",
+			"error", err,
+			"batch_size", len(inserts),
+			"message_uuid", msg.UUID,
+		)
+		return fmt.Errorf("bulk insert events: %w", err)
+	}
+
+	s.Logger.Debug(ctx, "bulk event batch inserted",
+		"batch_size", len(inserts),
+		"message_uuid", msg.UUID,
+	)
+	return nil
+}
+
+// RegisterHandler registers the event consumption handler with the router
+func (s *eventConsumptionService) RegisterHandler(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessing.Enabled {
+		s.Logger.Info(context.Background(), "event consumption handler disabled by configuration")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"event_consumption_handler",
+		cfg.EventProcessing.Topic,
+		cfg.EventProcessing.TopicDLQ,
+		s.pubSub,
+		s.processMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered event consumption handler",
+		"topic", cfg.EventProcessing.Topic,
+		"rate_limit", cfg.EventProcessing.RateLimit,
+	)
+}
+
+// RegisterHandler registers the event consumption handler with the router
+func (s *eventConsumptionService) RegisterHandlerLazy(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessingLazy.Enabled {
+		s.Logger.Info(context.Background(), "event consumption lazy handler disabled by configuration")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	throttle := middleware.NewThrottle(cfg.EventProcessingLazy.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"event_consumption_lazy_handler",
+		cfg.EventProcessingLazy.Topic,
+		cfg.EventProcessingLazy.TopicDLQ,
+		s.lazyPubSub,
+		s.processMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered event consumption lazy handler",
+		"topic", cfg.EventProcessingLazy.Topic,
+		"rate_limit", cfg.EventProcessingLazy.RateLimit,
+	)
+}
+
+// RegisterHandlerReplay registers the event consumption replay handler with the router
+func (s *eventConsumptionService) RegisterHandlerReplay(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessingReplay.Enabled {
+		s.Logger.Info(context.Background(), "event consumption replay handler disabled by configuration")
+		return
+	}
+
+	// Check if replay topic is configured
+	if cfg.EventProcessingReplay.Topic == "" {
+		s.Logger.Info(context.Background(), "replay topic not set, skipping replay handler")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	replayThrottle := middleware.NewThrottle(cfg.EventProcessingReplay.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"event_consumption_replay_handler",
+		cfg.EventProcessingReplay.Topic,
+		cfg.Kafka.TopicDLQ,
+		s.replayPubSub,
+		s.processMessage,
+		replayThrottle.Middleware,
+	)
+
+	s.Logger.Info(context.Background(), "registered event consumption replay handler",
+		"topic", cfg.EventProcessingReplay.Topic,
+		"rate_limit", cfg.EventProcessingReplay.RateLimit,
+		"pubsub_type", "kafka",
+	)
+}
+
+// processMessage processes a single event message from Kafka
+func (s *eventConsumptionService) processMessage(ctx context.Context, msg *message.Message) error {
+	partitionKey := msg.Metadata.Get("partition_key")
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	s.Logger.Debug(ctx, "processing event from message queue in event consumption service",
+		"message_uuid", msg.UUID,
+		"partition_key", partitionKey,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+	)
+
+	// Unmarshal the event
+	var event events.Event
+	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal event",
+			"error", err,
+			"payload", string(msg.Payload),
+		)
+		s.tracingService.CaptureException(ctx, err)
+
+		// Return error for non-retriable parse errors
+		// Watermill's poison queue middleware will handle moving it to DLQ
+		if !s.shouldRetryError(err) {
+			return fmt.Errorf("non-retriable unmarshal error: %w", err)
+		}
+		return err
+	}
+
+	if tenantID == "" && event.TenantID != "" {
+		tenantID = event.TenantID
+	}
+
+	if environmentID == "" && event.EnvironmentID != "" {
+		environmentID = event.EnvironmentID
+	}
+
+	s.Logger.Debug(ctx, "processing event in event consumption service",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
+		"environment_id", event.EnvironmentID,
+		"external_customer_id", event.ExternalCustomerID,
+		"timestamp", event.Timestamp,
+	)
+
+	// Prepare events to insert
+	eventsToInsert := []*events.Event{&event}
+
+	s.Logger.Debug(ctx, "creating billing event",
+		"tenant_id", s.Config.Billing.TenantID,
+		"environment_id", s.Config.Billing.EnvironmentID,
+		"external_customer_id", event.ExternalCustomerID,
+	)
+
+	// Create billing event if configured
+	if s.Config.Billing.TenantID != "" {
+		billingEvent := events.NewEvent(
+			"tenant_event", // Standardized event name for billing
+			s.Config.Billing.TenantID,
+			event.TenantID, // Use original tenant ID as external customer ID
+			map[string]interface{}{
+				"original_event_id":   event.ID,
+				"original_event_name": event.EventName,
+				"original_timestamp":  event.Timestamp,
+				"tenant_id":           event.TenantID,
+				"source":              event.Source,
+			},
+			time.Now(),
+			"", // Generate new ID
+			"", // Customer ID will be looked up by external ID
+			"system",
+			s.Config.Billing.EnvironmentID,
+		)
+		s.Logger.Debug(ctx, "appending billing event",
+			"tenant_id", s.Config.Billing.TenantID,
+			"environment_id", s.Config.Billing.EnvironmentID,
+			"external_customer_id", event.ExternalCustomerID,
+		)
+
+		eventsToInsert = append(eventsToInsert, billingEvent)
+	}
+
+	// Insert events into ClickHouse
+	s.Logger.Debug(ctx, "inserting events into ClickHouse",
+		"event_id", event.ID,
+		"events_to_insert_count", len(eventsToInsert),
+	)
+
+	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+		s.Logger.Error(ctx, "failed to insert events",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+
+		// Return error for retry
+		return ierr.WithError(err).
+			WithHint("Failed to insert events into ClickHouse").
+			Mark(ierr.ErrSystem)
+	}
+
+	s.Logger.Debug(ctx, "successfully processed event",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
+	)
+
+	return nil
+}
+
+// ProcessRawEvent processes a raw event payload (used for AWS Lambda and direct processing)
+func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload []byte) error {
+	// Start a transaction for this event processing
+	transaction, ctx := s.tracingService.StartTransaction(ctx, "event.process")
+	if transaction != nil {
+		defer transaction.Finish()
+	}
+
+	// Unmarshal the event
+	var event events.Event
+	if err := json.Unmarshal(payload, &event); err != nil {
+		s.Logger.Error(ctx, "failed to unmarshal event",
+			"error", err,
+			"payload", string(payload),
+		)
+		s.tracingService.CaptureException(ctx, err)
+		return fmt.Errorf("failed to unmarshal event: %w", err)
+	}
+
+	s.Logger.Debug(ctx, "processing raw event",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
+		"timestamp", event.Timestamp,
+	)
+
+	// Prepare events to insert
+	eventsToInsert := []*events.Event{&event}
+
+	// Create billing event if configured
+	if s.Config.Billing.TenantID != "" {
+		billingEvent := events.NewEvent(
+			"tenant_event", // Standardized event name for billing
+			s.Config.Billing.TenantID,
+			event.TenantID, // Use original tenant ID as external customer ID
+			map[string]interface{}{
+				"original_event_id":   event.ID,
+				"original_event_name": event.EventName,
+				"original_timestamp":  event.Timestamp,
+				"tenant_id":           event.TenantID,
+				"source":              event.Source,
+			},
+			time.Now(),
+			"", // Customer ID will be looked up by external ID
+			"", // Generate new ID
+			"system",
+			s.Config.Billing.EnvironmentID,
+		)
+		eventsToInsert = append(eventsToInsert, billingEvent)
+	}
+
+	// Insert events into ClickHouse
+	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+		s.Logger.Error(ctx, "failed to insert events",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return fmt.Errorf("failed to insert events: %w", err)
+	}
+
+	s.Logger.Debug(ctx, "successfully processed raw event",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
+	)
+
+	return nil
+}
+
+// shouldRetryError determines if an error should trigger a message retry
+func (s *eventConsumptionService) shouldRetryError(err error) bool {
+	// Don't retry parsing errors which are not likely to succeed on retry
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "unmarshal") ||
+		strings.Contains(errMsg, "parse") ||
+		strings.Contains(errMsg, "invalid") {
+		return false
+	}
+
+	// Retry all other errors (database issues, network issues, etc.)
+	return true
+}

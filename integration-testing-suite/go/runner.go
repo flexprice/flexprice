@@ -55,6 +55,7 @@ type SanityRunner struct {
 	entitlementID  string
 	taxRateID      string
 	taxRateCode    string
+	taxAssociationIDs []string
 	couponID       string
 	customerID     string
 	externalCustID string

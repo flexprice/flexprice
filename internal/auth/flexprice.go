@@ -144,8 +144,9 @@ func (f *flexpriceAuth) generateToken(userID, tenantID string) (string, error) {
 }
 
 // GenerateDevToken creates a short-lived JWT for internal developer testing.
-// It embeds tenant_id, user_id, and optionally environment_id in the claims.
-func (f *flexpriceAuth) GenerateDevToken(tenantID, environmentID, userID string, expiryHours int) (string, time.Time, error) {
+// Uses the flexprice claim schema: { user_id, tenant_id, environment_id }.
+// email is accepted for interface compatibility but not embedded in the token.
+func (f *flexpriceAuth) GenerateDevToken(tenantID, environmentID, userID, _ string, expiryHours int) (string, time.Time, error) {
 	if tenantID == "" {
 		return "", time.Time{}, ierr.NewError("tenantID is required").
 			WithHint("Provide a tenant ID to generate a dev token").
@@ -299,6 +300,33 @@ func (f *flexpriceAuth) ValidateSessionToken(ctx context.Context, token string) 
 		TenantID:           tenantID,
 		EnvironmentID:      environmentID,
 	}, nil
+}
+
+// checkoutTokenTTL is the lifetime of a checkout JWT.
+const checkoutTokenTTL = 2 * time.Hour
+
+// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+// Pass arbitrary provider-specific claims (e.g. publishable_key, payment_id, client_side_token).
+// exp and iat are always added automatically; token lifetime is checkoutTokenTTL.
+func (f *flexpriceAuth) GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error) {
+	expiresAt := time.Now().Add(checkoutTokenTTL)
+
+	claims := jwt.MapClaims{
+		"exp": expiresAt.Unix(),
+		"iat": time.Now().Unix(),
+	}
+	for k, v := range extraClaims {
+		claims[k] = v
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(f.AuthConfig.Secret))
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to sign checkout token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, nil
 }
 
 // UserInvite provisions a user in the configured auth provider and returns the newly created user ID and password.

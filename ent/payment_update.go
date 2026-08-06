@@ -318,6 +318,26 @@ func (pu *PaymentUpdate) ClearRefundedAt() *PaymentUpdate {
 	return pu
 }
 
+// SetVoidedAt sets the "voided_at" field.
+func (pu *PaymentUpdate) SetVoidedAt(t time.Time) *PaymentUpdate {
+	pu.mutation.SetVoidedAt(t)
+	return pu
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (pu *PaymentUpdate) SetNillableVoidedAt(t *time.Time) *PaymentUpdate {
+	if t != nil {
+		pu.SetVoidedAt(*t)
+	}
+	return pu
+}
+
+// ClearVoidedAt clears the value of the "voided_at" field.
+func (pu *PaymentUpdate) ClearVoidedAt() *PaymentUpdate {
+	pu.mutation.ClearVoidedAt()
+	return pu
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (pu *PaymentUpdate) SetRecordedAt(t time.Time) *PaymentUpdate {
 	pu.mutation.SetRecordedAt(t)
@@ -561,6 +581,12 @@ func (pu *PaymentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.RefundedAtCleared() {
 		_spec.ClearField(payment.FieldRefundedAt, field.TypeTime)
+	}
+	if value, ok := pu.mutation.VoidedAt(); ok {
+		_spec.SetField(payment.FieldVoidedAt, field.TypeTime, value)
+	}
+	if pu.mutation.VoidedAtCleared() {
+		_spec.ClearField(payment.FieldVoidedAt, field.TypeTime)
 	}
 	if value, ok := pu.mutation.RecordedAt(); ok {
 		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)
@@ -927,6 +953,26 @@ func (puo *PaymentUpdateOne) ClearRefundedAt() *PaymentUpdateOne {
 	return puo
 }
 
+// SetVoidedAt sets the "voided_at" field.
+func (puo *PaymentUpdateOne) SetVoidedAt(t time.Time) *PaymentUpdateOne {
+	puo.mutation.SetVoidedAt(t)
+	return puo
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (puo *PaymentUpdateOne) SetNillableVoidedAt(t *time.Time) *PaymentUpdateOne {
+	if t != nil {
+		puo.SetVoidedAt(*t)
+	}
+	return puo
+}
+
+// ClearVoidedAt clears the value of the "voided_at" field.
+func (puo *PaymentUpdateOne) ClearVoidedAt() *PaymentUpdateOne {
+	puo.mutation.ClearVoidedAt()
+	return puo
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (puo *PaymentUpdateOne) SetRecordedAt(t time.Time) *PaymentUpdateOne {
 	puo.mutation.SetRecordedAt(t)
@@ -1200,6 +1246,12 @@ func (puo *PaymentUpdateOne) sqlSave(ctx context.Context) (_node *Payment, err e
 	}
 	if puo.mutation.RefundedAtCleared() {
 		_spec.ClearField(payment.FieldRefundedAt, field.TypeTime)
+	}
+	if value, ok := puo.mutation.VoidedAt(); ok {
+		_spec.SetField(payment.FieldVoidedAt, field.TypeTime, value)
+	}
+	if puo.mutation.VoidedAtCleared() {
+		_spec.ClearField(payment.FieldVoidedAt, field.TypeTime)
 	}
 	if value, ok := puo.mutation.RecordedAt(); ok {
 		_spec.SetField(payment.FieldRecordedAt, field.TypeTime, value)

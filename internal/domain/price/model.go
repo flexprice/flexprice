@@ -16,7 +16,7 @@ import (
 )
 
 // max active prices per entity is 3000
-const MAX_ACTIVE_PRICES = 3000
+const MAX_ACTIVE_PRICES = 5000
 
 // JSONB types for complex fields
 // JSONBTiers are the tiers for the price when BillingModel is TIERED
@@ -235,16 +235,17 @@ func (p *Price) FormatAmountToStringWithPrecision() string {
 	return p.Amount.Round(config.Precision).String()
 }
 
-// FormatAmountToFloat64 formats the amount to float64
+// FormatAmountToFloat64 formats the amount to float64 for API responses.
+// Do not use the result as an input to further billing math — keep decimal.Decimal.
 func (p *Price) FormatAmountToFloat64() float64 {
 	return p.Amount.InexactFloat64()
 }
 
-// FormatAmountToFloat64WithPrecision formats the amount to float64
-// It rounds off the amount according to currency precision
+// FormatAmountToFloat64WithPrecision formats the amount to float64 for API responses.
+// It rounds to currency precision first. Do not feed the result back into billing math
+// via float→decimal conversion; use FormatAmountWithPrecision / decimal throughout.
 func (p *Price) FormatAmountToFloat64WithPrecision() float64 {
-	config := types.GetCurrencyConfig(p.Currency)
-	return p.Amount.Round(config.Precision).InexactFloat64()
+	return FormatAmountToFloat64WithPrecision(p.Amount, p.Currency)
 }
 
 // GetDisplayAmount returns the amount in the currency ex $12.00
@@ -297,10 +298,16 @@ func FormatAmountToStringWithPrecision(amount decimal.Decimal, currency string) 
 	return amount.Round(config.Precision).String()
 }
 
-// FormatAmountToFloat64WithPrecision formats the amount to float64
-// It rounds off the amount according to currency precision
+// FormatAmountWithPrecision rounds amount to the currency's decimal places.
+func FormatAmountWithPrecision(amount decimal.Decimal, currency string) decimal.Decimal {
+	return amount.Round(types.GetCurrencyPrecision(currency))
+}
+
+// FormatAmountToFloat64WithPrecision formats a currency-rounded amount for API/JSON float fields.
+// Billing calculations must keep decimal.Decimal end-to-end; converting through float64 can
+// change currency rounding at boundaries (e.g. 0.014999… → 0.02 instead of 0.01).
 func FormatAmountToFloat64WithPrecision(amount decimal.Decimal, currency string) float64 {
-	return amount.Round(types.GetCurrencyPrecision(currency)).InexactFloat64()
+	return FormatAmountWithPrecision(amount, currency).InexactFloat64()
 }
 
 // PriceTransform is the quantity transformation in case of PACKAGE billing model
@@ -601,6 +608,16 @@ func (p *Price) ValidateEntityType() error {
 	return p.EntityType.Validate()
 }
 
+// ValidateMinQuantity checks that min_quantity, when set, is non-negative
+func (p *Price) ValidateMinQuantity() error {
+	if p.MinQuantity != nil && p.MinQuantity.IsNegative() {
+		return ierr.NewError("min_quantity must be non-negative").
+			WithHint("min_quantity cannot be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // Validate performs all validations on the price
 func (p *Price) Validate() error {
 	if err := p.ValidateAmount(); err != nil {
@@ -619,6 +636,10 @@ func (p *Price) Validate() error {
 		return err
 	}
 
+	if err := p.ValidateMinQuantity(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -628,6 +649,31 @@ func (p *Price) Validate() error {
 func (p *Price) GetDefaultQuantity() decimal.Decimal {
 	if p.Type == types.PRICE_TYPE_USAGE && p.MeterID != "" {
 		return decimal.Zero
+	}
+	return decimal.NewFromInt(1)
+}
+
+// ValidateQuantityNonNegative rejects a negative quantity. nil (omitted) is allowed.
+func ValidateQuantityNonNegative(qty *decimal.Decimal) error {
+	if qty == nil || !qty.IsNegative() {
+		return nil
+	}
+	return ierr.NewError("quantity must be non-negative").
+		WithHint("Quantity cannot be negative").
+		Mark(ierr.ErrValidation)
+}
+
+// ApplyQuantityDefault resolves the effective quantity: non-zero values are returned as-is;
+// zero is replaced by MinQuantity when set and non-zero, or by the price's default quantity.
+func ApplyQuantityDefault(qty decimal.Decimal, p *Price) decimal.Decimal {
+	if !qty.IsZero() {
+		return qty
+	}
+	if p != nil && p.MinQuantity != nil {
+		return lo.FromPtr(p.MinQuantity)
+	}
+	if p != nil {
+		return p.GetDefaultQuantity()
 	}
 	return decimal.NewFromInt(1)
 }

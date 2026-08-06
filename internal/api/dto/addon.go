@@ -62,6 +62,7 @@ type AddonResponse struct {
 	// Optional expanded fields
 	Prices       []*PriceResponse       `json:"prices,omitempty"`
 	Entitlements []*EntitlementResponse `json:"entitlements,omitempty"`
+	CreditGrants []*CreditGrantResponse `json:"credit_grants,omitempty"`
 }
 
 // CreateAddonResponse represents the response after creating an addon
@@ -82,6 +83,9 @@ type AddAddonToSubscriptionRequest struct {
 
 	// LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
+
+	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
+	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
 	// SkipEntityValidation is used to skip the entitlement check for the addon
 	// This is used to add an addon to a subscription without checking the entitlement compatibility
@@ -134,6 +138,10 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	if err := validateNoDuplicateOverridePriceIDs(r.OverrideLineItems); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -146,6 +154,12 @@ type AddonAssociationResponse struct {
 
 // ListAddonAssociationsResponse represents the response for listing addon associations
 type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse]
+
+type AddAddonToSubscriptionResponse struct {
+	*addonassociation.AddonAssociation
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+	Invoice         *InvoiceResponse         `json:"invoice,omitempty"`
+}
 
 // GetActiveAddonAssociationRequest represents the request to get active addon associations
 type GetActiveAddonAssociationRequest struct {

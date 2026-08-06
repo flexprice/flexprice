@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Entitlement holds the schema definition for the Entitlement entity.
@@ -88,6 +89,34 @@ func (Entitlement) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("End date for time-bound entitlements (subscription-scoped only)"),
+		field.JSON("config_value", map[string]interface{}{}).
+			Optional().
+			SchemaType(map[string]string{"postgres": "jsonb"}),
+
+		// Grant config; a row with grant fields set is instantiated into entitlement_grants.
+		field.String("grant_measure").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Optional().
+			GoType(types.EntitlementGrantMeasure("")),
+
+		field.Int("grant_duration_value").
+			Optional().
+			Nillable(),
+
+		field.String("grant_duration_unit").
+			SchemaType(map[string]string{"postgres": "varchar(10)"}).
+			Optional().
+			GoType(types.EntitlementGrantDurationUnit("")),
+
+		field.Other("grant_quota", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(25,15)"}).
+			Optional().
+			Nillable(),
+
+		field.String("aggregation_mode").
+			SchemaType(map[string]string{"postgres": "varchar(20)"}).
+			Default(string(types.EntitlementAggregationModeAdditive)).
+			GoType(types.EntitlementAggregationMode("")),
 	}
 }
 
@@ -101,7 +130,7 @@ func (Entitlement) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "feature_id").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((aggregation_mode)::text <> 'parallel'::text))")),
 
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
@@ -109,6 +138,6 @@ func (Entitlement) Indexes() []ent.Index {
 
 		// Index for time-based queries on subscription-scoped entitlements
 		index.Fields("entity_id", "entity_type", "feature_id", "start_date", "end_date").
-			Annotations(entsql.IndexWhere("entity_type = 'SUBSCRIPTION' AND status = 'published'")),
+			Annotations(entsql.IndexWhere("(((entity_type)::text = 'SUBSCRIPTION'::text) AND ((status)::text = 'published'::text))")),
 	}
 }

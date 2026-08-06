@@ -54,6 +54,66 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Object labels for a component's Kubernetes resources (Deployment, Service, HPA,
+PDB, Ingress, ServiceAccount, ...).
+Usage: include "flexprice.componentLabels" (dict "ctx" . "component" "api")
+
+Emits the common labels, then operator-supplied labels from
+`.Values.<component>.labels`, then the component key.
+
+The component key goes last so it can't be overridden from values — several
+resources (PDB, NetworkPolicy, Service) build selectors from it, and a Service
+whose object labels disagree with the pods it targets is a debugging trap. The
+remaining common labels stay overridable, so an operator who really wants their
+own `app.kubernetes.io/version` can still set it.
+
+Never use this for `spec.selector.matchLabels`: selectors are immutable on
+Deployments and StatefulSets, so a user adding a label would break every
+subsequent `helm upgrade` with "field is immutable". Selectors stay on
+`flexprice.selectorLabels` + the component key.
+*/}}
+{{- define "flexprice.componentLabels" -}}
+{{- $ctx := .ctx -}}
+{{- /* `dig` can't walk .Values (chartutil.Values, not map[string]interface{}),
+       so resolve the component block with `index` and guard it being unset. */ -}}
+{{- $cfg := index $ctx.Values .component | default dict -}}
+{{ include "flexprice.labels" $ctx }}
+{{- with (get $cfg "labels") }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
+app.kubernetes.io/component: {{ .component }}
+{{- end }}
+
+{{/*
+Pod template labels for a component.
+Usage: include "flexprice.componentPodLabels" (dict "ctx" . "component" "api")
+
+Global `.Values.podLabels`, then `.Values.<component>.podLabels`, and finally the
+selector labels + component key. Pod labels are mutable, so adding one here only
+triggers a normal rolling update. This is the hook log shippers (Filebeat/ELK,
+Fluent Bit, Datadog) should target, since they enrich from pod metadata.
+
+The selector-owned keys (app.kubernetes.io/name, /instance, /component) are
+emitted LAST on purpose. YAML resolves duplicate keys to the final occurrence, so
+this makes them impossible to override from values: a user who sets
+`podLabels.app.kubernetes.io/component` gets their value silently discarded
+rather than a pod that no longer matches its own Deployment selector, Service,
+PDB, and NetworkPolicy. Reordering these lines reintroduces that bug.
+*/}}
+{{- define "flexprice.componentPodLabels" -}}
+{{- $ctx := .ctx -}}
+{{- $cfg := index $ctx.Values .component | default dict -}}
+{{- with $ctx.Values.podLabels }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
+{{- with (get $cfg "podLabels") }}
+{{- toYaml . | nindent 0 }}
+{{ end }}
+{{- include "flexprice.selectorLabels" $ctx }}
+app.kubernetes.io/component: {{ .component }}
+{{- end }}
+
+{{/*
 Default ServiceAccount name (shared across components when per-workload SAs are off).
 */}}
 {{- define "flexprice.serviceAccountName" -}}
@@ -233,7 +293,31 @@ Resolve the ClickHouse address (host:port) based on clickhouse.mode.
 {{- else if eq .Values.clickhouse.mode "altinity" -}}
 {{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
 {{- else -}}
-{{- printf "%s-clickhouse:9000" (include "flexprice.fullname" .) }}
+{{- printf "%s:9000" (include "flexprice.clickhouseServiceHost" .) }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Namespace the in-cluster ClickHouse (standalone/altinity) is deployed into.
+Defaults to the release namespace for backward compatibility; set
+clickhouse.namespace to isolate ClickHouse in its own namespace.
+*/}}
+{{- define "flexprice.clickhouseNamespace" -}}
+{{- .Values.clickhouse.namespace | default .Release.Namespace -}}
+{{- end }}
+
+{{/*
+Service host for the standalone ClickHouse. When clickhouse.namespace is set,
+returns the cross-namespace FQDN so consumers in other namespaces (app,
+migration job) resolve it; otherwise the short in-namespace service name
+(zero-diff from previous behavior).
+*/}}
+{{- define "flexprice.clickhouseServiceHost" -}}
+{{- $svc := printf "%s-clickhouse" (include "flexprice.fullname" .) -}}
+{{- if .Values.clickhouse.namespace -}}
+{{- printf "%s.%s.svc.cluster.local" $svc .Values.clickhouse.namespace -}}
+{{- else -}}
+{{- $svc -}}
 {{- end -}}
 {{- end }}
 
@@ -250,10 +334,62 @@ Uses the temporalio/temporal subchart service name when internal, or user-suppli
 {{- end }}
 
 {{/*
+Kafka broker CA volume. Renders nothing unless kafkaConfig.tlsCASecret.name is
+set, so clusters using publicly-trusted brokers (MSK, Confluent Cloud) are
+untouched.
+
+The Secret is expected to already exist — created by an ExternalSecret, sealed
+secret, or by hand. The chart never renders certificate material itself, which
+keeps PEM bytes out of values files. Its `key` must hold a PEM bundle; JKS/PKCS12
+truststores are not readable by Go and must be exported with
+`keytool -exportcert -rfc` first.
+*/}}
+{{- define "flexprice.kafkaTLSVolume" -}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: kafka-tls-ca
+  secret:
+    secretName: {{ .Values.kafkaConfig.tlsCASecret.name | quote }}
+    items:
+      - key: {{ .Values.kafkaConfig.tlsCASecret.key | default "ca.crt" | quote }}
+        path: {{ .Values.kafkaConfig.tlsCASecret.key | default "ca.crt" | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+Mount for the Kafka broker CA. Path must match FLEXPRICE_KAFKA_TLS_CA_CERT_FILE
+in "flexprice.env".
+*/}}
+{{- define "flexprice.kafkaTLSVolumeMounts" -}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: kafka-tls-ca
+  mountPath: {{ .Values.kafkaConfig.tlsCASecret.mountPath | default "/etc/flexprice/kafka-tls" | quote }}
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{/*
 Create environment variables from configuration.
 All service addresses are resolved via named templates above so this block stays clean.
 */}}
 {{- define "flexprice.env" -}}
+{{- if .Values.env }}
+{{- /* Generic env map — MIGRATED environments (config-autobind final-goal shape). The app
+       reads the baked config.yaml for defaults; every per-env override is an explicit env var
+       in .Values.env, and every secret is a name->secret-key entry in .Values.secretEnv. No
+       per-key template maintenance. When .Values.env is set the ConfigMap is not rendered. */}}
+{{- range $k, $v := .Values.env }}
+- name: {{ $k }}
+  value: {{ $v | quote }}
+{{- end }}
+{{- range $name, $key := .Values.secretEnv }}
+- name: {{ $name }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" $ }}
+      key: {{ $key }}
+{{- end }}
+{{- else }}
+{{- /* Legacy structured env — UN-MIGRATED environments (unchanged; ConfigMap still rendered). */ -}}
 - name: FLEXPRICE_SERVER_ADDRESS
   value: ":8080"
 {{- /* ---- PostgreSQL ---- */}}
@@ -300,6 +436,8 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.clickhouse.database | quote }}
 - name: FLEXPRICE_CLICKHOUSE_TLS
   value: {{ .Values.clickhouse.tls | quote }}
+- name: FLEXPRICE_CLICKHOUSE_TLS_SKIP_VERIFY
+  value: {{ .Values.clickhouse.tlsSkipVerify | default false | quote }}
 - name: FLEXPRICE_CLICKHOUSE_MAX_MEMORY_USAGE
   value: {{ .Values.clickhouse.maxMemoryUsageGB | default 90 | quote }}
 {{- /* ---- Kafka ---- */}}
@@ -313,6 +451,16 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.kafkaConfig.topicLazy | quote }}
 - name: FLEXPRICE_KAFKA_TLS
   value: {{ .Values.kafkaConfig.tls | quote }}
+{{- /*
+  Private/self-signed broker CA. Not gated on useSASL — a plain-TLS broker can
+  present a private CA too. The path must match the mount in
+  `flexprice.kafkaTLSVolumeMounts`. The file must be PEM; a JKS truststore has
+  to be exported first with `keytool -exportcert -rfc`.
+*/}}
+{{- if .Values.kafkaConfig.tlsCASecret.name }}
+- name: FLEXPRICE_KAFKA_TLS_CA_CERT_FILE
+  value: {{ printf "%s/%s" (.Values.kafkaConfig.tlsCASecret.mountPath | default "/etc/flexprice/kafka-tls") (.Values.kafkaConfig.tlsCASecret.key | default "ca.crt") | quote }}
+{{- end }}
 - name: FLEXPRICE_KAFKA_USE_SASL
   value: {{ .Values.kafkaConfig.useSASL | quote }}
 - name: FLEXPRICE_KAFKA_CLIENT_ID
@@ -513,7 +661,17 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.dynamodb.inUse | quote }}
 {{- /* ---- Webhook / Svix ---- */}}
 {{- if .Values.webhook.svixConfig.enabled }}
+{{- /* Legacy alias: pre-config-autobind images bind webhook.svix_config.auth_token from this
+       name via an explicit v.BindEnv. Kept so a rollback to an older image still gets the token. */}}
 - name: FLEXPRICE_SVIX_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: svix-auth-token
+{{- /* Canonical name the reflection env-binder derives from webhook.svix_config.auth_token.
+       Config-autobind images read THIS (no BindEnv needed). Same secret as the legacy alias
+       above, so both images resolve the same token — forward- and backward-compatible. */}}
+- name: FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.secretName" . }}
@@ -531,6 +689,10 @@ All service addresses are resolved via named templates above so this block stays
 {{- /* ---- Logging extended ---- */}}
 - name: FLEXPRICE_LOGGING_FORMAT
   value: {{ .Values.logging.format | default "json" | quote }}
+{{- if .Values.logging.environment }}
+- name: FLEXPRICE_LOGGING_ENVIRONMENT
+  value: {{ .Values.logging.environment | quote }}
+{{- end }}
 {{- if .Values.logging.otel.enabled }}
 - name: FLEXPRICE_LOGGING_OTEL_ENABLED
   value: "true"
@@ -546,6 +708,34 @@ All service addresses are resolved via named templates above so this block stays
       name: {{ include "flexprice.secretName" . }}
       key: logging-otel-auth-value
 {{- end }}
+{{- /* ---- OpenTelemetry traces (APM/RED metrics) ---- */}}
+{{- if .Values.otel.enabled }}
+- name: FLEXPRICE_OTEL_ENABLED
+  value: "true"
+{{- if .Values.otel.serviceName }}
+- name: FLEXPRICE_OTEL_SERVICE_NAME
+  value: {{ .Values.otel.serviceName | quote }}
+{{- end }}
+{{- if .Values.otel.traces.enabled }}
+- name: FLEXPRICE_OTEL_TRACES_ENABLED
+  value: "true"
+- name: FLEXPRICE_OTEL_TRACES_ENDPOINT
+  value: {{ .Values.otel.traces.endpoint | quote }}
+{{- if .Values.otel.traces.authHeader }}
+- name: FLEXPRICE_OTEL_TRACES_AUTH_HEADER
+  value: {{ .Values.otel.traces.authHeader | quote }}
+- name: FLEXPRICE_OTEL_TRACES_AUTH_VALUE
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: logging-otel-auth-value
+{{- end }}
+{{- if .Values.otel.traces.sampleRate }}
+- name: FLEXPRICE_OTEL_TRACES_SAMPLE_RATE
+  value: {{ .Values.otel.traces.sampleRate | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- /* ---- App URLs ---- */}}
 {{- if .Values.app.customerPortalUrl }}
 - name: FLEXPRICE_CUSTOMER_PORTAL_URL
@@ -555,8 +745,9 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_OAUTH_REDIRECT_URI
   value: {{ .Values.app.oauthRedirectUri | quote }}
 {{- end }}
-{{- /* ---- Extra env vars (passthrough) ---- */}}
+{{- end }}
+{{- /* ---- Extra env vars (passthrough; applies in both legacy and migrated modes) ---- */}}
 {{- with .Values.extraEnv }}
-{{- toYaml . }}
+{{ toYaml . | trim }}
 {{- end }}
 {{- end }}

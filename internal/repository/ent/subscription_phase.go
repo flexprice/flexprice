@@ -7,7 +7,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -19,16 +18,14 @@ type subscriptionPhaseRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts SubscriptionPhaseQueryOptions
-	cache     cache.Cache
 }
 
 // NewSubscriptionPhaseRepository creates a new subscription phase repository
-func NewSubscriptionPhaseRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) subscription.SubscriptionPhaseRepository {
+func NewSubscriptionPhaseRepository(client postgres.IClient, log *logger.Logger) subscription.SubscriptionPhaseRepository {
 	return &subscriptionPhaseRepository{
 		client:    client,
 		log:       log,
 		queryOpts: SubscriptionPhaseQueryOptions{},
-		cache:     cache,
 	}
 }
 
@@ -401,7 +398,7 @@ func (o SubscriptionPhaseQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 
 func (o SubscriptionPhaseQueryOptions) ApplyStatusFilter(query SubscriptionPhaseQuery, status string) SubscriptionPhaseQuery {
 	if status == "" {
-		return query.Where(subscriptionphase.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(subscriptionphase.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(subscriptionphase.Status(status))
 }

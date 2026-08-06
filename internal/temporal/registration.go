@@ -3,7 +3,11 @@ package temporal
 import (
 	"fmt"
 
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
+	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -12,6 +16,7 @@ import (
 	exportActivities "github.com/flexprice/flexprice/internal/temporal/activities/export"
 	hubspotActivities "github.com/flexprice/flexprice/internal/temporal/activities/hubspot"
 	invoiceActivities "github.com/flexprice/flexprice/internal/temporal/activities/invoice"
+	marketplaceActivities "github.com/flexprice/flexprice/internal/temporal/activities/marketplace"
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
 	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
@@ -21,6 +26,7 @@ import (
 	razorpayActivities "github.com/flexprice/flexprice/internal/temporal/activities/razorpay"
 	stripeActivities "github.com/flexprice/flexprice/internal/temporal/activities/stripe"
 	subscriptionActivities "github.com/flexprice/flexprice/internal/temporal/activities/subscription"
+	tabsActivities "github.com/flexprice/flexprice/internal/temporal/activities/tabs"
 	taskActivities "github.com/flexprice/flexprice/internal/temporal/activities/task"
 	whopActivities "github.com/flexprice/flexprice/internal/temporal/activities/whop"
 	workflowActivities "github.com/flexprice/flexprice/internal/temporal/activities/workflow"
@@ -45,15 +51,24 @@ type WorkerConfig struct {
 
 // cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
 type cronActivityBundle struct {
-	creditGrant           *cronActivities.CreditGrantActivities
-	subscription          *cronActivities.SubscriptionCronActivities
-	walletCreditExpiry    *cronActivities.WalletCreditExpiryActivities
-	webhookOutboundRetry  *cronActivities.WebhookOutboundRetryActivities
-	paddleInvoicePullSync *cronActivities.PaddleInvoicePullSyncActivities
+	creditGrant                  *cronActivities.CreditGrantActivities
+	subscription                 *cronActivities.SubscriptionCronActivities
+	walletCreditExpiry           *cronActivities.WalletCreditExpiryActivities
+	webhookOutboundRetry         *cronActivities.WebhookOutboundRetryActivities
+	paddleInvoicePullSync        *cronActivities.PaddleInvoicePullSyncActivities
+	moyasarAuthPaymentSettlement *cronActivities.MoyasarAuthPaymentSettlementActivities
+	checkoutSessionExpiry        *cronActivities.CheckoutSessionExpiryActivities
+	marketplaceSnapshot          *marketplaceActivities.SnapshotActivities
+	marketplaceReport            *marketplaceActivities.ReportActivities
+	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
-func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams, webhookService *webhook.WebhookService) error {
+func RegisterWorkflowsAndActivities(
+	temporalService temporalService.TemporalService,
+	params service.ServiceParams,
+	webhookService *webhook.WebhookService,
+) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
 		params,
@@ -98,17 +113,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		scheduledTaskService,
 	)
 
-	// Feature usage tracking (export needs GetDetailedUsageAnalytics for usage_analytics entity type)
-	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
-		params,
-		params.EventRepo,
-		params.FeatureUsageRepo,
-	)
+	// Meter usage service satisfies UsageAnalyticsGetter for the usage_analytics
+	// entity type export path.
+	meterUsageService := service.NewMeterUsageService(params)
 
 	// Create wallet service for credit usage export
 	walletService := service.NewWalletService(params)
 	exportActivity := exportActivities.NewExportActivity(
-		params.FeatureUsageRepo,
 		params.MeterUsageRepo,
 		params.PriceRepo,
 		params.InvoiceRepo,
@@ -119,7 +130,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.IntegrationFactory,
 		params.Config,
 		params.Logger,
-		featureUsageTrackingService,
+		meterUsageService,
 		params.EventRepo,
 		params.SubscriptionLineItemRepo,
 	)
@@ -175,9 +186,11 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	// Moyasar activities
+	moyasarInvoiceService := service.NewInvoiceService(params)
 	moyasarInvoiceSyncActivities := moyasarActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		moyasarInvoiceService,
 		params.Logger,
 	)
 
@@ -238,6 +251,10 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.IntegrationFactory,
 		params.Logger,
 	)
+	tabsInvoiceSyncActivities := tabsActivities.NewInvoiceSyncActivities(
+		params.IntegrationFactory,
+		params.Logger,
+	)
 
 	// Customer activities
 	customerActivities := customerActivities.NewCustomerActivities(
@@ -245,11 +262,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 	)
 
+	// Meter-usage-driven alert activities (spend-breach + wallet-balance checks).
+	// Registered on TemporalTaskQueueWorkflows alongside CustomerOnboardingWorkflow;
+	// both are event-driven, low-frequency-per-customer, short-lived workflows.
+	alertActs := alertActivities.NewAlertActivities(params, params.Logger)
+
 	// Environment clone activities
 	envActivities := environmentActivities.NewEnvironmentActivities(params)
-
-	// Reprocess events activities
-	reprocessEventsActivities := eventsActivities.NewReprocessEventsActivities(featureUsageTrackingService)
 
 	// Reprocess raw events activities
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
@@ -261,17 +280,39 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	envAccessService := service.NewEnvAccessService(params.Config)
 	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
+	// Marketplace activities
+	awsMarketplaceClient := awsmarketplace.NewClient(params.Config, params.Logger)
+	gcpMarketplaceClient := gcpmarketplace.NewClient(params.Config, params.Logger)
+	azureMarketplaceClient := azuremarketplace.NewClient(params.Logger)
+	// One reporter shared by both the scheduled reporting cron and the cancellation flush, so the two
+	// report through identical per-provider code.
+	mktplaceReporter := marketplaceActivities.NewMarketplaceReporter(
+		params,
+		awsMarketplaceClient,
+		gcpMarketplaceClient,
+		azureMarketplaceClient,
+		params.Logger,
+	)
+	marketplaceSnapshotActivities := marketplaceActivities.NewSnapshotActivities(params, params.Logger)
+	marketplaceReportActivities := marketplaceActivities.NewReportActivities(params, mktplaceReporter, params.Logger)
+	marketplaceFlushActivities := marketplaceActivities.NewFlushActivities(params, mktplaceReporter, params.Logger)
+
 	cronBundle := &cronActivityBundle{
-		creditGrant:           cronActivities.NewCreditGrantActivities(creditGrantService),
-		subscription:          cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
-		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
-		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
-		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService),
+		subscription:                 cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
+		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
+		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
+		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
+		marketplaceSnapshot:          marketplaceSnapshotActivities,
+		marketplaceReport:            marketplaceReportActivities,
+		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, envActivities, cronBundle, alertActs, marketplaceFlushActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -310,14 +351,16 @@ func buildWorkerConfig(
 	qbInvoiceSyncActivities *qbActivities.QuickBooksInvoiceSyncActivities,
 	qbCustomerSyncActivities *qbActivities.QuickBooksCustomerSyncActivities,
 	zohoInvoiceSyncActivities *zohoActivities.InvoiceSyncActivities,
+	tabsInvoiceSyncActivities *tabsActivities.InvoiceSyncActivities,
 	customerActivities *customerActivities.CustomerActivities,
 	scheduleBillingActivities *subscriptionActivities.SubscriptionActivities,
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
-	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
 	cron *cronActivityBundle,
+	alertActs *alertActivities.AlertActivities,
+	marketplaceFlushActivities *marketplaceActivities.FlushActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	// Add tracking activity to all task queues
@@ -344,6 +387,8 @@ func buildWorkerConfig(
 			workflows.ChargebeeInvoiceSyncWorkflow,
 			workflows.QuickBooksInvoiceSyncWorkflow,
 			workflows.ZohoBooksInvoiceSyncWorkflow,
+			workflows.ZohoBooksInvoiceMarkPaidWorkflow,
+			workflows.TabsInvoiceSyncWorkflow,
 			workflows.StripeCustomerSyncWorkflow,
 			workflows.RazorpayCustomerSyncWorkflow,
 			workflows.ChargebeeCustomerSyncWorkflow,
@@ -370,6 +415,8 @@ func buildWorkerConfig(
 			chargebeeInvoiceSyncActivities.SyncInvoiceToChargebee,
 			qbInvoiceSyncActivities.SyncInvoiceToQuickBooks,
 			zohoInvoiceSyncActivities.SyncInvoiceToZoho,
+			zohoInvoiceSyncActivities.MarkZohoBooksInvoicePaid,
+			tabsInvoiceSyncActivities.SyncInvoiceToTabs,
 			stripeCustomerSyncActivities.SyncCustomerToStripe,
 			razorpayCustomerSyncActivities.SyncCustomerToRazorpay,
 			chargebeeCustomerSyncActivities.SyncCustomerToChargebee,
@@ -414,6 +461,7 @@ func buildWorkerConfig(
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
 			invoiceWorkflows.RecalculateInvoiceWorkflow,
+			subscriptionWorkflows.MarketplaceSubscriptionFinalUsageFlushWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
@@ -428,6 +476,7 @@ func buildWorkerConfig(
 			billingActivities.TriggerInvoiceWorkflowActivity,
 			// Invoice recalculation (v2)
 			invoiceActs.RecalculateInvoiceActivity,
+			marketplaceFlushActivities.MarketplaceSubscriptionFinalUsageFlushActivity,
 		)
 
 	case types.TemporalTaskQueueInvoice:
@@ -458,8 +507,8 @@ func buildWorkerConfig(
 			workflows.CustomerOnboardingWorkflow,
 			workflows.PrepareProcessedEventsWorkflow,
 			workflows.EnvironmentCloneWorkflow,
+			workflows.UsageAlertWorkflow,
 		)
-		// Customer activities
 		activitiesList = append(activitiesList,
 			customerActivities.CreateCustomerActivity,
 			customerActivities.CreateWalletActivity,
@@ -469,17 +518,15 @@ func buildWorkerConfig(
 			planActivities.SyncPlanPrices,
 			envActivities.CloneEnvironmentFeatures,
 			envActivities.CloneEnvironmentPlans,
+			alertActs.SpendAndEntitlementAlertsActivity,
+			alertActs.WalletAlertsActivity,
 		)
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,
-			eventsWorkflows.ReprocessEventsWorkflow,
 			eventsWorkflows.ReprocessRawEventsWorkflow,
-			eventsWorkflows.ReprocessEventsForPlanWorkflow,
 		)
 		activitiesList = append(activitiesList,
-			reprocessEventsActivities.ReprocessEvents,
 			reprocessRawEventsActivities.ReprocessRawEvents,
-			planActivities.ReprocessEventsForPlan,
 		)
 
 	case types.TemporalTaskQueueCron:
@@ -493,6 +540,11 @@ func buildWorkerConfig(
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
+			cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
+			cronWorkflows.CheckoutSessionExpiryWorkflow,
+			cronWorkflows.MarketplaceUsageSnapshotWorkflow,
+			cronWorkflows.MarketplaceUsageReportWorkflow,
+			cronWorkflows.DailyDraftAndComputeWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -504,6 +556,22 @@ func buildWorkerConfig(
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 			cron.subscription.ProcessAutoInvoiceThresholdBillingActivity,
 			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
+			cron.moyasarAuthPaymentSettlement.ReconcilePendingAuthPaymentsActivity,
+			cron.moyasarAuthPaymentSettlement.VoidOrRefundSucceededAuthPaymentsActivity,
+			cron.checkoutSessionExpiry.ExpireCheckoutSessionsActivity,
+			cron.marketplaceSnapshot.MarketplaceUsageSnapshotActivity,
+			cron.marketplaceReport.MarketplaceUsageReportActivity,
+			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
+		)
+
+	case types.TemporalTaskQueueBilling:
+		// Isolate bulk daily invoice work from interactive requests.
+		workflowsList = append(workflowsList,
+			invoiceWorkflows.DraftAndComputeSubscriptionInvoiceWorkflow,
+		)
+		activitiesList = append(activitiesList,
+			invoiceActs.CreateDraftForCurrentSubscriptionPeriodActivity,
+			invoiceActs.ComputeInvoiceActivity,
 		)
 	}
 	return WorkerConfig{

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -77,11 +78,24 @@ func matchRecord(r *events.MeterUsage, p *events.MeterUsageQueryParams) bool {
 	if len(p.MeterIDs) > 0 && !containsString(p.MeterIDs, r.MeterID) {
 		return false
 	}
-	if !p.StartTime.IsZero() && r.Timestamp.Before(p.StartTime) {
-		return false
-	}
-	if !p.EndTime.IsZero() && !r.Timestamp.Before(p.EndTime) {
-		return false
+	if len(p.TimeRanges) > 0 {
+		inAny := false
+		for _, tr := range p.TimeRanges {
+			if !r.Timestamp.Before(tr.Start) && r.Timestamp.Before(tr.End) {
+				inAny = true
+				break
+			}
+		}
+		if !inAny {
+			return false
+		}
+	} else {
+		if !p.StartTime.IsZero() && r.Timestamp.Before(p.StartTime) {
+			return false
+		}
+		if !p.EndTime.IsZero() && !r.Timestamp.Before(p.EndTime) {
+			return false
+		}
 	}
 	if p.ExternalCustomerID != "" && r.ExternalCustomerID != p.ExternalCustomerID {
 		return false
@@ -309,6 +323,30 @@ func distinctUniqueHashCount(records []*events.MeterUsage) int {
 // GetUsage / GetUsageMultiMeter
 // ---------------------------------------------------------------------------
 
+func (s *InMemoryMeterUsageStore) GetEarliestUsageTimestamp(_ context.Context, params *events.MeterUsageQueryParams) (*time.Time, error) {
+	// An empty scope silently matches every tenant here but matches nothing in
+	// real ClickHouse (BuildWhereClause always binds tenant/env) — either way
+	// the request is malformed, so fail loudly and let tests catch it.
+	if params == nil || params.TenantID == "" || params.EnvironmentID == "" {
+		return nil, ierr.NewError("tenant_id and environment_id are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var earliest *time.Time
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		if earliest == nil || r.Timestamp.Before(*earliest) {
+			ts := r.Timestamp
+			earliest = &ts
+		}
+	}
+	return earliest, nil
+}
+
 func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -450,7 +488,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		return aggregateScalar(recs, types.AggregationMax)
 	}
 
-	hasGroupBy := params.GroupByProperty != ""
+	dims := parseInMemoryGroupBy(params.GroupBy)
 
 	// Bucket records by window first.
 	byBucket := make(map[time.Time][]*events.MeterUsage)
@@ -460,45 +498,283 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 	}
 
 	type entry struct {
-		bucket time.Time
-		group  string
-		value  decimal.Decimal
+		bucket     time.Time
+		groupKey   string
+		value      decimal.Decimal
+		eventCount uint64
 	}
 	entries := make([]entry, 0)
 
-	if hasGroupBy {
+	if len(dims) > 0 {
+		// Build a deterministic per-(bucket, combo) entry. We don't surface the
+		// combo dim values on UsageResult — billing's CalculateCostFromUsageResults
+		// only reads Value, and per-row group identity isn't consumed downstream.
+		// groupKey is just used here for stable sort order within a bucket.
 		for bucket, recs := range byBucket {
-			byGroup := make(map[string][]*events.MeterUsage)
+			byCombo := make(map[string][]*events.MeterUsage)
 			for _, r := range recs {
-				gk := propertyValue(r.Properties, params.GroupByProperty)
-				byGroup[gk] = append(byGroup[gk], r)
+				var parts []string
+				for _, d := range dims {
+					if d.isSource {
+						parts = append(parts, "s="+r.Source)
+					} else {
+						parts = append(parts, d.propName+"="+propertyValue(r.Properties, d.propName))
+					}
+				}
+				k := strings.Join(parts, "|")
+				byCombo[k] = append(byCombo[k], r)
 			}
-			for gk, grecs := range byGroup {
-				entries = append(entries, entry{bucket: bucket, group: gk, value: aggFn(grecs)})
+			for k, crecs := range byCombo {
+				entries = append(entries, entry{
+					bucket:     bucket,
+					groupKey:   k,
+					value:      aggFn(crecs),
+					eventCount: uint64(distinctIDCount(crecs)),
+				})
 			}
 		}
 		sort.Slice(entries, func(i, j int) bool {
 			if !entries[i].bucket.Equal(entries[j].bucket) {
 				return entries[i].bucket.Before(entries[j].bucket)
 			}
-			return entries[i].group < entries[j].group
+			return entries[i].groupKey < entries[j].groupKey
 		})
 	} else {
 		for bucket, recs := range byBucket {
-			entries = append(entries, entry{bucket: bucket, value: aggFn(recs)})
+			entries = append(entries, entry{
+				bucket:     bucket,
+				value:      aggFn(recs),
+				eventCount: uint64(distinctIDCount(recs)),
+			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].bucket.Before(entries[j].bucket) })
 	}
 
 	for _, e := range entries {
 		result.Value = result.Value.Add(e.value)
-		ur := events.UsageResult{WindowSize: e.bucket, Value: e.value}
-		if hasGroupBy {
-			ur.GroupKey = e.group
-		}
-		result.Results = append(result.Results, ur)
+		result.EventCount += e.eventCount
+		// Legacy group_key is intentionally dropped; per-group rows still
+		// carry their own Value, which is what billing consumes.
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: e.bucket,
+			Value:      e.value,
+			EventCount: e.eventCount,
+		})
 	}
 	return result, nil
+}
+
+// GetUsageForBucketedMetersDetailed mirrors the SQL pattern:
+//   - aggregate per (combo) → one MeterUsageDetailedResult per combo
+//     with TotalUsage / EventCount / MaxUsage already rolled up across buckets,
+//   - then per-bucket Points filtered to that combo.
+//
+// When GroupBy is empty, returns nil so the caller falls back to
+// GetUsageForBucketedMeters.
+func (s *InMemoryMeterUsageStore) GetUsageForBucketedMetersDetailed(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageDetailedResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dims := parseInMemoryGroupBy(params.GroupBy)
+	if len(dims) == 0 {
+		return nil, nil
+	}
+
+	matched := make([]*events.MeterUsage, 0)
+	for _, r := range s.records {
+		if matchRecord(r, params) {
+			matched = append(matched, r)
+		}
+	}
+
+	aggFn := func(recs []*events.MeterUsage) decimal.Decimal {
+		if params.AggregationType == types.AggregationSum {
+			return aggregateScalar(recs, types.AggregationSum)
+		}
+		return aggregateScalar(recs, types.AggregationMax)
+	}
+
+	// Group matched records by (bucket, combo) — the inner CTE in SQL.
+	type comboKey struct {
+		source string
+		props  string
+	}
+	dimCombo := func(r *events.MeterUsage) (comboKey, string, map[string]string) {
+		ck := comboKey{}
+		propMap := make(map[string]string)
+		var parts []string
+		for _, d := range dims {
+			if d.isSource {
+				ck.source = r.Source
+			} else {
+				v := propertyValue(r.Properties, d.propName)
+				propMap[d.propName] = v
+				parts = append(parts, d.propName+"="+v)
+			}
+		}
+		ck.props = strings.Join(parts, "|")
+		return ck, ck.source, propMap
+	}
+
+	type bucketCell struct {
+		value      decimal.Decimal
+		eventCount uint64
+	}
+	type comboState struct {
+		source string
+		props  map[string]string
+		// per-bucket cells in chronological order
+		buckets []time.Time
+		cells   map[time.Time]*bucketCell
+		total   decimal.Decimal
+		eventTC uint64
+	}
+	combos := make(map[comboKey]*comboState)
+
+	byBucket := make(map[time.Time][]*events.MeterUsage)
+	for _, r := range matched {
+		bk := truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor)
+		byBucket[bk] = append(byBucket[bk], r)
+	}
+	for bucket, recs := range byBucket {
+		byComboBucket := make(map[comboKey][]*events.MeterUsage)
+		for _, r := range recs {
+			ck, _, _ := dimCombo(r)
+			byComboBucket[ck] = append(byComboBucket[ck], r)
+		}
+		for ck, crecs := range byComboBucket {
+			cs, ok := combos[ck]
+			if !ok {
+				_, src, props := dimCombo(crecs[0])
+				cs = &comboState{
+					source: src,
+					props:  props,
+					cells:  make(map[time.Time]*bucketCell),
+				}
+				combos[ck] = cs
+			}
+			v := aggFn(crecs)
+			ec := uint64(distinctIDCount(crecs))
+			cs.cells[bucket] = &bucketCell{value: v, eventCount: ec}
+			cs.buckets = append(cs.buckets, bucket)
+			cs.total = cs.total.Add(v)
+			cs.eventTC += ec
+		}
+	}
+
+	// Materialize sorted by source then props, then per-combo buckets sorted by time.
+	keys := make([]comboKey, 0, len(combos))
+	for k := range combos {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].source != keys[j].source {
+			return keys[i].source < keys[j].source
+		}
+		return keys[i].props < keys[j].props
+	})
+
+	results := make([]*events.MeterUsageDetailedResult, 0, len(keys))
+	for _, k := range keys {
+		cs := combos[k]
+		// cs.props keeps empty values so the combo key groups events that
+		// share missing-property semantics; the result Properties map must
+		// drop empties to match the SQL repo's scan behavior and feature-side
+		// parity.
+		visibleProps := make(map[string]string, len(cs.props))
+		for pk, pv := range cs.props {
+			if pv != "" {
+				visibleProps[pk] = pv
+			}
+		}
+		res := &events.MeterUsageDetailedResult{
+			MeterID:    params.MeterID,
+			Source:     cs.source,
+			Properties: visibleProps,
+			TotalUsage: cs.total,
+			EventCount: cs.eventTC,
+		}
+		if params.AggregationType != types.AggregationSum {
+			res.MaxUsage = cs.total
+		}
+		if params.WindowSize != "" {
+			sort.Slice(cs.buckets, func(i, j int) bool { return cs.buckets[i].Before(cs.buckets[j]) })
+			pts := make([]events.MeterUsageDetailedPoint, 0, len(cs.buckets))
+			for _, bk := range cs.buckets {
+				cell := cs.cells[bk]
+				p := events.MeterUsageDetailedPoint{
+					WindowStart: bk,
+					TotalUsage:  cell.value,
+					EventCount:  cell.eventCount,
+				}
+				if params.AggregationType != types.AggregationSum {
+					p.MaxUsage = cell.value
+				}
+				pts = append(pts, p)
+			}
+			res.Points = pts
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+// inMemoryGroupByDim is the in-memory mirror of the SQL builder's
+// BucketedGroupByDim. Defined locally to avoid the testutil → clickhouse
+// repo import that would create a cycle.
+type inMemoryGroupByDim struct {
+	isSource bool
+	propName string
+}
+
+// parseInMemoryGroupBy mirrors clickhouse.bucketedGroupByDims: honors
+// "source" and "properties.X" entries, drops anything else (feature_id,
+// meter_id, unrecognized values), dedupes.
+func parseInMemoryGroupBy(groupBy []string) []inMemoryGroupByDim {
+	if len(groupBy) == 0 {
+		return nil
+	}
+	out := make([]inMemoryGroupByDim, 0, len(groupBy))
+	seen := make(map[string]struct{}, len(groupBy))
+	for _, g := range groupBy {
+		switch {
+		case g == "source":
+			if _, ok := seen["source"]; ok {
+				continue
+			}
+			seen["source"] = struct{}{}
+			out = append(out, inMemoryGroupByDim{isSource: true})
+		case strings.HasPrefix(g, "properties."):
+			propName := strings.TrimPrefix(g, "properties.")
+			if propName == "" {
+				continue
+			}
+			key := "p:" + propName
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, inMemoryGroupByDim{propName: propName})
+		}
+	}
+	return out
+}
+
+// propsString produces a deterministic serialization for entry.props sorting.
+func propsString(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"="+m[k])
+	}
+	return strings.Join(out, "|")
 }
 
 // ---------------------------------------------------------------------------
@@ -522,6 +798,27 @@ func (s *InMemoryMeterUsageStore) GetDistinctMeterIDs(_ context.Context, params 
 	}
 	sort.Strings(ids)
 	return ids, nil
+}
+
+func (s *InMemoryMeterUsageStore) GetSourcesForBucketedMeter(_ context.Context, params *events.MeterUsageQueryParams) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		if r.Source != "" {
+			seen[r.Source] = struct{}{}
+		}
+	}
+	sources := make([]string, 0, len(seen))
+	for src := range seen {
+		sources = append(sources, src)
+	}
+	sort.Strings(sources)
+	return sources, nil
 }
 
 // ---------------------------------------------------------------------------

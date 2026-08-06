@@ -35,7 +35,7 @@ type ProrationParams struct {
 	ScheduleType      types.ScheduleType      // When the change should take effect
 	ScheduleDate      time.Time               // Specific date for scheduled changes (if applicable)
 	HasScheduleDate   bool                    // Whether ScheduleDate is set
-	CustomerTimezone  string                  // Timezone of the customer
+	Timezone  string                  // Timezone of the customer
 
 	// Handling Multiple Changes / Credits
 	OriginalAmountPaid    decimal.Decimal         `swaggertype:"string"` // Amount originally paid for the item(s) being changed in this period

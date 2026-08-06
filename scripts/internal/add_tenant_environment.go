@@ -42,9 +42,9 @@ func newAddEnvironmentScript() (*addEnvironmentScript, error) {
 
 	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	repoParams := repository.RepositoryParams{
-		EntClient: client,
-		Logger:    log,
-		Cache:     cache.GetInMemoryCache(),
+		EntClient:     client,
+		Logger:        log,
+		InMemoryCache: cache.GetInMemoryCache(),
 	}
 
 	return &addEnvironmentScript{

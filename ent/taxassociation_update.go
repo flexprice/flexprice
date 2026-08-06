@@ -129,6 +129,46 @@ func (tau *TaxAssociationUpdate) ClearMetadata() *TaxAssociationUpdate {
 	return tau
 }
 
+// SetStartDate sets the "start_date" field.
+func (tau *TaxAssociationUpdate) SetStartDate(t time.Time) *TaxAssociationUpdate {
+	tau.mutation.SetStartDate(t)
+	return tau
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (tau *TaxAssociationUpdate) SetNillableStartDate(t *time.Time) *TaxAssociationUpdate {
+	if t != nil {
+		tau.SetStartDate(*t)
+	}
+	return tau
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (tau *TaxAssociationUpdate) ClearStartDate() *TaxAssociationUpdate {
+	tau.mutation.ClearStartDate()
+	return tau
+}
+
+// SetEndDate sets the "end_date" field.
+func (tau *TaxAssociationUpdate) SetEndDate(t time.Time) *TaxAssociationUpdate {
+	tau.mutation.SetEndDate(t)
+	return tau
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (tau *TaxAssociationUpdate) SetNillableEndDate(t *time.Time) *TaxAssociationUpdate {
+	if t != nil {
+		tau.SetEndDate(*t)
+	}
+	return tau
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (tau *TaxAssociationUpdate) ClearEndDate() *TaxAssociationUpdate {
+	tau.mutation.ClearEndDate()
+	return tau
+}
+
 // Mutation returns the TaxAssociationMutation object of the builder.
 func (tau *TaxAssociationUpdate) Mutation() *TaxAssociationMutation {
 	return tau.mutation
@@ -230,6 +270,18 @@ func (tau *TaxAssociationUpdate) sqlSave(ctx context.Context) (n int, err error)
 	}
 	if tau.mutation.MetadataCleared() {
 		_spec.ClearField(taxassociation.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := tau.mutation.StartDate(); ok {
+		_spec.SetField(taxassociation.FieldStartDate, field.TypeTime, value)
+	}
+	if tau.mutation.StartDateCleared() {
+		_spec.ClearField(taxassociation.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := tau.mutation.EndDate(); ok {
+		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)
+	}
+	if tau.mutation.EndDateCleared() {
+		_spec.ClearField(taxassociation.FieldEndDate, field.TypeTime)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, tau.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -349,6 +401,46 @@ func (tauo *TaxAssociationUpdateOne) SetMetadata(m map[string]string) *TaxAssoci
 // ClearMetadata clears the value of the "metadata" field.
 func (tauo *TaxAssociationUpdateOne) ClearMetadata() *TaxAssociationUpdateOne {
 	tauo.mutation.ClearMetadata()
+	return tauo
+}
+
+// SetStartDate sets the "start_date" field.
+func (tauo *TaxAssociationUpdateOne) SetStartDate(t time.Time) *TaxAssociationUpdateOne {
+	tauo.mutation.SetStartDate(t)
+	return tauo
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (tauo *TaxAssociationUpdateOne) SetNillableStartDate(t *time.Time) *TaxAssociationUpdateOne {
+	if t != nil {
+		tauo.SetStartDate(*t)
+	}
+	return tauo
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (tauo *TaxAssociationUpdateOne) ClearStartDate() *TaxAssociationUpdateOne {
+	tauo.mutation.ClearStartDate()
+	return tauo
+}
+
+// SetEndDate sets the "end_date" field.
+func (tauo *TaxAssociationUpdateOne) SetEndDate(t time.Time) *TaxAssociationUpdateOne {
+	tauo.mutation.SetEndDate(t)
+	return tauo
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (tauo *TaxAssociationUpdateOne) SetNillableEndDate(t *time.Time) *TaxAssociationUpdateOne {
+	if t != nil {
+		tauo.SetEndDate(*t)
+	}
+	return tauo
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (tauo *TaxAssociationUpdateOne) ClearEndDate() *TaxAssociationUpdateOne {
+	tauo.mutation.ClearEndDate()
 	return tauo
 }
 
@@ -483,6 +575,18 @@ func (tauo *TaxAssociationUpdateOne) sqlSave(ctx context.Context) (_node *TaxAss
 	}
 	if tauo.mutation.MetadataCleared() {
 		_spec.ClearField(taxassociation.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := tauo.mutation.StartDate(); ok {
+		_spec.SetField(taxassociation.FieldStartDate, field.TypeTime, value)
+	}
+	if tauo.mutation.StartDateCleared() {
+		_spec.ClearField(taxassociation.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := tauo.mutation.EndDate(); ok {
+		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)
+	}
+	if tauo.mutation.EndDateCleared() {
+		_spec.ClearField(taxassociation.FieldEndDate, field.TypeTime)
 	}
 	_node = &TaxAssociation{config: tauo.config}
 	_spec.Assign = _node.assignValues

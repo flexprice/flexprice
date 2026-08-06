@@ -161,8 +161,42 @@ func (r *SanityRunner) runCleanupSteps(ctx context.Context) {
 		})
 	}
 
-	// ── 10. Delete tax rate ──────────────────────────────────────────────
+	// ── 10. Delete tax associations, then tax rate ───────────────────────
+	// Tax rates cannot be deleted while associations still reference them.
 	if r.taxRateID != "" {
+		r.run("Cleanup: List Tax Associations", "TaxAssociations.ListTaxAssociations", false, func() error {
+			taxRateID := r.taxRateID
+			listResp, err := r.client.TaxAssociations.ListTaxAssociations(ctx, nil, nil, nil, &taxRateID)
+			if err != nil {
+				return fmt.Errorf("list tax associations: %w", err)
+			}
+			r.taxAssociationIDs = nil
+			if listResp == nil || listResp.ListTaxAssociationsResponse == nil {
+				r.lastResult().Details = "no associations found"
+				return nil
+			}
+
+			for _, assoc := range listResp.ListTaxAssociationsResponse.Items {
+				if assoc.ID != nil && *assoc.ID != "" {
+					r.taxAssociationIDs = append(r.taxAssociationIDs, *assoc.ID)
+				}
+			}
+			r.lastResult().Details = fmt.Sprintf("found %d association(s)", len(r.taxAssociationIDs))
+			return nil
+		})
+
+		for _, assocID := range r.taxAssociationIDs {
+			associationID := assocID
+			r.run("Cleanup: Delete Tax Association", "TaxAssociations.DeleteTaxAssociation", false, func() error {
+				_, err := r.client.TaxAssociations.DeleteTaxAssociation(ctx, associationID)
+				if err != nil {
+					return fmt.Errorf("delete tax association %s: %w", associationID, err)
+				}
+				r.lastResult().Details = fmt.Sprintf("association_id=%s, deleted", associationID)
+				return nil
+			})
+		}
+
 		r.run("Cleanup: Delete Tax Rate", "TaxRates.DeleteTaxRate", false, func() error {
 			_, err := r.client.TaxRates.DeleteTaxRate(ctx, r.taxRateID)
 			if err != nil {

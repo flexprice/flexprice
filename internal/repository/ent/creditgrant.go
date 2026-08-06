@@ -16,18 +16,18 @@ import (
 )
 
 type creditGrantRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CreditGrantQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CreditGrantQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCreditGrantRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCreditGrant.Repository {
+func NewCreditGrantRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCreditGrant.Repository {
 	return &creditGrantRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CreditGrantQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CreditGrantQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -59,6 +59,7 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetCadence(cg.Cadence).
 		SetNillablePlanID(cg.PlanID).
 		SetNillableSubscriptionID(cg.SubscriptionID).
+		SetNillableAddonID(cg.AddonID).
 		SetNillablePeriod(cg.Period).
 		SetNillablePeriodCount(cg.PeriodCount).
 		SetExpirationType(cg.ExpirationType).
@@ -146,6 +147,7 @@ func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*
 			SetCadence(cg.Cadence).
 			SetNillablePlanID(cg.PlanID).
 			SetNillableSubscriptionID(cg.SubscriptionID).
+			SetNillableAddonID(cg.AddonID).
 			SetNillablePeriod(cg.Period).
 			SetNillablePeriodCount(cg.PeriodCount).
 			SetExpirationType(cg.ExpirationType).
@@ -506,6 +508,31 @@ func (r *creditGrantRepository) GetBySubscription(ctx context.Context, subscript
 	return r.List(ctx, filter)
 }
 
+// GetByAddon retrieves all ADDON-scoped credit grants for the given addon ID
+func (r *creditGrantRepository) GetByAddon(ctx context.Context, addonID string) ([]*domainCreditGrant.CreditGrant, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "creditgrant", "list_by_addon_id", map[string]interface{}{
+		"addon_id":  addonID,
+		"tenant_id": types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if addonID == "" {
+		return []*domainCreditGrant.CreditGrant{}, nil
+	}
+
+	r.log.Debug(ctx, "listing credit grants by addon ID", "addon_id", addonID)
+
+	// Create a filter with addon ID
+	filter := types.NewNoLimitCreditGrantFilter()
+	filter.AddonIDs = []string{addonID}
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.Scope = lo.ToPtr(types.CreditGrantScopeAddon)
+
+	// Use the existing List method
+	return r.List(ctx, filter)
+}
+
 // CreditGrantQuery type alias for better readability
 type CreditGrantQuery = *ent.CreditGrantQuery
 
@@ -526,7 +553,10 @@ func (o CreditGrantQueryOptions) ApplyEnvironmentFilter(ctx context.Context, que
 
 func (o CreditGrantQueryOptions) ApplyStatusFilter(query CreditGrantQuery, status string) CreditGrantQuery {
 	if status == "" {
-		return query.Where(creditgrant.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditgrant.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(creditgrant.Status(status))
 }
@@ -570,6 +600,11 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		query = query.Where(creditgrant.SubscriptionIDIn(f.SubscriptionIDs...))
 	}
 
+	// Apply addon IDs filter if specified
+	if len(f.AddonIDs) > 0 {
+		query = query.Where(creditgrant.AddonIDIn(f.AddonIDs...))
+	}
+
 	// Apply scope filter if specified
 	if f.Scope != nil {
 		query = query.Where(creditgrant.Scope(lo.FromPtr(f.Scope)))
@@ -594,43 +629,39 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *creditGrantRepository) SetCache(ctx context.Context, creditGrant *domainCreditGrant.CreditGrant) {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "set", map[string]interface{}{
 		"creditgrant_id": creditGrant.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, creditGrant.ID)
-	r.cache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, creditGrant.ID)
+	r.redisCache.Set(ctx, cacheKey, creditGrant, cache.ExpiryDefaultRedis)
 }
 
-func (r *creditGrantRepository) GetCache(ctx context.Context, key string) *domainCreditGrant.CreditGrant {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
-		"creditgrant_id": key,
+func (r *creditGrantRepository) GetCache(ctx context.Context, id string) *domainCreditGrant.CreditGrant {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "get", map[string]interface{}{
+		"creditgrant_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCreditGrant.CreditGrant)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cg, ok := cache.UnmarshalCacheValue[domainCreditGrant.CreditGrant](value)
+	if !ok {
+		return nil
+	}
+	return cg
 }
 
 func (r *creditGrantRepository) DeleteCache(ctx context.Context, creditGrantID string) {
-	span := cache.StartCacheSpan(ctx, "creditgrant", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditgrant", "delete", map[string]interface{}{
 		"creditgrant_id": creditGrantID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	// Using a constant for cache prefix
-	cacheKey := cache.GenerateKey("credit_grant", tenantID, environmentID, creditGrantID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditGrant, creditGrantID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

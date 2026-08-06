@@ -1,4 +1,4 @@
-CREATE TABLE flexprice.raw_events
+CREATE TABLE IF NOT EXISTS flexprice.raw_events
 (
     `id` String,
     `tenant_id` String,

@@ -3,7 +3,9 @@ package integration
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -12,11 +14,16 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
+	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
+	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
@@ -25,6 +32,7 @@ import (
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	paddlewebhook "github.com/flexprice/flexprice/internal/integration/paddle/webhook"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
@@ -32,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	"github.com/flexprice/flexprice/internal/integration/tabs"
 	"github.com/flexprice/flexprice/internal/integration/whop"
 	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
@@ -40,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Factory manages different payment integration providers and storage providers
@@ -49,14 +59,17 @@ type Factory struct {
 	connectionRepo               connection.Repository
 	customerRepo                 customer.Repository
 	subscriptionRepo             subscription.Repository
+	planRepo                     plan.Repository
 	invoiceRepo                  invoice.Repository
 	paymentRepo                  payment.Repository
+	paymentMethodRepo            paymentmethod.Repository
 	priceRepo                    price.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	entityIntegrationMappingSvc  interfaces.EntityIntegrationMappingService
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
+	locker                       cache.Locker
 
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
@@ -64,6 +77,7 @@ type Factory struct {
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
+	lifecycle      *payments.PaymentLifecycle
 }
 
 // NewFactory creates a new integration factory
@@ -73,14 +87,17 @@ func NewFactory(
 	connectionRepo connection.Repository,
 	customerRepo customer.Repository,
 	subscriptionRepo subscription.Repository,
+	planRepo plan.Repository,
 	invoiceRepo invoice.Repository,
 	paymentRepo payment.Repository,
+	paymentMethodRepo paymentmethod.Repository,
 	priceRepo price.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	meterRepo meter.Repository,
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
 	temporalSvc temporalservice.TemporalService,
+	locker cache.Locker,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -88,14 +105,17 @@ func NewFactory(
 		connectionRepo:               connectionRepo,
 		customerRepo:                 customerRepo,
 		subscriptionRepo:             subscriptionRepo,
+		planRepo:                     planRepo,
 		invoiceRepo:                  invoiceRepo,
 		paymentRepo:                  paymentRepo,
+		paymentMethodRepo:            paymentMethodRepo,
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		entityIntegrationMappingSvc:  NewEntityIntegrationMappingAdapter(entityIntegrationMappingRepo),
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
+		locker:                       locker,
 		temporalSvc:                  temporalSvc,
 	}
 }
@@ -106,6 +126,7 @@ func NewFactory(
 func (f *Factory) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
 	f.paymentService = paymentService
 	f.invoiceService = invoiceService
+	f.lifecycle = payments.NewPaymentLifecycle(paymentService, invoiceService, f.logger)
 }
 
 // GetStripeIntegration returns a complete Stripe integration setup
@@ -122,6 +143,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		stripeClient,
 		f.customerRepo,
 		f.entityIntegrationMappingRepo,
+		f.locker,
 		f.logger,
 	)
 
@@ -255,24 +277,26 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.logger,
 	)
 
-	// Create invoice sync service
-	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
-		razorpayClient,
-		customerSvc.(*razorpay.CustomerService),
-		f.invoiceRepo,
-		f.entityIntegrationMappingRepo,
-		f.logger,
-	)
-
-	// Create payment service
+	// Pre-allocate so PaymentService and InvoiceSyncService share one pointer.
+	invoiceSyncSvc := &razorpay.InvoiceSyncService{}
 	paymentSvc := razorpay.NewPaymentService(
 		razorpayClient,
 		customerSvc,
 		invoiceSyncSvc,
+		f.locker,
 		f.logger,
 	)
+	*invoiceSyncSvc = *razorpay.NewInvoiceSyncService(
+		razorpayClient,
+		customerSvc.(*razorpay.CustomerService),
+		f.invoiceRepo,
+		f.paymentRepo,
+		f.entityIntegrationMappingRepo,
+		f.locker,
+		f.logger,
+		paymentSvc,
+	)
 
-	// Create webhook handler
 	webhookHandler := razorpaywebhook.NewHandler(
 		razorpayClient,
 		paymentSvc,
@@ -468,6 +492,7 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 	webhookHandler := paddlewebhook.NewHandler(
 		paymentSvc,
 		syncSvc,
+		f.subscriptionRepo,
 		f.logger,
 	)
 
@@ -567,15 +592,20 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		moyasarClient,
 		paymentSvc,
 		f.entityIntegrationMappingRepo,
+		f.paymentMethodRepo,
+		f.lifecycle,
 		f.logger,
 	)
 
 	return &MoyasarIntegration{
-		Client:         moyasarClient,
-		CustomerSvc:    customerSvc,
-		PaymentSvc:     paymentSvc,
-		InvoiceSyncSvc: invoiceSyncSvc,
-		WebhookHandler: webhookHandler,
+		Client:            moyasarClient,
+		CustomerSvc:       customerSvc,
+		PaymentSvc:        paymentSvc,
+		InvoiceSyncSvc:    invoiceSyncSvc,
+		WebhookHandler:    webhookHandler,
+		Lifecycle:         f.lifecycle,
+		PaymentMethodRepo: f.paymentMethodRepo,
+		Logger:            f.logger,
 	}, nil
 }
 
@@ -658,6 +688,64 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 	}, nil
 }
 
+// GetTabsIntegration returns a complete Tabs integration setup for the current environment. It
+// mirrors the other providers: it resolves the published Tabs connection and wires the invoice
+// sync service with the repositories it needs.
+func (f *Factory) GetTabsIntegration(ctx context.Context) (*TabsIntegration, error) {
+	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderTabs)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider tabs is not configured in this environment").
+			WithHint("Tabs connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+
+	client := tabs.NewClient(f.connectionRepo, f.encryptionService, f.logger)
+	invoiceSvc := tabs.NewInvoiceService(
+		client,
+		f.customerRepo,
+		f.subscriptionRepo,
+		f.planRepo,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.locker,
+		f.logger,
+	)
+
+	return &TabsIntegration{
+		Client:     client,
+		InvoiceSvc: invoiceSvc,
+	}, nil
+}
+
+// GetAWSMarketplaceIntegration returns an AWS Marketplace client. Unlike the other Get*Integration
+// methods, this does not resolve a connection from connectionRepo: it is called from
+// connection-creation verification, before the connection being verified is persisted, so there is
+// nothing yet to look up. The client itself is stateless and takes credentials per call.
+func (f *Factory) GetAWSMarketplaceIntegration(ctx context.Context) (*AWSMarketplaceIntegration, error) {
+	return &AWSMarketplaceIntegration{
+		Client: awsmarketplace.NewClient(f.config, f.logger),
+	}, nil
+}
+
+// GetGCPMarketplaceIntegration returns a GCP Marketplace client. See GetAWSMarketplaceIntegration
+// for why this does not resolve a connection from connectionRepo.
+func (f *Factory) GetGCPMarketplaceIntegration(ctx context.Context) (*GCPMarketplaceIntegration, error) {
+	return &GCPMarketplaceIntegration{
+		Client: gcpmarketplace.NewClient(f.config, f.logger),
+	}, nil
+}
+
+// GetAzureMarketplaceIntegration returns an Azure Marketplace client. See
+// GetAWSMarketplaceIntegration for why this does not resolve a connection from connectionRepo.
+func (f *Factory) GetAzureMarketplaceIntegration(ctx context.Context) (*AzureMarketplaceIntegration, error) {
+	return &AzureMarketplaceIntegration{
+		Client: azuremarketplace.NewClient(f.logger),
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (Base, error) {
 	switch providerType {
@@ -681,6 +769,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetZohoBooksIntegration(ctx)
 	case types.SecretProviderWhop:
 		return f.GetWhopIntegration(ctx)
+	case types.SecretProviderTabs:
+		return f.GetTabsIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -704,6 +794,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderMoyasar,
 		types.SecretProviderZohoBooks,
 		types.SecretProviderWhop,
+		types.SecretProviderTabs,
 	}
 }
 
@@ -814,15 +905,152 @@ func (n *NomodIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID s
 
 // MoyasarIntegration contains all Moyasar integration services
 type MoyasarIntegration struct {
-	Client         moyasar.MoyasarClient
-	CustomerSvc    moyasar.MoyasarCustomerService
-	PaymentSvc     *moyasar.PaymentService
-	InvoiceSyncSvc *moyasar.InvoiceSyncService
-	WebhookHandler *moyasarwebhook.Handler
+	Client            moyasar.MoyasarClient
+	CustomerSvc       moyasar.MoyasarCustomerService
+	PaymentSvc        *moyasar.PaymentService
+	InvoiceSyncSvc    *moyasar.InvoiceSyncService
+	WebhookHandler    *moyasarwebhook.Handler
+	Lifecycle         *payments.PaymentLifecycle
+	PaymentMethodRepo paymentmethod.Repository
+	Logger            *logger.Logger
 }
 
 func (m *MoyasarIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
 	return fmt.Errorf("invoice pull sync not supported for moyasar")
+}
+
+// VoidOrRefundAuthPayment attempts to void an AUTH payment in Moyasar.
+// If void fails, it falls back to a full refund.
+// Returns (voided, refunded, err).
+func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) (voided bool, refunded bool, err error) {
+	if m.Lifecycle == nil {
+		return false, false, ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
+	}
+
+	// Try void first
+	if _, voidErr := m.Client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
+		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		}); lifecycleErr != nil {
+			return false, false, lifecycleErr
+		}
+		return true, false, nil
+	} else {
+		// Log void failure so we can distinguish transient vs permanent failures in observability
+		m.Logger.Info(ctx, "void attempt failed, falling back to refund",
+			"flexprice_payment_id", flexpricePaymentID,
+			"gateway_payment_id", gatewayPaymentID,
+			"error", voidErr.Error(),
+		)
+	}
+
+	// Void failed — try full refund (amount=0 means full refund)
+	if _, refundErr := m.Client.RefundPayment(ctx, gatewayPaymentID, 0); refundErr != nil {
+		return false, false, refundErr
+	}
+	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   gatewayPaymentID,
+		RefundedAt:         time.Now().UTC(),
+	}); lifecycleErr != nil {
+		return false, false, lifecycleErr
+	}
+	return false, true, nil
+}
+
+// InitiateTokenization creates a Flexprice AUTH payment record for card tokenization.
+// Returns the flexprice_payment_id (anchor for webhook reconciliation) and the
+// Moyasar publishable key (needed by Moyasar.js on the frontend).
+func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerID string) (flexpricePaymentID string, publishableKey string, err error) {
+	if m.Lifecycle == nil {
+		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
+	}
+
+	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
+		DestinationID:     customerID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           string(types.SecretProviderMoyasar),
+		Amount:            decimal.NewFromInt(1),
+		Currency:          moyasar.DefaultCurrency,
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	config, err := m.Client.GetMoyasarConfig(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
+	return flexpricePaymentID, config.PublishableKey, nil
+}
+
+// ChargeInvoiceWithToken charges an invoice using the customer's default saved Moyasar token.
+// Returns (true, nil) if the charge was initiated, (false, nil) if no active token exists
+// (caller should fall through to invoice-link flow), or (false, err) on failure.
+func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoiceID, customerID string, amount decimal.Decimal, currency, moyasarInvoiceID string) (charged bool, err error) {
+	if m.Lifecycle == nil || m.PaymentMethodRepo == nil {
+		return false, ierr.NewError("lifecycle or payment method repo not initialised").Mark(ierr.ErrInternal)
+	}
+
+	gateway := string(types.SecretProviderMoyasar)
+	paymentMethod, err := m.PaymentMethodRepo.GetDefaultForCustomer(ctx, customerID, gateway)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil // No saved token — fall through to invoice-link flow
+		}
+		return false, err
+	}
+	if paymentMethod.PaymentMethodStatus != types.PaymentMethodStatusActive {
+		return false, nil // Token exists but not active — fall through
+	}
+
+	flexpricePaymentID, err := m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     invoiceID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           gateway,
+		Amount:            amount,
+		Currency:          currency,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	chargeResp, err := m.PaymentSvc.ChargeSavedPaymentMethod(
+		ctx,
+		customerID,
+		paymentMethod.GatewayMethodID,
+		amount,
+		currency,
+		"",
+		moyasarInvoiceID,
+		flexpricePaymentID,
+	)
+	if err != nil {
+		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   "",
+			FailedAt:           time.Now().UTC(),
+			ErrorMessage:       err.Error(),
+		}); failErr != nil {
+			m.Logger.Error(ctx, "failed to record payment failure after charge error",
+				"flexprice_payment_id", flexpricePaymentID,
+				"error", failErr,
+			)
+		}
+		return false, err
+	}
+
+	// Transition to PENDING now that Moyasar accepted the charge
+	if err := m.Lifecycle.ConfirmGatewayPayment(ctx, flexpricePaymentID, chargeResp.ID); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // WhopIntegration contains all Whop integration services
@@ -847,6 +1075,34 @@ type ZohoBooksIntegration struct {
 
 func (z *ZohoBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
 	return fmt.Errorf("invoice pull sync not supported for zohobooks")
+}
+
+// TabsIntegration contains all Tabs integration services
+type TabsIntegration struct {
+	Client     tabs.TabsClient
+	InvoiceSvc tabs.TabsInvoiceService
+}
+
+func (t *TabsIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for tabs")
+}
+
+// AWSMarketplaceIntegration contains the AWS Marketplace client. Unlike the other Integration
+// structs, this is not registered in GetIntegrationByProvider: marketplace connections are
+// consumed through the dedicated marketplace agreement/report flows, not the generic
+// invoice-pull-sync Base interface.
+type AWSMarketplaceIntegration struct {
+	Client awsmarketplace.Client
+}
+
+// GCPMarketplaceIntegration contains the GCP Marketplace client.
+type GCPMarketplaceIntegration struct {
+	Client gcpmarketplace.Client
+}
+
+// AzureMarketplaceIntegration contains the Azure Marketplace client.
+type AzureMarketplaceIntegration struct {
+	Client azuremarketplace.Client
 }
 
 // IntegrationProvider defines the interface for all integration providers
@@ -1036,6 +1292,15 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		}
 	}
 
+	// Check Tabs
+	tabsIntegration, err := f.GetTabsIntegration(ctx)
+	if err == nil {
+		tabsProvider := &TabsProvider{integration: tabsIntegration}
+		if tabsProvider.IsAvailable(ctx) {
+			providers = append(providers, tabsProvider)
+		}
+	}
+
 	return providers, nil
 }
 
@@ -1052,6 +1317,21 @@ func (p *WhopProvider) GetProviderType() types.SecretProvider {
 // IsAvailable checks if Whop integration is available
 func (p *WhopProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasWhopConnection(ctx)
+}
+
+// TabsProvider implements IntegrationProvider for Tabs
+type TabsProvider struct {
+	integration *TabsIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *TabsProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderTabs
+}
+
+// IsAvailable checks if Tabs integration is available
+func (p *TabsProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasTabsConnection(ctx)
 }
 
 // GetStorageProvider returns an S3 storage client for the given connection
@@ -1080,4 +1360,21 @@ func (f *Factory) GetS3Client(ctx context.Context) (*s3.Client, error) {
 		)
 	}
 	return f.s3Client, nil
+}
+
+// GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
+// Returns ErrValidation for providers that do not support hosted checkout.
+func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
+	switch provider {
+	case types.CheckoutPaymentProviderRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.CheckoutAdapter{Svc: i.PaymentSvc, CustomerSvc: customerSvc, InvoiceSvc: invoiceSvc}, nil
+	default:
+		return nil, ierr.NewError("payment provider not supported for checkout").
+			WithHintf("%s does not support hosted checkout sessions", provider).
+			Mark(ierr.ErrValidation)
+	}
 }

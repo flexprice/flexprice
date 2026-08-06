@@ -312,6 +312,26 @@ func (cu *CouponUpdate) ClearMetadata() *CouponUpdate {
 	return cu
 }
 
+// SetCouponCode sets the "coupon_code" field.
+func (cu *CouponUpdate) SetCouponCode(s string) *CouponUpdate {
+	cu.mutation.SetCouponCode(s)
+	return cu
+}
+
+// SetNillableCouponCode sets the "coupon_code" field if the given value is not nil.
+func (cu *CouponUpdate) SetNillableCouponCode(s *string) *CouponUpdate {
+	if s != nil {
+		cu.SetCouponCode(*s)
+	}
+	return cu
+}
+
+// ClearCouponCode clears the value of the "coupon_code" field.
+func (cu *CouponUpdate) ClearCouponCode() *CouponUpdate {
+	cu.mutation.ClearCouponCode()
+	return cu
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (cu *CouponUpdate) AddCouponAssociationIDs(ids ...string) *CouponUpdate {
 	cu.mutation.AddCouponAssociationIDs(ids...)
@@ -549,6 +569,12 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.MetadataCleared() {
 		_spec.ClearField(coupon.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := cu.mutation.CouponCode(); ok {
+		_spec.SetField(coupon.FieldCouponCode, field.TypeString, value)
+	}
+	if cu.mutation.CouponCodeCleared() {
+		_spec.ClearField(coupon.FieldCouponCode, field.TypeString)
 	}
 	if cu.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -941,6 +967,26 @@ func (cuo *CouponUpdateOne) ClearMetadata() *CouponUpdateOne {
 	return cuo
 }
 
+// SetCouponCode sets the "coupon_code" field.
+func (cuo *CouponUpdateOne) SetCouponCode(s string) *CouponUpdateOne {
+	cuo.mutation.SetCouponCode(s)
+	return cuo
+}
+
+// SetNillableCouponCode sets the "coupon_code" field if the given value is not nil.
+func (cuo *CouponUpdateOne) SetNillableCouponCode(s *string) *CouponUpdateOne {
+	if s != nil {
+		cuo.SetCouponCode(*s)
+	}
+	return cuo
+}
+
+// ClearCouponCode clears the value of the "coupon_code" field.
+func (cuo *CouponUpdateOne) ClearCouponCode() *CouponUpdateOne {
+	cuo.mutation.ClearCouponCode()
+	return cuo
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (cuo *CouponUpdateOne) AddCouponAssociationIDs(ids ...string) *CouponUpdateOne {
 	cuo.mutation.AddCouponAssociationIDs(ids...)
@@ -1208,6 +1254,12 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 	}
 	if cuo.mutation.MetadataCleared() {
 		_spec.ClearField(coupon.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := cuo.mutation.CouponCode(); ok {
+		_spec.SetField(coupon.FieldCouponCode, field.TypeString, value)
+	}
+	if cuo.mutation.CouponCodeCleared() {
+		_spec.ClearField(coupon.FieldCouponCode, field.TypeString)
 	}
 	if cuo.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

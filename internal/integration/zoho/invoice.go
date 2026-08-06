@@ -17,6 +17,10 @@ import (
 
 type ZohoInvoiceService interface {
 	SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceSyncRequest) (*ZohoInvoiceSyncResponse, error)
+	// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
+	// outstanding balance, bringing it to Paid. No-op if the invoice was never synced to
+	// Zoho, or if Zoho's balance is already zero.
+	MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error
 }
 
 type InvoiceService struct {
@@ -62,16 +66,21 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.EntityID = req.InvoiceID
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
 	if err == nil && len(mappings) > 0 {
 		zohoID := mappings[0].ProviderEntityID
 		status := "draft"
+		zohoInvNumber := ""
 		if mappings[0].Metadata != nil {
 			if s, ok := mappings[0].Metadata["zoho_status"].(string); ok && s != "" {
 				status = s
 			}
+			if invNumber, ok := mappings[0].Metadata["zoho_invoice_number"].(string); ok {
+				zohoInvNumber = invNumber
+			}
 		}
-		if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoID); werr != nil {
+		if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoID, zohoInvNumber); werr != nil {
 			s.logger.Info(ctx, "failed to update FlexPrice invoice metadata from existing Zoho mapping",
 				"error", werr,
 				"invoice_id", req.InvoiceID,
@@ -112,12 +121,6 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	//if flexInvoice.DueDate != nil {
-	//	reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
-	//}
-	if flexInvoice.InvoiceNumber != nil {
-		reqPayload.ReferenceNumber = *flexInvoice.InvoiceNumber
-	}
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
@@ -140,9 +143,10 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		EnvironmentID:    flexInvoice.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			"synced_at":         time.Now().UTC().Format(time.RFC3339),
-			"zoho_status":       zohoInv.Status,
-			"flexprice_invoice": req.InvoiceID,
+			"synced_at":           time.Now().UTC().Format(time.RFC3339),
+			"zoho_status":         zohoInv.Status,
+			"flexprice_invoice":   req.InvoiceID,
+			"zoho_invoice_number": zohoInv.InvoiceNumber,
 		},
 	}
 	mapping.TenantID = flexInvoice.TenantID
@@ -150,7 +154,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
-	if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoInv.InvoiceID); werr != nil {
+	if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoInv.InvoiceID, zohoInv.InvoiceNumber); werr != nil {
 		s.logger.Info(ctx, "failed to update FlexPrice invoice metadata from Zoho sync",
 			"error", werr,
 			"invoice_id", req.InvoiceID,
@@ -165,10 +169,70 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	}, nil
 }
 
+// MarkInvoicePaidInZoho records a Zoho customer payment for the invoice's current
+// outstanding balance, bringing it to Paid.
+//
+// Zoho's invoice total is intentionally tax-inclusive (items are synced as taxable —
+// see buildLineItems/EnsureItemsMapped) while FlexPrice's invoice.Total is not, so the
+// two totals routinely differ. Rather than track how much FlexPrice has separately
+// pushed to Zoho, this reads Zoho's own live balance and pays it off in full: a zero
+// balance means Zoho already considers the invoice settled (whether from a prior call
+// here, or from the existing inbound "Zoho invoice paid" webhook), so this is a no-op.
+func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInvoiceID string) error {
+	filter := types.NewEntityIntegrationMappingFilter()
+	filter.EntityType = types.IntegrationEntityTypeInvoice
+	filter.EntityID = flexpriceInvoiceID
+	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	mappings, err := s.mappingRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	if len(mappings) == 0 {
+		s.logger.Info(ctx, "no Zoho mapping for invoice, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID)
+		return nil
+	}
+	zohoInvoiceID := mappings[0].ProviderEntityID
+
+	zohoInv, err := s.client.GetInvoice(ctx, zohoInvoiceID)
+	if err != nil {
+		return err
+	}
+	if zohoInv == nil || !zohoInv.Balance.IsPositive() {
+		s.logger.Info(ctx, "Zoho invoice already has zero balance, skipping mark-paid",
+			"invoice_id", flexpriceInvoiceID,
+			"zoho_invoice_id", zohoInvoiceID)
+		return nil
+	}
+
+	_, err = s.client.CreateCustomerPayment(ctx, NewCustomerPaymentCreateRequest(
+		zohoInv.CustomerID,
+		"others",
+		zohoInv.Balance,
+		time.Now().UTC().Format("2006-01-02"),
+		[]CustomerPaymentInvoiceApply{
+			NewCustomerPaymentInvoiceApply(zohoInvoiceID, zohoInv.Balance),
+		},
+	))
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info(ctx, "marked Zoho invoice as paid",
+		"invoice_id", flexpriceInvoiceID,
+		"zoho_invoice_id", zohoInvoiceID,
+		"amount", zohoInv.Balance.String())
+	return nil
+}
+
 // writeZohoInvoiceMetadata stores the Zoho Books invoice id on the FlexPrice invoice metadata.
-func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *invoice.Invoice, zohoInvoiceID string) error {
+func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *invoice.Invoice, zohoInvoiceID, zohoInvoiceNumber string) error {
 	if flex == nil || zohoInvoiceID == "" {
 		return nil
+	}
+	if zohoInvoiceNumber != "" {
+		flex.InvoiceNumber = lo.ToPtr(zohoInvoiceNumber)
 	}
 	if flex.Metadata == nil {
 		flex.Metadata = make(types.Metadata)
@@ -185,9 +249,11 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	childCustomerIDs := make([]string, 0)
 	lineItemIDToChildCustomer := make(map[string]string)
 	for _, li := range flexInvoice.LineItems {
-		if li == nil || li.Amount.IsZero() {
+		// skip line items that are not syncable
+		if li == nil || li.Amount.IsZero() || li.PriceID == nil {
 			continue
 		}
+
 		inputs = append(inputs, ItemSyncInput{
 			PriceID: lo.FromPtr(li.PriceID),
 			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),

@@ -41,5 +41,5 @@ Algorithms and formulas: main PRD [§5.6](mixed-interval-billing.md#56-formulas-
 ## 4. Deliverables
 
 - **Date helpers** ([internal/types/date.go](internal/types/date.go)): IsLineItemIntervalEnd, LineItemIntervalDays, CalendarDaysBetween, EffectiveDaysForProration (add if missing). NextBillingDate / PreviousBillingDate unchanged.
-- **CalculateFixedCharges** ([internal/service/billing.go](internal/service/billing.go)): implement flow above; signature unchanged; backward compatible when interval equals invoice period (INCLUDE_FULL, existing behavior).
+- **CalculateFixedCharges** ([internal/ee/service/billing.go](internal/ee/service/billing.go)): implement flow above; signature unchanged; backward compatible when interval equals invoice period (INCLUDE_FULL, existing behavior).
 - **No other code changes** – no ClassifyLineItems edits, no new params on CalculateCharges/PrepareSubscriptionInvoiceRequest.

@@ -45,13 +45,14 @@ type PaymentEventData struct {
 
 // PaymentSourceData represents payment source information in webhook
 type PaymentSourceData struct {
-	Type        string `json:"type"`
-	Company     string `json:"company,omitempty"`      // Card company (Visa, Mastercard, etc.)
-	Name        string `json:"name,omitempty"`         // Cardholder name
-	Number      string `json:"number,omitempty"`       // Masked card number
-	GatewayID   string `json:"gateway_id,omitempty"`   // Gateway ID
-	ReferenceID string `json:"reference_id,omitempty"` // Reference ID
-	Message     string `json:"message,omitempty"`      // Response message
+	Type            string `json:"type"`
+	Company         string `json:"company,omitempty"`          // Card company (Visa, Mastercard, etc.)
+	Name            string `json:"name,omitempty"`             // Cardholder name
+	Number          string `json:"number,omitempty"`           // Masked card number
+	GatewayID       string `json:"gateway_id,omitempty"`       // Gateway ID
+	ReferenceNumber string `json:"reference_number,omitempty"` // Reference number
+	Token           string `json:"token,omitempty"`            // Moyasar token ID for saved card
+	Message         string `json:"message,omitempty"`          // Response message
 }
 
 // MoyasarPaymentMethod represents Moyasar payment method types

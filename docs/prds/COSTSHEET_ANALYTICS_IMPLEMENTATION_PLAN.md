@@ -75,7 +75,7 @@ Build a comprehensive analytics layer that provides cost-related metrics (Total 
 ### Existing Components
 
 #### 1. **Function Analytics API**
-- **Location**: `internal/service/feature_usage_tracking.go`
+- **Location**: `internal/ee/service/feature_usage_tracking.go`
 - **Key Methods**:
   - `GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest)`
 - **Data Source**: ClickHouse `events_processed` and `feature_usage` tables
@@ -118,7 +118,7 @@ Build a comprehensive analytics layer that provides cost-related metrics (Total 
 **Key Insight**: We must use raw events + billing services for all cost calculations to ensure accuracy and consistency with the existing billing system.
 
 #### 3. **Billing Services**
-- **Location**: `internal/service/billing.go`, `internal/service/price.go`
+- **Location**: `internal/ee/service/billing.go`, `internal/ee/service/price.go`
 - **Key Methods**:
   - `CalculateCost(ctx, price, quantity)` - Calculate cost for a price and quantity
   - `CalculateCostWithBreakup(ctx, price, quantity, round)` - Detailed cost breakdown
@@ -129,7 +129,7 @@ Build a comprehensive analytics layer that provides cost-related metrics (Total 
   - Tiered (Volume & Slab modes)
 
 #### 4. **Cost Sheet V2 Implementation** (Already in place)
-- **Location**: `internal/service/costsheet_v2.go`
+- **Location**: `internal/ee/service/costsheet_v2.go`
 - **Features**:
   - CRUD operations for Cost Sheets
   - Association with Prices (via `entity_type` = `COSTSHEET_V2`)
@@ -444,7 +444,7 @@ ORDER BY window_time ASC
 ### 3. Service Implementation
 
 ```go
-// Location: internal/service/costsheet_analytics.go
+// Location: internal/ee/service/costsheet_analytics.go
 
 type costsheetAnalyticsService struct {
     ServiceParams

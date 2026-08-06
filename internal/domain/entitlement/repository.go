@@ -21,6 +21,7 @@ type Repository interface {
 	DeleteBulk(ctx context.Context, ids []string) error
 
 	// Specific filter operations
+	ListByEntity(ctx context.Context, entityType types.EntitlementEntityType, entityID string) ([]*Entitlement, error)
 	ListByPlanIDs(ctx context.Context, planIDs []string) ([]*Entitlement, error)
 	ListByAddonIDs(ctx context.Context, addonIDs []string) ([]*Entitlement, error)
 	ListByFeatureIDs(ctx context.Context, featureIDs []string) ([]*Entitlement, error)

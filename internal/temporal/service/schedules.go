@@ -85,6 +85,42 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.PaddleInvoicePullSyncCronInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDMoyasarAuthPaymentSettlement,
+			Interval:  15 * time.Minute,
+			Workflow:  cronWorkflows.MoyasarAuthPaymentSettlementWorkflow,
+			Input:     struct{}{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDCheckoutSessionExpiry,
+			Interval:  30 * time.Minute,
+			Workflow:  cronWorkflows.CheckoutSessionExpiryWorkflow,
+			Input:     models.CheckoutSessionExpiryWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDMarketplaceUsageSnapshot,
+			Interval:  6 * time.Hour,
+			Workflow:  cronWorkflows.MarketplaceUsageSnapshotWorkflow,
+			Input:     models.MarketplaceUsageSnapshotWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDMarketplaceUsageReport,
+			Interval:  3 * time.Hour,
+			Workflow:  cronWorkflows.MarketplaceUsageReportWorkflow,
+			Input:     models.MarketplaceUsageReportWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDDailyDraftAndCompute,
+			Interval:  24 * time.Hour,
+			Offset:    2 * time.Hour, // fires at 02:00 UTC daily
+			Workflow:  cronWorkflows.DailyDraftAndComputeWorkflow,
+			Input:     models.DailyDraftAndComputeWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 
@@ -106,7 +142,10 @@ func ensureOneSchedule(ctx context.Context, tc client.TemporalClient, cfg types.
 
 	spec := sdkclient.ScheduleSpec{
 		Intervals: []sdkclient.ScheduleIntervalSpec{
-			{Every: cfg.Interval},
+			{
+				Every:  cfg.Interval,
+				Offset: cfg.Offset,
+			},
 		},
 	}
 

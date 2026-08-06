@@ -16,18 +16,18 @@ import (
 )
 
 type paymentRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts PaymentQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  PaymentQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPayment.Repository {
+func NewPaymentRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainPayment.Repository {
 	return &paymentRepository{
-		client:    client,
-		log:       log,
-		queryOpts: PaymentQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  PaymentQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -75,6 +75,7 @@ func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment
 		SetNillableSucceededAt(p.SucceededAt).
 		SetNillableFailedAt(p.FailedAt).
 		SetNillableRefundedAt(p.RefundedAt).
+		SetNillableVoidedAt(p.VoidedAt).
 		SetNillableErrorMessage(p.ErrorMessage).
 		SetNillableRecordedAt(p.RecordedAt).
 		SetTenantID(p.TenantID).
@@ -191,6 +192,54 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 	return domainPayment.FromEntList(payments), nil
 }
 
+// ListScopedByDestinationStatusGateway returns payments across all tenants and
+// environments matching the given destination type, payment status, and gateway.
+func (r *paymentRepository) ListScopedByDestinationStatusGateway(ctx context.Context, destinationType types.PaymentDestinationType, status types.PaymentStatus, gateway types.PaymentGatewayType) ([]domainPayment.ScopedPayment, error) {
+	span := StartRepositorySpan(ctx, "payment", "list_scoped_by_destination_status_gateway", map[string]interface{}{
+		"destination_type": destinationType,
+		"payment_status":   status,
+		"gateway":          gateway,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT id, tenant_id, environment_id, gateway_payment_id
+		FROM payments
+		WHERE destination_type = $1
+		  AND payment_status   = $2
+		  AND payment_gateway  = $3
+		  AND status           = 'published'
+		  AND gateway_payment_id <> ''`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query,
+		string(destinationType),
+		string(status),
+		string(gateway),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to list scoped payments").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result []domainPayment.ScopedPayment
+	for rows.Next() {
+		var row domainPayment.ScopedPayment
+		if err := rows.Scan(&row.PaymentID, &row.TenantID, &row.EnvironmentID, &row.GatewayPaymentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan scoped payment row").Mark(ierr.ErrDatabase)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate scoped payment rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
@@ -254,6 +303,7 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 		SetNillableSucceededAt(p.SucceededAt).
 		SetNillableFailedAt(p.FailedAt).
 		SetNillableRefundedAt(p.RefundedAt).
+		SetNillableVoidedAt(p.VoidedAt).
 		SetNillableErrorMessage(p.ErrorMessage).
 		Save(ctx)
 
@@ -619,7 +669,7 @@ func (o PaymentQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query P
 
 func (o PaymentQueryOptions) ApplyStatusFilter(query PaymentQuery, status string) PaymentQuery {
 	if status == "" {
-		return query.Where(payment.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(payment.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(payment.Status(status))
 }
@@ -712,40 +762,39 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 }
 
 func (r *paymentRepository) SetCache(ctx context.Context, payment *domainPayment.Payment) {
-	span := cache.StartCacheSpan(ctx, "payment", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "set", map[string]interface{}{
 		"payment_id": payment.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, payment.ID)
-	r.cache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, payment.ID)
+	r.redisCache.Set(ctx, cacheKey, payment, cache.ExpiryDefaultRedis)
 }
 
-func (r *paymentRepository) GetCache(ctx context.Context, key string) *domainPayment.Payment {
-	span := cache.StartCacheSpan(ctx, "payment", "get", map[string]interface{}{
-		"payment_id": key,
+func (r *paymentRepository) GetCache(ctx context.Context, id string) *domainPayment.Payment {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "get", map[string]interface{}{
+		"payment_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPayment.Payment)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPayment.Payment](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
-	span := cache.StartCacheSpan(ctx, "payment", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "payment", "delete", map[string]interface{}{
 		"payment_id": paymentID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPayment, tenantID, environmentID, paymentID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, paymentID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

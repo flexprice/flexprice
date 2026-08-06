@@ -61,6 +61,13 @@ func (CreditGrant) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		field.String("addon_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+
 		field.Other("credits", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -166,6 +173,10 @@ func (CreditGrant) Edges() []ent.Edge {
 			Ref("credit_grants").
 			Field("subscription_id").
 			Unique(),
+		edge.From("addon", Addon.Type).
+			Ref("credit_grants").
+			Field("addon_id").
+			Unique(),
 	}
 }
 
@@ -174,11 +185,15 @@ func (CreditGrant) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "status"),
 		index.Fields("tenant_id", "environment_id", "scope", "plan_id").
-			Annotations(entsql.IndexWhere("plan_id IS NOT NULL")).
+			Annotations(entsql.IndexWhere("(plan_id IS NOT NULL)")).
 			StorageKey("idx_plan_id_not_null"),
 
 		index.Fields("tenant_id", "environment_id", "scope", "subscription_id").
-			Annotations(entsql.IndexWhere("subscription_id IS NOT NULL")).
+			Annotations(entsql.IndexWhere("(subscription_id IS NOT NULL)")).
 			StorageKey("idx_subscription_id_not_null"),
+
+		index.Fields("tenant_id", "environment_id", "scope", "addon_id").
+			Annotations(entsql.IndexWhere("addon_id IS NOT NULL")).
+			StorageKey("idx_addon_id_not_null"),
 	}
 }

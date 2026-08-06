@@ -56,7 +56,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
 		"currency", req.Currency,
-		"environment_id", req.EnvironmentID,
 	)
 
 	// Get Stripe client and config
@@ -222,7 +221,6 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	metadata := map[string]string{
 		"flexprice_invoice_id": req.InvoiceID,
 		"customer_id":          req.CustomerID,
-		"environment_id":       req.EnvironmentID,
 		"payment_source":       "flexprice",
 		"payment_type":         "checkout",
 		"flexprice_payment_id": req.PaymentID,
@@ -1723,6 +1721,14 @@ func (s *PaymentService) VerifyWebhookSignature(payload []byte, signature string
 	return nil
 }
 
+func paymentIntentCustomerID(paymentIntent *stripe.PaymentIntent) string {
+	if paymentIntent == nil || paymentIntent.Customer == nil {
+		return ""
+	}
+
+	return paymentIntent.Customer.ID
+}
+
 // HandleFlexPriceCheckoutPayment handles payment intents from FlexPrice checkout sessions
 // paymentIntent is optional and can be nil
 func (s *PaymentService) HandleFlexPriceCheckoutPayment(
@@ -1785,8 +1791,8 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 								"error", err,
 								"payment_id", payment.ID,
 								"customer_id", invoiceResp.CustomerID,
-								"payment_method_id", paymentMethodID)
-							// Don't fail the entire webhook processing
+								"payment_method_id", paymentMethodID,
+								"payment_intent_customer_id", paymentIntentCustomerID(paymentIntent))
 						} else {
 							s.logger.Info(ctx, "successfully set default payment method",
 								"payment_id", payment.ID,

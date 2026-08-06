@@ -20,10 +20,10 @@ type featureRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts FeatureQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainFeature.Repository {
+func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainFeature.Repository {
 	return &featureRepository{
 		client:    client,
 		log:       log,
@@ -377,22 +377,63 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListByIDs retrieves features by their IDs
+// ListByIDs retrieves features by their IDs, serving whatever is already cached
+// and querying only the remainder.
 func (r *featureRepository) ListByIDs(ctx context.Context, featureIDs []string) ([]*domainFeature.Feature, error) {
 	if len(featureIDs) == 0 {
 		return []*domainFeature.Feature{}, nil
 	}
 
-	r.log.Debug(ctx, "listing features by IDs", "feature_ids", featureIDs)
+	span := StartRepositorySpan(ctx, "feature", "list_by_ids", map[string]interface{}{
+		"feature_ids_count": len(featureIDs),
+	})
+	defer FinishSpan(span)
 
-	// Create a filter with feature IDs
-	filter := &types.FeatureFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		FeatureIDs:  featureIDs,
+	result := make([]*domainFeature.Feature, 0, len(featureIDs))
+	missing := make([]string, 0, len(featureIDs))
+	seen := make(map[string]struct{}, len(featureIDs))
+
+	for _, id := range featureIDs {
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+
+		if cached := r.GetCache(ctx, id); cached != nil {
+			if cached.Status == types.StatusPublished || cached.Status == types.StatusArchived {
+				result = append(result, cached)
+			}
+			continue
+		}
+		missing = append(missing, id)
 	}
 
-	// Use the existing List method
-	return r.List(ctx, filter)
+	if len(missing) == 0 {
+		SetSpanSuccess(span)
+		return result, nil
+	}
+
+	filter := &types.FeatureFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		FeatureIDs:  missing,
+	}
+
+	fetched, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	for _, f := range fetched {
+		r.SetCache(ctx, f)
+		result = append(result, f)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
 }
 
 // GetByGroupIDs returns features that belong to any of the given group IDs.
@@ -484,7 +525,10 @@ func (o FeatureQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query F
 
 func (o FeatureQueryOptions) ApplyStatusFilter(query FeatureQuery, status string) FeatureQuery {
 	if status == "" {
-		return query.Where(feature.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(feature.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(feature.Status(status))
 }
@@ -593,40 +637,39 @@ func (o FeatureQueryOptions) GetFieldResolver(st string) (string, error) {
 }
 
 func (r *featureRepository) SetCache(ctx context.Context, feature *domainFeature.Feature) {
-	span := cache.StartCacheSpan(ctx, "feature", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "set", map[string]interface{}{
 		"feature_id": feature.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, feature.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, feature.ID)
 	r.cache.Set(ctx, cacheKey, feature, cache.ExpiryDefaultInMemory)
 }
 
-func (r *featureRepository) GetCache(ctx context.Context, key string) *domainFeature.Feature {
-	span := cache.StartCacheSpan(ctx, "feature", "get", map[string]interface{}{
-		"feature_id": key,
+func (r *featureRepository) GetCache(ctx context.Context, id string) *domainFeature.Feature {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "get", map[string]interface{}{
+		"feature_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainFeature.Feature)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	f, ok := cache.UnmarshalCacheValue[domainFeature.Feature](value)
+	if !ok {
+		return nil
+	}
+	return f
 }
 
 func (r *featureRepository) DeleteCache(ctx context.Context, featureID string) {
-	span := cache.StartCacheSpan(ctx, "feature", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "feature", "delete", map[string]interface{}{
 		"feature_id": featureID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixFeature, tenantID, environmentID, featureID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixFeature, featureID)
 	r.cache.Delete(ctx, cacheKey)
 }

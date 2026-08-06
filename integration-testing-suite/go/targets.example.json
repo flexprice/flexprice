@@ -5,6 +5,12 @@
     "api_key": "sk_replace_me"
   },
   {
+    "name": "preprod",
+    "api_host": "https://api-preprod.cloud.flexprice.io/v1",
+    "api_key": "sk_replace_me",
+    "insecure": true
+  },
+  {
     "name": "tirdad-prod",
     "api_host": "https://api.tirdad.ai/v1",
     "api_key": "sk_replace_me"

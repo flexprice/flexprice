@@ -44,6 +44,7 @@ coverage.html
 !.env.project
 !.env.vault
 !.env.local
+!cmd/e2eprobe/.env.example
 .flaskenv*
 .secrets
 .secrets.git
@@ -130,3 +131,4 @@ postman/
 
 # graphify
 graphify-out/
+graphify-out/server

@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -36,13 +34,17 @@ type PaymentService interface {
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
 	PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error)
+	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
+	// session without triggering payment lifecycle processing.
+	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
+	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 }
 
 // InvoiceService defines the interface for invoice operations
 type InvoiceService interface {
 	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
-	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (bool, error)
+	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	FinalizeInvoice(ctx context.Context, id string) error
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
@@ -61,7 +63,6 @@ type PlanService interface {
 	ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error)
 	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
 	SyncPlanPricesV2(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
-	ReprocessEventsForMissingPairs(ctx context.Context, missingPairs []planpricesync.PlanLineItemCreationDelta) error
 }
 
 type EntityIntegrationMappingService interface {
@@ -71,12 +72,19 @@ type EntityIntegrationMappingService interface {
 	UpdateEntityIntegrationMapping(ctx context.Context, id string, req dto.UpdateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
 	DeleteEntityIntegrationMapping(ctx context.Context, id string) error
 	LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error)
+	DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.SuccessResponse, error)
 }
 
 // RevenueAnalyticsService defines the interface for revenue analytics operations
 type RevenueAnalyticsService interface {
 	// GetDetailedCostAnalytics retrieves detailed cost analytics with derived metrics
 	GetDetailedCostAnalytics(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
+}
+
+// DraftAndComputeOptions configures draft-and-compute workflows.
+type DraftAndComputeOptions struct {
+	// SkipIfAlreadyInvoiced skips finalized current periods.
+	SkipIfAlreadyInvoiced bool
 }
 
 type SubscriptionService interface {
@@ -88,6 +96,7 @@ type SubscriptionService interface {
 	ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error
 	HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
+	GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error)
 
 	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 	UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error)
@@ -104,8 +113,7 @@ type SubscriptionService interface {
 
 	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*dto.PriceResponse, error)
 
-	// Addon management for subscriptions
-	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
+	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
 
 	// Line item management
@@ -123,13 +131,19 @@ type SubscriptionService interface {
 	// set and runs auto invoice threshold billing (mid-period invoices when usage crosses that threshold).
 	ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error)
 
-	// Feature usage tracking
-	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
-
 	// Meter usage tracking (reads from meter_usage table)
 	GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
 
+	// GetMeterUsageForSubscription is the data-fed variant of
+	// GetMeterUsageBySubscription: the caller supplies the subscription so no
+	// extra DB fetch happens for it.
+	GetMeterUsageForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
 	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
+
+	GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*dto.EntitlementResponse, error)
+
+	GetAggregatedSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 
 	// List all tenant subscriptions
@@ -152,6 +166,9 @@ type SubscriptionService interface {
 	// TriggerSubscriptionDraftAndComputeWorkflow creates an idempotent draft for the current period and runs compute via Temporal (invoice task queue).
 	TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
+	// TriggerSubscriptionDraftAndComputeWorkflowWithOptions starts a configurable workflow.
+	TriggerSubscriptionDraftAndComputeWorkflowWithOptions(ctx context.Context, subscriptionID string, opts DraftAndComputeOptions) (*dto.TriggerSubscriptionWorkflowResponse, error)
+
 	// Cron methods
 
 	// Calculate Billing Periods for the subscription
@@ -165,6 +182,13 @@ type SubscriptionService interface {
 
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
+
+	// TerminateSubscriptionResources terminates line items, addon associations, and credit
+	// grants for a subscription as of req.EffectiveDate. Called eagerly by CancelSubscription for
+	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and
+	// the Temporal CheckCancellationActivity when a previously scheduled cancellation fires, so
+	// resources are terminated exactly once, at the point cancellation actually takes effect.
+	TerminateSubscriptionResources(ctx context.Context, req dto.TerminateSubscriptionResourcesRequest) error
 
 	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
 	// Used by Temporal activities and other callers that need to fire subscription lifecycle events.
@@ -200,6 +224,27 @@ type CreditAdjustmentService interface {
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
 }
 
+type CheckoutSessionService interface {
+	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
+	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
+	Delete(ctx context.Context, id string) error
+	// CleanupCheckoutSession fetches the session by ID, archives all fulfillment entities
+	// (subscription, invoice, payment), and marks the session failed or expired.
+	// Pass reason=nil to mark as expired; pass a non-nil error to mark as failed.
+	CleanupCheckoutSession(ctx context.Context, sessionID string, reason error) error
+	// CleanupAllExpiredSessions finds all active sessions whose ExpiresAt is before
+	// effectiveDate (defaults to now) and archives them in batches of 1000.
+	// Returns total/succeeded/failed counts.
+	CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error)
+	// CompleteCheckoutSession activates the subscription, finalizes the invoice, and marks
+	// the payment succeeded. Called by gateway webhook handlers after payment confirmation.
+	CompleteCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) error
+	// StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
+	// fulfills payment + provider link, and publishes checkout.session.initiated.
+	StartPayFirstCheckoutSession(ctx context.Context, req *dto.PayFirstCheckoutRequest) (*dto.CheckoutSessionResponse, error)
+}
+
 type ServiceDependencies struct {
 	CustomerService                 CustomerService
 	PaymentService                  PaymentService
@@ -209,5 +254,6 @@ type ServiceDependencies struct {
 	EntityIntegrationMappingService EntityIntegrationMappingService
 	PriceUnitService                PriceUnitService
 	CreditAdjustmentService         CreditAdjustmentService
+	CheckoutSessionService          CheckoutSessionService
 	DB                              postgres.IClient
 }

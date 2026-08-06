@@ -76,14 +76,26 @@ var (
 
 	// SubscriptionExpandConfig defines what can be expanded on a subscription
 	SubscriptionExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandPlan, ExpandCustomer, ExpandPrices, ExpandMeters, ExpandSchedule, ExpandCouponAssociations, ExpandCoupon, ExpandSubscriptionLineItems},
+		AllowedFields: []ExpandableField{ExpandPlan, ExpandCustomer, ExpandPrices, ExpandMeters, ExpandSchedule, ExpandCouponAssociations, ExpandCoupon, ExpandSubscriptionLineItems, ExpandEntitlements},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandPlan:                  {ExpandPrices},
 			ExpandCustomer:              {},
 			ExpandPrices:                {ExpandMeters},
 			ExpandSchedule:              {},
 			ExpandCouponAssociations:    {ExpandCoupon},
-			ExpandSubscriptionLineItems: {ExpandPrices},
+			ExpandSubscriptionLineItems: {ExpandPrices, ExpandMeters},
+			ExpandEntitlements:          {},
+		},
+	}
+
+	SubscriptionsForCustomerExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandSubscriptionLineItems, ExpandEntitlements},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandSubscriptionLineItems: {ExpandMeters},
+			ExpandMeters:                {},
+			ExpandEntitlements:          {},
+			ExpandPlan:                  {},
+			ExpandCustomer:              {},
 		},
 	}
 
@@ -122,11 +134,12 @@ var (
 
 	// InvoiceExpandConfig defines what can be expanded on an invoice
 	InvoiceExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandSubscription, ExpandCustomer, ExpandCouponApplications},
+		AllowedFields: []ExpandableField{ExpandSubscription, ExpandCustomer, ExpandCouponApplications, ExpandTaxApplied},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandSubscription:       {ExpandPlan},
 			ExpandCustomer:           {},
 			ExpandCouponApplications: {ExpandCoupon},
+			ExpandTaxApplied:         {ExpandTaxRate},
 		},
 	}
 
@@ -171,6 +184,15 @@ var (
 		AllowedFields: []ExpandableField{ExpandAddons, ExpandSubscription},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandAddons: {},
+		},
+	}
+
+	// CouponAssociationExpandConfig defines what can be expanded on a coupon association
+	CouponAssociationExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandCoupon, ExpandSubscriptionLineItems},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandCoupon:                {},
+			ExpandSubscriptionLineItems: {ExpandPrices},
 		},
 	}
 

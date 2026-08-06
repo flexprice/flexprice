@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/addon"
+	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
@@ -25,6 +26,7 @@ type AddonQuery struct {
 	inters           []Interceptor
 	predicates       []predicate.Addon
 	withEntitlements *EntitlementQuery
+	withCreditGrants *CreditGrantQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -76,6 +78,28 @@ func (aq *AddonQuery) QueryEntitlements() *EntitlementQuery {
 			sqlgraph.From(addon.Table, addon.FieldID, selector),
 			sqlgraph.To(entitlement.Table, entitlement.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, addon.EntitlementsTable, addon.EntitlementsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(aq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryCreditGrants chains the current query on the "credit_grants" edge.
+func (aq *AddonQuery) QueryCreditGrants() *CreditGrantQuery {
+	query := (&CreditGrantClient{config: aq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := aq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := aq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addon.Table, addon.FieldID, selector),
+			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, addon.CreditGrantsTable, addon.CreditGrantsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(aq.driver.Dialect(), step)
 		return fromU, nil
@@ -276,6 +300,7 @@ func (aq *AddonQuery) Clone() *AddonQuery {
 		inters:           append([]Interceptor{}, aq.inters...),
 		predicates:       append([]predicate.Addon{}, aq.predicates...),
 		withEntitlements: aq.withEntitlements.Clone(),
+		withCreditGrants: aq.withCreditGrants.Clone(),
 		// clone intermediate query.
 		sql:  aq.sql.Clone(),
 		path: aq.path,
@@ -290,6 +315,17 @@ func (aq *AddonQuery) WithEntitlements(opts ...func(*EntitlementQuery)) *AddonQu
 		opt(query)
 	}
 	aq.withEntitlements = query
+	return aq
+}
+
+// WithCreditGrants tells the query-builder to eager-load the nodes that are connected to
+// the "credit_grants" edge. The optional arguments are used to configure the query builder of the edge.
+func (aq *AddonQuery) WithCreditGrants(opts ...func(*CreditGrantQuery)) *AddonQuery {
+	query := (&CreditGrantClient{config: aq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	aq.withCreditGrants = query
 	return aq
 }
 
@@ -371,8 +407,9 @@ func (aq *AddonQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Addon,
 	var (
 		nodes       = []*Addon{}
 		_spec       = aq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			aq.withEntitlements != nil,
+			aq.withCreditGrants != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -397,6 +434,13 @@ func (aq *AddonQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Addon,
 		if err := aq.loadEntitlements(ctx, query, nodes,
 			func(n *Addon) { n.Edges.Entitlements = []*Entitlement{} },
 			func(n *Addon, e *Entitlement) { n.Edges.Entitlements = append(n.Edges.Entitlements, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := aq.withCreditGrants; query != nil {
+		if err := aq.loadCreditGrants(ctx, query, nodes,
+			func(n *Addon) { n.Edges.CreditGrants = []*CreditGrant{} },
+			func(n *Addon, e *CreditGrant) { n.Edges.CreditGrants = append(n.Edges.CreditGrants, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -429,6 +473,39 @@ func (aq *AddonQuery) loadEntitlements(ctx context.Context, query *EntitlementQu
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "addon_entitlements" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (aq *AddonQuery) loadCreditGrants(ctx context.Context, query *CreditGrantQuery, nodes []*Addon, init func(*Addon), assign func(*Addon, *CreditGrant)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Addon)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(creditgrant.FieldAddonID)
+	}
+	query.Where(predicate.CreditGrant(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(addon.CreditGrantsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.AddonID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "addon_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "addon_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

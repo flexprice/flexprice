@@ -10,7 +10,8 @@ import (
 
 type User struct {
 	ID       string            `json:"id"`
-	Email    string            `json:"email"` // Empty for service accounts
+	Name     string            `json:"name,omitempty"` // Display name; optional for service accounts
+	Email    string            `json:"email"`          // Empty for service accounts
 	Type     types.UserType    `json:"type"`
 	Roles    []string          `json:"roles"`
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -51,6 +52,7 @@ func FromEnt(e *ent.User) *User {
 
 	return &User{
 		ID:       e.ID,
+		Name:     lo.FromPtrOr(e.Name, ""),
 		Email:    lo.FromPtrOr(e.Email, ""),
 		Type:     types.UserType(e.Type),
 		Roles:    e.Roles,

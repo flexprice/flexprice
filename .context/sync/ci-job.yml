@@ -1,0 +1,34 @@
+# Reference CI job — copy this block into your actual workflow file
+# or create .github/workflows/context-sync.yml
+
+name: Context Sync — Staleness Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  context-staleness:
+    name: Check AGENTS.md context is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for git diff
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Check context staleness
+        run: python3 .context/sync/sync.py --check
+        # Exits 1 if any registered AGENTS.md node is behind HEAD.
+        # On failure: run `python3 .context/sync/sync.py --sync` locally,
+        # feed the prompt bundles to your LLM, commit the updated AGENTS.md files,
+        # then run `python3 .context/sync/sync.py --advance --file <path>` per file.

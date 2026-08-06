@@ -16,18 +16,18 @@ import (
 )
 
 type connectionRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts ConnectionQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  ConnectionQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewConnectionRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainConnection.Repository {
+func NewConnectionRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainConnection.Repository {
 	return &connectionRepository{
-		client:    client,
-		log:       log,
-		queryOpts: ConnectionQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  ConnectionQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -181,6 +181,38 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	r.SetCache(ctx, connections[0])
 
 	return connections[0], nil
+}
+
+// ListPublishedByProvider returns every published connection for a provider across all tenants and
+// environments. It intentionally skips the tenant and environment filters that List applies, so a
+// scheduled job running without a tenant context can discover the connections to process; the
+// caller sets tenant/environment context from each returned connection before using it.
+func (r *connectionRepository) ListPublishedByProvider(ctx context.Context, provider types.SecretProvider) ([]*domainConnection.Connection, error) {
+	span := StartRepositorySpan(ctx, "connection", "list_published_by_provider", map[string]interface{}{
+		"provider_type": provider,
+	})
+	defer FinishSpan(span)
+
+	connections, err := r.client.Reader(ctx).Connection.Query().
+		Where(
+			connection.ProviderType(string(provider)),
+			connection.Status(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list connections by provider").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+
+	result := make([]*domainConnection.Connection, 0, len(connections))
+	for _, c := range connections {
+		result = append(result, domainConnection.FromEnt(c))
+	}
+	return result, nil
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
@@ -355,7 +387,37 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			if encryptedSecretData.Whop.ProductID != "" {
 				data["product_id"] = encryptedSecretData.Whop.ProductID
 			}
+			if encryptedSecretData.Whop.WebhookSecret != "" {
+				data["webhook_secret"] = encryptedSecretData.Whop.WebhookSecret
+			}
 			return data
+		}
+	case types.SecretProviderTabs:
+		if encryptedSecretData.Tabs != nil {
+			return map[string]interface{}{
+				"api_key": encryptedSecretData.Tabs.APIKey,
+			}
+		}
+	case types.SecretProviderAWSMarketplace:
+		if encryptedSecretData.AWSMarketplace != nil {
+			return map[string]interface{}{
+				"role_arn":    encryptedSecretData.AWSMarketplace.RoleArn,
+				"external_id": encryptedSecretData.AWSMarketplace.ExternalID,
+			}
+		}
+	case types.SecretProviderGCPMarketplace:
+		if encryptedSecretData.GCPMarketplace != nil {
+			return map[string]interface{}{
+				"credentials_json": encryptedSecretData.GCPMarketplace.CredentialsJSON,
+			}
+		}
+	case types.SecretProviderAzureMarketplace:
+		if encryptedSecretData.AzureMarketplace != nil {
+			return map[string]interface{}{
+				"tenant_id":     encryptedSecretData.AzureMarketplace.TenantID,
+				"client_id":     encryptedSecretData.AzureMarketplace.ClientID,
+				"client_secret": encryptedSecretData.AzureMarketplace.ClientSecret,
+			}
 		}
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks != nil {
@@ -558,7 +620,7 @@ func (o ConnectionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 
 func (o ConnectionQueryOptions) ApplyStatusFilter(query ConnectionQuery, status string) ConnectionQuery {
 	if status == "" {
-		return query.Where(connection.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(connection.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(connection.Status(status))
 }
@@ -644,49 +706,39 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *connectionRepository) SetCache(ctx context.Context, connection *domainConnection.Connection) {
-	span := cache.StartCacheSpan(ctx, "connection", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "set", map[string]interface{}{
 		"connection_id": connection.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Set ID based cache entry
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, tenantID, environmentID, connection.ID)
-
-	r.cache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixConnection, connection.ID)
+	r.redisCache.Set(ctx, cacheKey, connection, cache.ExpiryDefaultRedis)
 }
 
-func (r *connectionRepository) GetCache(ctx context.Context, key string) *domainConnection.Connection {
-	span := cache.StartCacheSpan(ctx, "connection", "get", map[string]interface{}{
-		"connection_id": key,
+func (r *connectionRepository) GetCache(ctx context.Context, id string) *domainConnection.Connection {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "get", map[string]interface{}{
+		"connection_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if connection, ok := value.(*domainConnection.Connection); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return connection
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixConnection, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainConnection.Connection](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *connectionRepository) DeleteCache(ctx context.Context, connection *domainConnection.Connection) {
-	span := cache.StartCacheSpan(ctx, "connection", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "connection", "delete", map[string]interface{}{
 		"connection_id": connection.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Delete ID-based cache
-	cacheKey := cache.GenerateKey(cache.PrefixConnection, tenantID, environmentID, connection.ID)
-	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixConnection, connection.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

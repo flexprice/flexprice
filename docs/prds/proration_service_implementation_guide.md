@@ -404,7 +404,7 @@ type ProrationService interface {
 
 Implement the `ProrationService` interface.
 
-**File: `internal/service/proration/service.go`**
+**File: `internal/ee/service/proration/service.go`**
 
 ```go
 package proration
@@ -535,7 +535,7 @@ func mapProrationItemToInvoiceItem(prorationItem proration.ProrationLineItem, su
 
 Add unit tests for the service implementation, mocking dependencies like the calculator and repositories.
 
-**File: `internal/service/proration/service_test.go`**
+**File: `internal/ee/service/proration/service_test.go`**
 
 ```go
 package proration
@@ -650,12 +650,12 @@ func TestApplyProration_NoBehavior(t *testing.T) {
 
 Ensure the `ProrationService` and its dependencies (`Calculator`, potentially `InvoiceRepository`) are registered correctly with your dependency injection framework (e.g., `fx`).
 
-**File: `internal/service/factory.go` (or relevant fx module)**
+**File: `internal/ee/service/factory.go` (or relevant fx module)**
 
 ```go
 // Add to imports
 prorationDomain "github.com/yourusername/flexprice/internal/domain/proration"
-prorationService "github.com/yourusername/flexprice/internal/service/proration"
+prorationService "github.com/yourusername/flexprice/internal/ee/service/proration"
 // Potentially invoice domain/repo imports
 
 // Add to Provider struct (or relevant struct holding services)
@@ -720,7 +720,7 @@ The Proration Service integrates with the subscription change operations through
 
 ### 10.1 Operation Integration Example
 
-**File: `internal/service/subscription/operations/update_line_item.go`**
+**File: `internal/ee/service/subscription/operations/update_line_item.go`**
 
 ```go
 package operations
@@ -834,7 +834,7 @@ func determineProrationAction(lineItem *subscription.LineItem, newPrice *Price, 
 
 The Proration Service integrates with the Subscription Update Orchestrator:
 
-**File: `internal/service/subscription/orchestrator.go`**
+**File: `internal/ee/service/subscription/orchestrator.go`**
 
 ```go
 type subscriptionUpdateOrchestrator struct {

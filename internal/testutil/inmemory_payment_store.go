@@ -357,6 +357,39 @@ func (m *InMemoryPaymentStore) Count(ctx context.Context, filter *types.PaymentF
 	return m.InMemoryStore.Count(ctx, filter, paymentFilterFn)
 }
 
+// ListScopedByDestinationStatusGateway returns matching payments across all tenants
+// and environments, mirroring the cross-tenant repository query used by crons.
+func (m *InMemoryPaymentStore) ListScopedByDestinationStatusGateway(ctx context.Context, destinationType types.PaymentDestinationType, status types.PaymentStatus, gateway types.PaymentGatewayType) ([]payment.ScopedPayment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []payment.ScopedPayment
+	for _, p := range m.createdInOrder {
+		if p.DestinationType != destinationType {
+			continue
+		}
+		if p.PaymentStatus != status {
+			continue
+		}
+		if p.PaymentGateway == nil || types.PaymentGatewayType(*p.PaymentGateway) != gateway {
+			continue
+		}
+		if p.GatewayPaymentID == nil || *p.GatewayPaymentID == "" {
+			continue
+		}
+		if p.Status == types.StatusDeleted {
+			continue
+		}
+		result = append(result, payment.ScopedPayment{
+			PaymentID:        p.ID,
+			TenantID:         p.TenantID,
+			EnvironmentID:    p.EnvironmentID,
+			GatewayPaymentID: *p.GatewayPaymentID,
+		})
+	}
+	return result, nil
+}
+
 // GetPaymentsForDestination returns payments for a specific destination
 func (m *InMemoryPaymentStore) GetPaymentsForDestination(ctx context.Context, destinationType types.PaymentDestinationType, destinationID string) ([]*payment.Payment, error) {
 	filter := &types.PaymentFilter{

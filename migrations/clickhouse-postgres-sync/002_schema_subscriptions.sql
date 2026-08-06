@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS flexprice.subscriptions (
     payment_behavior          LowCardinality(String) NOT NULL,
     collection_method         LowCardinality(String) NOT NULL,
     gateway_payment_method_id Nullable(String),
-    customer_timezone         String NOT NULL DEFAULT 'UTC',
+    timezone                  String NOT NULL DEFAULT 'UTC',
     proration_behavior        LowCardinality(String) NOT NULL,
     enable_true_up            Bool NOT NULL DEFAULT false,
     invoicing_customer_id     Nullable(String),

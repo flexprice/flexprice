@@ -65,11 +65,52 @@ down:
 run-server:
 	go run cmd/server/main.go
 
+.PHONY: run-e2eprobe
+run-e2eprobe:
+	go run cmd/e2eprobe/main.go
+
+E2EPROBE_IMAGE ?= flexprice/e2eprobe
+
+# Single-platform build loaded into the local Docker engine for testing.
+# (buildx cannot --load a multi-arch manifest into the default image store.)
+.PHONY: e2eprobe-docker-build
+e2eprobe-docker-build:
+	docker buildx build --load \
+	  -f Dockerfile.e2eprobe -t $(E2EPROBE_IMAGE) .
+
+# Multi-arch build pushed to a registry. Override the tag with
+# E2EPROBE_IMAGE=<registry>/e2eprobe:<tag>. buildx discards a multi-platform
+# result unless it is pushed, so --push is required here.
+.PHONY: e2eprobe-docker-push
+e2eprobe-docker-push:
+	docker buildx build --push --platform linux/amd64,linux/arm64 \
+	  -f Dockerfile.e2eprobe -t $(E2EPROBE_IMAGE) .
+
 .PHONY: run-server-local
 run-server-local: run-server
 
 .PHONY: run
 run: run-server
+
+.PHONY: dev-token
+dev-token:
+	@tenant_id=''; \
+	while [ -z "$$tenant_id" ]; do \
+		printf 'Tenant ID: '; \
+		if ! IFS= read -r tenant_id; then \
+			printf '\nUnable to read tenant ID.\n'; \
+			exit 1; \
+		fi; \
+		if [ -z "$$tenant_id" ]; then \
+			echo 'Tenant ID is required.'; \
+		fi; \
+	done; \
+	printf 'Environment ID (optional): '; \
+	if ! IFS= read -r environment_id; then \
+		printf '\nUnable to read environment ID.\n'; \
+		exit 1; \
+	fi; \
+	go run ./scripts -cmd generate-dev-token -tenant-id "$$tenant_id" -environment-id "$$environment_id"
 
 # ---------------------------------------------------------------------------
 # Local development targets — load .env.local on top of .env so local Docker
@@ -94,21 +135,71 @@ run-local:
 	@set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a; \
 	FLEXPRICE_DEPLOYMENT_MODE=local go run cmd/server/main.go
 
+# ---------------------------------------------------------------------------
+# Worktree-aware server — deterministic port from branch name, shared .env
+# ---------------------------------------------------------------------------
+
+# Run server on a port derived from the current branch name (8080 for main,
+# 8100-8899 for other branches). Loads .env from the main worktree so there
+# is only ever one .env file regardless of how many worktrees are active.
+.PHONY: run-wt
+run-wt:
+	@export PATH="/usr/local/go/bin:$$HOME/.local/bin:$$PATH"; \
+	BRANCH=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached); \
+	if [ "$$BRANCH" = "main" ] || [ "$$BRANCH" = "master" ]; then PORT=8080; \
+	else PORT=$$((8100 + $$(printf '%s' "$$BRANCH" | cksum | awk '{print $$1}') % 800)); fi; \
+	MAIN_WT=$$(git worktree list --porcelain | awk '/^worktree /{print $$2; exit}'); \
+	ENV_FILE="$$MAIN_WT/.env"; \
+	REPO_ROOT=$$(git rev-parse --show-toplevel); \
+	printf '\n+---------------------------------------------+\n'; \
+	printf '|  branch : %-34s|\n' "$$BRANCH"; \
+	printf '|  port   : %-34s|\n' "$$PORT"; \
+	printf '|  url    : %-34s|\n' "http://localhost:$$PORT"; \
+	printf '|  .env   : %-34s|\n' "$$ENV_FILE"; \
+	printf '+---------------------------------------------+\n\n'; \
+	[ -f "$$ENV_FILE" ] || { printf 'ERROR: .env not found at %s\n' "$$ENV_FILE" >&2; exit 1; }; \
+	set -a && . "$$ENV_FILE" && set +a; \
+	export FLEXPRICE_SERVER_ADDRESS=":$$PORT"; \
+	exec go run "$$REPO_ROOT/cmd/server/main.go"
+
+# Show all worktrees, their computed ports, and whether a server is running.
+# Calls scripts/wt-ports.sh from the main worktree (works before and after commit).
+.PHONY: wt-ports
+wt-ports:
+	@MAIN_WT=$$(git worktree list --porcelain | awk '/^worktree /{print $$2; exit}'); \
+	bash "$$MAIN_WT/scripts/wt-ports.sh"
+
 # Run Ent schema migrations against local Docker postgres
 .PHONY: migrate-local
 migrate-local:
 	@set -a && [ -f .env.local ] && . ./.env.local; set +a; \
-	go run cmd/migrate/main.go
+	go run ./cmd/migrate postgres
 
 .PHONY: test test-verbose test-coverage
 
+# Run go test, stream output, then print a short failure summary at the end.
+# Usage: $(call run-go-test,<go test args...>)
+define run-go-test
+	@bash -c 'set -o pipefail; \
+	tmp=$$(mktemp -t flexprice-test.XXXXXX); \
+	go test $(1) 2>&1 | tee "$$tmp"; \
+	status=$$?; \
+	echo ""; \
+	echo "======== FAILED TESTS ========"; \
+	grep -E "^--- FAIL:" "$$tmp" || echo "(none)"; \
+	echo "======== FAILED PACKAGES ====="; \
+	grep -E "^FAIL[[:space:]]" "$$tmp" || echo "(none)"; \
+	rm -f "$$tmp"; \
+	exit $$status'
+endef
+
 # Run all tests
 test: install-typst
-	go test -v -race ./internal/...
+	$(call run-go-test,-v -race ./internal/...)
 
 # Run tests with verbose output
 test-verbose:
-	go test -v ./internal/...
+	$(call run-go-test,-v ./internal/...)
 
 # Run tests with coverage report
 test-coverage:
@@ -130,25 +221,39 @@ generate-ent: install-ent
 .PHONY: migrate-ent
 migrate-ent:
 	@echo "Running Ent migrations..."
-	@go run cmd/migrate/main.go --timeout 300
+	@go run ./cmd/migrate postgres --timeout 300
 	@echo "Ent migrations complete"
 
 .PHONY: migrate-ent-dry-run
 migrate-ent-dry-run:
 	@echo "Generating SQL migration statements (dry run)..."
-	@go run cmd/migrate/main.go --dry-run --timeout 300
+	@go run ./cmd/migrate postgres --dry-run --timeout 300
 	@echo "SQL migration statements generated"
 
 .PHONY: generate-migration
 generate-migration:
 	@echo "Generating SQL migration file..."
 	@mkdir -p migrations/ent
-	@go run cmd/migrate/main.go --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
+	@go run ./cmd/migrate postgres --dry-run --timeout 300 > migrations/ent/migration_$(shell date +%Y%m%d%H%M%S).sql
 	@echo "SQL migration file generated in migrations/ent/"
 
 # Initialize databases and required topics
 init-db: up migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 	@echo "Database initialization complete"
+
+# One-off: seed Svix event-types on a new/self-hosted env.
+# Reads webhook.svix_config.base_url / auth_token (FLEXPRICE_WEBHOOK_SVIX_CONFIG_BASE_URL / FLEXPRICE_WEBHOOK_SVIX_CONFIG_AUTH_TOKEN).
+# Usage: make seed-svix
+.PHONY: seed-svix
+seed-svix:
+	@go run ./cmd/migrate svix
+
+# Same, run inside the flexprice image (no local Go toolchain needed).
+# Usage: make seed-svix-docker [IMAGE=flexprice-app:local]
+IMAGE ?= flexprice-app:local
+.PHONY: seed-svix-docker
+seed-svix-docker:
+	@docker run --rm --env-file .env --entrypoint ./migrate $(IMAGE) svix
 
 # Run postgres migrations
 migrate-postgres:
@@ -284,7 +389,7 @@ restart-flexprice: stop-flexprice start-flexprice
 dev-setup:
 	@echo "Setting up FlexPrice development environment..."
 	@echo "Step 1: Starting infrastructure services..."
-	@docker compose up -d postgres kafka clickhouse temporal temporal-ui
+	@docker compose up -d postgres kafka clickhouse redis temporal temporal-ui
 	@echo "Step 2: Building FlexPrice application image..."
 	@make build-image
 	@echo "Step 3: Running database migrations and initializing Kafka..."

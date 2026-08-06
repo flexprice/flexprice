@@ -8,8 +8,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -19,10 +21,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -39,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -76,6 +81,7 @@ type Stores struct {
 	TenantRepo                   tenant.Repository
 	EnvironmentRepo              environment.Repository
 	EntitlementRepo              entitlement.Repository
+	EntitlementGrantRepo         entitlementgrant.Repository
 	FeatureRepo                  feature.Repository
 	TaskRepo                     task.Repository
 	SecretRepo                   secret.Repository
@@ -93,9 +99,12 @@ type Stores struct {
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
-	FeatureUsageRepo             events.FeatureUsageRepository
+	AlertRepo                    alert.Repository
+	GroupRepo                    group.Repository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
+	CheckoutSessionRepo          domainCheckout.Repository
+	UsageRecordRepo              usagerecord.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -106,6 +115,9 @@ type BaseServiceTestSuite struct {
 	publisher           publisher.EventPublisher
 	webhookPublisher    webhookPublisher.WebhookPublisher
 	db                  postgres.IClient
+	inMemoryCache       cache.InMemoryCache
+	redisCache          cache.RedisCache
+	locker              cache.Locker
 	logger              *logger.Logger
 	config              *config.Configuration
 	now                 time.Time
@@ -127,6 +139,9 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 		Secrets: config.SecretsConfig{
 			EncryptionKey: "test-encryption-key-for-unit-tests-only",
 		},
+		Onboarding: config.OnboardingConfig{
+			DefaultTenantName: "Flexprice",
+		},
 	}
 	var err error
 	s.config = cfg
@@ -134,9 +149,6 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	if err != nil {
 		s.T().Fatalf("failed to create logger: %v", err)
 	}
-
-	// Initialize cache
-	cache.Initialize(cfg, s.logger)
 }
 
 func (s *BaseServiceTestSuite) setupDependencies() {
@@ -145,12 +157,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 
 	// Initialize encryption service
 	encryptionService, err := security.NewEncryptionService(s.config, s.logger)
@@ -166,14 +173,17 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.ConnectionRepo,
 		s.stores.CustomerRepo,
 		s.stores.SubscriptionRepo,
+		s.stores.PlanRepo,
 		s.stores.InvoiceRepo,
 		s.stores.PaymentRepo,
+		nil, // paymentMethodRepo — not needed in unit tests
 		s.stores.PriceRepo,
 		s.stores.EntityIntegrationMappingRepo,
 		s.stores.MeterRepo,
 		s.stores.FeatureRepo,
 		encryptionService,
 		nil, // TemporalService — not needed in unit tests
+		NewInMemoryRedisLocker(nil),
 	)
 }
 
@@ -225,6 +235,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		TenantRepo:                   NewInMemoryTenantStore(),
 		EnvironmentRepo:              NewInMemoryEnvironmentStore(),
 		EntitlementRepo:              NewInMemoryEntitlementStore(),
+		EntitlementGrantRepo:         NewInMemoryEntitlementGrantStore(),
 		FeatureRepo:                  NewInMemoryFeatureStore(),
 		TaskRepo:                     NewInMemoryTaskStore(),
 		SecretRepo:                   NewInMemorySecretStore(),
@@ -244,21 +255,26 @@ func (s *BaseServiceTestSuite) setupStores() {
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
-		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
+		AlertRepo:                    NewInMemoryAlertSettingsStore(),
+		GroupRepo:                    NewInMemoryGroupStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
+		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
+		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 	}
+
+	// Cache stores
+	s.inMemoryCache = cache.NewInMemoryCache()
+	s.redisCache = NewInMemoryRedis()
+	// Fresh locker per test — the in-memory locker keeps its own state map, so
+	// rebuilding it here keeps lock state from leaking across tests.
+	s.locker = NewInMemoryRedisLocker(s.redisCache.(*InMemoryRedis))
 
 	s.db = NewMockPostgresClient(s.logger)
 	s.pdfGenerator = NewMockPDFGenerator(s.logger)
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
-	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger, nil)
-	if err != nil {
-		s.T().Fatalf("failed to create webhook publisher: %v", err)
-	}
-	s.webhookPublisher = webhookPublisher
+	s.webhookPublisher = NewInMemoryWebhookPublisher()
 }
 
 func (s *BaseServiceTestSuite) clearStores() {
@@ -278,6 +294,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.TenantRepo.(*InMemoryTenantStore).Clear()
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()
+	s.stores.EntitlementGrantRepo.(*InMemoryEntitlementGrantStore).Clear()
 	s.stores.FeatureRepo.(*InMemoryFeatureStore).Clear()
 	s.stores.TaskRepo.(*InMemoryTaskStore).Clear()
 	s.stores.SecretRepo.(*InMemorySecretStore).Clear()
@@ -299,9 +316,12 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
 	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
-	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
+	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
+	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
+	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
+	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
@@ -311,6 +331,12 @@ func (s *BaseServiceTestSuite) ClearStores() {
 // GetContext returns the test context
 func (s *BaseServiceTestSuite) GetContext() context.Context {
 	return s.ctx
+}
+
+// WithEnvironment scopes the suite context to an environment, for suites whose
+// code paths require both tenant and environment ids (call from SetupTest).
+func (s *BaseServiceTestSuite) WithEnvironment(environmentID string) {
+	s.ctx = context.WithValue(s.ctx, types.CtxEnvironmentID, environmentID)
 }
 
 // GetConfig returns the test configuration
@@ -331,6 +357,30 @@ func (s *BaseServiceTestSuite) GetPublisher() publisher.EventPublisher {
 // GetWebhookPublisher returns the test webhook publisher
 func (s *BaseServiceTestSuite) GetWebhookPublisher() webhookPublisher.WebhookPublisher {
 	return s.webhookPublisher
+}
+
+// GetInMemoryCache returns the test in-memory cache
+func (s *BaseServiceTestSuite) GetInMemoryCache() cache.InMemoryCache {
+	return s.inMemoryCache
+}
+
+// GetRedisCache returns the test Redis cache
+func (s *BaseServiceTestSuite) GetRedisCache() cache.RedisCache {
+	return s.redisCache
+}
+
+// GetLocker returns the test distributed locker (in-memory, SetNX + TTL).
+func (s *BaseServiceTestSuite) GetLocker() cache.Locker {
+	return s.locker
+}
+
+// GetPublishedWebhooks returns the webhook events captured by the in-memory
+// webhook publisher this suite injects. Empty if the publisher was replaced.
+func (s *BaseServiceTestSuite) GetPublishedWebhooks() []*types.WebhookEvent {
+	if p, ok := s.webhookPublisher.(*InMemoryWebhookPublisher); ok {
+		return p.Events()
+	}
+	return nil
 }
 
 // GetDB returns the test database client

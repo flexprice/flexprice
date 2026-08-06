@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/errors"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -14,6 +15,7 @@ type CreditGrantScope string
 const (
 	CreditGrantScopePlan         CreditGrantScope = "PLAN"
 	CreditGrantScopeSubscription CreditGrantScope = "SUBSCRIPTION"
+	CreditGrantScopeAddon        CreditGrantScope = "ADDON"
 )
 
 // Validate validates the credit grant scope
@@ -21,6 +23,7 @@ func (s CreditGrantScope) Validate() error {
 	allowedValues := []CreditGrantScope{
 		CreditGrantScopePlan,
 		CreditGrantScopeSubscription,
+		CreditGrantScopeAddon,
 	}
 
 	if !lo.Contains(allowedValues, s) {
@@ -126,6 +129,28 @@ func (u CreditGrantExpiryDurationUnit) Validate() error {
 	return nil
 }
 
+// ResolveCreditsExpiry computes expiry as now + duration for DAY/WEEK/MONTH/YEAR units.
+// Returns nil when duration or unit is omitted (credits never expire), or when the unit is unknown.
+func ResolveCreditsExpiry(duration *int, unit *CreditGrantExpiryDurationUnit, now time.Time) *time.Time {
+	if duration == nil || unit == nil {
+		return nil
+	}
+	var expiry time.Time
+	switch *unit {
+	case CreditGrantExpiryDurationUnitDays:
+		expiry = now.Add(time.Duration(*duration) * 24 * time.Hour)
+	case CreditGrantExpiryDurationUnitWeeks:
+		expiry = now.Add(time.Duration(*duration) * 7 * 24 * time.Hour)
+	case CreditGrantExpiryDurationUnitMonths:
+		expiry = now.AddDate(0, *duration, 0)
+	case CreditGrantExpiryDurationUnitYears:
+		expiry = now.AddDate(*duration, 0, 0)
+	default:
+		return nil
+	}
+	return &expiry
+}
+
 // Validate validates the credit grant period
 func (p CreditGrantPeriod) Validate() error {
 	allowedValues := []CreditGrantPeriod{
@@ -175,6 +200,7 @@ type CreditGrantFilter struct {
 	// Specific filters for credit grants
 	PlanIDs         []string          `form:"plan_ids" json:"plan_ids,omitempty"`
 	SubscriptionIDs []string          `form:"subscription_ids" json:"subscription_ids,omitempty"`
+	AddonIDs        []string          `form:"addon_ids" json:"addon_ids,omitempty"`
 	Scope           *CreditGrantScope `form:"scope" json:"scope,omitempty"`
 	CreditGrantIDs  []string          `form:"credit_grant_ids" json:"credit_grant_ids,omitempty"`
 }

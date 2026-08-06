@@ -6,7 +6,7 @@ Legend: **Impact radius** estimates blast radius across teams/features.
 
 ---
 
-## 1. Megaclass service files (`internal/service/subscription.go`, `invoice.go`, `billing.go`)
+## 1. Megaclass service files (`internal/ee/service/subscription.go`, `invoice.go`, `billing.go`)
 
 | Attribute | Evidence |
 | --------- | ------- |
@@ -16,7 +16,7 @@ Legend: **Impact radius** estimates blast radius across teams/features.
 
 ---
 
-## 2. `ServiceParams` dependency hub (`internal/service/factory.go`)
+## 2. `ServiceParams` dependency hub (`internal/ee/service/factory.go`)
 
 | Attribute | Evidence |
 | --------- | ------- |
@@ -86,7 +86,7 @@ Legend: **Impact radius** estimates blast radius across teams/features.
 
 ---
 
-## 9. Feature usage tracker complexity (`internal/service/feature_usage_tracking.go` reported large + Temporal pings)
+## 9. Feature usage tracker complexity (`internal/ee/service/feature_usage_tracking.go` reported large + Temporal pings)
 
 | Attribute | Evidence |
 | --------- | ------- |

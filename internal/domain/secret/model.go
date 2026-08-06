@@ -21,6 +21,7 @@ type Secret struct {
 	ProviderData  map[string]string
 	Roles         []string // RBAC roles
 	UserType      string   // "user" or "service_account"
+	UserID        string   // user or service account this key belongs to
 	types.BaseModel
 }
 
@@ -43,6 +44,7 @@ func FromEnt(e *ent.Secret) *Secret {
 		ProviderData:  e.ProviderData,
 		Roles:         e.Roles,
 		UserType:      e.UserType,
+		UserID:        e.UserID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

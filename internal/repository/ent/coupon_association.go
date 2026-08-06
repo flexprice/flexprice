@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -36,7 +37,7 @@ func (o CouponAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 
 func (o CouponAssociationQueryOptions) ApplyStatusFilter(query CouponAssociationQuery, status string) CouponAssociationQuery {
 	if status == "" {
-		return query.Where(couponassociation.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(couponassociation.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(couponassociation.Status(status))
 }
@@ -113,8 +114,19 @@ func applyActiveOnlyFilter(query CouponAssociationQuery, activePeriodStart, acti
 				couponassociation.EndDateGTE(periodStart),
 				couponassociation.EndDateIsNil(),
 			),
+			couponassociation.Or(
+				couponassociation.EndDateIsNil(),
+				predicate.CouponAssociation(excludeZeroDurationCouponAssociations),
+			),
 		),
 	)
+}
+
+func excludeZeroDurationCouponAssociations(selector *entsql.Selector) {
+	selector.Where(entsql.ColumnsNEQ(
+		selector.C(couponassociation.FieldStartDate),
+		selector.C(couponassociation.FieldEndDate),
+	))
 }
 
 // applyEntityQueryOptions applies entity-specific filters from CouponAssociationFilter
@@ -182,18 +194,18 @@ func (o CouponAssociationQueryOptions) applyEntityQueryOptions(_ context.Context
 }
 
 type couponAssociationRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponAssociationQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponAssociationQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCouponAssociation.Repository {
+func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCouponAssociation.Repository {
 	return &couponAssociationRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponAssociationQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponAssociationQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -479,40 +491,39 @@ func (r *couponAssociationRepository) Count(ctx context.Context, filter *types.C
 }
 
 func (r *couponAssociationRepository) SetCache(ctx context.Context, association *domainCouponAssociation.CouponAssociation) {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "set", map[string]interface{}{
 		"association_id": association.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, association.ID)
-	r.cache.Set(ctx, cacheKey, association, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, association.ID)
+	r.redisCache.Set(ctx, cacheKey, association, cache.ExpiryDefaultRedis)
 }
 
-func (r *couponAssociationRepository) GetCache(ctx context.Context, key string) *domainCouponAssociation.CouponAssociation {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "get", map[string]interface{}{
-		"association_id": key,
+func (r *couponAssociationRepository) GetCache(ctx context.Context, id string) *domainCouponAssociation.CouponAssociation {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "get", map[string]interface{}{
+		"association_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCouponAssociation.CouponAssociation)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	ca, ok := cache.UnmarshalCacheValue[domainCouponAssociation.CouponAssociation](value)
+	if !ok {
+		return nil
+	}
+	return ca
 }
 
 func (r *couponAssociationRepository) DeleteCache(ctx context.Context, associationID string) {
-	span := cache.StartCacheSpan(ctx, "coupon_association", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon_association", "delete", map[string]interface{}{
 		"association_id": associationID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCouponAssociation, tenantID, environmentID, associationID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCouponAssociation, associationID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

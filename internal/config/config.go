@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -19,10 +21,16 @@ import (
 )
 
 type Configuration struct {
-	Deployment                 DeploymentConfig                 `validate:"required"`
-	Server                     ServerConfig                     `validate:"required"`
-	Auth                       AuthConfig                       `validate:"required"`
-	Kafka                      KafkaConfig                      `validate:"required"`
+	Deployment DeploymentConfig `validate:"required"`
+	Server     ServerConfig     `validate:"required"`
+	Auth       AuthConfig       `validate:"required"`
+	Kafka      KafkaConfig      `validate:"required"`
+	// KafkaSecondary is the optional second Kafka cluster the source event publisher also
+	// writes to during the AWS→GCP migration (the "other" cloud's cluster). When set
+	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
+	// when nil, publishing is single-cluster. The `kafka` block is this deployment's own
+	// local cluster — consumed AND always written. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	KafkaSecondary             *KafkaConfig                     `mapstructure:"kafka_secondary" validate:"omitempty"`
 	ClickHouse                 ClickHouseConfig                 `validate:"required"`
 	Logging                    LoggingConfig                    `validate:"required"`
 	Postgres                   PostgresConfig                   `validate:"required"`
@@ -37,19 +45,18 @@ type Configuration struct {
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
 	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
+	Marketplace                MarketplaceConfig                `mapstructure:"marketplace" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
 	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
 	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
-	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
-	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
-	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
-	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
 	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
-	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
+	BulkEventConsumption       BulkEventConsumptionConfig       `mapstructure:"bulk_event_consumption" validate:"required"`
+	BulkMeterUsageTracking     BulkMeterUsageTrackingConfig     `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
+	UsageAlerts                UsageAlertsConfig                `mapstructure:"usage_alerts" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -57,6 +64,7 @@ type Configuration struct {
 	OAuth                      OAuthConfig                      `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
+	Checkout                   CheckoutConfig                   `mapstructure:"checkout" validate:"omitempty"`
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
@@ -65,6 +73,11 @@ type Configuration struct {
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+	Onboarding                 OnboardingConfig                 `mapstructure:"onboarding" validate:"omitempty"`
+}
+
+type OnboardingConfig struct {
+	DefaultTenantName string `mapstructure:"default_tenant_name" validate:"omitempty" default:"Flexprice"`
 }
 
 // WhopConfig holds Whop integration settings (non-secret, static config)
@@ -81,8 +94,17 @@ type GeminiConfig struct {
 }
 
 type CacheConfig struct {
-	Enabled bool   `mapstructure:"enabled" validate:"required"`
-	Type    string `mapstructure:"type" validate:"required"`
+	Enabled  bool                `mapstructure:"enabled" validate:"required"`
+	InMemory InMemoryCacheConfig `mapstructure:"inmemory" validate:"required"`
+	Redis    RedisCacheConfig    `mapstructure:"redis" validate:"required"`
+}
+
+type InMemoryCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
+}
+
+type RedisCacheConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
 }
 
 type S3Config struct {
@@ -103,6 +125,48 @@ type FlexpriceS3ExportsConfig struct {
 	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
 	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
 	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
+}
+
+// MarketplaceConfig groups Flexprice's own credentials/identity for each marketplace it reports
+// usage to. Azure would be added as a further sibling field.
+type MarketplaceConfig struct {
+	AWS AWSMarketplaceConfig `mapstructure:"aws" validate:"omitempty"`
+	GCP GCPMarketplaceConfig `mapstructure:"gcp" validate:"omitempty"`
+}
+
+// AWSMarketplaceConfig holds Flexprice's OWN AWS identity — the caller that assumes each tenant's
+// role. sts:AssumeRole is an authenticated API: the tenant's trust policy names this principal, so
+// these credentials are what signs the AssumeRole request. They are unrelated to the tenant's
+// role_arn/external_id, which are the assume *target*, stored per-connection.
+//
+// These are set explicitly rather than resolved from the ambient AWS credential chain: the chain
+// ends at the EC2 instance-metadata endpoint, which is unreachable off EC2 and stalls for seconds
+// before failing — turning connection creation into a hang on any non-EC2 host.
+//
+// SessionToken is only set when the credentials are temporary (an ASIA... key from STS/SSO). A
+// long-lived AKIA... IAM user key has no session token, and sending a non-empty one with it makes
+// AWS reject the request.
+type AWSMarketplaceConfig struct {
+	Region          string `mapstructure:"region" validate:"omitempty"`
+	AccessKeyID     string `mapstructure:"access_key_id" validate:"omitempty"`
+	SecretAccessKey string `mapstructure:"secret_access_key" validate:"omitempty"`
+	SessionToken    string `mapstructure:"session_token" validate:"omitempty"`
+}
+
+// GCPMarketplaceConfig holds the two values Flexprice renders into the tenant-facing Workload
+// Identity Federation setup script (design doc FLE-981 §5.3, step 2's --account-id and
+// --attribute-condition). Unlike AWSMarketplaceConfig, these are not credentials: authenticating to
+// GCP happens ambiently, via the AWS identity attached to the worker process's own runtime
+// environment (the credentials JSON a tenant generates hard-codes a real EC2/ECS instance-metadata
+// endpoint for Google's client library to fetch that identity from — see the GCP client package
+// doc comment for the full explanation). This is a different identity from AWSMarketplaceConfig's
+// static caller credentials above (which sign AssumeRole calls for AWS Marketplace) — it names the
+// ambient instance role the worker actually runs as, purely so the WIF setup script we hand tenants
+// trusts the right principal. FlexpriceAWSAccountID/RoleName only need to be *correct*, i.e. matching
+// that role.
+type GCPMarketplaceConfig struct {
+	FlexpriceAWSAccountID string `mapstructure:"flexprice_aws_account_id" validate:"omitempty"`
+	FlexpriceAWSRoleName  string `mapstructure:"flexprice_aws_role_name" validate:"omitempty"`
 }
 
 type DeploymentConfig struct {
@@ -126,12 +190,42 @@ type SupabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers       []string             `mapstructure:"brokers" validate:"required"`
-	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
-	Topic         string               `mapstructure:"topic" validate:"required"`
-	TopicLazy     string               `mapstructure:"topic_lazy" validate:"required"`
-	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
-	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	Brokers       []string `mapstructure:"brokers" validate:"required"`
+	ConsumerGroup string   `mapstructure:"consumer_group" validate:"required"`
+	Topic         string   `mapstructure:"topic" validate:"required"`
+	TopicLazy     string   `mapstructure:"topic_lazy" validate:"required"`
+	// TopicBulk is this cluster's batched-ingest topic. Per-cluster because a shared prod
+	// cluster renames topics (FLEXPRICE_KAFKA_TOPICS).
+	TopicBulk string `mapstructure:"topic_bulk"`
+	// Batching bounds for PublishBatch; a batch closes at whichever is hit first.
+	// BulkMaxBatchBytes must stay under the topic's max.message.bytes (1 MB default on MSK).
+	// Read from the LOCAL cluster only: both clusters must receive byte-identical payloads to
+	// stay dedup-identical, so these must not diverge per cluster.
+	BulkMaxBatchSize  int `mapstructure:"bulk_max_batch_size" default:"200"`
+	BulkMaxBatchBytes int `mapstructure:"bulk_max_batch_bytes" default:"524288"`
+	// TopicDLQ is the global fallback dead-letter Kafka topic used by handlers that
+	// do not define their own per-consumer-group topic_dlq. Empty disables DLQ for
+	// those handlers.
+	TopicDLQ string `mapstructure:"topic_dlq" default:""`
+	TLS      bool   `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	// TLSCACertFile is the path to a PEM-encoded CA bundle used to verify the
+	// broker certificate. Empty (the default) means the OS trust store is used,
+	// which is correct for brokers with publicly-trusted certs (MSK, Confluent
+	// Cloud). Set it only when the broker presents a private/self-signed CA.
+	// The CA is applied to the Kafka client alone, so it does not affect other
+	// outbound TLS in the process (Stripe, GCP, webhooks).
+	//
+	// Must be PEM. JKS/PKCS12 truststores are not supported — sarama and Go's
+	// crypto/x509 read PEM only. Convert with:
+	//
+	//	keytool -exportcert -alias <alias> -keystore truststore.jks -rfc -file ca.pem
+	TLSCACertFile string `mapstructure:"tls_ca_cert_file"`
+	// TLSServerName overrides the hostname the broker certificate is verified
+	// against. Empty (the default) verifies against the dial address, i.e. the
+	// broker's advertised listener, which is correct almost always. Set it only
+	// when a private CA issues a certificate whose SAN does not match that name
+	// — a broker behind an SNI-mismatched load balancer, typically.
+	TLSServerName string               `mapstructure:"tls_server_name"`
 	UseSASL       bool                 `mapstructure:"use_sasl"`
 	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
 	SASLUser      string               `mapstructure:"sasl_user"`
@@ -142,11 +236,51 @@ type KafkaConfig struct {
 	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string   `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	// TopicsDefaults/Topics describe the full desired topic set for `migrate kafka`
+	// (partition counts, replication factor, retention). Consumed only by
+	// cmd/migrate (kafka subcommand), not by the server/consumer/worker processes. A deploy's
+	// FLEXPRICE_KAFKA_TOPICS env var (JSON), when set, FULLY REPLACES this block
+	// (no merge) — see internal/kafka/topicspec.
+	TopicsDefaults KafkaTopicsDefaults       `mapstructure:"topics_defaults"`
+	Topics         map[string]KafkaTopicSpec `mapstructure:"topics"`
+}
+
+type KafkaTopicsDefaults struct {
+	ReplicationFactor int16 `mapstructure:"replication_factor"`
+	RetentionMs       int64 `mapstructure:"retention_ms"`
+}
+
+type KafkaTopicSpec struct {
+	Partitions        int    `mapstructure:"partitions"`
+	ReplicationFactor *int16 `mapstructure:"replication_factor"`
+	RetentionMs       *int64 `mapstructure:"retention_ms"`
 }
 
 type ClickHouseConfig struct {
-	Address        string `mapstructure:"address" validate:"required"`
-	TLS            bool   `mapstructure:"tls"`
+	// MaxOpenConns caps concurrent ClickHouse queries per PROCESS, so insert throughput is
+	// bounded by (MaxOpenConns / insert latency) per pod/task no matter how many run. Left
+	// at 0 the driver applies MaxIdleConns+5 = 10, which silently caps a consumer fleet:
+	// 40 tasks x 10 conns / 685ms inserts = ~580 events/s. Exhaustion surfaces as
+	// clickhouse-go ErrAcquireConnTimeout ("acquire conn timeout") raised client-side —
+	// the query never reaches the server, so ClickHouse logs nothing. Size it against the
+	// server's spare admission (system.metrics Query vs max_concurrent_queries): raising it
+	// helps only when ClickHouse has headroom, and hurts when it is already saturated.
+	MaxOpenConns int `mapstructure:"max_open_conns"`
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+	// DialTimeout doubles as the pool-acquire deadline inside clickhouse-go
+	// (clickhouse.go acquire() waits on a semaphore of MaxOpenConns slots for DialTimeout),
+	// so it cannot be tuned for pool pressure without also changing dial failover — see
+	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
+	DialTimeout time.Duration `mapstructure:"dial_timeout"`
+	ReadTimeout time.Duration `mapstructure:"read_timeout"`
+	Address     string        `mapstructure:"address" validate:"required"`
+	TLS         bool          `mapstructure:"tls"`
+	// TLSSkipVerify disables server certificate and hostname verification on the
+	// TLS connection. It only takes effect when TLS is true. Intended for dev
+	// environments whose ClickHouse serves a self-signed certificate (equivalent to
+	// SSL=true with SSL_MODE=NONE); it removes MITM protection, so leave it false
+	// everywhere else and trust the CA instead.
+	TLSSkipVerify  bool   `mapstructure:"tls_skip_verify"`
 	Username       string `mapstructure:"username" validate:"required"`
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
@@ -222,8 +356,9 @@ type OtelConfig struct {
 	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
 	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
 
-	Traces OtelTracesConfig `mapstructure:"traces"`
-	Logs   OtelLogsConfig   `mapstructure:"logs"`
+	Traces  OtelTracesConfig  `mapstructure:"traces"`
+	Logs    OtelLogsConfig    `mapstructure:"logs"`
+	Metrics OtelMetricsConfig `mapstructure:"metrics"`
 }
 
 // OtelTracesConfig configures OTLP span export.
@@ -241,6 +376,10 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// Per-trace throttle on storage spans (0.0-1.0), applied when StorageSpansEnabled
+	// is true. Independent of SampleRate (which thins whole traces incl. server spans);
+	// this thins only the DB/cache/ClickHouse fan-out. Default 0.2; set 1.0 to debug.
+	StorageSpansSampleRate float64 `mapstructure:"storage_spans_sample_rate" default:"0.2"`
 	// CaptureExceptions records errors (CaptureException calls, error-level logs,
 	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
 	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
@@ -267,6 +406,29 @@ func (c OtelTracesConfig) MergedHeaders() map[string]string {
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
 func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// OtelMetricsConfig configures OTLP metric export (app-level DB/cache metrics).
+// Independent of Traces: metrics are always-on aggregate signal, cheap and
+// unsampled, so they carry steady-state monitoring while spans stay for debug.
+type OtelMetricsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+	// Export interval in seconds (PeriodicReader). Longer = cheaper (fewer samples).
+	IntervalSeconds int `mapstructure:"interval_seconds" default:"60"`
+	// TemporalEnabled attaches the Temporal Go SDK MetricsHandler to the shared
+	// MeterProvider when the metrics pipeline is on. Off by default — Temporal
+	// SDK series are higher volume than app DB/cache metrics.
+	TemporalEnabled bool `mapstructure:"temporal_enabled" default:"false"`
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelMetricsConfig) MergedHeaders() map[string]string {
 	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
 }
 
@@ -378,17 +540,7 @@ type EventProcessingConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
-}
-
-type EventPostProcessingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_post_processing"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_events_post_processing"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_events_post_processing_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_events_post_processing_backfill"`
+	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventProcessingLazyConfig struct {
@@ -399,6 +551,7 @@ type EventProcessingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_lazy_backfill"`
+	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 }
 
 type EventProcessingReplayConfig struct {
@@ -407,42 +560,42 @@ type EventProcessingReplayConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
-type FeatureUsageTrackingConfig struct {
-	// Rate limit in messages consumed per second
-	Enabled                bool   `mapstructure:"enabled" default:"true"`
-	Topic                  string `mapstructure:"topic" default:"events"`
-	RateLimit              int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup          string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
-	TopicBackfill          string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
-	RateLimitBackfill      int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
-	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
-	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
-}
-
-type FeatureUsageTrackingLazyConfig struct {
-	Enabled               bool   `mapstructure:"enabled" default:"true"`
-	Topic                 string `mapstructure:"topic" default:"events_lazy"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_realtime"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
-}
-
-type FeatureUsageTrackingReplayConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"v1_feature_tracking_service_replay"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_replay"`
-}
 
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"events"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	Enabled                   bool   `mapstructure:"enabled" default:"true"`
+	Topic                     string `mapstructure:"topic" default:"events"`
+	RateLimit                 int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup             string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	TopicDLQ                  string `mapstructure:"topic_dlq" default:""`
+	RedisDeduplicationEnabled bool   `mapstructure:"redis_deduplication_enabled" default:"false"`
+	WalletAlertPushEnabled    bool   `mapstructure:"wallet_alert_push_enabled" default:"false"`
+	SpendAlertWebhookEnabled  bool   `mapstructure:"spend_alert_webhook_enabled" default:"false"`
+
+	// event.rejected webhook (fired when an event produces no meter usage); opt-in.
+	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
+	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
+	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
+
+// UsageAlertsConfig controls the usage-driven alert pipeline end to end:
+// meter-usage post-insert schedules a debounced per-customer Temporal workflow
+// which evaluates spend, entitlement-grant, and wallet alerts.
+type UsageAlertsConfig struct {
+	// Enabled routes post-insert alerting through the debounced Temporal
+	// workflow instead of the Kafka wallet-alert path and inline spend-breach check.
+	Enabled bool `mapstructure:"enabled" default:"false"`
+	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
+	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
+	// StaleAfter bounds staleness on both queues: a workflow run firing more
+	// than this past its intended time yields once (ContinueAsNew) to the back
+	// of the queue so fresher customers evaluate first, and each activity's
+	// ScheduleToStartTimeout is set to the same value.
+	StaleAfter               time.Duration `mapstructure:"stale_after" default:"1h"`
+	WalletAlertsEnabled      bool          `mapstructure:"wallet_alerts_enabled" default:"true"`
+	SpendAlertsEnabled       bool          `mapstructure:"spend_alerts_enabled" default:"true"`
+	EntitlementAlertsEnabled bool          `mapstructure:"entitlement_alerts_enabled" default:"true"`
 }
 
 // MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
@@ -455,14 +608,7 @@ type MeterUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
-}
-
-// UsageBenchmarkConfig configures the usage benchmarking consumer
-type UsageBenchmarkConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"false"`
-	Topic         string `mapstructure:"topic" default:"staging_benchmarking"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_usage_benchmark_service"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
 }
 
 type WalletBalanceAlertConfig struct {
@@ -484,6 +630,33 @@ type RawEventConsumptionConfig struct {
 	OutputTopic   string `mapstructure:"output_topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
+}
+
+// BulkEventConsumptionConfig configures the batch-mode consumer that reads
+// RawEventBatch messages published by POST /events/bulk (batch_source=api_bulk
+// metadata) and bulk-inserts each event into the ClickHouse events table.
+// Shares the raw_events topic with RawEventConsumption (Bento) but a separate
+// consumer group; a metadata filter keeps the two paths from cross-processing.
+type BulkEventConsumptionConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"raw_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_bulk_event_consumption"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
+}
+
+// BulkMeterUsageTrackingConfig is the batch-mode sibling of MeterUsageTracking:
+// it reads the same api_bulk batches from raw_events, extracts per-meter
+// quantity/hash for every event, and bulk-inserts into meter_usage. Distinct
+// consumer group from BulkEventConsumption so the two run in parallel.
+type BulkMeterUsageTrackingConfig struct {
+	Enabled                      bool   `mapstructure:"enabled" default:"true"`
+	Topic                        string `mapstructure:"topic" default:"raw_events"`
+	RateLimit                    int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup                string `mapstructure:"consumer_group" default:"v1_bulk_meter_usage_tracking"`
+	TopicDLQ                     string `mapstructure:"topic_dlq" default:""`
+	RedisDeduplicationEnabled    bool   `mapstructure:"redis_deduplication_enabled" default:"true"`
+	PostInsertSideEffectsEnabled bool   `mapstructure:"post_insert_side_effects_enabled" default:"true"`
 }
 
 type OnboardingEventsConfig struct {
@@ -516,58 +689,24 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics    bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
-	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
-	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
-	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
-	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
+	EnableMeterUsageForBilling bool `mapstructure:"enable_meter_usage_for_billing" validate:"omitempty"`
 
-	// Per-tenant overrides for the meter-usage rollout. Resolution order:
+	// Per-tenant overrides for the meter-usage-for-billing rollout. Resolution order:
 	//   1. disabled_tenants — tenant force-disabled (highest priority)
 	//   2. enabled_tenants  — tenant force-enabled
 	//   3. global flag above — applies to everyone else
-	MeterUsageForPreviewInvoiceEnabledTenants  []string `mapstructure:"meter_usage_for_preview_invoice_enabled_tenants" validate:"omitempty"`
-	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
-	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
-	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
-	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingEnabledTenants  []string `mapstructure:"meter_usage_for_billing_enabled_tenants" validate:"omitempty"`
+	MeterUsageForBillingDisabledTenants []string `mapstructure:"meter_usage_for_billing_disabled_tenants" validate:"omitempty"`
 }
 
-// IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
-// preview-invoice endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForPreviewInvoice(tenantID string) bool {
+// IsMeterUsageEnabledForBilling resolves the meter-usage rollout for the
+// billing service for a specific tenant.
+func (c *FeatureFlagConfig) IsMeterUsageEnabledForBilling(tenantID string) bool {
 	return resolveTenantRollout(
 		tenantID,
-		c.EnableMeterUsageForPreviewInvoice,
-		c.MeterUsageForPreviewInvoiceEnabledTenants,
-		c.MeterUsageForPreviewInvoiceDisabledTenants,
-	)
-}
-
-// IsMeterUsageEnabledForAnalytics resolves the meter-usage rollout for the
-// analytics endpoint for a specific tenant. See FeatureFlagConfig for the
-// resolution order.
-func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableMeterUsageForAnalytics,
-		c.MeterUsageForAnalyticsEnabledTenants,
-		c.MeterUsageForAnalyticsDisabledTenants,
-	)
-}
-
-// IsUsageBenchmarkEnabled resolves the usage-benchmark publish gate for a
-// specific tenant. Gates publishBenchmarkEvent in the wallet billing path so
-// the feature-usage / meter-usage comparison runs only for selected tenants.
-// See FeatureFlagConfig for the resolution order.
-func (c *FeatureFlagConfig) IsUsageBenchmarkEnabled(tenantID string) bool {
-	return resolveTenantRollout(
-		tenantID,
-		c.EnableUsageBenchmark,
-		c.UsageBenchmarkEnabledTenants,
-		c.UsageBenchmarkDisabledTenants,
+		c.EnableMeterUsageForBilling,
+		c.MeterUsageForBillingEnabledTenants,
+		c.MeterUsageForBillingDisabledTenants,
 	)
 }
 
@@ -604,6 +743,7 @@ type CostSheetUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
 }
 
 type CostSheetUsageTrackingLazyConfig struct {
@@ -611,6 +751,11 @@ type CostSheetUsageTrackingLazyConfig struct {
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`
+	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
+}
+
+type CheckoutConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"required,url"`
 }
 
 type CustomerPortalConfig struct {
@@ -620,8 +765,10 @@ type CustomerPortalConfig struct {
 
 // RedisConfig holds configuration for Redis
 type RedisConfig struct {
-	Host      string        `mapstructure:"host" default:"localhost"`
-	Port      int           `mapstructure:"port" default:"6379"`
+	Host string `mapstructure:"host" default:"localhost"`
+	Port int    `mapstructure:"port" default:"6379"`
+	// Username is the data-node ACL user; leave empty for requirepass-style auth.
+	Username  string        `mapstructure:"username" default:""`
 	Password  string        `mapstructure:"password" default:""`
 	DB        int           `mapstructure:"db" default:"0"`
 	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
@@ -632,8 +779,21 @@ type RedisConfig struct {
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
-	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	// FLEXPRICE_REDIS_CLUSTER_MODE. Ignored when SentinelMasterName is set.
 	ClusterMode bool `mapstructure:"cluster_mode"`
+
+	// Sentinel HA: a non-empty SentinelMasterName switches to Sentinel mode
+	// (ignores Host/Port/ClusterMode) and resolves the master via the quorum.
+	// SentinelAddrs are the sentinel endpoints, NOT the master. Username/Password
+	// (above) auth the data nodes; SentinelUsername/Password auth the sentinels.
+	SentinelMasterName string   `mapstructure:"sentinel_master_name" default:""`
+	SentinelAddrs      []string `mapstructure:"sentinel_addrs"`
+	SentinelUsername   string   `mapstructure:"sentinel_username" default:""`
+	SentinelPassword   string   `mapstructure:"sentinel_password" default:""`
+
+	// RouteReadsToReplicas (Sentinel only) routes reads to the lowest-latency node
+	// among master+replicas; writes stay on master. Read scaling, not sharding.
+	RouteReadsToReplicas bool `mapstructure:"route_reads_to_replicas" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
@@ -662,55 +822,21 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
 	_ = v.BindEnv("logging.region", "REGION")
 
-	// Explicitly bind keys where AutomaticEnv is ambiguous due to underscores in key segments
-	_ = v.BindEnv("clickhouse.password", "FLEXPRICE_CLICKHOUSE_PASSWORD")
-	_ = v.BindEnv("clickhouse.username", "FLEXPRICE_CLICKHOUSE_USERNAME")
-	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
-	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
+	// Auto-bind every scalar/slice key in the Configuration struct to its FLEXPRICE_* env
+	// var. This replaces ~50 hand-written v.BindEnv calls (a graveyard grown one prod
+	// incident at a time). Viper's AutomaticEnv is NOT consulted by Unmarshal for keys
+	// absent from the loaded config.yaml or nested under underscores, so such keys silently
+	// fall to their Go zero value unless the key is registered. Walking the struct registers
+	// every leaf key, so a FLEXPRICE_* env var always lands regardless of which config.yaml a
+	// deployment mounts (baked file on ECS, ConfigMap on GKE) — and no new key can be
+	// forgotten. Runs once at startup; reflection cost is irrelevant. See bindEnvs below.
+	// clickhouse.protocol (FLEXPRICE_CLICKHOUSE_PROTOCOL) is bound automatically here.
+	bindEnvs(v, reflect.TypeOf(Configuration{}))
 
-	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
-	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
-	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
-	_ = v.BindEnv("otel.protocol", "FLEXPRICE_OTEL_PROTOCOL")
-	_ = v.BindEnv("otel.insecure", "FLEXPRICE_OTEL_INSECURE")
-	_ = v.BindEnv("otel.traces.enabled", "FLEXPRICE_OTEL_TRACES_ENABLED")
-	_ = v.BindEnv("otel.traces.endpoint", "FLEXPRICE_OTEL_TRACES_ENDPOINT")
-	_ = v.BindEnv("otel.traces.protocol", "FLEXPRICE_OTEL_TRACES_PROTOCOL")
-	_ = v.BindEnv("otel.traces.auth_header", "FLEXPRICE_OTEL_TRACES_AUTH_HEADER")
-	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
-	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
-	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
-	_ = v.BindEnv("otel.traces.capture_exceptions", "FLEXPRICE_OTEL_TRACES_CAPTURE_EXCEPTIONS")
-	// Exception capture is on by default. Struct `default:` tags aren't applied at
-	// runtime here (defaults live in config.yaml), so guarantee default-on via
-	// SetDefault for deploys whose config.yaml predates this key. Env/yaml override.
+	// Exception capture is on by default. Struct `default:` tags aren't applied at runtime
+	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
+	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
-	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
-	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
-	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
-	_ = v.BindEnv("otel.logs.insecure", "FLEXPRICE_OTEL_LOGS_INSECURE")
-	_ = v.BindEnv("otel.logs.auth_header", "FLEXPRICE_OTEL_LOGS_AUTH_HEADER")
-	_ = v.BindEnv("otel.logs.auth_value", "FLEXPRICE_OTEL_LOGS_AUTH_VALUE")
-
-	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
-	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
-	_ = v.BindEnv("logging.otel_endpoint", "FLEXPRICE_LOGGING_OTEL_ENDPOINT")
-	_ = v.BindEnv("logging.otel_insecure", "FLEXPRICE_LOGGING_OTEL_INSECURE")
-	_ = v.BindEnv("logging.otel_protocol", "FLEXPRICE_LOGGING_OTEL_PROTOCOL")
-	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
-	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
-	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
-
-	// Explicitly bind Temporal env vars — AutomaticEnv + Unmarshal misses these
-	// because the yaml ships non-empty defaults (api_key: "strong api key"), so
-	// Unmarshal returns the yaml value instead of consulting AutomaticEnv.
-	_ = v.BindEnv("temporal.api_key", "FLEXPRICE_TEMPORAL_API_KEY")
-	_ = v.BindEnv("temporal.api_key_name", "FLEXPRICE_TEMPORAL_API_KEY_NAME")
-
-	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
-	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
-	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
-	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -761,8 +887,157 @@ func NewConfig() (*Configuration, error) {
 	return &cfg, nil
 }
 
+// bindEnvs walks a (possibly nested) struct type and registers a Viper env binding for
+// every scalar/slice leaf field. The dotted key path is built from each field's
+// `mapstructure` tag (falling back to the lowercased field name); Viper derives the env var
+// name from that path via SetEnvPrefix("FLEXPRICE") + SetEnvKeyReplacer(".", "_"), i.e.
+// FLEXPRICE_<UPPER_SNAKE_PATH> — exactly the names the Helm chart and ECS task definitions
+// already set.
+//
+// Why this is needed: Viper's AutomaticEnv is not consulted by Unmarshal for keys that are
+// absent from the loaded config.yaml or nested under underscores, so such keys silently
+// resolve to their Go zero value. Registering the key here makes Unmarshal honor the env var
+// regardless of which config.yaml a deployment mounts. Replaces ~50 hand-maintained
+// v.BindEnv calls and guarantees no future key can be forgotten.
+//
+// Maps are intentionally NOT bound: the env-driven ones hold JSON strings
+// (auth.api_key.keys, env_access.user_env_mapping) that mapstructure can't decode into a
+// map; they are parsed by hand after Unmarshal. Slices ARE bound — Viper's default
+// StringToSlice decode hook splits a comma-separated env var into []string (e.g.
+// kafka_secondary.brokers). Unexported fields are skipped.
+func bindEnvs(v *viper.Viper, t reflect.Type, parts ...string) {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if f.PkgPath != "" { // unexported — Unmarshal can't set it anyway
+			continue
+		}
+		tag := strings.Split(f.Tag.Get("mapstructure"), ",")[0]
+		if tag == "-" {
+			continue
+		}
+		if tag == "" {
+			tag = strings.ToLower(f.Name)
+		}
+		path := append(append([]string{}, parts...), tag)
+
+		ft := f.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		switch ft.Kind() {
+		case reflect.Struct:
+			bindEnvs(v, ft, path...)
+		case reflect.Map:
+			// JSON-string env vars can't decode into a map; parsed by hand after Unmarshal.
+		default:
+			// scalars and slices (Viper splits comma-separated env into []string)
+			_ = v.BindEnv(strings.Join(path, "."))
+		}
+	}
+}
+
 func (c Configuration) Validate() error {
 	return validator.ValidateRequest(c)
+}
+
+// devDBPassword is the shared local docker-compose DB password baked into config.yaml.
+// Legitimate for local dev; a red flag in any real deployment.
+const devDBPassword = "flexprice123"
+
+const (
+	defaultClickHouseDialTimeout = 10 * time.Second
+	defaultClickHouseReadTimeout = 30 * time.Second
+)
+
+// placeholderSecrets are the exact dev/sample values baked into config.yaml (plus empty).
+// A non-local deployment booting with any of these for an ENABLED feature is running on a
+// public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
+var placeholderSecrets = map[string]bool{
+	"": true, // unset
+	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
+	"<supabase service key>":                                   true,
+	"svix_auth_token":                                          true,
+}
+
+// NewValidatedConfig loads configuration and, for non-local deployments, enforces fail-fast
+// validation: struct `validate` tags plus a placeholder-secret check. Binary entry points
+// (cmd/server) use this so a misconfigured deployment fails to START — with a rolling deploy
+// the old task keeps serving and the deploy fails loudly — instead of booting into a silent
+// incident (empty auth.secret → forgeable JWTs, dev DB password, etc). Unit tests call
+// NewConfig directly to stay lean.
+func NewValidatedConfig() (*Configuration, error) {
+	cfg, err := NewConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Deployment.Mode == types.ModeLocal {
+		return cfg, nil
+	}
+	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
+	// Many fields carry dormant `validate:"required"` tags that were never enforced
+	// (Validate was never called at boot historically) and are broken for boot-time
+	// use: `required` on a bool fails whenever it's false (Cache.Enabled, S3.Enabled,
+	// DynamoDB.InUse), and AWS-only creds (FlexpriceS3Exports.*) are legitimately unset
+	// on GCP. Enforcing them wholesale crashlooped every non-local pod. Fixing those
+	// tags is a separate cleanup; until then fail-fast is scoped to the targeted secret
+	// check below.
+	//
+	// validateSecrets is WARN-ONLY: it logs placeholder/dev secrets for enabled features
+	// but does NOT abort boot. A hard fail at boot risks a prod crashloop (cf. the
+	// 2026-07-06 full-struct-validation incident), so we surface misconfig in logs
+	// without taking prod down. Tighten to hard-fail later, once every env is confirmed
+	// clean via a staging deploy.
+	if err := cfg.validateSecrets(); err != nil {
+		log.Printf("[config] WARNING: %v", err)
+	}
+	return cfg, nil
+}
+
+// validateSecrets flags placeholder/dev secret values for features that are actually
+// enabled. It is intentionally conservative — it checks only KNOWN baked sentinels (not mere
+// emptiness of optional secrets) so it never false-positives on a legitimate deploy.
+// The caller (NewValidatedConfig) gates this on deployment.mode != local and treats a
+// returned error as a WARNING, not a boot failure.
+func (c Configuration) validateSecrets() error {
+	isPlaceholder := func(v string) bool { return placeholderSecrets[strings.TrimSpace(v)] }
+
+	var bad []string
+	// auth.secret signs/verifies JWTs for the flexprice provider — always required there.
+	if c.Auth.Provider == types.AuthProviderFlexprice && isPlaceholder(c.Auth.Secret) {
+		bad = append(bad, "auth.secret (FLEXPRICE_AUTH_SECRET)")
+	}
+	// supabase service key — required only when supabase is the auth provider.
+	if c.Auth.Provider == types.AuthProviderSupabase && isPlaceholder(c.Auth.Supabase.ServiceKey) {
+		bad = append(bad, "auth.supabase.service_key (FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY)")
+	}
+	// svix token — required only when the Svix webhook backend is on.
+	if c.Webhook.Svix.Enabled && isPlaceholder(c.Webhook.Svix.AuthToken) {
+		bad = append(bad, "webhook.svix_config.auth_token (FLEXPRICE_SVIX_API_KEY)")
+	}
+	// db creds — reject only the shared dev password. Don't require non-empty: managed IAM
+	// auth can legitimately use an empty DB password.
+	if strings.TrimSpace(c.Postgres.Password) == devDBPassword {
+		bad = append(bad, "postgres.password (FLEXPRICE_POSTGRES_PASSWORD)")
+	}
+	if strings.TrimSpace(c.ClickHouse.Password) == devDBPassword {
+		bad = append(bad, "clickhouse.password (FLEXPRICE_CLICKHOUSE_PASSWORD)")
+	}
+	// NOTE: secrets.encryption_key is intentionally NOT checked. ECS prod currently decrypts
+	// with the baked value (canonical env FLEXPRICE_SECRETS_ENCRYPTION_KEY is unset there; ECS
+	// sets a different, unread name). Rejecting it would block prod boot and switching keys
+	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
+
+	if len(bad) > 0 {
+		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
+			c.Deployment.Mode, strings.Join(bad, ", "))
+	}
+	return nil
 }
 
 // GetDefaultConfig returns a default configuration for local development
@@ -783,9 +1058,26 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 			Password: c.Password,
 		},
 		ConnOpenStrategy: clickhouse.ConnOpenInOrder,
+		// Bounded dial/read deadlines. Without DialTimeout the native driver can
+		// block forever on connect: ClickHouse Cloud behind AWS PrivateLink is
+		// fronted by multiple AZ ENIs, and an in-order dial to an ENI that never
+		// completes the TCP/native handshake hangs indefinitely with no default
+		// deadline. A finite DialTimeout makes it fail over to the next address.
+		DialTimeout: defaultClickHouseDialTimeout,
+		ReadTimeout: defaultClickHouseReadTimeout,
+		// Pool sizing. Zero values leave the driver defaults (MaxIdleConns 5,
+		// MaxOpenConns MaxIdleConns+5), which cap per-process query concurrency at 10.
+		MaxOpenConns: c.MaxOpenConns,
+		MaxIdleConns: c.MaxIdleConns,
+	}
+	if c.DialTimeout > 0 {
+		options.DialTimeout = c.DialTimeout
+	}
+	if c.ReadTimeout > 0 {
+		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
-		options.TLS = &tls.Config{}
+		options.TLS = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
 	}
 
 	maxMemoryUsageBytes := c.MaxMemoryUsage * int64(1024) * int64(1024) * int64(1024)

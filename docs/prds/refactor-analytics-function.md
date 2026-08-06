@@ -3,7 +3,7 @@
 ## 1. Executive Summary
 
 ### Problem Statement
-The `GetDetailedUsageAnalytics` function in `internal/service/feature_usage_tracking.go` has become severely unoptimized with:
+The `GetDetailedUsageAnalytics` function in `internal/ee/service/feature_usage_tracking.go` has become severely unoptimized with:
 - Excessive code complexity (125+ lines with 9+ steps)
 - Multiple sequential database calls causing performance bottlenecks
 - Deep nesting levels (3+ levels) making code hard to maintain

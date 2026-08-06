@@ -35,7 +35,7 @@ type MoyasarClient interface {
 	// Token methods
 	CreateToken(ctx context.Context, req *CreateTokenRequest) (*CreateTokenResponse, error)
 	GetToken(ctx context.Context, tokenID string) (*MoyasarToken, error)
-	ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string) (*CreatePaymentResponse, error)
+	ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID, invoiceID string) (*CreatePaymentResponse, error)
 }
 
 // Client handles Moyasar API client setup and configuration
@@ -555,16 +555,20 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amount int
 	return &refund, nil
 }
 
-// VoidPayment voids an authorized but uncaptured payment in Moyasar
-// This is used for cancelling SetupIntent or authorized payments
+// VoidPayment voids a paid or authorized payment in Moyasar.
+// This is intended for AUTH payments
 func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPayment, error) {
 	config, err := c.GetMoyasarConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create HTTP request to void the payment
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, BaseURL+"/payments/"+paymentID+"/void", nil)
+	body, err := json.Marshal(map[string]string{"reason": "card_verification"})
+	if err != nil {
+		return nil, ierr.NewError("failed to marshal void request").Mark(ierr.ErrInternal)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, BaseURL+"/payments/"+paymentID+"/void", bytes.NewReader(body))
 	if err != nil {
 		return nil, ierr.NewError("failed to create HTTP request").Mark(ierr.ErrInternal)
 	}
@@ -801,7 +805,7 @@ func (c *Client) GetToken(ctx context.Context, tokenID string) (*MoyasarToken, e
 }
 
 // ChargeWithToken charges a payment using a saved token
-func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string) (*CreatePaymentResponse, error) {
+func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID, invoiceID string) (*CreatePaymentResponse, error) {
 	// Build payment request with token source
 	req := &CreatePaymentRequest{
 		Amount:      amount,
@@ -809,6 +813,7 @@ func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int
 		Description: description,
 		Metadata:    metadata,
 		GivenID:     givenID,
+		InvoiceID:   invoiceID,
 		Source: &PaymentSource{
 			Type:  PaymentSourceTypeToken,
 			Token: tokenID,
@@ -816,7 +821,6 @@ func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int
 	}
 
 	c.logger.Info(ctx, "charging payment with token",
-		"token_id", tokenID,
 		"amount", amount,
 		"currency", currency)
 

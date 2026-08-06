@@ -123,6 +123,11 @@ func SubscriptionID(v string) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
+// AddonID applies equality check predicate on the "addon_id" field. It's identical to AddonIDEQ.
+func AddonID(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldAddonID, v))
+}
+
 // Credits applies equality check predicate on the "credits" field. It's identical to CreditsEQ.
 func Credits(v decimal.Decimal) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldCredits, v))
@@ -924,6 +929,81 @@ func SubscriptionIDEqualFold(v string) predicate.CreditGrant {
 // SubscriptionIDContainsFold applies the ContainsFold predicate on the "subscription_id" field.
 func SubscriptionIDContainsFold(v string) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldContainsFold(FieldSubscriptionID, v))
+}
+
+// AddonIDEQ applies the EQ predicate on the "addon_id" field.
+func AddonIDEQ(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldAddonID, v))
+}
+
+// AddonIDNEQ applies the NEQ predicate on the "addon_id" field.
+func AddonIDNEQ(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldAddonID, v))
+}
+
+// AddonIDIn applies the In predicate on the "addon_id" field.
+func AddonIDIn(vs ...string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldAddonID, vs...))
+}
+
+// AddonIDNotIn applies the NotIn predicate on the "addon_id" field.
+func AddonIDNotIn(vs ...string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldAddonID, vs...))
+}
+
+// AddonIDGT applies the GT predicate on the "addon_id" field.
+func AddonIDGT(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldAddonID, v))
+}
+
+// AddonIDGTE applies the GTE predicate on the "addon_id" field.
+func AddonIDGTE(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldAddonID, v))
+}
+
+// AddonIDLT applies the LT predicate on the "addon_id" field.
+func AddonIDLT(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldAddonID, v))
+}
+
+// AddonIDLTE applies the LTE predicate on the "addon_id" field.
+func AddonIDLTE(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldAddonID, v))
+}
+
+// AddonIDContains applies the Contains predicate on the "addon_id" field.
+func AddonIDContains(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldContains(FieldAddonID, v))
+}
+
+// AddonIDHasPrefix applies the HasPrefix predicate on the "addon_id" field.
+func AddonIDHasPrefix(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldHasPrefix(FieldAddonID, v))
+}
+
+// AddonIDHasSuffix applies the HasSuffix predicate on the "addon_id" field.
+func AddonIDHasSuffix(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldHasSuffix(FieldAddonID, v))
+}
+
+// AddonIDIsNil applies the IsNil predicate on the "addon_id" field.
+func AddonIDIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldAddonID))
+}
+
+// AddonIDNotNil applies the NotNil predicate on the "addon_id" field.
+func AddonIDNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldAddonID))
+}
+
+// AddonIDEqualFold applies the EqualFold predicate on the "addon_id" field.
+func AddonIDEqualFold(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEqualFold(FieldAddonID, v))
+}
+
+// AddonIDContainsFold applies the ContainsFold predicate on the "addon_id" field.
+func AddonIDContainsFold(v string) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldContainsFold(FieldAddonID, v))
 }
 
 // CreditsEQ applies the EQ predicate on the "credits" field.
@@ -1770,6 +1850,29 @@ func HasSubscription() predicate.CreditGrant {
 func HasSubscriptionWith(preds ...predicate.Subscription) predicate.CreditGrant {
 	return predicate.CreditGrant(func(s *sql.Selector) {
 		step := newSubscriptionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAddon applies the HasEdge predicate on the "addon" edge.
+func HasAddon() predicate.CreditGrant {
+	return predicate.CreditGrant(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, AddonTable, AddonColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAddonWith applies the HasEdge predicate on the "addon" edge with a given conditions (other predicates).
+func HasAddonWith(preds ...predicate.Addon) predicate.CreditGrant {
+	return predicate.CreditGrant(func(s *sql.Selector) {
+		step := newAddonStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

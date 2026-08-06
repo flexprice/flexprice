@@ -103,6 +103,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	f.builders[types.WebhookEventWalletTransactionCreated] = func() PayloadBuilder {
 		return NewTransactionPayloadBuilder(f.services)
 	}
+	f.builders[types.WebhookEventWalletTransactionUpdated] = func() PayloadBuilder {
+		return NewTransactionPayloadBuilder(f.services)
+	}
 	f.builders[types.WebhookEventWalletCreditBalanceDropped] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
 	}
@@ -113,6 +116,9 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewWalletPayloadBuilder(f.services)
 	}
 	f.builders[types.WebhookEventWalletOngoingBalanceRecovered] = func() PayloadBuilder {
+		return NewWalletPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventWalletOngoingBalanceUpdated] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)
 	}
 
@@ -154,6 +160,48 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 	}
 	f.builders[types.WebhookEventFeatureWalletBalanceAlert] = func() PayloadBuilder {
 		return NewAlertPayloadBuilder(f.services)
+	}
+
+	// event (usage ingestion) builder
+	f.builders[types.WebhookEventEventRejected] = func() PayloadBuilder {
+		return NewRejectedEventPayloadBuilder(f.services)
+	}
+
+	// spend alert builders (alert_settings table)
+	f.builders[types.WebhookEventSubscriptionSpendThresholdReached] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionSpendThresholdRecovered] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionLineItemSpendThresholdReached] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionLineItemSpendThresholdRecovered] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionGroupSpendThresholdReached] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventSubscriptionGroupSpendThresholdRecovered] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventEntitlementGrantExhausted] = func() PayloadBuilder {
+		return NewAlertPayloadBuilder(f.services)
+	}
+
+	// checkout session builders
+	f.builders[types.WebhookEventCheckoutSessionInitiated] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionCompleted] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionFailed] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
+	}
+	f.builders[types.WebhookEventCheckoutSessionExpired] = func() PayloadBuilder {
+		return NewCheckoutSessionPayloadBuilder(f.services)
 	}
 
 	return f

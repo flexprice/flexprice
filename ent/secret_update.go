@@ -241,6 +241,26 @@ func (su *SecretUpdate) ClearUserType() *SecretUpdate {
 	return su
 }
 
+// SetUserID sets the "user_id" field.
+func (su *SecretUpdate) SetUserID(s string) *SecretUpdate {
+	su.mutation.SetUserID(s)
+	return su
+}
+
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (su *SecretUpdate) SetNillableUserID(s *string) *SecretUpdate {
+	if s != nil {
+		su.SetUserID(*s)
+	}
+	return su
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (su *SecretUpdate) ClearUserID() *SecretUpdate {
+	su.mutation.ClearUserID()
+	return su
+}
+
 // Mutation returns the SecretMutation object of the builder.
 func (su *SecretUpdate) Mutation() *SecretMutation {
 	return su.mutation
@@ -387,6 +407,12 @@ func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.UserTypeCleared() {
 		_spec.ClearField(secret.FieldUserType, field.TypeString)
+	}
+	if value, ok := su.mutation.UserID(); ok {
+		_spec.SetField(secret.FieldUserID, field.TypeString, value)
+	}
+	if su.mutation.UserIDCleared() {
+		_spec.ClearField(secret.FieldUserID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -620,6 +646,26 @@ func (suo *SecretUpdateOne) ClearUserType() *SecretUpdateOne {
 	return suo
 }
 
+// SetUserID sets the "user_id" field.
+func (suo *SecretUpdateOne) SetUserID(s string) *SecretUpdateOne {
+	suo.mutation.SetUserID(s)
+	return suo
+}
+
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (suo *SecretUpdateOne) SetNillableUserID(s *string) *SecretUpdateOne {
+	if s != nil {
+		suo.SetUserID(*s)
+	}
+	return suo
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (suo *SecretUpdateOne) ClearUserID() *SecretUpdateOne {
+	suo.mutation.ClearUserID()
+	return suo
+}
+
 // Mutation returns the SecretMutation object of the builder.
 func (suo *SecretUpdateOne) Mutation() *SecretMutation {
 	return suo.mutation
@@ -796,6 +842,12 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 	}
 	if suo.mutation.UserTypeCleared() {
 		_spec.ClearField(secret.FieldUserType, field.TypeString)
+	}
+	if value, ok := suo.mutation.UserID(); ok {
+		_spec.SetField(secret.FieldUserID, field.TypeString, value)
+	}
+	if suo.mutation.UserIDCleared() {
+		_spec.ClearField(secret.FieldUserID, field.TypeString)
 	}
 	_node = &Secret{config: suo.config}
 	_spec.Assign = _node.assignValues

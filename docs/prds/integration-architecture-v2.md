@@ -144,7 +144,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) *RazorpayProvider 
 
 ### **Step 5: Update Service Layer**
 ```go
-// internal/service/payment.go
+// internal/ee/service/payment.go
 func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreatePaymentLinkRequest) (*dto.PaymentResponse, error) {
     // Determine provider based on request or configuration
     if req.Provider == "razorpay" {

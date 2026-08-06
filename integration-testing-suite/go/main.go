@@ -86,20 +86,27 @@ func main() {
 // its aggregate outcome.
 func runTarget(t Target) targetOutcome {
 	serverURL := t.serverURL()
+	insecure := t.skipTLSVerify()
 
 	fmt.Printf("API Host: %s\n", t.host())
 	fmt.Printf("API Key:  %s\n", t.maskedKey())
+	if insecure {
+		fmt.Printf("TLS:      INSECURE (certificate verification disabled)\n")
+	}
 	fmt.Printf("Started:  %s\n", time.Now().Format(time.RFC3339))
 
 	// ── Initialize SDK client ───────────────────────────────────────────
 
+	httpClient := newHTTPClient(insecure)
+
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
 		flexprice.WithSecurity(t.APIKey),
+		flexprice.WithClient(httpClient),
 	)
 
 	// Also keep a raw HTTP client as fallback for any edge cases.
-	raw := NewRawClient(serverURL, t.APIKey)
+	raw := NewRawClient(serverURL, t.APIKey, httpClient)
 
 	// ── Run orchestrated sanity test ────────────────────────────────────
 

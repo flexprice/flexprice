@@ -4,8 +4,7 @@ kind: PodDisruptionBudget
 metadata:
   name: {{ include "flexprice.fullname" . }}-frontend
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: frontend
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
 spec:
   {{- if .Values.frontend.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.frontend.podDisruptionBudget.minAvailable }}

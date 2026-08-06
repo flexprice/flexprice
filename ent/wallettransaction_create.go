@@ -336,6 +336,20 @@ func (wtc *WalletTransactionCreate) SetNillablePriority(i *int) *WalletTransacti
 	return wtc
 }
 
+// SetParentTransactionID sets the "parent_transaction_id" field.
+func (wtc *WalletTransactionCreate) SetParentTransactionID(s string) *WalletTransactionCreate {
+	wtc.mutation.SetParentTransactionID(s)
+	return wtc
+}
+
+// SetNillableParentTransactionID sets the "parent_transaction_id" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableParentTransactionID(s *string) *WalletTransactionCreate {
+	if s != nil {
+		wtc.SetParentTransactionID(*s)
+	}
+	return wtc
+}
+
 // SetID sets the "id" field.
 func (wtc *WalletTransactionCreate) SetID(s string) *WalletTransactionCreate {
 	wtc.mutation.SetID(s)
@@ -632,6 +646,10 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 	if value, ok := wtc.mutation.Priority(); ok {
 		_spec.SetField(wallettransaction.FieldPriority, field.TypeInt, value)
 		_node.Priority = &value
+	}
+	if value, ok := wtc.mutation.ParentTransactionID(); ok {
+		_spec.SetField(wallettransaction.FieldParentTransactionID, field.TypeString, value)
+		_node.ParentTransactionID = value
 	}
 	return _node, _spec
 }

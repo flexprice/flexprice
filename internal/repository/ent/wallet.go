@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -20,17 +22,17 @@ import (
 )
 
 type walletRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts WalletTransactionQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  WalletTransactionQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) walletdomain.Repository {
+func NewWalletRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) walletdomain.Repository {
 	return &walletRepository{
-		client: client,
-		logger: logger,
-		cache:  cache,
+		client:     client,
+		logger:     logger,
+		redisCache: redisCache,
 	}
 }
 
@@ -376,6 +378,11 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		tx.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	var parentTransactionID *string
+	if tx.ParentTransactionID != "" {
+		parentTransactionID = &tx.ParentTransactionID
+	}
+
 	transaction, err := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
@@ -405,9 +412,21 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetEnvironmentID(tx.EnvironmentID).
 		SetIdempotencyKey(tx.IdempotencyKey).
 		SetNillablePriority(tx.Priority).
+		SetNillableParentTransactionID(parentTransactionID).
 		Save(ctx)
 
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A wallet transaction with this idempotency key already exists").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":       tx.WalletID,
+					"type":            tx.Type,
+					"amount":          tx.Amount,
+					"idempotency_key": tx.IdempotencyKey,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create wallet transaction").
 			WithReportableDetails(map[string]interface{}{
@@ -523,6 +542,89 @@ func (r *walletRepository) GetTransactionByIdempotencyKey(ctx context.Context, i
 			WithHint("Failed to retrieve transaction by idempotency key").
 			WithReportableDetails(map[string]interface{}{
 				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return walletdomain.TransactionFromEnt(t), nil
+}
+
+// GetPendingTransactionByParent returns the pending bonus transaction whose
+// parent_transaction_id is parentTransactionID, if one exists.
+func (r *walletRepository) GetPendingTransactionByParent(ctx context.Context, parentTransactionID string) (*walletdomain.Transaction, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "wallet", "get_pending_transaction_by_parent", map[string]interface{}{
+		"parent_transaction_id": parentTransactionID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	t, err := client.WalletTransaction.Query().
+		Where(
+			wallettransaction.ParentTransactionID(parentTransactionID),
+			wallettransaction.TransactionStatusEQ(types.TransactionStatusPending),
+			wallettransaction.TenantID(types.GetTenantID(ctx)),
+			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Pending bonus transaction not found").
+				WithReportableDetails(map[string]interface{}{
+					"parent_transaction_id": parentTransactionID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve pending bonus transaction").
+			WithReportableDetails(map[string]interface{}{
+				"parent_transaction_id": parentTransactionID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return walletdomain.TransactionFromEnt(t), nil
+}
+
+// GetLastAutoTopupTransactionForWallet returns the most recent published wallet
+// transaction with metadata.auto_topup=true for the wallet, or nil if none.
+func (r *walletRepository) GetLastAutoTopupTransactionForWallet(ctx context.Context, walletID string) (*walletdomain.Transaction, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_last_auto_topup_transaction_for_wallet", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	t, err := client.WalletTransaction.Query().
+		Where(
+			wallettransaction.WalletID(walletID),
+			wallettransaction.TenantID(types.GetTenantID(ctx)),
+			wallettransaction.StatusEQ(string(types.StatusPublished)),
+			wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
+			predicate.WalletTransaction(func(s *sql.Selector) {
+				s.Where(sqljson.ValueEQ(
+					wallettransaction.FieldMetadata,
+					"true",
+					sqljson.Path(types.WalletMetadataKeyAutoTopup),
+				))
+			}),
+		).
+		Order(wallettransaction.ByCreatedAt(sql.OrderDesc())).
+		First(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, nil
+		}
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve last auto-topup wallet transaction").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": walletID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -742,7 +844,10 @@ func (o WalletTransactionQueryOptions) ApplyEnvironmentFilter(ctx context.Contex
 
 func (o WalletTransactionQueryOptions) ApplyStatusFilter(query WalletTransactionQuery, status string) WalletTransactionQuery {
 	if status == "" {
-		return query.Where(wallettransaction.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(wallettransaction.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(wallettransaction.Status(status))
 }
@@ -918,42 +1023,41 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 }
 
 func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
-	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": wallet.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, wallet.ID)
-	r.cache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, wallet.ID)
+	r.redisCache.Set(ctx, cacheKey, wallet, cache.ExpiryDefaultRedis)
 }
 
-func (r *walletRepository) GetCache(ctx context.Context, key string) *walletdomain.Wallet {
-	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
-		"wallet_id": key,
+func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+		"wallet_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*walletdomain.Wallet)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	w, ok := cache.UnmarshalCacheValue[walletdomain.Wallet](value)
+	if !ok {
+		return nil
+	}
+	return w
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
-	span := cache.StartCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
 		"wallet_id": walletID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixWallet, tenantID, environmentID, walletID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*walletdomain.Wallet, error) {

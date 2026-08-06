@@ -17,20 +17,34 @@ import (
 	"github.com/samber/lo"
 )
 
-type entitlementRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts EntitlementQueryOptions
-	cache     cache.Cache
+var cachedEntityTypes = []types.EntitlementEntityType{
+	types.ENTITLEMENT_ENTITY_TYPE_PLAN,
 }
 
-func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainEntitlement.Repository {
+type entitlementRepository struct {
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  EntitlementQueryOptions
+	cache      cache.InMemoryCache
+	redisCache cache.RedisCache
+}
+
+func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache, redisCache cache.RedisCache) domainEntitlement.Repository {
 	return &entitlementRepository{
-		client:    client,
-		log:       log,
-		queryOpts: EntitlementQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  EntitlementQueryOptions{},
+		cache:      cache,
+		redisCache: redisCache,
 	}
+}
+
+// defaultedAggregationMode maps zero-value to `additive` so ent doesn't emit an empty string.
+func defaultedAggregationMode(m types.EntitlementAggregationMode) types.EntitlementAggregationMode {
+	if m == "" {
+		return types.EntitlementAggregationModeAdditive
+	}
+	return m
 }
 
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
@@ -50,7 +64,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		e.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	result, err := client.Entitlement.Create().
+	createQuery := client.Entitlement.Create().
 		SetID(e.ID).
 		SetEntityType(e.EntityType).
 		SetEntityID(e.EntityID).
@@ -71,7 +85,15 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetCreatedBy(e.CreatedBy).
 		SetUpdatedBy(e.UpdatedBy).
 		SetEnvironmentID(e.EnvironmentID).
-		Save(ctx)
+		SetGrantMeasure(e.GrantMeasure).
+		SetNillableGrantDurationValue(e.GrantDurationValue).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetNillableGrantQuota(e.GrantQuota).
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
+	if e.ConfigValue != nil {
+		createQuery = createQuery.SetConfigValue(e.ConfigValue)
+	}
+	result, err := createQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -95,6 +117,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 			Mark(ierr.ErrDatabase)
 	}
 
+	r.deleteEntityCache(ctx, e.EntityType, e.EntityID)
 	return domainEntitlement.FromEnt(result), nil
 }
 
@@ -278,7 +301,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 	})
 	defer FinishSpan(span)
 
-	result, err := client.Entitlement.UpdateOneID(e.ID).
+	updateQuery := client.Entitlement.UpdateOneID(e.ID).
 		Where(
 			entitlement.TenantID(e.TenantID),
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -296,7 +319,24 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetGrantMeasure(e.GrantMeasure).
+		SetGrantDurationUnit(e.GrantDurationUnit).
+		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
+	// SetNillable* with nil is a no-op, so clearing a grant config needs explicit Clear.
+	if e.GrantDurationValue != nil {
+		updateQuery = updateQuery.SetGrantDurationValue(*e.GrantDurationValue)
+	} else {
+		updateQuery = updateQuery.ClearGrantDurationValue()
+	}
+	if e.GrantQuota != nil {
+		updateQuery = updateQuery.SetGrantQuota(*e.GrantQuota)
+	} else {
+		updateQuery = updateQuery.ClearGrantQuota()
+	}
+	if e.ConfigValue != nil {
+		updateQuery = updateQuery.SetConfigValue(e.ConfigValue)
+	}
+	result, err := updateQuery.Save(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -311,6 +351,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 			Mark(ierr.ErrDatabase)
 	}
 	r.DeleteCache(ctx, e.ID)
+	r.deleteEntityCache(ctx, e.EntityType, e.EntityID)
 	return domainEntitlement.FromEnt(result), nil
 }
 
@@ -329,7 +370,13 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	_, err := client.Entitlement.Update().
+	existing, err := r.Get(ctx, id)
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
+
+	_, err = client.Entitlement.Update().
 		Where(
 			entitlement.ID(id),
 			entitlement.TenantID(types.GetTenantID(ctx)),
@@ -354,6 +401,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	r.DeleteCache(ctx, id)
+	r.deleteEntityCache(ctx, existing.GetEntityType(), existing.GetEntityID())
 	return nil
 }
 
@@ -381,7 +429,7 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			e.EnvironmentID = environmentID
 		}
 
-		builders[i] = client.Entitlement.Create().
+		builder := client.Entitlement.Create().
 			SetID(e.ID).
 			SetEntityType(e.EntityType).
 			SetEntityID(e.EntityID).
@@ -402,7 +450,16 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetUpdatedAt(e.UpdatedAt).
 			SetCreatedBy(e.CreatedBy).
 			SetUpdatedBy(e.UpdatedBy).
-			SetEnvironmentID(e.EnvironmentID)
+			SetEnvironmentID(e.EnvironmentID).
+			SetGrantMeasure(e.GrantMeasure).
+			SetNillableGrantDurationValue(e.GrantDurationValue).
+			SetGrantDurationUnit(e.GrantDurationUnit).
+			SetNillableGrantQuota(e.GrantQuota).
+			SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
+		if e.ConfigValue != nil {
+			builder = builder.SetConfigValue(e.ConfigValue)
+		}
+		builders[i] = builder
 	}
 
 	results, err := client.Entitlement.CreateBulk(builders...).Save(ctx)
@@ -424,7 +481,9 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			Mark(ierr.ErrDatabase)
 	}
 
-	return domainEntitlement.FromEntList(results), nil
+	created := domainEntitlement.FromEntList(results)
+	r.invalidateEntityCaches(ctx, created)
+	return created, nil
 }
 
 func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) error {
@@ -441,7 +500,24 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 
 	r.log.Debug(ctx, "deleting entitlements in bulk", "count", len(ids))
 
-	_, err := r.client.Writer(ctx).Entitlement.Update().
+	// Resolve the owning entities before archiving so their cached lists can be dropped.
+	affected, err := r.client.Writer(ctx).Entitlement.Query().
+		Where(
+			entitlement.IDIn(ids...),
+			entitlement.TenantID(types.GetTenantID(ctx)),
+			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		All(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load entitlements for bulk delete").
+			WithReportableDetails(map[string]interface{}{
+				"count": len(ids),
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	_, err = r.client.Writer(ctx).Entitlement.Update().
 		Where(
 			entitlement.IDIn(ids...),
 			entitlement.TenantID(types.GetTenantID(ctx)),
@@ -461,7 +537,45 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	deleted := domainEntitlement.FromEntList(affected)
+	r.invalidateEntityCaches(ctx, deleted)
+
 	return nil
+}
+
+func (r *entitlementRepository) ListByEntity(ctx context.Context, entityType types.EntitlementEntityType, entityID string) ([]*domainEntitlement.Entitlement, error) {
+	if entityID == "" {
+		return []*domainEntitlement.Entitlement{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "entitlement", "list_by_entity", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+		"tenant_id":   types.GetTenantID(ctx),
+	})
+	defer FinishSpan(span)
+
+	if cached := r.getEntityCache(ctx, entityType, entityID); cached != nil {
+		SetSpanSuccess(span)
+		return cached, nil
+	}
+
+	filter := &types.EntitlementFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityType:  lo.ToPtr(entityType),
+		EntityIDs:   []string{entityID},
+	}
+	filter.WithStatus(types.StatusPublished)
+
+	entitlements, err := r.List(ctx, filter)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+
+	r.setEntityCache(ctx, entityType, entityID, entitlements)
+	SetSpanSuccess(span)
+	return entitlements, nil
 }
 
 // ListByPlanIDs retrieves all entitlements for the given plan IDs
@@ -563,7 +677,7 @@ func (o EntitlementQueryOptions) ApplyEnvironmentFilter(ctx context.Context, que
 
 func (o EntitlementQueryOptions) ApplyStatusFilter(query EntitlementQuery, status string) EntitlementQuery {
 	if status == "" {
-		return query.Where(entitlement.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(entitlement.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(entitlement.Status(status))
 }
@@ -631,6 +745,14 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		query = query.Where(entitlement.IsEnabled(*f.IsEnabled))
 	}
 
+	if f.HasGrantConfig != nil {
+		if *f.HasGrantConfig {
+			query = query.Where(entitlement.GrantQuotaNotNil())
+		} else {
+			query = query.Where(entitlement.GrantQuotaIsNil())
+		}
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {
@@ -670,40 +792,125 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 }
 
 func (r *entitlementRepository) SetCache(ctx context.Context, entitlement *domainEntitlement.Entitlement) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "set", map[string]interface{}{
 		"entitlement_id": entitlement.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlement.ID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlement.ID)
 	r.cache.Set(ctx, cacheKey, entitlement, cache.ExpiryDefaultInMemory)
 }
 
-func (r *entitlementRepository) GetCache(ctx context.Context, key string) *domainEntitlement.Entitlement {
-	span := cache.StartCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
-		"entitlement_id": key,
+func (r *entitlementRepository) GetCache(ctx context.Context, id string) *domainEntitlement.Entitlement {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "get", map[string]interface{}{
+		"entitlement_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainEntitlement.Entitlement)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	e, ok := cache.UnmarshalCacheValue[domainEntitlement.Entitlement](value)
+	if !ok {
+		return nil
+	}
+	return e
 }
 
 func (r *entitlementRepository) DeleteCache(ctx context.Context, entitlementID string) {
-	span := cache.StartCacheSpan(ctx, "entitlement", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "entitlement", "delete", map[string]interface{}{
 		"entitlement_id": entitlementID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixEntitlement, tenantID, environmentID, entitlementID)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixEntitlement, entitlementID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+func (r *entitlementRepository) entityCacheKey(ctx context.Context, entityType types.EntitlementEntityType, entityID string) string {
+	if r.redisCache == nil || entityID == "" || !lo.Contains(cachedEntityTypes, entityType) {
+		return ""
+	}
+
+	return cache.GenerateKey(ctx, cache.PrefixEntitlement, "entity", string(entityType), entityID)
+}
+
+func (r *entitlementRepository) setEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string, entitlements []*domainEntitlement.Entitlement) {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "set", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	r.redisCache.Set(spanCtx, cacheKey, entitlements, cache.ExpiryDefaultRedis)
+}
+
+func (r *entitlementRepository) getEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) []*domainEntitlement.Entitlement {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return nil
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "get", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	value, found := r.redisCache.Get(spanCtx, cacheKey)
+	if !found {
+		cache.SetCacheHit(span, false)
+		return nil
+	}
+
+	entitlements, ok := cache.UnmarshalCacheValue[[]*domainEntitlement.Entitlement](value)
+	if !ok || entitlements == nil {
+		cache.SetCacheHit(span, false)
+		return nil
+	}
+
+	cache.SetCacheHit(span, true)
+	return *entitlements
+}
+
+func (r *entitlementRepository) invalidateEntityCaches(ctx context.Context, entitlements []*domainEntitlement.Entitlement) {
+	seen := make(map[string]struct{}, len(entitlements))
+	for _, e := range entitlements {
+		if e == nil || e.EntityID == "" {
+			continue
+		}
+
+		key := r.entityCacheKey(ctx, e.GetEntityType(), e.GetEntityID())
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		r.deleteEntityCache(ctx, e.GetEntityType(), e.GetEntityID())
+	}
+}
+
+func (r *entitlementRepository) deleteEntityCache(ctx context.Context, entityType types.EntitlementEntityType, entityID string) {
+	cacheKey := r.entityCacheKey(ctx, entityType, entityID)
+	if cacheKey == "" {
+		return
+	}
+
+	span, spanCtx := cache.StartRedisCacheSpan(ctx, "entity_entitlements", "delete", map[string]interface{}{
+		"entity_type": entityType,
+		"entity_id":   entityID,
+	})
+	defer cache.FinishSpan(span)
+
+	r.redisCache.Delete(spanCtx, cacheKey)
 }

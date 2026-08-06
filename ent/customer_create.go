@@ -142,6 +142,20 @@ func (cc *CustomerCreate) SetNillableEmail(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetContact sets the "contact" field.
+func (cc *CustomerCreate) SetContact(s string) *CustomerCreate {
+	cc.mutation.SetContact(s)
+	return cc
+}
+
+// SetNillableContact sets the "contact" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableContact(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetContact(*s)
+	}
+	return cc
+}
+
 // SetAddressLine1 sets the "address_line1" field.
 func (cc *CustomerCreate) SetAddressLine1(s string) *CustomerCreate {
 	cc.mutation.SetAddressLine1(s)
@@ -226,6 +240,20 @@ func (cc *CustomerCreate) SetNillableAddressCountry(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetTimezone sets the "timezone" field.
+func (cc *CustomerCreate) SetTimezone(s string) *CustomerCreate {
+	cc.mutation.SetTimezone(s)
+	return cc
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableTimezone(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetTimezone(*s)
+	}
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -282,6 +310,10 @@ func (cc *CustomerCreate) defaults() {
 	if _, ok := cc.mutation.EnvironmentID(); !ok {
 		v := customer.DefaultEnvironmentID
 		cc.mutation.SetEnvironmentID(v)
+	}
+	if _, ok := cc.mutation.Timezone(); !ok {
+		v := customer.DefaultTimezone
+		cc.mutation.SetTimezone(v)
 	}
 }
 
@@ -399,6 +431,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 		_spec.SetField(customer.FieldEmail, field.TypeString, value)
 		_node.Email = value
 	}
+	if value, ok := cc.mutation.Contact(); ok {
+		_spec.SetField(customer.FieldContact, field.TypeString, value)
+		_node.Contact = &value
+	}
 	if value, ok := cc.mutation.AddressLine1(); ok {
 		_spec.SetField(customer.FieldAddressLine1, field.TypeString, value)
 		_node.AddressLine1 = value
@@ -422,6 +458,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.AddressCountry(); ok {
 		_spec.SetField(customer.FieldAddressCountry, field.TypeString, value)
 		_node.AddressCountry = value
+	}
+	if value, ok := cc.mutation.Timezone(); ok {
+		_spec.SetField(customer.FieldTimezone, field.TypeString, value)
+		_node.Timezone = value
 	}
 	return _node, _spec
 }

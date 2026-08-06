@@ -63,6 +63,8 @@ const (
 	FieldFailedAt = "failed_at"
 	// FieldRefundedAt holds the string denoting the refunded_at field in the database.
 	FieldRefundedAt = "refunded_at"
+	// FieldVoidedAt holds the string denoting the voided_at field in the database.
+	FieldVoidedAt = "voided_at"
 	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
 	FieldRecordedAt = "recorded_at"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
@@ -107,6 +109,7 @@ var Columns = []string{
 	FieldSucceededAt,
 	FieldFailedAt,
 	FieldRefundedAt,
+	FieldVoidedAt,
 	FieldRecordedAt,
 	FieldErrorMessage,
 }
@@ -266,6 +269,11 @@ func ByFailedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByRefundedAt orders the results by the refunded_at field.
 func ByRefundedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRefundedAt, opts...).ToFunc()
+}
+
+// ByVoidedAt orders the results by the voided_at field.
+func ByVoidedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVoidedAt, opts...).ToFunc()
 }
 
 // ByRecordedAt orders the results by the recorded_at field.

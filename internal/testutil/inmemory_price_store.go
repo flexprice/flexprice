@@ -67,6 +67,13 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		return false
 	}
 
+	// Filter by billing periods
+	if len(f.BillingPeriods) > 0 {
+		if !lo.Contains(f.BillingPeriods, p.BillingPeriod) {
+			return false
+		}
+	}
+
 	// Filter by time range
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && p.CreatedAt.Before(*f.StartTime) {

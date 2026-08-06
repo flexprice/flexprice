@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,15 @@ import (
 // InMemoryCouponStore implements coupon.Repository
 type InMemoryCouponStore struct {
 	*InMemoryStore[*coupon.Coupon]
+
+	// redemptionMu serializes IncrementRedemptions' read-check-write sequence.
+	// The embedded InMemoryStore locks each individual Get/Update call, but not
+	// across both — without this, two concurrent IncrementRedemptions calls can
+	// both Get() the same pre-increment state, both pass the limit check, and
+	// both Update(), letting TotalRedemptions exceed MaxRedemptions. This
+	// mirrors the atomic-guard contract the real Ent repository provides via a
+	// single conditional UPDATE statement.
+	redemptionMu sync.Mutex
 }
 
 // NewInMemoryCouponStore creates a new in-memory coupon store
@@ -43,6 +53,7 @@ func copyCoupon(c *coupon.Coupon) *coupon.Coupon {
 		Cadence:           c.Cadence,
 		DurationInPeriods: c.DurationInPeriods,
 		Currency:          c.Currency,
+		CouponCode:        c.CouponCode,
 		Metadata:          c.Metadata,
 		EnvironmentID:     c.EnvironmentID,
 		BaseModel: types.BaseModel{
@@ -86,6 +97,41 @@ func (s *InMemoryCouponStore) Get(ctx context.Context, id string) (*coupon.Coupo
 	return copyCoupon(c), nil
 }
 
+func (s *InMemoryCouponStore) GetByCode(ctx context.Context, code string) (*coupon.Coupon, error) {
+	normalised := strings.ToLower(strings.TrimSpace(code))
+	if normalised == "" {
+		return nil, ierr.NewError("coupon_code is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	items, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, c *coupon.Coupon, _ interface{}) bool {
+		if c.CouponCode == nil {
+			return false
+		}
+		tenantID := types.GetTenantID(ctx)
+		if tenantID != "" && c.TenantID != tenantID {
+			return false
+		}
+		if !CheckEnvironmentFilter(ctx, c.EnvironmentID) {
+			return false
+		}
+		if c.Status != types.StatusPublished {
+			return false
+		}
+		return strings.ToLower(strings.TrimSpace(*c.CouponCode)) == normalised
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, ierr.NewError("coupon not found").
+			WithHintf("Coupon with code '%s' was not found", code).
+			WithReportableDetails(map[string]interface{}{"coupon_code": code}).
+			Mark(ierr.ErrNotFound)
+	}
+	return copyCoupon(items[0]), nil
+}
+
 func (s *InMemoryCouponStore) Update(ctx context.Context, c *coupon.Coupon) error {
 	if c == nil {
 		return ierr.NewError("coupon cannot be nil").
@@ -115,10 +161,30 @@ func (s *InMemoryCouponStore) Count(ctx context.Context, filter *types.CouponFil
 	return s.InMemoryStore.Count(ctx, filter, couponFilterFn)
 }
 
-func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string) error {
+// IncrementRedemptions mirrors the atomic-guard semantics of the real Ent
+// repository (internal/repository/ent/coupon.go): when maxRedemptions is
+// non-nil and TotalRedemptions has already reached it, the increment is
+// rejected with a validation-class error instead of silently succeeding.
+// The caller supplies maxRedemptions (from an earlier Get/GetByCode) rather
+// than this store re-reading it, matching the real repository's contract.
+// This keeps the in-memory harness used by service-layer tests consistent
+// with production behavior for the coupon-redemption race-condition fix.
+func (s *InMemoryCouponStore) IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error {
+	s.redemptionMu.Lock()
+	defer s.redemptionMu.Unlock()
+
 	c, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if maxRedemptions != nil && c.TotalRedemptions >= *maxRedemptions {
+		return ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]interface{}{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	c.TotalRedemptions++

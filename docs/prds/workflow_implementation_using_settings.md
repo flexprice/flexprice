@@ -527,7 +527,7 @@ type Repository interface {
 
 ### 3. Workflow Service
 
-**File**: `internal/service/workflow.go`
+**File**: `internal/ee/service/workflow.go`
 
 ```go
 package service

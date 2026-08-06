@@ -88,6 +88,6 @@ func (PaymentAttempt) Indexes() []ent.Index {
 			StorageKey("idx_payment_attempt_status"),
 		index.Fields("gateway_attempt_id").
 			StorageKey("idx_gateway_attempt").
-			Annotations(entsql.IndexWhere("gateway_attempt_id IS NOT NULL")),
+			Annotations(entsql.IndexWhere("(gateway_attempt_id IS NOT NULL)")),
 	}
 }

@@ -23,7 +23,7 @@ The complete cost analytics infrastructure has been implemented following the ex
    - Validation logic for request parameters
    - Support for time-series, filtering, and pagination
 
-2. **`internal/service/costsheet_analytics.go`**
+2. **`internal/ee/service/costsheet_analytics.go`**
    - Core service implementation following `GetUsageBySubscription` pattern
    - Integration with existing billing services for cost calculation
    - Support for all pricing models and aggregation types
@@ -33,7 +33,7 @@ The complete cost analytics infrastructure has been implemented following the ex
    - Swagger documentation annotations
    - Standard error handling patterns
 
-4. **`internal/service/costsheet_analytics_test.go`**
+4. **`internal/ee/service/costsheet_analytics_test.go`**
    - Comprehensive unit tests for validation logic
    - Tests for DTO structures and derived metrics
    - Edge case handling tests

@@ -71,7 +71,7 @@ func (EntityIntegrationMapping) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "provider_type").
 			Unique().
 			StorageKey(Idx_entity_integration_mapping_unique).
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 		// Index for provider entity lookups (not covered by primary index)
 		index.Fields("provider_type", "provider_entity_id"),
 	}

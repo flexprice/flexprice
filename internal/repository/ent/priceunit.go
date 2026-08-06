@@ -20,10 +20,10 @@ type priceUnitRepository struct {
 	client    postgres.IClient
 	log       *logger.Logger
 	queryOpts PriceUnitQueryOptions
-	cache     cache.Cache
+	cache     cache.InMemoryCache
 }
 
-func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainPriceUnit.Repository {
+func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache cache.InMemoryCache) domainPriceUnit.Repository {
 	return &priceUnitRepository{
 		client:    client,
 		log:       log,
@@ -336,11 +336,7 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*doma
 
 	r.log.Debug(ctx, "getting price unit by code", "code", code)
 
-	// Try to get from cache first
-	if cachedPriceUnit := r.GetCache(ctx, code); cachedPriceUnit != nil {
-		return cachedPriceUnit, nil
-	}
-
+	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
 	entPriceUnit, err := r.client.Reader(ctx).PriceUnit.Query().
 		Where(
 			priceunit.Code(code),
@@ -371,7 +367,6 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*doma
 
 	SetSpanSuccess(span)
 	priceUnitData := domainPriceUnit.FromEnt(entPriceUnit)
-	r.SetCache(ctx, priceUnitData)
 	return priceUnitData, nil
 }
 
@@ -395,7 +390,7 @@ func (o PriceUnitQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query
 
 func (o PriceUnitQueryOptions) ApplyStatusFilter(query PriceUnitQuery, status string) PriceUnitQuery {
 	if status == "" {
-		return query.Where(priceunit.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(priceunit.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(priceunit.Status(status))
 }
@@ -491,44 +486,39 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *t
 }
 
 func (r *priceUnitRepository) SetCache(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) {
-	span := cache.StartCacheSpan(ctx, "price_unit", "set", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "price_unit", "set", map[string]interface{}{
 		"price_unit_id": priceUnit.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnit.ID)
-	codeCacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnit.Code)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, priceUnit.ID)
 	r.cache.Set(ctx, cacheKey, priceUnit, cache.ExpiryDefaultInMemory)
-	r.cache.Set(ctx, codeCacheKey, priceUnit, cache.ExpiryDefaultInMemory)
 }
 
-func (r *priceUnitRepository) GetCache(ctx context.Context, key string) *domainPriceUnit.PriceUnit {
-	span := cache.StartCacheSpan(ctx, "price_unit", "get", map[string]interface{}{
-		"price_unit_id": key,
+func (r *priceUnitRepository) GetCache(ctx context.Context, id string) *domainPriceUnit.PriceUnit {
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "price_unit", "get", map[string]interface{}{
+		"price_unit_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainPriceUnit.PriceUnit)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, id)
+	value, found := r.cache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	p, ok := cache.UnmarshalCacheValue[domainPriceUnit.PriceUnit](value)
+	if !ok {
+		return nil
+	}
+	return p
 }
 
 func (r *priceUnitRepository) DeleteCache(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) {
-	span := cache.StartCacheSpan(ctx, "price_unit", "delete", map[string]interface{}{
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "price_unit", "delete", map[string]interface{}{
 		"price_unit_id": priceUnit.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnit.ID)
-	codeCacheKey := cache.GenerateKey(cache.PrefixPriceUnit, tenantID, environmentID, priceUnit.Code)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixPriceUnit, priceUnit.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.cache.Delete(ctx, codeCacheKey)
 }

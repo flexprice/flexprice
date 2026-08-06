@@ -200,7 +200,7 @@ func (s *CustomerService) SaveCustomerToken(ctx context.Context, customerID stri
 	if err != nil {
 		s.logger.Error(ctx, "failed to check if token mapping exists",
 			"customer_id", customerID,
-			"token_id", tokenID,
+
 			"error", err)
 		return err
 	}
@@ -223,7 +223,6 @@ func (s *CustomerService) SaveCustomerToken(ctx context.Context, customerID stri
 	if err != nil {
 		s.logger.Error(ctx, "failed to save customer token",
 			"customer_id", customerID,
-			"token_id", tokenID,
 			"error", err)
 		return err
 	}

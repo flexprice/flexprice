@@ -49,11 +49,8 @@ const (
 	// ReferencePointCancel indicates invoice creation at the end of a period (for arrear charges)
 	ReferencePointCancel InvoiceReferencePoint = "cancel"
 	// ReferencePointInternalPreview indicates a preview invoice using the regular usage path
-	// (GetUsageBySubscription) instead of the feature_usage ClickHouse FINAL path.
+	// (GetUsageBySubscription) instead of the meter_usage ClickHouse FINAL path.
 	ReferencePointInternalPreview InvoiceReferencePoint = "internal_preview"
-	// ReferencePointMeterUsagePreview indicates a preview invoice using the meter_usage table
-	// for usage data instead of feature_usage or raw events.
-	ReferencePointMeterUsagePreview InvoiceReferencePoint = "meter_usage_preview"
 )
 
 func (r InvoiceReferencePoint) String() string {
@@ -67,7 +64,6 @@ func (r InvoiceReferencePoint) Validate() error {
 		ReferencePointPreview,
 		ReferencePointCancel,
 		ReferencePointInternalPreview,
-		ReferencePointMeterUsagePreview,
 	}
 
 	if !lo.Contains(allowedValues, r) {
@@ -114,51 +110,60 @@ func (b BillingCycle) Validate() error {
 	return nil
 }
 
-func CalculateCalendarBillingAnchor(startDate time.Time, billingPeriod BillingPeriod) time.Time {
-	now := startDate.UTC()
+func CalculateCalendarBillingAnchor(startDate time.Time, billingPeriod BillingPeriod, timezone string) time.Time {
+	loc := loadTimezone(timezone)
+	now := startDate.In(loc)
 
 	switch billingPeriod {
 	case BILLING_PERIOD_DAILY:
-		// Start of next day: 00:00:00
-		return time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+		// Start of next day: 00:00:00 in local timezone
+		boundary := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	case BILLING_PERIOD_WEEKLY:
-		// Start of next week (Monday)
+		// Start of next week (Monday) in local timezone
 		daysUntilMonday := (8 - int(now.Weekday())) % 7
 		if daysUntilMonday == 0 {
 			daysUntilMonday = 7
 		}
-		return time.Date(now.Year(), now.Month(), now.Day()+daysUntilMonday, 0, 0, 0, 0, time.UTC)
+		boundary := time.Date(now.Year(), now.Month(), now.Day()+daysUntilMonday, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	case BILLING_PERIOD_MONTHLY:
-		// Start of next month
-		return time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+		// Start of next month in local timezone
+		boundary := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	case BILLING_PERIOD_QUARTER:
-		// Start of next quarter
+		// Start of next quarter in local timezone
 		quarter := (int(now.Month())-1)/3 + 1
 		startNextQuarterMonth := time.Month(quarter*3 + 1)
 		if startNextQuarterMonth > 12 {
 			startNextQuarterMonth -= 12
-			return time.Date(now.Year()+1, startNextQuarterMonth, 1, 0, 0, 0, 0, time.UTC)
+			boundary := time.Date(now.Year()+1, startNextQuarterMonth, 1, 0, 0, 0, 0, loc)
+			return boundary.UTC()
 		}
-		return time.Date(now.Year(), startNextQuarterMonth, 1, 0, 0, 0, 0, time.UTC)
+		boundary := time.Date(now.Year(), startNextQuarterMonth, 1, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	case BILLING_PERIOD_HALF_YEAR:
-		// Start of next half-year
+		// Start of next half-year in local timezone
 		halfYear := (int(now.Month())-1)/6 + 1
 		startNextHalfYearMonth := time.Month(halfYear*6 + 1)
 		if startNextHalfYearMonth > 12 {
 			startNextHalfYearMonth -= 12
-			return time.Date(now.Year()+1, startNextHalfYearMonth, 1, 0, 0, 0, 0, time.UTC)
+			boundary := time.Date(now.Year()+1, startNextHalfYearMonth, 1, 0, 0, 0, 0, loc)
+			return boundary.UTC()
 		}
-		return time.Date(now.Year(), startNextHalfYearMonth, 1, 0, 0, 0, 0, time.UTC)
+		boundary := time.Date(now.Year(), startNextHalfYearMonth, 1, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	case BILLING_PERIOD_ANNUAL:
-		// Start of next year
-		return time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, time.UTC)
+		// Start of next year in local timezone
+		boundary := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, loc)
+		return boundary.UTC()
 
 	default:
-		return now
+		return now.UTC()
 	}
 }

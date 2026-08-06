@@ -156,6 +156,11 @@ func Currency(v string) predicate.Coupon {
 	return predicate.Coupon(sql.FieldEQ(FieldCurrency, v))
 }
 
+// CouponCode applies equality check predicate on the "coupon_code" field. It's identical to CouponCodeEQ.
+func CouponCode(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldEQ(FieldCouponCode, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Coupon {
 	return predicate.Coupon(sql.FieldEQ(FieldTenantID, v))
@@ -1219,6 +1224,81 @@ func MetadataIsNil() predicate.Coupon {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.Coupon {
 	return predicate.Coupon(sql.FieldNotNull(FieldMetadata))
+}
+
+// CouponCodeEQ applies the EQ predicate on the "coupon_code" field.
+func CouponCodeEQ(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldEQ(FieldCouponCode, v))
+}
+
+// CouponCodeNEQ applies the NEQ predicate on the "coupon_code" field.
+func CouponCodeNEQ(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldNEQ(FieldCouponCode, v))
+}
+
+// CouponCodeIn applies the In predicate on the "coupon_code" field.
+func CouponCodeIn(vs ...string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldIn(FieldCouponCode, vs...))
+}
+
+// CouponCodeNotIn applies the NotIn predicate on the "coupon_code" field.
+func CouponCodeNotIn(vs ...string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldNotIn(FieldCouponCode, vs...))
+}
+
+// CouponCodeGT applies the GT predicate on the "coupon_code" field.
+func CouponCodeGT(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldGT(FieldCouponCode, v))
+}
+
+// CouponCodeGTE applies the GTE predicate on the "coupon_code" field.
+func CouponCodeGTE(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldGTE(FieldCouponCode, v))
+}
+
+// CouponCodeLT applies the LT predicate on the "coupon_code" field.
+func CouponCodeLT(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldLT(FieldCouponCode, v))
+}
+
+// CouponCodeLTE applies the LTE predicate on the "coupon_code" field.
+func CouponCodeLTE(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldLTE(FieldCouponCode, v))
+}
+
+// CouponCodeContains applies the Contains predicate on the "coupon_code" field.
+func CouponCodeContains(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldContains(FieldCouponCode, v))
+}
+
+// CouponCodeHasPrefix applies the HasPrefix predicate on the "coupon_code" field.
+func CouponCodeHasPrefix(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldHasPrefix(FieldCouponCode, v))
+}
+
+// CouponCodeHasSuffix applies the HasSuffix predicate on the "coupon_code" field.
+func CouponCodeHasSuffix(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldHasSuffix(FieldCouponCode, v))
+}
+
+// CouponCodeIsNil applies the IsNil predicate on the "coupon_code" field.
+func CouponCodeIsNil() predicate.Coupon {
+	return predicate.Coupon(sql.FieldIsNull(FieldCouponCode))
+}
+
+// CouponCodeNotNil applies the NotNil predicate on the "coupon_code" field.
+func CouponCodeNotNil() predicate.Coupon {
+	return predicate.Coupon(sql.FieldNotNull(FieldCouponCode))
+}
+
+// CouponCodeEqualFold applies the EqualFold predicate on the "coupon_code" field.
+func CouponCodeEqualFold(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldEqualFold(FieldCouponCode, v))
+}
+
+// CouponCodeContainsFold applies the ContainsFold predicate on the "coupon_code" field.
+func CouponCodeContainsFold(v string) predicate.Coupon {
+	return predicate.Coupon(sql.FieldContainsFold(FieldCouponCode, v))
 }
 
 // HasCouponAssociations applies the HasEdge predicate on the "coupon_associations" edge.

@@ -72,7 +72,7 @@ func ExecuteTrackWorkflowStart(ctx workflow.Context, input TrackWorkflowStartInp
 	workflowID := info.WorkflowExecution.ID
 	runID := info.WorkflowExecution.RunID
 
-	logger.Info("Tracking workflow start",
+	logger.Debug("Tracking workflow start",
 		"workflow_id", workflowID,
 		"run_id", runID,
 		"workflow_type", input.WorkflowType,
@@ -109,7 +109,7 @@ func ExecuteTrackWorkflowStart(ctx workflow.Context, input TrackWorkflowStartInp
 		// Don't fail the workflow - tracking is non-critical
 	}
 
-	logger.Info("Successfully tracked workflow start", "workflow_id", workflowID, "run_id", runID)
+	logger.Debug("Successfully tracked workflow start", "workflow_id", workflowID, "run_id", runID)
 }
 
 // ExecuteTrackWorkflowEnd is a helper function to be called at the end of each workflow
@@ -122,7 +122,7 @@ func ExecuteTrackWorkflowEnd(ctx workflow.Context, input TrackWorkflowEndInput) 
 	workflowID := info.WorkflowExecution.ID
 	runID := info.WorkflowExecution.RunID
 
-	logger.Info("Tracking workflow end",
+	logger.Debug("Tracking workflow end",
 		"workflow_id", workflowID,
 		"run_id", runID,
 		"status", input.WorkflowStatus)
@@ -156,5 +156,5 @@ func ExecuteTrackWorkflowEnd(ctx workflow.Context, input TrackWorkflowEndInput) 
 		// Don't fail the workflow - tracking is non-critical
 	}
 
-	logger.Info("Successfully tracked workflow end", "workflow_id", workflowID, "run_id", runID)
+	logger.Debug("Successfully tracked workflow end", "workflow_id", workflowID, "run_id", runID)
 }

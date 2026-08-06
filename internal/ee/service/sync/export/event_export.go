@@ -1,0 +1,191 @@
+package export
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/gocarina/gocsv"
+)
+
+// EventExporter handles meter usage export operations
+type EventExporter struct {
+	meterUsageRepo     events.MeterUsageRepository
+	priceRepo          price.Repository
+	integrationFactory *integration.Factory
+	config             *config.Configuration
+	logger             *logger.Logger
+}
+
+// FeatureUsageCSV represents the CSV structure for feature usage export
+type FeatureUsageCSV struct {
+	ID                      string `csv:"id"`
+	TenantID                string `csv:"tenant_id"`
+	EnvironmentID           string `csv:"environment_id"`
+	ExternalCustomerID      string `csv:"external_customer_id"`
+	CustomerID              string `csv:"customer_id"`
+	SubscriptionID          string `csv:"subscription_id"`
+	SubLineItemID           string `csv:"sub_line_item_id"`
+	PriceID                 string `csv:"price_id"`
+	MeterID                 string `csv:"meter_id"`
+	FeatureID               string `csv:"feature_id"`
+	EventName               string `csv:"event_name"`
+	Source                  string `csv:"source"`
+	Timestamp               string `csv:"timestamp"`                 // RFC3339 format
+	IngestedAt              string `csv:"ingested_at"`               // RFC3339 format
+	PeriodID                string `csv:"period_id"`                 // Billing period ID (uint64 as string)
+	QtyTotal                string `csv:"qty_total"`                 // Total quantity (decimal as string)
+	ProvisionalUsageCharges string `csv:"provisional_usage_charges"` // price.Amount * quantity (decimal as string)
+	Properties              string `csv:"properties"`                // Event properties as JSON string
+	UniqueHash              string `csv:"unique_hash"`               // Deduplication hash
+}
+
+// NewEventExporter creates a new event exporter
+func NewEventExporter(
+	meterUsageRepo events.MeterUsageRepository,
+	priceRepo price.Repository,
+	integrationFactory *integration.Factory,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) *EventExporter {
+	return &EventExporter{
+		meterUsageRepo:     meterUsageRepo,
+		priceRepo:          priceRepo,
+		integrationFactory: integrationFactory,
+		config:             cfg,
+		logger:             logger,
+	}
+}
+
+// PrepareData fetches meter usage data in batches and converts it to CSV format.
+func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
+	const batchSize = 500
+
+	e.logger.Info(ctx, "starting batched meter usage data fetch",
+		"tenant_id", request.TenantID,
+		"env_id", request.EnvID,
+		"start_time", request.StartTime,
+		"end_time", request.EndTime,
+		"batch_size", batchSize)
+
+	return e.prepareDataFromMeterUsage(ctx, request, batchSize)
+}
+
+// prepareDataFromMeterUsage fetches rows from the meter_usage table and maps each
+// into the existing FeatureUsageCSV schema. Columns that meter_usage does not
+// carry (subscription_id, sub_line_item_id, price_id, customer_id, feature_id,
+// period_id, provisional_usage_charges) are left as empty strings — the schema
+// stays stable so downstream consumers don't see a header-row change.
+func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *dto.ExportRequest, batchSize int) ([]byte, int, error) {
+	var csvRecords []*FeatureUsageCSV
+	totalRecords := 0
+	offset := 0
+
+	for {
+		e.logger.Debug(ctx, "fetching meter_usage batch",
+			"offset", offset,
+			"batch_size", batchSize)
+
+		usageData, err := e.meterUsageRepo.GetMeterUsageForExport(
+			ctx,
+			request.StartTime,
+			request.EndTime,
+			batchSize,
+			offset,
+		)
+		if err != nil {
+			return nil, 0, ierr.WithError(err).
+				WithHint("Failed to fetch meter usage data batch").
+				WithReportableDetails(map[string]interface{}{
+					"offset":     offset,
+					"batch_size": batchSize,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+
+		if len(usageData) == 0 {
+			break
+		}
+
+		batchRecords, err := e.convertMeterUsageToCSVRecords(usageData)
+		if err != nil {
+			return nil, 0, err
+		}
+		csvRecords = append(csvRecords, batchRecords...)
+
+		totalRecords += len(usageData)
+		offset += batchSize
+
+		if len(usageData) < batchSize {
+			break
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := gocsv.Marshal(csvRecords, &buf); err != nil {
+		return nil, 0, ierr.WithError(err).
+			WithHint("Failed to marshal data to CSV").
+			Mark(ierr.ErrInternal)
+	}
+	csvBytes := buf.Bytes()
+
+	if totalRecords == 0 {
+		e.logger.Info(ctx, "no meter usage data found for export - will upload empty CSV with headers only",
+			"tenant_id", request.TenantID,
+			"env_id", request.EnvID,
+			"csv_size_bytes", len(csvBytes))
+	} else {
+		e.logger.Info(ctx, "completed batched meter_usage fetch and CSV conversion",
+			"total_records", totalRecords,
+			"csv_size_bytes", len(csvBytes))
+	}
+
+	return csvBytes, totalRecords, nil
+}
+
+// convertMeterUsageToCSVRecords maps MeterUsage rows into FeatureUsageCSV with
+// feature_usage-only columns left blank.
+func (e *EventExporter) convertMeterUsageToCSVRecords(usageData []*events.MeterUsage) ([]*FeatureUsageCSV, error) {
+	records := make([]*FeatureUsageCSV, 0, len(usageData))
+
+	for _, usage := range usageData {
+		propertiesJSON, err := json.Marshal(usage.Properties)
+		if err != nil {
+			e.logger.Info(context.Background(), "failed to marshal properties, using empty object",
+				"usage_id", usage.ID,
+				"error", err)
+			propertiesJSON = []byte("{}")
+		}
+
+		records = append(records, &FeatureUsageCSV{
+			ID:                 usage.ID,
+			TenantID:           usage.TenantID,
+			EnvironmentID:      usage.EnvironmentID,
+			ExternalCustomerID: usage.ExternalCustomerID,
+			MeterID:            usage.MeterID,
+			EventName:          usage.EventName,
+			Source:             usage.Source,
+			Timestamp:          usage.Timestamp.Format(time.RFC3339),
+			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
+			QtyTotal:           usage.QtyTotal.String(),
+			Properties:         string(propertiesJSON),
+			UniqueHash:         usage.UniqueHash,
+		})
+	}
+
+	return records, nil
+}
+
+// GetFilenamePrefix returns the prefix for the exported file
+func (e *EventExporter) GetFilenamePrefix() string {
+	return string(types.ScheduledTaskEntityTypeEvents)
+}

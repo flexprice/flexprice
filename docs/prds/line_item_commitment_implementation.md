@@ -42,7 +42,7 @@ const (
 ## 2. Validation Rules
 
 ### 2.1 Line Item Creation/Update Validation
-Location: `internal/service/subscription.go` (extend existing validation)
+Location: `internal/ee/service/subscription.go` (extend existing validation)
 
 **Rules**:
 1. **Commitment Type Validation**:
@@ -92,7 +92,7 @@ if hasCommitment {
 ## 3. Billing Calculation Flow
 
 ### 3.1 Commitment Normalization
-Location: `internal/service/billing.go:CalculateUsageCharges` (before line 230)
+Location: `internal/ee/service/billing.go:CalculateUsageCharges` (before line 230)
 
 **Convert quantity-based commitment to amount** (leverages existing `CalculateCost` from price.go:1100-1104):
 
@@ -119,7 +119,7 @@ if item.CommitmentType == types.COMMITMENT_TYPE_AMOUNT {
 - Pricing complexity handled by existing `CalculateCost` infrastructure
 
 ### 3.2 Non-Window Commitment
-Location: `internal/service/billing.go:CalculateUsageCharges` (extend lines 172-629)
+Location: `internal/ee/service/billing.go:CalculateUsageCharges` (extend lines 172-629)
 
 **Logic** (similar to existing subscription-level at lines 583-626):
 
@@ -245,11 +245,11 @@ For each window in billing period:
 **File: `internal/domain/subscription/line_item.go`**
 - Add commitment fields to struct (6 new fields)
 
-**File: `internal/service/subscription.go`**
+**File: `internal/ee/service/subscription.go`**
 - Extend `createLineItemFromPrice` (line 3645): Add commitment field copying
 - Add validation in line item creation/update (see section 2.1)
 
-**File: `internal/service/billing.go`**
+**File: `internal/ee/service/billing.go`**
 - Modify `CalculateUsageCharges` (line 172):
   - Add commitment normalization helper (converts quantity → amount using CalculateCost)
   - Add check for line item commitment after line 230

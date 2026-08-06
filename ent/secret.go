@@ -51,7 +51,9 @@ type Secret struct {
 	// Roles copied from user at API key creation time
 	Roles []string `json:"roles,omitempty"`
 	// User type copied from user at API key creation time
-	UserType     string `json:"user_type,omitempty"`
+	UserType string `json:"user_type,omitempty"`
+	// ID of the user or service account this key belongs to
+	UserID       string `json:"user_id,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -62,7 +64,7 @@ func (*Secret) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case secret.FieldProviderData, secret.FieldRoles:
 			values[i] = new([]byte)
-		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID, secret.FieldUserType:
+		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID, secret.FieldUserType, secret.FieldUserID:
 			values[i] = new(sql.NullString)
 		case secret.FieldCreatedAt, secret.FieldUpdatedAt, secret.FieldExpiresAt, secret.FieldLastUsedAt:
 			values[i] = new(sql.NullTime)
@@ -195,6 +197,12 @@ func (s *Secret) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.UserType = value.String
 			}
+		case secret.FieldUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field user_id", values[i])
+			} else if value.Valid {
+				s.UserID = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -285,6 +293,9 @@ func (s *Secret) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("user_type=")
 	builder.WriteString(s.UserType)
+	builder.WriteString(", ")
+	builder.WriteString("user_id=")
+	builder.WriteString(s.UserID)
 	builder.WriteByte(')')
 	return builder.String()
 }

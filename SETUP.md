@@ -63,7 +63,7 @@ If you prefer to run the application directly:
 
 ```bash
 # Start the required infrastructure
-docker compose up -d postgres kafka clickhouse temporal temporal-ui
+docker compose up -d postgres kafka clickhouse redis temporal temporal-ui
 
 # Run the application locally
 go run cmd/server/main.go

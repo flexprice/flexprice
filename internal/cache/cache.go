@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/types"
 )
 
-// Cache defines the interface for caching operations
-type Cache interface {
+// BaseCache provides common caching operations
+type BaseCache interface {
+	IsEnabled() bool
+
 	// Get retrieves a value from the cache
 	// Returns the value and a boolean indicating whether the key was found
 	Get(ctx context.Context, key string) (interface{}, bool)
@@ -31,6 +35,22 @@ type Cache interface {
 
 	// ForceCacheSet adds a value to the cache without checking if the cache is enabled
 	ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration)
+
+	// ForceCacheDelete removes a value from the cache without checking if the cache is enabled
+	ForceCacheDelete(ctx context.Context, key string)
+}
+
+// InMemoryCache defines the interface for caching operations
+type InMemoryCache interface {
+	BaseCache
+	IsInMemory() bool
+}
+
+type RedisCache interface {
+	BaseCache
+	IsRedisCache() bool
+
+	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
 }
 
 // Predefined cache key prefixes for different entity types
@@ -49,6 +69,7 @@ const (
 	PrefixFeature                  = "feature:v1:"
 	PrefixEntitlement              = "entitlement:v1:"
 	PrefixPayment                  = "payment:v1:"
+	PrefixPaymentMethod            = "payment_method:v1:"
 	PrefixCreditGrantApplication   = "creditgrantapplication:v1:"
 	PrefixCreditNote               = "creditnote:v1:"
 	PrefixTaxRate                  = "taxrate:v1:"
@@ -62,26 +83,45 @@ const (
 	PrefixEntityIntegrationMapping = "entity_integration_mapping:v1:"
 	PrefixConnection               = "connection:v1:"
 	PrefixSettings                 = "settings:v1:"
+	PrefixEnvironment              = "environment:v1:"
+	PrefixCreditGrant              = "creditgrant:v1:"
+	PrefixGroup                    = "group:v1:"
 	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
 	PrefixInvoiceLineItem          = "invoice_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
+	PrefixUsageAlertSchedule       = "usage_alert_schedule:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"
 	PrefixWalletRealTimeBalance    = "wallet_realtime_balance:v1:"
 	PrefixWorkflowExecution        = "workflow_execution:v1:"
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
-	PrefixPriceSyncLock = "price_sync:plan:"
+	PrefixPriceSyncLock             = "price_sync:plan:"
+	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
+	PrefixTabsInvoiceSyncLock       = "tabs:invoice_sync:"
+	// PrefixStripeCustomerSyncLock guards first-time Stripe customer creation for a
+	// FlexPrice customer (used with customerID) so concurrent callers cannot each
+	// create their own Stripe customer.
+	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters
 // It joins all parameters with a colon and appends them to the prefix
-func GenerateKey(prefix string, params ...interface{}) string {
-	parts := make([]string, len(params)+1)
-	parts[0] = prefix
+func GenerateKey(ctx context.Context, prefix string, params ...any) string {
+	parts := make([]string, 0, len(params)+3)
 
-	for i, param := range params {
-		parts[i+1] = fmt.Sprintf("%v", param)
+	if ctx != nil {
+		tenantId := types.GetTenantID(ctx)
+		environmentId := types.GetEnvironmentID(ctx)
+		if tenantId != "" && environmentId != "" {
+			parts = append(parts, tenantId, environmentId)
+		}
+	}
+
+	parts = append(parts, prefix)
+
+	for _, param := range params {
+		parts = append(parts, fmt.Sprintf("%v", param))
 	}
 
 	return strings.Join(parts, ":")

@@ -97,14 +97,14 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod      `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -145,7 +145,7 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
-	CommitmentTimeBuckets *types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -172,9 +172,9 @@ func (r *UpdateSubscriptionLineItemRequest) HasCommitment() bool {
 }
 
 // Validate validates the create subscription line item request.
-// price is optional and can be provided for MinQuantity validation when using price_id.
+// linePrice is optional and can be provided for MinQuantity validation when using price_id.
 // sub is optional; when provided, line item and inline price start/end dates are validated to fall within subscription bounds.
-func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *subscription.Subscription) error {
+func (r *CreateSubscriptionLineItemRequest) Validate(linePrice *price.Price, sub *subscription.Subscription) error {
 	// Exactly one of price_id or price must be set
 	hasPriceID := r.PriceID != ""
 	hasPrice := r.Price != nil
@@ -189,7 +189,7 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 			Mark(ierr.ErrValidation)
 	}
 
-	onetimeIgnoresRequestEndDate := (price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
+	onetimeIgnoresRequestEndDate := (linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
 		(r.Price != nil && r.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME)
 
 	// Validate start date is not after end date if both are provided
@@ -261,18 +261,18 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 	// Note: inline price path (r.Price) is nil here; ONETIME billing period is validated
 	// downstream in CreatePriceRequest.Validate() for that path.
 	// ONETIME charges must use ADVANCE invoice cadence
-	if price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-		if price.InvoiceCadence != "" && price.InvoiceCadence != types.InvoiceCadenceAdvance {
+	if linePrice != nil && linePrice.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		if linePrice.InvoiceCadence != "" && linePrice.InvoiceCadence != types.InvoiceCadenceAdvance {
 			return ierr.NewError("ONETIME charges must have invoice_cadence ADVANCE").
 				WithHint("One-time charges are always billed in advance").
 				Mark(ierr.ErrValidation)
 		}
 	}
 
-	// Validate quantity is positive if provided
-	if !r.Quantity.IsZero() && r.Quantity.IsNegative() {
-		return ierr.NewError("quantity must be positive").
-			WithHint("Quantity must be positive").
+	// Reject negative quantity; zero defaults to min_quantity downstream.
+	if r.Quantity.IsNegative() {
+		return ierr.NewError("quantity must be non-negative").
+			WithHint("Quantity cannot be negative").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -286,24 +286,6 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 	if hasPrice {
 		if err := validator.ValidateRequest(r.Price); err != nil {
 			return err
-		}
-	}
-
-	// price_id path: validate against price when provided (e.g. MinQuantity)
-	if price != nil && price.Type == types.PRICE_TYPE_FIXED && price.MinQuantity != nil {
-		finalQuantity := r.Quantity
-		if finalQuantity.IsZero() {
-			// Will be set to MinQuantity in ToSubscriptionLineItem, so validation passes
-			finalQuantity = *price.MinQuantity
-		}
-		if finalQuantity.LessThan(lo.FromPtr(price.MinQuantity)) {
-			return ierr.NewError("quantity must be greater than or equal to min_quantity").
-				WithHint("Quantity must be at least the minimum quantity specified for this price").
-				WithReportableDetails(map[string]interface{}{
-					"quantity":     finalQuantity.String(),
-					"min_quantity": price.MinQuantity.String(),
-				}).
-				Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -383,15 +365,16 @@ func validateCommitmentFieldsCommon(
 		}
 	}
 
-	// Rule 5: Overage factor is required and must be greater than 1.0
+	// Rule 5: Overage factor is required and must be at least 1.0.
+	// Exactly 1.0 means usage beyond commitment bills at the base rate (no premium).
 	if commitmentOverageFactor == nil {
 		return ierr.NewError("commitment_overage_factor is required when commitment is set").
-			WithHint("Specify a commitment_overage_factor greater than 1.0").
+			WithHint("Specify a commitment_overage_factor of 1.0 or greater").
 			Mark(ierr.ErrValidation)
 	}
 
-	if commitmentOverageFactor.LessThanOrEqual(decimal.NewFromFloat(1)) {
-		return ierr.NewError("commitment_overage_factor must be greater than 1.0").
+	if commitmentOverageFactor.LessThan(decimal.NewFromFloat(1)) {
+		return ierr.NewError("commitment_overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond commitment").
 			WithReportableDetails(map[string]interface{}{
 				"commitment_overage_factor": commitmentOverageFactor,
@@ -487,10 +470,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
-	// Always use price display name (priority: request > price display name)
 	if r.DisplayName != "" {
 		lineItem.DisplayName = r.DisplayName
-	} else if params.Price != nil && params.Price.DisplayName != "" {
+	} else if params.Price != nil {
 		lineItem.DisplayName = params.Price.DisplayName
 	}
 
@@ -503,14 +485,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 			}
 			lineItem.Quantity = decimal.Zero
 		} else {
-			// For fixed prices, use MinQuantity if quantity not provided and MinQuantity exists
-			if !r.Quantity.IsZero() {
-				lineItem.Quantity = r.Quantity
-			} else if params.Price.MinQuantity != nil {
-				lineItem.Quantity = lo.FromPtr(params.Price.MinQuantity)
-			} else {
-				lineItem.Quantity = params.Price.GetDefaultQuantity()
-			}
+			// Zero/omitted quantity defaults to MinQuantity, else the price's default.
+			// Non-zero quantity is used as-is (no floor validation on the create path).
+			lineItem.Quantity = price.ApplyQuantityDefault(r.Quantity, params.Price.Price)
 		}
 
 		// Copy price unit fields from price to line item
@@ -585,11 +562,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
 	if len(r.CommitmentTimeBuckets) > 0 {
-		// Copy to avoid aliasing the request's backing array — mutations to r
-		// after validation must not bleed into the domain object.
-		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(r.CommitmentTimeBuckets))
-		copy(commitmentTimeBuckets, r.CommitmentTimeBuckets)
-		lineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+		// Build the domain buckets here (IDs + commitment fields); the service
+		// layer materializes a price per bucket and fills in the PriceIDs.
+		lineItem.CommitmentTimeBuckets = bucketRequestsToDomain(r.CommitmentTimeBuckets)
 	}
 
 	return lineItem
@@ -648,14 +623,113 @@ func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	return nil
 }
 
+// CommitmentBucketRequest is the inline shape for one time-of-day commitment
+// bucket on a subscription line item.
+//
+// New bucket: omit id and provide price — the service creates a
+// SUBSCRIPTION-scoped Price and stores its id on the bucket.
+//
+// Existing bucket (update flows): provide the id previously returned by the
+// API and omit price — the bucket keeps its existing price. Commitment fields
+// always come from the request, so a commitment can change while the price is
+// kept.
+type CommitmentBucketRequest struct {
+	ID              string               `json:"id,omitempty"`
+	Start           types.Bucket         `json:"start"`
+	End             types.Bucket         `json:"end"`
+	Price           *CreatePriceRequest  `json:"price,omitempty"`
+	CommitmentType  types.CommitmentType `json:"commitment_type"`
+	CommitmentValue decimal.Decimal      `json:"commitment_value" swaggertype:"string"`
+	OverageFactor   *decimal.Decimal     `json:"overage_factor,omitempty" swaggertype:"string"`
+	TrueUpEnabled   bool                 `json:"true_up_enabled,omitempty"`
+}
+
+// Validate runs per-bucket field validation; idx is the bucket's position in
+// the request array, surfaced in error details. Array invariants (overlap,
+// window alignment) live on TimeOfDayBuckets and are applied by the service
+// after prices are created (and after the meter is loaded so we know windowMin).
+func (r CommitmentBucketRequest) Validate(idx int) error {
+	if err := validateBucketPoint(r.Start, idx); err != nil {
+		return err
+	}
+	if err := validateBucketPoint(r.End, idx); err != nil {
+		return err
+	}
+	// Exactly one of id (reuse existing bucket + price) or price (create new)
+	// must be provided.
+	if r.ID == "" && r.Price == nil {
+		return ierr.NewError("bucket price is required").
+			WithHint("Provide price for a new bucket, or id to keep an existing bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	if r.ID != "" && r.Price != nil {
+		return ierr.NewError("cannot provide both id and price on a bucket").
+			WithHint("Provide id to keep the existing bucket price, or price (without id) to create a new bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	if r.Price != nil && r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
+		return ierr.NewError("bucket price entity_type must be SUBSCRIPTION").
+			WithHint("Use entity_type=SUBSCRIPTION on inline bucket prices").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	tmp := types.TimeOfDayBucket{
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+	if err := tmp.Validate(); err != nil {
+		// Type-level errors don't know the array position; annotate it here.
+		return ierr.WithError(err).
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ToTimeOfDayBucket maps the request to a domain bucket with all commitment
+// fields but no PriceID — the service creates the bucket's price (or resolves
+// the existing one when id is provided) and fills in PriceID. A request without
+// an id gets a fresh server-assigned ID.
+func (r CommitmentBucketRequest) ToTimeOfDayBucket() types.TimeOfDayBucket {
+	id := r.ID
+	if id == "" {
+		id = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET)
+	}
+	return types.TimeOfDayBucket{
+		ID:              id,
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+}
+
+// bucketRequestsToDomain maps a slice of bucket requests to domain buckets
+// (preserving order) so the service can fill in PriceIDs positionally.
+func bucketRequestsToDomain(reqs []CommitmentBucketRequest) types.TimeOfDayBuckets {
+	if len(reqs) == 0 {
+		return types.TimeOfDayBuckets{}
+	}
+	out := make(types.TimeOfDayBuckets, len(reqs))
+	for i, r := range reqs {
+		out[i] = r.ToTimeOfDayBucket()
+	}
+	return out
+}
+
 // validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
 // rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
-func validateTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
+func validateTimeOfDayBuckets(buckets []CommitmentBucketRequest) error {
 	for i, b := range buckets {
-		if err := validateBucketPoint(b.Start, i); err != nil {
-			return err
-		}
-		if err := validateBucketPoint(b.End, i); err != nil {
+		if err := b.Validate(i); err != nil {
 			return err
 		}
 	}
@@ -784,9 +858,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	if r.CommitmentTimeBuckets != nil {
-		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(*r.CommitmentTimeBuckets))
-		copy(commitmentTimeBuckets, *r.CommitmentTimeBuckets)
-		newLineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+		// Replace-all: build fresh domain buckets (new IDs, empty PriceIDs); the
+		// service layer materializes a price per bucket and fills in the PriceIDs.
+		newLineItem.CommitmentTimeBuckets = bucketRequestsToDomain(*r.CommitmentTimeBuckets)
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}

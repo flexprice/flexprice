@@ -6,7 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -40,6 +40,13 @@ func NewTenantHandler(
 // @Router /tenants/{id} [get]
 func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 	id := c.Param("id")
+
+	if id != types.GetTenantID(c.Request.Context()) {
+		c.Error(ierr.NewError("cannot access another tenant's details").
+			WithHint("You can only access your own tenant's details").
+			Mark(ierr.ErrPermissionDenied))
+		return
+	}
 
 	resp, err := h.service.GetTenantByID(c.Request.Context(), id)
 	if err != nil {

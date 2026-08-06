@@ -60,6 +60,17 @@ type Provider interface {
 	// Customer Dashboard Token Management
 	GenerateSessionToken(customerID, externalCustomerID, tenantID, environmentID string, timeoutHours int) (string, time.Time, error)
 	ValidateSessionToken(ctx context.Context, token string) (*auth.SessionClaims, error)
+
+	// GenerateDevToken creates a short-lived JWT for internal developer testing.
+	// The claim schema is provider-specific:
+	//   flexprice → { user_id, tenant_id, environment_id }   (email ignored)
+	//   supabase  → { sub, email, app_metadata.tenant_id, environment_id }
+	GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error)
+
+	// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+	// The token carries provider-specific claims (e.g. publishable_key, flexprice_payment_id)
+	// and is decoded client-side by the checkout page. Both providers sign with HS256.
+	GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error)
 }
 
 func NewProvider(cfg *config.Configuration) Provider {

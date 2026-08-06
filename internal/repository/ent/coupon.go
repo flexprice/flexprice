@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -18,18 +19,18 @@ import (
 )
 
 type couponRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CouponQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CouponQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCoupon.Repository {
+func NewCouponRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCoupon.Repository {
 	return &couponRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CouponQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CouponQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -76,6 +77,9 @@ func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) e
 		SetNillableDurationInPeriods(c.DurationInPeriods)
 
 	// Handle optional fields
+	if code := strings.ToLower(strings.TrimSpace(lo.FromPtr(c.CouponCode))); code != "" {
+		createQuery = createQuery.SetCouponCode(code)
+	}
 	if c.Rules != nil {
 		createQuery = createQuery.SetRules(*c.Rules)
 	}
@@ -90,9 +94,10 @@ func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) e
 
 		if ent.IsConstraintError(err) {
 			return ierr.WithError(err).
-				WithHint("A coupon with this name already exists").
+				WithHint("A published coupon with this code already exists in this environment").
 				WithReportableDetails(map[string]any{
-					"name": c.Name,
+					"name":        c.Name,
+					"coupon_code": c.CouponCode,
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
@@ -151,6 +156,45 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 	return coupon, nil
 }
 
+func (r *couponRepository) GetByCode(ctx context.Context, code string) (*domainCoupon.Coupon, error) {
+	span := StartRepositorySpan(ctx, "coupon", "get_by_code", map[string]interface{}{
+		"coupon_code": code,
+	})
+	defer FinishSpan(span)
+
+	normalised := strings.ToLower(strings.TrimSpace(code))
+	if normalised == "" {
+		return nil, ierr.NewError("coupon_code is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	c, err := client.Coupon.Query().
+		Where(
+			coupon.CouponCode(normalised),
+			coupon.TenantID(types.GetTenantID(ctx)),
+			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+			coupon.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Coupon with code '%s' was not found", code).
+				WithReportableDetails(map[string]any{"coupon_code": code}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get coupon by code").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCoupon.FromEnt(c), nil
+}
+
 func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) error {
 	client := r.client.Writer(ctx)
 
@@ -177,6 +221,13 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
+	if c.CouponCode != nil {
+		if *c.CouponCode == "" {
+			updateQuery = updateQuery.ClearCouponCode()
+		} else {
+			updateQuery = updateQuery.SetCouponCode(strings.ToLower(strings.TrimSpace(*c.CouponCode)))
+		}
+	}
 	if c.Metadata != nil {
 		updateQuery = updateQuery.SetMetadata(*c.Metadata)
 	}
@@ -258,7 +309,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) error {
+func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string, maxRedemptions *int) error {
 	client := r.client.Writer(ctx)
 
 	r.log.Debug(ctx, "incrementing coupon redemptions",
@@ -273,12 +324,27 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Coupon.Update().
+	updateQuery := client.Coupon.Update().
 		Where(
 			coupon.ID(id),
 			coupon.TenantID(types.GetTenantID(ctx)),
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
+		)
+
+	if maxRedemptions != nil {
+		// Atomic compare-and-swap: only increment if still under the limit at
+		// the moment of the UPDATE, not at the moment the caller looked up the
+		// coupon. maxRedemptions itself is immutable coupon config (set at
+		// creation, never changes), so the caller's earlier read of it is safe
+		// to reuse here — only total_redemptions changes, and that's re-checked
+		// fresh by the database in this WHERE clause, not against a stale read.
+		// This is what closes the race — concurrent requests each re-check
+		// total_redemptions in the same statement that performs the increment,
+		// so only one of N concurrent callers can win when at the limit.
+		updateQuery = updateQuery.Where(coupon.TotalRedemptionsLT(*maxRedemptions))
+	}
+
+	affected, err := updateQuery.
 		AddTotalRedemptions(1).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -298,6 +364,49 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 		return ierr.WithError(err).
 			WithHint("Failed to increment coupon redemptions").
 			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		// affected == 0 means either the coupon doesn't exist (or isn't in this
+		// tenant/environment), or the WHERE total_redemptions < maxRedemptions
+		// guard excluded it because a concurrent request already won the race.
+		// A plain Update().Save() doesn't distinguish these — unlike Query.Only
+		// or UpdateOneID, it simply reports 0 rows matched, not a not-found
+		// error. Disambiguate with one cheap existence check (only on this
+		// already-failed path, not the common-case success path).
+		exists, existErr := client.Coupon.Query().
+			Where(
+				coupon.ID(id),
+				coupon.TenantID(types.GetTenantID(ctx)),
+				coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).
+			Exist(ctx)
+		if existErr != nil {
+			SetSpanError(span, existErr)
+			return ierr.WithError(existErr).
+				WithHint("Failed to increment coupon redemptions").
+				Mark(ierr.ErrDatabase)
+		}
+		if !exists {
+			err := ierr.NewErrorf("Coupon with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"coupon_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+			SetSpanError(span, err)
+			return err
+		}
+
+		// The WHERE clause excluded the row: another concurrent request won
+		// the race and already pushed total_redemptions to the limit.
+		err := ierr.NewError("coupon has reached maximum redemptions").
+			WithHint("This coupon cannot be redeemed again").
+			WithReportableDetails(map[string]any{
+				"coupon_id": id,
+			}).
+			Mark(ierr.ErrValidation)
+		SetSpanError(span, err)
+		return err
 	}
 
 	SetSpanSuccess(span)
@@ -390,7 +499,7 @@ func (o CouponQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query Co
 
 func (o CouponQueryOptions) ApplyStatusFilter(query CouponQuery, status string) CouponQuery {
 	if status == "" {
-		return query.Where(coupon.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(coupon.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(coupon.Status(status))
 }
@@ -443,6 +552,10 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(coupon.IDIn(f.CouponIDs...))
 	}
 
+	if len(f.CouponCodes) > 0 {
+		query = query.Where(coupon.CouponCodeIn(f.CouponCodes...))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CouponQuery, predicate.Coupon](
 			query,
@@ -472,46 +585,39 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 }
 
 func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "set", map[string]interface{}{
 		"coupon_id": coupon.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
-	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
-
-	r.log.Debug(ctx, "cache set", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultRedis)
 }
 
-func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
-	span := cache.StartCacheSpan(ctx, "coupon", "get", map[string]interface{}{
-		"coupon_id": key,
+func (r *couponRepository) GetCache(ctx context.Context, id string) *domainCoupon.Coupon {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "get", map[string]interface{}{
+		"coupon_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debug(ctx, "cache hit", "key", cacheKey)
-			return coupon
-		}
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	c, ok := cache.UnmarshalCacheValue[domainCoupon.Coupon](value)
+	if !ok {
+		return nil
+	}
+	return c
 }
 
 func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon.Coupon) {
-	span := cache.StartCacheSpan(ctx, "coupon", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "coupon", "delete", map[string]interface{}{
 		"coupon_id": coupon.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
-	r.cache.Delete(ctx, cacheKey)
-	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCoupon, coupon.ID)
+	r.redisCache.Delete(ctx, cacheKey)
 }

@@ -19,6 +19,7 @@ type CreateCreditGrantRequest struct {
 	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
+	AddonID                *string                              `json:"addon_id,omitempty"`
 	Credits                decimal.Decimal                      `json:"credits" binding:"required" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
@@ -43,15 +44,56 @@ type CreateCreditGrantRequest struct {
 	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
 	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
+
+	// FirstPeriodProration, when set, scales the first application's credits to the
+	// portion of the billing period the grant actually covers.
+	FirstPeriodProration *FirstPeriodProration `json:"-"`
+}
+
+// FirstPeriodProration describes the billing period a mid-cycle grant lands in.
+// It is consumed once, when the first credit grant application is created, and is
+// deliberately never persisted on the grant: every later period is a whole period
+// and must grant the full amount.
+type FirstPeriodProration struct {
+	// PeriodStart/PeriodEnd bound the subscription billing period containing the grant.
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+
+	// ProrationDate is when coverage begins, e.g. the addon attach date.
+	ProrationDate time.Time
+
+	Strategy types.ProrationStrategy
+
+	// Source labels the trigger in audit metadata, e.g. "addon_attach".
+	Source string
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
 type UpdateCreditGrantRequest struct {
 	Name     *string         `json:"name,omitempty"`
 	Metadata *types.Metadata `json:"metadata,omitempty"`
+	EndDate  *time.Time      `json:"end_date,omitempty"`
 }
 
-// CreditGrantResponse represents the response for a credit grant
+// Validate validates the update credit grant request
+func (r *UpdateCreditGrantRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.EndDate != nil {
+		if r.EndDate.Before(time.Now()) {
+			return errors.NewError("end_date cannot be in the past").
+				WithHint("Please provide a valid end date").
+				WithReportableDetails(map[string]interface{}{
+					"end_date": r.EndDate,
+				}).
+				Mark(errors.ErrValidation)
+		}
+	}
+	return nil
+}
+
 type CreditGrantResponse struct {
 	*creditgrant.CreditGrant
 }
@@ -134,9 +176,27 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
+	case types.CreditGrantScopeAddon:
+		if r.AddonID == nil || *r.AddonID == "" {
+			return errors.NewError("addon_id is required for ADDON-scoped grants").
+				WithHint("Please provide a valid addon ID").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
+		// ADDON-scoped grants are templates (like PLAN): start/end dates are not allowed
+		if r.StartDate != nil || r.EndDate != nil {
+			return errors.NewError("start_date and end_date are not allowed for ADDON-scoped grants").
+				WithHint("Start date and end date are not allowed for ADDON-scoped grants").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
 	default:
 		return errors.NewError("invalid scope").
-			WithHint("Scope must be either PLAN or SUBSCRIPTION").
+			WithHint("Scope must be one of PLAN, SUBSCRIPTION or ADDON").
 			WithReportableDetails(map[string]interface{}{
 				"scope": r.Scope,
 			}).
@@ -267,10 +327,23 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 		if r.CreditGrantAnchor != nil {
 			cg.CreditGrantAnchor = r.CreditGrantAnchor
 		}
-		// PlanID can be provided for subscription-scoped grants
+		// PlanID can be provided for subscription-scoped grants (provenance)
 		if r.PlanID != nil {
 			cg.PlanID = r.PlanID
 		}
+		// AddonID can be provided for subscription-scoped grants (provenance)
+		if r.AddonID != nil {
+			cg.AddonID = r.AddonID
+		}
+
+	case types.CreditGrantScopeAddon:
+		cg.AddonID = r.AddonID
+		// For ADDON scope (template), these fields must be nil
+		cg.SubscriptionID = nil
+		cg.PlanID = nil
+		cg.StartDate = nil
+		cg.EndDate = nil
+		cg.CreditGrantAnchor = nil
 	}
 
 	// Set fields based on cadence
@@ -312,25 +385,6 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 	return cg
 }
 
-// UpdateCreditGrant applies UpdateCreditGrantRequest to domain CreditGrant
-func (r *UpdateCreditGrantRequest) UpdateCreditGrant(grant *creditgrant.CreditGrant, ctx context.Context) {
-	user := types.GetUserID(ctx)
-	grant.UpdatedBy = user
-
-	if r.Name != nil {
-		grant.Name = *r.Name
-	}
-
-	if r.Metadata != nil {
-		if grant.Metadata == nil {
-			grant.Metadata = make(map[string]string)
-		}
-		for k, v := range *r.Metadata {
-			grant.Metadata[k] = v
-		}
-	}
-}
-
 // FromCreditGrant converts domain CreditGrant to CreditGrantResponse
 func FromCreditGrant(grant *creditgrant.CreditGrant) *CreditGrantResponse {
 	if grant == nil {
@@ -367,6 +421,7 @@ type CreateCreditGrantApplicationRequest struct {
 	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason"`
 	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application"`
 	IdempotencyKey                  string                             `json:"idempotency_key"`
+	Metadata                        types.Metadata                     `json:"metadata,omitempty"`
 }
 
 // Validate validates the create credit grant application request
@@ -429,6 +484,7 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 		SubscriptionStatusAtApplication: r.SubscriptionStatusAtApplication,
 		Credits:                         r.Credits,
 		IdempotencyKey:                  r.IdempotencyKey,
+		Metadata:                        r.Metadata,
 		RetryCount:                      0,
 		FailureReason:                   nil,
 		EnvironmentID:                   types.GetEnvironmentID(ctx),
@@ -440,6 +496,9 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 type CancelFutureSubscriptionGrantsRequest struct {
 	SubscriptionID string     `json:"subscription_id" binding:"required"`
 	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
+	// AddonID, when set, scopes cancellation to grants materialized from this addon
+	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
+	AddonID *string `json:"addon_id,omitempty"`
 }
 
 // Validate validates the cancel future subscription grants request

@@ -83,6 +83,26 @@ func (r *LinkIntegrationMappingRequest) Validate() error {
 	return nil
 }
 
+type DelinkIntegrationMappingRequest struct {
+	EntityType   types.IntegrationEntityType `json:"entity_type" validate:"required"`
+	EntityID     string                      `json:"entity_id" validate:"required"`
+	ProviderType string                      `json:"provider_type" validate:"required"`
+}
+
+
+func (r *DelinkIntegrationMappingRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if err := r.EntityType.Validate(); err != nil {
+		return err
+	}
+	if err := types.SecretProvider(r.ProviderType).Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
 type IntegrationConfigEntry struct {
 	Provider      types.SecretProvider `json:"provider"`
 	BaseConfig    *types.SyncConfig    `json:"base_config"`

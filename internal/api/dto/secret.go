@@ -62,18 +62,20 @@ func (r *CreateIntegrationRequest) Validate() error {
 
 // SecretResponse represents a secret in responses
 type SecretResponse struct {
-	ID         string               `json:"id"`
-	Name       string               `json:"name"`
-	Type       types.SecretType     `json:"type"`
-	Provider   types.SecretProvider `json:"provider"`
-	DisplayID  string               `json:"display_id"`
-	Roles      []string             `json:"roles,omitempty"`     // RBAC roles
-	UserType   types.UserType       `json:"user_type,omitempty"` // "user" or "service_account"
-	ExpiresAt  *time.Time           `json:"expires_at,omitempty"`
-	LastUsedAt *time.Time           `json:"last_used_at,omitempty"`
-	Status     types.Status         `json:"status"`
-	CreatedAt  time.Time            `json:"created_at"`
-	UpdatedAt  time.Time            `json:"updated_at"`
+	ID                 string               `json:"id"`
+	Name               string               `json:"name"`
+	Type               types.SecretType     `json:"type"`
+	Provider           types.SecretProvider `json:"provider"`
+	DisplayID          string               `json:"display_id"`
+	Roles              []string             `json:"roles,omitempty"`                // RBAC roles
+	UserType           types.UserType       `json:"user_type,omitempty"`            // "user" or "service_account"
+	UserID             string               `json:"user_id,omitempty"`              // user or service account this key belongs to
+	ServiceAccountName string               `json:"service_account_name,omitempty"` // name of the service account (populated for service_account user_type)
+	ExpiresAt          *time.Time           `json:"expires_at,omitempty"`
+	LastUsedAt         *time.Time           `json:"last_used_at,omitempty"`
+	Status             types.Status         `json:"status"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
 }
 
 // CreateAPIKeyResponse represents the response when creating a new API key
@@ -98,8 +100,9 @@ func ToSecretResponse(s *secret.Secret) *SecretResponse {
 		Type:       s.Type,
 		Provider:   s.Provider,
 		DisplayID:  s.DisplayID,
-		Roles:      s.Roles,                    // RBAC roles
-		UserType:   types.UserType(s.UserType), // User type
+		Roles:      s.Roles,
+		UserType:   types.UserType(s.UserType),
+		UserID:     s.UserID,
 		ExpiresAt:  s.ExpiresAt,
 		LastUsedAt: s.LastUsedAt,
 		Status:     s.Status,

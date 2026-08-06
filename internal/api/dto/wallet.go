@@ -253,6 +253,8 @@ func (r *CreateWalletRequest) Validate() error {
 type WalletResponse struct {
 	*wallet.Wallet
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
+	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
+	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -263,6 +265,20 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 
 	return &WalletResponse{
 		Wallet: w,
+	}
+}
+
+// WalletResponseFromBalance maps a computed balance into a WalletResponse with real-time fields.
+func WalletResponseFromBalance(b *WalletBalanceResponse) *WalletResponse {
+	if b == nil || b.Wallet == nil {
+		return nil
+	}
+
+	return &WalletResponse{
+		Wallet:                    b.Wallet,
+		CreditsAvailableBreakdown: b.CreditsAvailableBreakdown,
+		RealTimeBalance:           b.RealTimeBalance,
+		RealTimeCreditBalance:     b.RealTimeCreditBalance,
 	}
 }
 
@@ -323,6 +339,22 @@ type TopUpWalletRequest struct {
 	// BillingReason indicates why this top-up was triggered (e.g. WALLET_AUTO_TOPUP).
 	// When set, it is stamped on the invoice created for PURCHASED_CREDIT_INVOICED transactions.
 	BillingReason types.InvoiceBillingReason `json:"-"`
+	// bonus_credits_to_add is an explicit override for the bonus credits granted alongside this
+	// purchase. When nil/omitted, the bonus is resolved from the tenant's
+	// bonus_credits_topup_config slabs (if enabled). When set, it must be greater than 0 and is
+	// used as-is, skipping slab resolution. To grant no bonus, omit this field entirely.
+	BonusCreditsToAdd *decimal.Decimal `json:"bonus_credits_to_add,omitempty" swaggertype:"string"`
+	// bonus_credits_expiry_date_utc is the expiry (UTC, full precision) applied to the bonus
+	// credits transaction. Independent of expiry_date_utc, which governs the purchase credits.
+	// Only honored when bonus credits are actually granted (explicit BonusCreditsToAdd or slab).
+	BonusCreditsExpiryDateUTC *time.Time `json:"bonus_credits_expiry_date_utc,omitempty"`
+
+	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
+
+	// checkout opts into pay-first hosted checkout for PURCHASED_CREDIT_INVOICED top-ups.
+	// When set, credits are applied only after checkout payment succeeds.
+	// Omit for today's pay-later / auto-complete behavior.
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
@@ -369,6 +401,35 @@ func (r *TopUpWalletRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if r.BonusCreditsToAdd != nil && r.BonusCreditsToAdd.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("bonus_credits_to_add must be greater than 0").
+			WithHint("To grant no bonus credits, omit bonus_credits_to_add entirely").
+			WithReportableDetails(map[string]interface{}{
+				"bonus_credits_to_add": r.BonusCreditsToAdd,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+		return ierr.NewError("bonus_credits_expiry_date_utc cannot be in the past").
+			WithHint("Bonus credits expiry date must be in the future").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Checkout != nil {
+		if r.TransactionReason != types.TransactionReasonPurchasedCreditInvoiced {
+			return ierr.NewError("checkout is only supported for PURCHASED_CREDIT_INVOICED").
+				WithHint("Omit checkout, or set transaction_reason to PURCHASED_CREDIT_INVOICED").
+				WithReportableDetails(map[string]interface{}{
+					"transaction_reason": r.TransactionReason,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := r.Checkout.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -380,6 +441,8 @@ type TopUpWalletResponse struct {
 	InvoiceID *string `json:"invoice_id,omitempty"`
 	// Wallet details after the operation
 	Wallet *WalletResponse `json:"wallet"`
+	// CheckoutSession is set when pay-first checkout was requested on top-up.
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // WalletBalanceResponse represents the response for getting wallet balance
@@ -391,25 +454,11 @@ type WalletBalanceResponse struct {
 	CurrentPeriodUsage        *decimal.Decimal       `json:"current_period_usage,omitempty" swaggertype:"string"`
 	UnpaidInvoicesAmount      *decimal.Decimal       `json:"unpaid_invoices_amount,omitempty" swaggertype:"string"`
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
-}
-
-type ExpiredCreditsResponseItem struct {
-	TenantID                       string `json:"tenant_id"`
-	EnvironmentID                  string `json:"environment_id"`
-	Count                          int    `json:"count"`
-	Success                        int    `json:"success"`
-	Failed                         int    `json:"failed"`
-	SkippedDueToActiveSubscription int    `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int    `json:"skipped_due_to_active_invoice"`
-}
-
-type ExpiredCreditsResponse struct {
-	Items                          []*ExpiredCreditsResponseItem `json:"items"`
-	Total                          int                           `json:"total"`
-	Success                        int                           `json:"success"`
-	Failed                         int                           `json:"failed"`
-	SkippedDueToActiveSubscription int                           `json:"skipped_due_to_active_subscription"`
-	SkippedDueToActiveInvoice      int                           `json:"skipped_due_to_active_invoice"`
+	// IsCachedFallback is true whenever the response is sourced from cache:
+	// either an explicit cache request, or fallback after a real-time failure.
+	// Clients should treat the absence of this field as if it were true and
+	// only trust freshness when the server explicitly emits false.
+	IsCachedFallback bool `json:"is_cached_fallback"`
 }
 
 type GetCustomerWalletsRequest struct {

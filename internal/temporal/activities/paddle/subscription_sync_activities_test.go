@@ -55,14 +55,17 @@ func buildActivityFactory(
 		connectionRepo,
 		testutil.NewInMemoryCustomerStore(),
 		subscriptionRepo,
+		testutil.NewInMemoryPlanStore(),
 		invoiceRepo,
 		testutil.NewInMemoryPaymentStore(),
+		nil, // paymentMethodRepo — not needed in activity unit tests
 		testutil.NewInMemoryPriceStore(),
 		mappingRepo,
 		testutil.NewInMemoryMeterStore(),
 		testutil.NewInMemoryFeatureStore(),
 		encSvc,
 		nil, // TemporalService — not needed in activity unit tests
+		testutil.NewInMemoryRedisLocker(nil),
 	)
 }
 

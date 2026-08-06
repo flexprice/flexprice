@@ -1,0 +1,22 @@
+# Keep the Docker build context small. Excludes VCS, generated SDKs, docs,
+# and editor/OS cruft that the Go build never needs (COPY . .).
+# Do NOT exclude go.mod, go.sum, cmd/, internal/, ent/, migrations/, assets/.
+.git
+.gitignore
+.github
+.vscode
+.idea
+api
+docs
+# but keep the generated swagger Go package — main.go imports it (blank import for swagger docs)
+!docs/swagger/docs.go
+node_modules
+tmp
+bin
+dist
+*.log
+.env
+.env.*
+.DS_Store
+Dockerfile*
+.dockerignore

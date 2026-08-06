@@ -1,0 +1,285 @@
+package service
+
+import (
+	"testing"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/suite"
+)
+
+type PaymentServiceSuite struct {
+	testutil.BaseServiceTestSuite
+	service  PaymentService
+	testData struct {
+		customer *customer.Customer
+		invoice  *invoice.Invoice
+	}
+}
+
+func TestPaymentService(t *testing.T) {
+	suite.Run(t, new(PaymentServiceSuite))
+}
+
+func (s *PaymentServiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.setupService()
+	s.setupTestData()
+}
+
+func (s *PaymentServiceSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+}
+
+func (s *PaymentServiceSuite) setupService() {
+	// Create the PaymentService
+	s.service = NewPaymentService(ServiceParams{
+		Logger:           s.GetLogger(),
+		Config:           s.GetConfig(),
+		DB:               s.GetDB(),
+		SubRepo:          s.GetStores().SubscriptionRepo,
+		PlanRepo:         s.GetStores().PlanRepo,
+		PriceRepo:        s.GetStores().PriceRepo,
+		EventRepo:        s.GetStores().EventRepo,
+		MeterRepo:        s.GetStores().MeterRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		InvoiceRepo:      s.GetStores().InvoiceRepo,
+		EntitlementRepo:  s.GetStores().EntitlementRepo,
+		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
+		FeatureRepo:      s.GetStores().FeatureRepo,
+		TenantRepo:       s.GetStores().TenantRepo,
+		UserRepo:         s.GetStores().UserRepo,
+		AuthRepo:         s.GetStores().AuthRepo,
+		WalletRepo:       s.GetStores().WalletRepo,
+		PaymentRepo:      s.GetStores().PaymentRepo,
+		EventPublisher:   s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
+}
+
+func (s *PaymentServiceSuite) setupTestData() {
+	// Create test customer
+	s.testData.customer = &customer.Customer{
+		ID:         "cust_test_payment",
+		ExternalID: "ext_cust_test_payment",
+		Name:       "Test Customer",
+		Email:      "test@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), s.testData.customer))
+
+	// Create test invoice
+	s.testData.invoice = &invoice.Invoice{
+		ID:              "inv_test_payment",
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(100),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(100),
+		Description:     "Test Invoice for Payment Links",
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), s.testData.invoice))
+}
+
+func (s *PaymentServiceSuite) TestCreatePaymentWithPaymentLink() {
+	// Add environment ID to context
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	// Test creating a payment with PAYMENT_LINK method type
+	req := &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		ProcessPayment:    false, // Don't process immediately
+	}
+
+	resp, err := s.service.CreatePayment(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.PaymentMethodTypePaymentLink, resp.PaymentMethodType)
+	s.Equal("stripe", *resp.PaymentGateway)
+	s.Equal(types.PaymentStatusInitiated, resp.PaymentStatus)
+}
+
+func (s *PaymentServiceSuite) TestCreatePaymentLink_InitiatedStatus() {
+	// Add environment ID to context
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	// Create payment link request
+	req := &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
+		Amount:            decimal.NewFromInt(1000),
+		Currency:          "usd",
+		ProcessPayment:    false, // Don't process immediately to avoid Stripe calls
+	}
+
+	// Test that payment is created with INITIATED status
+	paymentResp, err := s.service.CreatePayment(ctx, req)
+	s.NoError(err)
+	s.NotNil(paymentResp)
+	s.Equal(types.PaymentStatusInitiated, paymentResp.PaymentStatus)
+
+	// Verify payment was created in database
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, paymentResp.ID)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
+	s.Equal(types.PaymentMethodTypePaymentLink, payment.PaymentMethodType)
+	s.Equal(string(types.PaymentGatewayTypeStripe), *payment.PaymentGateway)
+}
+
+func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {
+	// Add environment ID to context
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	// Create payment link request without processing
+	req := &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
+		Amount:            decimal.NewFromInt(1000),
+		Currency:          "usd",
+		ProcessPayment:    false, // Don't process immediately
+	}
+
+	// Create payment with INITIATED status
+	paymentResp, err := s.service.CreatePayment(ctx, req)
+	s.NoError(err)
+	s.NotNil(paymentResp)
+	s.Equal(types.PaymentStatusInitiated, paymentResp.PaymentStatus)
+
+	// Verify payment was created in database with INITIATED status
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, paymentResp.ID)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
+
+	// Test that payment processor accepts INITIATED status for payment links
+	// We'll just verify that the payment object has the correct status
+	// without actually calling the processor (which would require Stripe setup)
+	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
+	s.Equal(types.PaymentMethodTypePaymentLink, payment.PaymentMethodType)
+	s.Equal(string(types.PaymentGatewayTypeStripe), *payment.PaymentGateway)
+
+	// Verify that the payment is in a state that would be accepted by the processor
+	s.True(payment.PaymentStatus == types.PaymentStatusInitiated || payment.PaymentStatus == types.PaymentStatusPending)
+}
+
+func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_GuardConditions() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	tests := []struct {
+		name   string
+		status types.PaymentStatus
+		gwID   *string
+		gw     *string
+	}{
+		{
+			name:   "terminal FAILED — no sync",
+			status: types.PaymentStatusFailed,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "INITIATED — no sync",
+			status: types.PaymentStatusInitiated,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "PENDING nil gateway_payment_id — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   nil,
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
+		},
+		{
+			name:   "PENDING nil gateway — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   lo.ToPtr("pay_xyz"),
+			gw:     nil,
+		},
+		{
+			name:   "PENDING unsupported gateway nomod — no sync",
+			status: types.PaymentStatusPending,
+			gwID:   lo.ToPtr("nomod_ref"),
+			gw:     lo.ToPtr(string(types.PaymentGatewayTypeNomod)),
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			p := &payment.Payment{
+				ID:                "pay_guard_" + tt.name,
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     s.testData.invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypePaymentLink,
+				PaymentStatus:     tt.status,
+				Amount:            decimal.NewFromFloat(100),
+				Currency:          "usd",
+				GatewayPaymentID:  tt.gwID,
+				PaymentGateway:    tt.gw,
+				BaseModel:         types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+
+			svc := s.service.(*paymentService)
+			result, err := svc.syncPaymentStatusFromGateway(ctx, p)
+			s.NoError(err)
+			s.Equal(p.ID, result.ID)
+			s.Equal(tt.status, result.PaymentStatus)
+		})
+	}
+}
+
+// TestCreatePayment_CustomerDestination_ValidatesCustomer covers the VAPT fix:
+// CUSTOMER destination must now verify the customer exists in this tenant/env,
+// so bogus/foreign customer_ids fail-fast at CreatePayment rather than producing
+// an orphaned payment row (which would go on to fail later in ProcessPayment).
+func (s *PaymentServiceSuite) TestCreatePayment_CustomerDestination_ValidatesCustomer() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	s.Run("missing_customer_rejected", func() {
+		req := &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeCustomer,
+			DestinationID:     "cust_does_not_exist",
+			PaymentMethodType: types.PaymentMethodTypeCard,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+		}
+		_, err := s.service.CreatePayment(ctx, req)
+		s.Require().Error(err, "unknown customer_id must be rejected")
+		s.True(ierr.IsValidation(err), "expected validation-class error (not 500), got: %v", err)
+	})
+
+	s.Run("existing_customer_ok", func() {
+		req := &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeCustomer,
+			DestinationID:     s.testData.customer.ID,
+			PaymentMethodType: types.PaymentMethodTypeCard,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+		}
+		resp, err := s.service.CreatePayment(ctx, req)
+		s.Require().NoError(err, "existing customer must be accepted")
+		s.Equal(types.PaymentDestinationTypeCustomer, resp.DestinationType)
+		s.Equal(s.testData.customer.ID, resp.DestinationID)
+	})
+}

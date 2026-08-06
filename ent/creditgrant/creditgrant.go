@@ -37,6 +37,8 @@ const (
 	FieldPlanID = "plan_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
+	// FieldAddonID holds the string denoting the addon_id field in the database.
+	FieldAddonID = "addon_id"
 	// FieldCredits holds the string denoting the credits field in the database.
 	FieldCredits = "credits"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
@@ -69,6 +71,8 @@ const (
 	EdgePlan = "plan"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
+	// EdgeAddon holds the string denoting the addon edge name in mutations.
+	EdgeAddon = "addon"
 	// Table holds the table name of the creditgrant in the database.
 	Table = "credit_grants"
 	// PlanTable is the table that holds the plan relation/edge.
@@ -85,6 +89,13 @@ const (
 	SubscriptionInverseTable = "subscriptions"
 	// SubscriptionColumn is the table column denoting the subscription relation/edge.
 	SubscriptionColumn = "subscription_id"
+	// AddonTable is the table that holds the addon relation/edge.
+	AddonTable = "credit_grants"
+	// AddonInverseTable is the table name for the Addon entity.
+	// It exists in this package in order to avoid circular dependency with the "addon" package.
+	AddonInverseTable = "addons"
+	// AddonColumn is the table column denoting the addon relation/edge.
+	AddonColumn = "addon_id"
 )
 
 // Columns holds all SQL columns for creditgrant fields.
@@ -101,6 +112,7 @@ var Columns = []string{
 	FieldScope,
 	FieldPlanID,
 	FieldSubscriptionID,
+	FieldAddonID,
 	FieldCredits,
 	FieldConversionRate,
 	FieldTopupConversionRate,
@@ -217,6 +229,11 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }
 
+// ByAddonID orders the results by the addon_id field.
+func ByAddonID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddonID, opts...).ToFunc()
+}
+
 // ByCredits orders the results by the credits field.
 func ByCredits(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCredits, opts...).ToFunc()
@@ -295,6 +312,13 @@ func BySubscriptionField(field string, opts ...sql.OrderTermOption) OrderOption 
 		sqlgraph.OrderByNeighborTerms(s, newSubscriptionStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByAddonField orders the results by addon field.
+func ByAddonField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAddonStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newPlanStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -307,5 +331,12 @@ func newSubscriptionStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SubscriptionInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, SubscriptionTable, SubscriptionColumn),
+	)
+}
+func newAddonStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AddonInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, AddonTable, AddonColumn),
 	)
 }

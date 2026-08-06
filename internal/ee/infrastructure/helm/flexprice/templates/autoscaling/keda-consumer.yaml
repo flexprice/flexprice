@@ -15,8 +15,7 @@ kind: ScaledObject
 metadata:
   name: {{ include "flexprice.fullname" . }}-consumer
   labels:
-    {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: consumer
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "consumer") | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -38,12 +37,37 @@ spec:
         topic: {{ .Values.kafkaConfig.topic | quote }}
         lagThreshold: {{ .Values.consumer.keda.lagThreshold | default 1000 | quote }}
         offsetResetPolicy: {{ .Values.consumer.keda.offsetResetPolicy | default "earliest" | quote }}
-        {{- if .Values.kafkaConfig.tls }}
+        {{- if or .Values.kafkaConfig.tls .Values.kafkaConfig.useSASL }}
         tls: enable
         {{- end }}
         {{- if .Values.kafkaConfig.useSASL }}
-        sasl: {{ .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
+        {{- /*
+          KEDA's Kafka scaler names mechanisms differently from sarama: it wants
+          lowercase, underscore-separated values (scram_sha512), not the
+          SCRAM-SHA-512 spelling kafkaConfig.saslMechanism carries. Passing the
+          sarama spelling through makes the scaler fail to authenticate, so map
+          it here rather than asking operators to set the value twice.
+
+          An unmapped mechanism fails the render instead of defaulting to
+          plaintext: a silent default produces a scaler that cannot authenticate
+          and reports a misleading error, which is the exact bug this mapping
+          exists to prevent.
+        */}}
+        {{- $saslMap := dict "SCRAM-SHA-512" "scram_sha512" "SCRAM-SHA-256" "scram_sha256" "PLAIN" "plaintext" "OAUTHBEARER" "oauthbearer" }}
+        {{- $mechanism := .Values.kafkaConfig.saslMechanism | default "PLAIN" }}
+        {{- if not (hasKey $saslMap $mechanism) }}
+        {{- fail (printf "kafkaConfig.saslMechanism %q has no KEDA equivalent; the KEDA Kafka scaler supports only: %s. Set the sarama spelling (e.g. SCRAM-SHA-512), or disable consumer.keda.enabled." $mechanism (join ", " (keys $saslMap | sortAlpha))) }}
         {{- end }}
+        sasl: {{ get $saslMap $mechanism | quote }}
+        {{- end }}
+      {{- /*
+        KEDA's operator dials Kafka itself, so it never sees the CA mounted from
+        kafkaConfig.tlsCASecret into the workload pods. Credentials and a private
+        broker CA both have to reach it through an operator-supplied
+        TriggerAuthentication — and through the SAME one, since a trigger takes a
+        single authenticationRef. See consumer.keda.authenticationRef in
+        values.yaml for the resource shape, including the `ca` parameter.
+      */}}
       {{- with .Values.consumer.keda.authenticationRef }}
       authenticationRef:
         {{- toYaml . | nindent 8 }}

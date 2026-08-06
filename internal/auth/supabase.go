@@ -142,10 +142,13 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 			Mark(ierr.ErrPermissionDenied)
 	}
 
+	environmentID, _ := claims["environment_id"].(string)
+
 	return &auth.Claims{
-		UserID:   userID,
-		TenantID: tenantID,
-		Email:    email,
+		UserID:        userID,
+		TenantID:      tenantID,
+		Email:         email,
+		EnvironmentID: environmentID,
 	}, nil
 }
 
@@ -171,6 +174,45 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 	)
 
 	return nil
+}
+
+// GenerateDevToken creates a short-lived JWT that matches the Supabase claim schema so it
+// passes supabaseAuth.ValidateToken: { sub, email, app_metadata.tenant_id, environment_id }.
+func (s *supabaseAuth) GenerateDevToken(tenantID, environmentID, userID, email string, expiryHours int) (string, time.Time, error) {
+	if tenantID == "" {
+		return "", time.Time{}, ierr.NewError("tenantID is required").
+			WithHint("Provide a tenant ID to generate a dev token").
+			Mark(ierr.ErrValidation)
+	}
+	if email == "" {
+		return "", time.Time{}, ierr.NewError("email is required for Supabase dev tokens").
+			WithHint("Pass -user-email flag or set USER_EMAIL env var").
+			Mark(ierr.ErrValidation)
+	}
+
+	expiresAt := time.Now().Add(time.Duration(expiryHours) * time.Hour)
+
+	claims := jwt.MapClaims{
+		"sub":   userID,
+		"email": email,
+		"app_metadata": map[string]interface{}{
+			"tenant_id": tenantID,
+		},
+		"exp": expiresAt.Unix(),
+		"iat": time.Now().Unix(),
+	}
+	if environmentID != "" {
+		claims["environment_id"] = environmentID
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(s.AuthConfig.Secret))
+	if err != nil {
+		return "", time.Time{}, ierr.WithError(err).
+			WithHint("Failed to sign Supabase dev token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, expiresAt, nil
 }
 
 // GenerateSessionToken generates a session token
@@ -221,4 +263,27 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 	}
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil
+}
+
+// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+// Signed with the shared auth secret so the checkout page can decode it regardless of auth provider.
+func (s *supabaseAuth) GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error) {
+	expiresAt := time.Now().Add(checkoutTokenTTL)
+
+	claims := jwt.MapClaims{
+		"exp": expiresAt.Unix(),
+		"iat": time.Now().Unix(),
+	}
+	for k, v := range extraClaims {
+		claims[k] = v
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(s.AuthConfig.Secret))
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to sign checkout token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, nil
 }

@@ -111,11 +111,18 @@ type UsageParams struct {
 	// - Custom business cycles (fiscal months, quarterly periods)
 	// - Multi-tenant billing with different anchor dates per customer
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
-	// GroupByProperty is the property name in event.properties to group by before aggregating.
-	// When set, aggregation is applied per unique value of this property within each bucket,
-	// then the per-group results are summed to produce the bucket total.
-	// Currently only supported for MAX aggregation with bucket_size.
-	GroupByProperty string `json:"group_by_property,omitempty"`
+	// Timezone is the customer's IANA timezone name used to align
+	// window function queries (daily/monthly resets) with local time.
+	// Empty string or "UTC" means standard UTC windows (default for all existing data).
+	Timezone string `json:"timezone,omitempty"`
+	// GroupBy lists the analytics group_by dimensions.
+	//   - "source"        — group by event source
+	//   - "properties.X"  — group by JSON property X
+	// Naming matches UsageAnalyticsParams.GroupBy + MeterUsageQueryParams.GroupBy.
+	// Currently only supported for MAX aggregation with bucket_size; the events
+	// repo's per-row SQL consumes the first dim for legacy single-property
+	// grouping (multi-dim support is on the bucketed-meter path).
+	GroupBy []string `json:"group_by,omitempty"`
 }
 
 // UsageSummaryParams defines parameters for querying pre-computed usage
@@ -163,17 +170,42 @@ type GetEventsParams struct {
 type UsageResult struct {
 	WindowSize time.Time       `json:"window_size"`
 	Value      decimal.Decimal `json:"value"`
+	EventCount uint64          `json:"event_count"`         // Distinct event count in this window
 	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
 }
 
+// FirstGroupByProperty extracts the bare property name from the FIRST entry of
+// a GroupBy list when that entry is a "properties.X" form. Returns "" when the
+// list is empty or the first dim isn't a "properties.X" form.
+//
+// Positional semantics matter here: legacy SQL paths only support a single
+// dimension, and the primary dim is whatever the user listed first. Treating
+// later entries as candidates would silently demote the user's primary dim
+// (e.g., ["source", "properties.org_id"] would otherwise group by org_id and
+// drop source, which is the opposite of what the user asked).
+func FirstGroupByProperty(groupBy []string) string {
+	if len(groupBy) == 0 {
+		return ""
+	}
+	const prefix = "properties."
+	first := groupBy[0]
+	if len(first) > len(prefix) && first[:len(prefix)] == prefix {
+		return first[len(prefix):]
+	}
+	return ""
+}
+
 type AggregationResult struct {
-	Results   []UsageResult         `json:"results,omitempty"`
-	Value     decimal.Decimal       `json:"value,omitempty"`
-	EventName string                `json:"event_name"`
-	Type      types.AggregationType `json:"type"`
-	Metadata  map[string]string     `json:"metadata,omitempty"`
-	MeterID   string                `json:"meter_id"`
-	PriceID   string                `json:"price_id"`
+	Results    []UsageResult         `json:"results,omitempty"`
+	Value      decimal.Decimal       `json:"value,omitempty"`
+	EventCount uint64                `json:"event_count"` // Total distinct event count across all results
+	EventName  string                `json:"event_name"`
+	Type       types.AggregationType `json:"type"`
+	Metadata   map[string]string     `json:"metadata,omitempty"`
+	MeterID    string                `json:"meter_id"`
+	PriceID    string                `json:"price_id"`
+	// Sources holds distinct source values when CollectSources is requested (analytics expand:"source").
+	Sources []string `json:"sources,omitempty"`
 }
 
 type EventIterator struct {
@@ -210,16 +242,6 @@ type FilterGroup struct {
 type UsageWithFiltersParams struct {
 	*UsageParams
 	FilterGroups []FilterGroup // Ordered list of filter groups, from most specific to least specific
-}
-
-type FeatureUsageParams struct {
-	*UsageParams
-	FeatureID     string `json:"feature_id"`
-	PriceID       string `json:"price_id"`
-	MeterID       string `json:"meter_id"`
-	SubLineItemID string `json:"sub_line_item_id"`
-	// QuerySource: when InvoiceCreation, ClickHouse uses FINAL for ReplacingMergeTree deduplication; other sources do not.
-	Source types.UsageSource `json:"query_source,omitempty"`
 }
 
 // Cost Usage Params

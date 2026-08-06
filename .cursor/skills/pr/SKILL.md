@@ -34,7 +34,7 @@ Run mentally or out loud through this list; fix gaps before requesting review.
 
 - [ ] **`gofmt`**, **`go vet`** on affected scope.
 - [ ] **`go test -race`** on touched packages or **`make test`** for broad changes.
-- [ ] Prefer table-driven tests for multiple cases (`internal/service/*_test.go` conventions).
+- [ ] Prefer table-driven tests for multiple cases (`internal/ee/service/*_test.go` conventions).
 
 ## Docs & graph
 

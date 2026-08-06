@@ -1,0 +1,306 @@
+package types
+
+import (
+	"time"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/shopspring/decimal"
+)
+
+type CheckoutConfiguration struct {
+	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
+	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
+	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
+	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
+}
+
+// Validate validates that the configuration holds all required fields
+// for the given checkout action. Called at request entry so errors surface before
+// any DB operations begin.
+func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
+	switch action {
+	case CheckoutActionCreateSubscription:
+		if c.CreateSubscriptionParams == nil {
+			return ierr.NewError("create_subscription_params is required for create_subscription action").
+				WithHint("Provide create_subscription_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.CreateSubscriptionParams.Validate()
+	case CheckoutActionModifySubscription:
+		if c.ModifySubscriptionParams == nil {
+			return ierr.NewError("modify_subscription_params is required for modify_subscription action").
+				WithHint("Provide modify_subscription_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.ModifySubscriptionParams.Validate()
+	case CheckoutActionWalletTopup:
+		if c.WalletTopupParams == nil {
+			return ierr.NewError("wallet_topup_params is required for wallet_topup action").
+				WithHint("Provide wallet_topup_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.WalletTopupParams.Validate()
+	case CheckoutActionAddAddon:
+		if c.AddAddonParams == nil {
+			return ierr.NewError("add_addon_params is required for add_addon action").
+				WithHint("Provide add_addon_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.AddAddonParams.Validate()
+	}
+	return nil
+}
+
+type CreateSubscriptionParams struct {
+	PlanID        string            `json:"plan_id"`
+	Currency      string            `json:"currency"`
+	LookupKey     string            `json:"lookup_key,omitempty"`
+	StartDate     *time.Time        `json:"start_date,omitempty"`
+	EndDate       *time.Time        `json:"end_date,omitempty"`
+	BillingPeriod BillingPeriod     `json:"billing_period"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+}
+
+// Validate checks that all required fields for subscription creation are present
+// and internally consistent, mirroring CreateSubscriptionRequest validation rules.
+func (p *CreateSubscriptionParams) Validate() error {
+	if p.PlanID == "" {
+		return ierr.NewError("plan_id is required").
+			WithHint("Provide a valid plan_id in create_subscription_params").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := ValidateCurrencyCode(p.Currency); err != nil {
+		return err
+	}
+
+	if p.BillingPeriod == "" {
+		return ierr.NewError("billing_period is required").
+			WithHint("Provide a valid billing_period in create_subscription_params (e.g. MONTHLY, ANNUAL)").
+			Mark(ierr.ErrValidation)
+	}
+	if err := p.BillingPeriod.Validate(); err != nil {
+		return err
+	}
+
+	if p.StartDate != nil && p.EndDate != nil && p.EndDate.Before(*p.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("Ensure the subscription end date is on or after the start date").
+			WithReportableDetails(map[string]any{
+				"start_date": p.StartDate,
+				"end_date":   p.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ModifySubscriptionParams is persisted on checkout sessions for payment-gated
+// subscription modifications (e.g. quantity_change). Applied on payment success.
+type ModifySubscriptionParams struct {
+	SubscriptionID        string                       `json:"subscription_id"`
+	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
+}
+
+// ModifySubscriptionLineItem is one close-and-replace intent for a line item.
+type ModifySubscriptionLineItem struct {
+	LineItemID    string          `json:"line_item_id"`
+	Quantity      decimal.Decimal `json:"quantity" swaggertype:"string"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+}
+
+func (p *ModifySubscriptionParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("modify_subscription_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Provide subscription_id in modify_subscription_params").
+			Mark(ierr.ErrValidation)
+	}
+	if len(p.LineItemModifications) == 0 {
+		return ierr.NewError("line_item_modifications is required").
+			WithHint("Provide at least one line_item_modification").
+			Mark(ierr.ErrValidation)
+	}
+	for i, mod := range p.LineItemModifications {
+		if mod.LineItemID == "" {
+			return ierr.NewError("line_item_id is required").
+				WithHint("Each line_item_modification must have a non-empty line_item_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if mod.Quantity.IsNegative() {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+// AddAddonParams is persisted on checkout sessions for payment-gated addon attach.
+// The association rows it references already exist as addon_status = pending; payment
+// success flips them to active and materializes their line items and credit grants.
+// List-shaped so batching more than one addon per session is additive; the attach endpoint
+// is single-addon today, so sessions carry one, but completion loops the list.
+type AddAddonParams struct {
+	SubscriptionID string        `json:"subscription_id"`
+	Addons         []AddAddonRef `json:"addons"`
+}
+
+// AddAddonRef is one pending addon attach, carrying everything needed to replay the attach
+// at completion without trusting execute-time state.
+type AddAddonRef struct {
+	AssociationID string       `json:"association_id"`
+	AddonID       string       `json:"addon_id"`
+	Cadence       AddonCadence `json:"cadence"`
+	// Needed to prorate the addon's first credit grant.
+	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
+	StartDate         time.Time         `json:"start_date"`
+}
+
+func (p *AddAddonParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("add_addon_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Provide subscription_id in add_addon_params").
+			Mark(ierr.ErrValidation)
+	}
+	if len(p.Addons) == 0 {
+		return ierr.NewError("at least one addon is required").
+			WithHint("add_addon_params must carry at least one addon").
+			Mark(ierr.ErrValidation)
+	}
+
+	for i, ref := range p.Addons {
+		if ref.AssociationID == "" {
+			return ierr.NewError("association_id is required").
+				WithHint("Each addon must reference its pending addon association").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if ref.AddonID == "" {
+			return ierr.NewError("addon_id is required").
+				WithHint("Each addon must have a non-empty addon_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := ref.Cadence.Validate(); err != nil {
+			return err
+		}
+		if ref.ProrationBehavior != "" {
+			if err := ref.ProrationBehavior.Validate(); err != nil {
+				return err
+			}
+		}
+		if ref.StartDate.IsZero() {
+			return ierr.NewError("start_date is required").
+				WithHint("start_date must be resolved at execute time so completion replays the same attach date").
+				WithReportableDetails(map[string]any{"index": i, "addon_id": ref.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// WalletTopupParams is persisted on checkout sessions for payment-gated wallet
+// top-ups. Credits are applied on payment success via invoice metadata
+// (wallet_transaction_id), not by re-running top-up from this config.
+type WalletTopupParams struct {
+	WalletID            string `json:"wallet_id" validate:"required"`
+	WalletTransactionID string `json:"wallet_transaction_id,omitempty"`
+}
+
+func (p *WalletTopupParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("wallet_topup_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	return validator.ValidateRequest(p)
+}
+
+// ── JSONB result structs ──────────────────────────────────────────────────────
+
+type CheckoutResult struct {
+	CreateSubscriptionResult *CreateSubscriptionResult `json:"create_subscription_result,omitempty"`
+}
+
+type CreateSubscriptionResult struct {
+	SubscriptionID string `json:"subscription_id"`
+	InvoiceID      string `json:"invoice_id"`
+	PaymentID      string `json:"payment_id"`
+}
+
+// ── JSONB provider_result structs ────────────────────────────────────────────
+
+// CheckoutProviderResult is the flat, action-agnostic provider response stored in
+// checkout_sessions.provider_result. It is never serialized to API callers directly —
+// use PaymentAction() to extract the safe-to-expose action.
+type CheckoutProviderResult struct {
+	// NextAction is what the customer must do to complete payment.
+	NextAction *PaymentAction `json:"next_action,omitempty"`
+
+	// ProviderSessionID is stored in EntityIntegrationMapping at link creation.
+	//   Stripe:   Checkout Session ID  (cs_xxx)
+	//   Razorpay: Payment Link ID      (plink_xxx)
+	//   Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)
+	//   Moyasar:  Payment ID
+	ProviderSessionID string `json:"provider_session_id,omitempty"`
+
+	// ProviderPaymentIntentID is the provider-side charge/intent ID.
+	// Stripe returns this at link creation (pi_xxx); others populate it from the webhook payload.
+	ProviderPaymentIntentID string `json:"provider_payment_intent_id,omitempty"`
+
+	// ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,
+	// executeCheckoutAction tightens the session expiry to match.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// ProviderMetadata holds provider-specific data not needed for business logic.
+	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
+}
+
+func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
+	if r == nil {
+		return nil
+	}
+	return r.NextAction
+}
+
+// CheckoutPaymentProviderConfig is the per-checkout payment behavior config,
+// stored in CheckoutSession.payment_provider_config.
+type CheckoutPaymentProviderConfig struct {
+	CollectionMethod CollectionMethod  `json:"collection_method,omitempty"`
+	PaymentMethod    PaymentMethodType `json:"payment_method,omitempty"`
+	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
+}
+
+func (c *CheckoutPaymentProviderConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+
+	// PaymentMethod is optional (empty = provider picks / tries saved methods in order).
+	if c.PaymentMethod != "" {
+		if err := c.PaymentMethod.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if err := c.CollectionMethod.Validate(); err != nil {
+		return err
+	}
+
+	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
+	}
+	return nil
+}

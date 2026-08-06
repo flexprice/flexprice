@@ -50,8 +50,8 @@ func CopyPlanChargesToAddons() error {
 	}
 
 	pgClient := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
-	cacheClient := cache.NewInMemoryCache()
-	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
+	redisCache := cache.NewRedisCache()
+	priceRepo := entRepo.NewPriceRepository(pgClient, log, redisCache)
 
 	ctx := context.WithValue(context.Background(), types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)

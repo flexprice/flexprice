@@ -43,6 +43,10 @@ type UsageAnalyticsParams struct {
 	// - Subscription billing periods (e.g., customer signed up on 15th)
 	// - Custom business cycles (e.g., fiscal months starting on 5th)
 	BillingAnchor *time.Time
+	// ForceApplyCommitment mirrors MeterUsageDetailedAnalyticsParams.ForceApplyCommitment.
+	// Internal-only. Set by the CSV export pipeline to override the per-item
+	// commitment-skip that calculateCosts applies to fanned-out analytics.
+	ForceApplyCommitment bool
 }
 
 // DetailedUsageAnalytic represents detailed usage and cost data for analytics
@@ -60,12 +64,19 @@ type DetailedUsageAnalytic struct {
 	Unit            string
 	UnitPlural      string
 	TotalUsage      decimal.Decimal `swaggertype:"string"`
-	TotalCost       decimal.Decimal `swaggertype:"string"`
+	TotalCost       decimal.Decimal `swaggertype:"string"` // Always gross (pre-discount); the DTO layer may reinterpret its own same-named TotalCost as final cost after discount
 	Currency        string
 	EventCount      uint64                // Number of events that contributed to this aggregation
 	Properties      map[string]string     // Stores property values for flexible grouping (e.g., org_id -> "org123")
 	CommitmentInfo  *types.CommitmentInfo // Stores commitment info if applicable
 	Points          []UsageAnalyticPoint
+
+	// BucketPoints holds the bucket-grain (meter BucketSize) points BEFORE they are
+	// rolled up to the requested window in Points. Each carries its BucketID from the
+	// commitment pass. It is populated only for line items with commitment time
+	// buckets, so per-bucket summaries can be built at the grain where bucket
+	// attribution is exact — independent of how coarse the requested window_size is.
+	BucketPoints []UsageAnalyticPoint
 
 	// All aggregation values - we fetch all and use the appropriate one based on meter type
 	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
@@ -79,7 +90,13 @@ type UsageAnalyticPoint struct {
 	WindowStart time.Time       // For bucketed features: which request window this bucket belongs to
 	Usage       decimal.Decimal `swaggertype:"string"`
 	Cost        decimal.Decimal `swaggertype:"string"`
+	Discount    decimal.Decimal `swaggertype:"string"`
 	EventCount  uint64          // Number of events in this time window
+
+	// BucketID is the commitment time bucket this window's start falls in (empty
+	// when out-of-bucket). Stamped during the windowed-commitment pass at bucket
+	// grain; used to build per-bucket summaries before the request-window roll-up.
+	BucketID string
 
 	// Commitment breakdown (for windowed commitments)
 	ComputedCommitmentUtilizedAmount decimal.Decimal `swaggertype:"string"` // Amount of commitment utilized
@@ -92,17 +109,23 @@ type UsageAnalyticPoint struct {
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
-// UsageByFeatureResult represents aggregated usage data for a feature
-type UsageByFeatureResult struct {
-	SubLineItemID    string
-	FeatureID        string
-	MeterID          string
-	PriceID          string
-	SumTotal         decimal.Decimal `swaggertype:"string"`
-	MaxTotal         decimal.Decimal `swaggertype:"string"`
-	CountDistinctIDs uint64
-	CountUniqueQty   uint64
-	LatestQty        decimal.Decimal `swaggertype:"string"`
+// MaxBucketFeatureInfo describes a feature aggregated as MAX over bucketed windows.
+type MaxBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
+	GroupBy      []string
+}
+
+// SumBucketFeatureInfo describes a feature aggregated as SUM over bucketed windows.
+type SumBucketFeatureInfo struct {
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
 }
 
 type UsageByCostSheetResult struct {

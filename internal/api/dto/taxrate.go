@@ -81,8 +81,10 @@ func (r CreateTaxRateRequest) Validate() error {
 		return err
 	}
 
-	if err := r.Scope.Validate(); err != nil {
-		return err
+	if r.Scope != nil {
+		if err := r.Scope.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if r.TaxRateType == types.TaxRateTypePercentage {

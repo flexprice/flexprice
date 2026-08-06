@@ -24,18 +24,18 @@ import (
 )
 
 type subscriptionRepository struct {
-	client    postgres.IClient
-	logger    *logger.Logger
-	queryOpts SubscriptionQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	logger     *logger.Logger
+	queryOpts  SubscriptionQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainSub.Repository {
+func NewSubscriptionRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainSub.Repository {
 	return &subscriptionRepository{
-		client:    client,
-		logger:    logger,
-		queryOpts: SubscriptionQueryOptions{},
-		cache:     cache,
+		client:     client,
+		logger:     logger,
+		queryOpts:  SubscriptionQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -86,7 +86,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
 		SetEnvironmentID(sub.EnvironmentID).
-		SetCustomerTimezone(sub.CustomerTimezone).
+		SetTimezone(sub.Timezone).
 		SetProrationBehavior(sub.ProrationBehavior).
 		SetVersion(1).
 		SetMetadata(sub.Metadata).
@@ -310,7 +310,11 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	if filter.WithLineItems {
 		query = query.WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
 			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
-		}).WithCouponAssociations(func(q *ent.CouponAssociationQuery) {
+		})
+	}
+
+	if filter.WithCouponAssociations {
+		query = query.WithCouponAssociations(func(q *ent.CouponAssociationQuery) {
 			q.Where(couponassociation.Status(string(types.StatusPublished))).
 				WithCoupon(func(cq *ent.CouponQuery) {
 					cq.Where(coupon.Status(string(types.StatusPublished)))
@@ -508,7 +512,7 @@ func (o SubscriptionQueryOptions) ApplyEnvironmentFilter(ctx context.Context, qu
 
 func (o SubscriptionQueryOptions) ApplyStatusFilter(query SubscriptionQuery, status string) SubscriptionQuery {
 	if status == "" {
-		return query.Where(subscription.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(subscription.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(subscription.Status(status))
 }
@@ -831,7 +835,7 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 	s := domainSub.GetSubscriptionFromEnt(sub)
 
 	// Use ListBySubscription as the source of truth for line items
-	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger, r.cache)
+	lineItemRepo := NewSubscriptionLineItemRepository(r.client, r.logger)
 	lineItems, err := lineItemRepo.ListBySubscription(ctx, s)
 	if err != nil {
 		SetSpanError(span, err)
@@ -1056,42 +1060,41 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
-	span := cache.StartCacheSpan(ctx, "subscription", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "set", map[string]interface{}{
 		"subscription_id": sub.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, sub.ID)
-	r.cache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, sub.ID)
+	r.redisCache.Set(ctx, cacheKey, sub, cache.ExpiryDefaultRedis)
 }
 
-func (r *subscriptionRepository) GetCache(ctx context.Context, key string) *domainSub.Subscription {
-	span := cache.StartCacheSpan(ctx, "subscription", "get", map[string]interface{}{
-		"subscription_id": key,
+func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "get", map[string]interface{}{
+		"subscription_id": id,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainSub.Subscription)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, id)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	s, ok := cache.UnmarshalCacheValue[domainSub.Subscription](value)
+	if !ok {
+		return nil
+	}
+	return s
 }
 
 func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) {
-	span := cache.StartCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "delete", map[string]interface{}{
 		"subscription_id": subID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixSubscription, tenantID, environmentID, subID)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, subID)
+	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // ListByCustomerID retrieves all active subscriptions for a customer and includes line items
@@ -1107,7 +1110,8 @@ func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerI
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
 		},
-		WithLineItems: true,
+		WithLineItems:          true,
+		WithCouponAssociations: true,
 	}
 
 	// Use the existing List method

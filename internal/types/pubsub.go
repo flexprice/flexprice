@@ -12,7 +12,3 @@ type IntegrationEventsPubSub struct {
 	pubsub.PubSub
 }
 
-// UsageBenchmarkPubSub is a named wrapper so FX can inject it independently.
-type UsageBenchmarkPubSub struct {
-	pubsub.PubSub
-}

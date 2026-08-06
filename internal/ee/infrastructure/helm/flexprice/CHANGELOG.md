@@ -9,6 +9,57 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.2.0] - 2026-08-05
+
+### Added
+- Custom labels per component. Every workload block (`api`, `consumer`,
+  `worker`, `frontend`) now accepts:
+  - `<component>.labels` — extra labels on that component's Kubernetes objects
+    (Deployment, Service, HPA, PDB, Ingress, ServiceAccount).
+  - `<component>.podLabels` — extra labels on that component's pods only.
+- Global `podLabels`, applied to every FlexPrice pod. Per-component
+  `podLabels` merge on top of it.
+- The pre-existing global `labels` value is now documented in `values.yaml`.
+
+  Intended for log shippers (Filebeat/ELK, Fluent Bit, Datadog) that enrich from
+  pod metadata, so operators no longer have to fork the templates to add an
+  index or team label:
+
+  ```yaml
+  podLabels:
+    logging.company.io/index: flexprice
+  api:
+    podLabels:
+      logging.company.io/index: flexprice-api
+  ```
+
+  Labels are never added to `spec.selector.matchLabels` — selectors are
+  immutable on Deployments, so changing these values stays `helm upgrade`-safe.
+  Rendering with default values is byte-identical to 1.1.0.
+
+  The selector-owned keys (`app.kubernetes.io/name`, `/instance`, `/component`)
+  cannot be overridden from these values. Setting them is silently ignored
+  rather than producing pods that no longer match their own Deployment selector,
+  Service, PDB, and NetworkPolicy.
+
+## [1.1.0] - 2026-06-11
+
+### Added
+- Native OpenTelemetry **trace** export (`otel.traces.*`) for shipping APM/RED
+  metrics (request rate, error rate, latency) to any OTLP backend (SigNoz,
+  Tempo, Datadog). Mirrors the existing `logging.otel` (logs) wiring; the traces
+  auth value reuses the `logging-otel-auth-value` secret key.
+- `logging.environment` to set the OTel resource `deployment.environment`
+  (rendered as the `FLEXPRICE_LOGGING_ENVIRONMENT` env var).
+
+### Fixed
+- `extraEnv` rendered invalid YAML when non-empty — `{{- toYaml . }}` left-chomped
+  the preceding newline and glued the first env var onto the previous line. Now
+  uses `{{ toYaml . | trim }}`.
+- Chart-managed (dev) Secret now renders the shared `logging-otel-auth-value` key
+  when `otel.traces.enabled` (not only `logging.otel.enabled`), so a traces-only
+  config doesn't fail pods with a missing secret key (`CreateContainerConfigError`).
+
 ## [1.0.0] - 2026-05-11
 
 Initial GA release of the FlexPrice Helm chart. Production-ready packaging

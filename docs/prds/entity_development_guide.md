@@ -144,7 +144,7 @@ func NewEntityRepository(p RepositoryParams) entity.Repository {
 ```
 
 ### 7. Service Layer Implementation
-Create service in `internal/service/{entity}.go`:
+Create service in `internal/ee/service/{entity}.go`:
 - Define service interface
 - Implement business logic
 - Handle proper error handling and validation

@@ -3,12 +3,26 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// newHTTPClient builds an HTTP client. When insecure is true, TLS certificate
+// verification is disabled — useful for environments whose cert does not cover
+// the host (e.g. preprod). Never enable this against production.
+func newHTTPClient(insecure bool) *http.Client {
+	c := &http.Client{Timeout: 30 * time.Second}
+	if insecure {
+		c.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // opt-in via insecure flag
+		}
+	}
+	return c
+}
 
 // RawClient provides thin HTTP helpers for API resources that are not
 // exposed by the generated Speakeasy Go SDK.
@@ -19,14 +33,13 @@ type RawClient struct {
 }
 
 // NewRawClient creates a RawClient. baseURL should include the scheme and
-// path prefix, e.g. "https://us.api.flexprice.io/v1".
-func NewRawClient(baseURL, apiKey string) *RawClient {
+// path prefix, e.g. "https://us.api.flexprice.io/v1". httpClient is the
+// underlying client to use (e.g. one with TLS verification disabled).
+func NewRawClient(baseURL, apiKey string, httpClient *http.Client) *RawClient {
 	return &RawClient{
 		baseURL: baseURL,
 		apiKey:  apiKey,
-		http: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		http:    httpClient,
 	}
 }
 

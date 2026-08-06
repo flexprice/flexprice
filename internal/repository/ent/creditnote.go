@@ -20,18 +20,18 @@ import (
 )
 
 type creditnoteRepository struct {
-	client    postgres.IClient
-	log       *logger.Logger
-	queryOpts CreditNoteQueryOptions
-	cache     cache.Cache
+	client     postgres.IClient
+	log        *logger.Logger
+	queryOpts  CreditNoteQueryOptions
+	redisCache cache.RedisCache
 }
 
-func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainCreditNote.Repository {
+func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, redisCache cache.RedisCache) domainCreditNote.Repository {
 	return &creditnoteRepository{
-		client:    client,
-		log:       log,
-		queryOpts: CreditNoteQueryOptions{},
-		cache:     cache,
+		client:     client,
+		log:        log,
+		queryOpts:  CreditNoteQueryOptions{},
+		redisCache: redisCache,
 	}
 }
 
@@ -94,6 +94,15 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 						}).
 						Mark(ierr.ErrAlreadyExists)
 				}
+				if pqErr.Constraint == schema.Idx_tenant_environment_creditnote_idempotency_key_unique {
+					return ierr.WithError(err).
+						WithHint("Credit note with same idempotency key already exists").
+						WithReportableDetails(map[string]any{
+							"creditnote_id":   cn.ID,
+							"idempotency_key": lo.FromPtr(cn.IdempotencyKey),
+						}).
+						Mark(ierr.ErrAlreadyExists)
+				}
 			}
 
 			return ierr.WithError(err).
@@ -101,7 +110,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 				WithReportableDetails(map[string]any{
 					"creditnote_id": cn.ID,
 				}).
-				Mark(ierr.ErrDatabase)
+				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
 			WithHint("credit note creation failed").
@@ -170,6 +179,15 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 							WithReportableDetails(map[string]any{
 								"creditnote_id":     cn.ID,
 								"creditnote_number": cn.CreditNoteNumber,
+							}).
+							Mark(ierr.ErrAlreadyExists)
+					}
+					if pqErr.Constraint == schema.Idx_tenant_environment_creditnote_idempotency_key_unique {
+						return ierr.WithError(err).
+							WithHint("Credit note with same idempotency key already exists").
+							WithReportableDetails(map[string]any{
+								"creditnote_id":   cn.ID,
+								"idempotency_key": lo.FromPtr(cn.IdempotencyKey),
 							}).
 							Mark(ierr.ErrAlreadyExists)
 					}
@@ -534,7 +552,6 @@ func (r *creditnoteRepository) GetByIdempotencyKey(ctx context.Context, key stri
 			creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),
 			creditnote.TenantID(types.GetTenantID(ctx)),
 			creditnote.Status(string(types.StatusPublished)),
-			creditnote.CreditNoteStatus(types.CreditNoteStatusFinalized),
 		).
 		First(ctx)
 	if err != nil {
@@ -569,7 +586,7 @@ func (o CreditNoteQueryOptions) ApplyEnvironmentFilter(ctx context.Context, quer
 
 func (o CreditNoteQueryOptions) ApplyStatusFilter(query CreditNoteQuery, status string) CreditNoteQuery {
 	if status == "" {
-		return query.Where(creditnote.StatusNotIn(string(types.StatusDeleted)))
+		return query.Where(creditnote.StatusEQ(string(types.StatusPublished)))
 	}
 	return query.Where(creditnote.Status(status))
 }
@@ -631,42 +648,41 @@ func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 }
 
 func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNote.CreditNote) {
-	span := cache.StartCacheSpan(ctx, "creditnote", "set", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "set", map[string]interface{}{
 		"creditnote_id": cn.ID,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, cn.ID)
-	r.cache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultInMemory)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, cn.ID)
+	r.redisCache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultRedis)
 
 	r.log.Debug(ctx, "set credit note in cache", "id", cn.ID, "cache_key", cacheKey)
 }
 
 func (r *creditnoteRepository) GetCache(ctx context.Context, key string) *domainCreditNote.CreditNote {
-	span := cache.StartCacheSpan(ctx, "creditnote", "get", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "get", map[string]interface{}{
 		"creditnote_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, key)
-	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainCreditNote.CreditNote)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, key)
+	value, found := r.redisCache.Get(ctx, cacheKey)
+	if !found {
+		return nil
 	}
-	return nil
+	cn, ok := cache.UnmarshalCacheValue[domainCreditNote.CreditNote](value)
+	if !ok {
+		return nil
+	}
+	return cn
 }
 
 func (r *creditnoteRepository) DeleteCache(ctx context.Context, key string) {
-	span := cache.StartCacheSpan(ctx, "creditnote", "delete", map[string]interface{}{
+	span, ctx := cache.StartRedisCacheSpan(ctx, "creditnote", "delete", map[string]interface{}{
 		"creditnote_id": key,
 	})
 	defer cache.FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, key)
-	r.cache.Delete(ctx, cacheKey)
+	cacheKey := cache.GenerateKey(ctx, cache.PrefixCreditNote, key)
+	r.redisCache.Delete(ctx, cacheKey)
 }

@@ -7,12 +7,12 @@ name: Helm Chart Validate
 on:
   pull_request:
     paths:
-      - 'helm/**'
+      - 'internal/ee/infrastructure/helm/**'
       - '.github/workflows/helm-validate.yml'
   push:
     branches: [main]
     paths:
-      - 'helm/**'
+      - 'internal/ee/infrastructure/helm/**'
       - '.github/workflows/helm-validate.yml'
 
 permissions:
@@ -43,18 +43,18 @@ jobs:
           helm repo update
 
       - name: helm dependency build
-        run: helm dependency build helm/flexprice
+        run: helm dependency build internal/ee/infrastructure/helm/flexprice
 
       - name: helm lint (default values)
-        run: helm lint helm/flexprice
+        run: helm lint internal/ee/infrastructure/helm/flexprice
 
       - name: helm lint (values-local)
-        run: helm lint helm/flexprice -f helm/values-local.yaml
+        run: helm lint internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-local.yaml
 
       - name: helm lint (values-prod.example)
         run: |
-          helm lint helm/flexprice \
-            -f helm/values-prod.example.yaml \
+          helm lint internal/ee/infrastructure/helm/flexprice \
+            -f internal/ee/infrastructure/helm/values-prod.example.yaml \
             --set secrets.existingSecret=flexprice-secrets
 
       - name: Install kubeconform
@@ -67,19 +67,19 @@ jobs:
 
       - name: helm template + kubeconform (default)
         run: |
-          helm template flexprice helm/flexprice \
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
             --set secrets.existingSecret=test \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
       - name: helm template + kubeconform (values-local)
         run: |
-          helm template flexprice helm/flexprice -f helm/values-local.yaml \
+          helm template flexprice internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-local.yaml \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
       - name: helm template + kubeconform (values-prod.example)
         run: |
-          helm template flexprice helm/flexprice \
-            -f helm/values-prod.example.yaml \
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            -f internal/ee/infrastructure/helm/values-prod.example.yaml \
             --set secrets.existingSecret=flexprice-secrets \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
@@ -110,7 +110,7 @@ jobs:
           helm repo update
 
       - name: helm dependency build
-        run: helm dependency build helm/flexprice
+        run: helm dependency build internal/ee/infrastructure/helm/flexprice
 
       - name: helm install --dry-run (default profile with placeholder secret)
         run: |
@@ -124,7 +124,7 @@ jobs:
             --from-literal=redis-password=placeholder \
             --from-literal=temporal-api-key=placeholder \
             --from-literal=auth-secret=placeholder
-          helm install flexprice helm/flexprice \
+          helm install flexprice internal/ee/infrastructure/helm/flexprice \
             -n flexprice-rc \
             --set secrets.existingSecret=flexprice-secrets \
             --dry-run \

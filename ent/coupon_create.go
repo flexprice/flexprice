@@ -271,6 +271,20 @@ func (cc *CouponCreate) SetMetadata(m map[string]string) *CouponCreate {
 	return cc
 }
 
+// SetCouponCode sets the "coupon_code" field.
+func (cc *CouponCreate) SetCouponCode(s string) *CouponCreate {
+	cc.mutation.SetCouponCode(s)
+	return cc
+}
+
+// SetNillableCouponCode sets the "coupon_code" field if the given value is not nil.
+func (cc *CouponCreate) SetNillableCouponCode(s *string) *CouponCreate {
+	if s != nil {
+		cc.SetCouponCode(*s)
+	}
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CouponCreate) SetID(s string) *CouponCreate {
 	cc.mutation.SetID(s)
@@ -540,6 +554,10 @@ func (cc *CouponCreate) createSpec() (*Coupon, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Metadata(); ok {
 		_spec.SetField(coupon.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := cc.mutation.CouponCode(); ok {
+		_spec.SetField(coupon.FieldCouponCode, field.TypeString, value)
+		_node.CouponCode = &value
 	}
 	if nodes := cc.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

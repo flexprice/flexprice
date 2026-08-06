@@ -20,6 +20,9 @@ type Customer struct {
 	// Email is the email of the customer
 	Email string `db:"email" json:"email"`
 
+	// Contact is an optional contact number for the customer (e.g. phone)
+	Contact *string `db:"contact" json:"contact,omitempty"`
+
 	// AddressLine1 is the first line of the customer's address
 	AddressLine1 string `db:"address_line1" json:"address_line1"`
 
@@ -37,6 +40,10 @@ type Customer struct {
 
 	// AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)
 	AddressCountry string `db:"address_country" json:"address_country"`
+
+	// Timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata").
+	// Defaults to "UTC". Inherited by subscriptions at creation time.
+	Timezone string `db:"timezone" json:"timezone"`
 
 	// Metadata
 	Metadata map[string]string `db:"metadata" json:"metadata"`
@@ -57,12 +64,14 @@ func FromEnt(c *ent.Customer) *Customer {
 		ExternalID:        c.ExternalID,
 		Name:              c.Name,
 		Email:             c.Email,
+		Contact:           c.Contact,
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,
 		AddressState:      c.AddressState,
 		AddressPostalCode: c.AddressPostalCode,
 		AddressCountry:    c.AddressCountry,
+		Timezone:          c.Timezone,
 		Metadata:          c.Metadata,
 		EnvironmentID:     c.EnvironmentID,
 		BaseModel: types.BaseModel{

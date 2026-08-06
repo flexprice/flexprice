@@ -19,4 +19,5 @@ type Repository interface {
 
 	// Lookup operations
 	GetByLookupKey(ctx context.Context, lookupKey string) (*Plan, error)
+	ListByIDs(ctx context.Context, planIDs []string) ([]*Plan, error)
 }

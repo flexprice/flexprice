@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -27,7 +28,6 @@ import (
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/security"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
@@ -107,53 +107,53 @@ func SetupDummyBillingCustomer() error {
 	}
 	client := postgres.NewClient(entClient, appLogger, sentrySvc)
 	cacheClient := cache.NewInMemoryCache()
+	redisCache := cache.NewRedisCache()
 
-	customerRepo := entRepo.NewCustomerRepository(client, appLogger, cacheClient)
+	customerRepo := entRepo.NewCustomerRepository(client, appLogger, redisCache)
 	planRepo := entRepo.NewPlanRepository(client, appLogger, cacheClient)
-	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, cacheClient)
-	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, appLogger, cacheClient)
-	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, appLogger, cacheClient)
+	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, redisCache)
+	subscriptionLineItemRepo := entRepo.NewSubscriptionLineItemRepository(client, appLogger)
+	subscriptionPhaseRepo := entRepo.NewSubscriptionPhaseRepository(client, appLogger)
 	subscriptionScheduleRepo := entRepo.NewSubscriptionScheduleRepository(client, appLogger)
-	priceRepo := entRepo.NewPriceRepository(client, appLogger, cacheClient)
+	priceRepo := entRepo.NewPriceRepository(client, appLogger, redisCache)
 	priceUnitRepo := entRepo.NewPriceUnitRepository(client, appLogger, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(client, appLogger, cacheClient)
-	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, cacheClient)
-	invoiceLineItemRepo := entRepo.NewInvoiceLineItemRepository(client, appLogger, cacheClient)
+	invoiceRepo := entRepo.NewInvoiceRepository(client, appLogger, redisCache)
+	invoiceLineItemRepo := entRepo.NewInvoiceLineItemRepository(client, appLogger)
 	featureRepo := entRepo.NewFeatureRepository(client, appLogger, cacheClient)
-	entitlementRepo := entRepo.NewEntitlementRepository(client, appLogger, cacheClient)
-	walletRepo := entRepo.NewWalletRepository(client, appLogger, cacheClient)
-	tenantRepo := entRepo.NewTenantRepository(client, appLogger, cacheClient)
-	environmentRepo := entRepo.NewEnvironmentRepository(client, appLogger)
-	creditGrantRepo := entRepo.NewCreditGrantRepository(client, appLogger, cacheClient)
-	creditGrantApplicationRepo := entRepo.NewCreditGrantApplicationRepository(client, appLogger, cacheClient)
-	taxRateRepo := entRepo.NewTaxRateRepository(client, appLogger, cacheClient)
-	taxAssociationRepo := entRepo.NewTaxAssociationRepository(client, appLogger, cacheClient)
-	taxAppliedRepo := entRepo.NewTaxAppliedRepository(client, appLogger, cacheClient)
-	paymentRepo := entRepo.NewPaymentRepository(client, appLogger, cacheClient)
+	entitlementRepo := entRepo.NewEntitlementRepository(client, appLogger, cacheClient, redisCache)
+	walletRepo := entRepo.NewWalletRepository(client, appLogger, redisCache)
+	tenantRepo := entRepo.NewTenantRepository(client, appLogger, cacheClient, redisCache)
+	environmentRepo := entRepo.NewEnvironmentRepository(client, appLogger, cacheClient)
+	creditGrantRepo := entRepo.NewCreditGrantRepository(client, appLogger, redisCache)
+	creditGrantApplicationRepo := entRepo.NewCreditGrantApplicationRepository(client, appLogger, redisCache)
+	taxRateRepo := entRepo.NewTaxRateRepository(client, appLogger, redisCache)
+	taxAssociationRepo := entRepo.NewTaxAssociationRepository(client, appLogger, redisCache)
+	taxAppliedRepo := entRepo.NewTaxAppliedRepository(client, appLogger, redisCache)
+	paymentRepo := entRepo.NewPaymentRepository(client, appLogger, redisCache)
 	secretRepo := entRepo.NewSecretRepository(client, appLogger, cacheClient)
-	creditNoteRepo := entRepo.NewCreditNoteRepository(client, appLogger, cacheClient)
-	creditNoteLineItemRepo := entRepo.NewCreditNoteLineItemRepository(client, appLogger, cacheClient)
-	couponRepo := entRepo.NewCouponRepository(client, appLogger, cacheClient)
-	couponAssociationRepo := entRepo.NewCouponAssociationRepository(client, appLogger, cacheClient)
-	couponApplicationRepo := entRepo.NewCouponApplicationRepository(client, appLogger, cacheClient)
+	creditNoteRepo := entRepo.NewCreditNoteRepository(client, appLogger, redisCache)
+	creditNoteLineItemRepo := entRepo.NewCreditNoteLineItemRepository(client, appLogger)
+	couponRepo := entRepo.NewCouponRepository(client, appLogger, redisCache)
+	couponAssociationRepo := entRepo.NewCouponAssociationRepository(client, appLogger, redisCache)
+	couponApplicationRepo := entRepo.NewCouponApplicationRepository(client, appLogger, redisCache)
 	addonRepo := entRepo.NewAddonRepository(client, appLogger, cacheClient)
-	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, appLogger, cacheClient)
-	connectionRepo := entRepo.NewConnectionRepository(client, appLogger, cacheClient)
-	entityIntegrationMappingRepo := entRepo.NewEntityIntegrationMappingRepository(client, appLogger, cacheClient)
-	settingsRepo := entRepo.NewSettingsRepository(client, appLogger, cacheClient)
+	addonAssociationRepo := entRepo.NewAddonAssociationRepository(client, appLogger, redisCache)
+	connectionRepo := entRepo.NewConnectionRepository(client, appLogger, redisCache)
+	entityIntegrationMappingRepo := entRepo.NewEntityIntegrationMappingRepository(client, appLogger, redisCache)
+	settingsRepo := entRepo.NewSettingsRepository(client, appLogger, redisCache)
 	taskRepo := entRepo.NewTaskRepository(client, appLogger)
-	costSheetRepo := entRepo.NewCostsheetRepository(client, appLogger, cacheClient)
-	alertLogsRepo := entRepo.NewAlertLogsRepository(client, appLogger, cacheClient)
+	costSheetRepo := entRepo.NewCostsheetRepository(client, appLogger)
+	alertLogsRepo := entRepo.NewAlertLogsRepository(client, appLogger)
 	groupRepo := entRepo.NewGroupRepository(client, appLogger, cacheClient)
 	scheduledTaskRepo := entRepo.NewScheduledTaskRepository(client, appLogger)
 	planPriceSyncRepo := entRepo.NewPlanPriceSyncRepository(client, appLogger)
-	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger, cacheClient)
+	workflowExecutionRepo := entRepo.NewWorkflowExecutionRepository(client, appLogger)
 	authRepo := entRepo.NewAuthRepository(client, appLogger)
-	userRepo := entRepo.NewUserRepository(client, appLogger)
+	userRepo := entRepo.NewUserRepository(client, appLogger, redisCache)
 
 	eventRepo := chRepo.NewEventRepository(chStore, appLogger)
 	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, appLogger)
-	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, appLogger)
 	rawEventRepo := chRepo.NewRawEventRepository(chStore, appLogger)
 	costSheetUsageRepo := chRepo.NewCostSheetUsageRepository(chStore, appLogger)
 
@@ -167,7 +167,8 @@ func SetupDummyBillingCustomer() error {
 		}
 	}()
 
-	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil)
+	// secondaryProducer=nil (no dual-write in this script), dynamoClient=nil (kafka only)
+	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil, nil)
 	if err != nil {
 		return fmt.Errorf("event publisher: %w", err)
 	}
@@ -183,14 +184,17 @@ func SetupDummyBillingCustomer() error {
 		connectionRepo,
 		customerRepo,
 		subscriptionRepo,
+		planRepo,
 		invoiceRepo,
 		paymentRepo,
+		nil, // paymentMethodRepo — not needed in script context
 		priceRepo,
 		entityIntegrationMappingRepo,
 		meterRepo,
 		featureRepo,
 		encService,
 		nil, // TemporalService — not available in script context
+		nil, // Locker — not needed in script context
 	)
 
 	typstCompiler := typst.DefaultCompiler(appLogger)
@@ -206,7 +210,6 @@ func SetupDummyBillingCustomer() error {
 		EventRepo:                    eventRepo,
 		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
-		FeatureUsageRepo:             featureUsageRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,

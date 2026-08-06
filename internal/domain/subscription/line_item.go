@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -49,7 +50,20 @@ type SubscriptionLineItem struct {
 
 	Price *price.Price `json:"price,omitempty"`
 
+	// Meter is populated when the caller adds "meters" to a subscription-scoped
+	// expand string alongside "subscription_line_items". Only usage line items
+	// (PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.
+	Meter *meter.Meter `json:"meter,omitempty"`
+
 	types.BaseModel
+}
+
+func (li *SubscriptionLineItem) GetMeterID() string {
+	if li == nil {
+		return ""
+	}
+	
+	return li.MeterID
 }
 
 // IsActive returns true if the line item is active
@@ -83,21 +97,43 @@ func (li *SubscriptionLineItem) IsOneTime() bool {
 	return li.BillingPeriod == types.BILLING_PERIOD_ONETIME
 }
 
-// HasCommitmentTimeBuckets returns true when time-of-day filtering is configured.
+// HasCommitmentTimeBuckets returns true when per-bucket commitments are configured.
 func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
 	return len(li.CommitmentTimeBuckets) > 0
 }
 
-// HasCommitment returns true if the line item has commitment configured
+// HasCommitment returns true if the line item has a top-level commitment configured
 func (li *SubscriptionLineItem) HasCommitment() bool {
 	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)
 	hasQuantityCommitment := li.CommitmentQuantity != nil && li.CommitmentQuantity.GreaterThan(decimal.Zero)
 	return hasAmountCommitment || hasQuantityCommitment
 }
 
+// HasAnyCommitment returns true if the line item has a top-level commitment OR
+// per-bucket commitments. Per-bucket commitments bill through the windowed path
+// even when there is no top-level commitment (out-of-bucket usage is then billed
+// at base rate), so commitment-application gates must use this.
+func (li *SubscriptionLineItem) HasAnyCommitment() bool {
+	return li.HasCommitment() || li.HasCommitmentTimeBuckets()
+}
+
 // GetCommitmentType returns the commitment type for the line item
 func (li *SubscriptionLineItem) GetCommitmentType() types.CommitmentType {
 	return li.CommitmentType
+}
+
+// HasTrueUpEnabled returns true if the line item has true-up enabled at the line item level or
+// on any of its commitment time buckets.
+func (li *SubscriptionLineItem) HasTrueUpEnabled() bool {
+	if li.CommitmentTrueUpEnabled {
+		return true
+	}
+	for _, b := range li.CommitmentTimeBuckets {
+		if b.TrueUpEnabled {
+			return true
+		}
+	}
+	return false
 }
 
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems

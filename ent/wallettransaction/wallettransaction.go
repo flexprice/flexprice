@@ -69,6 +69,8 @@ const (
 	FieldTransactionReason = "transaction_reason"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldParentTransactionID holds the string denoting the parent_transaction_id field in the database.
+	FieldParentTransactionID = "parent_transaction_id"
 	// Table holds the table name of the wallettransaction in the database.
 	Table = "wallet_transactions"
 )
@@ -103,6 +105,7 @@ var Columns = []string{
 	FieldIdempotencyKey,
 	FieldTransactionReason,
 	FieldPriority,
+	FieldParentTransactionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -280,4 +283,9 @@ func ByTransactionReason(opts ...sql.OrderTermOption) OrderOption {
 // ByPriority orders the results by the priority field.
 func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriority, opts...).ToFunc()
+}
+
+// ByParentTransactionID orders the results by the parent_transaction_id field.
+func ByParentTransactionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentTransactionID, opts...).ToFunc()
 }

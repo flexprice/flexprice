@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -90,9 +91,19 @@ func (s *InMemoryEntityIntegrationMappingStore) Update(ctx context.Context, mapp
 	return s.InMemoryStore.Update(ctx, mapping.ID, copyEntityIntegrationMapping(mapping))
 }
 
-// Delete removes an entity integration mapping
+// Delete soft-deletes an entity integration mapping by flipping status to archived, mirroring the
+// real Ent repository (repository/ent/entityintegrationmapping.go) — the row is never removed, so a
+// re-link can still find it via a status-blind List.
 func (s *InMemoryEntityIntegrationMappingStore) Delete(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
-	return s.InMemoryStore.Delete(ctx, mapping.ID)
+	existing, err := s.InMemoryStore.Get(ctx, mapping.ID)
+	if err != nil {
+		return err
+	}
+	archived := copyEntityIntegrationMapping(existing)
+	archived.Status = types.StatusArchived
+	archived.UpdatedAt = time.Now().UTC()
+	archived.UpdatedBy = types.GetUserID(ctx)
+	return s.InMemoryStore.Update(ctx, archived.ID, archived)
 }
 
 // GetByEntityAndProvider retrieves an entity integration mapping by entity and provider
@@ -219,6 +230,13 @@ func entityIntegrationMappingFilterFn(ctx context.Context, m *entityintegrationm
 
 	// Apply environment filter
 	if !CheckEnvironmentFilter(ctx, m.EnvironmentID) {
+		return false
+	}
+
+	// Apply status filter — mirrors ApplyStatusFilter in repository/ent: no predicate when unset,
+	// so a status-blind filter (e.g. NewNoLimitQueryFilter) matches archived rows too, matching the
+	// real repository's behaviour that the relink-after-delink fix depends on.
+	if f.GetStatus() != "" && string(m.Status) != f.GetStatus() {
 		return false
 	}
 

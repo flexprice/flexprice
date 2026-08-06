@@ -17,16 +17,52 @@ type Client struct {
 	log *logger.Logger
 }
 
-// NewClient creates a new Redis client. Set RedisConfig.ClusterMode=true for
-// Redis Cluster (e.g. AWS ElastiCache cluster mode enabled); leave false for
-// standalone Redis (single ElastiCache node, in-cluster redis, Redis sentinel
-// via the universal client's failover path).
-func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), config.Redis.Timeout)
-	defer cancel()
+// redisMode is the connection topology NewClient selects from RedisConfig.
+type redisMode string
+
+const (
+	modeStandalone          redisMode = "standalone"
+	modeCluster             redisMode = "cluster"
+	modeSentinel            redisMode = "sentinel"
+	modeSentinelReplicaRead redisMode = "sentinel-replica-read"
+)
+
+// resolveRedisMode maps config to a topology (Sentinel > Cluster > Standalone)
+// and validates Sentinel coherence: master name and addresses must be set
+// together, else HA is silently lost (addrs dropped) or go-redis defaults to a
+// phantom localhost sentinel. Pure (no I/O) so both precedence and the guards
+// are unit-testable without a live Redis.
+func resolveRedisMode(c config.RedisConfig) (redisMode, error) {
+	hasMaster := c.SentinelMasterName != ""
+	hasAddrs := len(c.SentinelAddrs) > 0
+	switch {
+	case hasMaster && !hasAddrs:
+		return "", fmt.Errorf("redis: FLEXPRICE_REDIS_SENTINEL_MASTER_NAME is set but no sentinel addresses provided (FLEXPRICE_REDIS_SENTINEL_ADDRS)")
+	case hasAddrs && !hasMaster:
+		return "", fmt.Errorf("redis: sentinel addresses are set but FLEXPRICE_REDIS_SENTINEL_MASTER_NAME is empty — set the master name to enable Sentinel mode, or clear the addresses")
+	case hasMaster && c.RouteReadsToReplicas:
+		return modeSentinelReplicaRead, nil
+	case hasMaster:
+		return modeSentinel, nil
+	case c.ClusterMode:
+		return modeCluster, nil
+	default:
+		return modeStandalone, nil
+	}
+}
+
+// buildOptions maps config to go-redis options for the resolved topology. Pure
+// (no I/O) so the credential split — Username/Password to the data nodes,
+// SentinelUsername/SentinelPassword to the sentinels — is unit-testable without
+// a live Redis.
+func buildOptions(c config.RedisConfig) (*redis.UniversalOptions, redisMode, error) {
+	mode, err := resolveRedisMode(c)
+	if err != nil {
+		return nil, "", err
+	}
 
 	var tlsConfig *tls.Config
-	if config.Redis.UseTLS {
+	if c.UseTLS {
 		tlsConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: true, // Required for AWS ElastiCache wildcard certificates
@@ -34,30 +70,63 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 	}
 
 	opts := &redis.UniversalOptions{
-		Addrs:        []string{fmt.Sprintf("%s:%d", config.Redis.Host, config.Redis.Port)},
-		Password:     config.Redis.Password,
-		DB:           config.Redis.DB,
-		ReadTimeout:  config.Redis.Timeout,
-		WriteTimeout: config.Redis.Timeout,
-		PoolSize:     config.Redis.PoolSize,
+		Username:     c.Username,
+		Password:     c.Password,
+		DB:           c.DB,
+		ReadTimeout:  c.Timeout,
+		WriteTimeout: c.Timeout,
+		PoolSize:     c.PoolSize,
 		TLSConfig:    tlsConfig,
 	}
 
+	switch mode {
+	case modeSentinel, modeSentinelReplicaRead:
+		// Addrs are the sentinel endpoints; go-redis (via Failover()) discovers
+		// the master/replicas. resolveRedisMode has already ensured they're set.
+		opts.Addrs = c.SentinelAddrs
+		opts.MasterName = c.SentinelMasterName
+		opts.SentinelUsername = c.SentinelUsername
+		opts.SentinelPassword = c.SentinelPassword
+		// RouteByLatency: reads go to the lowest-latency node among
+		// master+replicas, writes to master. Read scaling, not sharding.
+		opts.RouteByLatency = mode == modeSentinelReplicaRead
+	default: // modeCluster, modeStandalone
+		opts.Addrs = []string{fmt.Sprintf("%s:%d", c.Host, c.Port)}
+	}
+	return opts, mode, nil
+}
+
+// NewClient creates a Redis client in one of three modes (see resolveRedisMode):
+// Sentinel (HA/automatic failover), Cluster (sharded), or Standalone (single node).
+func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), config.Redis.Timeout)
+	defer cancel()
+
+	opts, mode, err := buildOptions(config.Redis)
+	if err != nil {
+		return nil, err
+	}
+
 	var rdb redis.UniversalClient
-	if config.Redis.ClusterMode {
+	switch mode {
+	case modeSentinelReplicaRead:
+		rdb = redis.NewFailoverClusterClient(opts.Failover())
+	case modeSentinel:
+		rdb = redis.NewFailoverClient(opts.Failover())
+	case modeCluster:
 		rdb = redis.NewClusterClient(opts.Cluster())
-	} else {
+	default: // modeStandalone
 		// UniversalOptions.Simple() routes to a standalone *redis.Client; DB index applies.
 		rdb = redis.NewClient(opts.Simple())
 	}
 
 	result, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create redis client: %w", err)
+		return nil, fmt.Errorf("failed to create redis client (mode=%s): %w", mode, err)
 	}
 
-	log.Info(ctx, "PING result", "result", result, "cluster_mode", config.Redis.ClusterMode)
-	log.Info(ctx, "Connected to Redis successfully", "addr", opts.Addrs, "cluster_mode", config.Redis.ClusterMode)
+	log.Info(ctx, "PING result", "result", result, "mode", string(mode))
+	log.Info(ctx, "Connected to Redis successfully", "addr", opts.Addrs, "mode", string(mode))
 
 	return &Client{
 		rdb: rdb,

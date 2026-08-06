@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
-	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -25,7 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -41,12 +40,12 @@ import (
 	"go.uber.org/fx"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/proration"
-	ee "github.com/flexprice/flexprice/internal/ee/service"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/security"
-	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
 	"github.com/nedpals/supabase-go"
 )
@@ -80,8 +79,8 @@ func main() {
 			// Validator
 			validator.NewValidator,
 
-			// Config
-			config.NewConfig,
+			// Config — validated at boot (fail-fast for non-local deployments)
+			config.NewValidatedConfig,
 
 			// Logger
 			logger.NewLogger,
@@ -100,7 +99,9 @@ func main() {
 			pyroscope.NewPyroscopeService,
 
 			// Cache
-			cache.Initialize,
+			cache.InitializeInMemoryCache,
+			cache.NewRedisCache,
+			cache.NewRedisLocker,
 
 			// Postgres
 			postgres.NewEntClients,
@@ -120,6 +121,7 @@ func main() {
 
 			// Producers and Consumers
 			kafka.NewProducer,
+			kafka.NewSecondaryProducer,
 			kafka.NewConsumer,
 
 			// Event Publisher
@@ -134,11 +136,8 @@ func main() {
 			// Repositories
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
-			repository.NewFeatureUsageRepository,
 			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
-			repository.NewUsageBenchmarkRepository,
-			repository.NewAnalyticsBenchmarkRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -154,7 +153,10 @@ func main() {
 			repository.NewInvoiceLineItemRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
+			repository.NewEntitlementGrantRepository,
 			repository.NewPaymentRepository,
+			repository.NewPaymentMethodRepository,
+			repository.NewRefundRepository,
 			repository.NewTaskRepository,
 			repository.NewTaxAppliedRepository,
 			repository.NewSecretRepository,
@@ -165,6 +167,7 @@ func main() {
 			repository.NewCreditNoteLineItemRepository,
 			repository.NewConnectionRepository,
 			repository.NewEntityIntegrationMappingRepository,
+			repository.NewUsageRecordRepository,
 			repository.NewTaxRateRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
@@ -177,12 +180,15 @@ func main() {
 			repository.NewSubscriptionScheduleRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
+			repository.NewAlertSettingsRepository,
+			repository.NewIncomingWebhookEventRepository,
 			repository.NewSystemEventRepository,
 			repository.NewSystemEventDomainRepository,
 			repository.NewGroupRepository,
 			repository.NewScheduledTaskRepository,
 			repository.NewPriceUnitRepository,
 			repository.NewWorkflowExecutionRepository,
+			repository.NewCheckoutSessionRepository,
 			repository.NewRawEventRepository,
 
 			// PubSub
@@ -199,11 +205,10 @@ func main() {
 	// Integration events module — isolated consumer group on system_events topic (webhook-shaped events).
 	opts = append(opts, integrationevents.Module)
 
-	// Provide Wallet Balance Alert PubSub and Usage Benchmark PubSub
+	// Provide Wallet Balance Alert PubSub
 	opts = append(opts,
 		fx.Provide(
 			provideWalletBalanceAlertPubSub,
-			provideUsageBenchmarkPubSub,
 		),
 	)
 
@@ -224,15 +229,13 @@ func main() {
 			service.NewEnvironmentService,
 			service.NewMeterService,
 			service.NewEventService,
-			service.NewEventPostProcessingService,
 			service.NewEventConsumptionService,
-			service.NewFeatureUsageTrackingService,
 			service.NewRawEventsReprocessingService,
 			service.NewRawEventConsumptionService,
 			service.NewCostSheetUsageTrackingService,
 			service.NewMeterUsageTrackingService,
-			service.NewUsageBenchmarkService,
 			service.NewMeterUsageService,
+			service.NewCheckoutSessionService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
 			service.NewCustomerService,
@@ -242,6 +245,7 @@ func main() {
 			service.NewInvoiceService,
 			service.NewFeatureService,
 			service.NewEntitlementService,
+			service.NewEntitlementGrantService,
 			service.NewPaymentService,
 			service.NewPaymentProcessorService,
 			service.NewTaskService,
@@ -254,16 +258,19 @@ func main() {
 			service.NewRevenueAnalyticsService,
 			service.NewCreditNoteService,
 			service.NewConnectionService,
+			service.NewMarketplaceService,
 			service.NewEntityIntegrationMappingService,
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
 			service.NewCouponService,
+			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewSubscriptionModificationService,
 			service.NewSubscriptionScheduleService,
 			service.NewAlertLogsService,
+			service.NewAlertService,
 			service.NewGroupService,
 			service.NewScheduledTaskService,
 			service.NewWalletPaymentService,
@@ -272,15 +279,6 @@ func main() {
 			service.NewDashboardService,
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
-
-			// Enterprise (ee) services
-			ee.NewEnterpriseParams,
-			ee.NewCreditNoteService,
-			ee.NewCreditGrantService,
-			ee.NewWalletService,
-			ee.NewPrepaidCreditsService,
-			ee.NewBillingTimezoneService,
-			ee.NewInvoiceGracePeriodService,
 		),
 	)
 
@@ -300,6 +298,7 @@ func main() {
 		),
 		fx.Invoke(
 			tracing.RegisterHooks,
+			repository.InitTracing,
 			pyroscope.RegisterHooks,
 			initIntegrationFactory,
 			startServer,
@@ -312,9 +311,10 @@ func main() {
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	redisCache cache.RedisCache,
+	locker cache.Locker,
 	meterService service.MeterService,
 	eventService service.EventService,
-	eventPostProcessingService service.EventPostProcessingService,
 	environmentService service.EnvironmentService,
 	authService service.AuthService,
 	userService service.UserService,
@@ -340,20 +340,22 @@ func provideHandlers(
 	revenueAnalyticsService service.RevenueAnalyticsService,
 	creditNoteService service.CreditNoteService,
 	connectionService service.ConnectionService,
+	marketplaceService service.MarketplaceService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	integrationSyncService service.IntegrationSyncService,
 	svixClient *svix.Client,
 	taxService service.TaxService,
 	couponService service.CouponService,
+	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
 	subscriptionScheduleService service.SubscriptionScheduleService,
-	featureUsageTrackingService service.FeatureUsageTrackingService,
 	rawEventsReprocessingService service.RawEventsReprocessingService,
 	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
+	alertService service.AlertService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
@@ -365,12 +367,12 @@ func provideHandlers(
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
+	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
-	usageBenchmarkService service.UsageBenchmarkService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, usageBenchmarkService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -379,7 +381,7 @@ func provideHandlers(
 		Price:                    v1.NewPriceHandler(priceService, logger),
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, entityIntegrationMappingService, logger),
-		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, cfg, logger),
+		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, locker, cfg, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		SubscriptionModification: v1.NewSubscriptionModificationHandler(subscriptionModificationService, logger),
@@ -395,32 +397,30 @@ func provideHandlers(
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		AIPricing:                v1.NewAIPricingHandler(geminiPricingService, logger),
-		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, featureService, alertLogsService),
-		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, integrationFactory, logger),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		Costsheet:                v1.NewCostsheetHandler(costsheetService, logger),
 		RevenueAnalytics:         v1.NewRevenueAnalyticsHandler(revenueAnalyticsService, costsheetUsageTrackingService, cfg, logger),
-		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
+		Marketplace:              v1.NewMarketplaceHandler(marketplaceService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
-		Coupon:                   v1.NewCouponHandler(couponService, logger),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, db, webhookService),
+		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
+		AlertSettingsHandler:     v1.NewAlertSettingsHandler(alertService, logger),
 		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
-		CronKafkaLagMonitoring:   cron.NewKafkaLagMonitoringHandler(logger, eventService),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
+		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
 	}
 }
 
@@ -432,6 +432,7 @@ func provideRouter(
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
+	webhookRequestRepo incomingwebhookevent.Repository,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -441,6 +442,7 @@ func provideRouter(
 		envAccessService,
 		rbacService,
 		tenantService,
+		webhookRequestRepo,
 	)
 }
 
@@ -459,7 +461,7 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 	return &cfg.Temporal
 }
 
-func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
+func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger, tracingSvc *tracing.Service) (client.TemporalClient, error) {
 	log.Info(context.Background(), "Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
 
 	// Use default options and merge with config
@@ -474,6 +476,7 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 		options.APIKey = cfg.APIKey
 	}
 	options.TLS = cfg.TLS
+	options.MetricsHandler = tracingSvc.TemporalMetricsHandler()
 
 	// Create temporal client directly
 	temporalClient, err := client.NewTemporalClient(options, log)
@@ -520,14 +523,11 @@ func startServer(
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
 	log *logger.Logger,
-	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
-	featureUsageSvc service.FeatureUsageTrackingService,
 	costSheetUsageSvc service.CostSheetUsageTrackingService,
 	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
-	usageBenchmarkSvc service.UsageBenchmarkService,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -543,21 +543,21 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, false)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
@@ -566,7 +566,7 @@ func startServer(
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, cfg, true)
 		startRouter(lc, router, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
@@ -637,14 +637,11 @@ func registerRouterHandlers(
 	webhookService *webhook.WebhookService,
 	integrationEventService *integrationevents.IntegrationEventService,
 	onboardingService service.OnboardingService,
-	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
-	featureUsageSvc service.FeatureUsageTrackingService,
 	costSheetUsageSvc service.CostSheetUsageTrackingService,
 	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
-	usageBenchmarkSvc service.UsageBenchmarkService,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
@@ -654,18 +651,15 @@ func registerRouterHandlers(
 		integrationEventService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
-		// eventPostProcessingSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
-		featureUsageSvc.RegisterHandler(router, cfg)
-		featureUsageSvc.RegisterHandlerLazy(router, cfg)
-		featureUsageSvc.RegisterHandlerReplay(router, cfg)
+		eventConsumptionSvc.RegisterBulkHandler(router, cfg)
 		costSheetUsageSvc.RegisterHandler(router, cfg)
 		costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
 		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 		rawEventConsumptionSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
-		usageBenchmarkSvc.RegisterHandler(router, cfg)
+		meterUsageTrackingSvc.RegisterBulkHandler(router, cfg)
 	}
 }
 
@@ -705,20 +699,4 @@ func provideWalletBalanceAlertPubSub(
 		return types.WalletBalanceAlertPubSub{}
 	}
 	return types.WalletBalanceAlertPubSub{PubSub: pubSub}
-}
-
-func provideUsageBenchmarkPubSub(
-	cfg *config.Configuration,
-	logger *logger.Logger,
-) types.UsageBenchmarkPubSub {
-	pubSub, err := kafkaPubsub.NewPubSubFromConfig(
-		cfg,
-		logger,
-		cfg.UsageBenchmark.ConsumerGroup,
-	)
-	if err != nil {
-		logger.Fatalw("failed to create pubsub for usage benchmark", "error", err)
-		return types.UsageBenchmarkPubSub{}
-	}
-	return types.UsageBenchmarkPubSub{PubSub: pubSub}
 }

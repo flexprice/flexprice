@@ -21,7 +21,7 @@ HTTP POST /v1/meter-usage/detailed-analytics
 
 ## 2. Service Layer: `meterUsageService.GetDetailedAnalytics()`
 
-**File**: `internal/service/meter_usage.go:62`
+**File**: `internal/ee/service/meter_usage.go:62`
 
 ### 2.1 Set Defaults
 - `EndTime` defaults to `time.Now().UTC()`
@@ -30,7 +30,7 @@ HTTP POST /v1/meter-usage/detailed-analytics
 
 ### 2.2 Fetch Meter Configs: `fetchMeters()`
 
-**File**: `internal/service/meter_usage.go:487`
+**File**: `internal/ee/service/meter_usage.go:487`
 
 ```
 → MeterRepo.List(ctx, filter)  // PostgreSQL query via Ent
@@ -65,7 +65,7 @@ Each meter is classified into one of:
 
 ## 3. Bucketed Meter Analytics: `getBucketedMeterAnalytics()`
 
-**File**: `internal/service/meter_usage.go:514`
+**File**: `internal/ee/service/meter_usage.go:514`
 
 Called once per bucketed meter (MAX or SUM with `bucket_size`).
 
@@ -151,7 +151,7 @@ ORDER BY bucket_start, group_key
 
 ### 3.4 Event Count: `getEventCountForMeter()`
 
-**File**: `internal/service/meter_usage.go:593`
+**File**: `internal/ee/service/meter_usage.go:593`
 
 Bucketed queries don't return event counts, so a separate scalar query is fired:
 
@@ -273,7 +273,7 @@ ORDER BY window_start ASC
 
 ## 5. Response Building: `buildAnalyticsResponse()`
 
-**File**: `internal/service/meter_usage.go:153`
+**File**: `internal/ee/service/meter_usage.go:153`
 
 ```
 allResults []*MeterUsageDetailedResult
@@ -296,7 +296,7 @@ allResults []*MeterUsageDetailedResult
 
 ### 5.1 Build Analytics Data: `buildAnalyticsData()`
 
-**File**: `internal/service/meter_usage.go:188`
+**File**: `internal/ee/service/meter_usage.go:188`
 
 #### 5.1.1 Resolve Customer & Subscriptions: `resolveCustomerAndSubscriptions()`
 
@@ -363,7 +363,7 @@ From first subscription's currency.
 
 ### 5.3 Convert to Response DTO: `toUsageAnalyticsResponseDTO()`
 
-**File**: `internal/service/meter_usage.go:388`
+**File**: `internal/ee/service/meter_usage.go:388`
 
 For each `DetailedUsageAnalytic`:
 1. Calls `getCorrectMeterUsageValue()` to pick the right usage field based on aggregation type
@@ -386,7 +386,7 @@ Final response sorted by `FeatureName` ascending.
 
 ## 6. Cost Calculation Pipeline
 
-**File**: `internal/service/feature_usage_tracking.go:2069`
+**File**: `internal/ee/service/feature_usage_tracking.go:2069`
 
 ```go
 func (s *featureUsageTrackingService) CalculateCostsForAnalytics(ctx context.Context, data *AnalyticsData) error {
@@ -396,7 +396,7 @@ func (s *featureUsageTrackingService) CalculateCostsForAnalytics(ctx context.Con
 
 ### 6.1 `calculateCosts()` — Main Loop
 
-**File**: `internal/service/feature_usage_tracking.go:2073`
+**File**: `internal/ee/service/feature_usage_tracking.go:2073`
 
 ```
 For each analytic item in data.Analytics:
@@ -412,7 +412,7 @@ For each analytic item in data.Analytics:
 
 ### 6.2 `calculateBucketedCost()`
 
-**File**: `internal/service/feature_usage_tracking.go:2109`
+**File**: `internal/ee/service/feature_usage_tracking.go:2109`
 
 Resolves commitment state:
 ```
@@ -465,7 +465,7 @@ else if hasCommitment: applyLineItemCommitment(nil, Zero)
 
 ### 6.3 `calculateRegularCost()`
 
-**File**: `internal/service/feature_usage_tracking.go:2342`
+**File**: `internal/ee/service/feature_usage_tracking.go:2342`
 
 ```
 1. item.TotalUsage = getCorrectUsageValue(item, meter.Aggregation.Type)
@@ -494,7 +494,7 @@ else if hasCommitment: applyLineItemCommitment(nil, Zero)
 
 ## 7. Price Calculation Methods
 
-**File**: `internal/service/price.go`
+**File**: `internal/ee/service/price.go`
 
 ### 7.1 `CalculateCost(price, quantity)` → `calculateSingletonCost()`
 
@@ -546,7 +546,7 @@ for each tier:
 
 ## 8. Commitment Handling
 
-**File**: `internal/service/feature_usage_tracking.go:3371`
+**File**: `internal/ee/service/feature_usage_tracking.go:3371`
 
 ### 8.1 `applyLineItemCommitment()`
 

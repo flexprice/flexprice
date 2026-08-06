@@ -28,6 +28,7 @@ var CURRENCY_CONFIG = map[string]CurrencyConfig{
 	"brl": {Symbol: "R$", Precision: 2},
 	"chf": {Symbol: "CHF", Precision: 2},
 	"clp": {Symbol: "CLP$", Precision: 0},
+	"clf": {Symbol: "CLF", Precision: 4},
 	"cny": {Symbol: "CN¥", Precision: 2},
 	"czk": {Symbol: "CZK", Precision: 2},
 	"dkk": {Symbol: "DKK", Precision: 2},

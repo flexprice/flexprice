@@ -46,6 +46,8 @@ type Payment struct {
 	SucceededAt *time.Time `json:"succeeded_at,omitempty"`
 	// The failed_at timestamp indicates when this payment failed (optional)
 	FailedAt *time.Time `json:"failed_at,omitempty"`
+	// The voided_at timestamp shows when this payment was voided (optional)
+	VoidedAt *time.Time `json:"voided_at,omitempty"`
 	// The refunded_at timestamp shows when this payment was refunded (optional)
 	RefundedAt *time.Time `json:"refunded_at,omitempty"`
 	// The recorded_at timestamp indicates when this payment was manually recorded (optional)
@@ -185,6 +187,7 @@ func FromEnt(p *ent.Payment) *Payment {
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,
+		VoidedAt:          p.VoidedAt,
 		RefundedAt:        p.RefundedAt,
 		RecordedAt:        p.RecordedAt,
 		ErrorMessage:      p.ErrorMessage,

@@ -778,7 +778,7 @@ GET /events/event_error
 
 ## 12. References
 
-- `internal/service/feature_usage_tracking.go` - `prepareProcessedEvents` method
+- `internal/ee/service/feature_usage_tracking.go` - `prepareProcessedEvents` method
 - `internal/domain/events/model.go` - Event and FeatureUsage models
 - `internal/api/v1/events.go` - Existing event handlers
 - `internal/repository/clickhouse/feature_usage.go` - Feature usage repository methods

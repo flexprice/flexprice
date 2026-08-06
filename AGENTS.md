@@ -1,3 +1,77 @@
+---
+layer: constitution
+repo: flexprice (Go backend)
+synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+synced_at: 2026-06-09T00:00:00Z
+---
+
+# Flexprice Backend — Constitution
+
+> Invariants that MUST hold in every PR. Violation = block merge.
+> Operational details → per-layer AGENTS.md files (load lazily by working in that directory).
+> Improvement notes → `.context/findings/` (never in this file).
+
+## Stack
+Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafka · Temporal
+
+## Directory map
+| Layer | Path | One-line rule |
+|---|---|---|
+| Domain | `internal/domain/` | Interfaces + models; zero external deps |
+| Repository | `internal/repository/` | Implements domain interfaces; DB access only |
+| Service | `internal/service/` | All business logic; orchestrates repos + services |
+| API | `internal/api/v1/` | Parse → validate → delegate to service → respond |
+| Temporal | `internal/temporal/` | Long-running workflows + activities |
+| Integration | `internal/integration/` | Third-party providers; factory pattern |
+
+## Hard invariants
+
+### Layering (never violate)
+- No business logic in `internal/api/v1/` — handlers call services, nothing more.
+- No DB calls from handlers — all data access through service → repository chain.
+- Domain interfaces in `internal/domain/`; implementations in `internal/repository/`.
+- All new deps registered in `cmd/server/main.go` via `fx.Provide()`.
+
+### Multi-tenancy (every entity, every query)
+- Every DB entity carries `tenant_id` + `environment_id`.
+- Every query filters on both. Missing filter = data leak = critical bug.
+- No cross-tenant reads. No shared mutable state between tenants.
+
+### Event processing (billing correctness)
+- All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
+- Event ordering: do not assume arrival order; use event timestamps, not insertion order.
+- Retries: every Kafka consumer and Temporal activity must be safe to retry.
+- Backfill: any new aggregation must handle historical events correctly.
+
+### ClickHouse
+- Every query bounded by `max_memory_usage = 90GB` (hardcoded — do not remove).
+- Analytics queries → ClickHouse. Transactional reads/writes → PostgreSQL.
+
+### Observability
+- Structured logging via `internal/logger` (ctx-first API); always propagate `ctx` for trace correlation.
+- No `fmt.Println` or bare `log.Print` in production paths.
+- **Loglint is a merge gate.** Custom analyzer `tools/loglint` runs via `make lint-ci` (`go vet -vettool=./tools/bin/loglint ./internal/...`). Details: `internal/logger/README.md`.
+  - **LL006 (common failure):** every `log.Error(ctx, msg, fields...)` MUST include a literal `"error"` key in `fields`. The linter only accepts a string-literal key — `Error(ctx, err.Error())` alone fails.
+  - Correct: `s.logger.Error(ctx, "invoice finalize failed", "error", err, "invoice_id", id)`
+  - Also correct: `"error", err.Error()` or `"error", "redacted reason"` when you must not log the raw err.
+  - Wrong: `s.logger.Error(ctx, err.Error())` — no `"error"` field.
+  - Prefer logging at the boundary that owns the failure; intermediate helpers return errors without logging.
+  - Other enforced rules: LL001 deprecated logger methods; LL002 no `logger.L` / `GetLogger()` outside `cmd/`+`scripts/`; LL003 `Warn` only in bootstrap (`cmd/`, `main.go`, `init()`, `internal/config/`, `New*` constructors); LL004 no `fmt.Print*`; LL009 `ctx` is the first arg, not a field.
+
+### Testing
+- Unit tests for all service-layer business logic.
+- Table-driven tests preferred.
+- Integration tests use real DB (testcontainers / docker compose); do not mock Ent client.
+- Test files alongside implementation (`internal/service/foo_test.go`).
+
+### Schema / migrations
+- Schema changes: `ent/schema/*.go` → `make generate-ent` → `make generate-migration`.
+- Never hand-edit generated Ent files.
+- ClickHouse migrations in `migrations/clickhouse/`.
+
+---
+<!-- Below this line: original Warp-targeted content preserved for reference. -->
+
 # AGENTS.md
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
@@ -176,7 +250,7 @@ flexprice/
 ├── internal/
 │   ├── api/             # HTTP handlers and routing
 │   │   ├── v1/          # API v1 handlers
-│   │   └── cron/        # Scheduled job handlers
+│   │   └── cron/        # Legacy manual trigger for void-old-pending invoices (no Temporal equivalent); other cron-style jobs are Temporal schedules
 │   ├── domain/          # Domain models and interfaces
 │   ├── repository/      # Data access layer implementations
 │   ├── service/         # Business logic layer
@@ -212,7 +286,7 @@ flexprice/
 - Direct database access (Ent, ClickHouse, etc.)
 - Data mapping and persistence
 
-**Service Layer** (`internal/service/`)
+**Service Layer** (`internal/ee/service/`)
 
 - Business logic orchestration
 - Transaction management
@@ -309,11 +383,10 @@ type clickhouseEventRepository struct { ... }
 1. Define domain model in `internal/domain/<entity>/`
 2. Create/update Ent schema in `ent/schema/<entity>.go`
 3. Implement repository in `internal/repository/<entity>.go`
-4. Implement service in `internal/service/<entity>.go`
+4. Implement service in `internal/ee/service/<entity>.go`
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations to handler (including `@x-scope` for MCP - see below)
-8. Run `make swagger` to update API docs
 
 #### MCP Scope Annotations
 
@@ -356,8 +429,6 @@ Most operations get automatic scope assignment based on HTTP method (GET→read,
 1. If `@x-scope` is present → use explicit scope
 2. Otherwise → automatic based on HTTP method (GET/HEAD→read, POST/PUT/PATCH→write, DELETE→delete)
 
-After adding/changing endpoints, regenerate: `make swagger && make sdk-all`
-
 ### Creating a Temporal Workflow
 
 1. Define workflow interface in `internal/temporal/workflows/<name>_workflow.go`
@@ -384,7 +455,7 @@ After adding/changing endpoints, regenerate: `make swagger && make sdk-all`
 
 ### Test File Location
 
-Place tests alongside implementation: `internal/service/billing.go` → `internal/service/billing_test.go`
+Place tests alongside implementation: `internal/ee/service/billing.go` → `internal/ee/service/billing_test.go`
 
 ### Test Utilities
 
@@ -413,7 +484,7 @@ tests := []struct {
 
 - Use actual database instances (via testcontainers or docker compose)
 - Avoid mocking Ent client; use real DB for integration tests
-- Tests in `internal/service/*_test.go` often use real dependencies
+- Tests in `internal/ee/service/*_test.go` often use real dependencies
 
 ## Configuration
 
@@ -435,7 +506,7 @@ Environment variables override config.yaml. Example:
 ### Running a Single Test
 
 ```bash
-go test -v -race ./internal/service -run TestBillingService_GenerateInvoice
+go test -v -race ./internal/ee/service -run TestBillingService_GenerateInvoice
 ```
 
 ### Viewing Logs
@@ -495,3 +566,107 @@ Docker Compose demonstrates this pattern with separate services: `flexprice-api`
 - Core is AGPLv3 licensed
 - Enterprise features (`internal/ee/`) require commercial license
 - See LICENSE file for details
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for running this backend inside a Cursor Cloud VM. Standard
+commands live in `SETUP.md`, `LOCAL_TESTING.md`, `docs/REMOTE_DEV_INSTANCE_SETUP.md`, and
+the `Makefile`; this section only records the gotchas that are not obvious from those docs.
+
+### Two supported setup approaches
+1. **Self-contained Docker local (default in the Cloud VM).** Committed `.env.local` +
+   local Docker infra + `make run-local`. Needs no external secrets — this is what the
+   Cloud VM is provisioned for and what the steps below use.
+2. **Against shared staging infra** (see `docs/REMOTE_DEV_INSTANCE_SETUP.md`). Point a
+   locally-built server at already-deployed Postgres/Kafka/ClickHouse/Temporal by adding a
+   `./.env` (chmod `600`, staging creds from the team secrets manager, **never committed**)
+   and running `make run-server`. Use this only when staging credentials are supplied to
+   the VM as secrets; do not create `.env` if you want the local-Docker path.
+
+**Critical env-loading distinction** (drives which approach runs):
+`make run-server` loads `.env` only; the `make run-local*` targets load `.env` **then layer
+`.env.local` on top**, so local Docker endpoints override any staging values in `.env`.
+Likewise `make migrate-local` uses `.env.local` while `make migrate-ent` uses `.env`.
+
+Toolchain PATH (Go pinned by `go.mod`, `typst` from `scripts/install-typst.sh`):
+`export PATH="/usr/local/go/bin:$HOME/.local/bin:$PATH"`.
+
+### Docker daemon is not auto-started
+Docker is pre-installed in the VM image but there is **no systemd/service manager**, so
+`dockerd` is not running on a fresh session. Start it once per session before any
+`docker`/`make` target that touches infra:
+
+```bash
+sudo dockerd > /tmp/dockerd.log 2>&1 &      # wait ~5s for the socket
+sudo chmod 666 /var/run/docker.sock          # let the non-root user reach the socket
+```
+
+The daemon uses `fuse-overlayfs` with the containerd snapshotter disabled (see
+`/etc/docker/daemon.json`) — this is required because the VM kernel lacks full overlay2
+support. Do not switch the storage driver back to overlay2.
+
+### Bring up the stack (all infra is Docker, app runs via `go run`)
+```bash
+docker compose up -d postgres kafka clickhouse temporal temporal-ui
+make migrate-postgres        # docker exec: creates extensions
+make migrate-clickhouse      # docker exec: applies migrations/clickhouse/*
+make migrate-local           # Ent schema migration — uses .env.local (NOT make migrate-ent)
+make seed-db                 # seeds the default tenant/environment
+make init-kafka              # creates topics
+make run-local               # single process: API + consumer + workers
+```
+
+Then `curl http://localhost:8080/health` → `{"status":"ok"}`. Auth for `/v1/*` needs both
+`-H "x-api-key: sk_local_flexprice_test_key"` and
+`-H "x-environment-id: 00000000-0000-0000-0000-000000000000"`.
+
+### Non-obvious caveats
+- **Use `make migrate-local`, never `make migrate-ent`** for local Ent migrations —
+  `migrate-ent` reads `.env` (which can point at production); `migrate-local` reads the
+  committed `.env.local`. Same warning in `LOCAL_TESTING.md`.
+- **Temporal is disabled by default locally** (`FLEXPRICE_TEMPORAL_ENABLED="false"` in
+  `.env.local`), so `make run-local` boots even if the `temporal` container is not up. Set
+  it to `true` (and start the container) only when testing workflows.
+- **`make init-kafka` does not create the webhook topic.** The webhook consumer subscribes
+  to `flexprice_system_events` (from `webhook.topic` in `config.yaml`), which is not in the
+  `init-kafka` list. Without it the server logs a harmless-but-noisy `topic ... does not
+  exist` reconnect loop. Create it once to silence the loop:
+  `docker compose exec -T kafka kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic flexprice_system_events --partitions 1 --replication-factor 1`.
+- **Tests need no external infra.** `internal/testutil` provides in-memory stores, so
+  `make test` (Go `-race` over `./internal/...`) runs without the Docker stack. `make test`
+  first runs `scripts/install-typst.sh`, which downloads the `typst` binary to
+  `~/.local/bin` (needs network) and appends that dir to `~/.bashrc`.
+- **`make lint` is non-blocking** (prints `LL008` dev-checkpoint warnings and exits 0). Use
+  `make lint-ci` for the errors-only gate.
+
+### Integration sanity suite (`integration-testing-suite/go`)
+End-to-end billing lifecycle against a running server (see `make test-suite`). To run it
+against the local server, mint a DB-backed key (it embeds the environment, so the suite
+needs no `x-environment-id`) and point a target at `localhost:8080/v1`:
+
+```bash
+# sign up -> returns JWT + tenant_id; then create a private key scoped to the tenant's env
+curl -s -X POST localhost:8080/v1/auth/signup -H 'Content-Type: application/json' \
+  -d '{"email":"dev@example.com","password":"password12345","tenant_name":"Dev"}'
+# GET /v1/environments (Bearer <token>) -> env id; then:
+curl -s -X POST localhost:8080/v1/secrets/api/keys -H "Authorization: Bearer <token>" \
+  -H "X-Environment-ID: <env>" -H 'Content-Type: application/json' \
+  -d '{"name":"suite","type":"private_key"}'          # returns api_key once (sk_...)
+
+FLEXPRICE_API_KEY=<sk_...> FLEXPRICE_API_HOST=localhost:8080/v1 make test-suite
+```
+
+Notes: the suite exits non-zero only on **core** (Phase 1–5) failures; Phase 7 cleanup
+failures (e.g. `DeleteTaxAssociation` "unknown content-type … Status 200", an SDK quirk)
+are reported but non-fatal. The usage-processing wait (Phase 4) may time out in ~30s on a
+cold consumer without failing the run. The suite pins the Go SDK (`go-sdk/v2`, latest —
+currently `v2.1.20`), whose `go >= 1.25.10` requirement bumps the suite's `go` directive;
+the base toolchain on the box is older, so Go auto-downloads the required `1.25.x` toolchain
+(cached after the first build) — do not force `GOTOOLCHAIN=local`.
+
+## Coding style guide
+
+1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
+2. When updating "domain" entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
+3. Only add comments when some logic or definition is complex to understand or there is an edge case. Don't write comments on generic logic and easy to understand structs and methods.
+4. Logging: log only meaningful state changes, failures, and operational decisions, with the relevant IDs and error attached. `Warn` is reserved for bootstrap/setup code; use `Info` for a recovered/skipped condition and `Error` for a failure.

@@ -40,6 +40,8 @@ type Customer struct {
 	Name string `json:"name,omitempty"`
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
+	// Contact holds the value of the "contact" field.
+	Contact *string `json:"contact,omitempty"`
 	// AddressLine1 holds the value of the "address_line1" field.
 	AddressLine1 string `json:"address_line1,omitempty"`
 	// AddressLine2 holds the value of the "address_line2" field.
@@ -52,7 +54,9 @@ type Customer struct {
 	AddressPostalCode string `json:"address_postal_code,omitempty"`
 	// AddressCountry holds the value of the "address_country" field.
 	AddressCountry string `json:"address_country,omitempty"`
-	selectValues   sql.SelectValues
+	// Timezone holds the value of the "timezone" field.
+	Timezone     string `json:"timezone,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -62,7 +66,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata:
 			values[i] = new([]byte)
-		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry:
+		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -155,6 +159,13 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.Email = value.String
 			}
+		case customer.FieldContact:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field contact", values[i])
+			} else if value.Valid {
+				c.Contact = new(string)
+				*c.Contact = value.String
+			}
 		case customer.FieldAddressLine1:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field address_line1", values[i])
@@ -190,6 +201,12 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field address_country", values[i])
 			} else if value.Valid {
 				c.AddressCountry = value.String
+			}
+		case customer.FieldTimezone:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field timezone", values[i])
+			} else if value.Valid {
+				c.Timezone = value.String
 			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
@@ -260,6 +277,11 @@ func (c *Customer) String() string {
 	builder.WriteString("email=")
 	builder.WriteString(c.Email)
 	builder.WriteString(", ")
+	if v := c.Contact; v != nil {
+		builder.WriteString("contact=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	builder.WriteString("address_line1=")
 	builder.WriteString(c.AddressLine1)
 	builder.WriteString(", ")
@@ -277,6 +299,9 @@ func (c *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("address_country=")
 	builder.WriteString(c.AddressCountry)
+	builder.WriteString(", ")
+	builder.WriteString("timezone=")
+	builder.WriteString(c.Timezone)
 	builder.WriteByte(')')
 	return builder.String()
 }

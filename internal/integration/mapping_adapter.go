@@ -112,6 +112,50 @@ func (a *entityIntegrationMappingAdapter) LinkIntegrationMapping(ctx context.Con
 		Mark(ierr.ErrValidation)
 }
 
+// DelinkIntegrationMapping removes the entity integration mappings matching the
+// given entity and provider. It mirrors service.DelinkIntegrationMapping but, since
+// the adapter only holds the repository (no DB client), the deletes run without a
+// surrounding transaction.
+func (a *entityIntegrationMappingAdapter) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.SuccessResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
+		EntityID:    req.EntityID,
+		EntityType:  req.EntityType,
+		ProviderTypes: []string{
+			req.ProviderType,
+		},
+	}
+	mappings, err := a.repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no entity integration mapping found to delink").
+			WithHint("No active mapping exists for the given entity and provider").
+			WithReportableDetails(map[string]any{
+				"entity_id":     req.EntityID,
+				"entity_type":   req.EntityType,
+				"provider_type": req.ProviderType,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	for _, mapping := range mappings {
+		if err := a.repo.Delete(ctx, mapping); err != nil {
+			return nil, err
+		}
+	}
+
+	return &apidto.SuccessResponse{
+		Message: "Integration mapping delinked successfully",
+	}, nil
+}
+
 // toMappingResponse converts a domain mapping to a DTO response.
 func toMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
 	return &apidto.EntityIntegrationMappingResponse{

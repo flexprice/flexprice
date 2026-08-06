@@ -9,7 +9,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/costsheet"
-	"github.com/flexprice/flexprice/internal/cache"
 	domainCostsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -22,16 +21,14 @@ import (
 type costsheetRepository struct {
 	client postgres.IClient // Database client for executing queries
 	logger *logger.Logger   // Logger for tracking operations
-	cache  cache.Cache      // Cache for performance optimization
 }
 
 // NewCostsheetRepository creates a new instance of the Ent-based costsheet repository.
-// It initializes the repository with the provided database client, logger, and cache.
-func NewCostsheetRepository(client postgres.IClient, logger *logger.Logger, cache cache.Cache) domainCostsheet.Repository {
+// It initializes the repository with the provided database client and logger.
+func NewCostsheetRepository(client postgres.IClient, logger *logger.Logger) domainCostsheet.Repository {
 	return &costsheetRepository{
 		client: client,
 		logger: logger,
-		cache:  cache,
 	}
 }
 
@@ -74,9 +71,17 @@ func (r *costsheetRepository) Create(ctx context.Context, costsheet *domainCosts
 	return nil
 }
 
-// GetByID retrieves a costsheet record by its ID.
+// GetByID retrieves a costsheet record by its ID, scoped to the tenant and environment in ctx.
+// The tenant/environment predicates are always applied (never conditionally skipped) so that a
+// request with incomplete auth context fails closed instead of widening the lookup scope.
 func (r *costsheetRepository) GetByID(ctx context.Context, id string) (*domainCostsheet.Costsheet, error) {
-	entCostsheet, err := r.client.Reader(ctx).Costsheet.Get(ctx, id)
+	entCostsheet, err := r.client.Reader(ctx).Costsheet.Query().
+		Where(
+			costsheet.ID(id),
+			costsheet.TenantID(types.GetTenantID(ctx)),
+			costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ierr.NewError("costsheet not found").
@@ -266,11 +271,18 @@ func (r *costsheetRepository) Count(ctx context.Context, filter *domainCostsheet
 	return int64(count), nil
 }
 
-// Update updates an existing costsheet record.
-func (r *costsheetRepository) Update(ctx context.Context, costsheet *domainCostsheet.Costsheet) error {
-	entCostsheet := r.domainToEnt(costsheet)
+// Update updates an existing costsheet record, scoped to the tenant and environment in ctx.
+// The tenant/environment predicates are always applied (never conditionally skipped) so that a
+// request with incomplete auth context fails closed instead of widening the update scope.
+func (r *costsheetRepository) Update(ctx context.Context, cs *domainCostsheet.Costsheet) error {
+	entCostsheet := r.domainToEnt(cs)
 
-	updateQuery := r.client.Writer(ctx).Costsheet.UpdateOneID(entCostsheet.ID).
+	updateQuery := r.client.Writer(ctx).Costsheet.Update().
+		Where(
+			costsheet.ID(entCostsheet.ID),
+			costsheet.TenantID(types.GetTenantID(ctx)),
+			costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetName(entCostsheet.Name).
 		SetStatus(entCostsheet.Status).
 		SetUpdatedAt(entCostsheet.UpdatedAt).
@@ -287,31 +299,49 @@ func (r *costsheetRepository) Update(ctx context.Context, costsheet *domainCosts
 		updateQuery.SetMetadata(entCostsheet.Metadata)
 	}
 
-	err := updateQuery.Exec(ctx)
+	affected, err := updateQuery.Save(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return ierr.NewError("costsheet not found").
 				WithHint("No costsheet found with the provided ID").
-				WithReportableDetails(map[string]any{"id": costsheet.ID}).
+				WithReportableDetails(map[string]any{"id": cs.ID}).
 				Mark(ierr.ErrNotFound)
 		}
-		r.logger.Error(ctx, "Failed to update costsheet", "error", err, "costsheet_id", costsheet.ID)
+		r.logger.Error(ctx, "Failed to update costsheet", "error", err, "costsheet_id", cs.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to update costsheet").
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Info(ctx, "Updated costsheet", "costsheet_id", costsheet.ID, "name", costsheet.Name)
+	if affected == 0 {
+		return ierr.NewError("costsheet not found").
+			WithHint("No costsheet found with the provided ID").
+			WithReportableDetails(map[string]any{"id": cs.ID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	r.logger.Info(ctx, "Updated costsheet", "costsheet_id", cs.ID, "name", cs.Name)
 	return nil
 }
 
-// Delete soft deletes a costsheet record by setting its status to deleted.
+// Delete soft deletes a costsheet record by setting its status to deleted, scoped to the tenant and environment in ctx.
+// The tenant/environment predicates are always applied (never conditionally skipped) so that a
+// request with incomplete auth context fails closed instead of widening the delete scope. The
+// StatusNEQ guard makes the transition atomic: only a costsheet that isn't already deleted gets
+// flipped, so two concurrent deletes can't both read "active" and both report success.
 func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
-	err := r.client.Writer(ctx).Costsheet.UpdateOneID(id).
+	deleteQuery := r.client.Writer(ctx).Costsheet.Update().
+		Where(
+			costsheet.ID(id),
+			costsheet.TenantID(types.GetTenantID(ctx)),
+			costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
+			costsheet.StatusNEQ(string(types.StatusDeleted)),
+		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC()).
-		Exec(ctx)
+		SetUpdatedAt(time.Now().UTC())
+
+	affected, err := deleteQuery.Save(ctx)
 
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -324,6 +354,38 @@ func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 		return ierr.WithError(err).
 			WithHint("Failed to delete costsheet").
 			Mark(ierr.ErrDatabase)
+	}
+
+	if affected == 0 {
+		// affected == 0 means either the costsheet doesn't exist (or isn't in this
+		// tenant/environment), or the StatusNEQ guard excluded it because it was
+		// already deleted (possibly by a concurrent request that won the race).
+		// Disambiguate with one cheap existence check ignoring status (only on
+		// this already-failed path, not the common-case success path).
+		exists, existErr := r.client.Reader(ctx).Costsheet.Query().
+			Where(
+				costsheet.ID(id),
+				costsheet.TenantID(types.GetTenantID(ctx)),
+				costsheet.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).
+			Exist(ctx)
+		if existErr != nil {
+			r.logger.Error(ctx, "Failed to delete costsheet", "error", existErr, "costsheet_id", id)
+			return ierr.WithError(existErr).
+				WithHint("Failed to delete costsheet").
+				Mark(ierr.ErrDatabase)
+		}
+		if !exists {
+			return ierr.NewError("costsheet not found").
+				WithHint("No costsheet found with the provided ID").
+				WithReportableDetails(map[string]any{"id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		return ierr.NewError("costsheet is already deleted").
+			WithHint("This costsheet has already been deleted").
+			WithReportableDetails(map[string]any{"id": id}).
+			Mark(ierr.ErrValidation)
 	}
 
 	r.logger.Info(ctx, "Deleted costsheet", "costsheet_id", id)

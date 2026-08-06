@@ -450,6 +450,9 @@ func (wtu *WalletTransactionUpdate) sqlSave(ctx context.Context) (n int, err err
 	if wtu.mutation.PriorityCleared() {
 		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
 	}
+	if wtu.mutation.ParentTransactionIDCleared() {
+		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, wtu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{wallettransaction.Label}
@@ -919,6 +922,9 @@ func (wtuo *WalletTransactionUpdateOne) sqlSave(ctx context.Context) (_node *Wal
 	}
 	if wtuo.mutation.PriorityCleared() {
 		_spec.ClearField(wallettransaction.FieldPriority, field.TypeInt)
+	}
+	if wtuo.mutation.ParentTransactionIDCleared() {
+		_spec.ClearField(wallettransaction.FieldParentTransactionID, field.TypeString)
 	}
 	_node = &WalletTransaction{config: wtuo.config}
 	_spec.Assign = _node.assignValues

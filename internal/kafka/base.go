@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hash"
 
-	"crypto/tls"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -15,12 +14,19 @@ import (
 	"github.com/xdg-go/scram"
 )
 
-func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
+// GetSaramaConfig builds a Sarama config for a single Kafka cluster. It takes the
+// cluster's KafkaConfig directly (rather than the whole Configuration) so the same
+// builder serves both the local cluster (cfg.Kafka) and the optional second cluster
+// (cfg.KafkaSecondary) during the AWS→GCP migration — see infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+// It returns an error rather than panicking on unusable TLS/SASL material (bad
+// CA path, non-PEM bundle, missing GCP credentials) so a misconfigured deploy
+// surfaces as a normal startup failure instead of a stack trace.
+func GetSaramaConfig(kafkaCfg *config.KafkaConfig) (*sarama.Config, error) {
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Version = sarama.V2_1_0_0
 
 	// Configure client ID regardless of SASL
-	saramaConfig.ClientID = cfg.Kafka.ClientID
+	saramaConfig.ClientID = kafkaCfg.ClientID
 
 	// Set consumer offset reset policy to ensure we don't miss messages
 	// "earliest" ensures that when a consumer starts with no initial offset or
@@ -34,47 +40,50 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 	// When rebalancing happens, use the last committed offset
 	saramaConfig.Consumer.Offsets.Retry.Max = 3
 
-	if cfg.Kafka.TLS {
-		saramaConfig.Net.TLS.Enable = true
-		saramaConfig.Net.TLS.Config = &tls.Config{
-			InsecureSkipVerify: false,
+	// SASL implies TLS: SASL_SSL is the only SASL protocol this app speaks, so
+	// enabling SASL turns TLS on even when kafkaCfg.TLS is false.
+	if kafkaCfg.TLS || kafkaCfg.UseSASL {
+		tlsConfig, err := BuildTLSConfig(kafkaCfg)
+		if err != nil {
+			return nil, err
 		}
+		saramaConfig.Net.TLS.Enable = true
+		saramaConfig.Net.TLS.Config = tlsConfig
 	}
 
-	if !cfg.Kafka.UseSASL {
-		return saramaConfig
+	if !kafkaCfg.UseSASL {
+		return saramaConfig, nil
 	}
 
 	// SASL specific configs
 	saramaConfig.Net.SASL.Enable = true
-	saramaConfig.Net.TLS.Enable = true
 
 	// sasl configs
-	saramaConfig.Net.SASL.Mechanism = cfg.Kafka.SASLMechanism
+	saramaConfig.Net.SASL.Mechanism = kafkaCfg.SASLMechanism
 
-	switch cfg.Kafka.SASLMechanism {
+	switch kafkaCfg.SASLMechanism {
 	case sarama.SASLTypeOAuth:
 		// OAUTHBEARER (e.g. GCP Managed Kafka). Token comes from Application
 		// Default Credentials — Workload Identity on GKE, gcloud locally.
 		// User/Password are not used.
-		provider, err := newGCPTokenProvider(context.Background(), cfg.Kafka.SASLOAuthScopes)
+		provider, err := newGCPTokenProvider(context.Background(), kafkaCfg.SASLOAuthScopes)
 		if err != nil {
-			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", cfg.Kafka.SASLOAuthScopes, err))
+			return nil, fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", kafkaCfg.SASLOAuthScopes, err)
 		}
 		saramaConfig.Net.SASL.TokenProvider = provider
 	case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512:
-		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
-		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
+		saramaConfig.Net.SASL.User = kafkaCfg.SASLUser
+		saramaConfig.Net.SASL.Password = kafkaCfg.SASLPassword
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
-			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(cfg.Kafka.SASLMechanism)}
+			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(kafkaCfg.SASLMechanism)}
 		}
 	default:
 		// PLAIN and any other mechanism that uses user+password.
-		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
-		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
+		saramaConfig.Net.SASL.User = kafkaCfg.SASLUser
+		saramaConfig.Net.SASL.Password = kafkaCfg.SASLPassword
 	}
 
-	return saramaConfig
+	return saramaConfig, nil
 }
 
 // XDGSCRAMClient implements sarama.SCRAMClient for SCRAM authentication

@@ -15,11 +15,17 @@ type AddonAssociation func(*sql.Selector)
 // AlertLogs is the predicate function for alertlogs builders.
 type AlertLogs func(*sql.Selector)
 
+// AlertSettings is the predicate function for alertsettings builders.
+type AlertSettings func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
 // BillingSequence is the predicate function for billingsequence builders.
 type BillingSequence func(*sql.Selector)
+
+// CheckoutSession is the predicate function for checkoutsession builders.
+type CheckoutSession func(*sql.Selector)
 
 // Connection is the predicate function for connection builders.
 type Connection func(*sql.Selector)
@@ -54,6 +60,9 @@ type Customer func(*sql.Selector)
 // Entitlement is the predicate function for entitlement builders.
 type Entitlement func(*sql.Selector)
 
+// EntitlementGrant is the predicate function for entitlementgrant builders.
+type EntitlementGrant func(*sql.Selector)
+
 // EntityIntegrationMapping is the predicate function for entityintegrationmapping builders.
 type EntityIntegrationMapping func(*sql.Selector)
 
@@ -65,6 +74,9 @@ type Feature func(*sql.Selector)
 
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
+
+// IncomingWebhookEvent is the predicate function for incomingwebhookevent builders.
+type IncomingWebhookEvent func(*sql.Selector)
 
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
@@ -84,6 +96,9 @@ type Payment func(*sql.Selector)
 // PaymentAttempt is the predicate function for paymentattempt builders.
 type PaymentAttempt func(*sql.Selector)
 
+// PaymentMethod is the predicate function for paymentmethod builders.
+type PaymentMethod func(*sql.Selector)
+
 // Plan is the predicate function for plan builders.
 type Plan func(*sql.Selector)
 
@@ -92,6 +107,9 @@ type Price func(*sql.Selector)
 
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
+
+// Refund is the predicate function for refund builders.
+type Refund func(*sql.Selector)
 
 // ScheduledTask is the predicate function for scheduledtask builders.
 type ScheduledTask func(*sql.Selector)
@@ -134,6 +152,9 @@ type TaxRate func(*sql.Selector)
 
 // Tenant is the predicate function for tenant builders.
 type Tenant func(*sql.Selector)
+
+// UsageRecord is the predicate function for usagerecord builders.
+type UsageRecord func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
