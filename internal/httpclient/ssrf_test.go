@@ -32,6 +32,12 @@ func TestIsPublicIP(t *testing.T) {
 		{"benchmarking", "198.18.0.1", false},
 		{"limited broadcast", "255.255.255.255", false},
 		{"ipv6 documentation", "2001:db8::1", false},
+		{"this-network 0/8", "0.1.2.3", false},
+		{"class E reserved", "240.0.0.1", false},
+		{"nat64-encoded metadata IP", "64:ff9b::a9fe:a9fe", false},
+		{"nat64-encoded public IP", "64:ff9b::0808:0808", true},
+		{"6to4-encoded loopback", "2002:7f00:1::", false},
+		{"6to4-encoded public IP", "2002:0808:0808::", true},
 		{"public v4", "8.8.8.8", true},
 		{"public v6", "2606:4700:4700::1111", true},
 	}
