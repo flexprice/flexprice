@@ -105,6 +105,12 @@ clickhouse:
   address: 127.0.0.1:9000 # For local mode
   # Will be overridden by FLEXPRICE_CLICKHOUSE_ADDRESS env var in Docker
   tls: false
+  # Wire protocol: native (default) or http. The address port must match the
+  # protocol — native listens on 9000 (9440 with TLS), http on 8123 (8443 with
+  # TLS). A native client pointed at an HTTP port fails at connect with
+  # "[handshake] unexpected packet [72] from server". Use http when ClickHouse is
+  # only reachable via an HTTPS endpoint, e.g. behind a TLS-terminating LB.
+  protocol: native
   username: flexprice
   password: flexprice123
   database: flexprice

@@ -12,6 +12,7 @@ type CheckoutConfiguration struct {
 	CreateSubscriptionParams *CreateSubscriptionParams `json:"create_subscription_params,omitempty"`
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
+	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -40,6 +41,13 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.WalletTopupParams.Validate()
+	case CheckoutActionAddAddon:
+		if c.AddAddonParams == nil {
+			return ierr.NewError("add_addon_params is required for add_addon action").
+				WithHint("Provide add_addon_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.AddAddonParams.Validate()
 	}
 	return nil
 }
@@ -132,6 +140,75 @@ func (p *ModifySubscriptionParams) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	}
+	return nil
+}
+
+// AddAddonParams is persisted on checkout sessions for payment-gated addon attach.
+// The association rows it references already exist as addon_status = pending; payment
+// success flips them to active and materializes their line items and credit grants.
+// List-shaped so batching more than one addon per session is additive; the attach endpoint
+// is single-addon today, so sessions carry one, but completion loops the list.
+type AddAddonParams struct {
+	SubscriptionID string        `json:"subscription_id"`
+	Addons         []AddAddonRef `json:"addons"`
+}
+
+// AddAddonRef is one pending addon attach, carrying everything needed to replay the attach
+// at completion without trusting execute-time state.
+type AddAddonRef struct {
+	AssociationID string       `json:"association_id"`
+	AddonID       string       `json:"addon_id"`
+	Cadence       AddonCadence `json:"cadence"`
+	// Needed to prorate the addon's first credit grant.
+	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
+	StartDate         time.Time         `json:"start_date"`
+}
+
+func (p *AddAddonParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("add_addon_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	if p.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Provide subscription_id in add_addon_params").
+			Mark(ierr.ErrValidation)
+	}
+	if len(p.Addons) == 0 {
+		return ierr.NewError("at least one addon is required").
+			WithHint("add_addon_params must carry at least one addon").
+			Mark(ierr.ErrValidation)
+	}
+
+	for i, ref := range p.Addons {
+		if ref.AssociationID == "" {
+			return ierr.NewError("association_id is required").
+				WithHint("Each addon must reference its pending addon association").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if ref.AddonID == "" {
+			return ierr.NewError("addon_id is required").
+				WithHint("Each addon must have a non-empty addon_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := ref.Cadence.Validate(); err != nil {
+			return err
+		}
+		if ref.ProrationBehavior != "" {
+			if err := ref.ProrationBehavior.Validate(); err != nil {
+				return err
+			}
+		}
+		if ref.StartDate.IsZero() {
+			return ierr.NewError("start_date is required").
+				WithHint("start_date must be resolved at execute time so completion replays the same attach date").
+				WithReportableDetails(map[string]any{"index": i, "addon_id": ref.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 

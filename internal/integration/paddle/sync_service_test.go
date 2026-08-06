@@ -9,7 +9,6 @@ import (
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -927,7 +926,7 @@ func (m *mockSubscriptionService) CalculateResumeImpact(ctx context.Context, sub
 func (m *mockSubscriptionService) ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, sub *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*apidto.PriceResponse, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, subscriptionID string, req *apidto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error) {
+func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, req *apidto.AddAddonRequest) (*apidto.AddAddonToSubscriptionResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *apidto.RemoveAddonRequest) error {

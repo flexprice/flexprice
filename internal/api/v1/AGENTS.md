@@ -41,7 +41,7 @@ Gin HTTP handlers: deserialize requests, validate input, call service layer, ser
 ## Invariants (must hold)
 - Zero business logic in handlers. If you find yourself computing totals or applying discounts here, stop and move to service layer.
 - No direct DB / repository calls from handlers.
-- Every new route registered in `router.go` and annotated for Swagger (`make swagger` after changes).
+- Every new route registered in `router.go` and annotated for Swagger.
 - Auth middleware already applied at router level — do not re-implement auth in handlers.
 
 ## Common pitfalls
@@ -52,4 +52,3 @@ Gin HTTP handlers: deserialize requests, validate input, call service layer, ser
 ## Related layers
 - `internal/service/invoice.go` — all logic delegated here
 - `internal/api/router.go` — route registration
-- `docs/swagger/` — generated spec (run `make swagger` after handler changes)

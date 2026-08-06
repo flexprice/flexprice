@@ -558,8 +558,39 @@ type CreateSubscriptionRequest struct {
 }
 
 type AddAddonRequest struct {
-	SubscriptionID                string `json:"subscription_id" validate:"required"`
+	SubscriptionID                string          `json:"subscription_id" validate:"required"`
+	Checkout                      *CheckoutParams `json:"checkout,omitempty"`
 	AddAddonToSubscriptionRequest `json:",inline"`
+}
+
+func (r *AddAddonRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if err := r.AddAddonToSubscriptionRequest.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.Checkout.Validate(); err != nil {
+		return err
+	}
+
+	if r.Checkout != nil {
+		if len(r.OverrideLineItems) > 0 {
+			return ierr.NewError("override_line_items is not supported with checkout").
+				WithHint("Remove checkout to use override_line_items, or remove override_line_items to gate this addon behind payment").
+				Mark(ierr.ErrValidation)
+		}
+
+		if len(r.LineItemCommitments) > 0 {
+			return ierr.NewError("line_item_commitments is not supported with checkout").
+				WithHint("Remove checkout to use line_item_commitments, or remove line_item_commitments to gate this addon behind payment").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }
 
 type RemoveAddonRequest struct {

@@ -92,8 +92,18 @@ func (s *InMemoryAddonAssociationStore) Update(ctx context.Context, aa *addonass
 	return s.InMemoryStore.Update(ctx, aa.ID, copyAddonAssociation(aa))
 }
 
+// Delete mirrors the ent repository, which SOFT deletes by setting status = archived and
+// leaving addon_status untouched (repository/ent/addonassociation.go). Removing the row here
+// instead would make an archived association indistinguishable from one that never existed,
+// so rollback and cleanup paths could not be asserted.
 func (s *InMemoryAddonAssociationStore) Delete(ctx context.Context, id string) error {
-	return s.InMemoryStore.Delete(ctx, id)
+	assoc, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	assoc.Status = types.StatusArchived
+	return s.InMemoryStore.Update(ctx, id, assoc)
 }
 
 func (s *InMemoryAddonAssociationStore) List(ctx context.Context, filter *types.AddonAssociationFilter) ([]*addonassociation.AddonAssociation, error) {

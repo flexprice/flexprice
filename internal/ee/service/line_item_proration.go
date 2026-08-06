@@ -280,20 +280,17 @@ func prorationChargeInvoiceKey(req LineItemProrationRequest) string {
 	})
 }
 
-// settleCharge creates a one-off invoice for the aggregated charge amount.
-func (s *lineItemProrationService) settleCharge(
-	ctx context.Context,
+func buildLineItemProrationChargeInvoiceRequest(
 	sub *subscription.Subscription,
 	summary *LineItemProrationSummary,
 	effectiveDate time.Time,
 	idempotencyKey string,
-	invoiceSvc InvoiceService,
-) error {
+) dto.CreateInvoiceRequest {
 	billingCustomer := sub.GetInvoicingCustomerID()
 	billingPeriod := string(sub.BillingPeriod)
 	periodEnd := sub.CurrentPeriodEnd
 
-	inv, err := invoiceSvc.CreateInvoice(ctx, dto.CreateInvoiceRequest{
+	return dto.CreateInvoiceRequest{
 		CustomerID:     billingCustomer,
 		SubscriptionID: &sub.ID,
 		InvoiceType:    types.InvoiceTypeOneOff,
@@ -307,7 +304,18 @@ func (s *lineItemProrationService) settleCharge(
 		BillingPeriod:  &billingPeriod,
 		LineItems:      summary.ChargeLineItems,
 		IdempotencyKey: &idempotencyKey,
-	})
+	}
+}
+
+func (s *lineItemProrationService) settleCharge(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	summary *LineItemProrationSummary,
+	effectiveDate time.Time,
+	idempotencyKey string,
+	invoiceSvc InvoiceService,
+) error {
+	inv, err := invoiceSvc.CreateInvoice(ctx, buildLineItemProrationChargeInvoiceRequest(sub, summary, effectiveDate, idempotencyKey))
 	if err != nil {
 		s.params.Logger.Error(ctx, "failed to create proration charge invoice", "error", err)
 		return err

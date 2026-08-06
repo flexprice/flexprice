@@ -200,7 +200,7 @@ flexprice/
 4. Implement service in `internal/ee/service/<entity>.go`
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
-7. Add Swagger annotations, then run `make swagger`
+7. Add Swagger annotations
 
 ### Ent Schema Changes
 

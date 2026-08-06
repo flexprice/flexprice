@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -974,6 +975,68 @@ func (s *CreditNoteServiceSuite) TestVoidCreditNote() {
 			s.Equal(types.CreditNoteStatusVoided, resp.CreditNoteStatus)
 		})
 	}
+}
+
+// failOnUpdateInvoiceRepo wraps a real invoice.Repository and forces Update to
+// fail for one specific invoice ID, leaving every other method (including
+// GetForUpdate) delegated to the real repo. This is the only way to make
+// RecalculateInvoiceAmountsForCreditNote's InvoiceRepo.Update call fail while
+// the earlier GetForUpdate in FinalizeCreditNote still succeeds — deleting the
+// invoice out from under it fails the (already-correct) lock instead of the
+// (buggy, swallowed-error) recalculation step.
+type failOnUpdateInvoiceRepo struct {
+	invoice.Repository
+	failInvoiceID string
+}
+
+func (r *failOnUpdateInvoiceRepo) Update(ctx context.Context, inv *invoice.Invoice) error {
+	if inv.ID == r.failInvoiceID {
+		return errors.New("forced invoice update failure for test")
+	}
+	return r.Repository.Update(ctx, inv)
+}
+
+func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RecalculationFailureIsPropagated() {
+	cn := &creditnote.CreditNote{
+		ID:               "cn_finalize_recalc_fail_test",
+		CustomerID:       s.testData.customer.ID,
+		InvoiceID:        s.testData.invoices.pending.ID,
+		CreditNoteNumber: "CN-FINALIZE-RECALC-FAIL-TEST",
+		CreditNoteStatus: types.CreditNoteStatusDraft,
+		CreditNoteType:   types.CreditNoteTypeAdjustment,
+		Reason:           types.CreditNoteReasonBillingError,
+		Currency:         "USD",
+		TotalAmount:      decimal.NewFromFloat(10.00),
+		LineItems: []*creditnote.CreditNoteLineItem{
+			{
+				ID:          "finalize_recalc_fail_line_1",
+				DisplayName: "Adjustment for Product C",
+				Amount:      decimal.NewFromFloat(10.00),
+				Currency:    "USD",
+				BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CreditNoteRepo.CreateWithLineItems(s.GetContext(), cn))
+
+	failingService := NewCreditNoteService(ServiceParams{
+		Logger:           s.GetLogger(),
+		DB:               s.GetDB(),
+		CreditNoteRepo:   s.GetStores().CreditNoteRepo,
+		InvoiceRepo:      &failOnUpdateInvoiceRepo{Repository: s.GetStores().InvoiceRepo, failInvoiceID: cn.InvoiceID},
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
+
+	// setupTestData's createTestWallets() already publishes webhooks via the same
+	// shared publisher, so assert no *new* webhook was published rather than empty.
+	webhookCountBefore := len(s.GetPublishedWebhooks())
+
+	err := failingService.FinalizeCreditNote(s.GetContext(), cn.ID)
+
+	s.Error(err)
+	s.Contains(err.Error(), "forced invoice update failure for test")
+	s.Len(s.GetPublishedWebhooks(), webhookCountBefore)
 }
 
 func (s *CreditNoteServiceSuite) TestVoidCreditNote_TransactionFailurePropagates() {

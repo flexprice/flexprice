@@ -90,6 +90,13 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// add_addon sessions are created only via subscription addon attach (pay-first).
+	if r.Action == types.CheckoutActionAddAddon {
+		return ierr.NewError("add_addon is not supported via create checkout session").
+			WithHint("Use POST /subscriptions/addon with a checkout object instead").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := r.CheckoutParams.Validate(); err != nil {
 		return err
 	}
@@ -226,6 +233,13 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 				Mark(ierr.ErrValidation)
 		}
 		return cfg.WalletTopupParams.Validate()
+	case types.CheckoutActionAddAddon:
+		if cfg.AddAddonParams == nil {
+			return ierr.NewError("session has no add_addon_params").
+				WithHint("checkout session must have add_addon_params before it can be completed").
+				Mark(ierr.ErrValidation)
+		}
+		return cfg.AddAddonParams.Validate()
 	default:
 		return nil
 	}

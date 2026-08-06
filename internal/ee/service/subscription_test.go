@@ -214,10 +214,13 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeAddonCapsGr
 
 	// Attach as a ONETIME addon -> the addon association gets a bounded EndDate.
 	now := s.testData.now
-	_, err = s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:   addonID,
-		Cadence:   types.AddonCadenceOnetime,
-		StartDate: &now,
+	_, err = s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			Cadence:   types.AddonCadenceOnetime,
+			StartDate: &now,
+		},
 	})
 	s.NoError(err)
 
@@ -367,11 +370,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProratesFirstCredi
 	addonID := "addon_cg_prorate"
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
 
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &now,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &now,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err)
 
@@ -439,11 +445,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_ProrationBehaviorN
 	addonID := "addon_cg_no_prorate"
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
 
-	_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &now,
-		ProrationBehavior: types.ProrationBehaviorNone,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &now,
+			ProrationBehavior: types.ProrationBehaviorNone,
+		},
 	})
 	s.NoError(err)
 
@@ -465,11 +474,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_OnetimeGrantNotPro
 	addonID := "addon_cg_onetime"
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceOneTime)
 
-	_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &now,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &now,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err)
 
@@ -494,11 +506,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_AttachOnPeriodStar
 	addonID := "addon_cg_boundary"
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
 
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &periodStart,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &periodStart,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err)
 
@@ -527,11 +542,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_GrantPeriodMismatc
 	addonID := "addon_cg_period_mismatch"
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
 
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &now,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &now,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err)
 
@@ -566,11 +584,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_AnnualCycleFirstPe
 	addonID := "addon_cg_annual"
 	s.setupCreditGrantAddonWithPeriod(addonID, 100, types.CREDIT_GRANT_PERIOD_ANNUAL)
 
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &attach,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &attach,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err)
 
@@ -603,11 +624,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachSti
 	s.setupCreditGrantAddon(addonID, 100, types.CreditGrantCadenceRecurring)
 
 	backdated := now.AddDate(0, -2, 0).Add(72 * time.Hour)
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:           addonID,
-		Cadence:           types.AddonCadenceRecurring,
-		StartDate:         &backdated,
-		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &backdated,
+			ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		},
 	})
 	s.NoError(err, "an unresolvable period must not fail the addon attach")
 
@@ -661,14 +685,17 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 		overageFactor := decimal.NewFromFloat(2)
 		enableTrueUp := true
 
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
-				priceID: {
-					CommitmentAmount: &commitmentAmount,
-					OverageFactor:    &overageFactor,
-					EnableTrueUp:     &enableTrueUp,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+						OverageFactor:    &overageFactor,
+						EnableTrueUp:     &enableTrueUp,
+					},
 				},
 			},
 		})
@@ -709,12 +736,15 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 		now := time.Now().UTC()
 		commitmentAmount := decimal.NewFromFloat(25)
 
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
-				priceID: {
-					CommitmentAmount: &commitmentAmount,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+					},
 				},
 			},
 		})
@@ -731,14 +761,17 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 		overageFactor := decimal.NewFromFloat(2)
 		isWindow := true
 
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
-				priceID: {
-					CommitmentAmount:   &commitmentAmount,
-					OverageFactor:      &overageFactor,
-					IsWindowCommitment: &isWindow,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount:   &commitmentAmount,
+						OverageFactor:      &overageFactor,
+						IsWindowCommitment: &isWindow,
+					},
 				},
 			},
 		})
@@ -822,14 +855,17 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createFixedPriceAddon(addonID, priceID, decimal.NewFromFloat(10.00))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{
-					PriceID:  priceID,
-					Amount:   lo.ToPtr(decimal.NewFromFloat(25.00)),
-					Quantity: lo.ToPtr(decimal.NewFromInt(3)),
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID:  priceID,
+						Amount:   lo.ToPtr(decimal.NewFromFloat(25.00)),
+						Quantity: lo.ToPtr(decimal.NewFromInt(3)),
+					},
 				},
 			},
 		})
@@ -857,13 +893,16 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createUsagePriceAddon(addonID, priceID, s.testData.meters.apiCalls.ID)
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{
-					PriceID:  priceID,
-					Quantity: lo.ToPtr(decimal.NewFromInt(5)),
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID:  priceID,
+						Quantity: lo.ToPtr(decimal.NewFromInt(5)),
+					},
 				},
 			},
 		})
@@ -877,17 +916,20 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createFixedPriceAddon(addonID, priceID, decimal.NewFromFloat(10.00))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{
-					PriceID:      priceID,
-					BillingModel: types.BILLING_MODEL_TIERED,
-					TierMode:     types.BILLING_TIER_VOLUME,
-					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.RequireFromString("5.00")},
-						{UpTo: nil, UnitAmount: decimal.RequireFromString("3.00")},
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID:      priceID,
+						BillingModel: types.BILLING_MODEL_TIERED,
+						TierMode:     types.BILLING_TIER_VOLUME,
+						Tiers: []dto.CreatePriceTier{
+							{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.RequireFromString("5.00")},
+							{UpTo: nil, UnitAmount: decimal.RequireFromString("3.00")},
+						},
 					},
 				},
 			},
@@ -912,13 +954,16 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createFixedPriceAddon(addonID, priceID, decimal.NewFromFloat(10.00))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{
-					PriceID: s.testData.prices.fixedMonthly.ID, // belongs to the plan, not this addon
-					Amount:  lo.ToPtr(decimal.NewFromFloat(15.00)),
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID: s.testData.prices.fixedMonthly.ID, // belongs to the plan, not this addon
+						Amount:  lo.ToPtr(decimal.NewFromFloat(15.00)),
+					},
 				},
 			},
 		})
@@ -932,12 +977,15 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createFixedPriceAddon(addonID, priceID, decimal.NewFromFloat(10.00))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{PriceID: priceID, Amount: lo.ToPtr(decimal.NewFromFloat(15.00))},
-				{PriceID: priceID, Amount: lo.ToPtr(decimal.NewFromFloat(20.00))},
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{PriceID: priceID, Amount: lo.ToPtr(decimal.NewFromFloat(15.00))},
+					{PriceID: priceID, Amount: lo.ToPtr(decimal.NewFromFloat(20.00))},
+				},
 			},
 		})
 		s.Error(err)
@@ -950,9 +998,12 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		createFixedPriceAddon(addonID, priceID, decimal.NewFromFloat(10.00))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+			},
 		})
 		s.NoError(err)
 
@@ -973,23 +1024,26 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 		commitmentAmount := decimal.NewFromFloat(25)
 		overageFactor := decimal.NewFromFloat(2)
 
-		_, err := s.service.AddAddonToSubscription(ctx, s.testData.subscription.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
-			LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
-				priceID: {
-					CommitmentAmount: &commitmentAmount,
-					OverageFactor:    &overageFactor,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: s.testData.subscription.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+				LineItemCommitments: map[string]*dto.LineItemCommitmentConfig{
+					priceID: {
+						CommitmentAmount: &commitmentAmount,
+						OverageFactor:    &overageFactor,
+					},
 				},
-			},
-			OverrideLineItems: []dto.OverrideLineItemRequest{
-				{
-					PriceID:      priceID,
-					TierMode:     types.BILLING_TIER_SLAB,
-					BillingModel: types.BILLING_MODEL_TIERED,
-					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(1000)), UnitAmount: decimal.RequireFromString("0.02")},
-						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.01")},
+				OverrideLineItems: []dto.OverrideLineItemRequest{
+					{
+						PriceID:      priceID,
+						TierMode:     types.BILLING_TIER_SLAB,
+						BillingModel: types.BILLING_MODEL_TIERED,
+						Tiers: []dto.CreatePriceTier{
+							{UpTo: lo.ToPtr(uint64(1000)), UnitAmount: decimal.RequireFromString("0.02")},
+							{UpTo: nil, UnitAmount: decimal.RequireFromString("0.01")},
+						},
 					},
 				},
 			},
@@ -1061,6 +1115,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),
@@ -3095,9 +3151,12 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 
 		now := time.Now().UTC()
-		_, err := s.service.AddAddonToSubscription(ctx, subWithAddon.ID, &dto.AddAddonToSubscriptionRequest{
-			AddonID:   addonID,
-			StartDate: &now,
+		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+			SubscriptionID: subWithAddon.ID,
+			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+				AddonID:   addonID,
+				StartDate: &now,
+			},
 		})
 		s.NoError(err)
 
@@ -5158,9 +5217,12 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_ScheduledDoesNotEagerl
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 	addAddonNow := time.Now().UTC()
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:   addonID,
-		StartDate: &addAddonNow,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &addAddonNow,
+		},
 	})
 	s.NoError(err)
 
@@ -5255,7 +5317,10 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 	addAddonNow := time.Now().UTC()
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: &addAddonNow})
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID:                sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: &addAddonNow},
+	})
 	s.NoError(err)
 
 	creditGrantService := NewCreditGrantService(subService.ServiceParams)
@@ -8498,8 +8563,11 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
 
 	// Adding an addon to a draft subscription must succeed and publish subscription.updated
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
-	_, err = s.service.AddAddonToSubscription(ctx, draftResp.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID: addonID,
+	_, err = s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: draftResp.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID: addonID,
+		},
 	})
 	s.NoError(err)
 	updatedCount := 0
@@ -8796,9 +8864,12 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledC
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 	addAddonNow := time.Now().UTC()
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:   addonID,
-		StartDate: &addAddonNow,
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &addAddonNow,
+		},
 	})
 	s.NoError(err)
 

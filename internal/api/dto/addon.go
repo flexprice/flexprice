@@ -155,6 +155,12 @@ type AddonAssociationResponse struct {
 // ListAddonAssociationsResponse represents the response for listing addon associations
 type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse]
 
+type AddAddonToSubscriptionResponse struct {
+	*addonassociation.AddonAssociation
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+	Invoice         *InvoiceResponse         `json:"invoice,omitempty"`
+}
+
 // GetActiveAddonAssociationRequest represents the request to get active addon associations
 type GetActiveAddonAssociationRequest struct {
 	AddonIds   []string                         `json:"addon_ids,omitempty"`

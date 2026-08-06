@@ -210,6 +210,8 @@ func (s *checkoutSessionService) completeCheckoutAction(ctx context.Context, ses
 		return s.completeModifySubscriptionCheckout(ctx, session, providerResult)
 	case types.CheckoutActionWalletTopup:
 		return s.completeWalletTopupCheckout(ctx, session, providerResult)
+	case types.CheckoutActionAddAddon:
+		return s.completeAddAddonCheckout(ctx, session, providerResult)
 	default:
 		return ierr.NewError("unsupported checkout action for completion").
 			WithHint("No completion handler for this action type").
@@ -249,6 +251,35 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	}
 
 	modSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+	return nil
+}
+
+// completeAddAddonCheckout activates the pending addon associations the session gated, then
+// finalizes the existing DRAFT proration invoice and reconciles payment.
+func (s *checkoutSessionService) completeAddAddonCheckout(
+	ctx context.Context,
+	session *domainCheckout.CheckoutSession,
+	providerResult *types.CheckoutProviderResult,
+) error {
+	if err := dto.ValidateCheckoutSessionForCompletion(session); err != nil {
+		return err
+	}
+
+	cfg := session.Configuration.ToCheckoutConfiguration()
+	params := cfg.AddAddonParams
+	invoiceID := *session.CheckoutInvoiceID
+	paymentID := *session.CheckoutPaymentID
+
+	subSvc := &subscriptionService{ServiceParams: s.ServiceParams}
+	if err := subSvc.applyAddAddonCheckoutParams(ctx, params); err != nil {
+		return err
+	}
+
+	if err := s.finalizeCheckoutInvoiceAndPayment(ctx, invoiceID, paymentID, providerResult); err != nil {
+		return err
+	}
+
+	subSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
 	return nil
 }
 

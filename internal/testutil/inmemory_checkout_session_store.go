@@ -99,7 +99,11 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 			}
 		}
 		if cfg.SubscriptionID != "" {
-			if sessionCfg.ModifySubscriptionParams == nil || sessionCfg.ModifySubscriptionParams.SubscriptionID != cfg.SubscriptionID {
+			matchesModify := sessionCfg.ModifySubscriptionParams != nil &&
+				sessionCfg.ModifySubscriptionParams.SubscriptionID == cfg.SubscriptionID
+			matchesAddAddon := sessionCfg.AddAddonParams != nil &&
+				sessionCfg.AddAddonParams.SubscriptionID == cfg.SubscriptionID
+			if !matchesModify && !matchesAddAddon {
 				return false
 			}
 		}

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -114,8 +113,7 @@ type SubscriptionService interface {
 
 	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*dto.PriceResponse, error)
 
-	// Addon management for subscriptions
-	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
+	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
 
 	// Line item management

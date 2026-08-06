@@ -846,7 +846,10 @@ func (s *subscriptionModificationService) getAnyPendingCheckoutSession(ctx conte
 	pendingFilter := &types.CheckoutSessionFilter{
 		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
 		CustomerIDs: []string{customerID},
-		Actions:     []types.CheckoutAction{types.CheckoutActionModifySubscription},
+		Actions: []types.CheckoutAction{
+			types.CheckoutActionModifySubscription,
+			types.CheckoutActionAddAddon,
+		},
 		CheckoutStatuses: []types.CheckoutStatus{
 			types.CheckoutStatusInitiated,
 			types.CheckoutStatusPending,

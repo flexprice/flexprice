@@ -2193,6 +2193,104 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PayFirs
 	s.Empty(invoices, "guard must reject before creating a proration draft")
 }
 
+// seedPendingAddAddonCheckout inserts a pending add_addon session for the given sub. The
+// subscription id lives under add_addon_params, a different JSON path from the one quantity
+// change writes, so this only blocks anything if the config filter ORs both paths.
+func (s *SubscriptionModificationServiceSuite) seedPendingAddAddonCheckout(
+	customerID, subscriptionID string,
+) *domainCheckout.CheckoutSession {
+	ctx := s.GetContext()
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      customerID,
+		Action:          types.CheckoutActionAddAddon,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			AddAddonParams: &types.AddAddonParams{
+				SubscriptionID: subscriptionID,
+				Addons: []types.AddAddonRef{{
+					AssociationID: "addon_assoc_placeholder",
+					AddonID:       "addon_placeholder",
+					Cadence:       types.AddonCadenceRecurring,
+					StartDate:     s.GetNow(),
+				}},
+			},
+		}),
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+	return session
+}
+
+// The two payment-gated subscription flows must mutually exclude: a quantity change executing
+// while an addon attach is awaiting payment would invalidate the amount locked on that addon's
+// draft invoice. This is a deliberate behaviour change for the existing modify flow.
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_BlockedByPendingAddAddonCheckout() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-blocked-by-addon")
+	sub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	s.seedPendingAddAddonCheckout(cust.ID, sub.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+			},
+		},
+		Checkout: s.checkoutParamsRazorpay(),
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.True(ierr.IsAlreadyExists(err), "pending add_addon session must block a quantity change, got %v", err)
+
+	orig, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
+	s.Require().NoError(getErr)
+	s.True(orig.EndDate.IsZero())
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(listErr)
+	s.Empty(invoices, "guard must reject before creating a proration draft")
+}
+
+// A pending addon session on a *different* subscription must not block this one — the guard
+// widening must not degrade into "any outstanding session anywhere blocks everything".
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_UnrelatedPendingAddAddonDoesNotBlock() {
+	ctx := s.GetContext()
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-unrelated-addon")
+	sub := s.createActiveSub(cust.ID)
+	otherSub := s.createActiveSub(cust.ID)
+	p := s.createFixedPrice(decimal.NewFromInt(50), types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	s.seedPendingAddAddonCheckout(cust.ID, otherSub.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+			},
+		},
+		Checkout: s.checkoutParamsRazorpay(),
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.False(err != nil && ierr.IsAlreadyExists(err),
+		"a pending addon session on another subscription must not trip the guard, got %v", err)
+}
+
 func (s *SubscriptionModificationServiceSuite) TestCreateAggregatedProrationDraft_MixedChargeAndCredit() {
 	ctx := s.GetContext()
 	effectiveDate := s.GetNow().AddDate(0, 0, 15)

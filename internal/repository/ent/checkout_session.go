@@ -447,10 +447,17 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 		}
 		if f.Configuration.SubscriptionID != "" {
 			query = query.Where(predicate.CheckoutSession(func(s *sql.Selector) {
-				s.Where(sqljson.ValueEQ(
-					entCheckout.FieldConfiguration,
-					f.Configuration.SubscriptionID,
-					sqljson.Path("modify_subscription_params", "subscription_id"),
+				s.Where(sql.Or(
+					sqljson.ValueEQ(
+						entCheckout.FieldConfiguration,
+						f.Configuration.SubscriptionID,
+						sqljson.Path("modify_subscription_params", "subscription_id"),
+					),
+					sqljson.ValueEQ(
+						entCheckout.FieldConfiguration,
+						f.Configuration.SubscriptionID,
+						sqljson.Path("add_addon_params", "subscription_id"),
+					),
 				))
 			}))
 		}

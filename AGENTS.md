@@ -387,7 +387,6 @@ type clickhouseEventRepository struct { ... }
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations to handler (including `@x-scope` for MCP - see below)
-8. Run `make swagger` to update API docs
 
 #### MCP Scope Annotations
 
@@ -429,8 +428,6 @@ Most operations get automatic scope assignment based on HTTP method (GET→read,
 **Scope assignment logic:**
 1. If `@x-scope` is present → use explicit scope
 2. Otherwise → automatic based on HTTP method (GET/HEAD→read, POST/PUT/PATCH→write, DELETE→delete)
-
-After adding/changing endpoints, regenerate: `make swagger && make sdk-all`
 
 ### Creating a Temporal Workflow
 

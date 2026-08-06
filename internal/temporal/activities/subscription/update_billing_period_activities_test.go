@@ -172,9 +172,12 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_TerminatesResourc
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 	addAddonNow := time.Now().UTC()
 	subscriptionService := service.NewSubscriptionService(s.newServiceParams())
-	_, err := subscriptionService.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{
-		AddonID:   addonID,
-		StartDate: &addAddonNow,
+	_, err := subscriptionService.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &addAddonNow,
+		},
 	})
 	s.NoError(err)
 

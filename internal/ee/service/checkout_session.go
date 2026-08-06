@@ -179,6 +179,25 @@ func (s *checkoutSessionService) cleanupCheckoutSession(ctx context.Context, ses
 			}
 		}
 	}
+
+	if cfg := session.Configuration.ToCheckoutConfiguration(); cfg.AddAddonParams != nil {
+		for _, ref := range cfg.AddAddonParams.Addons {
+			association, err := s.AddonAssociationRepo.GetByID(ctx, ref.AssociationID)
+			if err != nil {
+				s.Logger.Error(ctx, "failed to load pending addon association for checkout cleanup",
+					"association_id", ref.AssociationID, "error", err)
+				continue
+			}
+			if association.AddonStatus != types.AddonStatusPending {
+				continue
+			}
+			if err := s.AddonAssociationRepo.Delete(ctx, ref.AssociationID); err != nil {
+				s.Logger.Error(ctx, "failed to archive pending addon association",
+					"association_id", ref.AssociationID, "error", err)
+			}
+		}
+	}
+
 	// modify_subscription (and other actions) store ids on the session columns.
 	if session.CheckoutPaymentID != nil && *session.CheckoutPaymentID != "" {
 		if err := s.PaymentRepo.Delete(ctx, *session.CheckoutPaymentID); err != nil {
