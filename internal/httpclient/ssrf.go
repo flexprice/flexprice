@@ -11,7 +11,11 @@ import (
 // nonPublicNets covers reserved ranges net.IP's classifiers don't: "this
 // network" (0.0.0.0/8), RFC6598 shared address space (CGNAT), RFC5737/
 // RFC3849 documentation ranges, RFC2544 benchmarking, Class E reserved
-// space, and the limited broadcast address.
+// space, the limited broadcast address, and the RFC6052 local-use NAT64
+// prefix. The local-use prefix is blocked outright rather than unwrapped
+// like the well-known 64:ff9b::/96 prefix below: its /48 embedding splits
+// the IPv4 payload around a reserved byte, so decoding it is unnecessary
+// complexity for a prefix that isn't globally routable anyway.
 var nonPublicNets = mustParseCIDRs(
 	"0.0.0.0/8",
 	"100.64.0.0/10",
@@ -22,6 +26,7 @@ var nonPublicNets = mustParseCIDRs(
 	"240.0.0.0/4",
 	"255.255.255.255/32",
 	"2001:db8::/32",
+	"64:ff9b:1::/48",
 )
 
 // nat64Net and sixToFourNet are IPv6 transition mechanisms (RFC6052,
@@ -90,18 +95,21 @@ func IsPublicIP(ip net.IP) bool {
 // controlBlockNonPublic runs on the resolved IP right before connect(), for
 // every dial including redirects -- so it can't be bypassed by DNS rebinding.
 func controlBlockNonPublic(_ string, address string, _ syscall.RawConn) error {
+	// Error strings deliberately omit the address/IP: they flow into logs and
+	// traces, and echoing back attacker-supplied targets would let a caller
+	// enumerate internal network addressing.
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("ssrf guard: invalid address %q: %w", address, err)
+		return fmt.Errorf("ssrf guard: invalid address")
 	}
 
 	ip := net.ParseIP(host)
 	if ip == nil {
-		return fmt.Errorf("ssrf guard: unable to parse resolved address %q", host)
+		return fmt.Errorf("ssrf guard: unable to parse resolved address")
 	}
 
 	if !IsPublicIP(ip) {
-		return fmt.Errorf("ssrf guard: connections to %s are not allowed", ip.String())
+		return fmt.Errorf("ssrf guard: connection blocked to non-public address")
 	}
 
 	return nil

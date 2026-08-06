@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +37,8 @@ func TestIsPublicIP(t *testing.T) {
 		{"class E reserved", "240.0.0.1", false},
 		{"nat64-encoded metadata IP", "64:ff9b::a9fe:a9fe", false},
 		{"nat64-encoded public IP", "64:ff9b::0808:0808", true},
+		{"nat64 local-use /48 metadata-embedding address", "64:ff9b:1:a9:fea9:fe00::", false},
+		{"nat64 local-use /48 public-looking address", "64:ff9b:1::0808:0808", false},
 		{"6to4-encoded loopback", "2002:7f00:1::", false},
 		{"6to4-encoded public IP", "2002:0808:0808::", true},
 		{"public v4", "8.8.8.8", true},
@@ -66,6 +69,16 @@ func TestSSRFSafeTransport_IgnoresProxyEnv(t *testing.T) {
 
 	if SSRFSafeTransport().Proxy != nil {
 		t.Fatal("expected SSRFSafeTransport to disable proxying so the dial guard always sees the real destination")
+	}
+}
+
+func TestControlBlockNonPublic_ErrorDoesNotLeakAddress(t *testing.T) {
+	err := controlBlockNonPublic("tcp", "127.0.0.1:80", nil)
+	if err == nil {
+		t.Fatal("expected loopback address to be blocked")
+	}
+	if strings.Contains(err.Error(), "127.0.0.1") {
+		t.Errorf("error must not leak the resolved address, got: %v", err)
 	}
 }
 
