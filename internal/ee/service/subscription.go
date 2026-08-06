@@ -3100,7 +3100,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
 			charge.SetAmountWithCurrencyPrecision(overageAmountDecimal, subscription.Currency)
-			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
+			charge.DisplayAmount = price.FormatAmountToStringWithPrecision(charge.AmountDecimal(), subscription.Currency)
 			charge.IsOverage = true
 			charge.OverageFactor = overageFactorFloat
 			response.Charges = append(response.Charges, charge)
@@ -6505,7 +6505,7 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 			totalOverageAmount = totalOverageAmount.Add(overageAmountDecimal)
 
 			charge.SetAmountWithCurrencyPrecision(overageAmountDecimal, sub.Currency)
-			charge.DisplayAmount = overageAmountDecimal.StringFixed(6)
+			charge.DisplayAmount = price.GetDisplayAmountWithPrecision(charge.AmountDecimal(), sub.Currency)
 			charge.IsOverage = true
 			charge.OverageFactor = overageFactorFloat
 			finalCharges = append(finalCharges, charge)

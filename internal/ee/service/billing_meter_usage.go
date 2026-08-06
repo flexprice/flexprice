@@ -542,6 +542,7 @@ func (s *billingService) applyMeterUsageCommitment(
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
+		adjustedAmount = types.RoundToCurrencyPrecision(adjustedAmount, matchingCharge.Price.Currency)
 		matchingCharge.SetAmountDecimal(adjustedAmount)
 		return adjustedAmount, info, nil
 	}
@@ -575,6 +576,7 @@ func (s *billingService) applyMeterUsageCommitment(
 	if err != nil {
 		return decimal.Zero, nil, err
 	}
+	adjustedAmount = types.RoundToCurrencyPrecision(adjustedAmount, matchingCharge.Price.Currency)
 	matchingCharge.SetAmountDecimal(adjustedAmount)
 	return adjustedAmount, info, nil
 }
