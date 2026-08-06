@@ -289,13 +289,15 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_RepeatedComput
 	// discount as reconcileLineItems would; the CouponApplication row from
 	// the first apply persists.
 	inv.LineItems[0].LineItemDiscount = decimal.Zero
-	_, err = s.service.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+	recomputeRes, err := s.service.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
 		Invoice: inv,
 		LineItemCoupons: []dto.InvoiceLineItemCoupon{
 			{LineItemID: priceID, CouponID: c.ID},
 		},
 	})
 	s.Require().NoError(err)
+	s.True(recomputeRes.TotalDiscountAmount.IsPositive(), "recompute must still apply the discount so the invoice total is correct after reconcileLineItems reset it")
+	s.True(inv.LineItems[0].LineItemDiscount.IsPositive(), "recompute must restore the line-item discount reset by reconcileLineItems")
 
 	afterSecond, err := s.GetStores().CouponRepo.Get(ctx, c.ID)
 	s.Require().NoError(err)
