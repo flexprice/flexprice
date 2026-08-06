@@ -118,6 +118,9 @@ func (e *Executor) RunJourney(ctx context.Context, j *Journey) *JourneyResult {
 
 	failed := false
 	for _, step := range j.Steps {
+		if step == nil { // rejected by validation; skip defensively if run anyway
+			continue
+		}
 		if failed {
 			res.Steps = append(res.Steps, &StepResult{
 				Name: step.DisplayName(), ID: step.ID, Phase: "steps",
@@ -144,6 +147,9 @@ func (e *Executor) RunJourney(ctx context.Context, j *Journey) *JourneyResult {
 	tdCtx, tdCancel := context.WithTimeout(context.WithoutCancel(ctx), e.teardownTimeout())
 	defer tdCancel()
 	for _, step := range j.Teardown {
+		if step == nil {
+			continue
+		}
 		sr := e.runStep(tdCtx, rc, step, "teardown")
 		if sr.Status == StatusFail && step.Optional {
 			sr.Status = StatusPass

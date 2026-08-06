@@ -328,6 +328,110 @@ steps:
 	}
 }
 
+func TestLoadJourneyRejectsEmptyAndMultiDoc(t *testing.T) {
+	dir := t.TempDir()
+
+	empty := filepath.Join(dir, "empty.yaml")
+	if err := os.WriteFile(empty, []byte("# just a comment\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadJourneyFile(empty); err == nil || !strings.Contains(err.Error(), "no YAML document") {
+		t.Errorf("empty file should be rejected with a clear message, got: %v", err)
+	}
+
+	multi := filepath.Join(dir, "multi.yaml")
+	if err := os.WriteFile(multi, []byte("journey: one\nsteps: [{call: x}]\n---\njourney: two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadJourneyFile(multi); err == nil || !strings.Contains(err.Error(), "multiple YAML documents") {
+		t.Errorf("multi-doc file should be rejected, got: %v", err)
+	}
+}
+
+func TestValidationCatchesNilStepsAndTeardownTypos(t *testing.T) {
+	_, ts := newFakeAPI(t)
+	exec := newTestExecutor(ts.URL)
+
+	bad := `
+journey: bad-teardown
+steps:
+  - id: customer
+    call: Customers.CreateCustomer
+    with: { external_id: x }
+    capture: { customer_id: id }
+  -
+teardown:
+  -
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: "{{ .steps.custmer.customer_id }}"
+`
+	j := loadJourneyFromString(t, bad)
+	all := ""
+	for _, e := range ValidateJourney(j, exec.Dispatcher) {
+		all += e.Error() + "\n"
+	}
+	for _, want := range []string{"steps[1] is empty", "teardown[0] is empty", ".steps.custmer"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("validation should mention %q:\n%s", want, all)
+		}
+	}
+	// The engine must not panic on nil steps even if run unvalidated.
+	exec.RunJourney(context.Background(), j)
+}
+
+func TestCoercionMarkerTrimmed(t *testing.T) {
+	rc := NewRenderCtx(map[string]any{"limit": 42}, "test")
+	v, err := rc.RenderString("  {{= .vars.limit }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := v.(float64); !ok || n != 42 {
+		t.Errorf("leading-whitespace coercion should yield numeric 42, got %T %v", v, v)
+	}
+}
+
+func TestSensitiveEnvNotExposedToTemplates(t *testing.T) {
+	t.Setenv("IT_TEST_API_KEY", "sk_super_secret")
+	t.Setenv("IT_TEST_PLAIN", "visible")
+	rc := NewRenderCtx(nil, "test")
+	if _, err := rc.RenderString("{{ .env.IT_TEST_API_KEY }}"); err == nil {
+		t.Error("secret-named env var should not be exposed to templates")
+	}
+	v, err := rc.RenderString("{{ .env.IT_TEST_PLAIN }}")
+	if err != nil || v != "visible" {
+		t.Errorf("non-sensitive env var should render, got %v err=%v", v, err)
+	}
+}
+
+func TestJUnitTeardownFailureIsNotAFailure(t *testing.T) {
+	tr := &TargetReport{
+		Target: Target{Name: "fake", APIKey: "sk_x"},
+		Results: []*JourneyResult{{
+			Journey: &Journey{Name: "j"},
+			Steps: []*StepResult{
+				{Name: "create", Phase: "steps", Status: StatusPass},
+				{Name: "cleanup", Phase: "teardown", Status: StatusFail, Err: fmt.Errorf("boom")},
+			},
+		}},
+	}
+	path := filepath.Join(t.TempDir(), "junit.xml")
+	if err := WriteJUnitReport(path, []*TargetReport{tr}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+	if strings.Contains(out, `failures="1"`) || strings.Contains(out, "<failure") {
+		t.Errorf("teardown failure must not be a JUnit failure (non-fatal policy):\n%s", out)
+	}
+	if !strings.Contains(out, "teardown failure (non-fatal): boom") {
+		t.Errorf("teardown failure should stay visible as skipped:\n%s", out)
+	}
+}
+
 func TestServerURLPreservesExplicitScheme(t *testing.T) {
 	cases := map[string]string{
 		"":                            "https://api.cloud.flexprice.io/v1",

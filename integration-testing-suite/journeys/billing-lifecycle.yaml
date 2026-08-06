@@ -26,6 +26,8 @@ steps:
       entity_type: feature
       lookup_key: "it_feat_grp_{{ .run.id }}"
     capture: { group_id: id }
+    expect:
+      - { path: lookup_key, equals: "it_feat_grp_{{ .run.id }}" }
 
   - id: price_group
     name: Create Price Group
@@ -35,6 +37,8 @@ steps:
       entity_type: price
       lookup_key: "it_price_grp_{{ .run.id }}"
     capture: { group_id: id }
+    expect:
+      - { path: lookup_key, equals: "it_price_grp_{{ .run.id }}" }
 
   - id: feature_a
     name: Create Metered Feature A (grouped, tokens)
@@ -73,6 +77,9 @@ steps:
     capture:
       feature_id: id
       meter_id: meter_id
+    expect:
+      - { path: meter_id, not_empty: true }
+      - { path: lookup_key, equals: "it_storage_{{ .run.id }}" }
 
   - id: plan
     name: Create Plan
@@ -82,6 +89,8 @@ steps:
       lookup_key: "it_plan_{{ .run.id }}"
       description: Integration test plan with recurring + usage charges
     capture: { plan_id: id }
+    expect:
+      - { path: lookup_key, equals: "it_plan_{{ .run.id }}" }
 
   - id: price_recurring_grouped
     name: Add Recurring Price (grouped, $49.99/mo)
@@ -100,6 +109,9 @@ steps:
       display_name: Platform Fee (Grouped)
       group_id: "{{ .steps.price_group.group_id }}"
     capture: { price_id: id }
+    expect:
+      - { path: amount, approx: { value: 49.99, epsilon: 0.001 } }
+      - { path: group_id, equals: "{{ .steps.price_group.group_id }}" }
 
   - id: price_recurring_base
     name: Add Recurring Price ($19.99/mo)
@@ -117,6 +129,8 @@ steps:
       currency: "{{ .vars.currency_upper }}"
       display_name: Base Fee
     capture: { price_id: id }
+    expect:
+      - { path: amount, approx: { value: 19.99, epsilon: 0.001 } }
 
   - id: price_usage_a
     name: Add Usage Price (Feature A, $0.01/token)
@@ -135,6 +149,9 @@ steps:
       meter_id: "{{ .steps.feature_a.meter_id }}"
       display_name: API Call Usage
     capture: { price_id: id }
+    expect:
+      - { path: amount, approx: { value: 0.01, epsilon: 0.0001 } }
+      - { path: meter_id, equals: "{{ .steps.feature_a.meter_id }}" }
 
   - id: price_usage_b
     name: Add Usage Price (Feature B, $0.05/gb_hour)
@@ -153,6 +170,9 @@ steps:
       meter_id: "{{ .steps.feature_b.meter_id }}"
       display_name: Storage Usage
     capture: { price_id: id }
+    expect:
+      - { path: amount, approx: { value: 0.05, epsilon: 0.0001 } }
+      - { path: meter_id, equals: "{{ .steps.feature_b.meter_id }}" }
 
   # ── Phase 2: Entitlements & billing entities ─────────────────────────
   - id: entitlement
@@ -169,6 +189,9 @@ steps:
       usage_reset_period: MONTHLY
       is_soft_limit: true
     capture: { entitlement_id: id }
+    expect:
+      - { path: feature_id, equals: "{{ .steps.feature_a.feature_id }}" }
+      - { path: usage_limit, equals: 1000 }
 
   - id: plan_entitlements
     name: Verify Plan Entitlements
@@ -191,6 +214,9 @@ steps:
     capture:
       tax_rate_id: id
       tax_code: code
+    expect:
+      - { path: code, equals: "GST18_{{ .run.id }}" }
+      - { path: percentage_value, approx: { value: 18, epsilon: 0.001 } }
 
   - id: coupon
     name: Create Coupon (10% off, once)
@@ -201,6 +227,9 @@ steps:
       cadence: once
       percentage_off: "10"
     capture: { coupon_id: id }
+    expect:
+      - { path: cadence, equals: once }
+      - { path: percentage_off, approx: { value: 10, epsilon: 0.001 } }
 
   # ── Phase 3: Customer & subscription ──────────────────────────────────
   - id: customer
@@ -214,6 +243,8 @@ steps:
     capture:
       customer_id: id
       external_id: external_id
+    expect:
+      - { path: external_id, equals: "it-billing-cust-{{ .run.id }}" }
 
   - id: subscription
     name: Create Subscription (coupon + tax override)
@@ -269,6 +300,8 @@ steps:
       description: Integration test prepaid wallet
       metadata: { source: integration_journeys }
     capture: { wallet_id: id }
+    expect:
+      - { path: customer_id, equals: "{{ .steps.customer.customer_id }}" }
 
   - id: wallet_topup
     name: Top Up Wallet (500 credits)
@@ -362,6 +395,11 @@ steps:
     expect:
       - { path: line_items, len_gte: 1 }
       - { path: id, equals: "{{ .steps.find_invoice.invoice_id }}" }
+      # The absolute total is timing-dependent (usage-pipeline lag is an
+      # accepted state — see usage_processed — and the recurring proration
+      # depends on the cancellation timestamp), so assert deterministic
+      # properties instead of an exact amount.
+      - { path: currency, equals: "{{ .vars.currency_lower }}" }
 
   - id: finalize
     name: Finalize Invoice (if draft)
@@ -380,6 +418,18 @@ steps:
 
 # ── Phase 7: Teardown (always runs, reverse dependency order) ──────────
 teardown:
+  - name: Cancel Subscription (backstop)
+    call: Subscriptions.CancelSubscription
+    args:
+      - "{{ .steps.subscription.subscription_id }}"
+      - cancellation_type: immediate
+        cancel_immediately_inovice_policy: skip
+        reason: Integration test teardown backstop
+    # Guarantees no subscription outlives the journey even when a mid-flow
+    # failure prevented the main cancel step from running. On clean runs the
+    # subscription is already cancelled and this fails; optional downgrades
+    # that to a warning (same pattern as the tax-rate delete below).
+    optional: true
   - name: Void Invoice
     call: Invoices.VoidInvoice
     with: "{{ .steps.find_invoice.invoice_id }}"

@@ -390,7 +390,7 @@ func unwrapResponse(rv reflect.Value) (any, int) {
 		f := rt.Field(i)
 		fv := rv.Field(i)
 		if f.Name == "HTTPMeta" {
-			if resp := fv.FieldByName("Response"); resp.IsValid() && !resp.IsNil() {
+			if resp := fv.FieldByName("Response"); resp.IsValid() && resp.Kind() == reflect.Ptr && !resp.IsNil() {
 				if hr, ok := resp.Interface().(*http.Response); ok && hr != nil {
 					status = hr.StatusCode
 				}
@@ -436,13 +436,15 @@ func errorStatus(err error) int {
 		return int(f.Int())
 	}
 	if meta := v.FieldByName("HTTPMeta"); meta.IsValid() {
-		if resp := meta.FieldByName("Response"); resp.IsValid() && !resp.IsNil() {
+		// Kind checks before IsNil: a future SDK error type could declare
+		// these names as non-pointer fields, and IsNil panics on those.
+		if resp := meta.FieldByName("Response"); resp.IsValid() && resp.Kind() == reflect.Ptr && !resp.IsNil() {
 			if hr, ok := resp.Interface().(*http.Response); ok && hr != nil {
 				return hr.StatusCode
 			}
 		}
 	}
-	if raw := v.FieldByName("RawResponse"); raw.IsValid() && !raw.IsNil() {
+	if raw := v.FieldByName("RawResponse"); raw.IsValid() && raw.Kind() == reflect.Ptr && !raw.IsNil() {
 		if hr, ok := raw.Interface().(*http.Response); ok && hr != nil {
 			return hr.StatusCode
 		}

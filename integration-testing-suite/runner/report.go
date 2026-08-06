@@ -284,11 +284,19 @@ func WriteJUnitReport(path string, reports []*TargetReport) error {
 				suite.Tests++
 				switch s.Status {
 				case StatusFail:
-					suite.Failures++
 					msg := "step failed"
 					if s.Err != nil {
 						msg = s.Err.Error()
 					}
+					// Teardown failures are non-fatal everywhere (exit code,
+					// console, JSON `failed`), so JUnit must not count them as
+					// failures either; surface them as skipped with the error.
+					if s.Phase == "teardown" {
+						suite.Skipped++
+						c.Skipped = &junitMessage{Message: "teardown failure (non-fatal): " + msg}
+						break
+					}
+					suite.Failures++
 					c.Failure = &junitMessage{Message: msg}
 				case StatusSkip:
 					suite.Skipped++

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -214,7 +216,15 @@ func loadJourneyFile(path string) (*Journey, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(data)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&j); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("parse %s: file contains no YAML document (empty or comments only)", path)
+		}
 		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	// One journey per file: a second `---` document would be silently ignored
+	// by a single Decode, so reject it explicitly.
+	if err := dec.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("parse %s: multiple YAML documents found — one journey per file", path)
 	}
 	j.File = path
 	if j.Name == "" {
@@ -335,16 +345,23 @@ func ValidateJourney(j *Journey, dispatcher *Dispatcher) []error {
 		}
 
 		// Template syntax + step references resolve to earlier steps.
-		walkStrings(stepAsDoc(s), func(str string) {
+		doc, err := stepAsDoc(s)
+		if err != nil {
+			addf("%s: cannot scan step for templates: %v", label, err)
+			return
+		}
+		walkStrings(doc, func(str string) {
 			if _, err := parseTemplate(str); err != nil {
 				addf("%s: template error in %q: %v", label, truncateStr(str, 60), err)
 			}
 			for _, m := range stepRefRe.FindAllStringSubmatch(str, -1) {
 				ref := m[1]
 				if !declared[ref] {
+					// By teardown time `declared` holds every step id, so an
+					// unmatched reference there is a typo, not an ordering issue.
 					if teardown {
-						// Teardown may reference any step in the journey.
-						return
+						addf("%s: references .steps.%s which is not declared by any step in this journey", label, ref)
+						continue
 					}
 					addf("%s: references .steps.%s which is not declared by an earlier step", label, ref)
 				}
@@ -353,7 +370,12 @@ func ValidateJourney(j *Journey, dispatcher *Dispatcher) []error {
 	}
 
 	ids := map[string]bool{}
-	for _, s := range j.Steps {
+	for i, s := range j.Steps {
+		// A stray "-" list entry decodes to a nil *Step and would panic below.
+		if s == nil {
+			addf("%s: steps[%d] is empty (stray '-' in YAML?)", j.Name, i)
+			continue
+		}
 		if s.ID != "" {
 			if ids[s.ID] {
 				addf("%s: duplicate step id %q", j.Name, s.ID)
@@ -367,23 +389,27 @@ func ValidateJourney(j *Journey, dispatcher *Dispatcher) []error {
 	}
 	// All step ids are in `declared` now, so teardown steps may reference any
 	// of them (and additionally skip the ordering check via the teardown flag).
-	for _, s := range j.Teardown {
+	for i, s := range j.Teardown {
+		if s == nil {
+			addf("%s: teardown[%d] is empty (stray '-' in YAML?)", j.Name, i)
+			continue
+		}
 		validateStep(s, "teardown", true)
 	}
 	return errs
 }
 
 // stepAsDoc converts a step to a generic document for template scanning.
-func stepAsDoc(s *Step) any {
+func stepAsDoc(s *Step) (any, error) {
 	raw, err := yaml.Marshal(s)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("marshal step: %w", err)
 	}
 	var doc any
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil
+		return nil, fmt.Errorf("unmarshal step: %w", err)
 	}
-	return doc
+	return doc, nil
 }
 
 // walkStrings visits every string in a nested document.

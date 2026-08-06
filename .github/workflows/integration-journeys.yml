@@ -64,13 +64,17 @@ jobs:
   run:
     name: Run journeys against staging
     needs: validate
-    # Release PRs (develop→main only), nightly, and manual runs. PR runs are
-    # restricted to head develop so this job never executes unreviewed PR code
-    # with secrets — an arbitrary same-repo branch targeting main must not be
-    # able to run a modified runner that could exfiltrate INTEGRATION_TARGETS_JSON.
+    # Nightly, manual dispatch from develop only, and develop→main release PRs.
+    # Every allowed path runs code that already passed review into develop, so
+    # this job never executes unreviewed code with secrets — neither a PR from
+    # an arbitrary branch nor a workflow_dispatch pointed at one can run a
+    # modified runner that could exfiltrate INTEGRATION_TARGETS_JSON.
     if: >-
-      github.event_name != 'pull_request' ||
-      (github.base_ref == 'main' && github.head_ref == 'develop')
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'pull_request' &&
+        github.base_ref == 'main' && github.head_ref == 'develop')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -24,11 +25,20 @@ type RenderCtx struct {
 	data map[string]any
 }
 
+// envSensitiveRe matches env var names that must never reach journey
+// templates: rendered values land in step details, error text, and the
+// JSON/JUnit artifacts CI uploads, so an accidental {{ .env.X_KEY }} would
+// leak a credential into a build artifact.
+var envSensitiveRe = regexp.MustCompile(`(?i)(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIALS?)$|^FLEXPRICE_TARGETS$`)
+
 // NewRenderCtx builds the template context for one journey run.
 func NewRenderCtx(vars map[string]any, targetName string) *RenderCtx {
 	env := map[string]any{}
 	for _, kv := range os.Environ() {
 		if i := strings.IndexByte(kv, '='); i > 0 {
+			if envSensitiveRe.MatchString(kv[:i]) {
+				continue
+			}
 			env[kv[:i]] = kv[i+1:]
 		}
 	}
@@ -116,9 +126,12 @@ func (e *ErrMissingDependency) Error() string { return e.inner.Error() }
 // JSON-parses the rendered output back into a native type (number/bool/etc.).
 func (c *RenderCtx) RenderString(s string) (any, error) {
 	coerce := false
-	if strings.HasPrefix(s, "{{=") {
+	// Trim before the prefix test to match stubTemplates in dispatch.go —
+	// otherwise " {{= ... }}" passes validation as a coercion but renders
+	// as a plain string at run time.
+	if trimmed := strings.TrimSpace(s); strings.HasPrefix(trimmed, "{{=") {
 		coerce = true
-		s = "{{" + s[3:]
+		s = "{{" + trimmed[3:]
 	}
 	if !strings.Contains(s, "{{") {
 		return s, nil
@@ -197,11 +210,9 @@ func (c *RenderCtx) RenderStringMap(m map[string]string) (map[string]string, err
 func randomBytes(n int) []byte {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		// crypto/rand failing is unrecoverable; fall back to time-derived bytes.
-		ts := time.Now().UnixNano()
-		for i := range b {
-			b[i] = byte(ts >> (8 * (i % 8)))
-		}
+		// Run ids and uuids must stay unique across parallel runs; a
+		// predictable fallback would silently break that guarantee.
+		panic(fmt.Errorf("crypto/rand unavailable, cannot generate unique run ids: %w", err))
 	}
 	return b
 }
