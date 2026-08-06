@@ -2747,8 +2747,10 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Publishes
 		BillingPeriodCount: 1,
 		BillingCycle:       types.BillingCycleAnniversary,
 		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
-		LineItems: []dto.CreateSubscriptionLineItemRequest{
-			{Price: inlinePriceReq},
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			LineItems: []dto.CreateSubscriptionLineItemRequest{
+				{Price: inlinePriceReq},
+			},
 		},
 	}
 
