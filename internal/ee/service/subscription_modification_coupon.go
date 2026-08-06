@@ -56,6 +56,15 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	}
 	couponID := c.ID
 
+	// Enforce coupon redemption rules (max_redemptions, redeem_after,
+	// redeem_before, currency/cadence) before creating the association. Without
+	// this, the modify/execute path bypasses every restriction the create path
+	// enforces (VAPT: coupon limits/validity not enforced at redemption time).
+	validationService := NewCouponValidationService(sp)
+	if err := validationService.ValidateCoupon(ctx, *c, sub); err != nil {
+		return nil, err
+	}
+
 	// Resolve target: line-item level or subscription level.
 	var lineItemID *string
 	if params.SubscriptionLineItemID != nil {
@@ -122,7 +131,19 @@ func (s *subscriptionModificationService) executeAddCoupon(
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		return sp.CouponAssociationRepo.Create(txCtx, assoc)
+		if err := sp.CouponAssociationRepo.Create(txCtx, assoc); err != nil {
+			return err
+		}
+		// Atomically increment total_redemptions within the same transaction.
+		// The DB-level CAS in IncrementRedemptions (WHERE total_redemptions <
+		// max_redemptions) is the real limit guard — it closes the TOCTOU between
+		// the ValidateCoupon read above and this insert, and keeps the counter in
+		// sync so the create path's limit stays enforced too. c.MaxRedemptions is
+		// immutable coupon config, safe to reuse from the earlier read.
+		if err := sp.CouponRepo.IncrementRedemptions(txCtx, couponID, c.MaxRedemptions); err != nil {
+			return err
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
