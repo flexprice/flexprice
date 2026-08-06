@@ -1194,11 +1194,14 @@ func (s *CreditNoteServiceSuite) TestProcessDraftCreditNote() {
 func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() {
 	// Two drafts, each individually valid (100 <= 110 max), whose combined total (200)
 	// exceeds what the invoice can actually refund.
-	draftReq := func() *dto.CreateCreditNoteRequest {
+	// Distinct idempotency keys are required: content-hash keys would collide and return
+	// the same draft twice instead of creating two independent notes.
+	draftReq := func(idempotencyKey string) *dto.CreateCreditNoteRequest {
 		return &dto.CreateCreditNoteRequest{
 			InvoiceID:         s.testData.invoices.finalized.ID,
 			Reason:            types.CreditNoteReasonUnsatisfactory,
 			ProcessCreditNote: false,
+			IdempotencyKey:    &idempotencyKey,
 			LineItems: []dto.CreateCreditNoteLineItemRequest{
 				{InvoiceLineItemID: "line_1", Amount: decimal.NewFromFloat(50.00)},
 				{InvoiceLineItemID: "line_2", Amount: decimal.NewFromFloat(50.00)},
@@ -1206,13 +1209,14 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() 
 		}
 	}
 
-	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq("refund-capacity-recheck-1"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteStatusDraft, first.CreditNoteStatus)
 
-	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq("refund-capacity-recheck-2"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteStatusDraft, second.CreditNoteStatus)
+	s.NotEqual(first.ID, second.ID)
 
 	walletBefore, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallets.usd.ID)
 	s.NoError(err)
@@ -1239,23 +1243,27 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() 
 func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_AdjustmentCapacityRecheck() {
 	// Same race as the refund case, but for ADJUSTMENT type, which has no wallet
 	// idempotency backstop against a double-applied recalculation.
-	draftReq := func() *dto.CreateCreditNoteRequest {
+	// Distinct idempotency keys are required: content-hash keys would collide and return
+	// the same draft twice instead of creating two independent notes.
+	draftReq := func(idempotencyKey string) *dto.CreateCreditNoteRequest {
 		return &dto.CreateCreditNoteRequest{
 			InvoiceID:         s.testData.invoices.pending.ID,
 			Reason:            types.CreditNoteReasonBillingError,
 			ProcessCreditNote: false,
+			IdempotencyKey:    &idempotencyKey,
 			LineItems: []dto.CreateCreditNoteLineItemRequest{
 				{InvoiceLineItemID: "line_3", Amount: decimal.NewFromFloat(80.00)},
 			},
 		}
 	}
 
-	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	first, err := s.service.CreateCreditNote(s.GetContext(), draftReq("adjustment-capacity-recheck-1"))
 	s.NoError(err)
 	s.Equal(types.CreditNoteTypeAdjustment, first.CreditNoteType)
 
-	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq())
+	second, err := s.service.CreateCreditNote(s.GetContext(), draftReq("adjustment-capacity-recheck-2"))
 	s.NoError(err)
+	s.NotEqual(first.ID, second.ID)
 
 	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID))
 
