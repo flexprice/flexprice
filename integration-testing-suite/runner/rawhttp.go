@@ -27,7 +27,16 @@ func NewRawClient(baseURL, apiKey string) *RawClient {
 	return &RawClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 60 * time.Second},
+		http: &http.Client{
+			Timeout: 60 * time.Second,
+			// Never follow redirects: Go strips Authorization/Cookie on
+			// cross-domain redirects but NOT custom headers, so following
+			// one would forward x-api-key to an arbitrary host. A 3xx is
+			// returned as-is and can be asserted with `status:`.
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
