@@ -190,11 +190,14 @@ type SubscriptionService interface {
 	// immediate cancellations, and by both processSubscriptionPeriod's period-rollover loop and
 	// the Temporal CheckCancellationActivity when a previously scheduled cancellation fires, so
 	// resources are terminated exactly once, at the point cancellation actually takes effect.
-	TerminateSubscriptionResources(ctx context.Context, req dto.TerminateSubscriptionResourcesRequest) error
+	// Returns the addon line items it terminated, which callers thread into
+	// PublishCancellationEvents so a line_item.deleted event fires for each one post-commit.
+	TerminateSubscriptionResources(ctx context.Context, req dto.TerminateSubscriptionResourcesRequest) ([]*subscription.SubscriptionLineItem, error)
 
-	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
+	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs,
+	// plus a line_item.deleted event for each terminated FIXED-price line item.
 	// Used by Temporal activities and other callers that need to fire subscription lifecycle events.
-	PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription)
+	PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription, terminatedLineItems []*subscription.SubscriptionLineItem)
 
 	// ExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs
 	// for the subscription owner plus all active/trialing/draft inherited children.

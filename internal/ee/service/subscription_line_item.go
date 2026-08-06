@@ -19,6 +19,11 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	if resp.SubscriptionLineItem != nil {
+		s.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem}, types.WebhookEventSubscriptionLineItemCreated)
+	}
+
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	return resp, nil
 }
@@ -318,6 +323,10 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+
+	s.publishLineItemEvents(ctx, resp.SubscriptionID,
+		[]*subscription.SubscriptionLineItem{resp.SubscriptionLineItem}, types.WebhookEventSubscriptionLineItemDeleted)
+
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 	return resp, nil
 }
@@ -592,6 +601,15 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		if err != nil {
 			return nil, err
 		}
+
+		// Publish both only after the transaction above (delete-old + create-new) has
+		// committed — publishing from inside deleteSubscriptionLineItem or
+		// SubscriptionLineItemRepo.Create would reference line items that could still be
+		// rolled back.
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{existingLineItem}, types.WebhookEventSubscriptionLineItemDeleted)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{newLineItem}, types.WebhookEventSubscriptionLineItemCreated)
 
 		s.Logger.Info(ctx, "updated subscription line item with price overrides",
 			"subscription_id", sub.ID,

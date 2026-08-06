@@ -338,9 +338,20 @@ func (s *subscriptionModificationService) executeQuantityChange(
 		// checkout + net credit/zero → immediate path (ignore checkout)
 	}
 
-	changedLineItems, changedInvoices, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
+	changedLineItems, changedInvoices, lineItemDeltas, err := s.settlePayLater(ctx, quantityChangeReq, prorationResult)
 	if err != nil {
 		return nil, err
+	}
+
+	// subscriptionModificationService only holds ServiceParams (unexported field), not a
+	// *subscriptionService, so publishLineItemEvents is reached via a throwaway concrete
+	// instance sharing the same ServiceParams.
+	lineItemPublisher := &subscriptionService{ServiceParams: sp}
+	for _, delta := range lineItemDeltas {
+		lineItemPublisher.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.ended}, types.WebhookEventSubscriptionLineItemDeleted)
+		lineItemPublisher.publishLineItemEvents(ctx, subscriptionID,
+			[]*subscription.SubscriptionLineItem{delta.new}, types.WebhookEventSubscriptionLineItemCreated)
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
