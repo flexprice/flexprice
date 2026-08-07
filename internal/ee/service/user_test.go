@@ -705,7 +705,7 @@ func (s *UserServiceSuite) TestRemoveUser() {
 			Type:      types.UserTypeServiceAccount,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
+		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 	}
 
 	s.Run("success_user_removed_api_key_retained", func() {
@@ -770,7 +770,7 @@ func (s *UserServiceSuite) TestRemoveUser() {
 			Type:      types.UserTypeUser,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
+		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 
 		// Add a second user and remove it, leaving the actor as the sole
 		// remaining human user; removing them next must be blocked.

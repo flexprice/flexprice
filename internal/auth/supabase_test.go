@@ -103,7 +103,10 @@ func TestSupabaseRemoveUser(t *testing.T) {
 		assert.Equal(t, "Bearer service-key", gotAuth[1])
 	})
 
-	t.Run("fails without deleting when the user is not found in Supabase", func(t *testing.T) {
+	t.Run("succeeds without deleting when the user is already gone from Supabase", func(t *testing.T) {
+		// A prior call may have already deleted the identity but failed before the local
+		// user could be archived. A retry must treat "not found" as already-removed so the
+		// caller can complete the local archival, instead of failing forever.
 		var sawDelete bool
 		a, srv := newAuth(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodDelete {
@@ -111,6 +114,22 @@ func TestSupabaseRemoveUser(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 404, "msg": "not found"})
+		})
+		defer srv.Close()
+
+		err := a.RemoveUser(context.Background(), "user_123")
+		require.NoError(t, err)
+		assert.False(t, sawDelete, "delete must not be attempted once the lookup shows the user is already gone")
+	})
+
+	t.Run("fails without deleting when the lookup errors for a reason other than not-found", func(t *testing.T) {
+		var sawDelete bool
+		a, srv := newAuth(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodDelete {
+				sawDelete = true
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"code": 500, "msg": "boom"})
 		})
 		defer srv.Close()
 

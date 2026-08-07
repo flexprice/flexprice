@@ -180,43 +180,54 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 }
 
 // RemoveUser permanently deletes the user's identity from Supabase. It first confirms the
-// user exists (surfacing a clear error otherwise), then issues the delete. The vendored
-// supabase-go Admin client has no delete wrapper, so the request is built directly against
-// the same admin endpoint/credentials the rest of the client uses.
+// user exists, then issues the delete. The vendored supabase-go Admin client has no delete
+// wrapper, so both requests are built directly against the same admin endpoint/credentials
+// the rest of the client uses (rather than mixing in Admin.GetUser's own error handling,
+// which keeps the not-found check below reliable regardless of the response body shape).
 func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
-	if _, err := s.client.Admin.GetUser(ctx, userID); err != nil {
+	getResp, err := s.doAdminUserRequest(ctx, http.MethodGet, userID)
+	if err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to find user in Supabase").
+			WithHint("Failed to check user in Supabase").
 			WithReportableDetails(map[string]interface{}{"user_id": userID}).
 			Mark(ierr.ErrSystem)
 	}
+	_ = getResp.Body.Close()
 
-	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, userID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to build Supabase delete user request").
+	if getResp.StatusCode == http.StatusNotFound {
+		// A prior call may have already deleted the Supabase identity but failed before
+		// the local user could be archived (e.g. the archive step errored after this
+		// succeeded). Treat "already gone" as success so a retry of the whole removal
+		// can still complete the local archival.
+		s.logger.Info(ctx, "user already removed from Supabase", "target_user_id", userID)
+		return nil
+	}
+	if getResp.StatusCode < http.StatusOK || getResp.StatusCode >= http.StatusMultipleChoices {
+		return ierr.NewError("failed to find user in Supabase").
+			WithHint("Supabase admin get user request failed").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":     userID,
+				"status_code": getResp.StatusCode,
+			}).
 			Mark(ierr.ErrSystem)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.AuthConfig.Supabase.ServiceKey)
-	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
 
-	resp, err := s.client.HTTPClient.Do(req)
+	delResp, err := s.doAdminUserRequest(ctx, http.MethodDelete, userID)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to delete user from Supabase").
 			WithReportableDetails(map[string]interface{}{"user_id": userID}).
 			Mark(ierr.ErrSystem)
 	}
-	defer resp.Body.Close()
+	defer delResp.Body.Close()
 
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
+	if delResp.StatusCode < http.StatusOK || delResp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(delResp.Body)
 		return ierr.NewError("failed to delete user from Supabase").
 			WithHint("Supabase admin delete user request failed").
 			WithReportableDetails(map[string]interface{}{
 				"user_id":     userID,
-				"status_code": resp.StatusCode,
+				"status_code": delResp.StatusCode,
 				"body":        string(body),
 			}).
 			Mark(ierr.ErrSystem)
@@ -224,6 +235,19 @@ func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
 
 	s.logger.Info(ctx, "deleted user from Supabase", "target_user_id", userID)
 	return nil
+}
+
+// doAdminUserRequest issues a request against the Supabase admin users/{id} endpoint using
+// the same base URL and service-role credentials as the rest of the client.
+func (s *supabaseAuth) doAdminUserRequest(ctx context.Context, method, userID string) (*http.Response, error) {
+	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, userID)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.AuthConfig.Supabase.ServiceKey)
+	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
+	return s.client.HTTPClient.Do(req)
 }
 
 // GenerateDevToken creates a short-lived JWT that matches the Supabase claim schema so it

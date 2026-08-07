@@ -634,33 +634,48 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		Type:        lo.ToPtr(types.UserTypeUser),
-	})
-	if err != nil {
-		return err
-	}
-	if totalHumanUsers <= 1 {
-		return ierr.NewError("cannot remove the last user in the tenant").
-			WithHint("At least one human user must remain in the tenant").
-			Mark(ierr.ErrValidation)
-	}
-
 	if s.cfg == nil {
 		return ierr.NewError("auth configuration missing").
 			WithHint("User removal requires auth provider configuration").
 			Mark(ierr.ErrValidation)
 	}
 
-	// The user is only considered removed once the auth provider identity is gone;
-	// the local record must not be touched if that fails.
+	tenantID := existingUser.TenantID
 	provider := authProvider.NewProvider(s.cfg)
-	if err := provider.RemoveUser(ctx, id); err != nil {
-		return err
-	}
 
-	if err := s.userRepo.Delete(ctx, id); err != nil {
+	// Serialize concurrent removals for this tenant: without a lock, two concurrent
+	// requests can both observe more than one human user, both pass the check below,
+	// and both archive a different user — leaving the tenant with none. The invariant
+	// check and the archive must be atomic together.
+	err = s.db.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire tenant lock for user removal").
+				Mark(ierr.ErrInternal)
+		}
+
+		_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			Type:        lo.ToPtr(types.UserTypeUser),
+		})
+		if err != nil {
+			return err
+		}
+		if totalHumanUsers <= 1 {
+			return ierr.NewError("cannot remove the last user in the tenant").
+				WithHint("At least one human user must remain in the tenant").
+				Mark(ierr.ErrValidation)
+		}
+
+		// The user is only considered removed once the auth provider identity is gone;
+		// the local record must not be touched if that fails.
+		if err := provider.RemoveUser(ctx, id); err != nil {
+			return err
+		}
+
+		return s.userRepo.Delete(ctx, id)
+	})
+	if err != nil {
 		return err
 	}
 
@@ -668,7 +683,7 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	s.logger.Info(ctx, "user removed from tenant",
 		"actor_user_id", actorUserID,
 		"target_user_id", id,
-		"tenant_id", existingUser.TenantID,
+		"tenant_id", tenantID,
 	)
 
 	return nil
