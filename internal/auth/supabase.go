@@ -228,8 +228,8 @@ func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
 		// WithReportableDetails is surfaced to API clients, and Supabase's error body
 		// could contain internal provider details we don't want to leak to a tenant admin.
 		s.logger.Error(ctx, "supabase admin delete user request failed",
+			"error", fmt.Sprintf("status %d", delResp.StatusCode),
 			"target_user_id", userID,
-			"status_code", delResp.StatusCode,
 			"body", string(body),
 		)
 		return ierr.NewError("failed to delete user from Supabase").
