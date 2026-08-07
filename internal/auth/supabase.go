@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -223,12 +224,19 @@ func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
 
 	if delResp.StatusCode < http.StatusOK || delResp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(delResp.Body)
+		// The upstream body is logged server-side only, not returned to the caller:
+		// WithReportableDetails is surfaced to API clients, and Supabase's error body
+		// could contain internal provider details we don't want to leak to a tenant admin.
+		s.logger.Error(ctx, "supabase admin delete user request failed",
+			"target_user_id", userID,
+			"status_code", delResp.StatusCode,
+			"body", string(body),
+		)
 		return ierr.NewError("failed to delete user from Supabase").
 			WithHint("Supabase admin delete user request failed").
 			WithReportableDetails(map[string]interface{}{
 				"user_id":     userID,
 				"status_code": delResp.StatusCode,
-				"body":        string(body),
 			}).
 			Mark(ierr.ErrSystem)
 	}
@@ -240,7 +248,7 @@ func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
 // doAdminUserRequest issues a request against the Supabase admin users/{id} endpoint using
 // the same base URL and service-role credentials as the rest of the client.
 func (s *supabaseAuth) doAdminUserRequest(ctx context.Context, method, userID string) (*http.Response, error) {
-	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, userID)
+	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, url.PathEscape(userID))
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
 	if err != nil {
 		return nil, err
