@@ -628,6 +628,24 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+
+	// Defense-in-depth tenant scoping: userRepo.GetByID already filters by the caller's
+	// tenant for the production Ent-backed repository, but that's an implicit property of
+	// one implementation (the in-memory test store used elsewhere does not enforce it), and
+	// this method deletes the target's identity with a global Supabase service-role key —
+	// too security-sensitive to rely on an implicit contract across repository layers.
+	authTenantID := types.GetTenantID(ctx)
+	if authTenantID == "" {
+		return ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required in context").
+			Mark(ierr.ErrValidation)
+	}
+	if existingUser.TenantID != authTenantID {
+		return ierr.NewError("user not found").
+			WithHint("User does not belong to your tenant").
+			Mark(ierr.ErrNotFound)
+	}
+
 	if existingUser.Type != types.UserTypeUser {
 		return ierr.NewError("only human users can be removed").
 			WithHint("Use the service account delete API to remove a service account").

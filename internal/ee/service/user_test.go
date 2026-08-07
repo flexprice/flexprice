@@ -744,6 +744,35 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.Error(err)
 	})
 
+	s.Run("cross_tenant_target_returns_not_found", func() {
+		// InMemoryUserStore.GetByID (unlike the real Ent-backed repo) doesn't filter by
+		// tenant, so this only reaches the target user at all because of that; the explicit
+		// authTenantID check in RemoveUser is what has to reject it from there. Note this
+		// can't observe the deeper reason the check matters in production: without it, the
+		// auth-provider (Supabase) deletion would already have fired — using a global
+		// service-role key — before any tenant-scoped local repository call ever runs, since
+		// provider.RemoveUser is called ahead of the (also tenant-scoped) local Delete. This
+		// test can only confirm the local record is left untouched and the request rejected.
+		seedStore()
+		otherTenantModel := baseModel
+		otherTenantModel.TenantID = "other-tenant"
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "other-tenant-user",
+			Email:     "other@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: otherTenantModel,
+		})
+
+		err := s.userService.RemoveUser(ctx, "other-tenant-user")
+		s.Error(err)
+		s.Contains(err.Error(), "user not found")
+
+		// Must not have been touched: still published, identity untouched.
+		untouched, getErr := s.userRepo.GetByID(ctx, "other-tenant-user")
+		s.NoError(getErr)
+		s.Equal(types.StatusPublished, untouched.Status)
+	})
+
 	s.Run("service_account_returns_validation_error", func() {
 		seedStore()
 		err := s.userService.RemoveUser(ctx, "sa-1")
