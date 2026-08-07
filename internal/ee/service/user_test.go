@@ -47,7 +47,6 @@ func (s *UserServiceSuite) SetupTest() {
 		secretRepo:      s.secretRepo,
 		db:              testutil.NewMockPostgresClient(nil),
 		rbacService:     nil,
-		supabaseAuth:    nil,
 		settingsService: nil,
 	}
 
@@ -93,7 +92,6 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 				userRepo:     s.userRepo,
 				tenantRepo:   s.tenantRepo,
 				rbacService:  nil,
-				supabaseAuth: nil,
 			}
 
 			ctx := testutil.SetupContext()
@@ -144,7 +142,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -159,7 +156,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -174,7 +170,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     nil,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -198,7 +193,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 					userRepo:        s.userRepo,
 					tenantRepo:      s.tenantRepo,
 					rbacService:     rbacSvc,
-					supabaseAuth:    nil,
 					settingsService: nil,
 				}
 			},
@@ -711,10 +705,10 @@ func (s *UserServiceSuite) TestRemoveUser() {
 			Type:      types.UserTypeServiceAccount,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, logger: testLogger(s.T())}
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 	}
 
-	s.Run("success_user_removed_and_keys_revoked", func() {
+	s.Run("success_user_removed_api_key_retained", func() {
 		seedStore()
 		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
 			ID:       "key-1",
@@ -732,8 +726,9 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.NoError(err)
 		s.Equal(types.StatusArchived, removedUser.Status)
 
-		_, err = s.secretRepo.Get(ctx, "key-1")
-		s.Error(err, "expected the user's secret to be deleted on removal")
+		key, err := s.secretRepo.Get(ctx, "key-1")
+		s.NoError(err, "the user's API key must remain active after removal")
+		s.Equal(types.StatusPublished, key.Status)
 	})
 
 	s.Run("empty_id_returns_validation_error", func() {
@@ -756,11 +751,14 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.Contains(err.Error(), "only human users can be removed")
 	})
 
-	s.Run("self_removal_returns_validation_error", func() {
+	s.Run("self_removal_is_allowed", func() {
 		seedStore()
 		err := s.userService.RemoveUser(ctx, "actor-1")
-		s.Error(err)
-		s.Contains(err.Error(), "cannot remove yourself")
+		s.NoError(err)
+
+		removedUser, err := s.userRepo.GetByID(ctx, "actor-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, removedUser.Status)
 	})
 
 	s.Run("last_human_user_returns_validation_error", func() {
@@ -772,12 +770,10 @@ func (s *UserServiceSuite) TestRemoveUser() {
 			Type:      types.UserTypeUser,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, logger: testLogger(s.T())}
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 
-		// Removing anyone other than the sole remaining user would already be
-		// unknown-ID; here the actor is the only user, so self-removal fires
-		// first. Add a second user, remove it, then the (now sole) actor
-		// cannot be removed by a third identity check below.
+		// Add a second user and remove it, leaving the actor as the sole
+		// remaining human user; removing them next must be blocked.
 		_ = s.userRepo.Create(ctx, &user.User{
 			ID:        "user-2",
 			Email:     "u2@example.com",
@@ -787,8 +783,7 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		err := s.userService.RemoveUser(ctx, "user-2")
 		s.NoError(err)
 
-		ctx2 := context.WithValue(ctx, types.CtxUserID, "someone-else")
-		err = s.userService.RemoveUser(ctx2, "actor-1")
+		err = s.userService.RemoveUser(ctx, "actor-1")
 		s.Error(err)
 		s.Contains(err.Error(), "cannot remove the last user")
 	})

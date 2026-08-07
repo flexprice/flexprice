@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/nedpals/supabase-go"
 	"github.com/samber/lo"
 )
 
@@ -41,7 +40,6 @@ type userService struct {
 	db              postgres.IClient
 	cfg             *config.Configuration
 	rbacService     *rbac.RBACService
-	supabaseAuth    *supabase.Client
 	settingsService SettingsService
 	logger          *logger.Logger
 }
@@ -55,7 +53,6 @@ func NewUserService(
 	db postgres.IClient,
 	cfg *config.Configuration,
 	rbacService *rbac.RBACService,
-	supabaseAuth *supabase.Client,
 	settingsService SettingsService,
 	logger *logger.Logger,
 ) UserService {
@@ -68,7 +65,6 @@ func NewUserService(
 		db:              db,
 		cfg:             cfg,
 		rbacService:     rbacService,
-		supabaseAuth:    supabaseAuth,
 		settingsService: settingsService,
 		logger:          logger,
 	}
@@ -638,13 +634,6 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	actorUserID := types.GetUserID(ctx)
-	if id == actorUserID {
-		return ierr.NewError("cannot remove yourself").
-			WithHint("Ask another tenant member to remove your access").
-			Mark(ierr.ErrValidation)
-	}
-
 	_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		Type:        lo.ToPtr(types.UserTypeUser),
@@ -658,25 +647,24 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	activeKeys, err := s.secretRepo.ListAll(ctx, &types.SecretFilter{
-		QueryFilter: &types.QueryFilter{
-			Status: lo.ToPtr(types.StatusPublished),
-		},
-		UserID: &id,
-	})
-	if err != nil {
-		return err
+	if s.cfg == nil {
+		return ierr.NewError("auth configuration missing").
+			WithHint("User removal requires auth provider configuration").
+			Mark(ierr.ErrValidation)
 	}
-	for _, key := range activeKeys {
-		if err := s.secretRepo.Delete(ctx, key.ID); err != nil {
-			return err
-		}
+
+	// The user is only considered removed once the auth provider identity is gone;
+	// the local record must not be touched if that fails.
+	provider := authProvider.NewProvider(s.cfg)
+	if err := provider.RemoveUser(ctx, id); err != nil {
+		return err
 	}
 
 	if err := s.userRepo.Delete(ctx, id); err != nil {
 		return err
 	}
 
+	actorUserID := types.GetUserID(ctx)
 	s.logger.Info(ctx, "user removed from tenant",
 		"actor_user_id", actorUserID,
 		"target_user_id", id,

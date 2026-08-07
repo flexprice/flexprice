@@ -2,7 +2,10 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -173,6 +176,53 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 		"response", resp,
 	)
 
+	return nil
+}
+
+// RemoveUser permanently deletes the user's identity from Supabase. It first confirms the
+// user exists (surfacing a clear error otherwise), then issues the delete. The vendored
+// supabase-go Admin client has no delete wrapper, so the request is built directly against
+// the same admin endpoint/credentials the rest of the client uses.
+func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
+	if _, err := s.client.Admin.GetUser(ctx, userID); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to find user in Supabase").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrSystem)
+	}
+
+	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to build Supabase delete user request").
+			Mark(ierr.ErrSystem)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.AuthConfig.Supabase.ServiceKey)
+	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
+
+	resp, err := s.client.HTTPClient.Do(req)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to delete user from Supabase").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrSystem)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(resp.Body)
+		return ierr.NewError("failed to delete user from Supabase").
+			WithHint("Supabase admin delete user request failed").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":     userID,
+				"status_code": resp.StatusCode,
+				"body":        string(body),
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	s.logger.Info(ctx, "deleted user from Supabase", "target_user_id", userID)
 	return nil
 }
 

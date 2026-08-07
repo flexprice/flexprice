@@ -188,6 +188,12 @@ func (f *flexpriceAuth) AssignUserToTenant(ctx context.Context, userID string, t
 	return nil
 }
 
+// RemoveUser is a no-op for Flexprice auth: there is no separate identity to delete, and
+// GetByEmail/GetByID already exclude archived users, which blocks further logins.
+func (f *flexpriceAuth) RemoveUser(ctx context.Context, userID string) error {
+	return nil
+}
+
 // GenerateSessionToken generates a JWT token for session access
 // This token is specifically for customers (not users) and has a shorter expiration
 func (f *flexpriceAuth) GenerateSessionToken(customerID, externalCustomerID, tenantID, environmentID string, timeoutHours int) (string, time.Time, error) {
