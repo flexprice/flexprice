@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// AddLineItemSuite tests the AddLineItem service method (T-09).
+// AddLineItemSuite tests the AddLineItem service method.
 type AddLineItemSuite struct {
 	testutil.BaseServiceTestSuite
 	service InvoiceService

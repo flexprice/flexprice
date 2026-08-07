@@ -86,18 +86,13 @@ type InvoiceService interface {
 	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error)
 
 	// UpdateLineItem archives the existing line item and creates its replacement with
-	// display_name/quantity/amount updated (archive-and-replace, see CR-06 in
-	// specs/invoice-draft-editing/spec.md). Draft-only.
+	// display_name/quantity/amount updated. Draft-only.
 	UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error)
 
-	// AddLineItem creates a brand-new line item on a draft invoice. Unlike
-	// UpdateLineItem, there is no prior row to archive - ParentLineItemID is nil.
-	// Draft-only.
+	// AddLineItem creates a brand-new line item on a draft invoice. Draft-only.
 	AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error)
 
-	// RemoveLineItem soft-deletes a line item on a draft invoice (status=deleted, see
-	// CR-07 in specs/invoice-draft-editing/spec.md). Unlike UpdateLineItem, there is no
-	// replacement row - the item is simply gone from totals and future listings. Draft-only.
+	// RemoveLineItem soft-deletes a line item on a draft invoice. Draft-only.
 	RemoveLineItem(ctx context.Context, invoiceID, lineItemID string) (*dto.InvoiceResponse, error)
 }
 
@@ -527,11 +522,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		computed = true
 
-		// A manually edited invoice is locked from automatic recompute: line items,
-		// coupons, taxes, and totals were hand-set via AddLineItem/UpdateLineItem/
-		// RemoveLineItem and must not be clobbered by a subsequent compute (from the
-		// API, a Temporal workflow, or the daily schedule). Reset computed to false so
-		// the no-op doesn't fire the downstream "invoice updated" system event below.
+		// Manually edited invoices are locked from automatic recompute; reset computed
+		// so this no-op doesn't fire the "invoice updated" system event below.
 		if inv.IsManuallyEdited {
 			s.Logger.Info(txCtx, "skipping compute: invoice has manual line-item edits", "invoice_id", inv.ID)
 			computed = false

@@ -13,10 +13,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// ComputeInvoiceLockGuardSuite tests the T-11 guard in ComputeInvoice: a draft invoice
-// with IsManuallyEdited = true must be a full no-op (CR-04), while a non-edited draft
-// invoice must still compute normally (regression check for the highest-risk change in
-// the invoice-draft-editing feature).
+// ComputeInvoiceLockGuardSuite verifies a manually-edited draft invoice is a full
+// no-op in ComputeInvoice, while a non-edited draft still computes normally.
 type ComputeInvoiceLockGuardSuite struct {
 	testutil.BaseServiceTestSuite
 	service InvoiceService

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// UpdateLineItemSuite tests the archive-and-replace UpdateLineItem service method (T-08).
+// UpdateLineItemSuite tests the archive-and-replace UpdateLineItem service method.
 type UpdateLineItemSuite struct {
 	testutil.BaseServiceTestSuite
 	service InvoiceService
@@ -252,8 +252,8 @@ func (s *UpdateLineItemSuite) TestRejectsEditOnAlreadyArchivedLineItem() {
 	_, err := s.service.UpdateLineItem(ctx, inv.ID, v1.ID, dto.UpdateLineItemRequest{DisplayName: &name2})
 	s.Require().NoError(err)
 
-	// v1 is now archived - editing it again (instead of its replacement) must be rejected,
-	// otherwise the lineage chain would branch instead of extending linearly (CR-06a).
+	// v1 is now archived - editing it again must be rejected, or the lineage
+	// chain would branch instead of extending linearly.
 	name3 := "v3-via-stale-id"
 	_, err = s.service.UpdateLineItem(ctx, inv.ID, v1.ID, dto.UpdateLineItemRequest{DisplayName: &name3})
 	s.Error(err)

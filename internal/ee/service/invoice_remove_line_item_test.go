@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// RemoveLineItemSuite tests the soft-delete RemoveLineItem service method (T-10).
+// RemoveLineItemSuite tests the soft-delete RemoveLineItem service method.
 type RemoveLineItemSuite struct {
 	testutil.BaseServiceTestSuite
 	service InvoiceService
@@ -73,7 +73,7 @@ func (s *RemoveLineItemSuite) TestSoftDeletesLineItem() {
 	s.NoError(err)
 	s.NotNil(resp)
 
-	// Row still exists (soft delete, not physically gone - CR-07) with status=deleted.
+	// Row still exists (soft delete, not physically gone) with status=deleted.
 	row, err := s.GetStores().InvoiceLineItemRepo.Get(ctx, li.ID)
 	s.NoError(err)
 	s.Equal(types.StatusDeleted, row.Status)

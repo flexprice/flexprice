@@ -32,13 +32,8 @@ func (s *invoiceService) recalculateTotalsFromLineItems(inv *invoice.Invoice, li
 	}
 }
 
-// UpdateLineItem edits a line item's display_name/amount/quantity on a draft invoice.
-// This is archive-and-replace, not an in-place update (CR-06): the existing row is
-// marked archived and a new row is created carrying forward every other field
-// unchanged, with parent_line_item_id pointing at the archived row. Editing a line
-// item that is itself the result of a prior edit therefore naturally chains the
-// lineage back through each intermediate row (CR-06a), since the new row always
-// points at whatever row was just fetched.
+// UpdateLineItem is archive-and-replace, not an in-place update: it archives the
+// existing row and creates a replacement with parent_line_item_id pointing back.
 func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -70,13 +65,12 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 		}
 		if existingItem.Status != types.StatusPublished {
 			// Editing an already-archived/deleted row would branch the lineage
-			// chain (CR-06a) instead of extending it, or resurrect a removed item.
+			// chain instead of extending it, or resurrect a removed item.
 			return ierr.NewError("line item is not editable").
 				WithHintf("line item %s has status %s and is not the current version", lineItemID, existingItem.Status).
 				Mark(ierr.ErrValidation)
 		}
 
-		// Copy every field forward unchanged, then override only the editable ones.
 		newItem := *existingItem
 		newItem.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
 		newItem.ParentLineItemID = &existingItem.ID
@@ -124,9 +118,8 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 	return dto.NewInvoiceResponse(lockedInv), nil
 }
 
-// AddLineItem creates a brand-new line item on a draft invoice. Currency and
-// CustomerID are inherited from the invoice - AddLineItemRequest carries neither.
-// ParentLineItemID stays nil: nothing preceded this row.
+// AddLineItem creates a new line item on a draft invoice; Currency and CustomerID are
+// inherited from the invoice since the request carries neither.
 func (s *invoiceService) AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -185,12 +178,8 @@ func (s *invoiceService) AddLineItem(ctx context.Context, invoiceID string, req 
 	return dto.NewInvoiceResponse(lockedInv), nil
 }
 
-// RemoveLineItem soft-deletes a line item on a draft invoice. Unlike UpdateLineItem,
-// there is no replacement row - the item is just gone (status=deleted, CR-07), so
-// there is no lineage to preserve. Reuses the existing InvoiceRepo.RemoveLineItems,
-// which sets status=deleted rather than hard-deleting. That repository call matches
-// on tenant + invoice + IDs and silently no-ops if nothing matches, so the existence
-// and ownership check below is done explicitly to surface a clear not-found error.
+// RemoveLineItem soft-deletes via InvoiceRepo.RemoveLineItems, which silently no-ops
+// if nothing matches - the check below exists to surface a clear error instead.
 func (s *invoiceService) RemoveLineItem(ctx context.Context, invoiceID, lineItemID string) (*dto.InvoiceResponse, error) {
 	var lockedInv *invoice.Invoice
 	var publishedLineItems []*invoice.InvoiceLineItem
