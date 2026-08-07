@@ -46,6 +46,7 @@ func (s *AddLineItemSuite) createDraftInvoice(ctx context.Context, amount decima
 		Subtotal:      amount,
 		Total:         amount,
 		AmountDue:     amount,
+		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))

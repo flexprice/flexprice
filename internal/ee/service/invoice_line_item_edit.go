@@ -141,14 +141,15 @@ func (s *invoiceService) AddLineItem(ctx context.Context, invoiceID string, req 
 		lockedInv = inv
 
 		newItem := &invoice.InvoiceLineItem{
-			ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-			InvoiceID:   inv.ID,
-			CustomerID:  inv.CustomerID,
-			DisplayName: lo.ToPtr(req.DisplayName),
-			Amount:      req.Amount,
-			Quantity:    req.Quantity,
-			Currency:    inv.Currency,
-			BaseModel:   types.GetDefaultBaseModel(txCtx),
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			InvoiceID:     inv.ID,
+			CustomerID:    inv.CustomerID,
+			EnvironmentID: inv.EnvironmentID,
+			DisplayName:   lo.ToPtr(req.DisplayName),
+			Amount:        req.Amount,
+			Quantity:      req.Quantity,
+			Currency:      inv.Currency,
+			BaseModel:     types.GetDefaultBaseModel(txCtx),
 		}
 
 		if err := newItem.Validate(); err != nil {
