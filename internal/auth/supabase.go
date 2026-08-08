@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -181,39 +182,28 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 }
 
 // RemoveUser permanently deletes the user's identity from Supabase. It first confirms the
-// user exists, then issues the delete. The vendored supabase-go Admin client has no delete
-// wrapper, so both requests are built directly against the same admin endpoint/credentials
-// the rest of the client uses (rather than mixing in Admin.GetUser's own error handling,
-// which keeps the not-found check below reliable regardless of the response body shape).
+// user exists via Admin.GetUser, then issues the delete. The vendored supabase-go Admin
+// client has no delete wrapper, so the delete is built directly against the same admin
+// endpoint/credentials the rest of the client uses.
 func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
-	getResp, err := s.doAdminUserRequest(ctx, http.MethodGet, userID)
+	_, err := s.client.Admin.GetUser(ctx, userID)
 	if err != nil {
+		var errRes *supabase.ErrorResponse
+		if errors.As(err, &errRes) && errRes.Code == http.StatusNotFound {
+			// A prior call may have already deleted the Supabase identity but failed before
+			// the local user could be archived (e.g. the archive step errored after this
+			// succeeded). Treat "already gone" as success so a retry of the whole removal
+			// can still complete the local archival.
+			s.logger.Info(ctx, "user already removed from Supabase", "target_user_id", userID)
+			return nil
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to check user in Supabase").
 			WithReportableDetails(map[string]interface{}{"user_id": userID}).
 			Mark(ierr.ErrSystem)
 	}
-	_ = getResp.Body.Close()
 
-	if getResp.StatusCode == http.StatusNotFound {
-		// A prior call may have already deleted the Supabase identity but failed before
-		// the local user could be archived (e.g. the archive step errored after this
-		// succeeded). Treat "already gone" as success so a retry of the whole removal
-		// can still complete the local archival.
-		s.logger.Info(ctx, "user already removed from Supabase", "target_user_id", userID)
-		return nil
-	}
-	if getResp.StatusCode < http.StatusOK || getResp.StatusCode >= http.StatusMultipleChoices {
-		return ierr.NewError("failed to find user in Supabase").
-			WithHint("Supabase admin get user request failed").
-			WithReportableDetails(map[string]interface{}{
-				"user_id":     userID,
-				"status_code": getResp.StatusCode,
-			}).
-			Mark(ierr.ErrSystem)
-	}
-
-	delResp, err := s.doAdminUserRequest(ctx, http.MethodDelete, userID)
+	delResp, err := s.deleteUser(ctx, userID)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to delete user from Supabase").
@@ -245,11 +235,12 @@ func (s *supabaseAuth) RemoveUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-// doAdminUserRequest issues a request against the Supabase admin users/{id} endpoint using
-// the same base URL and service-role credentials as the rest of the client.
-func (s *supabaseAuth) doAdminUserRequest(ctx context.Context, method, userID string) (*http.Response, error) {
+// deleteUser issues a DELETE against the Supabase admin users/{id} endpoint. The vendored
+// supabase-go Admin client has no delete wrapper, so this uses the same base URL and
+// service-role credentials as the rest of the client.
+func (s *supabaseAuth) deleteUser(ctx context.Context, userID string) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s/%s/users/%s", s.client.BaseURL, supabase.AdminEndpoint, url.PathEscape(userID))
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
