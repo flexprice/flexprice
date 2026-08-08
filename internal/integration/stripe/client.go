@@ -193,8 +193,7 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 	if webhookSecret, exists := decryptedMetadata["webhook_secret"]; exists {
 		stripeConfig.WebhookSecret = webhookSecret
 		c.logger.Info(context.Background(), "webhook secret found in decrypted metadata",
-			"has_webhook_secret", webhookSecret != "",
-			"webhook_secret_length", len(webhookSecret))
+			"has_webhook_secret", webhookSecret != "")
 	} else {
 		c.logger.Info(context.Background(), "webhook_secret not found in decrypted metadata",
 			"available_keys", lo.Keys(decryptedMetadata))
