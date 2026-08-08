@@ -56,6 +56,7 @@ type StripeConnectionMetadata struct {
 	SecretKey      string `json:"secret_key"`
 	WebhookSecret  string `json:"webhook_secret"`
 	AccountID      string `json:"account_id,omitempty"`
+	BaseURL        string `json:"base_url,omitempty"`
 }
 
 // S3ConnectionMetadata represents S3-specific connection metadata (encrypted secrets only)

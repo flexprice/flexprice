@@ -3,6 +3,10 @@ package stripe
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -40,6 +44,7 @@ type StripeConfig struct {
 	SecretKey      string
 	PublishableKey string
 	WebhookSecret  string
+	BaseURL        string
 }
 
 // GetStripeClient returns a configured Stripe client for the current environment
@@ -62,7 +67,69 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 	// Initialize Stripe client with an OTel-instrumented HTTP backend so that
 	// outbound Stripe API calls surface in SigNoz External API Monitoring.
 	// 80s mirrors the Stripe SDK's default HTTP timeout.
-	backends := stripe.NewBackends(httpclient.NewOtelHTTPClient(80 * time.Second))
+	httpClient := httpclient.NewOtelHTTPClient(80 * time.Second)
+
+	if stripeConfig.BaseURL != "" {
+		parsedURL, err := url.Parse(stripeConfig.BaseURL)
+		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+			return nil, nil, ierr.NewError("invalid Stripe base URL").
+				WithHint("connection base_url must be a valid http or https URL with a host").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Normalize origin (scheme://host[:port])
+		targetOrigin := strings.ToLower(parsedURL.Scheme + "://" + parsedURL.Host)
+
+		allowedOriginsEnv := os.Getenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS")
+		if allowedOriginsEnv == "" {
+			return nil, nil, ierr.NewError("custom Stripe base URL is not enabled").
+				WithHint("operator must set FLEXPRICE_STRIPE_ALLOWED_BASE_URLS env var to allow custom Stripe endpoints").
+				Mark(ierr.ErrValidation)
+		}
+
+		allowedList := strings.Split(allowedOriginsEnv, ",")
+		isAllowed := false
+		for _, raw := range allowedList {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			allowedParsed, err := url.Parse(raw)
+			if err != nil || allowedParsed.Scheme == "" || allowedParsed.Host == "" {
+				continue
+			}
+			allowedOrigin := strings.ToLower(allowedParsed.Scheme + "://" + allowedParsed.Host)
+			if targetOrigin == allowedOrigin {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			return nil, nil, ierr.NewError("custom Stripe base URL origin is not in the operator allowlist").
+				WithHint("connection base_url origin must be explicitly listed in FLEXPRICE_STRIPE_ALLOWED_BASE_URLS").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Prevent redirects on custom backends to block open-redirect SSRF
+		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+
+		backends := stripe.NewBackends(httpClient)
+		backends.API = stripe.GetBackendWithConfig(
+			stripe.APIBackend,
+			&stripe.BackendConfig{
+				URL:        stripe.String(stripeConfig.BaseURL),
+				HTTPClient: httpClient,
+			},
+		)
+		c.logger.Info(ctx, "configured custom Stripe API base URL", "has_custom_base_url", true)
+		stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
+		return stripeClient, stripeConfig, nil
+	}
+
+	backends := stripe.NewBackends(httpClient)
 	stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
 
 	return stripeClient, stripeConfig, nil
@@ -97,10 +164,15 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 			"available_keys", lo.Keys(decryptedMetadata))
 	}
 
+	if baseURL, exists := decryptedMetadata["base_url"]; exists {
+		stripeConfig.BaseURL = baseURL
+	}
+
 	c.logger.Info(context.Background(), "final stripe config",
 		"has_secret_key", stripeConfig.SecretKey != "",
 		"has_publishable_key", stripeConfig.PublishableKey != "",
-		"has_webhook_secret", stripeConfig.WebhookSecret != "")
+		"has_webhook_secret", stripeConfig.WebhookSecret != "",
+		"has_custom_base_url", stripeConfig.BaseURL != "")
 
 	return stripeConfig, nil
 }
@@ -149,6 +221,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"publishable_key": publishableKey,
 			"webhook_secret":  webhookSecret,
 			"account_id":      conn.EncryptedSecretData.Stripe.AccountID,
+			"base_url":        conn.EncryptedSecretData.Stripe.BaseURL,
 		}
 
 		c.logger.Info(context.Background(), "successfully decrypted connection metadata",

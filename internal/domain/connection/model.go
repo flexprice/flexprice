@@ -24,6 +24,7 @@ type StripeConnection struct {
 	SecretKey      string `json:"secret_key"`
 	WebhookSecret  string `json:"webhook_secret"`
 	AccountID      string `json:"account_id,omitempty"`
+	BaseURL        string `json:"base_url,omitempty"`
 }
 
 // GetStripeConfig extracts Stripe configuration from connection metadata
@@ -45,6 +46,7 @@ func (c *Connection) GetStripeConfig() (*StripeConnection, error) {
 		SecretKey:      c.EncryptedSecretData.Stripe.SecretKey,
 		WebhookSecret:  c.EncryptedSecretData.Stripe.WebhookSecret,
 		AccountID:      c.EncryptedSecretData.Stripe.AccountID,
+		BaseURL:        c.EncryptedSecretData.Stripe.BaseURL,
 	}
 
 	return config, nil
@@ -80,6 +82,9 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		}
 		if aid, ok := metadata["account_id"].(string); ok {
 			stripeMetadata.AccountID = aid
+		}
+		if bu, ok := metadata["base_url"].(string); ok {
+			stripeMetadata.BaseURL = bu
 		}
 		return types.ConnectionMetadata{
 			Stripe: stripeMetadata,
