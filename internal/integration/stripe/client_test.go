@@ -209,7 +209,9 @@ func TestGetStripeClient_RedirectToAnotherOriginRejected(t *testing.T) {
 	}))
 	defer secondServer.Close()
 
+	firstServerCalled := false
 	firstServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		firstServerCalled = true
 		http.Redirect(w, r, secondServer.URL+"/v1/customers/cus_123", http.StatusFound)
 	}))
 	defer firstServer.Close()
@@ -223,8 +225,9 @@ func TestGetStripeClient_RedirectToAnotherOriginRejected(t *testing.T) {
 	stripeSDKClient, _, err := client.GetStripeClient(context.Background())
 	require.NoError(t, err)
 
-	// Retrieve will succeed with 302 response body from firstServer without following redirect to secondServer
-	cust, _ := stripeSDKClient.V1Customers.Retrieve(context.Background(), "cus_123", nil)
+	cust, err := stripeSDKClient.V1Customers.Retrieve(context.Background(), "cus_123", nil)
+	require.Error(t, err, "Stripe SDK must return an error for 302 response without following redirect")
+	assert.True(t, firstServerCalled, "request must reach the configured first server backend")
 	assert.False(t, secondServerCalled, "request must not reach redirected target origin")
 	if cust != nil {
 		assert.NotEqual(t, "cus_123", cust.ID)
@@ -350,4 +353,18 @@ func TestConvertFlatMetadataToStructured_StripeBaseURL(t *testing.T) {
 	require.NotNil(t, res.Stripe)
 	assert.Equal(t, "http://localhost:12111", res.Stripe.BaseURL)
 	assert.Equal(t, "sk_test_123", res.Stripe.SecretKey)
+
+	// Verify StripeConnectionMetadata.Validate() validates BaseURL
+	err := res.Stripe.Validate()
+	require.NoError(t, err)
+
+	invalidMetadata := &types.StripeConnectionMetadata{
+		PublishableKey: "pk_test_123",
+		SecretKey:      "sk_test_123",
+		WebhookSecret:  "whsec_123",
+		BaseURL:        "https://user:pass@payments.example.com",
+	}
+	err = invalidMetadata.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid base_url")
 }

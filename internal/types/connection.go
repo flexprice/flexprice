@@ -2,10 +2,53 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
+
+// validateStripeBaseURL validates that a raw URL is a valid origin (scheme://hostname[:port]).
+func validateStripeBaseURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("URL is empty")
+	}
+
+	parsedURL, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid URL syntax: %w", err)
+	}
+
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("scheme must be http or https")
+	}
+
+	if parsedURL.User != nil {
+		return fmt.Errorf("userinfo/credentials are forbidden in origin")
+	}
+
+	if parsedURL.Host == "" {
+		return fmt.Errorf("host is required")
+	}
+
+	if parsedURL.RawQuery != "" {
+		return fmt.Errorf("query string is forbidden in origin")
+	}
+
+	if parsedURL.Fragment != "" {
+		return fmt.Errorf("fragment is forbidden in origin")
+	}
+
+	if parsedURL.Path != "" && parsedURL.Path != "/" {
+		return fmt.Errorf("non-root path is forbidden in origin")
+	}
+
+	return nil
+}
 
 // ConnectionMetadataType represents the type of connection metadata
 type ConnectionMetadataType string
@@ -326,6 +369,13 @@ func (s *StripeConnectionMetadata) Validate() error {
 		return ierr.NewError("webhook_secret is required").
 			WithHint("Stripe webhook secret is required").
 			Mark(ierr.ErrValidation)
+	}
+	if s.BaseURL != "" {
+		if err := validateStripeBaseURL(s.BaseURL); err != nil {
+			return ierr.NewError("invalid base_url: " + err.Error()).
+				WithHint("connection base_url must be a valid origin (scheme://hostname[:port])").
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
