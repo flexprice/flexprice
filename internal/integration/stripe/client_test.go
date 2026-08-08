@@ -340,6 +340,59 @@ func TestGetStripeClient_NonRootPathRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "non-root path is forbidden")
 }
 
+func TestGetStripeClient_PortOnlyHostRejected(t *testing.T) {
+	t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", "http://:8080")
+
+	repo := new(mockConnectionRepo)
+	repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection("http://:8080"), nil)
+
+	client := setupTestStripeClient(repo)
+	_, _, err := client.GetStripeClient(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "hostname is required")
+}
+
+func TestGetStripeClient_ValidHostnamesIPv4IPv6Accepted(t *testing.T) {
+	testCases := []struct {
+		name      string
+		url       string
+		allowlist string
+	}{
+		{
+			name:      "domain with port",
+			url:       "http://example.com:8080",
+			allowlist: "http://example.com:8080",
+		},
+		{
+			name:      "ipv4 with port",
+			url:       "http://127.0.0.1:8080",
+			allowlist: "http://127.0.0.1:8080",
+		},
+		{
+			name:      "ipv6 literal with port",
+			url:       "http://[::1]:8080",
+			allowlist: "http://[::1]:8080",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", tc.allowlist)
+
+			repo := new(mockConnectionRepo)
+			repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection(tc.url), nil)
+
+			client := setupTestStripeClient(repo)
+			stripeSDKClient, config, err := client.GetStripeClient(context.Background())
+
+			require.NoError(t, err)
+			assert.NotNil(t, stripeSDKClient)
+			assert.Equal(t, tc.url, config.BaseURL)
+		})
+	}
+}
+
 func TestConvertFlatMetadataToStructured_StripeBaseURL(t *testing.T) {
 	flatData := map[string]interface{}{
 		"publishable_key": "pk_test_123",

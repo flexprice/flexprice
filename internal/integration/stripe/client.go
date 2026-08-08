@@ -70,8 +70,8 @@ func normalizeStripeOrigin(raw string) (string, error) {
 		return "", fmt.Errorf("userinfo/credentials are forbidden in origin")
 	}
 
-	if parsedURL.Host == "" {
-		return "", fmt.Errorf("host is required")
+	if parsedURL.Hostname() == "" {
+		return "", fmt.Errorf("hostname is required")
 	}
 
 	if parsedURL.RawQuery != "" {
