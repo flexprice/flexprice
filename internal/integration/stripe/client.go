@@ -47,6 +47,50 @@ type StripeConfig struct {
 	BaseURL        string
 }
 
+// normalizeStripeOrigin parses, validates, and normalizes a raw URL string into an origin (scheme://hostname[:port]).
+// It enforces that the URL is an absolute origin: scheme must be http or https, host must be non-empty,
+// and userinfo/credentials, query parameters, fragments, and non-root paths (other than optional trailing slash) are rejected.
+func normalizeStripeOrigin(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("URL is empty")
+	}
+
+	parsedURL, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL syntax: %w", err)
+	}
+
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("scheme must be http or https")
+	}
+
+	if parsedURL.User != nil {
+		return "", fmt.Errorf("userinfo/credentials are forbidden in origin")
+	}
+
+	if parsedURL.Host == "" {
+		return "", fmt.Errorf("host is required")
+	}
+
+	if parsedURL.RawQuery != "" {
+		return "", fmt.Errorf("query string is forbidden in origin")
+	}
+
+	if parsedURL.Fragment != "" {
+		return "", fmt.Errorf("fragment is forbidden in origin")
+	}
+
+	// Reject paths other than empty or "/"
+	if parsedURL.Path != "" && parsedURL.Path != "/" {
+		return "", fmt.Errorf("non-root path is forbidden in origin")
+	}
+
+	host := strings.ToLower(parsedURL.Host)
+	return scheme + "://" + host, nil
+}
+
 // GetStripeClient returns a configured Stripe client for the current environment
 func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeConfig, error) {
 	// Get Stripe connection for this environment
@@ -70,15 +114,12 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 	httpClient := httpclient.NewOtelHTTPClient(80 * time.Second)
 
 	if stripeConfig.BaseURL != "" {
-		parsedURL, err := url.Parse(stripeConfig.BaseURL)
-		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
-			return nil, nil, ierr.NewError("invalid Stripe base URL").
-				WithHint("connection base_url must be a valid http or https URL with a host").
+		targetOrigin, err := normalizeStripeOrigin(stripeConfig.BaseURL)
+		if err != nil {
+			return nil, nil, ierr.NewError(fmt.Sprintf("invalid Stripe base URL origin: %v", err)).
+				WithHint("connection base_url must be a valid origin (scheme://hostname[:port])").
 				Mark(ierr.ErrValidation)
 		}
-
-		// Normalize origin (scheme://host[:port])
-		targetOrigin := strings.ToLower(parsedURL.Scheme + "://" + parsedURL.Host)
 
 		allowedOriginsEnv := os.Getenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS")
 		if allowedOriginsEnv == "" {
@@ -90,15 +131,10 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 		allowedList := strings.Split(allowedOriginsEnv, ",")
 		isAllowed := false
 		for _, raw := range allowedList {
-			raw = strings.TrimSpace(raw)
-			if raw == "" {
+			allowedOrigin, err := normalizeStripeOrigin(raw)
+			if err != nil {
 				continue
 			}
-			allowedParsed, err := url.Parse(raw)
-			if err != nil || allowedParsed.Scheme == "" || allowedParsed.Host == "" {
-				continue
-			}
-			allowedOrigin := strings.ToLower(allowedParsed.Scheme + "://" + allowedParsed.Host)
 			if targetOrigin == allowedOrigin {
 				isAllowed = true
 				break

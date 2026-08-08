@@ -498,6 +498,7 @@ Environment variables override config.yaml. Example:
 
 - `FLEXPRICE_POSTGRES_HOST` overrides `postgres.host`
 - `FLEXPRICE_KAFKA_BROKERS` overrides `kafka.brokers`
+- `FLEXPRICE_STRIPE_ALLOWED_BASE_URLS`: Optional comma-separated operator allowlist of exact origins (`scheme://hostname[:port]`, e.g. `http://stripe-mock:12111,https://stripe-proxy.internal:8443`) for custom Stripe base URLs. Required only when connections configure a custom `base_url` (private/internal origins are supported when explicitly listed). Standard Stripe integration (`https://api.stripe.com`) requires no allowlist configuration.
 
 **ClickHouse per-query memory limit:** Every ClickHouse query is bounded by a hardcoded limit of 90 GB (`max_memory_usage`).
 

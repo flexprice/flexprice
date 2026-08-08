@@ -282,7 +282,59 @@ func TestGetStripeClient_NonHTTPScheme(t *testing.T) {
 	_, _, err := client.GetStripeClient(context.Background())
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid Stripe base URL")
+	assert.Contains(t, err.Error(), "invalid Stripe base URL origin")
+}
+
+func TestGetStripeClient_CredentialsUserinfoRejected(t *testing.T) {
+	t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", "https://payments.example.com")
+
+	repo := new(mockConnectionRepo)
+	repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection("https://user:pass@payments.example.com"), nil)
+
+	client := setupTestStripeClient(repo)
+	_, _, err := client.GetStripeClient(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "credentials are forbidden")
+}
+
+func TestGetStripeClient_QueryStringRejected(t *testing.T) {
+	t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", "https://payments.example.com")
+
+	repo := new(mockConnectionRepo)
+	repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection("https://payments.example.com?token=x"), nil)
+
+	client := setupTestStripeClient(repo)
+	_, _, err := client.GetStripeClient(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query string is forbidden")
+}
+
+func TestGetStripeClient_FragmentRejected(t *testing.T) {
+	t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", "https://payments.example.com")
+
+	repo := new(mockConnectionRepo)
+	repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection("https://payments.example.com#fragment"), nil)
+
+	client := setupTestStripeClient(repo)
+	_, _, err := client.GetStripeClient(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fragment is forbidden")
+}
+
+func TestGetStripeClient_NonRootPathRejected(t *testing.T) {
+	t.Setenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS", "https://payments.example.com")
+
+	repo := new(mockConnectionRepo)
+	repo.On("GetByProvider", mock.Anything, types.SecretProviderStripe).Return(createDummyConnection("https://payments.example.com/foo"), nil)
+
+	client := setupTestStripeClient(repo)
+	_, _, err := client.GetStripeClient(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "non-root path is forbidden")
 }
 
 func TestConvertFlatMetadataToStructured_StripeBaseURL(t *testing.T) {
