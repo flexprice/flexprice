@@ -38,11 +38,18 @@
 //
 // All queries built in this file use `?` positional placeholders for any value that
 // originates from user/API input (filter property names/values, customer IDs, event
-// name, timezone, group-by property, timestamps). Each query-building function returns
-// (query string, []interface{} args) — the args slice must be passed to the ClickHouse
-// driver's Query(ctx, query, args...) call in the same order the placeholders appear in
-// the concatenated query string, since ClickHouse binds positionally. This mirrors the
-// pattern already used in meter_usage_query_builder.go.
+// name, timestamps). Each query-building function returns (query string, []interface{}
+// args) — the args slice must be passed to the ClickHouse driver's Query(ctx, query,
+// args...) call in the same order the placeholders appear in the concatenated query
+// string, since ClickHouse binds positionally. This mirrors the pattern already used in
+// meter_usage_query_builder.go.
+//
+// Two inputs cannot be bound and are instead validated then interpolated, because they
+// are used as SQL identifiers rather than values:
+//   - timezone: validated by normalizeCHTimezone (constrained to resolvable IANA names
+//     via time.LoadLocation) before it is interpolated into the window expressions.
+//   - group-by property: validated by validateGroupByProperty (strict allow-list) before
+//     it is interpolated as the JSONExtractString key.
 
 package clickhouse
 
