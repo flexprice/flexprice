@@ -514,7 +514,7 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 			// this is safe to interpolate and always emits exactly one column — keeping
 			// this list in lockstep with the scan targets built below.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
+			alias := groupByPropertyAlias(propertyName)
 			sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
 			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
 			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
@@ -635,9 +635,12 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 		scanValues := make([]interface{}, 0)
 		scanValues = append(scanValues, &result.FeatureID, &result.PriceID, &result.MeterID)
 
-		// Add property fields
+		// Add property fields. Iterate params.GroupBy, not groupByFieldMapping: the SELECT
+		// list appends property columns in params.GroupBy order, and map iteration order is
+		// unspecified — ranging the map here would misalign scan targets with columns and
+		// assign one property's value to another property's key.
 		propertyValues := make(map[string]*string)
-		for groupBy := range groupByFieldMapping {
+		for _, groupBy := range params.GroupBy {
 			if strings.HasPrefix(groupBy, "properties.") {
 				propertyName := strings.TrimPrefix(groupBy, "properties.")
 				val := new(string)
@@ -768,9 +771,13 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 			// this is safe to interpolate and always emits exactly one column — keeping
 			// this list in lockstep with the scan targets built below.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			// The alias must be dot-free: a raw "region.code" alias would be parsed by
+			// ClickHouse as the qualified identifier region.code in the outer query, not
+			// as this column. Use the shared collision-free alias, same as getStandardAnalytics.
+			alias := groupByPropertyAlias(propertyName)
 			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
-			outerSelectColumns = append(outerSelectColumns, propertyName)
+			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, alias))
+			outerSelectColumns = append(outerSelectColumns, alias)
 		}
 	}
 

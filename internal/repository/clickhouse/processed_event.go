@@ -607,8 +607,8 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 			// every entry emits exactly one column, keeping this list in lockstep with
 			// the scan targets built from params.GroupBy.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			// Create alias like "prop_org_id" for "properties.org_id"
-			alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
+			// Dot-free, collision-free alias for "properties.<name>" (e.g. prop_org_5fid).
+			alias := groupByPropertyAlias(propertyName)
 			sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
 			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
 			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)

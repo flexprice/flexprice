@@ -48,3 +48,27 @@ func TestGroupByPropertyValidation_RejectsRatherThanDrops(t *testing.T) {
 			"group_by property %q must be rejected, not dropped", propertyName)
 	}
 }
+
+// TestGroupByPropertyAlias_DotFreeAndCollisionFree pins the alias contract the analytics
+// SELECT/scan paths rely on: the alias must contain no dot (a raw "region.code" alias is
+// parsed by ClickHouse as a qualified identifier, breaking the outer query) and must be
+// injective (a plain dots->underscores scheme collides "region.code" with "region_code",
+// producing duplicate column aliases that ClickHouse rejects).
+func TestGroupByPropertyAlias_DotFreeAndCollisionFree(t *testing.T) {
+	// dot-free
+	for _, name := range []string{"region.code", "a.b.c", "org_id", "region_code"} {
+		assert.NotContains(t, groupByPropertyAlias(name), ".",
+			"alias for %q must not contain a dot", name)
+	}
+
+	// injective across names that a naive scheme would collide
+	names := []string{"region.code", "region_code", "a.b", "a_b", "a", "org_id", "org.id"}
+	seen := map[string]string{}
+	for _, name := range names {
+		alias := groupByPropertyAlias(name)
+		if prev, dup := seen[alias]; dup {
+			assert.Failf(t, "alias collision", "%q and %q both map to alias %q", prev, name, alias)
+		}
+		seen[alias] = name
+	}
+}

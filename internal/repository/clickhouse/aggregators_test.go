@@ -142,7 +142,11 @@ func TestAggregatorGetQuery_NoInjection(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				params := baseUsageParams()
+				// Sum/Max branch on BucketSize; the other six aggregators window on
+				// WindowSize. Set both so every "_windowed" subtest exercises the
+				// windowed query path rather than silently rerunning the plain one.
 				params.BucketSize = bucketSize
+				params.WindowSize = bucketSize
 				params.ExternalCustomerID = maliciousProperty
 				params.Filters = map[string][]string{maliciousProperty: {maliciousValue}}
 				if agg.GetType() == types.AggregationSumWithMultiplier {
