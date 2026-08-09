@@ -52,11 +52,6 @@ func setContextValues(c *gin.Context, tenantID, userID, environmentID, userType 
 		ctx = context.WithValue(ctx, types.CtxUserType, userType)
 	}
 
-	// Set additional headers for downstream handlers
-	if environmentID == "" {
-		environmentID = c.GetHeader(types.HeaderEnvironment)
-	}
-
 	if environmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
