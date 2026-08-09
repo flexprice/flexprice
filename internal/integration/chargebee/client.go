@@ -317,13 +317,19 @@ func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password 
 			Mark(ierr.ErrInternal)
 	}
 
-	// Check if webhook auth is configured
-	// Note: WebhookUsername and WebhookPassword should be stored in your Chargebee connection config
-	// These are the credentials you set in Chargebee UI: "Protect webhook URL with basic authentication"
+	// Empty decrypted credentials mean either the connection was never fully
+	// configured, or decryption silently failed (decryptConnectionMetadata swallows
+	// decryption errors and returns ""). Either way, we cannot verify the request,
+	// so fail closed. The caller entered this branch because the encrypted ciphertext
+	// is present on the connection, so blank decrypted values here are anomalous.
 	if config.WebhookUsername == "" || config.WebhookPassword == "" {
-		c.logger.Info(ctx, "webhook Basic Auth credentials not configured, skipping verification",
-			"note", "Configure username/password in Chargebee webhook settings for security")
-		return nil // Allow webhook without auth if not configured
+		c.logger.Error(ctx, "webhook Basic Auth verification failed: decrypted credentials are empty",
+			"error", "webhook_basic_auth_decrypted_credentials_empty",
+			"has_encrypted_username", config.WebhookUsername != "",
+			"has_encrypted_password", config.WebhookPassword != "")
+		return ierr.NewError("webhook authentication failed").
+			WithHint("Webhook credentials could not be verified. Check that the Chargebee connection's webhook_username and webhook_password are set and that decryption is healthy.").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Verify credentials match what was configured

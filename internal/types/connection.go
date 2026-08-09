@@ -146,6 +146,19 @@ func (c *ChargebeeConnectionMetadata) Validate() error {
 			WithHint("Chargebee API key is required").
 			Mark(ierr.ErrValidation)
 	}
+	// Chargebee v2 has no webhook signature scheme, so Basic Auth is the only
+	// supported way to authenticate incoming webhooks. Without it, anyone who
+	// knows a Chargebee invoice id can forge payment_succeeded events.
+	if c.WebhookUsername == "" {
+		return ierr.NewError("webhook_username is required").
+			WithHint("Enable Basic Auth on the Chargebee webhook and set webhook_username to match").
+			Mark(ierr.ErrValidation)
+	}
+	if c.WebhookPassword == "" {
+		return ierr.NewError("webhook_password is required").
+			WithHint("Enable Basic Auth on the Chargebee webhook and set webhook_password to match").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 

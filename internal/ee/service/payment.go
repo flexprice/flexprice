@@ -156,23 +156,43 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
-	// Generate idempotency key
+	// Auto-generated key includes payment_method_type, payment_method_id, and
+	// payment_gateway so distinct intents don't collapse into one row: switching
+	// method (card → link), swapping the underlying card (pm_1 → pm_2), or
+	// changing gateway all produce distinct keys. payment_method_id also
+	// captures gateway implicitly, since each method belongs to a single gateway
+	// — this matters for subscription card charges where the caller doesn't set
+	// payment_gateway (gets resolved later in ProcessPayment). Callers can pass
+	// their own IdempotencyKey to opt out (installments, etc).
 	if p.IdempotencyKey == "" {
 		p.IdempotencyKey = s.idempGen.GenerateKey(idempotency.ScopePayment, map[string]interface{}{
-			"invoice_id": p.DestinationID,
-			"amount":     p.Amount,
-			"currency":   p.Currency,
-			// TODO: think of a better way to generate this key rather than using the current timestamp
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"invoice_id":          p.DestinationID,
+			"amount":              p.Amount,
+			"currency":            p.Currency,
+			"payment_method_type": p.PaymentMethodType,
+			"payment_method_id":   p.PaymentMethodID,
+			"payment_gateway":     lo.FromPtr(p.PaymentGateway),
 		})
 	}
 
-	// validate the payment object before creating it
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
 
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
+		// Concurrent request already inserted with this key — return theirs.
+		// Gated on the idempotency-key conflict specifically: any other
+		// constraint violation is also ErrAlreadyExists, and re-fetching by a
+		// key that was never inserted would turn it into a misleading 404.
+		if payment.IsIdempotencyKeyConflict(err) {
+			existing, fetchErr := s.PaymentRepo.GetByIdempotencyKey(ctx, p.IdempotencyKey)
+			if fetchErr != nil {
+				// The row is gone or unreadable — report the original conflict
+				// rather than the lookup miss, which would misdescribe the cause.
+				return nil, err
+			}
+			return dto.NewPaymentResponse(existing), nil
+		}
 		return nil, err
 	}
 

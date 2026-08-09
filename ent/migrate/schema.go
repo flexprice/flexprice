@@ -1442,7 +1442,7 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "idempotency_key", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "idempotency_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "destination_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "destination_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "payment_method_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1486,6 +1486,11 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((payment_gateway IS NOT NULL) AND (gateway_payment_id IS NOT NULL))",
 				},
+			},
+			{
+				Name:    "idx_tenant_environment_payment_idempotency_key_unique",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[7], PaymentsColumns[8]},
 			},
 		},
 	}
@@ -1699,6 +1704,14 @@ var (
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[34], PricesColumns[40]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
+				},
+			},
+			{
+				Name:    "price_tenant_id_environment_id_entity_id_parent_price_id",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[36]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((entity_type)::text = 'SUBSCRIPTION'::text))",
 				},
 			},
 		},
@@ -1995,9 +2008,9 @@ var (
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[17], SubscriptionsColumns[11], SubscriptionsColumns[2]},
 			},
 			{
-				Name:    "subscription_tenant_id_environment_id_plan_id_synced_price_sequence",
+				Name:    "subscription_tenant_id_environment_id_plan_id_synced_price_sequence_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44], SubscriptionsColumns[0]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))",
 				},
@@ -2093,6 +2106,14 @@ var (
 				Name:    "subscriptionlineitem_subscription_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionLineItemsColumns[37], SubscriptionLineItemsColumns[2]},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_price_id_entity_type",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[37], SubscriptionLineItemsColumns[12], SubscriptionLineItemsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
 			},
 		},
 	}

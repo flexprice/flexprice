@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -282,4 +283,179 @@ func (s *PaymentServiceSuite) TestCreatePayment_CustomerDestination_ValidatesCus
 		s.Equal(types.PaymentDestinationTypeCustomer, resp.DestinationType)
 		s.Equal(s.testData.customer.ID, resp.DestinationID)
 	})
+}
+
+// The VAPT finding: CreatePayment previously auto-generated its idempotency key
+// from time.Now() at second precision, so a client timeout + retry produced a
+// different key, bypassed the unique constraint, and inserted a second payment
+// row. With process_payment=true that meant a second real gateway charge against
+// the customer's card.
+//
+// The key is now deterministic on the payment intent, and Create surfaces the
+// unique-constraint violation as ErrAlreadyExists which CreatePayment catches and
+// resolves by returning the existing payment.
+func (s *PaymentServiceSuite) TestCreatePayment_RetryIsIdempotent() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	newReq := func() *dto.CreatePaymentRequest {
+		return &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     s.testData.invoice.ID,
+			PaymentMethodType: types.PaymentMethodTypeOffline,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+		}
+	}
+
+	first, err := s.service.CreatePayment(ctx, newReq())
+	s.Require().NoError(err)
+	s.Require().NotEmpty(first.IdempotencyKey, "auto-generated key must be set")
+
+	// The retry: identical intent, no caller-supplied key.
+	second, err := s.service.CreatePayment(ctx, newReq())
+	s.Require().NoError(err, "retry must not error — it must return the existing payment")
+	s.Equal(first.ID, second.ID, "retry created a duplicate payment row (the duplicate-charge bug)")
+	s.Equal(first.IdempotencyKey, second.IdempotencyKey, "auto-generated key must be deterministic")
+}
+
+// Callers that genuinely want a second payment for the same intent (installments,
+// partial re-attempts) opt out by supplying their own key. This is the escape
+// hatch that makes the deterministic default safe to ship.
+func (s *PaymentServiceSuite) TestCreatePayment_DistinctIdempotencyKeysCreateDistinctPayments() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	newReq := func(key string) *dto.CreatePaymentRequest {
+		return &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     s.testData.invoice.ID,
+			PaymentMethodType: types.PaymentMethodTypeOffline,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			ProcessPayment:    false,
+			IdempotencyKey:    key,
+		}
+	}
+
+	first, err := s.service.CreatePayment(ctx, newReq("installment-1"))
+	s.Require().NoError(err)
+
+	second, err := s.service.CreatePayment(ctx, newReq("installment-2"))
+	s.Require().NoError(err)
+
+	s.NotEqual(first.ID, second.ID, "distinct caller-supplied keys must create distinct payments")
+}
+
+// The concurrency case CodeRabbit and CodeAnt both flagged. Lookup-then-insert is
+// not atomic, so two in-flight requests can both miss and both attempt Create.
+// The loser must receive the winner's payment rather than a raw constraint error.
+func (s *PaymentServiceSuite) TestCreatePayment_ConcurrentRetriesReturnSamePayment() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	const concurrent = 8
+	var wg sync.WaitGroup
+	ids := make([]string, concurrent)
+	errs := make([]error, concurrent)
+
+	wg.Add(concurrent)
+	for i := 0; i < concurrent; i++ {
+		go func(i int) {
+			defer wg.Done()
+			resp, err := s.service.CreatePayment(ctx, &dto.CreatePaymentRequest{
+				DestinationType:   types.PaymentDestinationTypeInvoice,
+				DestinationID:     s.testData.invoice.ID,
+				PaymentMethodType: types.PaymentMethodTypeOffline,
+				Amount:            decimal.NewFromInt(100),
+				Currency:          "usd",
+				ProcessPayment:    false,
+			})
+			errs[i] = err
+			if err == nil {
+				ids[i] = resp.ID
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		s.Require().NoError(err, "concurrent request %d failed instead of returning the existing payment", i)
+	}
+
+	unique := lo.Uniq(ids)
+	s.Len(unique, 1, "concurrent identical requests produced %d distinct payments (duplicate charges)", len(unique))
+}
+
+// A constraint violation that is NOT the idempotency-key index (a duplicate
+// payment ID, say) is also marked ErrAlreadyExists by the repository. Treating
+// every ErrAlreadyExists as an idempotency conflict made CreatePayment re-fetch
+// by a key that was never inserted, turning a 409 into a misleading 404.
+func (s *PaymentServiceSuite) TestCreatePayment_NonIdempotencyConstraintErrorIsNotMasked() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	err := s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+		ID:                "pay_duplicate_id_probe",
+		IdempotencyKey:    "key-already-taken",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            decimal.NewFromInt(100),
+		Currency:          "usd",
+		PaymentStatus:     types.PaymentStatusPending,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	})
+	s.Require().NoError(err)
+
+	// Same ID, different idempotency key: a non-idempotency constraint failure.
+	err = s.GetStores().PaymentRepo.Create(ctx, &payment.Payment{
+		ID:                "pay_duplicate_id_probe",
+		IdempotencyKey:    "a-different-key",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            decimal.NewFromInt(100),
+		Currency:          "usd",
+		PaymentStatus:     types.PaymentStatusPending,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	})
+	s.Require().Error(err)
+	s.False(payment.IsIdempotencyKeyConflict(err),
+		"a duplicate-ID violation must not be tagged as an idempotency conflict")
+	s.False(ierr.IsNotFound(err), "must not surface as ErrNotFound")
+}
+
+// Payments created without an explicit TenantID take it from context. The store
+// must persist that resolved tenant, otherwise the row is kept with an empty
+// TenantID, a later retry compares "" against the context tenant, the duplicate
+// goes undetected, and the idempotency guarantee silently disappears.
+func (s *PaymentServiceSuite) TestCreatePayment_RetryIsIdempotentWhenTenantComesFromContext() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	newPayment := func() *payment.Payment {
+		return &payment.Payment{
+			ID:                types.GenerateUUIDWithPrefix("pay"),
+			IdempotencyKey:    "tenant-from-context-key",
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     s.testData.invoice.ID,
+			PaymentMethodType: types.PaymentMethodTypeOffline,
+			Amount:            decimal.NewFromInt(100),
+			Currency:          "usd",
+			PaymentStatus:     types.PaymentStatusPending,
+			EnvironmentID:     "test-env-id",
+			// TenantID deliberately left empty — resolved from ctx.
+		}
+	}
+
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, newPayment()))
+
+	// The retry carries the tenant explicitly — as a caller that populated
+	// BaseModel would. If the first insert was stored with an empty TenantID,
+	// this comparison misses and the duplicate slips through.
+	retry := newPayment()
+	retry.TenantID = types.GetTenantID(ctx)
+	s.Require().NotEmpty(retry.TenantID, "test context must carry a tenant for this to be meaningful")
+
+	err := s.GetStores().PaymentRepo.Create(ctx, retry)
+	s.Require().Error(err, "second insert with the same key must be rejected")
+	s.True(payment.IsIdempotencyKeyConflict(err),
+		"context-resolved tenant must still be matched by the uniqueness check")
 }
