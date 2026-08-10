@@ -27,6 +27,18 @@ type CreatePaymentRequest struct {
 	Metadata               types.Metadata               `json:"metadata,omitempty"`
 	ProcessPayment         bool                         `json:"process_payment" default:"true"`
 	SaveCardAndMakeDefault bool                         `json:"save_card_and_make_default" default:"false"`
+	GatewayOptions         *PaymentGatewayOptions       `json:"gateway_options,omitempty"`
+}
+
+// PaymentGatewayOptions holds typed, per-gateway payment options.
+type PaymentGatewayOptions struct {
+	Stripe *StripePaymentGatewayOptions `json:"stripe,omitempty"`
+}
+
+// StripePaymentGatewayOptions carries Stripe-specific payment options.
+type StripePaymentGatewayOptions struct {
+	// TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout Sessions.
+	TaxIDCollectionEnabled *bool `json:"tax_id_collection_enabled,omitempty"`
 }
 
 // UpdatePaymentRequest represents a request to update a payment
@@ -208,6 +220,21 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		return nil, err
 	}
 
+	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil {
+		switch {
+		case r.PaymentMethodType != types.PaymentMethodTypePaymentLink,
+			r.PaymentGateway == nil,
+			r.PaymentGateway != nil && *r.PaymentGateway != types.PaymentGatewayTypeStripe:
+			return nil, ierr.NewError("gateway_options.stripe only applies to Stripe payment-link payments").
+				WithHint("Remove gateway_options.stripe, or set payment_method_type to PAYMENT_LINK and payment_gateway to stripe").
+				WithReportableDetails(map[string]interface{}{
+					"payment_method_type": r.PaymentMethodType,
+					"payment_gateway":     r.PaymentGateway,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Initialize gateway metadata for storing payment link related fields
 	gatewayMetadata := types.Metadata{}
 
@@ -220,6 +247,9 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 	}
 	if r.SaveCardAndMakeDefault {
 		gatewayMetadata["save_card_and_make_default"] = "true"
+	}
+	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil && lo.FromPtr(r.GatewayOptions.Stripe.TaxIDCollectionEnabled) {
+		gatewayMetadata["tax_id_collection_enabled"] = "true"
 	}
 
 	p := &payment.Payment{

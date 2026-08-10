@@ -145,6 +145,61 @@ func (s *PaymentServiceSuite) TestCreatePaymentLink_InitiatedStatus() {
 	s.Equal(string(types.PaymentGatewayTypeStripe), *payment.PaymentGateway)
 }
 
+func (s *PaymentServiceSuite) TestCreatePaymentLink_TaxIDCollection() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+
+	baseReq := func() *dto.CreatePaymentRequest {
+		return &dto.CreatePaymentRequest{
+			DestinationType:   types.PaymentDestinationTypeInvoice,
+			DestinationID:     s.testData.invoice.ID,
+			PaymentMethodType: types.PaymentMethodTypePaymentLink,
+			PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
+			Amount:            decimal.NewFromInt(1000),
+			Currency:          "usd",
+			ProcessPayment:    false, // Don't process immediately to avoid Stripe calls
+		}
+	}
+
+	s.Run("enabled_on_stripe_payment_link_persists_to_gateway_metadata", func() {
+		req := baseReq()
+		req.GatewayOptions = &dto.PaymentGatewayOptions{
+			Stripe: &dto.StripePaymentGatewayOptions{TaxIDCollectionEnabled: lo.ToPtr(true)},
+		}
+
+		resp, err := s.service.CreatePayment(ctx, req)
+		s.Require().NoError(err)
+
+		stored, err := s.GetStores().PaymentRepo.Get(ctx, resp.ID)
+		s.Require().NoError(err)
+		s.Equal("true", stored.GatewayMetadata["tax_id_collection_enabled"])
+	})
+
+	s.Run("rejected_when_not_payment_link", func() {
+		req := baseReq()
+		req.PaymentMethodType = types.PaymentMethodTypeCard
+		req.PaymentMethodID = "pm_test"
+		req.GatewayOptions = &dto.PaymentGatewayOptions{
+			Stripe: &dto.StripePaymentGatewayOptions{TaxIDCollectionEnabled: lo.ToPtr(true)},
+		}
+
+		_, err := s.service.CreatePayment(ctx, req)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err), "expected validation-class error, got: %v", err)
+	})
+
+	s.Run("rejected_when_gateway_not_stripe", func() {
+		req := baseReq()
+		req.PaymentGateway = lo.ToPtr(types.PaymentGatewayTypeRazorpay)
+		req.GatewayOptions = &dto.PaymentGatewayOptions{
+			Stripe: &dto.StripePaymentGatewayOptions{TaxIDCollectionEnabled: lo.ToPtr(true)},
+		}
+
+		_, err := s.service.CreatePayment(ctx, req)
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err), "expected validation-class error, got: %v", err)
+	})
+}
+
 func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {
 	// Add environment ID to context
 	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
