@@ -327,6 +327,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 		_, err = r.client.Writer(ctx).CreditNoteLineItem.Update().
 			Where(
 				creditnotelineitem.TenantID(types.GetTenantID(ctx)),
+				creditnotelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 				creditnotelineitem.CreditNoteID(creditNoteID),
 				creditnotelineitem.IDIn(itemIDs...),
 			).

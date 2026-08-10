@@ -3,6 +3,7 @@ package quickbooks
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestEscapeQueryLiteral(t *testing.T) {
@@ -35,8 +36,27 @@ func TestEscapeQueryLiteral(t *testing.T) {
 func TestEscapeQueryLiteral_LengthBound(t *testing.T) {
 	long := strings.Repeat("a", maxQueryLiteralLen+50)
 	got := escapeQueryLiteral(long)
-	if len(got) != maxQueryLiteralLen {
-		t.Fatalf("length = %d, want %d", len(got), maxQueryLiteralLen)
+	if len([]rune(got)) != maxQueryLiteralLen {
+		t.Fatalf("rune length = %d, want %d", len([]rune(got)), maxQueryLiteralLen)
+	}
+}
+
+func TestEscapeQueryLiteral_RuneBoundary(t *testing.T) {
+	// Multi-byte runes: bounding must be by rune, never cutting a rune in half.
+	// "€" is 3 bytes; a string of these that exceeds the rune cap must truncate
+	// to exactly maxQueryLiteralLen runes and remain valid UTF-8.
+	in := strings.Repeat("€", maxQueryLiteralLen+20)
+	got := escapeQueryLiteral(in)
+	if len([]rune(got)) != maxQueryLiteralLen {
+		t.Fatalf("rune length = %d, want %d", len([]rune(got)), maxQueryLiteralLen)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("result is not valid UTF-8: %q", got)
+	}
+	// Under the cap: a multi-byte value must pass through unchanged.
+	small := "café O'Brien"
+	if got := escapeQueryLiteral(small); got != "café O''Brien" {
+		t.Fatalf("escapeQueryLiteral(%q) = %q, want %q", small, got, "café O''Brien")
 	}
 }
 

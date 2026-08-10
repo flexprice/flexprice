@@ -403,6 +403,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 		_, err = r.client.Writer(ctx).InvoiceLineItem.Update().
 			Where(
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 				invoicelineitem.InvoiceID(invoiceID),
 				invoicelineitem.IDIn(itemIDs...),
 			).
@@ -626,6 +627,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			Where(
 				invoicelineitem.InvoiceID(id),
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
+				invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).

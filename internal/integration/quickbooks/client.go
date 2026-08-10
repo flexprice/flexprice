@@ -34,15 +34,17 @@ const maxQueryLiteralLen = 100
 // and could smuggle clauses or corrupt the request URL, so they are removed. The
 // result is length-bounded to the field maximum.
 func escapeQueryLiteral(s string) string {
-	if len(s) > maxQueryLiteralLen {
-		s = s[:maxQueryLiteralLen]
-	}
+	// Strip control characters first, then bound by runes (not bytes) so a
+	// multi-byte character is never cut in half, and finally double single quotes.
 	s = strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return -1
 		}
 		return r
 	}, s)
+	if runes := []rune(s); len(runes) > maxQueryLiteralLen {
+		s = string(runes[:maxQueryLiteralLen])
+	}
 	return strings.ReplaceAll(s, "'", "''")
 }
 
