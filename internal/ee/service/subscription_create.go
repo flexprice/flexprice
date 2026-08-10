@@ -51,10 +51,36 @@ func (s *subscriptionService) startCreateSubscriptionCheckout(
 	return nil
 }
 
+func (s *subscriptionService) draftChildSubscriptions(ctx context.Context, parentID string) ([]*subscription.Subscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	filter.ParentSubscriptionIDs = []string{parentID}
+	filter.SubscriptionTypes = []types.SubscriptionType{
+		types.SubscriptionTypeInherited,
+		types.SubscriptionTypeGroupedInvoicing,
+	}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusDraft}
+
+	return s.SubRepo.List(ctx, filter)
+}
+
 func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub *subscription.Subscription) error {
 	if sub == nil {
 		return ierr.NewError("subscription is required to activate a draft create").
 			Mark(ierr.ErrValidation)
+	}
+
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		children, err := s.draftChildSubscriptions(ctx, sub.ID)
+		if err != nil {
+			return err
+		}
+
+		for _, child := range children {
+			if err := s.activateDraftSubscription(ctx, child); err != nil {
+				return err
+			}
+		}
 	}
 
 	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
@@ -95,6 +121,24 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 			"subscription_status", sub.SubscriptionStatus,
 		)
 		return
+	}
+
+	if children, err := s.draftChildSubscriptions(ctx, subscriptionID); err != nil {
+		s.Logger.Error(ctx, "failed to list draft children for checkout cleanup",
+			"error", err,
+			"subscription_id", subscriptionID,
+		)
+	} else {
+		for _, child := range children {
+			s.archiveDraftSubscriptionDependencies(ctx, child.ID)
+			if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
+				s.Logger.Error(ctx, "failed to archive draft child subscription",
+					"error", err,
+					"subscription_id", subscriptionID,
+					"child_subscription_id", child.ID,
+				)
+			}
+		}
 	}
 
 	s.archiveDraftSubscriptionDependencies(ctx, subscriptionID)

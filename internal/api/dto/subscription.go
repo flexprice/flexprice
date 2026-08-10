@@ -321,6 +321,30 @@ type SubscriptionInheritanceConfig struct {
 	GroupedInvoicingChildrenToCreate []GroupedInvoicingChildRequest `json:"grouped_invoicing_children_to_create,omitempty" validate:"omitempty,dive"`
 }
 
+func (c *SubscriptionInheritanceConfig) checkoutUnsupportedFields() bool {
+	if c == nil {
+		return false
+	}
+
+	if len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return true
+	}
+	if c.ParentSubscriptionID != "" {
+		return true
+	}
+	if c.InvoicingCustomerExternalID != nil {
+		return true
+	}
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 {
+		return true
+	}
+	if len(c.GroupedInvoicingChildrenToCreate) > 0 {
+		return true
+	}
+
+	return false
+}
+
 func (c *SubscriptionInheritanceConfig) Validate() error {
 	if c == nil {
 		return nil
@@ -849,10 +873,10 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// TODO: Handle inheritance for checkout-gated creates
-	if r.Inheritance != nil {
-		return ierr.NewError("inheritance is not supported with checkout").
-			WithHint("Remove checkout to create an inherited or grouped-invoicing subscription").
+	if unsupported := r.Inheritance.checkoutUnsupportedFields(); unsupported {
+		return ierr.NewError("inheritance field is not supported with checkout").
+			WithHint("Remove checkout, or remove the listed inheritance fields to gate this subscription behind payment").
+			WithReportableDetails(map[string]any{"fields": unsupported}).
 			Mark(ierr.ErrValidation)
 	}
 

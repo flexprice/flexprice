@@ -742,3 +742,146 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_Collection
 		})
 	}
 }
+
+// ─────────────────────────────────────────────
+// Draft-child cascade plumbing
+//
+// Inheritance is still rejected with checkout, so no create path produces draft children yet.
+// These seed the state directly through the repo — the exact shape the gated parent create will
+// materialize once a field is unlocked.
+// ─────────────────────────────────────────────
+
+func (s *SubscriptionServiceSuite) seedChildSubscription(
+	parent *subscription.Subscription,
+	subType types.SubscriptionType,
+	status types.SubscriptionStatus,
+) *subscription.Subscription {
+	ctx := s.GetContext()
+
+	child := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           parent.CustomerID,
+		PlanID:               parent.PlanID,
+		Currency:             parent.Currency,
+		SubscriptionStatus:   status,
+		SubscriptionType:     subType,
+		ParentSubscriptionID: lo.ToPtr(parent.ID),
+		BillingAnchor:        parent.BillingAnchor,
+		BillingCycle:         parent.BillingCycle,
+		StartDate:            parent.StartDate,
+		CurrentPeriodStart:   parent.CurrentPeriodStart,
+		CurrentPeriodEnd:     parent.CurrentPeriodEnd,
+		BillingCadence:       parent.BillingCadence,
+		BillingPeriod:        parent.BillingPeriod,
+		BillingPeriodCount:   parent.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parent.EnvironmentID,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, child))
+	return child
+}
+
+// seedDraftParent creates a draft parent-typed subscription without going through the gated path.
+func (s *SubscriptionServiceSuite) seedDraftParent(planID string) *subscription.Subscription {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	req := s.checkoutCreateRequest(planID)
+	req.Checkout = nil
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	resp, err := subService.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	resp.Subscription.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, resp.Subscription))
+	return resp.Subscription
+}
+
+func (s *SubscriptionServiceSuite) TestDraftChildSubscriptions_ListsBothShapesAndOnlyDrafts() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_draft_children_lister", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_draft_children_lister")
+	inheritedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+	activeChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusActive)
+
+	children, err := subService.draftChildSubscriptions(ctx, parent.ID)
+	s.Require().NoError(err)
+
+	ids := lo.Map(children, func(c *subscription.Subscription, _ int) string { return c.ID })
+	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID}, ids,
+		"both inheritance shapes must be listed, and only while draft")
+	s.NotContains(ids, activeChild.ID, "an already-active child is not the cascade's business")
+}
+
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CascadesToDraftChildren() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_cascade", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_activate_cascade")
+	inheritedChild := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+
+	for _, id := range []string{parent.ID, inheritedChild.ID, groupedChild.ID} {
+		activated, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus,
+			"payment activates the whole group, not just the parent (%s)", id)
+	}
+}
+
+// A second webhook delivery must not error, and must not un-activate anything.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CascadeIsIdempotent() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_cascade_replay", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_activate_cascade_replay")
+	child := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+
+	activated, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus)
+}
+
+func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CascadesToDraftChildren() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_archive_cascade", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_archive_cascade")
+	inheritedChild := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	subService.archiveDraftCheckoutSubscription(ctx, parent.ID)
+
+	for _, id := range []string{parent.ID, inheritedChild.ID, groupedChild.ID} {
+		archived, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		s.Equal(types.StatusArchived, archived.Status,
+			"an abandoned checkout must not leave the group behind (%s)", id)
+	}
+}
+
+// The cascade must stay inert for the standalone subscriptions every existing gated create produces.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_StandaloneIsUnchanged() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_standalone", decimal.NewFromInt(50), 0)
+
+	_, draftSub, _ := s.seedPayFirstSubscriptionCheckout("plan_activate_standalone")
+	s.Require().NoError(subService.activateDraftSubscription(ctx, draftSub))
+
+	activated, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus)
+}
