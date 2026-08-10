@@ -51,7 +51,7 @@ func (s *subscriptionService) startCreateSubscriptionCheckout(
 	return nil
 }
 
-func (s *subscriptionService) draftChildSubscriptions(ctx context.Context, parentID string) ([]*subscription.Subscription, error) {
+func (s *subscriptionService) childSubscriptions(ctx context.Context, parentID string, statuses ...types.SubscriptionStatus) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.ParentSubscriptionIDs = []string{parentID}
@@ -59,7 +59,7 @@ func (s *subscriptionService) draftChildSubscriptions(ctx context.Context, paren
 		types.SubscriptionTypeInherited,
 		types.SubscriptionTypeGroupedInvoicing,
 	}
-	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusDraft}
+	filter.SubscriptionStatus = statuses
 
 	return s.SubRepo.List(ctx, filter)
 }
@@ -71,7 +71,7 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 	}
 
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		children, err := s.draftChildSubscriptions(ctx, sub.ID)
+		children, err := s.childSubscriptions(ctx, sub.ID, types.SubscriptionStatusDraft)
 		if err != nil {
 			return err
 		}
@@ -123,21 +123,26 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 		return
 	}
 
-	if children, err := s.draftChildSubscriptions(ctx, subscriptionID); err != nil {
-		s.Logger.Error(ctx, "failed to list draft children for checkout cleanup",
+	// Every status: the parent is still draft, so nothing here was ever paid for, whatever
+	// status its children resolved to.
+	children, err := s.childSubscriptions(ctx, subscriptionID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list children for checkout cleanup, leaving the group intact",
 			"error", err,
 			"subscription_id", subscriptionID,
 		)
-	} else {
-		for _, child := range children {
-			s.archiveDraftSubscriptionDependencies(ctx, child.ID)
-			if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
-				s.Logger.Error(ctx, "failed to archive draft child subscription",
-					"error", err,
-					"subscription_id", subscriptionID,
-					"child_subscription_id", child.ID,
-				)
-			}
+		return
+	}
+
+	for _, child := range children {
+		s.archiveDraftSubscriptionDependencies(ctx, child.ID)
+		if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
+			s.Logger.Error(ctx, "failed to archive child subscription, leaving the group intact",
+				"error", err,
+				"subscription_id", subscriptionID,
+				"child_subscription_id", child.ID,
+			)
+			return
 		}
 	}
 

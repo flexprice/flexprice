@@ -745,11 +745,11 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_Collection
 }
 
 // ─────────────────────────────────────────────
-// Draft-child cascade plumbing
+// Child cascade plumbing
 //
-// Inheritance is still rejected with checkout, so no create path produces draft children yet.
-// These seed the state directly through the repo — the exact shape the gated parent create will
-// materialize once a field is unlocked.
+// A gated parent create materializes these through grouped_invoicing_children_to_create; the
+// inherited shapes are still gated off. These seed the state directly through the repo so the
+// cascade can be exercised against every child status independently of how it was produced.
 // ─────────────────────────────────────────────
 
 func (s *SubscriptionServiceSuite) seedChildSubscription(
@@ -799,7 +799,7 @@ func (s *SubscriptionServiceSuite) seedDraftParent(planID string) *subscription.
 	return resp.Subscription
 }
 
-func (s *SubscriptionServiceSuite) TestDraftChildSubscriptions_ListsBothShapesAndOnlyDrafts() {
+func (s *SubscriptionServiceSuite) TestChildSubscriptions_DraftFilterVsEveryStatus() {
 	ctx := s.GetContext()
 	subService := s.service.(*subscriptionService)
 	s.seedFixedPricePlan("plan_draft_children_lister", decimal.NewFromInt(50), 0)
@@ -807,15 +807,20 @@ func (s *SubscriptionServiceSuite) TestDraftChildSubscriptions_ListsBothShapesAn
 	parent := s.seedDraftParent("plan_draft_children_lister")
 	inheritedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
 	groupedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+	trialingChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusTrialing)
 	activeChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusActive)
 
-	children, err := subService.draftChildSubscriptions(ctx, parent.ID)
+	drafts, err := subService.childSubscriptions(ctx, parent.ID, types.SubscriptionStatusDraft)
 	s.Require().NoError(err)
+	draftIDs := lo.Map(drafts, func(c *subscription.Subscription, _ int) string { return c.ID })
+	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID}, draftIDs,
+		"the activation cascade takes both inheritance shapes, and only while draft")
 
-	ids := lo.Map(children, func(c *subscription.Subscription, _ int) string { return c.ID })
-	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID}, ids,
-		"both inheritance shapes must be listed, and only while draft")
-	s.NotContains(ids, activeChild.ID, "an already-active child is not the cascade's business")
+	all, err := subService.childSubscriptions(ctx, parent.ID)
+	s.Require().NoError(err)
+	allIDs := lo.Map(all, func(c *subscription.Subscription, _ int) string { return c.ID })
+	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID, trialingChild.ID, activeChild.ID}, allIDs,
+		"cleanup takes every child, whatever status it resolved to")
 }
 
 func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CascadesToDraftChildren() {
@@ -1050,12 +1055,50 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFai
 	s.Require().NoError(err)
 	s.Equal(types.StatusArchived, archivedParent.Status)
 
-	for _, child := range s.groupedChildrenOf(parent.ID) {
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1, "the seat must exist for its archival to mean anything")
+	for _, child := range children {
 		archivedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
 		s.Require().NoError(err)
 		s.Equal(types.StatusArchived, archivedChild.Status,
 			"an abandoned checkout must not leave a seat behind")
 	}
+}
+
+// A seat whose plan carries a trial falls through the gate as trialing rather than draft, so a
+// draft-only cleanup would leave it live — entitlements running for a bundle nobody paid for.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFailureArchivesTrialingSeat() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_trial_archive_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_trial_archive_seat", decimal.NewFromInt(30), 14)
+	s.seedChildCustomer("ext_seat_trial_archive")
+
+	idempKey := "create-subscription-trial-archive-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_trial_archive_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_trial_archive_seat", ExternalCustomerID: "ext_seat_trial_archive"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+
+	parent := s.subscriptionForPlan("plan_trial_archive_parent")
+	s.Require().NotNil(parent)
+
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1)
+	s.Require().Equal(types.SubscriptionStatusTrialing, children[0].SubscriptionStatus,
+		"fixture guard — this test is only meaningful while the seat falls through as trialing")
+
+	archivedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, children[0].ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusArchived, archivedChild.Status,
+		"a trialing seat must not outlive the abandoned bundle it belongs to")
 }
 
 // seedDraftGroupedChild builds a draft grouped_invoicing child that carries real line items, which
