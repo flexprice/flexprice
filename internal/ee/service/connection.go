@@ -718,6 +718,17 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
+	// Zoho Books: validate the metadata on direct creation too. The OAuth flow
+	// gates accounts_server and api_domain behind a CSRF state token, but those
+	// same fields can be supplied straight to this endpoint, and they become the
+	// host for every later token refresh and API call. Validating here means
+	// both routes converge on the same checks.
+	if conn.ProviderType == types.SecretProviderZohoBooks && conn.EncryptedSecretData.ZohoBooks != nil {
+		if err := conn.EncryptedSecretData.ZohoBooks.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	// Check if this is a Flexprice-managed S3 connection
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
 		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",

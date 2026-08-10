@@ -2,6 +2,7 @@ package types
 
 import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 // ScheduledTaskInterval represents the interval for scheduled tasks
@@ -211,6 +212,10 @@ func (s *S3JobConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := s.validateEndpointURL(); err != nil {
+		return err
+	}
+
 	// Validate compression type if provided
 	if err := s.Compression.Validate(); err != nil {
 		return err
@@ -242,6 +247,10 @@ func (s *S3JobConfig) ValidateForFlexpriceManaged() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := s.validateEndpointURL(); err != nil {
+		return err
+	}
+
 	// Only validate compression and encryption (bucket/region will be populated from config)
 	if err := s.Compression.Validate(); err != nil {
 		return err
@@ -249,6 +258,29 @@ func (s *S3JobConfig) ValidateForFlexpriceManaged() error {
 
 	if err := s.Encryption.Validate(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateEndpointURL rejects a custom S3 endpoint that is not a public https
+// host. The endpoint receives SigV4-signed requests carrying our credentials,
+// so a tenant-supplied value naming an internal address (the cloud metadata
+// service, or any host inside the VPC) must not be accepted. Applied on both
+// validation paths because a Flexprice-managed connection can still carry a
+// tenant-supplied endpoint.
+func (s *S3JobConfig) validateEndpointURL() error {
+	if s.EndpointURL == "" {
+		return nil
+	}
+
+	if err := validator.ValidateOutboundURL(s.EndpointURL); err != nil {
+		return ierr.WithError(err).
+			WithHint("S3 endpoint_url must be an https URL pointing to a publicly routable host").
+			WithReportableDetails(map[string]any{
+				"endpoint_url": s.EndpointURL,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
