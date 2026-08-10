@@ -75,6 +75,23 @@ func isReservedStripeMetadataKey(key string) bool {
 	return reserved
 }
 
+// mergeCallerMetadata copies caller-supplied metadata over the trusted block,
+// skipping the keys FlexPrice sets itself. Both Stripe call sites that accept
+// caller metadata go through here so the filtering cannot be dropped from one
+// of them alone.
+func mergeCallerMetadata(trusted map[string]string, caller types.Metadata) map[string]string {
+	if trusted == nil {
+		trusted = map[string]string{}
+	}
+	for k, v := range caller {
+		if isReservedStripeMetadataKey(k) {
+			continue
+		}
+		trusted[k] = v
+	}
+	return trusted
+}
+
 // CreatePaymentLink creates a Stripe checkout session for payment
 func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateStripePaymentLinkRequest, customerService interfaces.CustomerService, invoiceService interfaces.InvoiceService) (*dto.StripePaymentLinkResponse, error) {
 	s.logger.Info(ctx, "creating stripe payment link",
@@ -269,12 +286,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	// uses to correlate the Stripe payment back to ours, and req.Metadata carries
 	// caller-supplied values straight from the create-payment request. Letting a
 	// caller set it would point the webhook at a different payment.
-	for k, v := range req.Metadata {
-		if isReservedStripeMetadataKey(k) {
-			continue
-		}
-		metadata[k] = v
-	}
+	metadata = mergeCallerMetadata(metadata, req.Metadata)
 
 	// Provide default URLs if not provided
 	successURL := req.SuccessURL
@@ -1216,12 +1228,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 
 	// Add custom metadata if provided, keeping the keys FlexPrice sets itself
 	// authoritative (this also covers the internal connection fields).
-	for k, v := range req.Metadata {
-		if isReservedStripeMetadataKey(k) {
-			continue
-		}
-		metadata[k] = v
-	}
+	metadata = mergeCallerMetadata(metadata, req.Metadata)
 
 	// Add set_default flag to metadata if requested
 	if req.SetDefault {

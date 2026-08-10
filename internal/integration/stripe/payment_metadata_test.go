@@ -1,6 +1,10 @@
 package stripe
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 // Caller-supplied metadata reaches Stripe from the create-payment request body,
 // and the keys FlexPrice sets itself are what a returning webhook uses to decide
@@ -35,67 +39,65 @@ func TestReservedStripeMetadataKeys(t *testing.T) {
 	}
 }
 
-// The merge that applies req.Metadata runs after the trusted block is built, so
-// skipping reserved keys is the only thing keeping the FlexPrice-set values
-// authoritative.
-func TestReservedKeysSurviveCallerMetadataMerge(t *testing.T) {
-	metadata := map[string]string{
+// mergeCallerMetadata is the merge both Stripe call sites use, so exercising it
+// here covers the filtering that keeps the FlexPrice-set values authoritative.
+func TestMergeCallerMetadataKeepsReservedKeys(t *testing.T) {
+	trusted := map[string]string{
 		"flexprice_payment_id": "pay_trusted",
 		"payment_source":       "flexprice",
 	}
 
-	callerMetadata := map[string]string{
+	merged := mergeCallerMetadata(trusted, types.Metadata{
 		"flexprice_payment_id": "pay_attacker",
 		"payment_source":       "spoofed",
 		"order_ref":            "ref_123",
-	}
+	})
 
-	for k, v := range callerMetadata {
-		if isReservedStripeMetadataKey(k) {
-			continue
-		}
-		metadata[k] = v
-	}
-
-	if got := metadata["flexprice_payment_id"]; got != "pay_trusted" {
+	if got := merged["flexprice_payment_id"]; got != "pay_trusted" {
 		t.Fatalf("caller metadata overwrote the payment anchor: got %q, want %q", got, "pay_trusted")
 	}
-	if got := metadata["payment_source"]; got != "flexprice" {
+	if got := merged["payment_source"]; got != "flexprice" {
 		t.Fatalf("caller metadata overwrote payment_source: got %q, want %q", got, "flexprice")
 	}
-	if got := metadata["order_ref"]; got != "ref_123" {
+	if got := merged["order_ref"]; got != "ref_123" {
 		t.Fatalf("non-reserved caller metadata must pass through: got %q", got)
 	}
 }
 
-// SetupIntent writes set_default after merging caller metadata, so the key is
-// absent rather than overwritten when the caller supplies it. The setup-intent
-// success webhook makes the payment method the customer's default on seeing
-// "true", so a caller that could set it would promote its own card without
-// asking for it through req.SetDefault.
-func TestCallerCannotSetSetupIntentDefaultFlag(t *testing.T) {
-	metadata := map[string]string{
-		"customer_id":    "cust_1",
-		"environment_id": "env_1",
-	}
-
-	callerMetadata := map[string]string{
-		"set_default": "true",
-		"order_ref":   "ref_123",
-	}
-
-	for k, v := range callerMetadata {
-		if isReservedStripeMetadataKey(k) {
-			continue
+// SetupIntent builds its trusted block, merges caller metadata, and only then
+// writes set_default from req.SetDefault. The setup-intent success webhook makes
+// the payment method the customer's default on seeing "true", so a caller able to
+// set the key would promote its own card without asking through req.SetDefault.
+//
+// Reproduces that ordering around the shared merge rather than calling
+// SetupIntent, which would need a live Stripe client and a synced customer.
+func TestSetupIntentDefaultFlagComesOnlyFromRequest(t *testing.T) {
+	setupIntentMetadata := func(setDefault bool, caller types.Metadata) map[string]string {
+		metadata := map[string]string{
+			"customer_id":    "cust_1",
+			"environment_id": "env_1",
+			"usage":          "off_session",
 		}
-		metadata[k] = v
+		metadata = mergeCallerMetadata(metadata, caller)
+		if setDefault {
+			metadata["set_default"] = "true"
+		}
+		return metadata
 	}
 
-	// Mirrors the req.SetDefault == false path, which writes nothing.
+	spoofed := types.Metadata{"set_default": "true", "order_ref": "ref_123"}
+
+	metadata := setupIntentMetadata(false, spoofed)
 	if _, present := metadata["set_default"]; present {
 		t.Fatal("caller metadata must not be able to set set_default")
 	}
 	if got := metadata["order_ref"]; got != "ref_123" {
 		t.Fatalf("non-reserved caller metadata must pass through: got %q", got)
+	}
+
+	// The trusted path must still write the flag when the request asks for it.
+	metadata = setupIntentMetadata(true, spoofed)
+	if got := metadata["set_default"]; got != "true" {
+		t.Fatalf("req.SetDefault must still set the flag: got %q, want %q", got, "true")
 	}
 }
