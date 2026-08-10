@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -223,10 +222,10 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 		assert.NotContains(t, w.Body.String(), "env_from_header")
 	})
 
-	// Falling through with an empty environment ID would make every repository
-	// filter on environment_id = "" and silently return no rows, so the request
-	// must resolve to a real environment instead.
-	t.Run("no environment_id in claim or header falls back to the tenant's development environment", func(t *testing.T) {
+	// No claim and no header means nothing selects an environment. Rather than
+	// guessing one, the request is refused: a wrong guess would silently operate
+	// on the wrong environment's data.
+	t.Run("no environment_id in claim or header is refused", func(t *testing.T) {
 		token := makeJWT(t, "t_tenant1", "usr_dev", "", 1)
 
 		w := httptest.NewRecorder()
@@ -234,8 +233,7 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+token)
 		router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Contains(t, w.Body.String(), `"environment_id":"env_dev"`)
+		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
 
 	t.Run("denies the request when the tenant has no environments", func(t *testing.T) {
@@ -269,6 +267,9 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodGet, "/capture", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
+		// An ordinary route needs a selected environment to get past the
+		// middleware; this test is about caller type, not resolution.
+		req.Header.Set(types.HeaderEnvironment, "env_dev")
 		r.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
@@ -333,30 +334,12 @@ func TestResolveEnvironmentID(t *testing.T) {
 		assert.ErrorIs(t, err, errEnvironmentUnresolved)
 	})
 
-	t.Run("falls back to the development environment when no header is sent", func(t *testing.T) {
+	t.Run("no header on an ordinary route is refused rather than defaulted", func(t *testing.T) {
 		c := newEnvironmentResolutionContext("t_tenant1", "")
 
-		resolved, err := resolveEnvironmentID(c.Request.Context(), c, newTestEnvironmentRepo(), "", "t_tenant1")
+		_, err := resolveEnvironmentID(c.Request.Context(), c, newTestEnvironmentRepo(), "", "t_tenant1")
 
-		require.NoError(t, err)
-		assert.Equal(t, "env_dev", resolved)
-	})
-
-	// List orders by created_at DESC, so a tenant with no development
-	// environment falls back to its most recently created one.
-	t.Run("falls back to the newest environment when the tenant has no development environment", func(t *testing.T) {
-		repo := &fakeEnvironmentRepo{
-			environments: []*domainEnvironment.Environment{
-				testEnvironment("env_newest", "t_tenant1", types.EnvironmentProduction),
-				testEnvironment("env_older", "t_tenant1", types.EnvironmentProduction),
-			},
-		}
-		c := newEnvironmentResolutionContext("t_tenant1", "")
-
-		resolved, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
-
-		require.NoError(t, err)
-		assert.Equal(t, "env_newest", resolved)
+		assert.ErrorIs(t, err, errEnvironmentUnresolved)
 	})
 
 	t.Run("fails when the tenant owns no environments", func(t *testing.T) {
@@ -377,26 +360,6 @@ func TestResolveEnvironmentID(t *testing.T) {
 		assert.ErrorIs(t, err, errEnvironmentUnresolved)
 	})
 
-	// The development environment is created at onboarding and is therefore the
-	// tenant's oldest. A paged scan of the newest N would miss it once the tenant
-	// has more environments than a page holds, and would silently fall through to
-	// the newest — plausibly production. The lookup is by type for this reason.
-	t.Run("finds the development environment for a tenant with many environments", func(t *testing.T) {
-		envs := []*domainEnvironment.Environment{
-			testEnvironment("env_dev", "t_tenant1", types.EnvironmentDevelopment),
-		}
-		for i := 0; i < 100; i++ {
-			envs = append(envs, testEnvironment(
-				fmt.Sprintf("env_prod_%d", i), "t_tenant1", types.EnvironmentProduction))
-		}
-		repo := &fakeEnvironmentRepo{environments: envs}
-		c := newEnvironmentResolutionContext("t_tenant1", "")
-
-		resolved, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
-
-		require.NoError(t, err)
-		assert.Equal(t, "env_dev", resolved)
-	})
 }
 
 // A failed lookup must not be reported as an access decision: 403 tells the
@@ -417,29 +380,62 @@ func TestResolveEnvironmentIDPropagatesRepositoryFailures(t *testing.T) {
 		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
 	})
 
-	t.Run("default lookup failure is propagated, not turned into a refusal", func(t *testing.T) {
-		repo := &fakeEnvironmentRepo{defaultErr: dbErr}
-		c := newEnvironmentResolutionContext("t_tenant1", "")
+}
 
-		_, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
+// The dashboard learns which environments exist by calling GET /v1/environments,
+// and only then can it send X-Environment-ID on subsequent requests. Its login
+// JWT carries no environment claim, so requiring a header to reach that route
+// would be circular: the caller could never obtain an ID to send. These routes
+// are tenant- and user-scoped and do not read the resolved environment.
+func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-		require.Error(t, err)
-		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
+	cfg := &config.Configuration{
+		Auth: config.AuthConfig{
+			Provider: types.AuthProviderFlexprice,
+			Secret:   testSecret,
+			APIKey:   config.APIKeyConfig{Header: "x-api-key"},
+		},
+	}
+
+	newRouter := func() *gin.Engine {
+		r := gin.New()
+		r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestLogger(t)))
+		handler := func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"environment_id": types.GetEnvironmentID(c.Request.Context()),
+			})
+		}
+		r.GET("/v1/environments", handler)
+		r.GET("/v1/environments/:id", handler)
+		r.GET("/v1/customers", handler)
+		return r
+	}
+
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+makeJWT(t, "t_tenant1", "usr_dev", "", 1))
+		newRouter().ServeHTTP(w, req)
+		return w
+	}
+
+	t.Run("listing environments succeeds without a header", func(t *testing.T) {
+		w := get("/v1/environments")
+
+		require.Equal(t, http.StatusOK, w.Code)
+		// No environment is selected, so none is placed in the context.
+		assert.Contains(t, w.Body.String(), `"environment_id":""`)
 	})
 
-	// No development environment is an ordinary absence, so resolution proceeds
-	// to the newest-environment fallback; only that query failing is a fault.
-	t.Run("fallback list failure is propagated, not turned into a refusal", func(t *testing.T) {
-		repo := &fakeEnvironmentRepo{
-			defaultErr: ierr.NewError("environment not found").Mark(ierr.ErrNotFound),
-			listErr:    dbErr,
-		}
-		c := newEnvironmentResolutionContext("t_tenant1", "")
+	t.Run("reading a single environment succeeds without a header", func(t *testing.T) {
+		assert.Equal(t, http.StatusOK, get("/v1/environments/env_dev").Code)
+	})
 
-		_, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
-
-		require.Error(t, err)
-		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
+	// The exemption is limited to discovery: every other route still requires a
+	// selection, so this cannot be used to reach tenant data without one.
+	t.Run("an ordinary route without a header is still refused", func(t *testing.T) {
+		assert.Equal(t, http.StatusForbidden, get("/v1/customers").Code)
 	})
 }
 
@@ -457,13 +453,14 @@ func TestAuthenticateMiddleware_EnvironmentLookupFailureIsNotForbidden(t *testin
 
 	r := gin.New()
 	r.Use(AuthenticateMiddleware(cfg, nil, &fakeEnvironmentRepo{
-		defaultErr: ierr.NewError("connection refused").Mark(ierr.ErrDatabase),
+		getErr: ierr.NewError("connection refused").Mark(ierr.ErrDatabase),
 	}, newTestLogger(t)))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+makeJWT(t, "t_tenant1", "usr_dev", "", 1))
+	req.Header.Set(types.HeaderEnvironment, "env_dev")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)

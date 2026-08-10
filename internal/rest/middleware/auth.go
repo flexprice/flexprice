@@ -66,55 +66,54 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 		return "", errEnvironmentUnresolved
 	}
 
-	if requested := c.GetHeader(types.HeaderEnvironment); requested != "" {
-		env, err := environmentRepo.Get(ctx, requested)
-		if err != nil {
-			// Absence means the environment does not exist or belongs to another
-			// tenant, which is a refusal. Anything else is an infrastructure
-			// failure and must surface as such rather than as an access denial.
-			if ierr.IsNotFound(err) {
-				return "", errEnvironmentUnresolved
-			}
-			return "", err
+	requested := c.GetHeader(types.HeaderEnvironment)
+	if requested == "" {
+		// No environment to operate on. Discovery routes are the exception:
+		// they are how a caller learns which environments exist, so requiring a
+		// selection to reach them would be circular.
+		if isEnvironmentDiscoveryRoute(c) {
+			return "", nil
 		}
-		if env == nil {
-			return "", errEnvironmentUnresolved
-		}
-		return env.ID, nil
-	}
-
-	return defaultEnvironmentID(ctx, environmentRepo)
-}
-
-// defaultEnvironmentID picks the environment used when a caller supplies no
-// header. Tenants are onboarded with a single development environment, so that
-// is both the common case and the safe default: a request that lands here by
-// mistake touches the sandbox rather than production data.
-//
-// The development environment is looked up by type rather than by scanning a
-// page of results: it is created at onboarding and is therefore the tenant's
-// oldest, so a tenant with more environments than one page holds would not find
-// it in the newest N.
-func defaultEnvironmentID(ctx context.Context, environmentRepo domainEnvironment.Repository) (string, error) {
-	if env, err := environmentRepo.GetDefaultByType(ctx, types.EnvironmentDevelopment); err != nil {
-		if !ierr.IsNotFound(err) {
-			return "", err
-		}
-	} else if env != nil {
-		return env.ID, nil
-	}
-
-	// No development environment: fall back to the newest environment the tenant
-	// has. List orders by created_at DESC, so the first entry is the newest.
-	environments, err := environmentRepo.List(ctx, types.Filter{Limit: 1})
-	if err != nil {
-		return "", err
-	}
-	if len(environments) == 0 {
 		return "", errEnvironmentUnresolved
 	}
 
-	return environments[0].ID, nil
+	env, err := environmentRepo.Get(ctx, requested)
+	if err != nil {
+		// Absence means the environment does not exist or belongs to another
+		// tenant, which is a refusal. Anything else is an infrastructure
+		// failure and must surface as such rather than as an access denial.
+		if ierr.IsNotFound(err) {
+			return "", errEnvironmentUnresolved
+		}
+		return "", err
+	}
+	if env == nil {
+		return "", errEnvironmentUnresolved
+	}
+	return env.ID, nil
+}
+
+// isEnvironmentDiscoveryRoute reports whether a route can be served without an
+// environment selected.
+//
+// Listing and reading environments is scoped by tenant and user, never by
+// environment, so these handlers do not consult the resolved value. They are
+// also the only way an unbound caller — a dashboard JWT, which carries no
+// environment claim — can discover an ID to send in X-Environment-ID on every
+// later request. Refusing them for lack of a header would leave such a caller
+// unable to ever obtain one.
+func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
+	if c.Request.Method != http.MethodGet {
+		return false
+	}
+	// FullPath is the matched route template, so this cannot be spoofed by a
+	// crafted URL the router did not match to these handlers.
+	switch c.FullPath() {
+	case "/v1/environments", "/v1/environments/:id":
+		return true
+	default:
+		return false
+	}
 }
 
 // setContextValues sets the tenant ID, user ID, environment ID, roles, and caller type in the context.
@@ -140,7 +139,12 @@ func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Reposito
 		return err
 	}
 
-	ctx = context.WithValue(ctx, types.CtxEnvironmentID, resolvedEnvironmentID)
+	// Only discovery routes resolve to an empty environment, and they do not read
+	// it. Leaving the key unset rather than storing "" keeps GetEnvironmentID's
+	// zero value meaning "no environment" for anything that does read it.
+	if resolvedEnvironmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, resolvedEnvironmentID)
+	}
 	c.Request = c.Request.WithContext(ctx)
 	return nil
 }

@@ -123,35 +123,6 @@ func (s *InMemoryEnvironmentStore) CountByType(ctx context.Context, envType type
 	return count, nil
 }
 
-// GetDefaultByType mirrors the repository: the tenant's oldest published
-// environment of that type, or a not-found error when it has none.
-func (s *InMemoryEnvironmentStore) GetDefaultByType(ctx context.Context, envType types.EnvironmentType) (*environment.Environment, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	tenantID := types.GetTenantID(ctx)
-
-	var oldest *environment.Environment
-	for _, env := range s.environments {
-		if env.TenantID != tenantID ||
-			env.Type != envType ||
-			env.Status != types.StatusPublished {
-			continue
-		}
-		if oldest == nil || env.CreatedAt.Before(oldest.CreatedAt) {
-			oldest = env
-		}
-	}
-
-	if oldest == nil {
-		return nil, ierr.NewError("environment not found").
-			WithHint("Environment not found").
-			Mark(ierr.ErrNotFound)
-	}
-
-	return oldest, nil
-}
-
 func (s *InMemoryEnvironmentStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
