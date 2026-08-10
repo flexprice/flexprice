@@ -132,3 +132,7 @@ postman/
 # graphify
 graphify-out/
 graphify-out/server
+
+# Security assessment working directory. This repository is public; scan
+# configuration and findings must not be published here.
+shannon-setup/
