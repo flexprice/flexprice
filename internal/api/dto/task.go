@@ -31,6 +31,14 @@ func (r *CreateTaskRequest) Validate() error {
 			WithHint("File URL cannot be empty").
 			Mark(ierr.ErrValidation)
 	}
+	// file_url is fetched server-side during task processing, so it must be a
+	// public https target — an internal address (e.g. the cloud metadata
+	// endpoint) would otherwise be reachable via SSRF.
+	if err := validator.ValidateOutboundURL(r.FileURL); err != nil {
+		return ierr.WithError(err).
+			WithHint("file_url must be an https URL pointing to a publicly routable host").
+			Mark(ierr.ErrValidation)
+	}
 	if err := r.FileType.Validate(); err != nil {
 		return err
 	}
