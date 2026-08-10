@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 )
 
-// NewEncryptionKey returns a random 32-byte key for tests that need to build a
-// security.EncryptionService.
+// NewEncryptionKey returns a hex-encoded key drawn from 32 random bytes, for
+// tests that need to build a security.EncryptionService.
 //
 // Generated rather than written as a literal so no test file carries a
 // credential-shaped constant: secret scanners flag those on every pull request,
@@ -14,7 +14,7 @@ import (
 // The value only has to round-trip within a single test run, so a fresh key per
 // call is sufficient.
 func NewEncryptionKey() string {
-	key := make([]byte, 16)
+	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		panic("testutil: could not generate encryption key: " + err.Error())
 	}

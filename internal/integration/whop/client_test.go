@@ -113,7 +113,7 @@ func mustTestLogger(t *testing.T) *logger.Logger {
 // described on fakeConnectionRepo above.
 func newTestEncryptionKey(t *testing.T) string {
 	t.Helper()
-	key := make([]byte, 16)
+	key := make([]byte, 32)
 	_, err := rand.Read(key)
 	require.NoError(t, err)
 	return hex.EncodeToString(key)
