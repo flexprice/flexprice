@@ -2461,6 +2461,23 @@ func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 		return nil // No-op for zero-dollar skipped invoices
 	}
 
+	// A payment must only be attempted against a finalized invoice: finalization
+	// is what applies credits, tax, and discounts. The subscription payment path
+	// below does not re-check this, so a DRAFT subscription invoice would
+	// otherwise be charged pre-finalization (the non-subscription path already
+	// enforces the same rule). Internal subscription-creation/renewal flows that
+	// legitimately process a DRAFT invoice call attemptPaymentForSubscriptionInvoice
+	// directly and do not go through this entry point.
+	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
+		return ierr.NewError("invoice must be finalized").
+			WithHint("Invoice must be finalized before attempting payment").
+			WithReportableDetails(map[string]any{
+				"invoice_id":     inv.ID,
+				"invoice_status": inv.InvoiceStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Use the new payment function with nil parameters to use subscription defaults
 	return s.attemptPaymentForSubscriptionInvoice(ctx, inv, nil, nil, types.InvoiceFlowManual)
 }
