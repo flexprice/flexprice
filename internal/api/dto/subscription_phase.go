@@ -8,7 +8,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 // CreateSubscriptionPhaseRequest represents the request to create a subscription phase
@@ -87,14 +86,6 @@ func (r *UpdateSubscriptionPhaseRequest) Validate() error {
 // SubscriptionPhaseResponse represents the response for subscription phase operations
 type SubscriptionPhaseResponse struct {
 	*subscription.SubscriptionPhase
-}
-
-// ToWebhookPayload is a no-op copy: SubscriptionPhaseResponse has nothing to trim.
-func (r *SubscriptionPhaseResponse) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionPhaseResponse {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
 }
 
 // ListSubscriptionPhasesResponse represents the response for listing subscription phases

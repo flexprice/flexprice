@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 // CreateGroupRequest represents the request to create a group
@@ -54,14 +53,6 @@ type GroupResponse struct {
 	Metadata   map[string]string `json:"metadata"`
 	CreatedAt  time.Time         `json:"created_at"`
 	UpdatedAt  time.Time         `json:"updated_at"`
-}
-
-// ToWebhookPayload is a no-op copy: GroupResponse has nothing to trim.
-func (r *GroupResponse) ToWebhookPayload(eventType types.WebhookEventName) *GroupResponse {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
 }
 
 // ListGroupsResponse represents the response for listing groups

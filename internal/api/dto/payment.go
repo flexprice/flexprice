@@ -77,14 +77,6 @@ type PaymentResponse struct {
 	EnvironmentID          string                       `json:"environment_id"`
 }
 
-// ToWebhookPayload is a no-op copy: PaymentResponse has nothing to trim.
-func (r *PaymentResponse) ToWebhookPayload(eventType types.WebhookEventName) *PaymentResponse {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
-}
-
 func (p *PaymentResponse) ToPayment() *payment.Payment {
 	return &payment.Payment{
 		ID:                p.ID,

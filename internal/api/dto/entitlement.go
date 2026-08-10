@@ -10,7 +10,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -179,18 +178,6 @@ type EntitlementResponse struct {
 
 	// TODO: Remove this once we have a proper entitlement entity type
 	PlanID string `json:"plan_id,omitempty"`
-}
-
-// ToWebhookPayload nils Plan and Addon and delegates trimming to the nested Feature.
-func (r *EntitlementResponse) ToWebhookPayload(eventType types.WebhookEventName) *EntitlementResponse {
-	if r == nil {
-		return nil
-	}
-	cp := lo.FromPtr(r)
-	cp.Feature = r.Feature.ToWebhookPayload(eventType)
-	cp.Plan = nil
-	cp.Addon = nil
-	return lo.ToPtr(cp)
 }
 
 // ListEntitlementsResponse represents a paginated list of entitlements

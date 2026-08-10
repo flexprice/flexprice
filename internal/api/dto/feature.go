@@ -123,16 +123,6 @@ type FeatureResponse struct {
 	Group *GroupResponse `json:"group,omitempty"`
 }
 
-// ToWebhookPayload keeps Meter as-is and delegates trimming to the nested Group.
-func (r *FeatureResponse) ToWebhookPayload(eventType types.WebhookEventName) *FeatureResponse {
-	if r == nil {
-		return nil
-	}
-	cp := lo.FromPtr(r)
-	cp.Group = r.Group.ToWebhookPayload(eventType)
-	return lo.ToPtr(cp)
-}
-
 // ListFeaturesResponse represents a paginated list of features
 type ListFeaturesResponse = types.ListResponse[*FeatureResponse] // @name ListFeaturesResponse
 

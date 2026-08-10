@@ -812,22 +812,6 @@ type SubscriptionResponse struct {
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
-// ToWebhookPayload nils Plan, CreditGrants, Phases, CouponAssociations, and always LatestInvoice
-// (breaks its circular reference back to InvoiceResponse.Subscription).
-func (r *SubscriptionResponse) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponse {
-	if r == nil {
-		return nil
-	}
-
-	cp := lo.FromPtr(r)
-	cp.Plan = nil
-	cp.CreditGrants = nil
-	cp.Phases = nil
-	cp.CouponAssociations = nil
-	cp.LatestInvoice = nil
-	return lo.ToPtr(cp)
-}
-
 // ListSubscriptionsResponse represents the response for listing subscriptions
 type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse] // @name ListSubscriptionsResponse
 
@@ -862,14 +846,6 @@ type SubscriptionResponseV2 struct {
 	// is behind the plan's current max prices.sequence — i.e. plan-price
 	// changes have not yet been reconciled into this subscription's line items.
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
-}
-
-// ToWebhookPayload is a no-op copy: fields are already expand-gated at fetch time.
-func (r *SubscriptionResponseV2) ToWebhookPayload(eventType types.WebhookEventName) *SubscriptionResponseV2 {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
 }
 
 func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {

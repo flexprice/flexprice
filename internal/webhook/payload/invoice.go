@@ -67,7 +67,7 @@ func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType type
 	}
 	invoice.InvoicePDFURL = lo.ToPtr(pdfUrl)
 
-	payload := webhookDto.NewInvoiceWebhookPayload(invoice.ToWebhookPayload(eventType), eventType)
+	payload := webhookDto.NewInvoiceWebhookPayload(invoice, eventType)
 
 	// Return the invoice response as is
 	return json.Marshal(payload)

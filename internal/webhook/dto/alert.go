@@ -4,13 +4,10 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
-// InternalAlertEvent is what LogAlert publishes for any alert type; AlertPayloadBuilder branches
-// on which fields are populated to decide how to resolve it into a webhook payload.
 type InternalAlertEvent struct {
 	FeatureID   string           `json:"feature_id,omitempty"`
 	WalletID    string           `json:"wallet_id,omitempty"`
@@ -18,10 +15,6 @@ type InternalAlertEvent struct {
 	AlertType   types.AlertType  `json:"alert_type"`
 	AlertStatus types.AlertState `json:"alert_status"`
 
-	// Populated only for a subscription/line-item/group spend alert (alert_settings table); empty
-	// for the feature/wallet-balance alert above. EntityID is the subscription itself for a
-	// subscription-level alert, or the line item/group for the other two scopes, in which case
-	// ParentEntityID is the subscription it rolls up to.
 	EntityType       types.AlertEntityType `json:"entity_type,omitempty"`
 	EntityID         string                `json:"entity_id,omitempty"`
 	ParentEntityID   string                `json:"parent_entity_id,omitempty"`
@@ -29,46 +22,100 @@ type InternalAlertEvent struct {
 	AlertInfo        types.AlertInfo       `json:"alert_info,omitempty"`
 }
 
-// SpendAlertEvent is the webhook payload for the three alert_settings spend alert types
-// (subscription, subscription line item, group). Subscription/AlertSettings are always set;
-// SubscriptionLineItem/Group only for their scope. SubscriptionLineItem is the plain domain
-// object, not the dto wrapper, whose Price field pulls in the same Plan bloat stripped below.
-type SpendAlertEvent struct {
-	Subscription         *dto.SubscriptionResponse          `json:"subscription"`
-	SubscriptionLineItem *subscription.SubscriptionLineItem `json:"subscription_line_item,omitempty"`
-	Group                *dto.GroupResponse                 `json:"group,omitempty"`
-	AlertType            types.AlertType                    `json:"alert_type"`
-	AlertStatus          types.AlertState                   `json:"alert_status"`
-	AlertSettings        *types.AlertSettings               `json:"alert_settings,omitempty"`
-	CurrentSpend         string                             `json:"current_spend"`
-	TriggeredAt          time.Time                          `json:"triggered_at"`
-}
-
 type AlertWebhookPayload struct {
-	EventType   types.WebhookEventName `json:"event_type"`
-	AlertType   types.AlertType        `json:"alert_type"`
-	AlertStatus types.AlertState       `json:"alert_status"`
-	Feature     *dto.FeatureResponse   `json:"feature,omitempty"`
-	Wallet      *dto.WalletResponse    `json:"wallet,omitempty"`
-	Customer    *dto.CustomerResponse  `json:"customer,omitempty"`
-}
-
-// EntitlementGrantAlertEvent is the webhook payload for entitlement grant
-// exhaustion: four flat entities, no nesting — the builder strips the
-// subscription's embedded customer/line items/plan and the entitlement's
-// feature/plan expansions. UsageRatio is usage/quota at evaluation time
-// (>= 1 when exhausted).
-type EntitlementGrantAlertEvent struct {
-	Subscription     *dto.SubscriptionResponseV2        `json:"subscription"`
-	Customer         *dto.CustomerResponse              `json:"customer"`
-	Entitlement      *dto.EntitlementResponse           `json:"entitlement"`
-	EntitlementGrant *entitlementgrant.EntitlementGrant `json:"entitlement_grant"`
-	AlertType        types.AlertType                    `json:"alert_type"`
-	AlertStatus      types.AlertState                   `json:"alert_status"`
-	UsageRatio       string                             `json:"usage_ratio"`
-	TriggeredAt      time.Time                          `json:"triggered_at"`
+	EventType      types.WebhookEventName `json:"event_type"`
+	AlertType      types.AlertType        `json:"alert_type"`
+	AlertStatus    types.AlertState       `json:"alert_status"`
+	FeatureID      string                 `json:"feature_id,omitempty"`
+	WalletID       string                 `json:"wallet_id,omitempty"`
+	CustomerID     string                 `json:"customer_id,omitempty"`
+	CurrentBalance string                 `json:"current_balance,omitempty"`
+	CreditBalance  string                 `json:"credit_balance,omitempty"`
 }
 
 func NewAlertWebhookPayload(feature *dto.FeatureResponse, wallet *dto.WalletResponse, customer *dto.CustomerResponse, alertType types.AlertType, alertStatus types.AlertState, eventType types.WebhookEventName) *AlertWebhookPayload {
-	return &AlertWebhookPayload{EventType: eventType, AlertType: alertType, AlertStatus: alertStatus, Feature: feature, Wallet: wallet, Customer: customer}
+	payload := &AlertWebhookPayload{
+		EventType:   eventType,
+		AlertType:   alertType,
+		AlertStatus: alertStatus,
+	}
+	if feature != nil && feature.Feature != nil {
+		payload.FeatureID = feature.ID
+	}
+	if wallet != nil && wallet.Wallet != nil {
+		payload.WalletID = wallet.ID
+		payload.CurrentBalance = wallet.Balance.String()
+		payload.CreditBalance = wallet.CreditBalance.String()
+	}
+	if customer != nil && customer.Customer != nil {
+		payload.CustomerID = customer.ID
+	}
+	return payload
+}
+
+type SpendAlertEvent struct {
+	Subscription           *Subscription    `json:"subscription"`
+	SubscriptionLineItemID string           `json:"subscription_line_item_id,omitempty"`
+	GroupID                string           `json:"group_id,omitempty"`
+	AlertType              types.AlertType  `json:"alert_type"`
+	AlertStatus            types.AlertState `json:"alert_status"`
+	CurrentSpend           string           `json:"current_spend"`
+	Threshold              *decimal.Decimal `json:"threshold,omitempty" swaggertype:"string"`
+	TriggeredAt            time.Time        `json:"triggered_at"`
+}
+
+func thresholdForAlertStatus(settings *types.AlertSettings, status types.AlertState) *decimal.Decimal {
+	if settings == nil {
+		return nil
+	}
+	var t *types.AlertThreshold
+	switch status {
+	case types.AlertStateInAlarm:
+		t = settings.Critical
+	case types.AlertStateWarning:
+		t = settings.Warning
+	case types.AlertStateInfo:
+		t = settings.Info
+	}
+	if t == nil {
+		return nil
+	}
+	return &t.Threshold
+}
+
+func NewSpendAlertEvent(sub *dto.SubscriptionResponse, lineItemID, groupID string, alertType types.AlertType, alertStatus types.AlertState, currentSpend string, alertSettings *types.AlertSettings, triggeredAt time.Time) *SpendAlertEvent {
+	return &SpendAlertEvent{
+		Subscription:           NewSubscription(sub),
+		SubscriptionLineItemID: lineItemID,
+		GroupID:                groupID,
+		AlertType:              alertType,
+		AlertStatus:            alertStatus,
+		CurrentSpend:           currentSpend,
+		Threshold:              thresholdForAlertStatus(alertSettings, alertStatus),
+		TriggeredAt:            triggeredAt,
+	}
+}
+
+type EntitlementGrantAlertEvent struct {
+	SubscriptionID     string           `json:"subscription_id"`
+	CustomerID         string           `json:"customer_id"`
+	EntitlementID      string           `json:"entitlement_id"`
+	EntitlementGrantID string           `json:"entitlement_grant_id"`
+	AlertType          types.AlertType  `json:"alert_type"`
+	AlertStatus        types.AlertState `json:"alert_status"`
+	UsageRatio         string           `json:"usage_ratio"`
+	TriggeredAt        time.Time        `json:"triggered_at"`
+}
+
+func NewEntitlementGrantAlertEvent(subscriptionID, customerID, entitlementID, grantID string, alertType types.AlertType, alertStatus types.AlertState, usageRatio string, triggeredAt time.Time) *EntitlementGrantAlertEvent {
+	return &EntitlementGrantAlertEvent{
+		SubscriptionID:     subscriptionID,
+		CustomerID:         customerID,
+		EntitlementID:      entitlementID,
+		EntitlementGrantID: grantID,
+		AlertType:          alertType,
+		AlertStatus:        alertStatus,
+		UsageRatio:         usageRatio,
+		TriggeredAt:        triggeredAt,
+	}
 }

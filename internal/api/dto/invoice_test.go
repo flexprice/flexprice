@@ -3,7 +3,6 @@ package dto
 import (
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
@@ -42,69 +41,4 @@ func TestCreateInvoiceRequest_ZeroOutAmounts_EmptyLineItems(t *testing.T) {
 	assert.True(t, req.Subtotal.IsZero())
 	assert.True(t, req.Total.IsZero())
 	assert.True(t, req.AmountDue.IsZero())
-}
-
-func TestInvoiceResponse_ToWebhookPayload(t *testing.T) {
-	newInvoice := func() *InvoiceResponse {
-		return &InvoiceResponse{
-			LineItems:    []*InvoiceLineItemResponse{{}},
-			Subscription: &SubscriptionResponse{Plan: &PlanResponse{}},
-		}
-	}
-
-	t.Run("finalized keeps line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceUpdateFinalized)
-		assert.NotNil(t, out.LineItems)
-		assert.Len(t, out.LineItems, 1)
-	})
-
-	t.Run("voided keeps line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceUpdateVoided)
-		assert.NotNil(t, out.LineItems)
-	})
-
-	t.Run("payment update drops line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceUpdatePayment)
-		assert.Nil(t, out.LineItems)
-	})
-
-	t.Run("generic update drops line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceUpdate)
-		assert.Nil(t, out.LineItems)
-	})
-
-	t.Run("payment overdue drops line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoicePaymentOverdue)
-		assert.Nil(t, out.LineItems)
-	})
-
-	t.Run("communication triggered drops line items", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceCommunicationTriggered)
-		assert.Nil(t, out.LineItems)
-	})
-
-	t.Run("nested subscription is trimmed via delegation", func(t *testing.T) {
-		inv := newInvoice()
-		out := inv.ToWebhookPayload(types.WebhookEventInvoiceUpdateFinalized)
-		assert.NotNil(t, out.Subscription)
-		assert.Nil(t, out.Subscription.Plan)
-	})
-
-	t.Run("does not mutate the receiver", func(t *testing.T) {
-		inv := newInvoice()
-		_ = inv.ToWebhookPayload(types.WebhookEventInvoiceUpdatePayment)
-		assert.NotNil(t, inv.LineItems, "original invoice must be untouched")
-		assert.NotNil(t, inv.Subscription.Plan, "original subscription must be untouched")
-	})
-
-	t.Run("nil receiver returns nil", func(t *testing.T) {
-		var inv *InvoiceResponse
-		assert.Nil(t, inv.ToWebhookPayload(types.WebhookEventInvoiceUpdateFinalized))
-	})
 }

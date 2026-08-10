@@ -44,7 +44,7 @@ func (b *PaymentPayloadBuilder) BuildPayload(ctx context.Context, eventType type
 		return nil, err
 	}
 
-	payload := webhookDto.NewPaymentWebhookPayload(payment.ToWebhookPayload(eventType), eventType)
+	payload := webhookDto.NewPaymentWebhookPayload(payment, eventType)
 
 	return json.Marshal(payload)
 }

@@ -264,15 +264,6 @@ type CheckoutSessionResponse struct {
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
 }
 
-// ToWebhookPayload is a no-op copy: sensitive/large fields are already stripped by
-// ToCheckoutSessionResponse.
-func (r *CheckoutSessionResponse) ToWebhookPayload(eventType types.WebhookEventName) *CheckoutSessionResponse {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
-}
-
 // ListCheckoutSessionsResponse is the paginated list response.
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 

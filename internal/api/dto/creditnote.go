@@ -9,7 +9,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -143,17 +142,6 @@ type CreditNoteResponse struct {
 
 	// customer contains the customer information associated with this credit note
 	Customer *customer.Customer `json:"customer,omitempty"`
-}
-
-// ToWebhookPayload delegates trimming to the nested Invoice and Subscription.
-func (r *CreditNoteResponse) ToWebhookPayload(eventType types.WebhookEventName) *CreditNoteResponse {
-	if r == nil {
-		return nil
-	}
-	cp := lo.FromPtr(r)
-	cp.Invoice = r.Invoice.ToWebhookPayload(eventType)
-	cp.Subscription = r.Subscription.ToWebhookPayload(eventType)
-	return lo.ToPtr(cp)
 }
 
 // ListCreditNotesResponse represents the paginated response for listing credit notes

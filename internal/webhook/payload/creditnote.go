@@ -48,6 +48,6 @@ func (b *CreditNotePayloadBuilder) BuildPayload(ctx context.Context, eventType t
 		return nil, err
 	}
 
-	payload := webhookDto.NewCreditNoteWebhookPayload(creditNote.ToWebhookPayload(eventType), eventType)
+	payload := webhookDto.NewCreditNoteWebhookPayload(creditNote, eventType)
 	return json.Marshal(payload)
 }

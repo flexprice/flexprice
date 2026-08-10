@@ -9,7 +9,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 // IntegrationEntityMapping represents a provider integration mapping
@@ -127,17 +126,9 @@ type CustomerResponse struct {
 	Integrations []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
 }
 
-// ToWebhookPayload is a no-op copy: CustomerResponse has nothing to trim.
-func (r *CustomerResponse) ToWebhookPayload(eventType types.WebhookEventName) *CustomerResponse {
-	if r == nil {
-		return nil
-	}
-	return lo.ToPtr(lo.FromPtr(r))
-}
-
 func EmptyCustomerResponse() *CustomerResponse {
 	return &CustomerResponse{
-		Customer:     &customer.Customer{},
+		Customer: &customer.Customer{},
 		Integrations: []*EntityIntegrationMappingResponse{},
 	}
 }

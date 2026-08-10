@@ -43,7 +43,7 @@ func (b *EntitlementPayloadBuilder) BuildPayload(ctx context.Context, eventType 
 		return nil, err
 	}
 
-	payload := webhookDto.NewEntitlementWebhookPayload(entitlement.ToWebhookPayload(eventType), eventType)
+	payload := webhookDto.NewEntitlementWebhookPayload(entitlement, eventType)
 
 	return json.Marshal(payload)
 }

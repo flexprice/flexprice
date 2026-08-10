@@ -994,26 +994,6 @@ type InvoiceResponse struct {
 	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
 }
 
-// ToWebhookPayload drops line items except on finalized/voided events.
-func (r *InvoiceResponse) ToWebhookPayload(eventType types.WebhookEventName) *InvoiceResponse {
-	if r == nil {
-		return nil
-	}
-
-	cp := lo.FromPtr(r)
-	cp.Subscription = r.Subscription.ToWebhookPayload(eventType)
-
-	keepLineItems := lo.Contains([]types.WebhookEventName{
-		types.WebhookEventInvoiceUpdateFinalized,
-		types.WebhookEventInvoiceUpdateVoided,
-	}, eventType)
-	if !keepLineItems {
-		cp.LineItems = nil
-	}
-
-	return lo.ToPtr(cp)
-}
-
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
 type SourceUsageItem struct {
 	// source is the name of the event source

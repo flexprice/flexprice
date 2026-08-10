@@ -36,7 +36,7 @@ func (b SubscriptionPayloadBuilder) BuildPayload(ctx context.Context, eventType 
 		return nil, err
 	}
 
-	payload := webhookDto.NewSubscriptionWebhookPayload(subscriptionData.ToWebhookPayload(eventType), eventType)
+	payload := webhookDto.NewSubscriptionWebhookPayload(subscriptionData, eventType)
 
 	// Marshal payload
 	return json.Marshal(payload)
