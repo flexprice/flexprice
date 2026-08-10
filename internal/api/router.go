@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/docs/swagger"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
+	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -76,6 +77,7 @@ func NewRouter(
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
 	webhookRequestRepo domainIncomingWebhookEvent.Repository,
+	environmentRepo domainEnvironment.Repository,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -138,7 +140,7 @@ func NewRouter(
 		v1Public.POST("/auth/login", handlers.Auth.Login)
 	}
 
-	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
+	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, environmentRepo, logger))
 	private.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
 	private.Use(middleware.TenantContextMiddleware)
@@ -159,8 +161,8 @@ func NewRouter(
 		environment := v1Private.Group("/environments")
 		{
 			environment.POST("", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CreateEnvironment)
-			environment.GET("", handlers.Environment.GetEnvironments)
-			environment.GET("/:id", handlers.Environment.GetEnvironment)
+			environment.GET("", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironments)
+			environment.GET("/:id", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironment)
 			environment.PUT("/:id", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UpdateEnvironment)
 			environment.POST("/:id/clone", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CloneEnvironment)
 		}
@@ -574,7 +576,7 @@ func NewRouter(
 
 		// Admin routes (API Key only)
 		adminRoutes := v1Private.Group("/admin")
-		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
+		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, environmentRepo, logger))
 		{
 			// All admin routes to go here
 		}
