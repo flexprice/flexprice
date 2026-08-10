@@ -2,16 +2,23 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
+	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
+
+// defaultEnvironmentLookupLimit bounds the environment list read when falling
+// back to a tenant's default environment. Tenants hold a handful of
+// environments, so this covers every real tenant in one query.
+const defaultEnvironmentLookupLimit = 50
 
 // validateAPIKey validates the API key against the config first, then the database.
 func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
@@ -37,8 +44,66 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	return "", "", "", "", nil, false
 }
 
-// setContextValues sets the tenant ID, user ID, environment ID, roles, and caller type in the context
-func setContextValues(c *gin.Context, tenantID, userID, environmentID, userType string, roles []string) {
+// errEnvironmentUnresolved signals that no environment could be established for
+// the caller. Callers must abort the request rather than continue with an empty
+// environment ID: every repository filters on environment_id, so an empty value
+// silently matches nothing instead of failing.
+var errEnvironmentUnresolved = errors.New("environment could not be resolved")
+
+// resolveEnvironmentID determines which environment a request operates on.
+//
+// Credentials bound to an environment (database-backed API keys) always win —
+// such a key must stay pinned and cannot be redirected by a header. Callers that
+// carry no bound environment (dashboard JWTs, config-map API keys) select one
+// per request via the X-Environment-ID header, which is how the UI switches
+// environments without re-minting a token.
+//
+// A caller-supplied environment is only honoured after confirming it belongs to
+// the caller's tenant; environmentRepo.Get filters on tenant_id, so an ID from
+// another tenant resolves to not-found and the request is refused.
+func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo domainEnvironment.Repository, boundEnvironmentID, tenantID string) (string, error) {
+	if boundEnvironmentID != "" {
+		return boundEnvironmentID, nil
+	}
+
+	if environmentRepo == nil || tenantID == "" {
+		return "", errEnvironmentUnresolved
+	}
+
+	if requested := c.GetHeader(types.HeaderEnvironment); requested != "" {
+		env, err := environmentRepo.Get(ctx, requested)
+		if err != nil || env == nil {
+			return "", errEnvironmentUnresolved
+		}
+		return env.ID, nil
+	}
+
+	return defaultEnvironmentID(ctx, environmentRepo)
+}
+
+// defaultEnvironmentID picks the environment used when a caller supplies no
+// header. Tenants are onboarded with a single development environment, so that
+// is both the common case and the safe default: a request that lands here by
+// mistake touches the sandbox rather than production data.
+func defaultEnvironmentID(ctx context.Context, environmentRepo domainEnvironment.Repository) (string, error) {
+	environments, err := environmentRepo.List(ctx, types.Filter{Limit: defaultEnvironmentLookupLimit})
+	if err != nil || len(environments) == 0 {
+		return "", errEnvironmentUnresolved
+	}
+
+	for _, env := range environments {
+		if env.Type == types.EnvironmentDevelopment {
+			return env.ID, nil
+		}
+	}
+
+	// List orders by created_at DESC, so the first entry is the newest.
+	return environments[0].ID, nil
+}
+
+// setContextValues sets the tenant ID, user ID, environment ID, roles, and caller type in the context.
+// It reports whether an environment was established for the request.
+func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Repository, tenantID, userID, environmentID, userType string, roles []string) error {
 	ctx := c.Request.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, userID)
@@ -52,15 +117,32 @@ func setContextValues(c *gin.Context, tenantID, userID, environmentID, userType 
 		ctx = context.WithValue(ctx, types.CtxUserType, userType)
 	}
 
-	// Set additional headers for downstream handlers
-	if environmentID == "" {
-		environmentID = c.GetHeader(types.HeaderEnvironment)
+	// Environment resolution needs the tenant already in context: the repository
+	// scopes its lookups to the tenant taken from ctx.
+	resolvedEnvironmentID, err := resolveEnvironmentID(ctx, c, environmentRepo, environmentID, tenantID)
+	if err != nil {
+		return err
 	}
 
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, resolvedEnvironmentID)
 	c.Request = c.Request.WithContext(ctx)
+	return nil
+}
+
+// abortUnresolvedEnvironment refuses a request whose environment could not be
+// established. The response deliberately does not distinguish "no such
+// environment" from "belongs to another tenant".
+func abortUnresolvedEnvironment(c *gin.Context, log *logger.Logger, tenantID, userID string) {
+	log.Info(c.Request.Context(), "environment could not be resolved for request",
+		"tenant_id", tenantID,
+		"user_id", userID,
+		"requested_environment_id", c.GetHeader(types.HeaderEnvironment),
+	)
+	c.JSON(http.StatusForbidden, gin.H{
+		"error":   "Access denied",
+		"message": "Invalid or inaccessible environment",
+	})
+	c.Abort()
 }
 
 // GuestAuthenticateMiddleware is a middleware that allows requests without authentication
@@ -70,7 +152,7 @@ func GuestAuthenticateMiddleware(c *gin.Context) {
 }
 
 // APIKeyAuthMiddleware is a middleware that only allows requests with valid API keys
-func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.SecretService, logger *logger.Logger) gin.HandlerFunc {
+func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
 		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
@@ -81,7 +163,10 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 			return
 		}
 
-		setContextValues(c, tenantID, userID, environmentID, userType, roles)
+		if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
+			abortUnresolvedEnvironment(c, logger, tenantID, userID)
+			return
+		}
 		c.Next()
 	}
 }
@@ -89,7 +174,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 // AuthenticateMiddleware is a middleware that authenticates requests based on either:
 // 1. JWT token in the Authorization header as a Bearer token
 // 2. API key in the x-api-key header (or configured header name)
-func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, logger *logger.Logger) gin.HandlerFunc {
+func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, logger *logger.Logger) gin.HandlerFunc {
 	authProvider := auth.NewProvider(cfg)
 
 	return func(c *gin.Context) {
@@ -97,7 +182,10 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
 		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
-			setContextValues(c, tenantID, userID, environmentID, userType, roles)
+			if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
+				abortUnresolvedEnvironment(c, logger, tenantID, userID)
+				return
+			}
 			c.Next()
 			return
 		}
@@ -133,7 +221,10 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		// JWT users have empty roles = full access
-		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{})
+		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{}); err != nil {
+			abortUnresolvedEnvironment(c, logger, claims.TenantID, claims.UserID)
+			return
+		}
 		c.Next()
 	}
 }
