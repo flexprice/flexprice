@@ -143,18 +143,72 @@ func IsPublicIP(ip net.IP) bool {
 		return false
 	}
 
-	// Carrier-grade NAT (100.64.0.0/10). Not covered by IsPrivate, but routable
-	// inside cloud networks and used by some metadata proxies.
+	// An IPv6 address can carry an IPv4 destination inside it. To4 only unwraps
+	// the IPv4-mapped and IPv4-compatible forms, so NAT64 and 6to4 addresses
+	// reach the IPv6 path with their real target hidden: 64:ff9b::a00:5 routes to
+	// 10.0.0.5 and 2002:a9fe:a9fe:: routes to the 169.254.169.254 metadata
+	// address. Judge those by the address they actually reach.
+	if embedded := embeddedIPv4(ip); embedded != nil {
+		return IsPublicIP(embedded)
+	}
+
 	if ip4 := ip.To4(); ip4 != nil {
-		if ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
-			return false
-		}
-		// 192.0.0.0/24 holds IETF protocol assignments, including the
-		// 192.0.0.192 metadata address used by some providers.
-		if ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0 {
-			return false
-		}
+		return isPublicIPv4(ip4)
 	}
 
 	return true
+}
+
+// isPublicIPv4 rejects the IPv4 ranges that are not publicly routable but are
+// not covered by the net.IP classification helpers.
+func isPublicIPv4(ip4 net.IP) bool {
+	switch {
+	// Carrier-grade NAT (100.64.0.0/10). Routable inside cloud networks and used
+	// by some metadata proxies.
+	case ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127:
+		return false
+	// 192.0.0.0/24 holds IETF protocol assignments, including the 192.0.0.192
+	// metadata address used by some providers.
+	case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0:
+		return false
+	// 192.0.2.0/24 (TEST-NET-1), 198.51.100.0/24 (TEST-NET-2) and
+	// 203.0.113.0/24 (TEST-NET-3) are documentation ranges, never a real
+	// destination.
+	case ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 2,
+		ip4[0] == 198 && ip4[1] == 51 && ip4[2] == 100,
+		ip4[0] == 203 && ip4[1] == 0 && ip4[2] == 113:
+		return false
+	// 198.18.0.0/15 is reserved for inter-network benchmarking.
+	case ip4[0] == 198 && (ip4[1] == 18 || ip4[1] == 19):
+		return false
+	// 240.0.0.0/4 is reserved for future use, and includes the
+	// 255.255.255.255 broadcast address.
+	case ip4[0] >= 240:
+		return false
+	}
+
+	return true
+}
+
+// embeddedIPv4 returns the IPv4 address carried inside an IPv6 address for the
+// translation schemes that To4 does not unwrap, or nil when there is none.
+func embeddedIPv4(ip net.IP) net.IP {
+	ip16 := ip.To16()
+	if ip16 == nil || ip.To4() != nil {
+		return nil
+	}
+
+	// NAT64 well-known prefix 64:ff9b::/96 carries the IPv4 address in the last
+	// four bytes. The RFC 8215 local-use prefix 64:ff9b:1::/48 uses the same
+	// layout for its /96 suffix.
+	if ip16[0] == 0x00 && ip16[1] == 0x64 && ip16[2] == 0xff && ip16[3] == 0x9b {
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15])
+	}
+
+	// 6to4 (2002::/16) encodes the IPv4 address in bytes 2-5.
+	if ip16[0] == 0x20 && ip16[1] == 0x02 {
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5])
+	}
+
+	return nil
 }

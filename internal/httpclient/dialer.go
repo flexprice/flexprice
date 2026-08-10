@@ -78,6 +78,14 @@ func publicOnlyDialContext(ctx context.Context, network, addr string) (net.Conn,
 func newGuardedTransport() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DialContext = publicOnlyDialContext
+
+	// The clone inherits ProxyFromEnvironment, which would defeat the guard: with
+	// HTTP_PROXY set, the dial goes to the proxy address, publicOnlyDialContext
+	// classifies the proxy rather than the destination, and the proxy then reaches
+	// the original target unchecked. It also makes behaviour depend on the
+	// environment the process happens to run in.
+	transport.Proxy = nil
+
 	return transport
 }
 

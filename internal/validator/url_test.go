@@ -37,6 +37,23 @@ func TestValidateOutboundURL(t *testing.T) {
 		{"carrier grade nat", "https://100.64.0.1/", true},
 		{"ietf protocol assignment", "https://192.0.0.192/", true},
 
+		// IPv6 forms that carry an IPv4 target To4 does not unwrap. Judged by the
+		// address they actually route to, not by the outer IPv6 address.
+		{"nat64 rfc1918", "https://[64:ff9b::a00:5]/", true},
+		{"nat64 imds", "https://[64:ff9b::a9fe:a9fe]/", true},
+		{"6to4 rfc1918", "https://[2002:a00:5::]/", true},
+		{"6to4 imds", "https://[2002:a9fe:a9fe::]/", true},
+		{"nat64 public target allowed", "https://[64:ff9b::5db8:d822]/", false},
+
+		// Reserved IPv4 ranges that are not a real destination.
+		{"benchmarking range", "https://198.18.0.1/", true},
+		{"benchmarking range upper", "https://198.19.255.254/", true},
+		{"reserved future use", "https://240.0.0.1/", true},
+		{"broadcast", "https://255.255.255.255/", true},
+		{"test net one", "https://192.0.2.1/", true},
+		{"test net two", "https://198.51.100.1/", true},
+		{"test net three", "https://203.0.113.1/", true},
+
 		{"http scheme rejected", "http://api.example.com/", true},
 		{"file scheme rejected", "file:///etc/passwd", true},
 		{"gopher scheme rejected", "gopher://api.example.com/", true},

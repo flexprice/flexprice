@@ -348,14 +348,6 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 
 	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Payment not found").
-				WithReportableDetails(map[string]interface{}{
-					"payment_id": p.ID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
 		return ierr.WithError(err).
 			WithHint("Failed to update payment").
 			WithReportableDetails(map[string]interface{}{
@@ -364,17 +356,31 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 			Mark(ierr.ErrDatabase)
 	}
 
-	// With a status predicate, matching no rows means the payment moved to a
-	// different status between the caller's read and this write. Reported as a
-	// conflict so the caller can re-read rather than silently doing nothing.
-	if affected == 0 && expectedStatus != nil {
-		return ierr.NewError("payment status changed during update").
-			WithHint("The payment was modified concurrently. Retry with the current payment state.").
+	// A bulk update reports a missing row as zero rows affected with a nil error,
+	// so this count is the only signal that the write did not land — without it
+	// an unknown ID, or one belonging to another tenant, returns success having
+	// changed nothing.
+	if affected == 0 {
+		// With a status predicate, the row may well exist and simply have moved
+		// to a different status between the caller's read and this write.
+		// Reported as a conflict so the caller re-reads rather than treating the
+		// payment as gone.
+		if expectedStatus != nil {
+			return ierr.NewError("payment status changed during update").
+				WithHint("The payment was modified concurrently. Retry with the current payment state.").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":      p.ID,
+					"expected_status": *expectedStatus,
+				}).
+				Mark(ierr.ErrVersionConflict)
+		}
+
+		return ierr.NewError("payment not found").
+			WithHint("Payment not found").
 			WithReportableDetails(map[string]interface{}{
-				"payment_id":      p.ID,
-				"expected_status": *expectedStatus,
+				"payment_id": p.ID,
 			}).
-			Mark(ierr.ErrVersionConflict)
+			Mark(ierr.ErrNotFound)
 	}
 
 	r.DeleteCache(ctx, p.ID)
@@ -421,31 +427,34 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 		SetPaymentStatus(string(types.StatusArchived)).
 		Save(ctx)
 
-	if err == nil && affected == 0 && expectedStatus != nil {
-		return ierr.NewError("payment status changed during delete").
-			WithHint("The payment was modified concurrently. Re-read it before deleting.").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id":      id,
-				"expected_status": *expectedStatus,
-			}).
-			Mark(ierr.ErrVersionConflict)
-	}
-
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Payment not found").
-				WithReportableDetails(map[string]interface{}{
-					"payment_id": id,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
 		return ierr.WithError(err).
 			WithHint("Failed to delete payment").
 			WithReportableDetails(map[string]interface{}{
 				"payment_id": id,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+
+	// As in update: zero rows affected is the only signal that nothing was
+	// archived, since a bulk update does not report a missing row as an error.
+	if affected == 0 {
+		if expectedStatus != nil {
+			return ierr.NewError("payment status changed during delete").
+				WithHint("The payment was modified concurrently. Re-read it before deleting.").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":      id,
+					"expected_status": *expectedStatus,
+				}).
+				Mark(ierr.ErrVersionConflict)
+		}
+
+		return ierr.NewError("payment not found").
+			WithHint("Payment not found").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	r.DeleteCache(ctx, id)

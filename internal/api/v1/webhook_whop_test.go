@@ -45,7 +45,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 
 	cfg := &config.Configuration{
 		Logging: config.LoggingConfig{Level: types.LogLevelInfo},
-		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-32-bytes!!!"},
+		Secrets: config.SecretsConfig{EncryptionKey: testutil.NewEncryptionKey()},
 	}
 	log, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
