@@ -401,7 +401,6 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	// Status observed before any mutation. The write below is conditioned on it
 	// so the lifecycle check and the update apply as one atomic step.
 	observedStatus := p.PaymentStatus
-	statusChanged := false
 
 	if req.PaymentStatus != nil {
 		// Payment status must follow the lifecycle: without this check the update
@@ -412,7 +411,6 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			return nil, err
 		}
 		p.PaymentStatus = target
-		statusChanged = true
 	}
 	if req.PaymentGateway != nil {
 		p.PaymentGateway = req.PaymentGateway
@@ -422,7 +420,6 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		// Confirm the gateway accepted the payment: INITIATED → PENDING
 		if p.PaymentStatus == types.PaymentStatusInitiated {
 			p.PaymentStatus = types.PaymentStatusPending
-			statusChanged = true
 		}
 	}
 	if req.PaymentMethodID != nil {
@@ -447,15 +444,11 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		p.Metadata = *req.Metadata
 	}
 
-	// A status change is written conditionally on the status this update was
-	// validated against, so a concurrent update cannot be overwritten by a
-	// decision made from stale state. Updates that leave the status alone keep
-	// the unconditional write.
-	if statusChanged {
-		if err := s.PaymentRepo.UpdateWithExpectedStatus(ctx, p, observedStatus); err != nil {
-			return nil, err // Repository already using ierr
-		}
-	} else if err := s.PaymentRepo.Update(ctx, p); err != nil {
+	// Conditioned on the status observed before any mutation, whether or not
+	// this request changed it. The write persists the whole payment including
+	// PaymentStatus, so an update that only touches other fields would still
+	// write back the status it read and could revert a concurrent transition.
+	if err := s.PaymentRepo.UpdateWithExpectedStatus(ctx, p, observedStatus); err != nil {
 		return nil, err // Repository already using ierr
 	}
 
@@ -556,7 +549,10 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
+	// Conditioned on the status the deletability check was made against, so a
+	// payment that becomes non-deletable between the read and the write is not
+	// deleted on the strength of a stale check.
+	return s.PaymentRepo.DeleteWithExpectedStatus(ctx, id, p.PaymentStatus) // Repository already using ierr
 }
 
 func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {

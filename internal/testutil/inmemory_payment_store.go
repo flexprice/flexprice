@@ -170,6 +170,26 @@ func (m *InMemoryPaymentStore) UpdateWithExpectedStatus(ctx context.Context, p *
 }
 
 // Delete removes a payment
+// DeleteWithExpectedStatus deletes only while the stored status still matches
+// expectedStatus, mirroring the predicate the real repository applies.
+func (m *InMemoryPaymentStore) DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error {
+	m.mu.Lock()
+	storedStatus, ok := m.statusSnapshots[id]
+	m.mu.Unlock()
+
+	if ok && storedStatus != expectedStatus {
+		return ierr.NewError("payment status changed during delete").
+			WithHint("The payment was modified concurrently. Re-read it before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      id,
+				"expected_status": expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	return m.Delete(ctx, id)
+}
+
 func (m *InMemoryPaymentStore) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -382,6 +382,17 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 }
 
 func (r *paymentRepository) Delete(ctx context.Context, id string) error {
+	return r.delete(ctx, id, nil)
+}
+
+// DeleteWithExpectedStatus archives the payment only while the stored status
+// still matches expectedStatus, so a deletability check made by the caller and
+// this write happen as one atomic operation.
+func (r *paymentRepository) DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error {
+	return r.delete(ctx, id, &expectedStatus)
+}
+
+func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatus *types.PaymentStatus) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "delete", map[string]interface{}{
 		"payment_id": id,
@@ -396,14 +407,29 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	_, err := client.Payment.Update().
-		Where(
-			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
-			payment.ID(id),
-			payment.TenantID(types.GetTenantID(ctx)),
-		).
+	predicates := []predicate.Payment{
+		payment.EnvironmentID(types.GetEnvironmentID(ctx)),
+		payment.ID(id),
+		payment.TenantID(types.GetTenantID(ctx)),
+	}
+	if expectedStatus != nil {
+		predicates = append(predicates, payment.PaymentStatus(string(*expectedStatus)))
+	}
+
+	affected, err := client.Payment.Update().
+		Where(predicates...).
 		SetPaymentStatus(string(types.StatusArchived)).
 		Save(ctx)
+
+	if err == nil && affected == 0 && expectedStatus != nil {
+		return ierr.NewError("payment status changed during delete").
+			WithHint("The payment was modified concurrently. Re-read it before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      id,
+				"expected_status": *expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
 
 	if err != nil {
 		if ent.IsNotFound(err) {

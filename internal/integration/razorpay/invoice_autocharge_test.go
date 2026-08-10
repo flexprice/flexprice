@@ -90,6 +90,9 @@ func (s *inlinePaymentStore) UpdateWithExpectedStatus(_ context.Context, p *paym
 	return nil
 }
 func (s *inlinePaymentStore) Delete(_ context.Context, _ string) error { return nil }
+func (s *inlinePaymentStore) DeleteWithExpectedStatus(_ context.Context, _ string, _ types.PaymentStatus) error {
+	return nil
+}
 func (s *inlinePaymentStore) List(_ context.Context, _ *types.PaymentFilter) ([]*payment.Payment, error) {
 	return nil, nil
 }

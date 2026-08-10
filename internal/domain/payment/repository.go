@@ -46,6 +46,11 @@ type Repository interface {
 	// ErrVersionConflict when the stored status has since changed.
 	UpdateWithExpectedStatus(ctx context.Context, payment *Payment, expectedStatus types.PaymentStatus) error
 	Delete(ctx context.Context, id string) error
+	// DeleteWithExpectedStatus deletes the payment only while its stored status
+	// still equals expectedStatus, so a deletability check made against a value
+	// read earlier cannot be applied after a concurrent transition. Returns
+	// ErrVersionConflict when the stored status has since changed.
+	DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error
 	List(ctx context.Context, filter *types.PaymentFilter) ([]*Payment, error)
 	Count(ctx context.Context, filter *types.PaymentFilter) (int, error)
 	GetByIdempotencyKey(ctx context.Context, key string) (*Payment, error)

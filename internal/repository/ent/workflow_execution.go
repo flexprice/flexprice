@@ -119,8 +119,8 @@ func (r *workflowExecutionRepository) GetMany(ctx context.Context, refs []domain
 	predicates := make([]predicate.WorkflowExecution, 0, len(refs))
 	for _, ref := range refs {
 		predicates = append(predicates, workflowexecution.And(
-			workflowexecution.WorkflowID(ref.WorkflowID),
-			workflowexecution.RunID(ref.RunID),
+			workflowexecution.WorkflowID(ref.WorkflowID()),
+			workflowexecution.RunID(ref.RunID()),
 		))
 	}
 

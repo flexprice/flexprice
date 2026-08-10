@@ -546,3 +546,33 @@ func (s *PaymentServiceSuite) TestUpdateWithExpectedStatusReportsConflict() {
 	s.Error(err)
 	s.True(ierr.IsVersionConflict(err), "expected a version conflict, got: %v", err)
 }
+
+// Deleting is conditioned on the status the deletability check was made
+// against, so a payment that settles between the read and the write is not
+// deleted on the strength of a stale check.
+func (s *PaymentServiceSuite) TestDeletePaymentRejectsConcurrentStatusChange() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_delete_raced",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusInitiated,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	// The payment settles after it was read as deletable.
+	settled, err := repo.Get(ctx, p.ID)
+	s.NoError(err)
+	settled.PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(repo.Update(ctx, settled))
+
+	err = repo.DeleteWithExpectedStatus(ctx, p.ID, types.PaymentStatusInitiated)
+	s.Error(err, "a settled payment must not be deleted on a stale deletability check")
+	s.True(ierr.IsVersionConflict(err), "expected a version conflict, got: %v", err)
+}

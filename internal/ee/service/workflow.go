@@ -153,7 +153,7 @@ func (s *workflowService) authorizeWorkflowsBatch(ctx context.Context, refs []wo
 		if exec == nil {
 			continue
 		}
-		found[workflowexecution.WorkflowRef{WorkflowID: exec.WorkflowID, RunID: exec.RunID}] = struct{}{}
+		found[workflowexecution.NewWorkflowRef(exec.WorkflowID, exec.RunID)] = struct{}{}
 	}
 
 	for _, ref := range refs {
@@ -348,7 +348,7 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 	// scoped query rather than a lookup per item.
 	refs := make([]workflowexecution.WorkflowRef, 0, len(req.Workflows))
 	for _, wf := range req.Workflows {
-		refs = append(refs, workflowexecution.WorkflowRef{WorkflowID: wf.WorkflowID, RunID: wf.RunID})
+		refs = append(refs, workflowexecution.NewWorkflowRef(wf.WorkflowID, wf.RunID))
 	}
 	if err := s.authorizeWorkflowsBatch(ctx, refs); err != nil {
 		return nil, err
@@ -356,7 +356,7 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 
 	executions := make([]struct{ WorkflowID, RunID string }, 0, len(refs))
 	for _, ref := range refs {
-		executions = append(executions, struct{ WorkflowID, RunID string }{WorkflowID: ref.WorkflowID, RunID: ref.RunID})
+		executions = append(executions, struct{ WorkflowID, RunID string }{WorkflowID: ref.WorkflowID(), RunID: ref.RunID()})
 	}
 	infos, err := s.querier.DescribeWorkflowBatch(ctx, executions)
 	if err != nil {
