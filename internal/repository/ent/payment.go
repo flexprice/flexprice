@@ -365,22 +365,26 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 		// to a different status between the caller's read and this write.
 		// Reported as a conflict so the caller re-reads rather than treating the
 		// payment as gone.
+		var mutationErr error
 		if expectedStatus != nil {
-			return ierr.NewError("payment status changed during update").
+			mutationErr = ierr.NewError("payment status changed during update").
 				WithHint("The payment was modified concurrently. Retry with the current payment state.").
 				WithReportableDetails(map[string]interface{}{
 					"payment_id":      p.ID,
 					"expected_status": *expectedStatus,
 				}).
 				Mark(ierr.ErrVersionConflict)
+		} else {
+			mutationErr = ierr.NewError("payment not found").
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": p.ID,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
 
-		return ierr.NewError("payment not found").
-			WithHint("Payment not found").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id": p.ID,
-			}).
-			Mark(ierr.ErrNotFound)
+		SetSpanError(span, mutationErr)
+		return mutationErr
 	}
 
 	r.DeleteCache(ctx, p.ID)
@@ -428,6 +432,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 		Save(ctx)
 
 	if err != nil {
+		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete payment").
 			WithReportableDetails(map[string]interface{}{
@@ -439,22 +444,26 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 	// As in update: zero rows affected is the only signal that nothing was
 	// archived, since a bulk update does not report a missing row as an error.
 	if affected == 0 {
+		var mutationErr error
 		if expectedStatus != nil {
-			return ierr.NewError("payment status changed during delete").
+			mutationErr = ierr.NewError("payment status changed during delete").
 				WithHint("The payment was modified concurrently. Re-read it before deleting.").
 				WithReportableDetails(map[string]interface{}{
 					"payment_id":      id,
 					"expected_status": *expectedStatus,
 				}).
 				Mark(ierr.ErrVersionConflict)
+		} else {
+			mutationErr = ierr.NewError("payment not found").
+				WithHint("Payment not found").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
 
-		return ierr.NewError("payment not found").
-			WithHint("Payment not found").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id": id,
-			}).
-			Mark(ierr.ErrNotFound)
+		SetSpanError(span, mutationErr)
+		return mutationErr
 	}
 
 	r.DeleteCache(ctx, id)

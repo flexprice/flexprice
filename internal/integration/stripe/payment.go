@@ -62,6 +62,9 @@ var reservedStripeMetadataKeys = map[string]struct{}{
 	"customer_id":           {},
 	"payment_source":        {},
 	"payment_type":          {},
+	// The setup-intent success webhook makes the payment method the customer's
+	// default when this is "true", so it must come from req.SetDefault only.
+	"set_default": {},
 	// Internal connection fields, previously filtered by the callers.
 	"connection_id":   {},
 	"connection_name": {},

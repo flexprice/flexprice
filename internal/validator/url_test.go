@@ -45,6 +45,14 @@ func TestValidateOutboundURL(t *testing.T) {
 		{"6to4 imds", "https://[2002:a9fe:a9fe::]/", true},
 		{"nat64 public target allowed", "https://[64:ff9b::5db8:d822]/", false},
 
+		// 64:ff9b:1::/48 is the RFC 8215 local-use range. RFC 6052 splits the
+		// embedded address for prefixes shorter than /96, so the final four bytes
+		// are not the destination: this address translates to 10.0.0.5 while its
+		// suffix reads as 8.8.8.8. The whole range is refused rather than decoded.
+		{"nat64 local use split encoding", "https://[64:ff9b:1:a00:0:5:808:808]/", true},
+		{"nat64 local use zero suffix", "https://[64:ff9b:1::]/", true},
+		{"nat64 local use public looking suffix", "https://[64:ff9b:1::5db8:d822]/", true},
+
 		// Reserved IPv4 ranges that are not a real destination.
 		{"benchmarking range", "https://198.18.0.1/", true},
 		{"benchmarking range upper", "https://198.19.255.254/", true},

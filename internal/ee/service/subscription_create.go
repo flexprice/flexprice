@@ -137,10 +137,11 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 	for _, child := range children {
 		s.archiveDraftSubscriptionDependencies(ctx, child.ID)
 		if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
-			// The child's dependencies were archived just above, so the group is
-			// already partially torn down: this child row survives without them,
-			// and the parent and any remaining children are left untouched.
-			s.Logger.Error(ctx, "failed to archive child subscription, group left partially cleaned up",
+			// Dependency archival was attempted for this child just above and
+			// reports failures only through its own logs, so an unknown subset of
+			// them is already gone. This child row survives without them, and the
+			// parent and any remaining children are untouched.
+			s.Logger.Error(ctx, "failed to archive child subscription, group cleanup attempted and may be partial",
 				"error", err,
 				"subscription_id", subscriptionID,
 				"child_subscription_id", child.ID,

@@ -143,6 +143,13 @@ func IsPublicIP(ip net.IP) bool {
 		return false
 	}
 
+	// The RFC 8215 local-use translation range carries an IPv4 destination that
+	// cannot be recovered without knowing the operator's prefix length, so it is
+	// refused rather than decoded. See isNAT64LocalUsePrefix.
+	if ip16 := ip.To16(); ip16 != nil && ip.To4() == nil && isNAT64LocalUsePrefix(ip16) {
+		return false
+	}
+
 	// An IPv6 address can carry an IPv4 destination inside it. To4 only unwraps
 	// the IPv4-mapped and IPv4-compatible forms, so NAT64 and 6to4 addresses
 	// reach the IPv6 path with their real target hidden: 64:ff9b::a00:5 routes to
@@ -199,9 +206,13 @@ func embeddedIPv4(ip net.IP) net.IP {
 	}
 
 	// NAT64 well-known prefix 64:ff9b::/96 carries the IPv4 address in the last
-	// four bytes. The RFC 8215 local-use prefix 64:ff9b:1::/48 uses the same
-	// layout for its /96 suffix.
-	if ip16[0] == 0x00 && ip16[1] == 0x64 && ip16[2] == 0xff && ip16[3] == 0x9b {
+	// four bytes. Bytes 4-11 must be zero for the prefix to be the /96 one:
+	// matching on the first four bytes alone would also catch 64:ff9b:1::/48,
+	// whose embedded address RFC 6052 splits around the u-octet rather than
+	// leaving in the final four bytes. Reading those bytes for a /48 address
+	// yields the wrong IPv4, so 64:ff9b:1::/48 is rejected outright below rather
+	// than decoded here.
+	if isNAT64WellKnownPrefix(ip16) {
 		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15])
 	}
 
@@ -211,4 +222,35 @@ func embeddedIPv4(ip net.IP) net.IP {
 	}
 
 	return nil
+}
+
+// isNAT64WellKnownPrefix reports whether the address uses the 64:ff9b::/96
+// well-known prefix, which is the only NAT64 prefix whose embedded IPv4 address
+// sits in the final four bytes.
+func isNAT64WellKnownPrefix(ip16 net.IP) bool {
+	if ip16[0] != 0x00 || ip16[1] != 0x64 || ip16[2] != 0xff || ip16[3] != 0x9b {
+		return false
+	}
+	for _, b := range ip16[4:12] {
+		if b != 0x00 {
+			return false
+		}
+	}
+	return true
+}
+
+// isNAT64LocalUsePrefix reports whether the address falls in 64:ff9b:1::/48,
+// the RFC 8215 local-use translation range.
+//
+// RFC 6052 encodes the embedded IPv4 address differently for each prefix length
+// and splits it around the reserved u-octet for prefixes shorter than /96, so
+// the destination cannot be recovered without knowing which length the operator
+// configured. RFC 8215 says applications must not assume the embedded-address
+// syntax here. Since the real target is unknowable, the whole range is refused
+// rather than decoded: 64:ff9b:1:a00:0:5:808:808 translates to 10.0.0.5 while
+// its final four bytes read as 8.8.8.8.
+func isNAT64LocalUsePrefix(ip16 net.IP) bool {
+	return ip16[0] == 0x00 && ip16[1] == 0x64 &&
+		ip16[2] == 0xff && ip16[3] == 0x9b &&
+		ip16[4] == 0x00 && ip16[5] == 0x01
 }
