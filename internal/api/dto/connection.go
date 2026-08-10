@@ -70,6 +70,9 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 		if aid, ok := flatMetadata["account_id"].(string); ok {
 			stripeMetadata.AccountID = aid
 		}
+		if bu, ok := flatMetadata["base_url"].(string); ok {
+			stripeMetadata.BaseURL = bu
+		}
 
 		return types.ConnectionMetadata{
 			Stripe: stripeMetadata,

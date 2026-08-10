@@ -3,6 +3,10 @@ package stripe
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -40,6 +44,51 @@ type StripeConfig struct {
 	SecretKey      string
 	PublishableKey string
 	WebhookSecret  string
+	BaseURL        string
+}
+
+// normalizeStripeOrigin parses, validates, and normalizes a raw URL string into an origin (scheme://hostname[:port]).
+// It enforces that the URL is an absolute origin: scheme must be http or https, host must be non-empty,
+// and userinfo/credentials, query parameters, fragments, and non-root paths (other than optional trailing slash) are rejected.
+func normalizeStripeOrigin(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("URL is empty")
+	}
+
+	parsedURL, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL syntax: %w", err)
+	}
+
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("scheme must be http or https")
+	}
+
+	if parsedURL.User != nil {
+		return "", fmt.Errorf("userinfo/credentials are forbidden in origin")
+	}
+
+	if parsedURL.Hostname() == "" {
+		return "", fmt.Errorf("hostname is required")
+	}
+
+	if parsedURL.RawQuery != "" {
+		return "", fmt.Errorf("query string is forbidden in origin")
+	}
+
+	if parsedURL.Fragment != "" {
+		return "", fmt.Errorf("fragment is forbidden in origin")
+	}
+
+	// Reject paths other than empty or "/"
+	if parsedURL.Path != "" && parsedURL.Path != "/" {
+		return "", fmt.Errorf("non-root path is forbidden in origin")
+	}
+
+	host := strings.ToLower(parsedURL.Host)
+	return scheme + "://" + host, nil
 }
 
 // GetStripeClient returns a configured Stripe client for the current environment
@@ -62,7 +111,61 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 	// Initialize Stripe client with an OTel-instrumented HTTP backend so that
 	// outbound Stripe API calls surface in SigNoz External API Monitoring.
 	// 80s mirrors the Stripe SDK's default HTTP timeout.
-	backends := stripe.NewBackends(httpclient.NewOtelHTTPClient(80 * time.Second))
+	httpClient := httpclient.NewOtelHTTPClient(80 * time.Second)
+
+	if stripeConfig.BaseURL != "" {
+		targetOrigin, err := normalizeStripeOrigin(stripeConfig.BaseURL)
+		if err != nil {
+			return nil, nil, ierr.NewError(fmt.Sprintf("invalid Stripe base URL origin: %v", err)).
+				WithHint("connection base_url must be a valid origin (scheme://hostname[:port])").
+				Mark(ierr.ErrValidation)
+		}
+
+		allowedOriginsEnv := os.Getenv("FLEXPRICE_STRIPE_ALLOWED_BASE_URLS")
+		if allowedOriginsEnv == "" {
+			return nil, nil, ierr.NewError("custom Stripe base URL is not enabled").
+				WithHint("operator must set FLEXPRICE_STRIPE_ALLOWED_BASE_URLS env var to allow custom Stripe endpoints").
+				Mark(ierr.ErrValidation)
+		}
+
+		allowedList := strings.Split(allowedOriginsEnv, ",")
+		isAllowed := false
+		for _, raw := range allowedList {
+			allowedOrigin, err := normalizeStripeOrigin(raw)
+			if err != nil {
+				continue
+			}
+			if targetOrigin == allowedOrigin {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			return nil, nil, ierr.NewError("custom Stripe base URL origin is not in the operator allowlist").
+				WithHint("connection base_url origin must be explicitly listed in FLEXPRICE_STRIPE_ALLOWED_BASE_URLS").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Prevent redirects on custom backends to block open-redirect SSRF
+		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+
+		backends := stripe.NewBackends(httpClient)
+		backends.API = stripe.GetBackendWithConfig(
+			stripe.APIBackend,
+			&stripe.BackendConfig{
+				URL:        stripe.String(stripeConfig.BaseURL),
+				HTTPClient: httpClient,
+			},
+		)
+		c.logger.Info(ctx, "configured custom Stripe API base URL", "has_custom_base_url", true)
+		stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
+		return stripeClient, stripeConfig, nil
+	}
+
+	backends := stripe.NewBackends(httpClient)
 	stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
 
 	return stripeClient, stripeConfig, nil
@@ -90,17 +193,21 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 	if webhookSecret, exists := decryptedMetadata["webhook_secret"]; exists {
 		stripeConfig.WebhookSecret = webhookSecret
 		c.logger.Info(context.Background(), "webhook secret found in decrypted metadata",
-			"has_webhook_secret", webhookSecret != "",
-			"webhook_secret_length", len(webhookSecret))
+			"has_webhook_secret", webhookSecret != "")
 	} else {
 		c.logger.Info(context.Background(), "webhook_secret not found in decrypted metadata",
 			"available_keys", lo.Keys(decryptedMetadata))
 	}
 
+	if baseURL, exists := decryptedMetadata["base_url"]; exists {
+		stripeConfig.BaseURL = baseURL
+	}
+
 	c.logger.Info(context.Background(), "final stripe config",
 		"has_secret_key", stripeConfig.SecretKey != "",
 		"has_publishable_key", stripeConfig.PublishableKey != "",
-		"has_webhook_secret", stripeConfig.WebhookSecret != "")
+		"has_webhook_secret", stripeConfig.WebhookSecret != "",
+		"has_custom_base_url", stripeConfig.BaseURL != "")
 
 	return stripeConfig, nil
 }
@@ -149,6 +256,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"publishable_key": publishableKey,
 			"webhook_secret":  webhookSecret,
 			"account_id":      conn.EncryptedSecretData.Stripe.AccountID,
+			"base_url":        conn.EncryptedSecretData.Stripe.BaseURL,
 		}
 
 		c.logger.Info(context.Background(), "successfully decrypted connection metadata",
