@@ -15,6 +15,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// defaultSessionTokenTimeoutHours is used when the configured customer portal
+// token timeout is missing or non-positive, so a misconfiguration degrades to a
+// short-lived token instead of one that is already expired when issued.
+const defaultSessionTokenTimeoutHours = 1
+
 type flexpriceAuth struct {
 	AuthConfig config.AuthConfig
 }
@@ -213,7 +218,13 @@ func (f *flexpriceAuth) GenerateSessionToken(customerID, externalCustomerID, ten
 			Mark(ierr.ErrValidation)
 	}
 
-	// Dashboard tokens expire based on the provided timeout
+	// Dashboard tokens expire based on the provided timeout. A missing or
+	// nonsensical timeout would otherwise mint a token with exp == iat, which is
+	// expired on arrival and breaks every portal session, so fall back to a
+	// usable default rather than issuing a dead token.
+	if timeoutHours <= 0 {
+		timeoutHours = defaultSessionTokenTimeoutHours
+	}
 	expiresAt := time.Now().Add(time.Duration(timeoutHours) * time.Hour)
 
 	claims := jwt.MapClaims{
