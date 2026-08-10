@@ -1556,6 +1556,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
 		}
+
+		// A draft parent is only ever invoiced by the checkout pricing pass, and its inline
+		// children are draft too, so they belong on the amount the customer is asked to pay.
+		if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+			filter.SubscriptionStatus = append(filter.SubscriptionStatus, types.SubscriptionStatusDraft)
+		}
 		children, err := s.SubRepo.List(ctx, filter)
 		if err != nil {
 			return nil, err

@@ -304,3 +304,158 @@ func TestCreateSubscriptionRequestValidate_GroupedInvoicingChildrenToCreate_Requ
 		}
 	})
 }
+
+func checkoutParamsForTest() *CheckoutParams {
+	return &CheckoutParams{
+		PaymentParams: PaymentParams{
+			PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		},
+	}
+}
+
+func TestSubscriptionInheritanceConfig_CheckoutUnsupportedFields(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *SubscriptionInheritanceConfig
+		want   bool
+	}{
+		{
+			name:   "nil config reports nothing",
+			config: nil,
+		},
+		{
+			name:   "empty config reports nothing",
+			config: &SubscriptionInheritanceConfig{},
+		},
+		{
+			name:   "external_customer_ids_to_inherit_subscription",
+			config: &SubscriptionInheritanceConfig{ExternalCustomerIDsToInheritSubscription: []string{"ext_child_1"}},
+			want:   true,
+		},
+		{
+			name:   "parent_subscription_id",
+			config: &SubscriptionInheritanceConfig{ParentSubscriptionID: "subs_parent"},
+			want:   true,
+		},
+		{
+			name:   "invoicing_customer_external_id",
+			config: &SubscriptionInheritanceConfig{InvoicingCustomerExternalID: lo.ToPtr("ext_payer")},
+			want:   true,
+		},
+		{
+			name:   "subscriptions_ids_for_grouped_invoicing",
+			config: &SubscriptionInheritanceConfig{SubscriptionsIDsForGroupedInvoicing: []string{"subs_child"}},
+			want:   true,
+		},
+		{
+			name: "grouped_invoicing_children_to_create is supported",
+			config: &SubscriptionInheritanceConfig{
+				GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+					{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+				},
+			},
+		},
+		{
+			name: "a supported field alongside an unsupported one still reports",
+			config: &SubscriptionInheritanceConfig{
+				GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+					{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+				},
+				InvoicingCustomerExternalID: lo.ToPtr("ext_payer"),
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.checkoutUnsupportedFields()
+			if got != tt.want {
+				t.Fatalf("expected fields %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_CheckoutRejectsEachInheritanceField(t *testing.T) {
+	configs := map[string]*SubscriptionInheritanceConfig{
+		"external_customer_ids_to_inherit_subscription": {ExternalCustomerIDsToInheritSubscription: []string{"ext_child_1"}},
+		"parent_subscription_id":                        {ParentSubscriptionID: "subs_parent"},
+		"invoicing_customer_external_id":                {InvoicingCustomerExternalID: lo.ToPtr("ext_payer")},
+		"subscriptions_ids_for_grouped_invoicing":       {SubscriptionsIDsForGroupedInvoicing: []string{"subs_child"}},
+	}
+
+	for field, config := range configs {
+		t.Run("rejects "+field, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.Checkout = checkoutParamsForTest()
+			req.Inheritance = config
+
+			err := req.Validate()
+			if err == nil {
+				t.Fatal("expected validation error, got nil")
+			}
+			if !strings.Contains(err.Error(), "inheritance field is not supported with checkout") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_CheckoutWithoutInheritancePasses(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+	req.Checkout = checkoutParamsForTest()
+
+	if err := req.Validate(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_CheckoutAllowsGroupedInvoicingChildren(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+	req.Checkout = checkoutParamsForTest()
+	req.Inheritance = &SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{
+			{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"},
+		},
+	}
+
+	if err := req.Validate(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+// Inline children never reach handleSubscriptionPhases, so a gated create carrying child phases
+// would persist a half-built schedule.
+func TestCreateSubscriptionRequestValidate_CheckoutRejectsChildPhases(t *testing.T) {
+	child := GroupedInvoicingChildRequest{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"}
+	child.Phases = []SubscriptionPhaseCreateRequest{{StartDate: time.Now().UTC()}}
+
+	req := baseCreateSubscriptionRequest()
+	req.Checkout = checkoutParamsForTest()
+	req.Inheritance = &SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{child},
+	}
+
+	err := req.Validate()
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "phases is not supported with checkout") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_ChildPhasesAllowedWithoutCheckout(t *testing.T) {
+	child := GroupedInvoicingChildRequest{PlanID: "plan_seat", ExternalCustomerID: "ext_seat_1"}
+	child.Phases = []SubscriptionPhaseCreateRequest{{StartDate: time.Now().UTC()}}
+
+	req := baseCreateSubscriptionRequest()
+	req.Inheritance = &SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []GroupedInvoicingChildRequest{child},
+	}
+
+	if err := req.Validate(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
