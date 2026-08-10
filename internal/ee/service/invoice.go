@@ -1428,8 +1428,9 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 
 	// Create sync request using the integration package's DTO
 	syncRequest := stripe.StripeInvoiceSyncRequest{
-		InvoiceID:        inv.ID,
-		CollectionMethod: string(stripeCollectionMethod),
+		InvoiceID:         inv.ID,
+		CollectionMethod:  string(stripeCollectionMethod),
+		LinkStripeProduct: conn.IsPriceOutboundEnabled(),
 	}
 
 	// Perform the sync
