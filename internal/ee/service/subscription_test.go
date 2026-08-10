@@ -2803,8 +2803,10 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Publishes
 		BillingPeriodCount: 1,
 		BillingCycle:       types.BillingCycleAnniversary,
 		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
-		LineItems: []dto.CreateSubscriptionLineItemRequest{
-			{Price: inlinePriceReq},
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			LineItems: []dto.CreateSubscriptionLineItemRequest{
+				{Price: inlinePriceReq},
+			},
 		},
 	}
 
@@ -5502,7 +5504,13 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_AddonLineItemDeletedEv
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 
 	addAddonNow := time.Now().UTC()
-	_, err := s.service.AddAddonToSubscription(ctx, sub.ID, &dto.AddAddonToSubscriptionRequest{AddonID: addonID, StartDate: &addAddonNow})
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &addAddonNow,
+		},
+	})
 	s.NoError(err)
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
