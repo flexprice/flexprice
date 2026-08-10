@@ -1,0 +1,163 @@
+name: Publish e2eprobe Image to GHCR
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'cmd/e2eprobe/**'
+      - 'internal/e2eprobe/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile.e2eprobe'
+      - '.github/workflows/publish-e2eprobe-image.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Extra image tag to publish (e.g. v1.0.0). The commit SHA tag is always published.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/e2eprobe
+
+jobs:
+  build-and-publish:
+    name: Build, scan, publish multi-arch e2eprobe image
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to commit SHAs so a retagged upstream
+      # release can't run arbitrary code in a job holding GHCR_PUBLISH_TOKEN.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Resolve image tags
+        id: tag
+        env:
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
+          IMG: ${{ env.REGISTRY }}/${{ github.repository_owner }}/e2eprobe
+        run: |
+          set -euo pipefail
+          SHA_TAG="$(echo "${GITHUB_SHA}" | cut -c1-12)"
+          # Only the immutable SHA tag is pushed by the build. Everything a
+          # deployment tracks is promoted onto that digest after Trivy passes,
+          # so a failing scan can never leave a vulnerable image under a
+          # tag something is following.
+          PROMOTE=""
+          # Branch name doubles as the mutable tag deployments track:
+          # develop for staging, main for production.
+          case "${GITHUB_REF}" in
+            refs/heads/develop) PROMOTE="develop" ;;
+            refs/heads/main)    PROMOTE="main" ;;
+          esac
+          if [ -n "${DISPATCH_TAG}" ]; then
+            if ! echo "${DISPATCH_TAG}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+              echo "::error::Invalid tag format: ${DISPATCH_TAG}"
+              exit 1
+            fi
+            PROMOTE="${PROMOTE:+${PROMOTE} }${DISPATCH_TAG}"
+          fi
+          ALL="${IMG}:${SHA_TAG}"
+          for t in ${PROMOTE}; do
+            ALL="${ALL}"$'\n'"${IMG}:${t}"
+          done
+          {
+            echo "sha_tag=${SHA_TAG}"
+            echo "promote_tags=${PROMOTE}"
+            echo "all_tags<<EOF"
+            echo "${ALL}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          # PAT auth — default GITHUB_TOKEN can't push to the org's GHCR
+          # package unless the package is linked to this repo with Write.
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      # Pushes the immutable SHA tag only. Multi-arch manifests need registry
+      # access at build time, so the image has to land somewhere before it can
+      # be scanned; the SHA tag is not tracked by any deployment.
+      - name: Build & push multi-arch image (SHA tag only)
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: Dockerfile.e2eprobe
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=e2eprobe
+            org.opencontainers.image.description=Flexprice end-to-end synthetic probe
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha_tag }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      # Only reached when Trivy passes. Retags the scanned digest without
+      # rebuilding, so the promoted tag is byte-identical to what was scanned.
+      - name: Promote scanned digest to deployment tags
+        if: steps.tag.outputs.promote_tags != ''
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          PROMOTE_TAGS: ${{ steps.tag.outputs.promote_tags }}
+        run: |
+          set -euo pipefail
+          for t in ${PROMOTE_TAGS}; do
+            echo "Promoting ${IMG}@${DIGEST} -> ${IMG}:${t}"
+            docker buildx imagetools create -t "${IMG}:${t}" "${IMG}@${DIGEST}"
+          done
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Summary
+        env:
+          TAGS: ${{ steps.tag.outputs.all_tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "## e2eprobe Image Published"
+            echo ""
+            echo "- Tags:"
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+            echo "- Platforms: linux/amd64, linux/arm64"
+            echo "- Digest: \`${DIGEST}\`"
+            echo "- SBOM + provenance: attached"
+          } >> "$GITHUB_STEP_SUMMARY"
