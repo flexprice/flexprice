@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -855,9 +856,20 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 		h.logger.Debug(c.Request.Context(), "Nomod webhook authentication successful",
 			"remote_addr", c.ClientIP())
 	} else {
-		h.logger.Debug(c.Request.Context(), "Nomod webhook processing without authentication",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		h.logger.Error(c.Request.Context(), "Nomod webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
+			"remote_addr", c.ClientIP(),
 			"tenant_id", tenantID,
-			"environment_id", environmentID)
+			"environment_id", environmentID,
+			"note", "Configure webhook_secret in the Nomod connection settings")
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
+		return
 	}
 
 	// Log webhook processing (without sensitive data)
@@ -988,8 +1000,9 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			return
 		}
 
-		// Verify the secret_token matches our configured (decrypted) webhook_secret
-		if event.SecretToken != moyasarConfig.WebhookSecret {
+		// Verify the secret_token matches our configured (decrypted) webhook_secret.
+		// Constant-time compare so response timing cannot be used to recover the secret.
+		if subtle.ConstantTimeCompare([]byte(event.SecretToken), []byte(moyasarConfig.WebhookSecret)) != 1 {
 			h.logger.Info(context.Background(), "Moyasar webhook secret_token verification failed - rejecting request",
 				"tenant_id", tenantID,
 				"environment_id", environmentID,
@@ -1003,12 +1016,17 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			"environment_id", environmentID,
 			"event_id", event.ID)
 	} else {
-		// No webhook secret configured - allow with warning
-		h.logger.Info(context.Background(), "Moyasar webhook received without secret verification",
+		// No webhook secret configured - reject. This route is unauthenticated by
+		// design and takes the tenant and environment from the URL, so a request
+		// that cannot be verified against a configured secret must not be treated
+		// as coming from the provider, since it drives invoice payment state.
+		h.logger.Error(context.Background(), "Moyasar webhook rejected: webhook secret is not configured on the connection",
+			"error", "webhook_secret_not_configured",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"event_id", event.ID,
-			"note", "Configure webhook_secret in Moyasar connection for enhanced security")
+			"note", "Configure webhook_secret in the Moyasar connection settings")
+		return
 	}
 
 	// Log webhook processing (without sensitive data)

@@ -2,6 +2,7 @@ package nomod
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -342,14 +343,21 @@ func (c *Client) VerifyWebhookAuth(ctx context.Context, providedAPIKey string) e
 			Mark(ierr.ErrInternal)
 	}
 
-	// If no webhook secret configured, skip verification
+	// No webhook secret means the request cannot be verified, so fail closed
+	// rather than accepting it. Callers reach this method to authenticate an
+	// externally-originated webhook, so returning nil here would authenticate
+	// any caller rather than only Nomod.
 	if config.WebhookSecret == "" {
-		c.logger.Debug(ctx, "no webhook secret configured, skipping verification")
-		return nil
+		c.logger.Error(ctx, "webhook authentication failed: no webhook secret configured",
+			"error", "webhook_secret_not_configured")
+		return ierr.NewError("webhook secret is not configured").
+			WithHint("Configure webhook_secret in the Nomod connection settings").
+			Mark(ierr.ErrValidation)
 	}
 
-	// Verify the provided API key matches the webhook secret
-	if providedAPIKey != config.WebhookSecret {
+	// Verify the provided API key matches the webhook secret.
+	// Constant-time compare so response timing cannot be used to recover the secret.
+	if subtle.ConstantTimeCompare([]byte(providedAPIKey), []byte(config.WebhookSecret)) != 1 {
 		c.logger.Info(ctx, "webhook authentication failed - invalid X-API-KEY")
 		return ierr.NewError("invalid webhook API key").
 			WithHint("X-API-KEY header does not match configured webhook secret").
