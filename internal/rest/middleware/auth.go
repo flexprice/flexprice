@@ -10,15 +10,11 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
-
-// defaultEnvironmentLookupLimit bounds the environment list read when falling
-// back to a tenant's default environment. Tenants hold a handful of
-// environments, so this covers every real tenant in one query.
-const defaultEnvironmentLookupLimit = 50
 
 // validateAPIKey validates the API key against the config first, then the database.
 func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
@@ -72,7 +68,16 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 
 	if requested := c.GetHeader(types.HeaderEnvironment); requested != "" {
 		env, err := environmentRepo.Get(ctx, requested)
-		if err != nil || env == nil {
+		if err != nil {
+			// Absence means the environment does not exist or belongs to another
+			// tenant, which is a refusal. Anything else is an infrastructure
+			// failure and must surface as such rather than as an access denial.
+			if ierr.IsNotFound(err) {
+				return "", errEnvironmentUnresolved
+			}
+			return "", err
+		}
+		if env == nil {
 			return "", errEnvironmentUnresolved
 		}
 		return env.ID, nil
@@ -85,19 +90,30 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 // header. Tenants are onboarded with a single development environment, so that
 // is both the common case and the safe default: a request that lands here by
 // mistake touches the sandbox rather than production data.
+//
+// The development environment is looked up by type rather than by scanning a
+// page of results: it is created at onboarding and is therefore the tenant's
+// oldest, so a tenant with more environments than one page holds would not find
+// it in the newest N.
 func defaultEnvironmentID(ctx context.Context, environmentRepo domainEnvironment.Repository) (string, error) {
-	environments, err := environmentRepo.List(ctx, types.Filter{Limit: defaultEnvironmentLookupLimit})
-	if err != nil || len(environments) == 0 {
+	if env, err := environmentRepo.GetDefaultByType(ctx, types.EnvironmentDevelopment); err != nil {
+		if !ierr.IsNotFound(err) {
+			return "", err
+		}
+	} else if env != nil {
+		return env.ID, nil
+	}
+
+	// No development environment: fall back to the newest environment the tenant
+	// has. List orders by created_at DESC, so the first entry is the newest.
+	environments, err := environmentRepo.List(ctx, types.Filter{Limit: 1})
+	if err != nil {
+		return "", err
+	}
+	if len(environments) == 0 {
 		return "", errEnvironmentUnresolved
 	}
 
-	for _, env := range environments {
-		if env.Type == types.EnvironmentDevelopment {
-			return env.ID, nil
-		}
-	}
-
-	// List orders by created_at DESC, so the first entry is the newest.
 	return environments[0].ID, nil
 }
 
@@ -129,10 +145,32 @@ func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Reposito
 	return nil
 }
 
-// abortUnresolvedEnvironment refuses a request whose environment could not be
-// established. The response deliberately does not distinguish "no such
-// environment" from "belongs to another tenant".
-func abortUnresolvedEnvironment(c *gin.Context, log *logger.Logger, tenantID, userID string) {
+// abortUnresolvedEnvironment ends a request whose environment could not be
+// established.
+//
+// A refusal and an infrastructure failure are answered differently. Only
+// errEnvironmentUnresolved — no such environment, or one belonging to another
+// tenant — is an access decision and yields 403; that response deliberately does
+// not distinguish the two so it cannot be used to probe for foreign environment
+// IDs. Anything else means the lookup itself failed, which is a 500: reporting a
+// database outage as an access denial hides the fault and tells the caller not
+// to retry something that is in fact retryable.
+func abortUnresolvedEnvironment(c *gin.Context, log *logger.Logger, err error, tenantID, userID string) {
+	if !errors.Is(err, errEnvironmentUnresolved) {
+		log.Error(c.Request.Context(), "environment resolution failed",
+			"error", err,
+			"tenant_id", tenantID,
+			"user_id", userID,
+			"requested_environment_id", c.GetHeader(types.HeaderEnvironment),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Internal server error",
+			"message": "Failed to resolve environment",
+		})
+		c.Abort()
+		return
+	}
+
 	log.Info(c.Request.Context(), "environment could not be resolved for request",
 		"tenant_id", tenantID,
 		"user_id", userID,
@@ -164,7 +202,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 		}
 
 		if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
-			abortUnresolvedEnvironment(c, logger, tenantID, userID)
+			abortUnresolvedEnvironment(c, logger, err, tenantID, userID)
 			return
 		}
 		c.Next()
@@ -183,7 +221,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
 			if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
-				abortUnresolvedEnvironment(c, logger, tenantID, userID)
+				abortUnresolvedEnvironment(c, logger, err, tenantID, userID)
 				return
 			}
 			c.Next()
@@ -222,7 +260,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 
 		// JWT users have empty roles = full access
 		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{}); err != nil {
-			abortUnresolvedEnvironment(c, logger, claims.TenantID, claims.UserID)
+			abortUnresolvedEnvironment(c, logger, err, claims.TenantID, claims.UserID)
 			return
 		}
 		c.Next()

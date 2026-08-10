@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,13 +20,21 @@ import (
 
 const testSecret = "test-secret-key-32-bytes-minimum!"
 
-// fakeEnvironmentRepo mirrors the tenant scoping of the real repository: both
-// Get and List only ever return environments owned by the tenant in context.
+// fakeEnvironmentRepo mirrors the tenant scoping of the real repository: Get,
+// List and GetDefaultByType only ever return environments owned by the tenant in
+// context. The err fields inject an infrastructure failure so that the
+// distinction between "not found" and "the database is down" can be asserted.
 type fakeEnvironmentRepo struct {
 	environments []*domainEnvironment.Environment
+	getErr       error
+	listErr      error
+	defaultErr   error
 }
 
 func (f *fakeEnvironmentRepo) Get(ctx context.Context, id string) (*domainEnvironment.Environment, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
 	tenantID := types.GetTenantID(ctx)
 	for _, env := range f.environments {
 		if env.ID == id && env.TenantID == tenantID {
@@ -36,6 +45,9 @@ func (f *fakeEnvironmentRepo) Get(ctx context.Context, id string) (*domainEnviro
 }
 
 func (f *fakeEnvironmentRepo) List(ctx context.Context, filter types.Filter) ([]*domainEnvironment.Environment, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	tenantID := types.GetTenantID(ctx)
 	var result []*domainEnvironment.Environment
 	for _, env := range f.environments {
@@ -43,7 +55,25 @@ func (f *fakeEnvironmentRepo) List(ctx context.Context, filter types.Filter) ([]
 			result = append(result, env)
 		}
 	}
+	if filter.Limit > 0 && len(result) > filter.Limit {
+		result = result[:filter.Limit]
+	}
 	return result, nil
+}
+
+// GetDefaultByType returns the tenant's first published environment of that
+// type, matching the repository's oldest-first ordering over this fixed slice.
+func (f *fakeEnvironmentRepo) GetDefaultByType(ctx context.Context, envType types.EnvironmentType) (*domainEnvironment.Environment, error) {
+	if f.defaultErr != nil {
+		return nil, f.defaultErr
+	}
+	tenantID := types.GetTenantID(ctx)
+	for _, env := range f.environments {
+		if env.TenantID == tenantID && env.Type == envType {
+			return env, nil
+		}
+	}
+	return nil, ierr.NewError("environment not found").Mark(ierr.ErrNotFound)
 }
 
 func (f *fakeEnvironmentRepo) Create(ctx context.Context, env *domainEnvironment.Environment) error {
@@ -346,4 +376,95 @@ func TestResolveEnvironmentID(t *testing.T) {
 
 		assert.ErrorIs(t, err, errEnvironmentUnresolved)
 	})
+
+	// The development environment is created at onboarding and is therefore the
+	// tenant's oldest. A paged scan of the newest N would miss it once the tenant
+	// has more environments than a page holds, and would silently fall through to
+	// the newest — plausibly production. The lookup is by type for this reason.
+	t.Run("finds the development environment for a tenant with many environments", func(t *testing.T) {
+		envs := []*domainEnvironment.Environment{
+			testEnvironment("env_dev", "t_tenant1", types.EnvironmentDevelopment),
+		}
+		for i := 0; i < 100; i++ {
+			envs = append(envs, testEnvironment(
+				fmt.Sprintf("env_prod_%d", i), "t_tenant1", types.EnvironmentProduction))
+		}
+		repo := &fakeEnvironmentRepo{environments: envs}
+		c := newEnvironmentResolutionContext("t_tenant1", "")
+
+		resolved, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
+
+		require.NoError(t, err)
+		assert.Equal(t, "env_dev", resolved)
+	})
+}
+
+// A failed lookup must not be reported as an access decision: 403 tells the
+// caller their credentials are wrong and not to retry, while a database outage
+// is retryable and needs to surface as a fault.
+func TestResolveEnvironmentIDPropagatesRepositoryFailures(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dbErr := ierr.NewError("connection refused").Mark(ierr.ErrDatabase)
+
+	t.Run("header lookup failure is propagated, not turned into a refusal", func(t *testing.T) {
+		repo := &fakeEnvironmentRepo{getErr: dbErr}
+		c := newEnvironmentResolutionContext("t_tenant1", "env_prod")
+
+		_, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
+
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
+	})
+
+	t.Run("default lookup failure is propagated, not turned into a refusal", func(t *testing.T) {
+		repo := &fakeEnvironmentRepo{defaultErr: dbErr}
+		c := newEnvironmentResolutionContext("t_tenant1", "")
+
+		_, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
+
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
+	})
+
+	// No development environment is an ordinary absence, so resolution proceeds
+	// to the newest-environment fallback; only that query failing is a fault.
+	t.Run("fallback list failure is propagated, not turned into a refusal", func(t *testing.T) {
+		repo := &fakeEnvironmentRepo{
+			defaultErr: ierr.NewError("environment not found").Mark(ierr.ErrNotFound),
+			listErr:    dbErr,
+		}
+		c := newEnvironmentResolutionContext("t_tenant1", "")
+
+		_, err := resolveEnvironmentID(c.Request.Context(), c, repo, "", "t_tenant1")
+
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, errEnvironmentUnresolved)
+	})
+}
+
+// The middleware must translate the two error classes into different statuses.
+func TestAuthenticateMiddleware_EnvironmentLookupFailureIsNotForbidden(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Configuration{
+		Auth: config.AuthConfig{
+			Provider: types.AuthProviderFlexprice,
+			Secret:   testSecret,
+			APIKey:   config.APIKeyConfig{Header: "x-api-key"},
+		},
+	}
+
+	r := gin.New()
+	r.Use(AuthenticateMiddleware(cfg, nil, &fakeEnvironmentRepo{
+		defaultErr: ierr.NewError("connection refused").Mark(ierr.ErrDatabase),
+	}, newTestLogger(t)))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+makeJWT(t, "t_tenant1", "usr_dev", "", 1))
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }

@@ -250,6 +250,58 @@ func (r *environmentRepository) CountByType(ctx context.Context, envType types.E
 	return count, nil
 }
 
+// GetDefaultByType returns the tenant's oldest published environment of the
+// given type. Ordered ascending because the environment created at onboarding
+// is the tenant's first, and that is the one meant by "the tenant's default".
+func (r *environmentRepository) GetDefaultByType(ctx context.Context, envType types.EnvironmentType) (*domainEnvironment.Environment, error) {
+	span := StartRepositorySpan(ctx, "environment", "get_default_by_type", map[string]interface{}{
+		"environment_type": envType,
+	})
+	defer FinishSpan(span)
+
+	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
+	if !ok {
+		validationErr := fmt.Errorf("tenant ID not found in context")
+		SetSpanError(span, validationErr)
+		return nil, ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	e, err := client.Environment.
+		Query().
+		Where(
+			entEnvironment.TenantID(tenantID),
+			entEnvironment.Type(string(envType)),
+			entEnvironment.Status(string(types.StatusPublished)),
+		).
+		Order(ent.Asc(entEnvironment.FieldCreatedAt)).
+		First(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Environment not found").
+				WithReportableDetails(map[string]interface{}{
+					"tenant_id":        tenantID,
+					"environment_type": envType,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve default environment").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id":        tenantID,
+				"environment_type": envType,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return domainEnvironment.FromEnt(e), nil
+}
+
 // Environments are scoped to a tenant (not to an environment), so the cache key
 // is keyed by tenant + environment ID only, mirroring the Get query filter.
 func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnvironment.Environment) {
