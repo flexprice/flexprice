@@ -2,17 +2,18 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/nedpals/supabase-go"
@@ -21,6 +22,7 @@ import (
 
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
+	GetUser(ctx context.Context, id string) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
 	UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
 	UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error)
@@ -33,10 +35,12 @@ type userService struct {
 	tenantRepo      tenant.Repository
 	authRepo        domainAuth.Repository
 	secretRepo      domainSecret.Repository
+	environmentRepo environment.Repository
 	cfg             *config.Configuration
 	rbacService     *rbac.RBACService
 	supabaseAuth    *supabase.Client
 	settingsService SettingsService
+	db              postgres.IClient
 	logger          *logger.Logger
 }
 
@@ -45,10 +49,12 @@ func NewUserService(
 	tenantRepo tenant.Repository,
 	authRepo domainAuth.Repository,
 	secretRepo domainSecret.Repository,
+	environmentRepo environment.Repository,
 	cfg *config.Configuration,
 	rbacService *rbac.RBACService,
 	supabaseAuth *supabase.Client,
 	settingsService SettingsService,
+	db postgres.IClient,
 	logger *logger.Logger,
 ) UserService {
 	return &userService{
@@ -56,10 +62,12 @@ func NewUserService(
 		tenantRepo:      tenantRepo,
 		authRepo:        authRepo,
 		secretRepo:      secretRepo,
+		environmentRepo: environmentRepo,
 		cfg:             cfg,
 		rbacService:     rbacService,
 		supabaseAuth:    supabaseAuth,
 		settingsService: settingsService,
+		db:              db,
 		logger:          logger,
 	}
 }
@@ -90,6 +98,77 @@ func (s *userService) GetUserInfo(ctx context.Context) (*dto.UserResponse, error
 	}
 
 	return dto.NewUserResponse(user, tenant), nil
+}
+
+func (s *userService) GetUser(ctx context.Context, id string) (*dto.UserResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	u, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := dto.NewUserResponse(u, tenant)
+	if u.Type != types.UserTypeServiceAccount {
+		return resp, nil
+	}
+
+	tenantCtx := types.SetEnvironmentID(ctx, "")
+	secrets, err := s.secretRepo.ListAll(tenantCtx, &types.SecretFilter{
+		QueryFilter: &types.QueryFilter{
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		UserID: &id,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	items := dto.ToSecretResponseList(secrets)
+	s.enrichSecretEnvironmentNames(tenantCtx, items)
+	resp.APIKeys = items
+
+	return resp, nil
+}
+
+func (s *userService) enrichSecretEnvironmentNames(ctx context.Context, items []*dto.SecretResponse) {
+	if s.environmentRepo == nil || len(items) == 0 {
+		return
+	}
+
+	envs, err := s.environmentRepo.List(ctx, types.Filter{
+		Limit:  100,
+		Status: types.StatusPublished,
+	})
+	if err != nil || len(envs) == 0 {
+		return
+	}
+
+	nameByID := lo.SliceToMap(envs, func(env *environment.Environment) (string, string) {
+		return env.ID, env.Name
+	})
+
+	for _, item := range items {
+		if name, ok := nameByID[item.EnvironmentID]; ok {
+			item.EnvironmentName = name
+		}
+	}
 }
 
 func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error) {
@@ -422,25 +501,11 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Block archive if the service account has active (published, non-expired) API keys.
-	// Service accounts are tenant-scoped, so check across all environments.
-	now := time.Now().UTC()
-	tenantCtx := types.SetEnvironmentID(ctx, "")
-	activeCount, err := s.secretRepo.Count(tenantCtx, &types.SecretFilter{
-		QueryFilter: &types.QueryFilter{
-			Status: lo.ToPtr(types.StatusPublished),
-		},
-		UserID:       &id,
-		NotExpiredAt: &now,
+	return s.db.WithTx(ctx, func(txCtx context.Context) error {
+		tenantCtx := types.SetEnvironmentID(txCtx, "")
+		if _, err := s.secretRepo.DeletePublishedByUserID(tenantCtx, id); err != nil {
+			return err
+		}
+		return s.userRepo.Delete(txCtx, id)
 	})
-	if err != nil {
-		return err
-	}
-	if activeCount > 0 {
-		return ierr.NewError("service account has active API keys").
-			WithHint("Revoke all API keys before archiving this service account").
-			Mark(ierr.ErrValidation)
-	}
-
-	return s.userRepo.Delete(ctx, id)
 }

@@ -26,6 +26,9 @@ type Repository interface {
 	// Delete deletes a secret by ID
 	Delete(ctx context.Context, id string) error
 
+	// DeletePublishedByUserID soft-deletes all published secrets for userID (tenant-scoped), including expired keys.
+	DeletePublishedByUserID(ctx context.Context, userID string) (int, error)
+
 	// GetAPIKeyByValue retrieves an API key by value
 	GetAPIKeyByValue(ctx context.Context, value string) (*Secret, error)
 

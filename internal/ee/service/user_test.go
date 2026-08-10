@@ -7,9 +7,12 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -18,11 +21,13 @@ import (
 
 type UserServiceSuite struct {
 	suite.Suite
-	ctx         context.Context
-	userService *userService
-	userRepo    *testutil.InMemoryUserStore
-	tenantRepo  *testutil.InMemoryTenantStore
-	secretRepo  *testutil.InMemorySecretStore
+	ctx             context.Context
+	userService     *userService
+	userRepo        *testutil.InMemoryUserStore
+	tenantRepo      *testutil.InMemoryTenantStore
+	secretRepo      *testutil.InMemorySecretStore
+	environmentRepo *testutil.InMemoryEnvironmentStore
+	db              postgres.IClient
 }
 
 func TestUserService(t *testing.T) {
@@ -34,19 +39,24 @@ func (s *UserServiceSuite) SetupTest() {
 	s.userRepo = testutil.NewInMemoryUserStore()
 	s.tenantRepo = testutil.NewInMemoryTenantStore()
 	s.secretRepo = testutil.NewInMemorySecretStore()
+	s.environmentRepo = testutil.NewInMemoryEnvironmentStore()
+	s.db = testutil.NewMockPostgresClient(logger.NewNoopLogger())
 	s.userService = &userService{
 		userRepo:        s.userRepo,
 		tenantRepo:      s.tenantRepo,
 		secretRepo:      s.secretRepo,
+		environmentRepo: s.environmentRepo,
+		db:              s.db,
 		rbacService:     nil,
 		supabaseAuth:    nil,
 		settingsService: nil,
 	}
 
-	s.tenantRepo.Create(s.ctx, &tenant.Tenant{
+	err := s.tenantRepo.Create(s.ctx, &tenant.Tenant{
 		ID:   types.DefaultTenantID,
 		Name: "Test Tenant",
 	})
+	s.NoError(err)
 }
 
 func (s *UserServiceSuite) TestGetUserInfo() {
@@ -282,7 +292,12 @@ func (s *UserServiceSuite) TestUpdateServiceAccount() {
 			Type:      types.UserTypeUser,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo}
+		s.userService = &userService{
+			userRepo:   s.userRepo,
+			tenantRepo: s.tenantRepo,
+			secretRepo: s.secretRepo,
+			db:         s.db,
+		}
 	}
 
 	s.Run("success_name_updated", func() {
@@ -363,7 +378,12 @@ func (s *UserServiceSuite) TestDeleteUser() {
 			Type:      types.UserTypeUser,
 			BaseModel: baseModel,
 		})
-		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo}
+		s.userService = &userService{
+			userRepo:   s.userRepo,
+			tenantRepo: s.tenantRepo,
+			secretRepo: s.secretRepo,
+			db:         s.db,
+		}
 	}
 
 	s.Run("success_service_account_archived", func() {
@@ -400,30 +420,23 @@ func (s *UserServiceSuite) TestDeleteUser() {
 		s.Error(err)
 	})
 
-	s.Run("active_api_key_blocks_archive", func() {
+	s.Run("published_api_keys_across_envs_are_revoked", func() {
 		seedStore()
 		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
-			ID:       "key-1",
-			UserID:   "sa-1",
-			UserType: string(types.UserTypeServiceAccount),
+			ID:            "key-sandbox",
+			UserID:        "sa-1",
+			UserType:      string(types.UserTypeServiceAccount),
+			EnvironmentID: "env-sandbox",
 			BaseModel: types.BaseModel{
 				TenantID: types.DefaultTenantID,
 				Status:   types.StatusPublished,
 			},
 		})
-		err := s.userService.DeleteUser(ctx, "sa-1")
-		s.Error(err)
-		s.Contains(err.Error(), "active API keys")
-	})
-
-	s.Run("expired_api_key_allows_archive", func() {
-		seedStore()
-		past := time.Now().Add(-24 * time.Hour)
 		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
-			ID:        "key-2",
-			UserID:    "sa-1",
-			UserType:  string(types.UserTypeServiceAccount),
-			ExpiresAt: &past,
+			ID:            "key-prod",
+			UserID:        "sa-1",
+			UserType:      string(types.UserTypeServiceAccount),
+			EnvironmentID: "env-prod",
 			BaseModel: types.BaseModel{
 				TenantID: types.DefaultTenantID,
 				Status:   types.StatusPublished,
@@ -431,6 +444,156 @@ func (s *UserServiceSuite) TestDeleteUser() {
 		})
 		err := s.userService.DeleteUser(ctx, "sa-1")
 		s.NoError(err)
+
+		archived, err := s.userRepo.GetByID(ctx, "sa-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, archived.Status)
+
+		keySandbox, err := s.secretRepo.Get(ctx, "key-sandbox")
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, keySandbox.Status)
+
+		keyProd, err := s.secretRepo.Get(ctx, "key-prod")
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, keyProd.Status)
+	})
+
+	s.Run("expired_published_api_key_is_also_revoked", func() {
+		seedStore()
+		past := time.Now().Add(-24 * time.Hour)
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:            "key-expired",
+			UserID:        "sa-1",
+			UserType:      string(types.UserTypeServiceAccount),
+			EnvironmentID: "env-sandbox",
+			ExpiresAt:     &past,
+			BaseModel: types.BaseModel{
+				TenantID: types.DefaultTenantID,
+				Status:   types.StatusPublished,
+			},
+		})
+		err := s.userService.DeleteUser(ctx, "sa-1")
+		s.NoError(err)
+
+		key, err := s.secretRepo.Get(ctx, "key-expired")
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, key.Status)
+	})
+}
+
+func (s *UserServiceSuite) TestGetUser() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+	// Request may be env-scoped; GetUser must still return keys across envs.
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, "env-sandbox")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+
+	s.userRepo = testutil.NewInMemoryUserStore()
+	s.secretRepo = testutil.NewInMemorySecretStore()
+	s.environmentRepo = testutil.NewInMemoryEnvironmentStore()
+	_ = s.environmentRepo.Create(ctx, &environment.Environment{
+		ID:   "env-sandbox",
+		Name: "Sandbox",
+		Type: types.EnvironmentDevelopment,
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	})
+	_ = s.environmentRepo.Create(ctx, &environment.Environment{
+		ID:   "env-prod",
+		Name: "Production",
+		Type: types.EnvironmentProduction,
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	})
+	_ = s.userRepo.Create(ctx, &user.User{
+		ID:        "sa-1",
+		Name:      "Recon service",
+		Type:      types.UserTypeServiceAccount,
+		BaseModel: baseModel,
+	})
+	_ = s.userRepo.Create(ctx, &user.User{
+		ID:        "user-1",
+		Email:     "u@example.com",
+		Type:      types.UserTypeUser,
+		BaseModel: baseModel,
+	})
+	past := time.Now().Add(-24 * time.Hour)
+	_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+		ID:            "key-sandbox",
+		Name:          "sandbox-key",
+		UserID:        "sa-1",
+		UserType:      string(types.UserTypeServiceAccount),
+		EnvironmentID: "env-sandbox",
+		DisplayID:     "sk_****SB",
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	})
+	_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+		ID:            "key-prod-expired",
+		Name:          "prod-key",
+		UserID:        "sa-1",
+		UserType:      string(types.UserTypeServiceAccount),
+		EnvironmentID: "env-prod",
+		ExpiresAt:     &past,
+		DisplayID:     "sk_****PR",
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	})
+	s.userService = &userService{
+		userRepo:        s.userRepo,
+		tenantRepo:      s.tenantRepo,
+		secretRepo:      s.secretRepo,
+		environmentRepo: s.environmentRepo,
+		db:              s.db,
+	}
+
+	s.Run("human_user_has_no_api_keys", func() {
+		resp, err := s.userService.GetUser(ctx, "user-1")
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("user-1", resp.ID)
+		s.Nil(resp.APIKeys)
+	})
+
+	s.Run("service_account_includes_published_keys_across_envs", func() {
+		resp, err := s.userService.GetUser(ctx, "sa-1")
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("sa-1", resp.ID)
+		s.Require().NotNil(resp.APIKeys)
+		s.Equal(2, len(resp.APIKeys))
+
+		byID := map[string]*dto.SecretResponse{}
+		for _, key := range resp.APIKeys {
+			byID[key.ID] = key
+		}
+		s.Equal("Sandbox", byID["key-sandbox"].EnvironmentName)
+		s.Equal("env-sandbox", byID["key-sandbox"].EnvironmentID)
+		s.Equal("Production", byID["key-prod-expired"].EnvironmentName)
+		s.Equal("env-prod", byID["key-prod-expired"].EnvironmentID)
+	})
+
+	s.Run("empty_id_returns_validation_error", func() {
+		resp, err := s.userService.GetUser(ctx, "")
+		s.Error(err)
+		s.Nil(resp)
+	})
+
+	s.Run("unknown_id_returns_not_found", func() {
+		resp, err := s.userService.GetUser(ctx, "missing")
+		s.Error(err)
+		s.Nil(resp)
 	})
 }
 

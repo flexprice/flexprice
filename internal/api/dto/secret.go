@@ -67,6 +67,8 @@ type SecretResponse struct {
 	Type               types.SecretType     `json:"type"`
 	Provider           types.SecretProvider `json:"provider"`
 	DisplayID          string               `json:"display_id"`
+	EnvironmentID      string               `json:"environment_id,omitempty"`
+	EnvironmentName    string               `json:"environment_name,omitempty"`
 	Roles              []string             `json:"roles,omitempty"`                // RBAC roles
 	UserType           types.UserType       `json:"user_type,omitempty"`            // "user" or "service_account"
 	UserID             string               `json:"user_id,omitempty"`              // user or service account this key belongs to
@@ -95,19 +97,20 @@ func ToSecretResponse(s *secret.Secret) *SecretResponse {
 	}
 
 	return &SecretResponse{
-		ID:         s.ID,
-		Name:       s.Name,
-		Type:       s.Type,
-		Provider:   s.Provider,
-		DisplayID:  s.DisplayID,
-		Roles:      s.Roles,
-		UserType:   types.UserType(s.UserType),
-		UserID:     s.UserID,
-		ExpiresAt:  s.ExpiresAt,
-		LastUsedAt: s.LastUsedAt,
-		Status:     s.Status,
-		CreatedAt:  s.CreatedAt,
-		UpdatedAt:  s.UpdatedAt,
+		ID:            s.ID,
+		Name:          s.Name,
+		Type:          s.Type,
+		Provider:      s.Provider,
+		DisplayID:     s.DisplayID,
+		EnvironmentID: s.EnvironmentID,
+		Roles:         s.Roles,
+		UserType:      types.UserType(s.UserType),
+		UserID:        s.UserID,
+		ExpiresAt:     s.ExpiresAt,
+		LastUsedAt:    s.LastUsedAt,
+		Status:        s.Status,
+		CreatedAt:     s.CreatedAt,
+		UpdatedAt:     s.UpdatedAt,
 	}
 }
 

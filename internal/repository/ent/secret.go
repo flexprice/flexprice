@@ -310,6 +310,71 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *secretRepository) DeletePublishedByUserID(ctx context.Context, userID string) (int, error) {
+	if userID == "" {
+		return 0, ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return 0, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Writer(ctx)
+	r.log.Debug(ctx, "deleting published secrets by user_id", "user_id", userID)
+
+	query := client.Secret.Query().
+		Where(
+			secret.TenantID(tenantID),
+			secret.UserID(userID),
+			secret.Status(string(types.StatusPublished)),
+		)
+	query = r.queryOpts.ApplyEnvironmentFilter(ctx, query)
+
+	secrets, err := query.All(ctx)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to list secrets for user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": userID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	if len(secrets) == 0 {
+		return 0, nil
+	}
+
+	ids := make([]string, len(secrets))
+	values := make([]string, len(secrets))
+	for i, s := range secrets {
+		ids[i] = s.ID
+		values[i] = s.Value
+	}
+
+	n, err := client.Secret.Update().
+		Where(secret.IDIn(ids...)).
+		SetStatus(string(types.StatusDeleted)).
+		Save(ctx)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to delete secrets for user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id": userID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, value := range values {
+		r.DeleteCache(ctx, value)
+	}
+
+	return n, nil
+}
+
 type SecretQuery = *ent.SecretQuery
 
 type SecretQueryOptions struct{}

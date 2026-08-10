@@ -147,6 +147,30 @@ func (h *UserHandler) QueryUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// @Summary Get user or service account by ID
+// @ID getUser
+// @Description Get a user or service account by ID.
+// @Tags Users
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "User or Service Account ID"
+// @Success 200 {object} dto.UserResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /users/{id} [get]
+func (h *UserHandler) GetUser(c *gin.Context) {
+	id := c.Param("id")
+	resp, err := h.userService.GetUser(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "failed to get user", "error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Update service account
 // @ID updateServiceAccount
 // @Description Update a service account by ID (name only).
@@ -184,7 +208,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 
 // @Summary Delete service account
 // @ID deleteServiceAccount
-// @Description Soft-delete (archive) a service account by ID.
+// @Description Soft-delete (archive) a service account by ID and revoke all of its published API keys across environments.
 // @Tags Users
 // @Produce json
 // @Security ApiKeyAuth
