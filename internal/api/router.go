@@ -112,7 +112,6 @@ func NewRouter(
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
 	write := permissionMW.RequirePermission // shorthand used on every write route
-	read := permissionMW.RequirePermission  // shorthand used on read-guarded routes
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -159,8 +158,8 @@ func NewRouter(
 		environment := v1Private.Group("/environments")
 		{
 			environment.POST("", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CreateEnvironment)
-			environment.GET("", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironments)
-			environment.GET("/:id", read(types.EntityEnvironment, types.ActionRead), handlers.Environment.GetEnvironment)
+			environment.GET("", handlers.Environment.GetEnvironments)
+			environment.GET("/:id", handlers.Environment.GetEnvironment)
 			environment.PUT("/:id", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.UpdateEnvironment)
 			environment.POST("/:id/clone", write(types.EntityEnvironment, types.ActionWrite), handlers.Environment.CloneEnvironment)
 		}
