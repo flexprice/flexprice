@@ -93,26 +93,37 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 	return env.ID, nil
 }
 
+// environmentDiscoveryGroups are the route groups a caller can reach before it
+// has selected an environment: identity, environment discovery, and tenant.
+// These are how an unbound caller -- a dashboard JWT, which carries no
+// environment claim -- learns an ID to send in X-Environment-ID on every later
+// request, so requiring a selection to reach them would be circular.
+var environmentDiscoveryGroups = []string{"/v1/users", "/v1/environments", "/v1/tenants"}
+
 // isEnvironmentDiscoveryRoute reports whether a route can be served without an
 // environment selected.
 //
-// Only the bootstrap GETs are exempt: identity, environment discovery, and
-// tenant shell. Writes under the same groups still require a resolved
-// environment so a JWT without X-Environment-ID cannot create users, clone
-// environments, or mutate tenant billing. Signup already creates a default
-// environment, so CreateEnvironment is not part of this set.
+// Matching is by group prefix, so every route under these groups is exempt
+// regardless of method. Handlers in these groups therefore run with no
+// environment in context: GetEnvironmentID returns "", and a repository call
+// that filters on environment_id matches nothing rather than failing loudly.
 func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
-	if c.Request.Method != http.MethodGet {
-		return false
-	}
 	// FullPath is the matched route template, so this cannot be spoofed by a
-	// crafted URL the router did not match to these handlers.
-	switch c.FullPath() {
-	case "/v1/users/me", "/v1/environments", "/v1/environments/:id", "/v1/tenants/:id":
-		return true
-	default:
+	// crafted URL the router did not match to one of these handlers. An
+	// unmatched request yields "", which no prefix below accepts.
+	path := c.FullPath()
+	if path == "" {
 		return false
 	}
+
+	for _, group := range environmentDiscoveryGroups {
+		// The trailing separator keeps the match on a path boundary, so a
+		// sibling group such as /v1/usersettings is not swept in by /v1/users.
+		if path == group || strings.HasPrefix(path, group+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // setContextValues sets the tenant ID, user ID, environment ID, roles, and

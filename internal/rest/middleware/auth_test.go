@@ -382,10 +382,16 @@ func TestResolveEnvironmentIDPropagatesRepositoryFailures(t *testing.T) {
 
 }
 
-// The dashboard bootstraps via a small set of GETs before it can send
-// X-Environment-ID. Its login JWT carries no environment claim, so requiring a
-// header to reach those routes would be circular. Writes under the same groups
-// still require a selection.
+// The dashboard bootstraps under /v1/users, /v1/environments, and /v1/tenants
+// before it can send X-Environment-ID. Its login JWT carries no environment
+// claim, so requiring a header to reach those routes would be circular.
+//
+// The exemption is by group prefix and does not check the method, so writes
+// under these groups are exempt too: a JWT with no X-Environment-ID can create
+// users, clone environments, and update tenant billing. Those handlers run with
+// no environment in context, so any repository call filtering on
+// environment_id matches nothing or writes an empty value. Every route outside
+// the three groups still requires a selection.
 func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -416,6 +422,9 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		r.GET("/v1/tenants/billing", handler)
 		r.PUT("/v1/tenants/update", handler)
 		r.GET("/v1/customers", handler)
+		// Guards the prefix boundary: a sibling group whose name merely starts
+		// with an exempt one must not be swept in.
+		r.GET("/v1/usersettings", handler)
 		return r
 	}
 
@@ -427,12 +436,13 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		return w
 	}
 
-	t.Run("bootstrap GETs succeed without a header", func(t *testing.T) {
+	t.Run("bootstrap reads succeed without a header", func(t *testing.T) {
 		for _, path := range []string{
 			"/v1/users/me",
 			"/v1/environments",
 			"/v1/environments/env_dev",
 			"/v1/tenants/t_tenant1",
+			"/v1/tenants/billing",
 		} {
 			w := do(http.MethodGet, path)
 			require.Equal(t, http.StatusOK, w.Code, path)
@@ -440,7 +450,11 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		}
 	})
 
-	t.Run("writes and non-bootstrap reads under the same groups still require a header", func(t *testing.T) {
+	// Prefix matching ignores the method, so these writes are served with no
+	// environment resolved. Asserted explicitly rather than left implicit: it is
+	// the cost of matching by group, and a future change that reinstates a method
+	// check should fail here and be read as intentional.
+	t.Run("writes under the same groups are served without a header", func(t *testing.T) {
 		for _, tc := range []struct {
 			method, path string
 		}{
@@ -448,12 +462,19 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 			{http.MethodPost, "/v1/users"},
 			{http.MethodPost, "/v1/environments"},
 			{http.MethodPost, "/v1/environments/env_dev/clone"},
-			{http.MethodGet, "/v1/tenants/billing"},
 			{http.MethodPut, "/v1/tenants/update"},
-			{http.MethodGet, "/v1/customers"},
 		} {
-			assert.Equal(t, http.StatusForbidden, do(tc.method, tc.path).Code, tc.method+" "+tc.path)
+			w := do(tc.method, tc.path)
+			require.Equal(t, http.StatusOK, w.Code, tc.method+" "+tc.path)
+			assert.Contains(t, w.Body.String(), `"environment_id":""`, tc.method+" "+tc.path)
 		}
+	})
+
+	// The exemption stops at the three groups; everything else is still refused.
+	t.Run("routes outside the exempt groups still require a header", func(t *testing.T) {
+		assert.Equal(t, http.StatusForbidden, do(http.MethodGet, "/v1/customers").Code)
+		// /v1/usersettings shares a prefix with /v1/users but is a different group.
+		assert.Equal(t, http.StatusForbidden, do(http.MethodGet, "/v1/usersettings").Code)
 	})
 }
 
