@@ -38,6 +38,42 @@ func TestValidateZohoEndpoint(t *testing.T) {
 	}
 }
 
+// ValidateZohoEndpoint is the stricter exported variant used for the
+// accounts_server that gets a fixed OAuth path concatenated onto it. It must
+// reject an empty value and any URL component beyond scheme+host, since a path,
+// query, fragment, or userinfo would change which URL the token exchange reaches.
+func TestValidateZohoEndpoint_BareOrigin(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"bare zoho origin allowed", "https://accounts.zoho.com", false},
+		{"zoho eu origin allowed", "https://accounts.zoho.eu", false},
+
+		{"empty rejected", "", true},
+		{"trailing slash path rejected", "https://accounts.zoho.com/", true},
+		{"oauth path rejected", "https://accounts.zoho.com/oauth/v2/token", true},
+		{"query rejected", "https://accounts.zoho.com?x=1", true},
+		{"fragment rejected", "https://accounts.zoho.com#frag", true},
+		{"userinfo rejected", "https://user:pass@accounts.zoho.com", true},
+		{"non-zoho rejected", "https://evil.example.com", true},
+		{"http rejected", "http://accounts.zoho.com", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateZohoEndpoint(tt.url, "accounts_server")
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected %q to be rejected, got nil error", tt.url)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected %q to be allowed, got: %v", tt.url, err)
+			}
+		})
+	}
+}
+
 func TestValidateGoogleEndpoint(t *testing.T) {
 	tests := []struct {
 		name    string

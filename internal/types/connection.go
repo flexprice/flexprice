@@ -376,15 +376,35 @@ var zohoEndpointSuffixes = []string{
 // ValidateZohoEndpoint restricts a client-supplied Zoho URL to an https Zoho
 // domain. Callers performing the OAuth token exchange must apply this to the
 // accounts_server before sending client_id/client_secret to it, so those
-// credentials cannot be exfiltrated to an attacker-chosen host. Unlike an
-// empty-allowed field validation, this rejects an empty value.
+// credentials cannot be exfiltrated to an attacker-chosen host.
+//
+// Unlike the internal check, this enforces a bare-origin invariant: the value is
+// concatenated with a fixed OAuth path (e.g. accounts_server + "/oauth/v2/token"),
+// so any path, query, fragment, or userinfo component would change which URL is
+// actually reached — a query would swallow the OAuth path, a fragment would strip
+// the OAuth query, and userinfo would send credentials to a different authority.
+// It also rejects an empty value.
 func ValidateZohoEndpoint(raw, field string) error {
-	if strings.TrimSpace(raw) == "" {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
 		return ierr.NewError(field + " is required").
 			WithHintf("Zoho Books %s must be provided", field).
 			Mark(ierr.ErrValidation)
 	}
-	return validateZohoEndpoint(raw, field)
+
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return ierr.NewError(field + " must be a valid https URL").
+			WithHintf("Zoho Books %s must be an https URL", field).
+			Mark(ierr.ErrValidation)
+	}
+	if u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return ierr.NewError(field + " must be a bare origin").
+			WithHintf("Zoho Books %s must be a scheme and host only, with no path, query, fragment, or credentials", field).
+			Mark(ierr.ErrValidation)
+	}
+
+	return validateZohoEndpoint(trimmed, field)
 }
 
 // validateZohoEndpoint checks a Zoho-supplied URL is https and served from a
