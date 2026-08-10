@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 )
 
 const (
@@ -599,6 +600,14 @@ func (s *oauthService) BuildOAuthURL(provider types.OAuthProvider, clientID, red
 		if accountsServer == "" {
 			accountsServer = "https://accounts.zoho.com"
 		}
+		// Validate the client-supplied accounts_server before building a URL the
+		// user's browser is redirected to, so it cannot be turned into an
+		// open-redirect / internal-endpoint target.
+		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
+			return "", ierr.WithError(err).
+				WithHint("Invalid accounts_server: must be a public https endpoint").
+				Mark(ierr.ErrValidation)
+		}
 		return fmt.Sprintf("%s/oauth/v2/auth?%s", strings.TrimRight(accountsServer, "/"), params.Encode()), nil
 
 	// Add more providers here:
@@ -808,6 +817,17 @@ func (s *oauthService) ExchangeCodeForConnection(
 			accountsServer = "https://accounts.zoho.com"
 		}
 
+		// accounts_server is client-supplied (via POST /v1/oauth/complete) and is
+		// used verbatim to build the outbound token-exchange URL below, which
+		// carries client_id/client_secret. Validate it as a public https endpoint
+		// so it cannot be pointed at cloud metadata (169.254.169.254), localhost,
+		// or any internal address to exfiltrate those credentials.
+		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
+			return "", ierr.WithError(err).
+				WithHint("Invalid accounts_server: must be a public https endpoint").
+				Mark(ierr.ErrValidation)
+		}
+
 		form := url.Values{}
 		form.Set("code", code)
 		form.Set("client_id", clientID)
@@ -830,9 +850,14 @@ func (s *oauthService) ExchangeCodeForConnection(
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// Do not reflect the raw response body to the caller: the outbound host
+			// is client-influenced, so echoing the body back would leak the content
+			// of whatever endpoint was reached. Log it server-side instead.
+			s.logger.Error(ctx, "Zoho token exchange failed",
+				"error", "non_2xx_from_token_endpoint",
+				"status_code", resp.StatusCode)
 			return "", ierr.NewError("Zoho token exchange failed").
 				WithHintf("Zoho token endpoint returned status %d", resp.StatusCode).
-				WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 				Mark(ierr.ErrHTTPClient)
 		}
 
