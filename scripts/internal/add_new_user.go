@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -52,8 +54,10 @@ func newUserAdditionScript() (*newUserAddScript, error) {
 
 	// Initialize repositories
 	repoParams := repository.RepositoryParams{
-		EntClient: client,
-		Logger:    log,
+		EntClient:     client,
+		Logger:        log,
+		InMemoryCache: cache.GetInMemoryCache(),
+		RedisCache:    cache.NewRedisCache(),
 	}
 
 	// Create auth provider
@@ -90,29 +94,30 @@ func (s *newUserAddScript) createUser(ctx context.Context, email, tenantID strin
 	password := os.Getenv("USER_PASSWORD")
 	u := user.NewUser(email, tenantID)
 
-	// Check if user already exists in MongoDB
 	existingUser, err := s.userRepo.GetByEmail(ctx, u.Email)
 	if err == nil && existingUser != nil {
 		s.log.Infow("user already exists", "id", existingUser.ID, "email", existingUser.Email, "tenant_id", existingUser.TenantID)
 		return existingUser, nil
 	}
 
-	// Register the user with Supabase only if UserID is empty
-	// Skip the confirmation email step and directly set the user as confirmed
-	supabaseUser, err := s.supabaseAuth.Admin.CreateUser(ctx, supabase.AdminUserParams{
-		Email:        u.Email,
-		Password:     lo.ToPtr(password),
-		EmailConfirm: true, // This is the key setting that bypasses email confirmation
-		AppMetadata: map[string]interface{}{
-			"tenant_id": tenantID,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user with admin API: %w", err)
+	// USER_ID skips Supabase create (recovery when auth user already exists)
+	if existingID := strings.TrimSpace(os.Getenv("USER_ID")); existingID != "" {
+		u.ID = existingID
+	} else {
+		supabaseUser, err := s.supabaseAuth.Admin.CreateUser(ctx, supabase.AdminUserParams{
+			Email:        u.Email,
+			Password:     lo.ToPtr(password),
+			EmailConfirm: true,
+			AppMetadata: map[string]interface{}{
+				"tenant_id": tenantID,
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create user with admin API: %w", err)
+		}
+		s.log.Infof("Supabase registration response : %+v", supabaseUser)
+		u.ID = supabaseUser.ID
 	}
-	s.log.Infof("Supabase registration response : %+v", supabaseUser)
-
-	u.ID = supabaseUser.ID // Set the UserID from the Supabase response
 
 	if err := s.userRepo.Create(ctx, u); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
