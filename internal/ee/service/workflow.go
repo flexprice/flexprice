@@ -75,6 +75,29 @@ func (s *workflowService) ListWorkflows(ctx context.Context, filter *types.Workf
 	}, nil
 }
 
+// authorizeWorkflowAccess resolves a workflow execution through the tenant- and
+// environment-scoped repository before any Temporal query is issued. Temporal's
+// DescribeWorkflow has no notion of tenancy, so this lookup is the only thing
+// standing between a caller and another tenant's workflow history — which embeds
+// third-party error payloads. A workflow belonging to a different tenant is
+// filtered out by the repository and is reported here as not found, so the
+// response cannot be used to probe for the existence of foreign workflow IDs.
+func (s *workflowService) authorizeWorkflowAccess(ctx context.Context, workflowID, runID string) (*workflowexecution.WorkflowExecution, error) {
+	if types.GetTenantID(ctx) == "" {
+		return nil, ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID must be present in context").
+			Mark(ierr.ErrValidation)
+	}
+
+	exec, err := s.workflowExec.GetWorkflowExecution(ctx, workflowID, runID)
+	if err != nil || exec == nil {
+		return nil, ierr.NewError("workflow not found").
+			WithHint("Workflow not found").
+			Mark(ierr.ErrNotFound)
+	}
+	return exec, nil
+}
+
 func workflowExecutionToDTO(exec *workflowexecution.WorkflowExecution) *dto.WorkflowExecutionDTO {
 	if exec == nil {
 		return nil
@@ -99,6 +122,9 @@ func (s *workflowService) GetWorkflowSummary(ctx context.Context, workflowID, ru
 		return nil, ierr.NewError("workflow_id and run_id are required").
 			WithHint("Both workflow ID and run ID must be provided").
 			Mark(ierr.ErrValidation)
+	}
+	if _, err := s.authorizeWorkflowAccess(ctx, workflowID, runID); err != nil {
+		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
 	if err != nil {
@@ -137,6 +163,9 @@ func (s *workflowService) GetWorkflowDetails(ctx context.Context, workflowID, ru
 		return nil, ierr.NewError("workflow_id and run_id are required").
 			WithHint("Both workflow ID and run ID must be provided").
 			Mark(ierr.ErrValidation)
+	}
+	if _, err := s.authorizeWorkflowAccess(ctx, workflowID, runID); err != nil {
+		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
 	if err != nil {
@@ -184,6 +213,9 @@ func (s *workflowService) GetWorkflowTimeline(ctx context.Context, workflowID, r
 		return nil, ierr.NewError("workflow_id and run_id are required").
 			WithHint("Both workflow ID and run ID must be provided").
 			Mark(ierr.ErrValidation)
+	}
+	if _, err := s.authorizeWorkflowAccess(ctx, workflowID, runID); err != nil {
+		return nil, err
 	}
 	info, err := s.querier.DescribeWorkflow(ctx, workflowID, runID)
 	if err != nil {
@@ -242,9 +274,14 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 			WithHint("Maximum 50 workflows can be queried at once").
 			Mark(ierr.ErrValidation)
 	}
-	executions := make([]struct{ WorkflowID, RunID string }, len(req.Workflows))
-	for i, wf := range req.Workflows {
-		executions[i] = struct{ WorkflowID, RunID string }{WorkflowID: wf.WorkflowID, RunID: wf.RunID}
+	// Every requested workflow is authorized independently: a batch containing a
+	// single owned workflow must not pull foreign ones along with it.
+	executions := make([]struct{ WorkflowID, RunID string }, 0, len(req.Workflows))
+	for _, wf := range req.Workflows {
+		if _, err := s.authorizeWorkflowAccess(ctx, wf.WorkflowID, wf.RunID); err != nil {
+			return nil, err
+		}
+		executions = append(executions, struct{ WorkflowID, RunID string }{WorkflowID: wf.WorkflowID, RunID: wf.RunID})
 	}
 	infos, err := s.querier.DescribeWorkflowBatch(ctx, executions)
 	if err != nil {
