@@ -3,7 +3,11 @@
 # Pin the builder to the runner's native arch ($BUILDPLATFORM) and
 # cross-compile to the requested $TARGETARCH. Avoids QEMU emulation of
 # the Go toolchain, which is 10-20x slower on multi-arch builds.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS builder
+#
+# Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
+# Go version must be >= the `go` directive in go.mod or `go mod download`
+# hard-fails. Bump this whenever that directive moves.
+FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
