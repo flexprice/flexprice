@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -741,4 +742,460 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_Collection
 			s.Equal(string(tt.expected), resp.CollectionMethod)
 		})
 	}
+}
+
+// ─────────────────────────────────────────────
+// Child cascade plumbing
+//
+// A gated parent create materializes these through grouped_invoicing_children_to_create; the
+// inherited shapes are still gated off. These seed the state directly through the repo so the
+// cascade can be exercised against every child status independently of how it was produced.
+// ─────────────────────────────────────────────
+
+func (s *SubscriptionServiceSuite) seedChildSubscription(
+	parent *subscription.Subscription,
+	subType types.SubscriptionType,
+	status types.SubscriptionStatus,
+) *subscription.Subscription {
+	ctx := s.GetContext()
+
+	child := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           parent.CustomerID,
+		PlanID:               parent.PlanID,
+		Currency:             parent.Currency,
+		SubscriptionStatus:   status,
+		SubscriptionType:     subType,
+		ParentSubscriptionID: lo.ToPtr(parent.ID),
+		BillingAnchor:        parent.BillingAnchor,
+		BillingCycle:         parent.BillingCycle,
+		StartDate:            parent.StartDate,
+		CurrentPeriodStart:   parent.CurrentPeriodStart,
+		CurrentPeriodEnd:     parent.CurrentPeriodEnd,
+		BillingCadence:       parent.BillingCadence,
+		BillingPeriod:        parent.BillingPeriod,
+		BillingPeriodCount:   parent.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parent.EnvironmentID,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, child))
+	return child
+}
+
+// seedDraftParent creates a draft parent-typed subscription without going through the gated path.
+func (s *SubscriptionServiceSuite) seedDraftParent(planID string) *subscription.Subscription {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	req := s.checkoutCreateRequest(planID)
+	req.Checkout = nil
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	resp, err := subService.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	resp.Subscription.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, resp.Subscription))
+	return resp.Subscription
+}
+
+func (s *SubscriptionServiceSuite) TestChildSubscriptions_DraftFilterVsEveryStatus() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_draft_children_lister", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_draft_children_lister")
+	inheritedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedDraft := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+	trialingChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusTrialing)
+	activeChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusActive)
+
+	drafts, err := subService.childSubscriptions(ctx, parent.ID, types.SubscriptionStatusDraft)
+	s.Require().NoError(err)
+	draftIDs := lo.Map(drafts, func(c *subscription.Subscription, _ int) string { return c.ID })
+	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID}, draftIDs,
+		"the activation cascade takes both inheritance shapes, and only while draft")
+
+	all, err := subService.childSubscriptions(ctx, parent.ID)
+	s.Require().NoError(err)
+	allIDs := lo.Map(all, func(c *subscription.Subscription, _ int) string { return c.ID })
+	s.ElementsMatch([]string{inheritedDraft.ID, groupedDraft.ID, trialingChild.ID, activeChild.ID}, allIDs,
+		"cleanup takes every child, whatever status it resolved to")
+}
+
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CascadesToDraftChildren() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_cascade", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_activate_cascade")
+	inheritedChild := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+
+	for _, id := range []string{parent.ID, inheritedChild.ID, groupedChild.ID} {
+		activated, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus,
+			"payment activates the whole group, not just the parent (%s)", id)
+	}
+}
+
+// A second webhook delivery must not error, and must not un-activate anything.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_CascadeIsIdempotent() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_cascade_replay", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_activate_cascade_replay")
+	child := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+
+	activated, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus)
+}
+
+func (s *SubscriptionServiceSuite) TestArchiveDraftCheckoutSubscription_CascadesToDraftChildren() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_archive_cascade", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_archive_cascade")
+	inheritedChild := s.seedChildSubscription(parent, types.SubscriptionTypeInherited, types.SubscriptionStatusDraft)
+	groupedChild := s.seedChildSubscription(parent, types.SubscriptionTypeGroupedInvoicing, types.SubscriptionStatusDraft)
+
+	subService.archiveDraftCheckoutSubscription(ctx, parent.ID)
+
+	for _, id := range []string{parent.ID, inheritedChild.ID, groupedChild.ID} {
+		archived, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		s.Equal(types.StatusArchived, archived.Status,
+			"an abandoned checkout must not leave the group behind (%s)", id)
+	}
+}
+
+// The cascade must stay inert for the standalone subscriptions every existing gated create produces.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_StandaloneIsUnchanged() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_activate_standalone", decimal.NewFromInt(50), 0)
+
+	_, draftSub, _ := s.seedPayFirstSubscriptionCheckout("plan_activate_standalone")
+	s.Require().NoError(subService.activateDraftSubscription(ctx, draftSub))
+
+	activated, err := s.GetStores().SubscriptionRepo.Get(ctx, draftSub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus)
+}
+
+// ─────────────────────────────────────────────
+// Inline grouped-invoicing children behind the gate
+// ─────────────────────────────────────────────
+
+func (s *SubscriptionServiceSuite) seedChildCustomer(externalID string) *customer.Customer {
+	ctx := s.GetContext()
+	c := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: externalID,
+		Name:       externalID,
+		Email:      externalID + "@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, c))
+	return c
+}
+
+func (s *SubscriptionServiceSuite) groupedChildrenOf(parentID string) []*subscription.Subscription {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{parentID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	children, err := s.GetStores().SubscriptionRepo.List(s.GetContext(), filter)
+	s.Require().NoError(err)
+	return children
+}
+
+// The point of the whole phase: one payment link whose amount covers the parent AND every inline
+// seat. Without the draft-aware merge filter the children are invisible and this reads 50.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_GroupedChildrenArePricedIntoTheDraft() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_grouped_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_grouped_seat", decimal.NewFromInt(30), 0)
+	s.seedChildCustomer("ext_seat_priced_1")
+	s.seedChildCustomer("ext_seat_priced_2")
+
+	idempKey := "create-subscription-grouped-priced-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_grouped_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_grouped_seat", ExternalCustomerID: "ext_seat_priced_1"},
+			{PlanID: "plan_grouped_seat", ExternalCustomerID: "ext_seat_priced_2"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err, "expected the seeded idempotency collision to fail session create")
+
+	inv := s.draftInvoiceForPlan("plan_grouped_parent")
+	s.Require().NotNil(inv, "the gated create must have priced a draft invoice before opening a session")
+	s.True(inv.AmountDue.Equal(decimal.NewFromInt(110)),
+		"the locked amount must cover parent (50) + two seats (30 each), got %s", inv.AmountDue)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_GroupedChildrenAreCreatedDraft() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_grouped_draft_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_grouped_draft_seat", decimal.NewFromInt(30), 0)
+	s.seedChildCustomer("ext_seat_draft_1")
+
+	idempKey := "create-subscription-grouped-draft-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_grouped_draft_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_grouped_draft_seat", ExternalCustomerID: "ext_seat_draft_1"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+
+	parent := s.subscriptionForPlan("plan_grouped_draft_parent")
+	s.Require().NotNil(parent)
+	s.Equal(types.SubscriptionTypeParent, parent.SubscriptionType)
+
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1)
+	s.Equal(types.SubscriptionStatusDraft, children[0].SubscriptionStatus,
+		"a seat must not go live before the bundle is paid for")
+	s.Empty(s.invoicesForSubscription(children[0].ID),
+		"the seat's charges belong on the parent's invoice, not its own")
+}
+
+// The status relaxation is keyed on the internal grouped_invoicing marker, so the wire-reachable
+// inherited shape must still be refused a draft parent.
+func (s *SubscriptionServiceSuite) TestPrepareInheritance_InheritedChildUnderDraftParentStillRejected() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_inherited_draft_parent", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_inherited_draft_parent")
+
+	req := &dto.CreateSubscriptionRequest{
+		Inheritance: &dto.SubscriptionInheritanceConfig{ParentSubscriptionID: parent.ID},
+	}
+	sub := &subscription.Subscription{CustomerID: s.testData.customer.ID}
+
+	_, _, err := subService.prepareSubscriptionInheritanceForCreate(ctx, req, sub)
+	s.Require().Error(err, "an inherited child must not attach to an unpaid draft parent")
+	s.Contains(err.Error(), "parent subscription is not active")
+}
+
+// A seat whose plan carries a trial resolves to trialing and must not be flattened into a draft
+// that would later activate as ACTIVE, destroying the trial.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_GroupedChildTrialFallsThrough() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_grouped_trial_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_grouped_trial_seat", decimal.NewFromInt(30), 14)
+	s.seedChildCustomer("ext_seat_trial_1")
+
+	idempKey := "create-subscription-grouped-trial-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_grouped_trial_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_grouped_trial_seat", ExternalCustomerID: "ext_seat_trial_1"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+
+	parent := s.subscriptionForPlan("plan_grouped_trial_parent")
+	s.Require().NotNil(parent)
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1)
+	s.Equal(types.SubscriptionStatusTrialing, children[0].SubscriptionStatus,
+		"a plan-inherited trial on a seat must survive the gate")
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFailureArchivesGroupedChildren() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_grouped_archive_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_grouped_archive_seat", decimal.NewFromInt(30), 0)
+	s.seedChildCustomer("ext_seat_archive_1")
+
+	idempKey := "create-subscription-grouped-archive-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_grouped_archive_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_grouped_archive_seat", ExternalCustomerID: "ext_seat_archive_1"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+
+	parent := s.subscriptionForPlan("plan_grouped_archive_parent")
+	s.Require().NotNil(parent)
+	archivedParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parent.ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusArchived, archivedParent.Status)
+
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1, "the seat must exist for its archival to mean anything")
+	for _, child := range children {
+		archivedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+		s.Require().NoError(err)
+		s.Equal(types.StatusArchived, archivedChild.Status,
+			"an abandoned checkout must not leave a seat behind")
+	}
+}
+
+// A seat whose plan carries a trial falls through the gate as trialing rather than draft, so a
+// draft-only cleanup would leave it live — entitlements running for a bundle nobody paid for.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFailureArchivesTrialingSeat() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_trial_archive_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_trial_archive_seat", decimal.NewFromInt(30), 14)
+	s.seedChildCustomer("ext_seat_trial_archive")
+
+	idempKey := "create-subscription-trial-archive-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	req := s.checkoutCreateRequest("plan_trial_archive_parent")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_trial_archive_seat", ExternalCustomerID: "ext_seat_trial_archive"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+
+	parent := s.subscriptionForPlan("plan_trial_archive_parent")
+	s.Require().NotNil(parent)
+
+	children := s.groupedChildrenOf(parent.ID)
+	s.Require().Len(children, 1)
+	s.Require().Equal(types.SubscriptionStatusTrialing, children[0].SubscriptionStatus,
+		"fixture guard — this test is only meaningful while the seat falls through as trialing")
+
+	archivedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, children[0].ID)
+	s.Require().NoError(err)
+	s.Equal(types.StatusArchived, archivedChild.Status,
+		"a trialing seat must not outlive the abandoned bundle it belongs to")
+}
+
+// seedDraftGroupedChild builds a draft grouped_invoicing child that carries real line items, which
+// a bare repo insert cannot do — the merge only ever sees a child through its line items.
+func (s *SubscriptionServiceSuite) seedDraftGroupedChild(
+	parent *subscription.Subscription,
+	planID string,
+) *subscription.Subscription {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan(planID, decimal.NewFromInt(30), 0)
+
+	req := s.checkoutCreateRequest(planID)
+	req.Checkout = nil
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	req.StartDate = lo.ToPtr(parent.StartDate)
+	resp, err := subService.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+
+	resp.Subscription.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+	resp.Subscription.ParentSubscriptionID = lo.ToPtr(parent.ID)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, resp.Subscription))
+	return resp.Subscription
+}
+
+// The merge relaxation is scoped to a draft parent. A live parent's cycle invoice must never pick
+// up a draft child left behind by a partial activation — that child was never paid for.
+func (s *SubscriptionServiceSuite) TestPrepareSubscriptionInvoiceRequest_ActiveParentIgnoresDraftChildren() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_active_parent_merge", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_active_parent_merge")
+	draftChild := s.seedDraftGroupedChild(parent, "plan_active_parent_merge_seat")
+
+	billingSvc := NewBillingService(subService.ServiceParams)
+	params := &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   parent,
+		PeriodStart:    parent.CurrentPeriodStart,
+		PeriodEnd:      parent.CurrentPeriodEnd,
+		ReferencePoint: types.ReferencePointPeriodStart,
+	}
+
+	gated, err := billingSvc.PrepareSubscriptionInvoiceRequest(ctx, params)
+	s.Require().NoError(err)
+	s.True(lo.SomeBy(gated.LineItems, func(li dto.CreateInvoiceLineItemRequest) bool {
+		return lo.FromPtr(li.SubscriptionID) == draftChild.ID
+	}), "a draft parent must price its draft children into the checkout amount")
+
+	parent.SubscriptionStatus = types.SubscriptionStatusActive
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
+
+	live, err := billingSvc.PrepareSubscriptionInvoiceRequest(ctx, params)
+	s.Require().NoError(err)
+	s.False(lo.SomeBy(live.LineItems, func(li dto.CreateInvoiceLineItemRequest) bool {
+		return lo.FromPtr(li.SubscriptionID) == draftChild.ID
+	}), "an active parent must not bill an unpaid draft child on its cycle invoice")
+}
+
+// A seat's first period was already covered by the parent's checkout invoice, so activating it
+// must not raise one of its own.
+func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_GroupedChildGetsNoOwnInvoice() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	s.seedFixedPricePlan("plan_seat_no_own_invoice_parent", decimal.NewFromInt(50), 0)
+
+	parent := s.seedDraftParent("plan_seat_no_own_invoice_parent")
+	child := s.seedDraftGroupedChild(parent, "plan_seat_no_own_invoice_seat")
+
+	s.Require().NoError(subService.activateDraftSubscription(ctx, parent))
+
+	activated, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, activated.SubscriptionStatus)
+	s.Empty(s.invoicesForSubscription(child.ID),
+		"the seat's charges settled on the parent's invoice; a second one would double-charge")
+}
+
+// An explicitly-draft parent is not a gated one: nothing would ever activate its seats, and once
+// the parent goes live the merge excludes draft children, so the seats would never be billed.
+// Only a checkout-gated create may link a child to a draft parent.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_ExplicitDraftParentRejectsGroupedChildren() {
+	ctx := s.GetContext()
+	s.seedFixedPricePlan("plan_explicit_draft_parent", decimal.NewFromInt(50), 0)
+	s.seedFixedPricePlan("plan_explicit_draft_seat", decimal.NewFromInt(30), 0)
+	s.seedChildCustomer("ext_seat_explicit_draft")
+
+	req := s.checkoutCreateRequest("plan_explicit_draft_parent")
+	req.Checkout = nil
+	req.SubscriptionStatus = types.SubscriptionStatusDraft
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{
+		GroupedInvoicingChildrenToCreate: []dto.GroupedInvoicingChildRequest{
+			{PlanID: "plan_explicit_draft_seat", ExternalCustomerID: "ext_seat_explicit_draft"},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "parent subscription is not active")
 }

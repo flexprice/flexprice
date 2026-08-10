@@ -7,6 +7,25 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// WorkflowRef identifies a single workflow execution. Fields are unexported so
+// a reference cannot be partially constructed or mutated after creation; build
+// one with NewWorkflowRef and read it through the getters.
+type WorkflowRef struct {
+	workflowID string
+	runID      string
+}
+
+// NewWorkflowRef returns a reference to one workflow execution.
+func NewWorkflowRef(workflowID, runID string) WorkflowRef {
+	return WorkflowRef{workflowID: workflowID, runID: runID}
+}
+
+// WorkflowID returns the Temporal workflow ID.
+func (r WorkflowRef) WorkflowID() string { return r.workflowID }
+
+// RunID returns the Temporal run ID.
+func (r WorkflowRef) RunID() string { return r.runID }
+
 // WorkflowExecution represents a workflow execution record in the domain layer.
 // It mirrors the persisted entity but is independent of the ORM.
 type WorkflowExecution struct {

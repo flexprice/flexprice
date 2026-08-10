@@ -19,14 +19,19 @@ type InMemoryPaymentStore struct {
 	mu             sync.RWMutex
 	attempts       map[string]*payment.PaymentAttempt
 	createdInOrder []*payment.Payment
+	// statusSnapshots records the status as last written, so a compare-and-set
+	// is not defeated by callers mutating the payment pointer this store handed
+	// them. See UpdateWithExpectedStatus.
+	statusSnapshots map[string]types.PaymentStatus
 }
 
 // NewInMemoryPaymentStore creates a new in-memory payment repository
 func NewInMemoryPaymentStore() *InMemoryPaymentStore {
 	return &InMemoryPaymentStore{
-		InMemoryStore:  NewInMemoryStore[*payment.Payment](),
-		attempts:       make(map[string]*payment.PaymentAttempt),
-		createdInOrder: make([]*payment.Payment, 0),
+		InMemoryStore:   NewInMemoryStore[*payment.Payment](),
+		attempts:        make(map[string]*payment.PaymentAttempt),
+		createdInOrder:  make([]*payment.Payment, 0),
+		statusSnapshots: make(map[string]types.PaymentStatus),
 	}
 }
 
@@ -37,6 +42,7 @@ func (m *InMemoryPaymentStore) Clear() {
 	m.InMemoryStore.Clear()
 	m.attempts = make(map[string]*payment.PaymentAttempt)
 	m.createdInOrder = make([]*payment.Payment, 0)
+	m.statusSnapshots = make(map[string]types.PaymentStatus)
 }
 
 // Create stores a new payment
@@ -94,6 +100,7 @@ func (m *InMemoryPaymentStore) Create(ctx context.Context, p *payment.Payment) e
 	}
 
 	m.createdInOrder = append(m.createdInOrder, p)
+	m.statusSnapshots[p.ID] = p.PaymentStatus
 	return nil
 }
 
@@ -113,10 +120,76 @@ func (m *InMemoryPaymentStore) Update(ctx context.Context, p *payment.Payment) e
 	// Update timestamp
 	p.UpdatedAt = time.Now().UTC()
 
+	m.mu.Lock()
+	m.statusSnapshots[p.ID] = p.PaymentStatus
+	m.mu.Unlock()
+
+	return m.InMemoryStore.Update(ctx, p.ID, p)
+}
+
+// UpdateWithExpectedStatus updates the payment only while its stored status
+// still matches expectedStatus, mirroring the compare-and-set the real
+// repository performs in a single statement.
+//
+// The comparison uses a stored snapshot rather than the live entry: this store
+// hands out pointers to its own values, so a caller that mutates the payment it
+// read would otherwise also mutate what we compare against, and the check would
+// always appear to match. The real repository re-reads from the database and
+// does not have that aliasing.
+func (m *InMemoryPaymentStore) UpdateWithExpectedStatus(ctx context.Context, p *payment.Payment, expectedStatus types.PaymentStatus) error {
+	if p == nil {
+		return ierr.NewError("payment cannot be nil").
+			WithHint("Payment cannot be nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	storedStatus, ok := m.statusSnapshots[p.ID]
+	if !ok {
+		existing, err := m.InMemoryStore.Get(ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		storedStatus = existing.PaymentStatus
+	}
+	if storedStatus != expectedStatus {
+		return ierr.NewError("payment status changed during update").
+			WithHint("The payment was modified concurrently. Retry with the current payment state.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      p.ID,
+				"expected_status": expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	p.UpdatedAt = time.Now().UTC()
+	m.statusSnapshots[p.ID] = p.PaymentStatus
 	return m.InMemoryStore.Update(ctx, p.ID, p)
 }
 
 // Delete removes a payment
+// DeleteWithExpectedStatus deletes only while the stored status still matches
+// expectedStatus, mirroring the predicate the real repository applies.
+func (m *InMemoryPaymentStore) DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error {
+	m.mu.Lock()
+	storedStatus, ok := m.statusSnapshots[id]
+	m.mu.Unlock()
+
+	if ok && storedStatus != expectedStatus {
+		return ierr.NewError("payment status changed during delete").
+			WithHint("The payment was modified concurrently. Re-read it before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      id,
+				"expected_status": expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
+	return m.Delete(ctx, id)
+}
+
 func (m *InMemoryPaymentStore) Delete(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

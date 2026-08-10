@@ -304,6 +304,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		}(),
 		Metadata:  linkMetadata,
 		PaymentID: paymentObj.ID,
+		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
 	}
 
 	// Get Stripe integration for creating payment link

@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -20,6 +21,12 @@ type CreateTaskRequest struct {
 }
 
 func (r *CreateTaskRequest) Validate() error {
+	// Normalize before validating so the value that is persisted and later
+	// fetched is the same one that was checked. ValidateOutboundURL trims its
+	// own copy, so without this a padded URL would pass validation and reach
+	// task processing untrimmed.
+	r.FileURL = strings.TrimSpace(r.FileURL)
+
 	if err := r.TaskType.Validate(); err != nil {
 		return err
 	}
@@ -29,6 +36,14 @@ func (r *CreateTaskRequest) Validate() error {
 	if r.FileURL == "" {
 		return ierr.NewError("file_url cannot be empty").
 			WithHint("File URL cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	// file_url is fetched server-side during task processing, so it must be a
+	// public https target — an internal address (e.g. the cloud metadata
+	// endpoint) would otherwise be reachable via SSRF.
+	if err := validator.ValidateOutboundURL(r.FileURL); err != nil {
+		return ierr.WithError(err).
+			WithHint("file_url must be an https URL pointing to a publicly routable host").
 			Mark(ierr.ErrValidation)
 	}
 	if err := r.FileType.Validate(); err != nil {

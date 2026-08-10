@@ -285,6 +285,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		)
 	}
 
+	if req.TaxIDCollectionEnabled {
+		params.TaxIDCollection = &stripe.CheckoutSessionCreateTaxIDCollectionParams{
+			Enabled: stripe.Bool(true),
+		}
+	}
+
 	// Create the checkout session
 	session, err := stripeClient.V1CheckoutSessions.Create(ctx, params)
 	if err != nil {

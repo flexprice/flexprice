@@ -401,6 +401,25 @@ func (r *CostSheetUsageRepository) GetDetailedUsageAnalytics(ctx context.Context
 				}).
 				Mark(ierr.ErrValidation)
 		}
+
+		// The property name is interpolated into the query both as a SQL string literal
+		// and as a column-alias identifier, so it can never be bound via `?` — reject it
+		// here rather than dropping it downstream, which would desync the SELECT column
+		// list from the scan targets (both are sized off params.GroupBy).
+		if strings.HasPrefix(groupBy, "properties.") {
+			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			if propertyName == "" {
+				return nil, ierr.NewError("invalid group_by value").
+					WithHint("group_by 'properties.<field_name>' requires a non-empty field name").
+					WithReportableDetails(map[string]interface{}{
+						"group_by": groupBy,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			if err := validateGroupByProperty(propertyName); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	var allResults []*events.DetailedUsageAnalytic
@@ -491,14 +510,15 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 			continue
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
+			// Already validated against the allow-list in GetDetailedUsageAnalytics, so
+			// this is safe to interpolate and always emits exactly one column — keeping
+			// this list in lockstep with the scan targets built below.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
-				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
-				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
-				groupByFieldMapping[groupBy] = alias
-			}
+			alias := groupByPropertyAlias(propertyName)
+			sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
+			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
+			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+			groupByFieldMapping[groupBy] = alias
 		}
 	}
 
@@ -615,9 +635,12 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 		scanValues := make([]interface{}, 0)
 		scanValues = append(scanValues, &result.FeatureID, &result.PriceID, &result.MeterID)
 
-		// Add property fields
+		// Add property fields. Iterate params.GroupBy, not groupByFieldMapping: the SELECT
+		// list appends property columns in params.GroupBy order, and map iteration order is
+		// unspecified — ranging the map here would misalign scan targets with columns and
+		// assign one property's value to another property's key.
 		propertyValues := make(map[string]*string)
-		for groupBy := range groupByFieldMapping {
+		for _, groupBy := range params.GroupBy {
 			if strings.HasPrefix(groupBy, "properties.") {
 				propertyName := strings.TrimPrefix(groupBy, "properties.")
 				val := new(string)
@@ -744,10 +767,17 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 			continue
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
+			// Already validated against the allow-list in GetDetailedUsageAnalytics, so
+			// this is safe to interpolate and always emits exactly one column — keeping
+			// this list in lockstep with the scan targets built below.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			// The alias must be dot-free: a raw "region.code" alias would be parsed by
+			// ClickHouse as the qualified identifier region.code in the outer query, not
+			// as this column. Use the shared collision-free alias, same as getStandardAnalytics.
+			alias := groupByPropertyAlias(propertyName)
 			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
-			outerSelectColumns = append(outerSelectColumns, propertyName)
+			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, alias))
+			outerSelectColumns = append(outerSelectColumns, alias)
 		}
 	}
 

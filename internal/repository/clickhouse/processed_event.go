@@ -546,6 +546,25 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 				}).
 				Mark(ierr.ErrValidation)
 		}
+
+		// The property name is interpolated into the query both as a SQL string literal
+		// and as a column-alias identifier, so it can never be bound via `?` — reject it
+		// here rather than dropping it, which would desync the SELECT column list from
+		// the scan targets below (both are sized off params.GroupBy).
+		if strings.HasPrefix(groupBy, "properties.") {
+			propertyName := strings.TrimPrefix(groupBy, "properties.")
+			if propertyName == "" {
+				return nil, ierr.NewError("invalid group_by value").
+					WithHint("group_by 'properties.<field_name>' requires a non-empty field name").
+					WithReportableDetails(map[string]interface{}{
+						"group_by": groupBy,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			if err := validateGroupByProperty(propertyName); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Initialize query parameters with the standard parameters that will be added later
@@ -583,16 +602,17 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 			groupByColumnAliases = append(groupByColumnAliases, "source")
 			groupByFieldMapping["source"] = "source"
 		case strings.HasPrefix(groupBy, "properties."):
-			// Extract property name from "properties.field_name"
+			// Extract property name from "properties.field_name". Already validated
+			// against the allow-list above, so it is safe to interpolate here — and
+			// every entry emits exactly one column, keeping this list in lockstep with
+			// the scan targets built from params.GroupBy.
 			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
-				// Create alias like "prop_org_id" for "properties.org_id"
-				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
-				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
-				groupByFieldMapping[groupBy] = alias
-			}
+			// Dot-free, collision-free alias for "properties.<name>" (e.g. prop_org_5fid).
+			alias := groupByPropertyAlias(propertyName)
+			sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
+			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
+			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+			groupByFieldMapping[groupBy] = alias
 		}
 	}
 
