@@ -7,6 +7,8 @@ on:
     paths:
       - 'cmd/e2eprobe/**'
       - 'internal/e2eprobe/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'Dockerfile.e2eprobe'
       - '.github/workflows/publish-e2eprobe-image.yml'
   workflow_dispatch:
@@ -32,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Resolve image tags
         id: tag
