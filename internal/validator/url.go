@@ -15,12 +15,23 @@ import (
 // from a malformed URL.
 var ErrURLNotPublic = errors.New("url must point to a publicly routable host")
 
+// StubResolverForTest makes ValidateOutboundURL resolve every hostname to the
+// given addresses, and restores the real resolver when the test finishes.
+// Tests that exercise validation of public hostnames must use this: without it
+// they perform live DNS lookups and fail wherever the network is unavailable.
+func StubResolverForTest(t interface{ Cleanup(func()) }, ips ...net.IP) {
+	previous := resolveHost
+	t.Cleanup(func() { resolveHost = previous })
+	resolveHost = func(string) ([]net.IP, error) { return ips, nil }
+}
+
 // dnsLookupTimeout bounds the resolution below. This runs on the request path,
 // so an unresponsive DNS server must not hold the goroutine for the resolver's
 // own default timeout.
 const dnsLookupTimeout = 5 * time.Second
 
-// resolveHost is swapped out in tests. Production always resolves via DNS.
+// resolveHost is swapped out in tests via StubResolverForTest. Production
+// always resolves via DNS.
 var resolveHost = func(host string) ([]net.IP, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dnsLookupTimeout)
 	defer cancel()
@@ -85,7 +96,7 @@ func ValidateOutboundURL(raw string) error {
 	// A literal IP is checked directly; a hostname is resolved first so that a
 	// name pointing at an internal address is rejected too.
 	if ip := net.ParseIP(hostname); ip != nil {
-		if !isPublicIP(ip) {
+		if !IsPublicIP(ip) {
 			return fmt.Errorf("%w: %s", ErrURLNotPublic, hostname)
 		}
 		return nil
@@ -100,7 +111,7 @@ func ValidateOutboundURL(raw string) error {
 	}
 
 	for _, ip := range ips {
-		if !isPublicIP(ip) {
+		if !IsPublicIP(ip) {
 			return fmt.Errorf("%w: %s", ErrURLNotPublic, hostname)
 		}
 	}
@@ -108,9 +119,13 @@ func ValidateOutboundURL(raw string) error {
 	return nil
 }
 
-// isPublicIP reports whether an address is publicly routable, and therefore not
+// IsPublicIP reports whether an address is publicly routable, and therefore not
 // somewhere an outbound request could be used to reach internal infrastructure.
-func isPublicIP(ip net.IP) bool {
+//
+// Exported so the outbound HTTP transport can apply the same rule at dial time,
+// which is what actually closes DNS rebinding: this function checks the
+// addresses a name resolves to now, and the address dialed later may differ.
+func IsPublicIP(ip net.IP) bool {
 	if ip == nil {
 		return false
 	}

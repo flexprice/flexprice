@@ -1,11 +1,21 @@
 package dto
 
-import "testing"
+import (
+	"net"
+	"testing"
+
+	"github.com/flexprice/flexprice/internal/validator"
+)
 
 // Regression for SSRF-VULN-01: file_url is fetched server-side, so
 // CreateTaskRequest.Validate must reject internal / non-https targets while
 // still accepting legitimate public https file hosts.
 func TestCreateTaskRequest_Validate_FileURL_SSRF(t *testing.T) {
+	// Resolve hostnames to a fixed public address so the public-host case does
+	// not depend on live DNS. Literal-IP cases below bypass resolution entirely
+	// and still exercise the address classification.
+	validator.StubResolverForTest(t, net.ParseIP("93.184.216.34"))
+
 	base := func(url string) *CreateTaskRequest {
 		return &CreateTaskRequest{
 			TaskType:   "IMPORT",

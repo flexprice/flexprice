@@ -172,9 +172,11 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 	}
 
 	// Make the request with extended timeout for large file downloads.
-	// NewOtelHTTPClient refuses redirects — file_url is caller-supplied and only
-	// the initial URL is validated, so a redirect would reach an unvalidated host.
-	httpClient := httpclient.NewOtelHTTPClient(10 * time.Minute)
+	// NewPublicOnlyClient refuses redirects and refuses to connect to a
+	// non-public address: file_url is caller-supplied, and validating it when
+	// the task was created does not bind the address dialed here, since the
+	// host is resolved again at this point.
+	httpClient := httpclient.NewPublicOnlyClient(10 * time.Minute)
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		fp.Logger.Error(ctx, "failed to download file stream", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
@@ -237,9 +239,9 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	// Shorter timeout for HEAD requests; redirects refused (same reasoning as
-	// the download path above).
-	httpClient := httpclient.NewOtelHTTPClient(30 * time.Second)
+	// Shorter timeout for HEAD requests; redirects and non-public addresses
+	// refused (same reasoning as the download path above).
+	httpClient := httpclient.NewPublicOnlyClient(30 * time.Second)
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		fp.Logger.Error(ctx, "failed to get file size", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
