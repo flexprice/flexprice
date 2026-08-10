@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - main
     paths:
       - 'cmd/e2eprobe/**'
       - 'internal/e2eprobe/**'
@@ -48,10 +49,12 @@ jobs:
           set -euo pipefail
           SHA_TAG="$(echo "${GITHUB_SHA}" | cut -c1-12)"
           TAGS="${IMG}:${SHA_TAG}"
-          # develop is the mutable tag the staging ArgoCD app tracks.
-          if [ "${GITHUB_REF}" = "refs/heads/develop" ]; then
-            TAGS="${TAGS}"$'\n'"${IMG}:develop"
-          fi
+          # Branch name doubles as the mutable tag deployments track:
+          # develop for staging, main for production.
+          case "${GITHUB_REF}" in
+            refs/heads/develop) TAGS="${TAGS}"$'\n'"${IMG}:develop" ;;
+            refs/heads/main)    TAGS="${TAGS}"$'\n'"${IMG}:main" ;;
+          esac
           if [ -n "${DISPATCH_TAG}" ]; then
             if ! echo "${DISPATCH_TAG}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
               echo "::error::Invalid tag format: ${DISPATCH_TAG}"
