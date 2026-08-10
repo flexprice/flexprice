@@ -116,8 +116,11 @@ func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
 	}
 }
 
-// setContextValues sets the tenant ID, user ID, environment ID, roles, and caller type in the context.
-// It reports whether an environment was established for the request.
+// setContextValues sets the tenant ID, user ID, environment ID, roles, and
+// caller type in the context. It returns errEnvironmentUnresolved when no
+// environment could be established for the caller, and the underlying error
+// when the lookup itself failed; callers pass the error to
+// abortEnvironmentResolution, which distinguishes the two.
 func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Repository, tenantID, userID, environmentID, userType string, roles []string) error {
 	ctx := c.Request.Context()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
@@ -149,17 +152,16 @@ func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Reposito
 	return nil
 }
 
-// abortUnresolvedEnvironment ends a request whose environment could not be
-// established.
+// abortEnvironmentResolution ends a request whose environment could not be
+// established, answering according to why.
 //
-// A refusal and an infrastructure failure are answered differently. Only
-// errEnvironmentUnresolved — no such environment, or one belonging to another
-// tenant — is an access decision and yields 403; that response deliberately does
-// not distinguish the two so it cannot be used to probe for foreign environment
-// IDs. Anything else means the lookup itself failed, which is a 500: reporting a
-// database outage as an access denial hides the fault and tells the caller not
-// to retry something that is in fact retryable.
-func abortUnresolvedEnvironment(c *gin.Context, log *logger.Logger, err error, tenantID, userID string) {
+// Only errEnvironmentUnresolved — no such environment, or one belonging to
+// another tenant — is an access decision and yields 403; that response
+// deliberately does not distinguish the two so it cannot be used to probe for
+// foreign environment IDs. Anything else means the lookup itself failed, which
+// is a 500: reporting a database outage as an access denial hides the fault and
+// tells the caller not to retry something that is in fact retryable.
+func abortEnvironmentResolution(c *gin.Context, log *logger.Logger, err error, tenantID, userID string) {
 	if !errors.Is(err, errEnvironmentUnresolved) {
 		log.Error(c.Request.Context(), "environment resolution failed",
 			"error", err,
@@ -206,7 +208,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 		}
 
 		if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
-			abortUnresolvedEnvironment(c, logger, err, tenantID, userID)
+			abortEnvironmentResolution(c, logger, err, tenantID, userID)
 			return
 		}
 		c.Next()
@@ -225,7 +227,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
 			if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
-				abortUnresolvedEnvironment(c, logger, err, tenantID, userID)
+				abortEnvironmentResolution(c, logger, err, tenantID, userID)
 				return
 			}
 			c.Next()
@@ -264,7 +266,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 
 		// JWT users have empty roles = full access
 		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", []string{}); err != nil {
-			abortUnresolvedEnvironment(c, logger, err, claims.TenantID, claims.UserID)
+			abortEnvironmentResolution(c, logger, err, claims.TenantID, claims.UserID)
 			return
 		}
 		c.Next()
