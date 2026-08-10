@@ -335,7 +335,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	if req.Inheritance != nil && len(req.Inheritance.GroupedInvoicingChildrenToCreate) > 0 {
-		if err := s.createGroupedInvoicingChildren(ctx, sub, req.Inheritance.GroupedInvoicingChildrenToCreate); err != nil {
+		if err := s.createGroupedInvoicingChildren(ctx, sub, req.Inheritance.GroupedInvoicingChildrenToCreate, req.Checkout); err != nil {
 			return nil, err
 		}
 	}
@@ -7968,7 +7968,12 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		if err != nil {
 			return nil, nil, err
 		}
-		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+
+		isCheckoutGatedChild := req.Checkout != nil &&
+			sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing &&
+			parentSub.SubscriptionStatus == types.SubscriptionStatusDraft
+
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive && !isCheckoutGatedChild {
 			return nil, nil, ierr.NewError("parent subscription is not active").
 				WithHint("The parent subscription must be active").
 				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
@@ -8105,6 +8110,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 	ctx context.Context,
 	parent *subscription.Subscription,
 	childRequests []dto.GroupedInvoicingChildRequest,
+	checkout *dto.CheckoutParams,
 ) error {
 	for _, c := range childRequests {
 		startDate := parent.StartDate
@@ -8127,6 +8133,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 			BillingAnchor:              billingAnchor,
 			SubscriptionType:           types.SubscriptionTypeGroupedInvoicing,
 			SubscriptionCreationConfig: c.SubscriptionCreationConfig,
+			Checkout:                   checkout,
 			Inheritance: &dto.SubscriptionInheritanceConfig{
 				ParentSubscriptionID: parent.ID,
 			},
