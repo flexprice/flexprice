@@ -394,7 +394,8 @@ func parseStartDate(raw string) (time.Time, error) {
 func eventPropertiesForMeter(m *meter.Meter) map[string]interface{} {
 	properties := make(map[string]interface{})
 	if m.Aggregation.Type == types.AggregationSum ||
-		m.Aggregation.Type == types.AggregationAvg {
+		m.Aggregation.Type == types.AggregationAvg ||
+		m.Aggregation.Type == types.AggregationMax {
 		if m.Aggregation.Field != "" {
 			properties[m.Aggregation.Field] = rand.Int63n(1000) + 1
 		}

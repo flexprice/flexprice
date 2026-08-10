@@ -60,8 +60,9 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 
 	// Handle properties based on meter aggregation and filters
 	if selectedMeter.Aggregation.Type == types.AggregationSum ||
-		selectedMeter.Aggregation.Type == types.AggregationAvg {
-		// For sum/avg aggregation, we need to generate a value for the aggregation field
+		selectedMeter.Aggregation.Type == types.AggregationAvg ||
+		selectedMeter.Aggregation.Type == types.AggregationMax {
+		// Generate a value for aggregation types that use the aggregation field.
 		if selectedMeter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 1000
 			properties[selectedMeter.Aggregation.Field] = rand.Int63n(1000) + 1

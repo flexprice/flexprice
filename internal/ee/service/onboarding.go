@@ -387,8 +387,9 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 	// Handle properties based on meter aggregation and filters
 	if meter.Aggregation.Type == types.AggregationSum ||
 		meter.Aggregation.Type == types.AggregationCountUnique ||
-		meter.Aggregation.Type == types.AggregationAvg {
-		// For sum/avg aggregation, we need to generate a value for the aggregation field
+		meter.Aggregation.Type == types.AggregationAvg ||
+		meter.Aggregation.Type == types.AggregationMax {
+		// Generate a value for aggregation types that use the aggregation field.
 		if meter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 100
 			properties[meter.Aggregation.Field] = rand.Int63n(100) + 1
