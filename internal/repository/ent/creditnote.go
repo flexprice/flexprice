@@ -257,7 +257,12 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
-		exists, err := r.client.Writer(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).CreditNote.Query().
+			Where(
+				creditnote.ID(creditNoteID),
+				creditnote.TenantID(types.GetTenantID(ctx)),
+				creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -306,7 +311,12 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
-		exists, err := r.client.Writer(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).CreditNote.Query().
+			Where(
+				creditnote.ID(creditNoteID),
+				creditnote.TenantID(types.GetTenantID(ctx)),
+				creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note existence check failed").Mark(ierr.ErrDatabase)
 		}

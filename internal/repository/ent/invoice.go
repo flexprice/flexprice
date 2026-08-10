@@ -309,8 +309,15 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 	r.logger.Debug(ctx, "adding line items", "invoice_id", invoiceID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
-		// Verify invoice exists
-		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		// Verify invoice exists within the caller's tenant + environment. Without
+		// this predicate the existence gate would accept a foreign-tenant invoice
+		// ID, allowing a cross-tenant line-item write (SHN-9b / A01 invariant).
+		exists, err := r.client.Writer(ctx).Invoice.Query().
+			Where(
+				invoice.ID(invoiceID),
+				invoice.TenantID(types.GetTenantID(ctx)),
+				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -377,8 +384,15 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 	r.logger.Debug(ctx, "removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
-		// Verify invoice exists
-		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		// Verify invoice exists within the caller's tenant + environment. Without
+		// this predicate the existence gate would accept a foreign-tenant invoice
+		// ID, allowing a cross-tenant line-item write (SHN-9b / A01 invariant).
+		exists, err := r.client.Writer(ctx).Invoice.Query().
+			Where(
+				invoice.ID(invoiceID),
+				invoice.TenantID(types.GetTenantID(ctx)),
+				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
