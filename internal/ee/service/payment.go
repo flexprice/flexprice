@@ -398,6 +398,11 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		return nil, err // Repository already using ierr
 	}
 
+	// Status observed before any mutation. The write below is conditioned on it
+	// so the lifecycle check and the update apply as one atomic step.
+	observedStatus := p.PaymentStatus
+	statusChanged := false
+
 	if req.PaymentStatus != nil {
 		// Payment status must follow the lifecycle: without this check the update
 		// API would accept any status for any payment, including settling one
@@ -407,6 +412,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			return nil, err
 		}
 		p.PaymentStatus = target
+		statusChanged = true
 	}
 	if req.PaymentGateway != nil {
 		p.PaymentGateway = req.PaymentGateway
@@ -416,6 +422,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		// Confirm the gateway accepted the payment: INITIATED → PENDING
 		if p.PaymentStatus == types.PaymentStatusInitiated {
 			p.PaymentStatus = types.PaymentStatusPending
+			statusChanged = true
 		}
 	}
 	if req.PaymentMethodID != nil {
@@ -440,7 +447,15 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		p.Metadata = *req.Metadata
 	}
 
-	if err := s.PaymentRepo.Update(ctx, p); err != nil {
+	// A status change is written conditionally on the status this update was
+	// validated against, so a concurrent update cannot be overwritten by a
+	// decision made from stale state. Updates that leave the status alone keep
+	// the unconditional write.
+	if statusChanged {
+		if err := s.PaymentRepo.UpdateWithExpectedStatus(ctx, p, observedStatus); err != nil {
+			return nil, err // Repository already using ierr
+		}
+	} else if err := s.PaymentRepo.Update(ctx, p); err != nil {
 		return nil, err // Repository already using ierr
 	}
 

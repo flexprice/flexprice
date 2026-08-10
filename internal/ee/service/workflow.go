@@ -82,11 +82,16 @@ func (s *workflowService) ListWorkflows(ctx context.Context, filter *types.Workf
 // third-party error payloads. A workflow belonging to a different tenant is
 // filtered out by the repository and is reported here as not found, so the
 // response cannot be used to probe for the existence of foreign workflow IDs.
+//
+// Both tenant and environment must be present. The repository's environment
+// filter is skipped when the environment is absent from the context, so a
+// request carrying only a tenant would authorize against any environment of
+// that tenant and then read Temporal history, which is not environment-scoped
+// at all. Requiring the environment here keeps the check as narrow as the data
+// it protects.
 func (s *workflowService) authorizeWorkflowAccess(ctx context.Context, workflowID, runID string) (*workflowexecution.WorkflowExecution, error) {
-	if types.GetTenantID(ctx) == "" {
-		return nil, ierr.NewError("tenant_id is required").
-			WithHint("Tenant ID must be present in context").
-			Mark(ierr.ErrValidation)
+	if err := requireTenantAndEnvironment(ctx); err != nil {
+		return nil, err
 	}
 
 	exec, err := s.workflowExec.GetWorkflowExecution(ctx, workflowID, runID)
@@ -107,6 +112,59 @@ func (s *workflowService) authorizeWorkflowAccess(ctx context.Context, workflowI
 			Mark(ierr.ErrNotFound)
 	}
 	return exec, nil
+}
+
+// requireTenantAndEnvironment rejects a request that is missing either scope.
+// The repository applies each filter only when the corresponding value is
+// present, so an absent environment silently widens the lookup to the whole
+// tenant.
+func requireTenantAndEnvironment(ctx context.Context) error {
+	if types.GetTenantID(ctx) == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID must be present in context").
+			Mark(ierr.ErrValidation)
+	}
+	if types.GetEnvironmentID(ctx) == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID must be present in context").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// authorizeWorkflowsBatch authorizes several workflows in a single scoped
+// query, so batch size does not translate into one database round trip per
+// item. It applies the same rule as authorizeWorkflowAccess to every entry: if
+// any requested workflow falls outside the caller's tenant and environment the
+// whole request is refused rather than quietly reduced, so a batch cannot be
+// used to test which workflow IDs exist.
+func (s *workflowService) authorizeWorkflowsBatch(ctx context.Context, refs []workflowexecution.WorkflowRef) error {
+	if err := requireTenantAndEnvironment(ctx); err != nil {
+		return err
+	}
+
+	execs, err := s.workflowExec.GetWorkflowExecutions(ctx, refs)
+	if err != nil {
+		return err
+	}
+
+	found := make(map[workflowexecution.WorkflowRef]struct{}, len(execs))
+	for _, exec := range execs {
+		if exec == nil {
+			continue
+		}
+		found[workflowexecution.WorkflowRef{WorkflowID: exec.WorkflowID, RunID: exec.RunID}] = struct{}{}
+	}
+
+	for _, ref := range refs {
+		if _, ok := found[ref]; !ok {
+			return ierr.NewError("workflow not found").
+				WithHint("Workflow not found").
+				Mark(ierr.ErrNotFound)
+		}
+	}
+
+	return nil
 }
 
 func workflowExecutionToDTO(exec *workflowexecution.WorkflowExecution) *dto.WorkflowExecutionDTO {
@@ -285,14 +343,20 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 			WithHint("Maximum 50 workflows can be queried at once").
 			Mark(ierr.ErrValidation)
 	}
-	// Every requested workflow is authorized independently: a batch containing a
-	// single owned workflow must not pull foreign ones along with it.
-	executions := make([]struct{ WorkflowID, RunID string }, 0, len(req.Workflows))
+	// Every requested workflow must be authorized: a batch containing a single
+	// owned workflow must not pull foreign ones along with it. Resolved in one
+	// scoped query rather than a lookup per item.
+	refs := make([]workflowexecution.WorkflowRef, 0, len(req.Workflows))
 	for _, wf := range req.Workflows {
-		if _, err := s.authorizeWorkflowAccess(ctx, wf.WorkflowID, wf.RunID); err != nil {
-			return nil, err
-		}
-		executions = append(executions, struct{ WorkflowID, RunID string }{WorkflowID: wf.WorkflowID, RunID: wf.RunID})
+		refs = append(refs, workflowexecution.WorkflowRef{WorkflowID: wf.WorkflowID, RunID: wf.RunID})
+	}
+	if err := s.authorizeWorkflowsBatch(ctx, refs); err != nil {
+		return nil, err
+	}
+
+	executions := make([]struct{ WorkflowID, RunID string }, 0, len(refs))
+	for _, ref := range refs {
+		executions = append(executions, struct{ WorkflowID, RunID string }{WorkflowID: ref.WorkflowID, RunID: ref.RunID})
 	}
 	infos, err := s.querier.DescribeWorkflowBatch(ctx, executions)
 	if err != nil {

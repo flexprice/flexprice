@@ -125,6 +125,13 @@ func (s *WorkflowExecutionService) GetWorkflowExecution(ctx context.Context, wor
 	return s.workflowExecRepo.Get(ctx, workflowID, runID)
 }
 
+// GetWorkflowExecutions retrieves several workflow executions in a single
+// tenant- and environment-scoped query. Executions outside that scope are
+// omitted from the result.
+func (s *WorkflowExecutionService) GetWorkflowExecutions(ctx context.Context, refs []workflowexecution.WorkflowRef) ([]*workflowexecution.WorkflowExecution, error) {
+	return s.workflowExecRepo.GetMany(ctx, refs)
+}
+
 // DeleteWorkflowExecution deletes a workflow execution record
 func (s *WorkflowExecutionService) DeleteWorkflowExecution(ctx context.Context, id string) error {
 	return s.workflowExecRepo.Delete(ctx, id)

@@ -7,6 +7,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// WorkflowRef identifies a single workflow execution.
+type WorkflowRef struct {
+	WorkflowID string
+	RunID      string
+}
+
 // WorkflowExecution represents a workflow execution record in the domain layer.
 // It mirrors the persisted entity but is independent of the ORM.
 type WorkflowExecution struct {
