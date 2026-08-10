@@ -30,15 +30,46 @@ type CreatePaymentRequest struct {
 	GatewayOptions         *PaymentGatewayOptions       `json:"gateway_options,omitempty"`
 }
 
-// PaymentGatewayOptions holds typed, per-gateway payment options.
+// PaymentGatewayOptions holds typed, per-gateway payment options. Adding
+// support for a new gateway's options means adding its struct here plus a
+// Validate method on it — no other call site needs to change.
 type PaymentGatewayOptions struct {
 	Stripe *StripePaymentGatewayOptions `json:"stripe,omitempty"`
+}
+
+// Validate checks that any set gateway options are compatible with the
+// payment's method type and selected gateway.
+func (o *PaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodType, paymentGateway *types.PaymentGatewayType) error {
+	if o == nil {
+		return nil
+	}
+	if o.Stripe != nil {
+		return o.Stripe.Validate(paymentMethodType, paymentGateway)
+	}
+	return nil
 }
 
 // StripePaymentGatewayOptions carries Stripe-specific payment options.
 type StripePaymentGatewayOptions struct {
 	// TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout Sessions.
 	TaxIDCollectionEnabled *bool `json:"tax_id_collection_enabled,omitempty"`
+}
+
+// Validate ensures Stripe options are only used with Stripe payment-link payments.
+func (o *StripePaymentGatewayOptions) Validate(paymentMethodType types.PaymentMethodType, paymentGateway *types.PaymentGatewayType) error {
+	switch {
+	case paymentMethodType != types.PaymentMethodTypePaymentLink,
+		paymentGateway == nil,
+		paymentGateway != nil && *paymentGateway != types.PaymentGatewayTypeStripe:
+		return ierr.NewError("gateway_options.stripe only applies to Stripe payment-link payments").
+			WithHint("Remove gateway_options.stripe, or set payment_method_type to PAYMENT_LINK and payment_gateway to stripe").
+			WithReportableDetails(map[string]interface{}{
+				"payment_method_type": paymentMethodType,
+				"payment_gateway":     paymentGateway,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // UpdatePaymentRequest represents a request to update a payment
@@ -220,19 +251,8 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		return nil, err
 	}
 
-	if r.GatewayOptions != nil && r.GatewayOptions.Stripe != nil {
-		switch {
-		case r.PaymentMethodType != types.PaymentMethodTypePaymentLink,
-			r.PaymentGateway == nil,
-			r.PaymentGateway != nil && *r.PaymentGateway != types.PaymentGatewayTypeStripe:
-			return nil, ierr.NewError("gateway_options.stripe only applies to Stripe payment-link payments").
-				WithHint("Remove gateway_options.stripe, or set payment_method_type to PAYMENT_LINK and payment_gateway to stripe").
-				WithReportableDetails(map[string]interface{}{
-					"payment_method_type": r.PaymentMethodType,
-					"payment_gateway":     r.PaymentGateway,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+	if err := r.GatewayOptions.Validate(r.PaymentMethodType, r.PaymentGateway); err != nil {
+		return nil, err
 	}
 
 	// Initialize gateway metadata for storing payment link related fields
