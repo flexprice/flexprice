@@ -399,7 +399,14 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 
 	if req.PaymentStatus != nil {
-		p.PaymentStatus = types.PaymentStatus(*req.PaymentStatus)
+		// Payment status must follow the lifecycle: without this check the update
+		// API would accept any status for any payment, including settling one
+		// without the gateway ever being involved.
+		target := types.PaymentStatus(*req.PaymentStatus)
+		if err := p.PaymentStatus.ValidateTransitionTo(target); err != nil {
+			return nil, err
+		}
+		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {
 		p.PaymentGateway = req.PaymentGateway
@@ -512,6 +519,25 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("payment_id is required").
 			WithHint("Payment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	p, err := s.PaymentRepo.Get(ctx, id)
+	if err != nil {
+		return err // Repository already using ierr
+	}
+
+	// Payments that represent settled money movement must not be deletable:
+	// deleting one removes it from reconciliation views while the money it
+	// records still moved. Void or refund such a payment instead, which keeps
+	// the record and its audit trail intact.
+	if !p.PaymentStatus.IsDeletable() {
+		return ierr.NewError("payment cannot be deleted in its current status").
+			WithHintf("A payment in status %s cannot be deleted. Void or refund it instead.", p.PaymentStatus).
+			WithReportableDetails(map[string]any{
+				"payment_id":     id,
+				"payment_status": p.PaymentStatus,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
