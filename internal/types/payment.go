@@ -35,10 +35,15 @@ func (s PaymentStatus) IsTerminal() bool {
 // Statuses that record settled or in-flight money movement are not deletable:
 // removing one hides it from reconciliation while the money it records still
 // moved. Such payments should be voided or refunded instead, which preserves
-// the record. Only payments that never resulted in a charge can be deleted.
+// the record.
+//
+// PENDING is excluded because it means the gateway has accepted the payment and
+// the outcome is still to come; deleting one discards the record of a live
+// gateway transaction. Only INITIATED (never sent to a gateway) and FAILED
+// (sent, and definitively did not charge) can be deleted.
 func (s PaymentStatus) IsDeletable() bool {
 	switch s {
-	case PaymentStatusInitiated, PaymentStatusPending, PaymentStatusFailed:
+	case PaymentStatusInitiated, PaymentStatusFailed:
 		return true
 	default:
 		return false

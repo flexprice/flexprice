@@ -923,7 +923,13 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Always return 200 OK to Moyasar to prevent retries
 	// We log errors internally but don't expose them to Moyasar
+	//
+	// Skipped when the request was aborted: a rejected webhook must keep its own
+	// status rather than be overwritten with a success body.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -1020,12 +1026,20 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		// design and takes the tenant and environment from the URL, so a request
 		// that cannot be verified against a configured secret must not be treated
 		// as coming from the provider, since it drives invoice payment state.
-		h.logger.Error(context.Background(), "Moyasar webhook rejected: webhook secret is not configured on the connection",
+		//
+		// AbortWithStatusJSON rather than a bare return: the deferred success
+		// body at the top of this handler would otherwise answer 200 to a
+		// request that was refused. Aborting marks the context so the deferred
+		// write is skipped.
+		h.logger.Error(c.Request.Context(), "Moyasar webhook rejected: webhook secret is not configured on the connection",
 			"error", "webhook_secret_not_configured",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"event_id", event.ID,
 			"note", "Configure webhook_secret in the Moyasar connection settings")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+			"error": "Webhook authentication is not configured for this connection",
+		})
 		return
 	}
 

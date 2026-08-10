@@ -1,11 +1,13 @@
 package validator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // ErrURLNotPublic is returned when a URL resolves to an address that is not
@@ -13,8 +15,27 @@ import (
 // from a malformed URL.
 var ErrURLNotPublic = errors.New("url must point to a publicly routable host")
 
+// dnsLookupTimeout bounds the resolution below. This runs on the request path,
+// so an unresponsive DNS server must not hold the goroutine for the resolver's
+// own default timeout.
+const dnsLookupTimeout = 5 * time.Second
+
 // resolveHost is swapped out in tests. Production always resolves via DNS.
-var resolveHost = net.LookupIP
+var resolveHost = func(host string) ([]net.IP, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dnsLookupTimeout)
+	defer cancel()
+
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
+	ips := make([]net.IP, 0, len(addrs))
+	for _, addr := range addrs {
+		ips = append(ips, addr.IP)
+	}
+	return ips, nil
+}
 
 // ValidateOutboundURL checks that a user-supplied URL is safe to send a server
 // side request to.
@@ -118,12 +139,6 @@ func isPublicIP(ip net.IP) bool {
 		if ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 0 {
 			return false
 		}
-	}
-
-	// IPv4-mapped and NAT64 addresses are re-checked as IPv4 so that
-	// ::ffff:169.254.169.254 cannot slip past the checks above.
-	if ip4 := ip.To4(); ip4 != nil && len(ip) == net.IPv6len {
-		return isPublicIP(ip4)
 	}
 
 	return true

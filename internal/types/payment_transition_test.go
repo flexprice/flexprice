@@ -71,9 +71,12 @@ func TestPaymentStatusIsDeletable(t *testing.T) {
 		{PaymentStatusPartiallyRefunded, false},
 		{PaymentStatusVoided, false},
 
-		// Never resulted in a charge.
+		// PENDING means the gateway accepted the payment and the outcome is
+		// still to come, so the record must survive.
+		{PaymentStatusPending, false},
+
+		// Never charged: not sent to a gateway, or sent and definitively failed.
 		{PaymentStatusInitiated, true},
-		{PaymentStatusPending, true},
 		{PaymentStatusFailed, true},
 	}
 

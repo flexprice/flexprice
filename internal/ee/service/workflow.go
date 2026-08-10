@@ -90,7 +90,18 @@ func (s *workflowService) authorizeWorkflowAccess(ctx context.Context, workflowI
 	}
 
 	exec, err := s.workflowExec.GetWorkflowExecution(ctx, workflowID, runID)
-	if err != nil || exec == nil {
+	if err != nil {
+		// A genuine lookup failure is reported as such. Only absence is
+		// translated to not-found, so a database outage is not reported as a
+		// missing workflow.
+		if !ierr.IsNotFound(err) {
+			return nil, err
+		}
+		return nil, ierr.NewError("workflow not found").
+			WithHint("Workflow not found").
+			Mark(ierr.ErrNotFound)
+	}
+	if exec == nil {
 		return nil, ierr.NewError("workflow not found").
 			WithHint("Workflow not found").
 			Mark(ierr.ErrNotFound)

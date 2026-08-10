@@ -49,6 +49,9 @@ func TestValidateGoogleEndpoint(t *testing.T) {
 
 		{"attacker host rejected", "https://evil.example.com/token", true},
 		{"lookalike suffix rejected", "https://googleapis.com.evil.example/token", true},
+		// Serves tenant-controlled content, so it must not be reachable even
+		// though it is a genuine Google domain.
+		{"other google host rejected", "https://storage.googleapis.com/token", true},
 		{"metadata service rejected", "https://169.254.169.254/token", true},
 		{"http rejected", "http://sts.googleapis.com/v1/token", true},
 		{"empty rejected", "", true},
