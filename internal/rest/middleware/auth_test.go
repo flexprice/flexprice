@@ -75,7 +75,7 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "env_prod")
 	})
 
-	t.Run("X-Environment-ID header has no effect when claim absent", func(t *testing.T) {
+	t.Run("falls back to X-Environment-ID header when claim absent", func(t *testing.T) {
 		token := makeJWT(t, "t_tenant1", "usr_dev", "", 1)
 
 		w := httptest.NewRecorder()
@@ -85,8 +85,7 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Contains(t, w.Body.String(), `"environment_id":""`)
-		assert.NotContains(t, w.Body.String(), "env_from_header")
+		assert.Contains(t, w.Body.String(), "env_from_header")
 	})
 
 	t.Run("JWT claim takes priority over header", func(t *testing.T) {

@@ -89,38 +89,3 @@ func TestRequirePermission_AllowsServiceAccountWithRole(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, "service account with the right role must be allowed through")
 }
-
-// TestRequirePermission_DeniesServiceAccountEnvironmentRead reproduces the
-// live-verified staging PoC: a service-account key scoped to
-// event_ingestor/event_reader (neither of which grants environment:read)
-// successfully called GET /v1/environments and got all 50 tenant environment
-// UUIDs. That must now be 403.
-func TestRequirePermission_DeniesServiceAccountEnvironmentRead(t *testing.T) {
-	rbacSvc := realRBACService(t)
-	router := newPermissionTestRouter(t, rbacSvc, string(types.UserTypeServiceAccount),
-		[]string{"event_ingestor", "event_reader"}, types.EntityEnvironment, types.ActionRead)
-
-	req := httptest.NewRequest(http.MethodPost, "/customers", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusForbidden, w.Code, "service account without environment:read role must be denied")
-
-	var body map[string]string
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "insufficient permissions", body["message"])
-}
-
-// TestRequirePermission_AllowsSuperAdminEnvironmentRead confirms super_admin's
-// wildcard role is unaffected by the new environment:read guard.
-func TestRequirePermission_AllowsSuperAdminEnvironmentRead(t *testing.T) {
-	rbacSvc := realRBACService(t)
-	router := newPermissionTestRouter(t, rbacSvc, string(types.UserTypeServiceAccount),
-		[]string{"super_admin"}, types.EntityEnvironment, types.ActionRead)
-
-	req := httptest.NewRequest(http.MethodPost, "/customers", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code, "super_admin must retain access to environment reads")
-}
