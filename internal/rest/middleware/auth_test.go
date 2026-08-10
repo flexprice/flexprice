@@ -382,11 +382,10 @@ func TestResolveEnvironmentIDPropagatesRepositoryFailures(t *testing.T) {
 
 }
 
-// The dashboard learns which environments exist by calling GET /v1/environments,
-// and only then can it send X-Environment-ID on subsequent requests. Its login
-// JWT carries no environment claim, so requiring a header to reach that route
-// would be circular: the caller could never obtain an ID to send. These routes
-// are tenant- and user-scoped and do not read the resolved environment.
+// The dashboard bootstraps via a small set of GETs before it can send
+// X-Environment-ID. Its login JWT carries no environment claim, so requiring a
+// header to reach those routes would be circular. Writes under the same groups
+// still require a selection.
 func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -406,36 +405,55 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 				"environment_id": types.GetEnvironmentID(c.Request.Context()),
 			})
 		}
+		r.GET("/v1/users/me", handler)
+		r.PUT("/v1/users/me", handler)
+		r.POST("/v1/users", handler)
 		r.GET("/v1/environments", handler)
 		r.GET("/v1/environments/:id", handler)
+		r.POST("/v1/environments", handler)
+		r.POST("/v1/environments/:id/clone", handler)
+		r.GET("/v1/tenants/:id", handler)
+		r.GET("/v1/tenants/billing", handler)
+		r.PUT("/v1/tenants/update", handler)
 		r.GET("/v1/customers", handler)
 		return r
 	}
 
-	get := func(path string) *httptest.ResponseRecorder {
+	do := func(method, path string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		req, _ := http.NewRequest(method, path, nil)
 		req.Header.Set("Authorization", "Bearer "+makeJWT(t, "t_tenant1", "usr_dev", "", 1))
 		newRouter().ServeHTTP(w, req)
 		return w
 	}
 
-	t.Run("listing environments succeeds without a header", func(t *testing.T) {
-		w := get("/v1/environments")
-
-		require.Equal(t, http.StatusOK, w.Code)
-		// No environment is selected, so none is placed in the context.
-		assert.Contains(t, w.Body.String(), `"environment_id":""`)
+	t.Run("bootstrap GETs succeed without a header", func(t *testing.T) {
+		for _, path := range []string{
+			"/v1/users/me",
+			"/v1/environments",
+			"/v1/environments/env_dev",
+			"/v1/tenants/t_tenant1",
+		} {
+			w := do(http.MethodGet, path)
+			require.Equal(t, http.StatusOK, w.Code, path)
+			assert.Contains(t, w.Body.String(), `"environment_id":""`, path)
+		}
 	})
 
-	t.Run("reading a single environment succeeds without a header", func(t *testing.T) {
-		assert.Equal(t, http.StatusOK, get("/v1/environments/env_dev").Code)
-	})
-
-	// The exemption is limited to discovery: every other route still requires a
-	// selection, so this cannot be used to reach tenant data without one.
-	t.Run("an ordinary route without a header is still refused", func(t *testing.T) {
-		assert.Equal(t, http.StatusForbidden, get("/v1/customers").Code)
+	t.Run("writes and non-bootstrap reads under the same groups still require a header", func(t *testing.T) {
+		for _, tc := range []struct {
+			method, path string
+		}{
+			{http.MethodPut, "/v1/users/me"},
+			{http.MethodPost, "/v1/users"},
+			{http.MethodPost, "/v1/environments"},
+			{http.MethodPost, "/v1/environments/env_dev/clone"},
+			{http.MethodGet, "/v1/tenants/billing"},
+			{http.MethodPut, "/v1/tenants/update"},
+			{http.MethodGet, "/v1/customers"},
+		} {
+			assert.Equal(t, http.StatusForbidden, do(tc.method, tc.path).Code, tc.method+" "+tc.path)
+		}
 	})
 }
 

@@ -96,12 +96,11 @@ func resolveEnvironmentID(ctx context.Context, c *gin.Context, environmentRepo d
 // isEnvironmentDiscoveryRoute reports whether a route can be served without an
 // environment selected.
 //
-// Listing and reading environments is scoped by tenant and user, never by
-// environment, so these handlers do not consult the resolved value. They are
-// also the only way an unbound caller — a dashboard JWT, which carries no
-// environment claim — can discover an ID to send in X-Environment-ID on every
-// later request. Refusing them for lack of a header would leave such a caller
-// unable to ever obtain one.
+// Only the bootstrap GETs are exempt: identity, environment discovery, and
+// tenant shell. Writes under the same groups still require a resolved
+// environment so a JWT without X-Environment-ID cannot create users, clone
+// environments, or mutate tenant billing. Signup already creates a default
+// environment, so CreateEnvironment is not part of this set.
 func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
 	if c.Request.Method != http.MethodGet {
 		return false
@@ -109,7 +108,7 @@ func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
 	// FullPath is the matched route template, so this cannot be spoofed by a
 	// crafted URL the router did not match to these handlers.
 	switch c.FullPath() {
-	case "/v1/environments", "/v1/environments/:id":
+	case "/v1/users/me", "/v1/environments", "/v1/environments/:id", "/v1/tenants/:id":
 		return true
 	default:
 		return false
