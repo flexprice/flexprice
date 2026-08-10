@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/predicate"
 	entSchema "github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
@@ -291,6 +292,18 @@ func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilt
 }
 
 func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment) error {
+	return r.update(ctx, p, nil)
+}
+
+// UpdateWithExpectedStatus applies the update only while the stored status
+// still matches expectedStatus. The predicate makes the caller's lifecycle
+// check and this write a single atomic operation, so two concurrent updates
+// cannot both validate against the same status and then overwrite each other.
+func (r *paymentRepository) UpdateWithExpectedStatus(ctx context.Context, p *domainPayment.Payment, expectedStatus types.PaymentStatus) error {
+	return r.update(ctx, p, &expectedStatus)
+}
+
+func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment, expectedStatus *types.PaymentStatus) error {
 	client := r.client.Writer(ctx)
 
 	r.log.Debug(ctx, "updating payment",
@@ -305,12 +318,17 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Payment.Update().
-		Where(
-			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
-			payment.ID(p.ID),
-			payment.TenantID(p.TenantID),
-		).
+	predicates := []predicate.Payment{
+		payment.EnvironmentID(types.GetEnvironmentID(ctx)),
+		payment.ID(p.ID),
+		payment.TenantID(p.TenantID),
+	}
+	if expectedStatus != nil {
+		predicates = append(predicates, payment.PaymentStatus(string(*expectedStatus)))
+	}
+
+	affected, err := client.Payment.Update().
+		Where(predicates...).
 		SetPaymentStatus(string(p.PaymentStatus)).
 		SetPaymentMethodID(p.PaymentMethodID).
 		SetNillablePaymentGateway(p.PaymentGateway).
@@ -346,11 +364,35 @@ func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment
 			Mark(ierr.ErrDatabase)
 	}
 
+	// With a status predicate, matching no rows means the payment moved to a
+	// different status between the caller's read and this write. Reported as a
+	// conflict so the caller can re-read rather than silently doing nothing.
+	if affected == 0 && expectedStatus != nil {
+		return ierr.NewError("payment status changed during update").
+			WithHint("The payment was modified concurrently. Retry with the current payment state.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      p.ID,
+				"expected_status": *expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
+
 	r.DeleteCache(ctx, p.ID)
 	return nil
 }
 
 func (r *paymentRepository) Delete(ctx context.Context, id string) error {
+	return r.delete(ctx, id, nil)
+}
+
+// DeleteWithExpectedStatus archives the payment only while the stored status
+// still matches expectedStatus, so a deletability check made by the caller and
+// this write happen as one atomic operation.
+func (r *paymentRepository) DeleteWithExpectedStatus(ctx context.Context, id string, expectedStatus types.PaymentStatus) error {
+	return r.delete(ctx, id, &expectedStatus)
+}
+
+func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatus *types.PaymentStatus) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "delete", map[string]interface{}{
 		"payment_id": id,
@@ -365,14 +407,29 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	_, err := client.Payment.Update().
-		Where(
-			payment.EnvironmentID(types.GetEnvironmentID(ctx)),
-			payment.ID(id),
-			payment.TenantID(types.GetTenantID(ctx)),
-		).
+	predicates := []predicate.Payment{
+		payment.EnvironmentID(types.GetEnvironmentID(ctx)),
+		payment.ID(id),
+		payment.TenantID(types.GetTenantID(ctx)),
+	}
+	if expectedStatus != nil {
+		predicates = append(predicates, payment.PaymentStatus(string(*expectedStatus)))
+	}
+
+	affected, err := client.Payment.Update().
+		Where(predicates...).
 		SetPaymentStatus(string(types.StatusArchived)).
 		Save(ctx)
+
+	if err == nil && affected == 0 && expectedStatus != nil {
+		return ierr.NewError("payment status changed during delete").
+			WithHint("The payment was modified concurrently. Re-read it before deleting.").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":      id,
+				"expected_status": *expectedStatus,
+			}).
+			Mark(ierr.ErrVersionConflict)
+	}
 
 	if err != nil {
 		if ent.IsNotFound(err) {

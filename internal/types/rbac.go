@@ -47,4 +47,5 @@ const (
 	EntitySetting         Entity = "setting"
 	EntityOAuth           Entity = "oauth"
 	EntityCheckoutSession Entity = "checkoutsession"
+	EntityWorkflow        Entity = "workflow"
 )

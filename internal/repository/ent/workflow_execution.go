@@ -103,6 +103,44 @@ func (r *workflowExecutionRepository) Get(ctx context.Context, workflowID, runID
 	return dom, nil
 }
 
+// GetMany resolves several executions in one tenant- and environment-scoped
+// query, so a caller authorizing a batch does not issue a round trip per item.
+// Executions outside the caller's scope are simply absent from the result.
+func (r *workflowExecutionRepository) GetMany(ctx context.Context, refs []domainWorkflowExecution.WorkflowRef) ([]*domainWorkflowExecution.WorkflowExecution, error) {
+	if len(refs) == 0 {
+		return []*domainWorkflowExecution.WorkflowExecution{}, nil
+	}
+
+	span := StartRepositorySpan(ctx, "workflow_execution", "get_many", map[string]interface{}{
+		"count": len(refs),
+	})
+	defer FinishSpan(span)
+
+	predicates := make([]predicate.WorkflowExecution, 0, len(refs))
+	for _, ref := range refs {
+		predicates = append(predicates, workflowexecution.And(
+			workflowexecution.WorkflowID(ref.WorkflowID()),
+			workflowexecution.RunID(ref.RunID()),
+		))
+	}
+
+	client := r.client.Reader(ctx)
+	q := client.WorkflowExecution.Query().Where(workflowexecution.Or(predicates...))
+	q = r.queryOpts.ApplyTenantFilter(ctx, q)
+	q = r.queryOpts.ApplyEnvironmentFilter(ctx, q)
+
+	entExecs, err := q.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get workflow executions").
+			Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+
+	return domainWorkflowExecution.FromEntList(entExecs), nil
+}
+
 func (r *workflowExecutionRepository) getEnt(ctx context.Context, workflowID, runID string) (*ent.WorkflowExecution, error) {
 	client := r.client.Reader(ctx)
 	q := client.WorkflowExecution.Query().

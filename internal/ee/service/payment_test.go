@@ -459,3 +459,120 @@ func (s *PaymentServiceSuite) TestCreatePayment_RetryIsIdempotentWhenTenantComes
 	s.True(payment.IsIdempotencyKeyConflict(err),
 		"context-resolved tenant must still be matched by the uniqueness check")
 }
+
+// A status update is written only while the stored status still matches the
+// one the transition was validated against, so a decision made from a stale
+// read cannot overwrite a concurrent update.
+func (s *PaymentServiceSuite) TestUpdatePaymentRejectsConcurrentStatusChange() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_concurrent_status",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	// Another writer settles the payment first.
+	concurrent, err := repo.Get(ctx, p.ID)
+	s.NoError(err)
+	concurrent.PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(repo.Update(ctx, concurrent))
+
+	// This update was validated against PENDING and must not apply on top.
+	_, err = s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+		PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
+	})
+	s.Error(err)
+
+	stored, getErr := repo.Get(ctx, p.ID)
+	s.NoError(getErr)
+	s.Equal(types.PaymentStatusSucceeded, stored.PaymentStatus,
+		"the concurrent writer's status must survive")
+}
+
+// The guard must not reject an update when nothing else touched the payment.
+func (s *PaymentServiceSuite) TestUpdatePaymentAppliesWhenStatusUnchanged() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_uncontended_status",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	_, err := s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
+		PaymentStatus: lo.ToPtr(string(types.PaymentStatusSucceeded)),
+	})
+	s.NoError(err)
+
+	stored, getErr := repo.Get(ctx, p.ID)
+	s.NoError(getErr)
+	s.Equal(types.PaymentStatusSucceeded, stored.PaymentStatus)
+}
+
+// The repository reports a conflict rather than silently writing nothing.
+func (s *PaymentServiceSuite) TestUpdateWithExpectedStatusReportsConflict() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_cas_conflict",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	p.PaymentStatus = types.PaymentStatusSucceeded
+	err := repo.UpdateWithExpectedStatus(ctx, p, types.PaymentStatusFailed)
+	s.Error(err)
+	s.True(ierr.IsVersionConflict(err), "expected a version conflict, got: %v", err)
+}
+
+// Deleting is conditioned on the status the deletability check was made
+// against, so a payment that settles between the read and the write is not
+// deleted on the strength of a stale check.
+func (s *PaymentServiceSuite) TestDeletePaymentRejectsConcurrentStatusChange() {
+	ctx := s.GetContext()
+	repo := s.GetStores().PaymentRepo
+
+	p := &payment.Payment{
+		ID:                "pay_delete_raced",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusInitiated,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(repo.Create(ctx, p))
+
+	// The payment settles after it was read as deletable.
+	settled, err := repo.Get(ctx, p.ID)
+	s.NoError(err)
+	settled.PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(repo.Update(ctx, settled))
+
+	err = repo.DeleteWithExpectedStatus(ctx, p.ID, types.PaymentStatusInitiated)
+	s.Error(err, "a settled payment must not be deleted on a stale deletability check")
+	s.True(ierr.IsVersionConflict(err), "expected a version conflict, got: %v", err)
+}

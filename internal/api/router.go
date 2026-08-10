@@ -112,6 +112,7 @@ func NewRouter(
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
 	write := permissionMW.RequirePermission // shorthand used on every write route
+	read := permissionMW.RequirePermission  // shorthand used on read routes that opt in to an RBAC gate
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -608,11 +609,15 @@ func NewRouter(
 	// Customer Dashboard - Customer-facing APIs (requires dashboard token)
 	customerPortalAPI := router.Group("/v1/customer/portal")
 	customerPortalAPI.Use(middleware.SessionTokenAuthMiddleware(cfg, logger))
+	// The session token carries the tenant, so the portal is subject to the same
+	// tenant suspension rules as the rest of the API. Without this a suspended
+	// tenant's customers could keep mutating data through the portal.
+	customerPortalAPI.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	customerPortalAPI.Use(middleware.ErrorHandler())
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)
-		customerPortalAPI.PUT("/info", handlers.CustomerPortal.UpdateCustomer)
+		customerPortalAPI.PUT("/info", write(types.EntityCustomer, types.ActionWrite), handlers.CustomerPortal.UpdateCustomer)
 		customerPortalAPI.GET("/usage", handlers.CustomerPortal.GetUsageSummary)
 
 		// Subscriptions
@@ -711,14 +716,18 @@ func NewRouter(
 		dashboardRoutes.POST("/revenue-dashboard", handlers.Dashboard.GetRevenueDashboard)
 	}
 
-	// Workflow monitoring routes
+	// Workflow monitoring routes.
+	// These expose Temporal workflow history, which embeds third-party (Stripe,
+	// QuickBooks, Zoho) error payloads, so they are gated on workflow:read even
+	// though they are reads. Search and batch are POST for their request bodies
+	// but are read-only, hence ActionRead rather than ActionWrite.
 	workflows := v1Private.Group("/workflows")
 	{
-		workflows.POST("/search", handlers.Workflow.QueryWorkflows)
-		workflows.POST("/batch", handlers.Workflow.GetWorkflowsBatch)
-		workflows.GET("/:workflow_id/:run_id/summary", handlers.Workflow.GetWorkflowSummary)
-		workflows.GET("/:workflow_id/:run_id/timeline", handlers.Workflow.GetWorkflowTimeline)
-		workflows.GET("/:workflow_id/:run_id", handlers.Workflow.GetWorkflowDetails)
+		workflows.POST("/search", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.QueryWorkflows)
+		workflows.POST("/batch", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowsBatch)
+		workflows.GET("/:workflow_id/:run_id/summary", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowSummary)
+		workflows.GET("/:workflow_id/:run_id/timeline", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowTimeline)
+		workflows.GET("/:workflow_id/:run_id", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowDetails)
 	}
 
 	return router
