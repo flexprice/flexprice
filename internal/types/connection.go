@@ -373,6 +373,20 @@ var zohoEndpointSuffixes = []string{
 	".zohoapiscloud.ca",
 }
 
+// ValidateZohoEndpoint restricts a client-supplied Zoho URL to an https Zoho
+// domain. Callers performing the OAuth token exchange must apply this to the
+// accounts_server before sending client_id/client_secret to it, so those
+// credentials cannot be exfiltrated to an attacker-chosen host. Unlike an
+// empty-allowed field validation, this rejects an empty value.
+func ValidateZohoEndpoint(raw, field string) error {
+	if strings.TrimSpace(raw) == "" {
+		return ierr.NewError(field + " is required").
+			WithHintf("Zoho Books %s must be provided", field).
+			Mark(ierr.ErrValidation)
+	}
+	return validateZohoEndpoint(raw, field)
+}
+
 // validateZohoEndpoint checks a Zoho-supplied URL is https and served from a
 // Zoho domain. An empty value is allowed: these fields are populated by the
 // token exchange and are absent before OAuth completes.

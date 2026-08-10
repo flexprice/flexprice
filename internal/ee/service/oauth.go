@@ -600,9 +600,12 @@ func (s *oauthService) BuildOAuthURL(provider types.OAuthProvider, clientID, red
 		if accountsServer == "" {
 			accountsServer = "https://accounts.zoho.com"
 		}
-		// Validate the client-supplied accounts_server before building a URL the
-		// user's browser is redirected to, so it cannot be turned into an
-		// open-redirect / internal-endpoint target.
+		// Restrict the client-supplied accounts_server to a Zoho domain before
+		// building a URL the user's browser is redirected to, so it cannot be
+		// turned into an open-redirect or internal-endpoint target.
+		if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+			return "", err
+		}
 		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
 			return "", ierr.WithError(err).
 				WithHint("Invalid accounts_server: must be a public https endpoint").
@@ -819,9 +822,13 @@ func (s *oauthService) ExchangeCodeForConnection(
 
 		// accounts_server is client-supplied (via POST /v1/oauth/complete) and is
 		// used verbatim to build the outbound token-exchange URL below, which
-		// carries client_id/client_secret. Validate it as a public https endpoint
-		// so it cannot be pointed at cloud metadata (169.254.169.254), localhost,
-		// or any internal address to exfiltrate those credentials.
+		// carries client_id/client_secret. Restrict it to a Zoho domain so those
+		// credentials cannot be exfiltrated to an attacker-chosen host, and also
+		// run the outbound-URL guard for defense-in-depth against DNS/private-IP
+		// tricks (metadata 169.254.169.254, localhost, internal ranges).
+		if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+			return "", err
+		}
 		if err := validator.ValidateOutboundURL(accountsServer); err != nil {
 			return "", ierr.WithError(err).
 				WithHint("Invalid accounts_server: must be a public https endpoint").
