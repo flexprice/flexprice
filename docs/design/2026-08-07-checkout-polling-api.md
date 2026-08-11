@@ -11,24 +11,8 @@ A customer pays on a Razorpay-hosted page. The only thing that tells us they pai
 webhook. If it's late, dropped, or errors, the customer watches a spinner while their money is
 gone and their subscription doesn't exist.
 
-The frontend has no way to ask "is it done?". `GET /v1/checkout/sessions/{id}` returns stored
+The frontend has no way to ask "is it done?". `GET /v1/checkout/sessions/{id}` returns stored  
 state and never consults the gateway, so polling it returns the same stale answer forever.
-
-Three separable problems get conflated here. **v0 solves only A.**
-
-
-|       | Problem                                                                                         | v0?                  |
-| ----- | ----------------------------------------------------------------------------------------------- | -------------------- |
-| **A** | Customer present and waiting can't ask "is it done?"                                            | **yes**              |
-| **B** | Customer left, webhook never arrived, nothing recovers                                          | no — needs a sweeper |
-| **C** | Payment status writes are unguarded read-modify-write; duplicate webhooks double-count invoices | no                   |
-
-
-B and C are pre-existing. Polling neither creates nor worsens them.
-
-**v0 introduces no new mutation.** `CompleteCheckoutSession` already exists, already runs from
-the webhook, and already has a terminal guard plus an atomic claim. The poll is a *second
-trigger* for a transition that is already reachable. That is why v0 is small.
 
 ---
 
@@ -36,11 +20,8 @@ trigger* for a transition that is already reachable. That is why v0 is small.
 
 ## 2. Why polling
 
-**Webhook-only** stays required — it's the only thing that works when the customer has gone —
+**Webhook-only** stays required — it's the only thing that works when the customer has gone —  
 but a webhook is a push to us, invisible to the customer's browser.
-
-**Long polling / SSE** convert a cheap read into a held connection for up to a full checkout.
-Deferred, not rejected.
 
 **Client-driven** `POST /complete` makes the browser a participant in a money-moving
 transition. Any server-side verification we'd bolt on re-derives the gateway fetch that polling
@@ -105,14 +86,15 @@ sequenceDiagram
     participant C as Client
     participant API as Checkout GET
     participant DB as Postgres
+    participant R as Redis
     participant RZP as Razorpay
 
     C->>RZP: pays on hosted page
     Note over RZP: webhook never delivered
     C->>API: GET session
     API->>DB: read session — pending
-    API->>DB: claim the right to call the gateway
-    DB-->>API: claim won
+    API->>R: acquire poll debounce lock
+    R-->>API: acquired
     API->>RZP: fetch by pre-payment handle
     RZP-->>API: paid, plus the payment id
     API->>DB: payment SUCCEEDED, payment id backfilled
@@ -187,60 +169,35 @@ addon associations — then marks the session `failed` or `expired`. Cleanup is 
 immediately if already terminal) and best-effort per child (individual archive failures are
 logged and skipped).
 
-### 5.1 Expiry is enforced at the gateway,
+### 5.1 Two expiries, and the grace between them
 
-Today `expires_at` is a private constant Razorpay knows nothing about, so a customer can pay on
-a still-live link after we consider the session dead. The sweep's 30-minute cadence against a
-15-minute expiry created an accidental 0–30 minute grace window that masked this.
-
-**Decision: push expiry to the gateway; no grace.**
-
-- We send an expiry to Razorpay so the link **stops accepting payment** at a time we chose.
-- Our `expires_at` is deliberately **later** than the gateway's, absorbing clock skew and
-in-flight requests.
-- A payment arriving after our `expires_at` is **rejected**. It should not be able to happen,
-because the gateway closed first.
-- The sweep reaps whenever its cadence fires. Its interval is now purely a housekeeping-latency
-knob and no longer influences whether a payment is honoured.
-
-`expires_at` now means exactly one thing: *the gateway will not take money after this.* Cleanup
-timing becomes independent of payment correctness.
-
-**The current 15-minute session expiry cannot survive this.** Measured against the live gateway:
+There are two deadlines, not one, and they exist for different reasons.
 
 
-| `expire_by` sent | Result                                                                  |
-| ---------------- | ----------------------------------------------------------------------- |
-| now + 5m         | rejected — `expire_by should be at least 15 minutes after current time` |
-| now + 14m        | rejected — same                                                         |
-| now + 16m        | accepted                                                                |
+| Deadline                | Value                         | Owned by | Meaning                                  |
+| ----------------------- | ----------------------------- | -------- | ---------------------------------------- |
+| **Payment link expiry** | the provider's minimum        | Razorpay | the link stops accepting new payments    |
+| **Checkout expiry**     | link expiry **+ 5 min grace** | us       | we stop waiting and tear the drafts down |
 
 
-So `gateway_window ≥ 15m`, and the rule is `gateway_window < our_window`, therefore
-`our_window > 15m`. **Session expiry must be raised.** Proposed:
+The gateway closes **first**. That is what makes the grace safe: once the link is dead no *new*  
+payment can start, so the grace window only ever covers a payment that was **already in flight**  
+when the link closed. Its purpose is precisely that — **capture late payments** rather than  
+refund a customer who pressed pay a few seconds before the deadline and whose bank was slow.
 
+### 5.2 What the sweeper does at expiry
 
-| Value                | Setting       | Why                                                                            |
-| -------------------- | ------------- | ------------------------------------------------------------------------------ |
-| Gateway `expire_by`  | `now() + 16m` | one minute above the hard floor, covering skew and request latency             |
-| Session `expires_at` | `now() + 20m` | ~4 minutes later, absorbing payments authorised just before the gateway closes |
+The sweeper never simply gives up. Before reaping, it does **one last best-effort fetch** of the
+payment from the gateway if the local record has not been updated, then decides:
 
+```
+payment succeeded, and it happened before checkout expiry   -> complete the checkout
+payment succeeded, but it happened after checkout expiry    -> refund, then fail the checkout
+no successful payment                                       -> void the payment, fail the checkout
+```
 
-Computed as `expire_by = max(session.expires_at − buffer, now() + 16m)` so the floor is explicit
-and cannot be violated.
-
-### Where the lifecycles diverge
-
-
-| #   | State                                          | Cause                                                                       | Repaired by                                            |
-| --- | ---------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------ |
-| C1  | payment `SUCCEEDED`, session `pending`         | crash between the two writes (separate transactions)                        | next poll or webhook; **nothing if the tab is closed** |
-| C2  | session `completed`, invoice still `DRAFT`     | settlement partially failed                                                 | nothing — manual                                       |
-| C3  | session `expired`, payment row still live      | per-child archive failure during cleanup                                    | nothing — manual                                       |
-| C4  | invoice `OVERPAID`                             | duplicate webhook double-counts `amount_paid`                               | nothing — problem C                                    |
-| C5  | wallet debited twice                           | reconciling onto a **draft** invoice, then finalisation re-applying credits | **prevented by PR-1**                                  |
-| C6  | payment succeeds after the session is terminal | debit landed post-expiry                                                    | refund                                                 |
-
+This is what makes the grace window real rather than decorative: a payment that lands inside the  
+grace is completed by the sweeper even if no webhook and no poll ever saw it.
 
 ---
 
@@ -249,39 +206,20 @@ and cannot be violated.
 ## 6. Invariants
 
 
-| #      | Invariant                                                | Enforced by                                                                                        |
-| ------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **I1** | At most one gateway call per payment per debounce window | A conditional UPDATE reserving the right to call, using the database clock on both sides           |
-| **I2** | Effects applied at most once per session                 | The existing completion claim — a guarded status update. Zero rows affected means someone else won |
-| **I3** | The read never 5xxs because of the gateway               | Every gateway failure inside the refresh path is swallowed; stored state is returned               |
-| **I4** | No transition reachable *only* via the read              | The read calls the same completion routine the webhook calls                                       |
-| **I5** | The gateway is authoritative, never the client           | Status is derived from a gateway fetch, never a request body                                       |
+| #      | Invariant                                                | Enforced by                                                                          |
+| ------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **I1** | At most one gateway call per payment per debounce window | Redis lock on payment id                                                             |
+|        |                                                          |                                                                                      |
+| **I2** | The read never 5xxs because of the gateway               | Every gateway failure inside the refresh path is swallowed; stored state is returned |
+| **I3** | One reconcile method to rule them all                    | All state transitions are powered via the same method                                |
+|        |                                                          |                                                                                      |
 
-
-I1 bounds cost, I2 bounds correctness. Independent, both required.
-
----
-
-
-
-## 7. Non-goals
-
-Closed tab + lost webhook (needs the sweeper). Late-authorisation latency. Guarded payment
-status transitions. Effects in one transaction. A transactional outbox. Consolidating the three
-mutators. Non-Razorpay gateways.
 
 ---
 
 
 
 ## 8. Data model and state machines
-
-One new column: `payments.next_poll_at` — `timestamptz`, nullable, no default, plain
-single-column btree index.
-
-Plain and not partial deliberately: the migrator runs with  
-`WithSkipChanges(DropIndex | DropColumn | ModifyIndex)`. A partial index that drifts can't even be repaired by the normal path. Plain gets the  
-selectivity anyway — Postgres btrees don't index NULLs for single-column indexes.
 
 ```mermaid
 erDiagram
@@ -300,7 +238,6 @@ erDiagram
         varchar payment_status
         varchar gateway_payment_id "pay_"
         varchar gateway_tracking_id "plink_ / inv_ / order_"
-        timestamptz next_poll_at "NEW"
     }
     INVOICES {
         varchar id PK
@@ -311,46 +248,68 @@ erDiagram
 
 
 
-`checkout_payment_id` is **nil on every insert** and stays nil if fulfilment fails — the poll
-path must tolerate it.
+
 
 ### Payment status
 
 ```mermaid
 stateDiagram-v2
     [*] --> INITIATED
-    INITIATED --> PENDING: gateway handle recorded
-    PENDING --> PROCESSING: authorized
-    PENDING --> SUCCEEDED: captured
-    PROCESSING --> SUCCEEDED: captured
-    PENDING --> FAILED: attempt failed
-    PROCESSING --> FAILED: attempt failed
-    FAILED --> SUCCEEDED: retry on a still-live link
-    FAILED --> VOIDED: checkout cleanup gives up
-    PENDING --> VOIDED: checkout cleanup gives up
-    SUCCEEDED --> REFUNDED: refund
-    SUCCEEDED --> VOIDED: void
-    VOIDED --> [*]
+    INITIATED --> PENDING
+    INITIATED --> PROCESSING
+    INITIATED --> SUCCEEDED
+    INITIATED --> FAILED
+    PENDING --> PROCESSING
+    PENDING --> SUCCEEDED
+    PENDING --> FAILED
+    PROCESSING --> SUCCEEDED
+    PROCESSING --> FAILED
+    FAILED --> PENDING: retry
+    FAILED --> PROCESSING: retry
+    FAILED --> SUCCEEDED: retry
+    SUCCEEDED --> OVERPAID
+    SUCCEEDED --> PARTIALLY_REFUNDED
+    SUCCEEDED --> REFUNDED
+    SUCCEEDED --> VOIDED: Moyasar auth release
+    OVERPAID --> REFUNDED
+    PARTIALLY_REFUNDED --> REFUNDED
     REFUNDED --> [*]
+    VOIDED --> [*]
 ```
 
 
 
-Terminal is `VOIDED | REFUNDED`. `SUCCEEDED` is deliberately not terminal — an authorised payment
-can still be voided or refunded.
+#### "Terminal" means two different things
 
-`FAILED` **means "this attempt failed", not "this payment is dead."** The `FAILED → SUCCEEDED`
-edge is not hypothetical — it is what happens today whenever a customer retries. A declined card
-writes `FAILED` to the payment, but nothing marks the session failed: the handler for a failed
-payment never touches the checkout session. The session stays `pending`, the Razorpay link stays
-live, the customer retries, and the same payment row is reused with its `gateway_payment_id`
-overwritten by the new attempt.
 
-When a checkout session is cleaned up, its payment is driven to `VOIDED` — unambiguously
-terminal for every reader. This is data hygiene rather than a correctness requirement: without
-it, a payment under an abandoned checkout sits at `FAILED` or `PENDING` forever with nothing on
-the row distinguishing "still in flight" from "nobody is coming". It is also the intent-level
-"cancelled", so it points at the eventual intent/attempt split rather than away from it.
+| Question                                             | States                            | Who asks                          |
+| ---------------------------------------------------- | --------------------------------- | --------------------------------- |
+| **Lifecycle-terminal** — can this ever change again? | `REFUNDED`, `VOIDED`              | refund and void guards            |
+| **Settlement-terminal** — is the outcome known?      | `SUCCEEDED`, `REFUNDED`, `VOIDED` | reporting, invoice reconciliation |
+
+
+`SUCCEEDED` is settlement-terminal but **not** lifecycle-terminal: a refund can still follow.
+
+#### The one required change: `FAILED` is not terminal
+
+`FAILED` means *this attempt failed*, not *this payment is dead*. A customer whose card declines  
+can retry on the same still-live link, and the same payment row is reused with its  
+`gateway_payment_id` overwritten.
+
+The fix is to let `FAILED` behave like `PENDING` again: `{FAILED, PENDING, PROCESSING, SUCCEEDED, OVERPAID}`, and `IsTerminal()` becomes `VOIDED | REFUNDED`.
+
+#### Marking an abandoned payment
+
+Not a new state. Cleanup already marks it — into the wrong column. `PaymentRepo.Delete` writes
+`types.StatusArchived` (a row-lifecycle value) into `payment_status` (the money-lifecycle enum),
+producing rows with `payment_status = 'archived'` and base `status = 'published'`. That value is
+not in the enum, so `ValidateTransitionTo` refuses any transition out of it and the row is frozen
+by accident, while `IsTerminal()` reports false for something dead.
+
+The fix is to write the base `status` column, where `archived` already means "out of use" for
+every other entity. Filed as a bug rather than absorbed into this design.
+
+If an explicit intent-level cancel is ever wanted, the name is `CANCELLED`.
 
 ### What makes a payment pollable
 
@@ -373,19 +332,16 @@ So the checkout poll gates on `checkout_status IN (initiated, pending)` — whic
 is the authority on "we are still trying"; the payment status only decides what to *do* with
 whatever the gateway reports.
 
-Once polling is session-gated, whether `FAILED` is terminal *for the payment*
-stops affecting when we stop asking.
-
 ### Checkout status
 
 ```mermaid
 stateDiagram-v2
     [*] --> initiated
     initiated --> pending: provider handle created
-    pending --> completed: payment SUCCEEDED
     initiated --> failed: fulfilment error
-    pending --> failed: link cancelled or expired
     initiated --> expired: reaped by sweep
+    pending --> completed: payment succeeded
+    pending --> failed: link cancelled or expired
     pending --> expired: reaped by sweep
     completed --> [*]
     failed --> [*]
@@ -394,64 +350,87 @@ stateDiagram-v2
 
 
 
+Terminal is `completed | failed | expired`, and unlike the payment machine this is **not
+declared anywhere** — it is inlined in four places (both cleanup and completion guards, the
+`MarkCompleted` predicate, and the expired-session query), which happen to agree today. Only one
+transition is compare-and-swapped: `MarkCompleted`.
 
+The work is to declare what already exists — a `CheckoutStatus.IsTerminal()` and a transition map
+mirroring the payment one, with CAS extended past `MarkCompleted`. No behaviour change; it just
+stops four copies from drifting apart.
 
 ### Who may do what
 
 
-| Transition                          | Webhook                      | Poll (v0)                  | Expiry sweep                   |
-| ----------------------------------- | ---------------------------- | -------------------------- | ------------------------------ |
-| `initiated` → `pending`             | no                           | no                         | no — creation path only        |
-| `pending` → `completed`             | yes                          | **yes, new**               | no                             |
-| `pending` → `failed`                | yes — link cancelled/expired | no                         | no                             |
-| `initiated` / `pending` → `expired` | no                           | no                         | yes                            |
-| payment → `SUCCEEDED`               | yes                          | **yes, new**               | no                             |
-| payment → `FAILED`                  | yes                          | yes — via the sync routine | no                             |
-| payment → `VOIDED`                  | no                           | no                         | **yes — cascade from cleanup** |
-| archive drafts                      | no                           | no                         | yes                            |
+| Transition                          | Webhook                      | Poll (v0)                  | Expiry sweep |
+| ----------------------------------- | ---------------------------- | -------------------------- | ------------ |
+| `initiated` → `pending`             | no                           | no                         | no           |
+| `pending` → `completed`             | yes                          | **yes, new**               | no           |
+| `pending` → `failed`                | yes — link cancelled/expired | no                         | no           |
+| `initiated` / `pending` → `expired` | no                           | no                         | yes          |
+| payment → `SUCCEEDED`               | yes                          | **yes, new**               | no           |
+| payment → `FAILED`                  | yes                          | yes — via the sync routine | no           |
+| archive drafts                      | no                           | no                         | yes          |
 
 
-The poll gains exactly two capabilities, both of which the webhook already had. It cannot fail,
-expire, or archive anything — which is what makes **I4** hold.
+The poll gains exactly two capabilities, both of which the webhook already had. It cannot fail, expire, or archive anything.
 
 The expiry sweep is *checkout-scoped*. It touches payments only as a cascade of tearing down a
 session, never on its own initiative.
 
 ---
 
+## 9. Debounce and concurrency
 
+A poll that finds a non-terminal session tries to acquire a lock keyed on the payment, with a
+TTL equal to the backoff window for the session's age:
 
-## 9. Concurrency
-
-The claim:
-
-```sql
-UPDATE payments
-SET    next_poll_at = now() + $4::interval, updated_at = now()
-WHERE  id = $1 AND tenant_id = $2 AND environment_id = $3
-  AND  (next_poll_at IS NULL OR next_poll_at <= now())
-RETURNING *
+```
+lock key: checkout:poll:<payment_id>          TTL = backoff(session age).debounce
+acquired -> call the gateway
+not acquired -> serve stored state, stale = true
 ```
 
-**Read before claim.** The handler reads the session first and evaluates the debounce against
-that. Fifty concurrent polls inside one window therefore produce fifty primary-key selects and
-zero updates. Claim-first would make all fifty issue the UPDATE and forty-nine wait on the row
-lock — same correctness, far worse behaviour.
+**The lock is acquired and never released.** Expiry of the TTL *is* the debounce; releasing it
+would let the next caller straight through and defeat the purpose. This is a rate-limit token
+wearing a lock's interface. For the same reason it uses a single non-retrying `AcquireLock` —
+the retrying helper would queue callers up behind the window instead of turning them away.
 
-The webhook passes `force`, skipping the debounce check but **still taking the claim**, so two
-simultaneous webhooks don't both call the gateway.
+**Only the polling API uses it.** The sweeper runs on its own cadence and does not consult the
+lock; it is not competing for the same resource and does not need to be debounced against
+customers.
 
+Why Redis rather than a column: the debounce is soft, per-request, and disposable. Losing it
+costs at most one extra gateway call per payment. Paying a schema migration, an index, and a
+write on every poll for state we are happy to lose is the wrong trade — and the write would be
+on an indexed column, so every poll would amplify into an index update.
 
-| Race                       | Resolved by                                  | Loser sees                                   |
-| -------------------------- | -------------------------------------------- | -------------------------------------------- |
-| poll vs poll (any process) | the claim                                    | zero rows → stored state                     |
-| poll vs webhook            | the claim, then the session completion claim | `ErrAlreadyExists`, treated as success       |
-| poll vs expiry sweep       | both guard on terminal status first          | sweep skips completed; poll returns terminal |
-
-
----
+### Failure modes
 
 
+| Condition                     | Behaviour                        | Rationale                                                                                                                             |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Redis unreachable             | **fail open** — call the gateway | The rate limiter (§10) is the real ceiling. Failing closed would silently stop all polling, which looks identical to a healthy system |
+| Locker not configured (nil)   | fail open                        | The helper already returns a nil lock in this case; callers decide                                                                    |
+| Process dies holding the lock | window expires on its own        | Nothing to clean up — there is no release path                                                                                        |
+
+
+Fail-open is safe only because a second, independent ceiling exists. If the outbound rate
+limiter is ever removed, this choice must be revisited.
+
+### Races
+
+
+| Race                       | Resolved by                                                                                                | Loser sees                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| poll vs poll (any process) | the Redis lock                                                                                             | stored state, `stale = true`           |
+| poll vs webhook            | the webhook bypasses the debounce entirely; session completion is arbitrated by the existing guarded claim | `ErrAlreadyExists`, treated as success |
+| poll vs sweeper            | both call the same completion routine, which is guarded                                                    | whichever loses applies no effects     |
+
+
+Session completion remains guarded by the existing conditional UPDATE on `checkout_status`, which
+is a Postgres row-level operation and unaffected by moving the debounce out. **That guard is what
+enforces "effects at most once" (I2); the Redis lock only bounds gateway call volume (I1).** 
 
 ## 10. API contract
 
@@ -483,7 +462,7 @@ bug. A client that read the redirect URL before completion finds it gone afterwa
 
 ### What it returns after v0
 
-```json
+```jsonc
 {
   "id": "cs_01KZNG78VW7RFCHHJBQYA9SPAA",
   "customer_id": "cust_01K...",
@@ -491,9 +470,9 @@ bug. A client that read the redirect URL before completion finds it gone afterwa
   "payment_provider": "razorpay",
 
   "checkout_status": "pending",
-  "terminal": false,
+  "terminal": false, // to be used by the clients to know when to stop polling
 
-  "payment": {
+  "payment": { // only populated if checkout is related to payment
     "id": "pay_01K...",
     "status": "PROCESSING",
     "gateway": "razorpay"
@@ -506,8 +485,8 @@ bug. A client that read the redirect URL before completion finds it gone afterwa
   "completed_at": null,
   "created_at": "2026-08-10T09:31:52Z",
 
-  "next_poll_after_ms": 2000,
-  "stale": false,
+  "next_poll_after_ms": 2000, // hint for the caller
+  "stale": false, // to indicate staleness
 
   "payment_action": { "type": "payment_link", "url": "https://rzp.io/..." }
 }
@@ -518,35 +497,114 @@ bug. A client that read the redirect URL before completion finds it gone afterwa
 ### Field by field
 
 
-| Field                | New?    | Meaning                                                                                                                                                                                                                                                       |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `checkout_status`    | kept    | The real status. **Name unchanged** — renaming it to `status` would break existing readers for no gain                                                                                                                                                        |
-| `terminal`           | **new** | `checkout_status ∈ {completed, failed, expired}`. Saves every client hardcoding that set and getting it wrong when we add a state                                                                                                                             |
-| `payment`            | **new** | Nullable block. `null` when the session has no payment yet — which is every session at insert, and permanently if fulfilment failed                                                                                                                           |
-| `next_poll_after_ms` | **new** | Server-driven backoff. `0` when terminal, meaning stop                                                                                                                                                                                                        |
-| `stale`              | **new** | `true` when this response is stored state because the gateway was not consulted on this request — debounced, timed out, or rate-limited. Computed per-request; **needs no column**. Lets a UI say "still checking" rather than showing a stale answer as fact |
-| `payment_action`     | kept    | Redirect URL. Requires fixing the `provider_result` clobber, or it vanishes after completion                                                                                                                                                                  |
-|                      |         |                                                                                                                                                                                                                                                               |
+| Field             | New?    | Meaning                                                                                                                                                                                                                                                       |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checkout_status` | kept    | The real status. **Name unchanged** — renaming it to `status` would break existing readers for no gain                                                                                                                                                        |
+| `terminal`        | **new** | `checkout_status ∈ {completed, failed, expired}`. Saves every client hardcoding that set and getting it wrong when we add a state                                                                                                                             |
+| `payment`         | **new** | Nullable block. `null` when the session has no payment yet — which is every session at insert, and permanently if fulfilment failed                                                                                                                           |
+| `next_poll_at_ms` | **new** | Server-driven backoff. `0` when terminal, meaning stop                                                                                                                                                                                                        |
+| `stale`           | **new** | `true` when this response is stored state because the gateway was not consulted on this request — debounced, timed out, or rate-limited. Computed per-request; **needs no column**. Lets a UI say "still checking" rather than showing a stale answer as fact |
+| `payment_action`  | kept    | Redirect URL. Requires fixing the `provider_result` clobber, or it vanishes after completion                                                                                                                                                                  |
+|                   |         |                                                                                                                                                                                                                                                               |
 
 
 
 
-### Backoff
+## 11. Cancel checkout (Need to be finalised and need more thoughts on the product side)
 
-`next_poll_after_ms` and the server-side debounce are both functions of session age. They are
-different numbers on purpose: the hint is what a well-behaved client should do, the debounce is
-the floor enforced regardless of client behaviour.
+Polling tells a customer what happened. It gives no way to *stop*. A session that is stuck, or
+one the customer has changed their mind about, currently has no exit but the sweeper — and if the
+payment lands late, the only outcome is an automatic refund with no operator involvement.
 
+`POST /v1/checkout/sessions/{id}/cancel` closes that gap, in **two endpoints**: a preview that
+answers "what would happen?" and an execute that does it. Cancelling a checkout can move money
+and can revoke access, so it must never be a surprise.
 
-| Session age       | Debounce (server floor) | `next_poll_after_ms` (client hint) |
-| ----------------- | ----------------------- | ---------------------------------- |
-| < 30s             | 500 ms                  | 1000                               |
-| 30s – 2m          | 2 s                     | 2000                               |
-| 2m – `expires_at` | 10 s                    | 5000                               |
-| past `expires_at` | 60 s                    | 15000                              |
-| terminal          | —                       | 0                                  |
+### The three cases
 
 
-The hint is roughly double the debounce so a single well-behaved client gets a fresh gateway  
-check on most polls. The debounce is not there to throttle that client — it is there for the  
-case of several tabs, a retry loop, or a poll colliding with the webhook and the sweep.
+| Case                     | Condition                                  | What execute does                                                                         |
+| ------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| **1. Nothing collected** | no successful payment                      | invalidate the link at the provider, fail the session, archive the drafts and the payment |
+| **2. Payment collected** | a successful payment exists                | refund it, then reverse everything the checkout did — as far as it can be reversed        |
+| **3. Already terminal**  | session `completed` / `failed` / `expired` | rejected — nothing to cancel. Use the ordinary refund path instead                        |
+
+
+
+
+### What can actually be reversed
+
+Effects fan out from checkout completion. They are not equally undoable, and the split does not
+follow the action boundary — it follows whether the effect left our system or was consumed.
+
+
+| Effect                                           | Reversible? | How, and what it costs                                                                                               |
+| ------------------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| Gateway payment                                  | **yes**     | refund at the provider                                                                                               |
+| Draft / finalised invoice                        | **yes**     | void, or issue a credit note if already finalised                                                                    |
+| Subscription created                             | **yes**     | cancel or archive                                                                                                    |
+| Quantity change applied                          | **yes**     | apply the inverse change                                                                                             |
+| Addon association                                | **yes**     | archive it                                                                                                           |
+| Payment link                                     | **yes**     | cancel it at the provider                                                                                            |
+| **Wallet credit already spent**                  | **no**      | credits consumed against usage cannot be clawed back. A reversal can drive the balance negative or leave a shortfall |
+| **Usage metered against an active subscription** | **no**      | events are already ingested and may already be billed                                                                |
+| **Invoice number issued**                        | **partly**  | numbers come from a gapless sequence; the correct reversal is a credit note, not deletion                            |
+| **Invoice synced to an external system**         | **no**      | Zoho, Tabs, QuickBooks already have it. Reversal means a second document there, not an edit                          |
+| **Webhooks already delivered**                   | **no**      | the customer's own systems have acted on `subscription.activated` and friends                                        |
+
+
+The one that matters most in practice is **wallet credit**. A `wallet_topup` checkout credits a
+balance the customer can spend immediately; a `create_subscription` checkout can apply credit
+grants on activation. By the time anyone cancels, some of it may be gone.
+
+### Preview
+
+`GET .../cancel/preview` returns what execute would do, so a UI can make the customer confirm
+against specifics rather than a generic warning:
+
+```json
+{
+  "case": "payment_collected",
+  "refund": { "amount": "5.16", "currency": "inr", "payment_id": "pay_..." },
+  "reversible": [
+    { "entity": "subscription", "id": "subs_...", "action": "cancel" },
+    { "entity": "invoice", "id": "inv_...", "action": "credit_note" }
+  ],
+  "irreversible": [
+    { "entity": "wallet_credit", "amount": "5.16", "spent": "2.00",
+      "note": "2.00 of credit has already been consumed and cannot be recovered" }
+  ],
+  "blocked": false
+}
+```
+
+`blocked: true` when the irreversible set is large enough that we should refuse and require an  
+operator — the obvious rule being that a wallet top-up already substantially spent is not  
+something a self-serve cancel should unwind.
+
+---
+
+
+
+## 12. Bugs found while designing this
+
+Each is pre-existing and independent of polling. Listed here because the design ran into them;
+they should be tickets, not absorbed into this work.
+
+
+| #   | Bug                                                                                                                                                         | Impact                                                                                                                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `PaymentRepo.Delete` writes `types.StatusArchived` into `payment_status` instead of the base `status` column                                                | Puts a non-enum value in the enum. `ValidateTransitionTo` then refuses every transition out of it, freezing the row by accident, while `IsTerminal()` reports false for something dead and base `status` still reads `published` |
+| 2   | `paymentStatusTransitions[FAILED] = {FAILED}` blocks retry recovery                                                                                         | A customer who retries successfully after a decline cannot be moved to `SUCCEEDED`; the session never completes and the sweeper refunds them. **Transition rejection proven; the retry scenario itself not yet reproduced**      |
+| 3   | Two state machines over one enum disagree                                                                                                                   | The invoice-side `validatePaymentStatusTransition` allows `FAILED → SUCCEEDED`; the payment-side map forbids it. Same enum, opposite rules, on precisely the transition retry needs                                              |
+| 4   | Invoice `SUCCEEDED → SUCCEEDED` is permitted alongside `AmountPaid.Add()`                                                                                   | A duplicate webhook double-counts and flips the invoice to `OVERPAID`                                                                                                                                                            |
+| 5   | Checkout terminality is inlined in four places with no declared map and no CAS beyond `MarkCompleted`                                                       | They agree today; nothing keeps them agreeing                                                                                                                                                                                    |
+| 6   | Razorpay token selection reads only `recurring_details.status`, ignoring the token's top-level `status`                                                     | A token that is `confirmed` but `failed` is selected and charged; the charge silently never authorises                                                                                                                           |
+| 7   | `provider_result` is clobbered on completion — `NextAction` and friends dropped, and the claim writes it unconditionally so a nil argument nulls the column | `payment_action` disappears from the API response after completion                                                                                                                                                               |
+| 8   | The generic payment read eager-loads `payment_attempts` on every call                                                                                       | Checkout payments set `track_attempts = false` and never have any — a guaranteed-empty query per poll. The table has zero rows system-wide                                                                                       |
+| 9   | Expiry sweep pages with `offset` hardcoded to 0 and breaks on a short page                                                                                  | ≥1000 consecutive cleanup failures loop forever inside a 10-minute activity                                                                                                                                                      |
+| 10  | Webhook signature compared with `!=` rather than a constant-time compare; a missing signature header returns 200 with no processing                         | Timing-attack surface, and silently dropped events                                                                                                                                                                               |
+
+
+Numbers 1–3 are the ones this design actually depends on. The rest are recorded so they are not
+rediscovered.
