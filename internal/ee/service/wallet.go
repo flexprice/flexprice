@@ -832,16 +832,21 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	var walletTransactionID string
 	var invoiceID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Serialize with processWalletOperation and completePurchasedCreditTransaction
-		// so the wallet snapshot we base the tx record's balance-before/after and the
-		// (auto-complete) balance write on is not raced. Released on tx commit/rollback.
-		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: walletID}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to acquire wallet lock").
-				Mark(ierr.ErrInternal)
+		// Only take the wallet advisory lock when this tx actually mutates the wallet balance (auto-complete branch).
+		// In the pending path we only record a tx snapshot; the balance write is deferred to completePurchasedCreditTransaction
+		// which takes its own lock and overwrites CreditBalanceBefore/After at that
+		// point, so this record's initial snapshot need not be lock-consistent.
+		// Keeping the lock out of the pending path avoids holding it across tax
+		// lookup, invoice creation, and any inline external sync.
+		if autoCompleteEnabled {
+			if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: walletID}); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to acquire wallet lock").
+					Mark(ierr.ErrInternal)
+			}
 		}
 
-		// Retrieve wallet inside the lock — authoritative snapshot.
+		// Retrieve wallet inside the tx (under the lock when auto-complete).
 		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
 		if err != nil {
 			return err
