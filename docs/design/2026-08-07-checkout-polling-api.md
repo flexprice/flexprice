@@ -32,6 +32,8 @@ trigger* for a transition that is already reachable. That is why v0 is small.
 
 ---
 
+
+
 ## 2. Why polling
 
 **Webhook-only** stays required — it's the only thing that works when the customer has gone —
@@ -59,6 +61,8 @@ asynchronous and are not recommended for time-critical applications" — and shi
 Orb and Metronome avoid the problem by not owning payments. We own them, so we inherit it.
 
 ---
+
+
 
 ## 3. How it works
 
@@ -146,6 +150,8 @@ succeeded and whose page shows an error is strictly worse off than one who sees 
 
 ---
 
+
+
 ## 4. The three provider paths
 
 The least obvious part of the design. One gateway, three checkout mechanics, each producing a
@@ -167,6 +173,8 @@ later poll uses the payment fetch. The sync routine already prefers `gateway_pay
 present, so v0 extends an existing preference.
 
 ---
+
+
 
 ## 5. Expiry, grace, and cleanup
 
@@ -236,6 +244,8 @@ and cannot be violated.
 
 ---
 
+
+
 ## 6. Invariants
 
 
@@ -252,6 +262,8 @@ I1 bounds cost, I2 bounds correctness. Independent, both required.
 
 ---
 
+
+
 ## 7. Non-goals
 
 Closed tab + lost webhook (needs the sweeper). Late-authorisation latency. Guarded payment
@@ -259,6 +271,8 @@ status transitions. Effects in one transaction. A transactional outbox. Consolid
 mutators. Non-Razorpay gateways.
 
 ---
+
+
 
 ## 8. Data model and state machines
 
@@ -346,6 +360,8 @@ stateDiagram-v2
 
 
 
+
+
 ### Who may do what
 
 
@@ -368,6 +384,8 @@ The expiry sweep is *checkout-scoped*. It touches payments only as a cascade of 
 session, never on its own initiative.
 
 ---
+
+
 
 ## 9. Concurrency
 
@@ -396,4 +414,102 @@ simultaneous webhooks don't both call the gateway.
 | poll vs webhook            | the claim, then the session completion claim | `ErrAlreadyExists`, treated as success       |
 | poll vs expiry sweep       | both guard on terminal status first          | sweep skips completed; poll returns terminal |
 
+
+---
+
+## 10. API contract
+
+Route unchanged: `GET /v1/checkout/sessions/{id}`. No new endpoint, no new verb.
+
+### What it returns today
+
+```json
+{
+  "id": "cs_01KZNG78VW7RFCHHJBQYA9SPAA",
+  "checkout_status": "completed",
+  "checkout_invoice_id": "inv_...",
+  "checkout_payment_id": "pay_01K...",
+  "expires_at": "2026-08-10T09:46:52Z",
+  "completed_at": "2026-08-10T09:37:25Z",
+  "status": "published",
+  "tenant_id": "tenant_01K...",
+  "created_by": "user_01K...",
+  "updated_by": ""
+}
+```
+
+Two problems visible in that live response. `status: "published"` is the base-mixin row state
+leaking through the embedded domain model — it is not the checkout's status and means nothing to
+a caller. And `tenant_id` / `created_by` / `updated_by` are internal audit fields.
+
+There is also no `payment_action`, because completion nulled `provider_result` — the clobbering
+bug. A client that read the redirect URL before completion finds it gone afterwards.
+
+### What it returns after v0
+
+```json
+{
+  "id": "cs_01KZNG78VW7RFCHHJBQYA9SPAA",
+  "customer_id": "cust_01K...",
+  "action": "add_addon",
+  "payment_provider": "razorpay",
+
+  "checkout_status": "pending",
+  "terminal": false,
+
+  "payment": {
+    "id": "pay_01K...",
+    "status": "PROCESSING",
+    "gateway": "razorpay"
+  },
+
+  "checkout_invoice_id": "inv_...",
+  "checkout_payment_id": "pay_01K...",
+
+  "expires_at": "2026-08-10T09:46:52Z",
+  "completed_at": null,
+  "created_at": "2026-08-10T09:31:52Z",
+
+  "next_poll_after_ms": 2000,
+  "stale": false,
+
+  "payment_action": { "type": "payment_link", "url": "https://rzp.io/..." }
+}
+```
+
+
+
+### Field by field
+
+
+| Field                | New?    | Meaning                                                                                                                                                                                    |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `checkout_status`    | kept    | The real status. **Name unchanged** — renaming it to `status` would break existing readers for no gain                                                                                     |
+| `terminal`           | **new** | `checkout_status ∈ {completed, failed, expired}`. Saves every client hardcoding that set and getting it wrong when we add a state                                                          |
+| `payment`            | **new** | Nullable block. `null` when the session has no payment yet — which is every session at insert, and permanently if fulfilment failed                                                        |
+| `next_poll_after_ms` | **new** | Server-driven backoff. `0` when terminal, meaning stop                                                                                                                                     |
+| `stale` | **new** | `true` when this response is stored state because the gateway was not consulted on this request — debounced, timed out, or rate-limited. Computed per-request; **needs no column**. Lets a UI say "still checking" rather than showing a stale answer as fact |
+| `payment_action`     | kept    | Redirect URL. Requires fixing the `provider_result` clobber, or it vanishes after completion                                                                                               |
+|                      |         |                                                                                                                                                                                            |
+
+
+### Backoff
+
+`next_poll_after_ms` and the server-side debounce are both functions of session age. They are
+different numbers on purpose: the hint is what a well-behaved client should do, the debounce is
+the floor enforced regardless of client behaviour.
+
+
+| Session age       | Debounce (server floor) | `next_poll_after_ms` (client hint) |
+| ----------------- | ----------------------- | ---------------------------------- |
+| < 30s             | 500 ms                  | 1000                               |
+| 30s – 2m          | 2 s                     | 2000                               |
+| 2m – `expires_at` | 10 s                    | 5000                               |
+| past `expires_at` | 60 s                    | 15000                              |
+| terminal          | —                       | 0                                  |
+
+
+The hint is roughly double the debounce so a single well-behaved client gets a fresh gateway  
+check on most polls. The debounce is not there to throttle that client — it is there for the  
+case of several tabs, a retry loop, or a poll colliding with the webhook and the sweep.
 
