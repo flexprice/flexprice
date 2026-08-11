@@ -325,6 +325,7 @@ stateDiagram-v2
     PROCESSING --> SUCCEEDED: captured
     PENDING --> FAILED: attempt failed
     PROCESSING --> FAILED: attempt failed
+    FAILED --> SUCCEEDED: retry on a still-live link
     FAILED --> VOIDED: checkout cleanup gives up
     PENDING --> VOIDED: checkout cleanup gives up
     SUCCEEDED --> REFUNDED: refund
@@ -338,9 +339,42 @@ stateDiagram-v2
 Terminal is `VOIDED | REFUNDED`. `SUCCEEDED` is deliberately not terminal — an authorised payment
 can still be voided or refunded.
 
-`FAILED` **means "this attempt failed", not "this payment is dead."** A late authorisation can
-still move it. When a checkout session is cleaned up, its payment is driven to `VOIDED`,
-which is unambiguously terminal for every reader. 
+`FAILED` **means "this attempt failed", not "this payment is dead."** The `FAILED → SUCCEEDED`
+edge is not hypothetical — it is what happens today whenever a customer retries. A declined card
+writes `FAILED` to the payment, but nothing marks the session failed: the handler for a failed
+payment never touches the checkout session. The session stays `pending`, the Razorpay link stays
+live, the customer retries, and the same payment row is reused with its `gateway_payment_id`
+overwritten by the new attempt.
+
+When a checkout session is cleaned up, its payment is driven to `VOIDED` — unambiguously
+terminal for every reader. This is data hygiene rather than a correctness requirement: without
+it, a payment under an abandoned checkout sits at `FAILED` or `PENDING` forever with nothing on
+the row distinguishing "still in flight" from "nobody is coming". It is also the intent-level
+"cancelled", so it points at the eventual intent/attempt split rather than away from it.
+
+### What makes a payment pollable
+
+**The session decides, not the payment status.**
+
+The generic gateway sync refuses to contact the gateway unless a payment is `PENDING` or
+`PROCESSING`. That is the right rule for the ordinary payment read — no one wants every
+`GET /payments/{id}` hitting Razorpay — but it is the wrong gate for the checkout poll, and
+inheriting it would open a hole exactly where retries happen:
+
+```
+attempt fails  -> payment FAILED, session still pending, link still live
+customer retries on the same link
+retry succeeds -> webhook lost
+poll runs      -> payment is FAILED -> generic guard bails -> never recovered
+```
+
+So the checkout poll gates on `checkout_status IN (initiated, pending)` — which
+`refreshSessionFromGateway` already does — and does **not** re-check payment status. The session
+is the authority on "we are still trying"; the payment status only decides what to *do* with
+whatever the gateway reports.
+
+Once polling is session-gated, whether `FAILED` is terminal *for the payment*
+stops affecting when we stop asking.
 
 ### Checkout status
 
@@ -417,6 +451,8 @@ simultaneous webhooks don't both call the gateway.
 
 ---
 
+
+
 ## 10. API contract
 
 Route unchanged: `GET /v1/checkout/sessions/{id}`. No new endpoint, no new verb.
@@ -482,15 +518,17 @@ bug. A client that read the redirect URL before completion finds it gone afterwa
 ### Field by field
 
 
-| Field                | New?    | Meaning                                                                                                                                                                                    |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `checkout_status`    | kept    | The real status. **Name unchanged** — renaming it to `status` would break existing readers for no gain                                                                                     |
-| `terminal`           | **new** | `checkout_status ∈ {completed, failed, expired}`. Saves every client hardcoding that set and getting it wrong when we add a state                                                          |
-| `payment`            | **new** | Nullable block. `null` when the session has no payment yet — which is every session at insert, and permanently if fulfilment failed                                                        |
-| `next_poll_after_ms` | **new** | Server-driven backoff. `0` when terminal, meaning stop                                                                                                                                     |
-| `stale` | **new** | `true` when this response is stored state because the gateway was not consulted on this request — debounced, timed out, or rate-limited. Computed per-request; **needs no column**. Lets a UI say "still checking" rather than showing a stale answer as fact |
-| `payment_action`     | kept    | Redirect URL. Requires fixing the `provider_result` clobber, or it vanishes after completion                                                                                               |
-|                      |         |                                                                                                                                                                                            |
+| Field                | New?    | Meaning                                                                                                                                                                                                                                                       |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checkout_status`    | kept    | The real status. **Name unchanged** — renaming it to `status` would break existing readers for no gain                                                                                                                                                        |
+| `terminal`           | **new** | `checkout_status ∈ {completed, failed, expired}`. Saves every client hardcoding that set and getting it wrong when we add a state                                                                                                                             |
+| `payment`            | **new** | Nullable block. `null` when the session has no payment yet — which is every session at insert, and permanently if fulfilment failed                                                                                                                           |
+| `next_poll_after_ms` | **new** | Server-driven backoff. `0` when terminal, meaning stop                                                                                                                                                                                                        |
+| `stale`              | **new** | `true` when this response is stored state because the gateway was not consulted on this request — debounced, timed out, or rate-limited. Computed per-request; **needs no column**. Lets a UI say "still checking" rather than showing a stale answer as fact |
+| `payment_action`     | kept    | Redirect URL. Requires fixing the `provider_result` clobber, or it vanishes after completion                                                                                                                                                                  |
+|                      |         |                                                                                                                                                                                                                                                               |
+
+
 
 
 ### Backoff
@@ -512,4 +550,3 @@ the floor enforced regardless of client behaviour.
 The hint is roughly double the debounce so a single well-behaved client gets a fresh gateway  
 check on most polls. The debounce is not there to throttle that client — it is there for the  
 case of several tabs, a retry loop, or a poll colliding with the webhook and the sweep.
-
