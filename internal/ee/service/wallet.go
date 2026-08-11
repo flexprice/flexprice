@@ -808,12 +808,6 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		ServiceParams: s.ServiceParams,
 	}
 
-	// Retrieve wallet and customer details
-	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
-	if err != nil {
-		return "", "", err
-	}
-
 	// Get invoice config setting to check auto_complete flag
 	invoiceConfig, err := GetSetting[types.InvoiceConfig](
 		settingsService,
@@ -838,6 +832,21 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	var walletTransactionID string
 	var invoiceID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Serialize with processWalletOperation and completePurchasedCreditTransaction
+		// so the wallet snapshot we base the tx record's balance-before/after and the
+		// (auto-complete) balance write on is not raced. Released on tx commit/rollback.
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: walletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Retrieve wallet inside the lock — authoritative snapshot.
+		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+		if err != nil {
+			return err
+		}
+
 		// Step 1: Create wallet transaction (pending or completed based on setting)
 		txStatus := types.TransactionStatusPending
 		balanceAfter := w.CreditBalance
@@ -1152,7 +1161,8 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 
 // completePurchasedCreditTransaction performs the actual completion logic
 func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, walletTransactionID string) error {
-	// Get the pending transaction
+	// Fast-path pre-check to skip the lock for terminal / wrong-type txns; the
+	// authoritative status check runs again under the lock below.
 	tx, err := s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
 	if err != nil {
 		return ierr.WithError(err).
@@ -1160,19 +1170,17 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Validate transaction state
+	if tx.TxStatus == types.TransactionStatusCompleted {
+		s.Logger.Debug(ctx, "wallet transaction already completed",
+			"wallet_transaction_id", walletTransactionID,
+		)
+		return nil
+	}
 	if tx.TxStatus != types.TransactionStatusPending {
 		s.Logger.Debug(ctx, "wallet transaction is not pending",
 			"wallet_transaction_id", walletTransactionID,
 			"current_status", tx.TxStatus,
 		)
-		// If already completed (e.g., via auto-complete setting), this is idempotent - return success
-		if tx.TxStatus == types.TransactionStatusCompleted {
-			s.Logger.Debug(ctx, "wallet transaction already completed",
-				"wallet_transaction_id", walletTransactionID,
-			)
-			return nil
-		}
 		return ierr.NewError("wallet transaction is not in pending state").
 			WithHint("Only pending transactions can be completed").
 			WithReportableDetails(map[string]interface{}{
@@ -1192,16 +1200,54 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Get wallet to check current balance
-	w, err := s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get wallet").
-			Mark(ierr.ErrNotFound)
-	}
+	var w *wallet.Wallet
+	// alreadyCompleted flips true if a concurrent completer finished this tx while
+	// we were waiting for the advisory lock — suppresses the post-commit webhook
+	// publish and alert side effects to avoid double firing.
+	alreadyCompleted := false
 
 	// Execute completion in a transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Serialize with processWalletOperation and other completion paths so a
+		// concurrent debit/credit cannot overwrite the absolute-value balance write
+		// below with a stale-snapshot value. Released on tx commit/rollback.
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: tx.WalletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Re-read tx under the lock so a concurrent completer that raced us to the
+		// lock is observed as terminal instead of double-applying its credit.
+		var err error
+		tx, err = s.WalletRepo.GetTransactionByID(ctx, walletTransactionID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet transaction").
+				Mark(ierr.ErrNotFound)
+		}
+		if tx.TxStatus == types.TransactionStatusCompleted {
+			alreadyCompleted = true
+			return nil
+		}
+		if tx.TxStatus != types.TransactionStatusPending {
+			return ierr.NewError("wallet transaction is not in pending state").
+				WithHint("Only pending transactions can be completed").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_transaction_id": walletTransactionID,
+					"current_status":        tx.TxStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Re-read wallet under the lock — authoritative balance.
+		w, err = s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to get wallet").
+				Mark(ierr.ErrNotFound)
+		}
+
 		// Calculate new balances
 		finalBalance := w.Balance.Add(tx.Amount)
 		newCreditBalance := w.CreditBalance.Add(tx.CreditAmount)
@@ -1284,6 +1330,12 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 
 	if err != nil {
 		return err
+	}
+
+	// A concurrent completer finished this tx first — the winner already published
+	// the webhook and alert events, so we return without repeating them.
+	if alreadyCompleted {
+		return nil
 	}
 
 	// Publish webhook event after transaction commits
