@@ -58,7 +58,13 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 	// Generate properties based on meter configuration
 	properties := make(map[string]interface{})
 
-	// Handle properties based on meter aggregation and filters
+	for _, filter := range selectedMeter.Filters {
+		if len(filter.Values) > 0 {
+			// Select a random value from the filter values
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+		}
+	}
+
 	if selectedMeter.Aggregation.Type == types.AggregationSum ||
 		selectedMeter.Aggregation.Type == types.AggregationAvg ||
 		selectedMeter.Aggregation.Type == types.AggregationMax {
@@ -66,14 +72,6 @@ func (g *EventGenerator) generateEvent(index int) dto.IngestEventRequest {
 		if selectedMeter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 1000
 			properties[selectedMeter.Aggregation.Field] = rand.Int63n(1000) + 1
-		}
-	}
-
-	// Apply filter values if available
-	for _, filter := range selectedMeter.Filters {
-		if len(filter.Values) > 0 {
-			// Select a random value from the filter values
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
 		}
 	}
 

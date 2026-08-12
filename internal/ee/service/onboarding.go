@@ -384,7 +384,13 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 	// Generate properties based on meter configuration
 	properties := make(map[string]interface{})
 
-	// Handle properties based on meter aggregation and filters
+	for _, filter := range meter.Filters {
+		if len(filter.Values) > 0 {
+			// Select a random value from the filter values
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+		}
+	}
+
 	if meter.Aggregation.Type == types.AggregationSum ||
 		meter.Aggregation.Type == types.AggregationCountUnique ||
 		meter.Aggregation.Type == types.AggregationAvg ||
@@ -393,14 +399,6 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 		if meter.Aggregation.Field != "" {
 			// Generate a random value between 1 and 100
 			properties[meter.Aggregation.Field] = rand.Int63n(100) + 1
-		}
-	}
-
-	// Apply filter values if available
-	for _, filter := range meter.Filters {
-		if len(filter.Values) > 0 {
-			// Select a random value from the filter values
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
 		}
 	}
 
