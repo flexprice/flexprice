@@ -43,6 +43,6 @@ func lookupEEProvider(name types.AuthProvider, cfg *config.Configuration) (Provi
 	return factory(cfg), true
 }
 
-// EEProviderCount reports how many enterprise auth providers registered.
+// EEProviderCount reports how many enterprise auth providers are registered.
 // See temporal.EEContributorCount for why this is exported.
 func EEProviderCount() int { return len(eeProviders) }

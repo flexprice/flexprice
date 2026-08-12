@@ -199,6 +199,28 @@ endef
 test: install-typst
 	$(call run-go-test,-v -race ./internal/... ./cmd/server/...)
 
+# Verify the ee/ submodule is at the reviewed commit.
+#
+# ee/ executes inside the server process in an enterprise build: its init()
+# functions register auth providers, routes, and workflows. A submodule pointer
+# moved to an unreviewed commit is therefore arbitrary code execution with the
+# server's privileges. .gitmodules tracks no branch, so builds follow the
+# gitlink in the commit tree, and ee.expected_commit records the SHA that was
+# reviewed. Changing ee/ requires updating that file in the same PR.
+verify-ee-pin:
+	@if [ ! -f ee.expected_commit ]; then echo "ee.expected_commit missing"; exit 1; fi
+	@expected=$$(cat ee.expected_commit | tr -d '[:space:]'); \
+	actual=$$(git -C ee rev-parse HEAD 2>/dev/null); \
+	if [ -z "$$actual" ]; then \
+		echo "ee/ not checked out — run 'git submodule update --init'"; exit 1; \
+	elif [ "$$expected" != "$$actual" ]; then \
+		echo "ee/ is at $$actual but ee.expected_commit pins $$expected."; \
+		echo "If this update is intended, review the ee diff and update ee.expected_commit."; \
+		exit 1; \
+	else \
+		echo "ee/ verified at $$expected"; \
+	fi
+
 # Run the enterprise build's tests. Requires the ee/ submodule:
 #   git submodule update --init
 # Skips with a notice rather than failing when ee/ is empty, so a community
@@ -207,7 +229,7 @@ test-ee:
 	@if [ -z "$$(ls -A ee 2>/dev/null | grep -v '^\.git$$')" ]; then \
 		echo "ee/ is empty — run 'git submodule update --init' (needs access to flexprice/ee). Skipping."; \
 	else \
-		go test -tags ee ./ee/... ./cmd/server/... ./internal/...; \
+		$(MAKE) verify-ee-pin && go test -tags ee ./ee/... ./cmd/server/... ./internal/...; \
 	fi
 
 # Run tests with verbose output

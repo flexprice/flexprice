@@ -1,4 +1,3 @@
 [submodule "ee"]
 	path = ee
 	url = git@github.com:flexprice/ee.git
-	branch = feat/usage-alert-workflow-and-saml
