@@ -26,7 +26,7 @@ func TestNewProviderCommunityBuildUnchanged(t *testing.T) {
 	}{
 		{types.AuthProviderFlexprice, types.AuthProviderFlexprice},
 		{types.AuthProviderSupabase, types.AuthProviderSupabase},
-		{"saml", types.AuthProviderFlexprice},
+		{"external_idp", types.AuthProviderFlexprice},
 		{"", types.AuthProviderFlexprice},
 	}
 
@@ -43,7 +43,7 @@ func TestNewProviderCommunityBuildUnchanged(t *testing.T) {
 func TestEEProviderIsAdditive(t *testing.T) {
 	withNoEEProviders(t)
 
-	const eeName types.AuthProvider = "saml"
+	const eeName types.AuthProvider = "external_idp"
 	RegisterEEProvider(eeName, func(cfg *config.Configuration) Provider {
 		return NewFlexpriceAuth(cfg)
 	})
@@ -102,13 +102,13 @@ func TestEEProviderRejectsInvalidRegistrations(t *testing.T) {
 
 	t.Run("duplicate name", func(t *testing.T) {
 		withNoEEProviders(t)
-		RegisterEEProvider("saml", noop)
+		RegisterEEProvider("external_idp", noop)
 		defer func() {
 			if recover() == nil {
 				t.Error("registering the same provider name twice should panic")
 			}
 		}()
-		RegisterEEProvider("saml", noop)
+		RegisterEEProvider("external_idp", noop)
 	})
 }
 

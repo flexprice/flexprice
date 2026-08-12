@@ -21,7 +21,7 @@ func withNoEESettings(t *testing.T) {
 func TestCommunityBuildRejectsUnknownKeys(t *testing.T) {
 	withNoEESettings(t)
 
-	key := SettingKey("saml_config")
+	key := SettingKey("enterprise_example_config")
 	if err := key.Validate(); err == nil {
 		t.Error("an unregistered key must be rejected in a community build")
 	}
@@ -37,7 +37,7 @@ func TestCommunityBuildRejectsUnknownKeys(t *testing.T) {
 func TestEESettingBecomesValidOnceRegistered(t *testing.T) {
 	withNoEESettings(t)
 
-	key := SettingKey("saml_config")
+	key := SettingKey("enterprise_example_config")
 	RegisterEESetting(EESettingDefinition{
 		Key:          key,
 		DefaultValue: map[string]interface{}{"enabled": false},
