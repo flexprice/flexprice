@@ -74,17 +74,18 @@ type Provider interface {
 }
 
 func NewProvider(cfg *config.Configuration) Provider {
-	switch cfg.Auth.Provider {
-	case types.AuthProviderSupabase:
-		return NewSupabaseAuth(cfg)
-	case types.AuthProviderFlexprice:
-		return NewFlexpriceAuth(cfg)
-	}
-
-	// Providers contributed by the ee/ submodule. Empty in a community build,
-	// so an unknown value still falls through to the flexprice default.
+	// Enterprise contributions are consulted first so a build can supply a
+	// variation of a built-in provider under the same auth.provider value.
+	// The registry is empty in a community build, so this is a no-op there and
+	// the switch below is reached unchanged.
 	if provider, ok := lookupEEProvider(cfg.Auth.Provider, cfg); ok {
 		return provider
 	}
-	return NewFlexpriceAuth(cfg)
+
+	switch cfg.Auth.Provider {
+	case types.AuthProviderSupabase:
+		return NewSupabaseAuth(cfg)
+	default:
+		return NewFlexpriceAuth(cfg)
+	}
 }
