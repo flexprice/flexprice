@@ -1110,6 +1110,43 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Version
 	s.True(newQty.Equal(newLI.Quantity), "new line item should have updated quantity")
 }
 
+// TestExecuteQuantityChange_PublishesLineItemDeleteAndCreate verifies that executing a
+// quantity change on a FIXED-price line item publishes subscription.line_item.deleted for
+// the ended line item and subscription.line_item.created for its replacement.
+func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PublishesLineItemDeleteAndCreate() {
+	ctx := s.GetContext()
+
+	cust := s.createCustomer("ext-qty-lineitem-events")
+	sub := s.createActiveSub(cust.ID)
+	li := s.createFixedLineItem(sub.ID, cust.ID, decimal.NewFromInt(5), types.InvoiceCadenceArrear)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{
+				{ID: li.ID, Quantity: decimal.NewFromInt(10)},
+			},
+		},
+	}
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	resp, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	var sawDeleted, sawCreated bool
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			sawDeleted = true
+		}
+		if e.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			sawCreated = true
+		}
+	}
+	s.Require().True(sawDeleted, "expected subscription.line_item.deleted")
+	s.Require().True(sawCreated, "expected subscription.line_item.created")
+}
+
 // TestExecuteQuantityChange_PreservesFiniteEndDate verifies that a replacement line item
 // keeps the source item's finite EndDate (not cleared to open-ended).
 func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_PreservesFiniteEndDate() {
@@ -2407,7 +2444,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	// Re-apply the same request — must not create another open LI.
 	rebuilt, err := modSvc.requestFromModifySubscriptionParams(ctx, request.toModifySubscriptionParams())
 	s.Require().NoError(err)
-	_, err = modSvc.applyQuantityChange(ctx, rebuilt)
+	_, _, err = modSvc.applyQuantityChange(ctx, rebuilt)
 	s.Require().NoError(err)
 
 	_, afterSecond, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
