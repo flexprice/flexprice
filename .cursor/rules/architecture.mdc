@@ -19,7 +19,7 @@ Before substantive work (new features, refactors, integrations, Temporal changes
    - `docs/HOTSPOTS.md` — avoid enlarging risky areas blindly  
    - `docs/FLOWS/*.md` — when touching authentication, metering, billing, invoices, subscriptions, webhooks, or retries  
 
-2. **Trace dependencies before editing** — follow constructor wiring from `cmd/server/main.go`, service interfaces in `internal/service`, and domain contracts in `internal/domain`. Prefer explicit injection over widening hidden globals.
+2. **Trace dependencies before editing** — follow constructor wiring from `cmd/server/main.go`, service interfaces in `internal/ee/service`, and domain contracts in `internal/domain`. Prefer explicit injection over widening hidden globals.
 
 3. **Preserve layering** — domain packages do not import repositories or HTTP layers. Handlers delegate to services. Do not bypass services for transactional rules.
 
@@ -27,6 +27,4 @@ Before substantive work (new features, refactors, integrations, Temporal changes
 
 5. **No silent architecture changes** — if you materially change pipelines (Kafka topics/groups), deployment modes, Temporal schedules, tenancy/RBAC semantics, or data stores, update the matching `docs/*` sections in the same change when practical.
 
-6. **Generated code discipline** — do not hand-edit Ent outputs under `repository/ent` or generated SDK trees; edit schema/spec + run documented `make` targets.
-
-7. **Graphify** — When `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain` before undirected codebase search. After structural code changes, run `graphify update .` so the graph matches the tree (`docs/ARCHITECTURE.md` Graphify section).
+6. **Generated code discipline** — do not hand-edit Ent outputs under `ent/` or generated SDK trees; edit schema/spec + run documented `make` targets.

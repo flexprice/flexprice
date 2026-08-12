@@ -15,14 +15,18 @@ const (
 	ProrationActionCancellation   ProrationAction = "cancellation"
 	ProrationActionAddItem        ProrationAction = "add_item"
 	ProrationActionRemoveItem     ProrationAction = "remove_item"
+	// ProrationActionFirstPeriod prices a short first (stub) period as
+	// stubDuration/fullIntervalDuration of the full price. Independent of
+	// mid-cycle proration_behavior; uses second-based ratios like other proration.
+	ProrationActionFirstPeriod ProrationAction = "first_period"
 )
 
 // ProrationStrategy defines how the proration coefficient is calculated.
 type ProrationStrategy string
 
 const (
-	StrategyDayBased    ProrationStrategy = "day_based"    // Default
-	StrategySecondBased ProrationStrategy = "second_based" // Future enhancement
+	StrategyDayBased    ProrationStrategy = "day_based"
+	StrategySecondBased ProrationStrategy = "second_based"
 )
 
 // ProrationBehavior defines how proration is applied (e.g., create invoice items).

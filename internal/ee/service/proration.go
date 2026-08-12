@@ -489,7 +489,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 
 		ProrationDate:     effectiveDate,
 		ProrationBehavior: behavior,
-		Timezone:  subscription.Timezone,
+		Timezone:          subscription.Timezone,
 		ProrationStrategy: types.StrategySecondBased,
 		Currency:          price.Currency,
 		PlanDisplayName:   item.PlanDisplayName,
@@ -562,13 +562,49 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 		NewPricePerUnit:       price.Amount,
 		ProrationDate:         item.GetPeriodStart(periodStart),
 		ProrationBehavior:     behavior,
-		Timezone:      subscription.Timezone,
+		Timezone:              subscription.Timezone,
 		OriginalAmountPaid:    decimal.Zero,
 		PreviousCreditsIssued: decimal.Zero,
 		ProrationStrategy:     types.StrategySecondBased,
 		Currency:              price.Currency,
 		PlanDisplayName:       item.PlanDisplayName,
 	}, nil
+}
+
+// CreateProrationParamsForFirstPeriod builds second-based stub-period pricing params
+// (same granularity as mid-cycle proration). stubStart/stubEnd are the actual billed
+// window; fullIntervalEnd is one self-anchored billing interval after stubStart and is
+// used only as the denominator.
+func (s *prorationService) CreateProrationParamsForFirstPeriod(
+	subscription *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	price *price.Price,
+	stubStart time.Time,
+	stubEnd time.Time,
+	fullIntervalEnd time.Time,
+) proration.ProrationParams {
+	tz := subscription.Timezone
+	if tz == "" {
+		tz = types.DefaultTimezone
+	}
+	return proration.ProrationParams{
+		SubscriptionID:     subscription.ID,
+		LineItemID:         item.ID,
+		PlanPayInAdvance:   price.InvoiceCadence == types.InvoiceCadenceAdvance,
+		CurrentPeriodStart: stubStart,
+		CurrentPeriodEnd:   fullIntervalEnd,
+		Action:             types.ProrationActionFirstPeriod,
+		NewPriceID:         item.PriceID,
+		NewQuantity:        item.Quantity,
+		NewPricePerUnit:    price.Amount,
+		ProrationDate:      stubEnd,
+		// Always create: first-period pricing is independent of mid-cycle proration_behavior.
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		Timezone:          tz,
+		ProrationStrategy: types.StrategySecondBased,
+		Currency:          price.Currency,
+		PlanDisplayName:   item.PlanDisplayName,
+	}
 }
 
 // isRefundEligible determines if a customer is eligible for refund/credit based on cancellation scenario
@@ -665,7 +701,7 @@ func (s *prorationService) CalculateEntitlementProration(
 		PeriodStart:        periodStart,
 		PeriodEnd:          periodEnd,
 		ProrationDate:      prorationDate,
-		Timezone:   customerTimezone,
+		Timezone:           customerTimezone,
 		BillingCycle:       billingCycle,
 		BillingAnchor:      billingAnchor,
 		BillingPeriod:      billingPeriod,

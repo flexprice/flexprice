@@ -317,11 +317,13 @@ func TestNextBillingDate_Annual_Anniversary(t *testing.T) {
 			want:          time.Date(2025, time.February, 28, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:          "billing anchor cutoff",
+			// Anchor is 45 days out, so the first period is a 45-day stub ending on the
+			// anchor. Previously this returned Feb 28 2025, a 13-month first period.
+			name:          "anchor after start yields a short first period ending on the anchor",
 			currentPeriod: time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
 			billingAnchor: time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC),
 			unit:          1,
-			want:          time.Date(2025, time.February, 28, 0, 0, 0, 0, time.UTC),
+			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "preserve billing anchor across years",
@@ -436,11 +438,15 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 			errMsg:        "",
 		},
 		{
-			name:          "start: dec 31 2023, anchor: jan 1 2024, unit: 2 (skip a year)",
+			// Multi-year calendar billing takes a one-day stub to the first calendar
+			// boundary, then runs full two-year cycles from there. Previously this skipped
+			// straight to Jan 1 2025, making the first period two years and one day.
+			// Matches how QUARTERLY and HALF_YEARLY already treat unit > 1.
+			name:          "start: dec 31 2023, anchor: jan 1 2024, unit: 2 (stub to the boundary first)",
 			currentPeriod: time.Date(2023, time.December, 31, 0, 0, 0, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          2,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
+			want:          time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
 			errMsg:        "",
 		},

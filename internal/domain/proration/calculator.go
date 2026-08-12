@@ -35,6 +35,12 @@ type calculatorImpl struct {
 }
 
 func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) (*ProrationResult, error) {
+	// First-period stub pricing is pricing correctness, not a mid-cycle event.
+	// It always runs when requested, independent of ProrationBehavior.
+	if params.Action == types.ProrationActionFirstPeriod {
+		return c.calculateFirstPeriod(ctx, params)
+	}
+
 	if params.ProrationBehavior == types.ProrationBehaviorNone {
 		return nil, nil
 	}
@@ -147,6 +153,75 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	result.NetAmount = result.NetAmount.Round(precision)
 
 	c.logger.Info(context.Background(), "proration net amount", "amount", result.NetAmount.String())
+
+	return result, nil
+}
+
+// calculateFirstPeriod prices a short first (stub) period as
+// stubDuration/fullIntervalDuration of the full price, using second-based ratios
+// (same granularity as mid-cycle proration).
+//
+// Param convention:
+//   - CurrentPeriodStart = stub start
+//   - ProrationDate      = stub end
+//   - CurrentPeriodEnd   = full interval end (one self-anchored interval from stub start)
+func (c *calculatorImpl) calculateFirstPeriod(ctx context.Context, params ProrationParams) (*ProrationResult, error) {
+	if err := validateParams(params); err != nil {
+		return nil, ierr.WithError(err).
+			WithHintf("invalid first-period proration params: %+v", err).
+			Mark(ierr.ErrValidation)
+	}
+
+	stubStart := params.CurrentPeriodStart
+	stubEnd := params.ProrationDate
+	fullEnd := params.CurrentPeriodEnd
+
+	totalSeconds := fullEnd.Sub(stubStart).Seconds()
+	if totalSeconds <= 0 {
+		return nil, ierr.NewError("invalid full billing interval for first-period proration").
+			WithHintf("full interval seconds is zero or negative (%v to %v)", stubStart, fullEnd).
+			Mark(ierr.ErrValidation)
+	}
+	usedSeconds := stubEnd.Sub(stubStart).Seconds()
+	if usedSeconds < 0 {
+		usedSeconds = 0
+	}
+
+	coefficient := decimal.NewFromFloat(usedSeconds).Div(decimal.NewFromFloat(totalSeconds))
+	precision := types.GetCurrencyPrecision(params.Currency)
+	charge := params.NewPricePerUnit.Mul(params.NewQuantity).Mul(coefficient).Round(precision)
+
+	result := &ProrationResult{
+		NetAmount:          charge,
+		Action:             params.Action,
+		ProrationDate:      params.ProrationDate,
+		LineItemID:         params.LineItemID,
+		IsPreview:          false,
+		CreditItems:        []ProrationLineItem{},
+		ChargeItems:        []ProrationLineItem{},
+		Currency:           params.Currency,
+		CurrentPeriodStart: params.CurrentPeriodStart,
+		CurrentPeriodEnd:   params.ProrationDate, // stub end is the billed window
+	}
+
+	if charge.GreaterThan(decimal.Zero) {
+		result.ChargeItems = append(result.ChargeItems, ProrationLineItem{
+			Description: c.generateChargeDescription(params),
+			Amount:      charge,
+			StartDate:   params.CurrentPeriodStart,
+			EndDate:     params.ProrationDate,
+			Quantity:    params.NewQuantity,
+			PriceID:     params.NewPriceID,
+			IsCredit:    false,
+		})
+	}
+
+	c.logger.Info(ctx, "first-period stub proration",
+		"used_seconds", usedSeconds,
+		"total_seconds", totalSeconds,
+		"coefficient", coefficient.String(),
+		"amount", charge.String(),
+	)
 
 	return result, nil
 }
@@ -277,6 +352,8 @@ func (c *calculatorImpl) generateChargeDescription(params ProrationParams) strin
 		return "Prorated charge for quantity change"
 	case types.ProrationActionAddItem:
 		return "Prorated charge for new item"
+	case types.ProrationActionFirstPeriod:
+		return "Prorated charge for first billing period"
 	default:
 		return "Prorated charge"
 	}
@@ -324,6 +401,20 @@ func validateParams(params ProrationParams) error {
 		}
 		if params.OldQuantity.LessThan(decimal.Zero) || params.NewQuantity.LessThan(decimal.Zero) {
 			return fmt.Errorf("both old and new quantities must be positive for quantity_change action")
+		}
+	case types.ProrationActionFirstPeriod:
+		if params.NewPriceID == "" {
+			return fmt.Errorf("new price ID is required for first_period action")
+		}
+		if params.NewQuantity.LessThan(decimal.Zero) {
+			return fmt.Errorf("new quantity must be non-negative for first_period action")
+		}
+		// ProrationDate is the stub end; CurrentPeriodEnd is the full-interval reference end.
+		if !params.ProrationDate.After(params.CurrentPeriodStart) {
+			return fmt.Errorf("stub end must be after stub start for first_period action")
+		}
+		if !params.ProrationDate.Before(params.CurrentPeriodEnd) {
+			return fmt.Errorf("stub end must be before full interval end for first_period action")
 		}
 	default:
 		return fmt.Errorf("invalid proration action: %s", params.Action)
