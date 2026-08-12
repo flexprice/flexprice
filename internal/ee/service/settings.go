@@ -38,7 +38,15 @@ func NewSettingsService(params ServiceParams) SettingsService {
 // isTenantLevelSetting checks if a setting is tenant-level (no environment_id)
 // Tenant-level settings apply across all environments for a tenant
 func isTenantLevelSetting(key types.SettingKey) bool {
-	return key == types.SettingKeyTenantConfig
+	if key == types.SettingKeyTenantConfig {
+		return true
+	}
+	// Enterprise keys declare their own scope. Tenant-level ones are readable
+	// without an environment in context, which pre-login flows such as SSO need.
+	if def, ok := types.LookupEESetting(key); ok {
+		return def.TenantLevel
+	}
+	return false
 }
 
 // fetchSetting fetches a setting from the repository
@@ -240,6 +248,12 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
 	default:
+		// Enterprise keys are not known at compile time here, so they are handled
+		// as raw maps rather than a typed struct. The registered Validate func
+		// enforces their schema.
+		if _, ok := types.LookupEESetting(key); ok {
+			return getSettingByKey[eeSettingValue](s, ctx, key)
+		}
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
@@ -290,6 +304,17 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
 	default:
+		// Enterprise keys are not known at compile time here, so they are handled
+		// as raw maps rather than a typed struct. The registered Validate func
+		// enforces their schema.
+		if def, ok := types.LookupEESetting(key); ok {
+			if def.Validate != nil {
+				if err := def.Validate(req.Value); err != nil {
+					return nil, err
+				}
+			}
+			return updateSettingByKey[eeSettingValue](s, ctx, key, req)
+		}
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
@@ -391,3 +416,11 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	// Return updated setting
 	return s.GetSettingByKey(ctx, key)
 }
+
+// eeSettingValue carries an enterprise setting whose Go type is not known to the
+// community build. It satisfies types.SettingConfig so the generic update path
+// accepts it; the schema check lives in the key's registered Validate func and
+// has already run by the time this is constructed.
+type eeSettingValue map[string]interface{}
+
+func (eeSettingValue) Validate() error { return nil }
