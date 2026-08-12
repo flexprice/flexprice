@@ -199,6 +199,17 @@ endef
 test: install-typst
 	$(call run-go-test,-v -race ./internal/... ./cmd/server/...)
 
+# Build the enterprise image.
+#
+# .dockerignore excludes ee/ so a community build can never pick up enterprise
+# source. buildx honours <dockerfile>.dockerignore in preference to
+# .dockerignore, so a sibling file without the ee/ entry scopes the exception to
+# this build alone rather than mutating .dockerignore.
+docker-build-ee: verify-ee-pin
+	@grep -v '^ee/$$' .dockerignore > Dockerfile.dockerignore
+	@trap 'rm -f Dockerfile.dockerignore' EXIT; \
+	docker build --build-arg BUILD_TAGS=ee -t $${IMAGE:-flexprice-ee} .
+
 # Verify the ee/ submodule is at the reviewed commit.
 #
 # ee/ executes inside the server process in an enterprise build: its init()
