@@ -45,13 +45,13 @@ func buildPaymentResponse(nAttempts int) *dto.PaymentResponse {
 		SucceededAt:            lo.ToPtr(benchTime),
 		Attempts:               attempts,
 		InvoiceNumber:          lo.ToPtr("INV-BENCH-0001"),
-		TenantID:                "tenant_bench",
-		SaveCardAndMakeDefault:  false,
-		CreatedAt:                benchTime,
-		UpdatedAt:                benchTime,
-		CreatedBy:                "bench",
-		UpdatedBy:                "bench",
-		EnvironmentID:            "env_bench",
+		TenantID:               "tenant_bench",
+		SaveCardAndMakeDefault: false,
+		CreatedAt:              benchTime,
+		UpdatedAt:              benchTime,
+		CreatedBy:              "bench",
+		UpdatedBy:              "bench",
+		EnvironmentID:          "env_bench",
 	}
 }
 

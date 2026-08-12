@@ -114,8 +114,8 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 	})
 
 	results = append(results, result{
-		entity: "alert",
-		tier:   "fixed",
+		entity:   "alert",
+		tier:     "fixed",
 		oldBytes: marshal(t, buildOldAlertPayload()),
 		newBytes: marshal(t, NewAlertWebhookPayload(
 			buildFeatureResponse(), buildWalletResponse(), buildCustomerResponse(3),
