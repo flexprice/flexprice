@@ -220,6 +220,10 @@ docker-build-ee: verify-ee-pin
 # reviewed. Changing ee/ requires updating that file in the same PR.
 verify-ee-pin:
 	@if [ ! -f ee.expected_commit ]; then echo "ee.expected_commit missing"; exit 1; fi
+	@if [ ! -e ee/.git ]; then \
+		echo "ee/ is not checked out — run 'git submodule update --init' (needs access to flexprice/ee)"; \
+		exit 1; \
+	fi
 	@expected=$$(cat ee.expected_commit | tr -d '[:space:]'); \
 	actual=$$(git -C ee rev-parse HEAD 2>/dev/null); \
 	if [ -z "$$actual" ]; then \
