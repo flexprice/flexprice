@@ -29,13 +29,20 @@ func ReplayDLQWorkflow(ctx workflow.Context, input models.ReplayDLQWorkflowInput
 		"source_topic", input.SourceTopic,
 		"dry_run", input.DryRun)
 
+	// Resume (committed offsets) makes a retry safe — it continues, not restarts.
+	// But --from-start / --since deliberately ignore the resume point, so a retry
+	// would re-publish already-sent messages. Disable retries in that case.
+	maxAttempts := int32(3)
+	if input.FromStart || input.SinceMs > 0 {
+		maxAttempts = 1
+	}
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: time.Minute * 30,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute * 5,
-			MaximumAttempts:    3,
+			MaximumAttempts:    maxAttempts,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)

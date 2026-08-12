@@ -196,6 +196,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalRazorpayInvoiceSyncWorkflow,
 		TemporalRecalculateInvoiceWorkflow,
 		TemporalReprocessRawEventsWorkflow,
+		TemporalReplayDLQWorkflow,
 		TemporalScheduleDraftFinalizationWorkflow,
 		TemporalScheduleSubscriptionBillingWorkflow,
 		TemporalStripeCustomerSyncWorkflow,
