@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -5244,6 +5246,110 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 	})
 }
 
+// TestCancelSubscription_Immediate_PublishesLineItemDeleted verifies that an immediate
+// cancellation publishes subscription.line_item.deleted for the subscription's FIXED-price
+// line item.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_Immediate_PublishesLineItemDeleted() {
+	ctx := s.GetContext()
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_cancel_lineitem_deleted",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems: []*subscription.SubscriptionLineItem{
+			{
+				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID:  "sub_cancel_lineitem_deleted",
+				CustomerID:      s.testData.customer.ID,
+				EntityID:        s.testData.plan.ID,
+				EntityType:      types.SubscriptionLineItemEntityTypePlan,
+				PlanDisplayName: s.testData.plan.Name,
+				PriceID:         s.testData.prices.fixedMonthly.ID,
+				PriceType:       s.testData.prices.fixedMonthly.Type,
+				DisplayName:     "Fixed line item",
+				Quantity:        decimal.NewFromInt(1),
+				Currency:        "usd",
+				BillingPeriod:   types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence:  types.InvoiceCadenceAdvance,
+				StartDate:       s.testData.now.Add(-30 * 24 * time.Hour),
+				BaseModel:       types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	s.Require().NoError(err)
+
+	found := false
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			found = true
+		}
+	}
+	s.Require().True(found, "expected line_item.deleted on immediate cancellation")
+}
+
+// TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce verifies that an addon's
+// FIXED-price line item — terminated by cancelAddonsForSubscription — does not also get
+// double-counted by cancelAllLineItemsForSubscription's separate termination pass, which
+// would otherwise publish subscription.line_item.deleted for it twice.
+func (s *SubscriptionServiceSuite) TestCancelSubscription_AddonLineItemDeletedEventFiresExactlyOnce() {
+	ctx := s.GetContext()
+	sub := s.testData.subscription
+
+	addonID := "addon_cancel_lineitem_once"
+	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(20), types.InvoiceCadenceAdvance)
+
+	addAddonNow := sub.CurrentPeriodStart
+	_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
+		SubscriptionID: sub.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID:           addonID,
+			Cadence:           types.AddonCadenceRecurring,
+			StartDate:         &addAddonNow,
+			ProrationBehavior: types.ProrationBehaviorNone,
+		},
+	})
+	s.Require().NoError(err)
+
+	addonLineItems := s.addonLineItemsFor(sub.ID, addonID)
+	s.Require().Len(addonLineItems, 1)
+	addonLineItemID := addonLineItems[0].ID
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	_, err = s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	s.Require().NoError(err)
+
+	count := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName != types.WebhookEventSubscriptionLineItemDeleted {
+			continue
+		}
+		var payload webhookDto.InternalSubscriptionLineItemEvent
+		s.Require().NoError(json.Unmarshal(e.Payload, &payload))
+		if payload.LineItemID == addonLineItemID {
+			count++
+		}
+	}
+	s.Require().Equal(1, count, "addon line item must publish line_item.deleted exactly once, not double-counted between the addon-scoped and plan/subscription-scoped termination paths")
+}
+
 func (s *SubscriptionServiceSuite) TestCancelSubscription_ScheduledDoesNotEagerlyTerminateResources() {
 	ctx := s.GetContext()
 	subService := s.service.(*subscriptionService)
@@ -5412,18 +5518,20 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 
 	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
 
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 	// Calling it again with the same effectiveDate must not error, even though every
 	// resource is already terminated (repo-level guards make this a no-op the second time).
-	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+	_, err = subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
 		EffectiveDate:      effectiveDate,
 		CancellationReason: "idempotency_test",
-	}))
+	})
+	s.NoError(err)
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = []string{sub.ID}
