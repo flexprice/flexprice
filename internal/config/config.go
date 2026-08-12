@@ -198,6 +198,12 @@ type SAMLConfig struct {
 	// EnforceSSO rejects password login deployment-wide. A per-tenant toggle
 	// would need a break-glass path; this is the simpler first step.
 	EnforceSSO bool `mapstructure:"enforce_sso"`
+	// DefaultTenantID lets a single-tenant deployment use "default" in place of
+	// a tenant UUID in the SAML URLs. Self-hosted installs have exactly one
+	// tenant whose ID is the same on every install, so putting it in the path
+	// is noise the operator has to copy correctly into their identity provider.
+	// Empty means the alias is unavailable and the UUID must be used.
+	DefaultTenantID string `mapstructure:"default_tenant_id"`
 }
 
 type SupabaseConfig struct {

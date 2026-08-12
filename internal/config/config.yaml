@@ -19,6 +19,9 @@ auth:
     dashboard_url: "http://localhost:3000/auth/callback"
     # Refuse password login deployment-wide.
     enforce_sso: false
+    # Single-tenant deployments can use /v1/auth/saml/default/... instead of
+    # putting the tenant UUID in the path. Leave empty for multi-tenant.
+    default_tenant_id: "00000000-0000-0000-0000-000000000000"
   supabase:
     base_url: "http://localhost:54321"
     service_key: "<supabase service key>"
