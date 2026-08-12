@@ -6,7 +6,7 @@
 
 ## Execution path
 
-1. **Router construction** [`internal/api/NewRouter`](internal/api/router.go)
+1. **Router construction** [`internal/api/NewRouter`](../../internal/api/router.go)
    - `gin.New()` + custom middleware ordering (recovery → request id → structured logging → CORS → Sentry → Pyroscope).
    - Dynamic swagger host shim.
 2. Route groups:

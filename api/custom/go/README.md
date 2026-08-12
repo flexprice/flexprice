@@ -25,7 +25,7 @@ import "github.com/flexprice/go-sdk/v2"
 | `FLEXPRICE_API_KEY` | Yes | API key |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
-**Integration tests** in [api/tests/go/test_sdk.go](../tests/go/test_sdk.go) use a different env shape (host without scheme); see [api/tests/README.md](../tests/README.md).
+**Integration tests** in [api/tests/go/test_sdk.go](../../tests/go/test_sdk.go) use a different env shape (host without scheme); see [api/tests/README.md](../../tests/README.md).
 
 ## Quick start
 
@@ -445,4 +445,4 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 - [FlexPrice API documentation](https://docs.flexprice.io)
 - [Go SDK examples](examples/) in this repo
-- [SDK integration tests](../tests/README.md) — full API coverage (different `FLEXPRICE_API_HOST` shape; see that README)
+- [SDK integration tests](../../tests/README.md) — full API coverage (different `FLEXPRICE_API_HOST` shape; see that README)

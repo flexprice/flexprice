@@ -11,4 +11,4 @@
    Run the async example: `python async_event_example.py`  
    (From the package root: `python examples/example.py` or `python examples/async_event_example.py`.)
 
-**Integration tests:** Full API flows are in [api/tests/python/test_sdk.py](../../tests/python/test_sdk.py). Install with `pip install -r requirements.txt` in `api/tests/python`; see [api/tests/README.md](../../tests/README.md).
+**Integration tests:** Full API flows are in [api/tests/python/test_sdk.py](../../../tests/python/test_sdk.py). Install with `pip install -r requirements.txt` in `api/tests/python`; see [api/tests/README.md](../../../tests/README.md).
