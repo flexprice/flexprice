@@ -1,0 +1,23 @@
+{{- if .Values.e2eprobe.enabled }}
+# ClusterIP for the probe's webhook listener.
+#
+# Cluster-internal only — the endpoint accepts unauthenticated JSON POSTs and
+# must NEVER be exposed through ingress. Do not add this Service to
+# templates/app/ingress.yaml or any other ingress-gcp template.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: e2eprobe
+  ports:
+    - name: webhook
+      port: {{ .Values.e2eprobe.service.port }}
+      targetPort: webhook
+      protocol: TCP
+{{- end }}

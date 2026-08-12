@@ -380,6 +380,30 @@ frontend:
   # Inherits global topologySpreadConstraints unless overridden here.
   topologySpreadConstraints: []
 
+# e2eprobe — synthetic end-to-end probe that runs continuously against a
+# live environment, driving real billing flows under a dedicated probe
+# tenant and alerting to Slack on assertion failure. Off by default so
+# existing regions are unaffected; opt in per-region.
+e2eprobe:
+  enabled: false          # opt-in; existing regions unaffected
+  # SEPARATE GHCR repo from the app image — the probe ships its own artifact.
+  image:
+    repository: ghcr.io/flexprice/e2eprobe
+    tag: "develop"
+    pullPolicy: Always
+  replicaCount: 1         # see deployment.yaml — 1 is a correctness constraint, not a default
+  existingSecret: e2eprobe-secrets
+  secretKeys:
+    apiKey: api-key
+    slackWebhookUrl: slack-webhook-url
+  env: {}                 # E2EPROBE_* non-secret vars, set per region
+  service: {port: 8765}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  nodeSelector: {}
+  tolerations: []
+
 # Frontend ingress — serves the UI at its own hostname
 frontendIngress:
   enabled: false
