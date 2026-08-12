@@ -772,14 +772,26 @@ could land in one AZ with nothing in the manifest to show for it.
 
 A constraint that DOES define labelSelector is passed through untouched, so an
 operator can still spread against an arbitrary set of pods.
+
+Presence is tested with `hasKey`, not truthiness: an explicit `labelSelector: {}`
+is a VALID selector meaning "match every pod in the namespace", but it is falsey
+in Go templates. Testing truthiness would take the injection branch and emit
+`labelSelector` twice in the same constraint — YAML resolves the duplicate to the
+last occurrence, so the operator's explicit selector would be silently discarded
+rather than rejected.
 */}}
 {{- define "flexprice.topologySpreadConstraints" -}}
 {{- $ctx := .ctx -}}
 {{- $component := .component -}}
 {{- $cfg := index $ctx.Values $component | default dict -}}
 {{- $tsc := default $ctx.Values.topologySpreadConstraints (get $cfg "topologySpreadConstraints") -}}
+{{- /* `--set topologySpreadConstraints=[]` yields the STRING "[]", not an empty
+       list, and `range` over a string is a render error. Anything that is not a
+       real list is treated as "no constraints" so the caller's `with` emits
+       nothing, matching `topologySpreadConstraints: []` set via a values file. */ -}}
+{{- if not (kindIs "slice" $tsc) }}{{- $tsc = list }}{{- end -}}
 {{- range $tsc }}
-{{- if .labelSelector }}
+{{- if hasKey . "labelSelector" }}
 - {{ toYaml . | nindent 2 | trim }}
 {{- else }}
 - {{ toYaml . | nindent 2 | trim }}
