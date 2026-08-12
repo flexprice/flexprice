@@ -53,8 +53,17 @@ data:
       timeout: {{ .Values.redisConfig.timeout | default "5s" | quote }}
 
     kafka:
+      {{- /* One YAML entry per broker. flexprice.kafkaBrokers returns the
+             comma-joined form the FLEXPRICE_KAFKA_BROKERS env var needs, which is
+             correct there but NOT here: emitted as a single list item it produces
+             one malformed address ("b1:9093,b2:9093"), and sarama treats the whole
+             string as one host. It only ever worked because the env var takes
+             precedence over this file at Unmarshal time — remove that env var and
+             the cluster becomes unreachable. Split it back out. */}}
       brokers:
-        - {{ include "flexprice.kafkaBrokers" . | quote }}
+        {{- range (splitList "," (include "flexprice.kafkaBrokers" .)) }}
+        - {{ . | trim | quote }}
+        {{- end }}
       consumer_group: {{ .Values.kafkaConfig.consumerGroup | quote }}
       topic: {{ .Values.kafkaConfig.topic | quote }}
       topic_lazy: {{ .Values.kafkaConfig.topicLazy | quote }}

@@ -751,3 +751,42 @@ All service addresses are resolved via named templates above so this block stays
 {{ toYaml . | trim }}
 {{- end }}
 {{- end }}
+
+{{/*
+Topology spread constraints for a component, with a defaulted labelSelector.
+Usage: include "flexprice.topologySpreadConstraints" (dict "ctx" . "component" "api")
+
+Resolves `.Values.<component>.topologySpreadConstraints` first, falling back to
+the global `.Values.topologySpreadConstraints`.
+
+Any constraint that carries NO labelSelector of its own gets one injected:
+the chart's selector labels (which honour nameOverride/fullnameOverride) plus
+the component key, so each workload spreads against its own replicas rather
+than against every pod in the release.
+
+This defaulting exists because the previous values.yaml hardcoded
+`app.kubernetes.io/name: flexprice`. That matched zero pods the moment an
+operator set nameOverride, and since the default whenUnsatisfiable is
+ScheduleAnyway the scheduler silently ignored the constraint — all replicas
+could land in one AZ with nothing in the manifest to show for it.
+
+A constraint that DOES define labelSelector is passed through untouched, so an
+operator can still spread against an arbitrary set of pods.
+*/}}
+{{- define "flexprice.topologySpreadConstraints" -}}
+{{- $ctx := .ctx -}}
+{{- $component := .component -}}
+{{- $cfg := index $ctx.Values $component | default dict -}}
+{{- $tsc := default $ctx.Values.topologySpreadConstraints (get $cfg "topologySpreadConstraints") -}}
+{{- range $tsc }}
+{{- if .labelSelector }}
+- {{ toYaml . | nindent 2 | trim }}
+{{- else }}
+- {{ toYaml . | nindent 2 | trim }}
+  labelSelector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" $ctx | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1160,13 +1160,19 @@ affinity: {}
 # HA on real EKS/GKE/AKS deployments. Override per-component via
 # `<component>.topologySpreadConstraints`. Use `whenUnsatisfiable: DoNotSchedule`
 # for strict HA where you'd rather pods stay Pending than land in one AZ.
+#
+# labelSelector is left EMPTY on purpose: the deployment templates inject
+# `app.kubernetes.io/name` (honouring nameOverride) plus the per-component key
+# when a constraint carries no selector of its own. Hardcoding
+# `app.kubernetes.io/name: flexprice` here matched nothing as soon as an
+# operator set nameOverride, and because whenUnsatisfiable is ScheduleAnyway
+# that failed SILENTLY — every replica could land in one AZ with no signal.
+# Set labelSelector explicitly only if you want to spread against a different
+# set of pods than the component being rendered.
 topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: flexprice
 
 # Liveness probe
 livenessProbe:

@@ -74,10 +74,9 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- $tsc := default .Values.topologySpreadConstraints .Values.frontend.topologySpreadConstraints }}
-      {{- if $tsc }}
+      {{- with (include "flexprice.topologySpreadConstraints" (dict "ctx" . "component" "frontend") | trim) }}
       topologySpreadConstraints:
-        {{- toYaml $tsc | nindent 8 }}
+        {{- . | nindent 8 }}
       {{- end }}
 {{- end }}
 ---
