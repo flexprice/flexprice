@@ -337,6 +337,37 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
+  # provider selects the ingress controller flavor. "nginx" (default) changes
+  # nothing from prior chart versions. "gce" additionally renders the
+  # templates/ingress-gcp/* CRDs (ManagedCertificate, BackendConfig,
+  # FrontendConfig — GKE's Ingress-for-Anthos / GCE-native ingress objects)
+  # and adds NEG + BackendConfig annotations to the api Service. Only takes
+  # effect when ingress.enabled is also true.
+  provider: nginx   # nginx | gce
+  gce:
+    managedCertificate:
+      # Domains covered by the GCP-managed TLS certificate. Defaults to the
+      # hosts already listed under ingress.hosts above; override only if the
+      # certificate needs to cover additional domains.
+      domains: []
+    backendConfig:
+      healthCheck:
+        path: /health
+        port: 8080
+        checkIntervalSec: 15
+        timeoutSec: 5
+        healthyThreshold: 2
+        unhealthyThreshold: 3
+      timeoutSec: 30
+      # Optional Cloud Armor security policy. Leave securityPolicyName empty
+      # to omit the securityPolicy block entirely.
+      cloudArmor:
+        securityPolicyName: ""
+    frontendConfig:
+      # Redirect HTTP -> HTTPS at the GCE load balancer.
+      redirectToHttps:
+        enabled: true
+        responseCodeName: MOVED_PERMANENTLY_DEFAULT
 
 
 # Frontend deployment configuration

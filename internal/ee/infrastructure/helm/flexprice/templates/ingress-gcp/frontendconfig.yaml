@@ -1,0 +1,18 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.provider "gce") (.Values.ingress.gce.frontendConfig.redirectToHttps.enabled) }}
+# FrontendConfig — HTTP to HTTPS redirect at the GCE load balancer.
+#
+# The GCE ingress serves both :80 and :443. Without this the plaintext listener
+# stays open and serves the app. Referenced from the Ingress object via the
+# networking.gke.io/v1beta1.FrontendConfig annotation, which is set per-region
+# in ingress.annotations.
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api-frontend
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "api") | nindent 4 }}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: {{ .Values.ingress.gce.frontendConfig.redirectToHttps.responseCodeName }}
+{{- end }}
