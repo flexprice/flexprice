@@ -1,6 +1,9 @@
 package dto
 
-import "github.com/flexprice/flexprice/internal/validator"
+import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
+)
 
 // ReplayDLQRequest is the admin request to start a DLQ replay workflow.
 type ReplayDLQRequest struct {
@@ -27,5 +30,18 @@ type ReplayDLQRequest struct {
 
 // Validate validates the DLQ replay request.
 func (r *ReplayDLQRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if r.Max < 0 {
+		return ierr.NewError("max must be >= 0").
+			WithHint("max caps replayed messages; 0 means no cap").
+			Mark(ierr.ErrValidation)
+	}
+	if r.MaxReplays < 0 {
+		return ierr.NewError("max_replays must be >= 0").
+			WithHint("max_replays quarantines a message after this many replays; 0 uses the default").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
