@@ -206,8 +206,11 @@ test: install-typst
 # .dockerignore, so a sibling file without the ee/ entry scopes the exception to
 # this build alone rather than mutating .dockerignore.
 docker-build-ee: verify-ee-pin
-	@grep -v '^ee/$$' .dockerignore > Dockerfile.dockerignore
-	@trap 'rm -f Dockerfile.dockerignore' EXIT; \
+	@test ! -e Dockerfile.dockerignore || \
+		(echo "Dockerfile.dockerignore already exists — a previous build left it behind."; \
+		 echo "Remove it before continuing; while present, every docker build includes ee/."; exit 1)
+	@trap 'rm -f Dockerfile.dockerignore' EXIT INT TERM HUP; \
+	grep -v '^ee/$$' .dockerignore > Dockerfile.dockerignore; \
 	docker build --build-arg BUILD_TAGS=ee -t $${IMAGE:-flexprice-ee} .
 
 # Verify the ee/ submodule is at the reviewed commit.
