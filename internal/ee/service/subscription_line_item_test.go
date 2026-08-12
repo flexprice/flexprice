@@ -2078,3 +2078,90 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItemInternal_D
 	s.Require().NoError(err)
 	s.Equal(0, s.countSubscriptionUpdated())
 }
+
+func (s *SubscriptionLineItemServiceSuite) countLineItemCreated() int {
+	n := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *SubscriptionLineItemServiceSuite) countLineItemDeleted() int {
+	n := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_PublishesLineItemCreated() {
+	ctx := s.GetContext()
+	price2 := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, price2))
+
+	s.resetWebhooks()
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              price2.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(1, s.countLineItemCreated())
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_PublishesLineItemDeleted() {
+	ctx := s.GetContext()
+	s.resetWebhooks()
+	resp, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(1, s.countLineItemDeleted())
+}
+
+// TestAddSubscriptionLineItem_UsagePriceDoesNotPublishLineItemEvent verifies that a
+// USAGE-price line item must NOT publish subscription.line_item.created — only
+// FIXED-price line items sync to HubSpot deal line items.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_UsagePriceDoesNotPublishLineItemEvent() {
+	ctx := s.GetContext()
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	s.resetWebhooks()
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePrice.ID,
+		SkipEntitlementCheck: true,
+	})
+	s.Require().NoError(err)
+	s.Equal(0, s.countLineItemCreated(),
+		"a USAGE-price line item must not publish subscription.line_item.created")
+}
