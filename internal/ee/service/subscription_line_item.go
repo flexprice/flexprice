@@ -580,6 +580,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// Execute the complex update within a transaction
 		var newLineItem *subscription.SubscriptionLineItem
+		var terminatedLineItem *subscription.SubscriptionLineItem
 		err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Process the price override using existing method
 			lineItems := []*subscription.SubscriptionLineItem{existingLineItem}
@@ -595,10 +596,11 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
 				EffectiveFrom: &endDate,
 			}
-			_, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
+			deletedResp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 			if err != nil {
 				return err
 			}
+			terminatedLineItem = deletedResp.SubscriptionLineItem
 
 			// Create new line item using the DTO method
 			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
@@ -657,6 +659,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		)
 
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{terminatedLineItem},
+			types.WebhookEventSubscriptionLineItemDeleted)
+		s.publishLineItemEvents(ctx, sub.ID,
+			[]*subscription.SubscriptionLineItem{newLineItem},
+			types.WebhookEventSubscriptionLineItemCreated)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
 		// Update metadata and commitment fields if provided

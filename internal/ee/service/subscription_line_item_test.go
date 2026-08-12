@@ -2165,3 +2165,34 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_UsagePric
 	s.Equal(0, s.countLineItemCreated(),
 		"a USAGE-price line item must not publish subscription.line_item.created")
 }
+
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_PriceOverride_PublishesDeleteThenCreate() {
+	ctx := s.GetContext()
+
+	req := dto.UpdateSubscriptionLineItemRequest{
+		Amount: lo.ToPtr(decimal.NewFromInt(500)), // triggers ShouldCreateNewLineItem()
+	}
+
+	s.resetWebhooks()
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotEqual(s.testData.lineItem.ID, resp.SubscriptionLineItem.ID, "expected a new line item, not an in-place update")
+
+	events := s.GetPublishedWebhooks()
+	var sawDeleted, sawCreated bool
+	var deletedIdx, createdIdx int
+	for i, e := range events {
+		if e.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			sawDeleted = true
+			deletedIdx = i
+		}
+		if e.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			sawCreated = true
+			createdIdx = i
+		}
+	}
+	s.Require().True(sawDeleted, "expected subscription.line_item.deleted for the old line item")
+	s.Require().True(sawCreated, "expected subscription.line_item.created for the new line item")
+	s.Require().Less(deletedIdx, createdIdx, "deleted must publish before created, matching delete-old-then-create-new order")
+}
