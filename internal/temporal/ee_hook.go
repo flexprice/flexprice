@@ -1,6 +1,8 @@
 package temporal
 
 import (
+	"fmt"
+
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -23,9 +25,24 @@ func RegisterEEContributor(c EEContributor) {
 
 // applyEEContributions merges every EE contribution for a task queue into the
 // config the core builder produced. Returns cfg untouched in a community build.
+//
+// A contributor can only add to a queue the community build already runs.
+// Workers are started from types.GetAllTaskQueues() (cmd/server/main.go), a
+// fixed list, so a contribution naming a queue outside it would be registered
+// and then never polled — a silent no-op. Rather than let WorkerConfig.TaskQueue
+// look supported, a mismatch panics at startup.
 func applyEEContributions(cfg WorkerConfig, params service.ServiceParams, taskQueue types.TemporalTaskQueue) WorkerConfig {
 	for _, contribute := range eeContributors {
 		extra := contribute(params, taskQueue)
+		if len(extra.Workflows) == 0 && len(extra.Activities) == 0 {
+			continue
+		}
+		if extra.TaskQueue != "" && extra.TaskQueue != taskQueue {
+			panic(fmt.Sprintf(
+				"ee contribution targets task queue %q while building %q; "+
+					"contributors must return an empty WorkerConfig for queues they do not extend",
+				extra.TaskQueue, taskQueue))
+		}
 		cfg.Workflows = append(cfg.Workflows, extra.Workflows...)
 		cfg.Activities = append(cfg.Activities, extra.Activities...)
 	}

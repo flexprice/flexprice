@@ -70,3 +70,33 @@ func TestApplyEEContributionsIsAdditive(t *testing.T) {
 func sameFunc(a, b interface{}) bool {
 	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }
+
+// TestContributionToForeignQueuePanics covers a trap in the WorkerConfig shape:
+// the struct has a TaskQueue field, so a contributor can plausibly set it to a
+// queue it wants to own. Workers are started from a fixed list, so such a
+// contribution would be registered and never polled — a silent no-op. It must
+// fail at startup instead.
+func TestContributionToForeignQueuePanics(t *testing.T) {
+	original := eeContributors
+	t.Cleanup(func() { eeContributors = original })
+
+	eeContributors = []EEContributor{
+		func(_ service.ServiceParams, _ types.TemporalTaskQueue) WorkerConfig {
+			return WorkerConfig{
+				TaskQueue: types.TemporalTaskQueueCron,
+				Workflows: []interface{}{func() {}},
+			}
+		},
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Error("contributing to a queue other than the one being built should panic")
+		}
+	}()
+	applyEEContributions(
+		WorkerConfig{TaskQueue: types.TemporalTaskQueueWorkflows},
+		service.ServiceParams{},
+		types.TemporalTaskQueueWorkflows,
+	)
+}
