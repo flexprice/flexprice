@@ -2127,6 +2127,79 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 // Pay-first quantity change tests
 // ─────────────────────────────────────────────
 
+// TestCompleteModifySubscriptionCheckout_PublishesLineItemDeleteAndCreate verifies that
+// completing a checkout-driven quantity change publishes subscription.line_item.deleted
+// for the ended line item and subscription.line_item.created for its replacement.
+func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionCheckout_PublishesLineItemDeleteAndCreate() {
+	ctx := s.GetContext()
+	periodStart := s.GetNow()
+	effectiveDate := periodStart.AddDate(0, 0, 15)
+
+	cust := s.createCustomer("payfirst-lineitem-events")
+	sub := s.createActiveSub(cust.ID)
+	priceAmount := decimal.NewFromInt(50)
+	p := s.createFixedPrice(priceAmount, types.InvoiceCadenceAdvance)
+	li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+
+	modSvc := s.service.(*subscriptionModificationService)
+	request, err := modSvc.buildQuantityChangeRequest(ctx, sub.ID, &dto.SubModifyQuantityChangeRequest{
+		LineItems: []dto.LineItemQuantityChange{
+			{ID: li.ID, Quantity: decimal.NewFromInt(3), EffectiveDate: &effectiveDate},
+		},
+	})
+	s.Require().NoError(err)
+
+	proration, err := modSvc.calculateProration(ctx, request)
+	s.Require().NoError(err)
+	s.Require().True(proration.GetNetAmount().GreaterThan(decimal.Zero))
+
+	draftInv, err := modSvc.createAggregatedProrationDraftInvoice(ctx, request.GetSubscription(), proration)
+	s.Require().NoError(err)
+	s.Require().NotNil(draftInv)
+
+	params := s.buildServiceParams()
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draftInv.Invoice, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+
+	invID := draftInv.ID
+	payID := payResp.ID
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      cust.ID,
+		Action:          types.CheckoutActionModifySubscription,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			ModifySubscriptionParams: request.toModifySubscriptionParams(),
+		}),
+		CheckoutInvoiceID: &invID,
+		CheckoutPaymentID: &payID,
+		ExpiresAt:         time.Now().UTC().Add(time.Hour),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	err = checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_test_lineitem_events_001",
+	})
+	s.Require().NoError(err)
+
+	var sawDeleted, sawCreated bool
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemDeleted {
+			sawDeleted = true
+		}
+		if e.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			sawCreated = true
+		}
+	}
+	s.Require().True(sawDeleted, "expected subscription.line_item.deleted")
+	s.Require().True(sawCreated, "expected subscription.line_item.created")
+}
+
 func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_CheckoutIgnoredOnCredit() {
 	ctx := s.GetContext()
 	effectiveDate := s.GetNow().AddDate(0, 0, 15)
