@@ -25,7 +25,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 
 	var results []result
 
-	fullCustomer := buildCustomerResponse(500)
+	fullCustomer := buildCustomerResponse(2000)
 	results = append(results, result{
 		entity:   "customer",
 		tier:     "huge",
@@ -33,7 +33,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 		newBytes: marshal(t, NewCustomerWebhookPayload(fullCustomer, types.WebhookEventCustomerUpdated)),
 	})
 
-	fullSubscription := buildSubscriptionResponse(500, 500, 500)
+	fullSubscription := buildSubscriptionResponse(2000, 2000, 2000)
 	results = append(results, result{
 		entity:   "subscription",
 		tier:     "huge",
@@ -41,7 +41,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 		newBytes: marshal(t, NewSubscriptionWebhookPayload(fullSubscription, types.WebhookEventSubscriptionUpdated)),
 	})
 
-	fullInvoice := buildInvoiceResponse(500)
+	fullInvoice := buildInvoiceResponse(2000)
 	results = append(results, result{
 		entity:   "invoice",
 		tier:     "huge",
@@ -49,7 +49,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 		newBytes: marshal(t, NewInvoiceWebhookPayload(fullInvoice, types.WebhookEventInvoiceUpdateFinalized)),
 	})
 
-	fullCreditNote := buildCreditNoteResponse(500)
+	fullCreditNote := buildCreditNoteResponse(2000)
 	results = append(results, result{
 		entity:   "credit_note",
 		tier:     "huge",
@@ -57,7 +57,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 		newBytes: marshal(t, NewCreditNoteWebhookPayload(fullCreditNote, types.WebhookEventCreditNoteUpdated)),
 	})
 
-	fullPayment := buildPaymentResponse(500)
+	fullPayment := buildPaymentResponse(2000)
 	results = append(results, result{
 		entity:   "payment",
 		tier:     "huge",
@@ -123,7 +123,7 @@ func TestPayloadSize_NewIsSmallerThanOld(t *testing.T) {
 		)),
 	})
 
-	fullInvoiceForComm := buildInvoiceResponse(50)
+	fullInvoiceForComm := buildInvoiceResponse(800)
 	results = append(results, result{
 		entity:   "communication",
 		tier:     "fixed",

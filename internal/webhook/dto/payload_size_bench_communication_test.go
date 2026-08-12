@@ -8,7 +8,7 @@ import (
 )
 
 func BenchmarkCommunicationPayloadSize(b *testing.B) {
-	full := buildInvoiceResponse(50)
+	full := buildInvoiceResponse(800)
 
 	b.Run("fixed/old", func(b *testing.B) {
 		var size int

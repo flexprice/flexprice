@@ -11,7 +11,7 @@ func BenchmarkCustomerPayloadSize(b *testing.B) {
 	tiers := []struct {
 		name string
 		n    int
-	}{{"small", 5}, {"medium", 50}, {"huge", 500}}
+	}{{"small", 200}, {"medium", 800}, {"huge", 2000}}
 
 	for _, tier := range tiers {
 		full := buildCustomerResponse(tier.n)
