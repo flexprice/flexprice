@@ -925,6 +925,14 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	default:
+		// Enterprise keys carry their own validator, since the community build
+		// has no type to decode them into.
+		if def, ok := LookupEESetting(key); ok {
+			if def.Validate == nil {
+				return nil
+			}
+			return def.Validate(value)
+		}
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
