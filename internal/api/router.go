@@ -80,6 +80,7 @@ func NewRouter(
 	webhookRequestRepo domainIncomingWebhookEvent.Repository,
 	environmentRepo domainEnvironment.Repository,
 	userRepo domainUser.Repository,
+	serviceParams service.ServiceParams,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -743,10 +744,11 @@ func NewRouter(
 	// Routes contributed by the ee/ submodule. No-op in a community build.
 	// Mounted last so EE can only add paths, never shadow a community route.
 	applyEERoutes(EERouteParams{
-		Config:  cfg,
-		Logger:  logger,
-		Public:  v1Public,
-		Private: v1Private,
+		Config:        cfg,
+		Logger:        logger,
+		ServiceParams: serviceParams,
+		Public:        v1Public,
+		Private:       v1Private,
 	})
 
 	return router

@@ -180,8 +180,24 @@ type ServerConfig struct {
 type AuthConfig struct {
 	Provider types.AuthProvider `mapstructure:"provider" validate:"required"`
 	Secret   string             `mapstructure:"secret" validate:"required"`
+	SAML     SAMLConfig         `mapstructure:"saml"`
 	Supabase SupabaseConfig     `mapstructure:"supabase"`
 	APIKey   APIKeyConfig       `mapstructure:"api_key"`
+}
+
+// SAMLConfig holds deployment-level SAML settings. Per-tenant identity provider
+// details live in the tenant's saml_config setting, not here.
+type SAMLConfig struct {
+	// BaseURL is the externally reachable origin of this deployment. It builds
+	// the SP entity ID and ACS URL published in our metadata, so it must match
+	// what the identity provider is configured to call back.
+	BaseURL string `mapstructure:"base_url"`
+	// DashboardURL receives the browser redirect after a successful assertion,
+	// carrying the minted token.
+	DashboardURL string `mapstructure:"dashboard_url"`
+	// EnforceSSO rejects password login deployment-wide. A per-tenant toggle
+	// would need a break-glass path; this is the simpler first step.
+	EnforceSSO bool `mapstructure:"enforce_sso"`
 }
 
 type SupabaseConfig struct {

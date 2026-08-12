@@ -444,6 +444,7 @@ func provideRouter(
 	webhookRequestRepo incomingwebhookevent.Repository,
 	environmentRepo environment.Repository,
 	userRepo user.Repository,
+	serviceParams service.ServiceParams,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -456,6 +457,7 @@ func provideRouter(
 		webhookRequestRepo,
 		environmentRepo,
 		userRepo,
+		serviceParams,
 	)
 }
 

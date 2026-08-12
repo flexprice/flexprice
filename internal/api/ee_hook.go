@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -12,6 +13,9 @@ import (
 type EERouteParams struct {
 	Config *config.Configuration
 	Logger *logger.Logger
+	// ServiceParams gives enterprise routes the same repository and service
+	// access community handlers have, so they need no bespoke wiring.
+	ServiceParams service.ServiceParams
 	// Public is the unauthenticated /v1 group. EE routes that must be reachable
 	// before a session exists (SSO redirects, IdP callbacks) mount here.
 	Public *gin.RouterGroup
