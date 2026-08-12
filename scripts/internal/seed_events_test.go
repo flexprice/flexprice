@@ -15,6 +15,10 @@ func TestDummyEventGeneratorsPopulateMaxAggregationField(t *testing.T) {
 			Type:  types.AggregationMax,
 			Field: "storage_gb",
 		},
+		Filters: []meter.Filter{{
+			Key:    "storage_gb",
+			Values: []string{"not-a-number"},
+		}},
 	}
 
 	tests := []struct {

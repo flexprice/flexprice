@@ -393,16 +393,17 @@ func parseStartDate(raw string) (time.Time, error) {
 
 func eventPropertiesForMeter(m *meter.Meter) map[string]interface{} {
 	properties := make(map[string]interface{})
+	for _, filter := range m.Filters {
+		if len(filter.Values) > 0 {
+			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
+		}
+	}
+
 	if m.Aggregation.Type == types.AggregationSum ||
 		m.Aggregation.Type == types.AggregationAvg ||
 		m.Aggregation.Type == types.AggregationMax {
 		if m.Aggregation.Field != "" {
 			properties[m.Aggregation.Field] = rand.Int63n(1000) + 1
-		}
-	}
-	for _, filter := range m.Filters {
-		if len(filter.Values) > 0 {
-			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
 		}
 	}
 	return properties

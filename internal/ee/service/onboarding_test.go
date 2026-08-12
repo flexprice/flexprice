@@ -13,6 +13,10 @@ func TestOnboardingCreateEventRequestPopulatesMaxAggregationField(t *testing.T) 
 			Type:  types.AggregationMax,
 			Field: "storage_gb",
 		},
+		Filters: []types.FilterInfo{{
+			Key:    "storage_gb",
+			Values: []string{"not-a-number"},
+		}},
 	}
 
 	event := (&onboardingService{}).createEventRequest(
