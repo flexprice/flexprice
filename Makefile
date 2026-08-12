@@ -194,8 +194,21 @@ define run-go-test
 endef
 
 # Run all tests
+# cmd/server is included for the ee wiring guards, which assert that a community
+# build registers no enterprise code.
 test: install-typst
-	$(call run-go-test,-v -race ./internal/...)
+	$(call run-go-test,-v -race ./internal/... ./cmd/server/...)
+
+# Run the enterprise build's tests. Requires the ee/ submodule:
+#   git submodule update --init
+# Skips with a notice rather than failing when ee/ is empty, so a community
+# clone can still run `make test-ee` without an error it cannot act on.
+test-ee:
+	@if [ -z "$$(ls -A ee 2>/dev/null | grep -v '^\.git$$')" ]; then \
+		echo "ee/ is empty — run 'git submodule update --init' (needs access to flexprice/ee). Skipping."; \
+	else \
+		go test -tags ee ./ee/... ./cmd/server/... ./internal/...; \
+	fi
 
 # Run tests with verbose output
 test-verbose:

@@ -38,3 +38,7 @@ func applyEERoutes(params EERouteParams) {
 		register(params)
 	}
 }
+
+// EERouteRegistrarCount reports how many enterprise route registrars are
+// mounted. See temporal.EEContributorCount for why this is exported.
+func EERouteRegistrarCount() int { return len(eeRouteRegistrars) }

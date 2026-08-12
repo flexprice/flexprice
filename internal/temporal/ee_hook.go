@@ -31,3 +31,9 @@ func applyEEContributions(cfg WorkerConfig, params service.ServiceParams, taskQu
 	}
 	return cfg
 }
+
+// EEContributorCount reports how many enterprise contributors registered. It
+// exists so a build-level test can assert that an `-tags ee` binary actually
+// reached the ee/ init() functions — a build succeeding does not prove the
+// import chain is wired.
+func EEContributorCount() int { return len(eeContributors) }
