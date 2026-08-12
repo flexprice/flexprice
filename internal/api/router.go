@@ -740,5 +740,14 @@ func NewRouter(
 		workflows.GET("/:workflow_id/:run_id", read(types.EntityWorkflow, types.ActionRead), handlers.Workflow.GetWorkflowDetails)
 	}
 
+	// Routes contributed by the ee/ submodule. No-op in a community build.
+	// Mounted last so EE can only add paths, never shadow a community route.
+	applyEERoutes(EERouteParams{
+		Config:  cfg,
+		Logger:  logger,
+		Public:  v1Public,
+		Private: v1Private,
+	})
+
 	return router
 }
