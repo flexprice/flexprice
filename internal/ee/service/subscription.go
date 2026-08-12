@@ -570,6 +570,17 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCreated, result.Sub.ID)
 	}
 
+	// Re-fetch rather than trust result.Sub.LineItems: addon-derived and extra
+	// req.LineItems-derived line items are appended to a different in-memory
+	// subscription object by their own internal fetch-and-append calls, and never
+	// make it back onto this one.
+	if _, allLineItems, err := s.SubRepo.GetWithLineItems(ctx, result.Sub.ID); err == nil {
+		s.publishLineItemEvents(ctx, result.Sub.ID, allLineItems, types.WebhookEventSubscriptionLineItemCreated)
+	} else {
+		s.Logger.Error(ctx, "failed to fetch line items for post-create publish",
+			"error", err, "subscription_id", result.Sub.ID)
+	}
+
 	if req.Checkout != nil && result.Sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 		invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, response)
 		if err != nil {

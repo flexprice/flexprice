@@ -2764,6 +2764,79 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems() {
 	}
 }
 
+// TestCreateSubscription_PublishesLineItemCreatedForPlanAndExtraLineItems verifies that
+// CreateSubscription publishes subscription.line_item.created for both the plan-derived
+// line item and any extra FIXED-price line item supplied via req.LineItems — using a
+// self-contained plan with exactly one FIXED price so the plan-derived count is exact
+// (avoids depending on the shared testData.plan's many prices).
+func (s *SubscriptionServiceSuite) TestCreateSubscription_PublishesLineItemCreatedForPlanAndExtraLineItems() {
+	ctx := s.GetContext()
+
+	onePricePlan := &plan.Plan{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:        "Single Fixed Price Plan",
+		Description: "Plan with exactly one FIXED usd/monthly price",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, onePricePlan))
+
+	planPrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(50),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           onePricePlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, planPrice))
+
+	inlinePriceReq := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             lo.ToPtr(decimal.NewFromInt(5)),
+		LookupKey:          "extra_fixed_line_item",
+	}
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             onePricePlan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(90 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+			LineItems: []dto.CreateSubscriptionLineItemRequest{
+				{Price: inlinePriceReq},
+			},
+		},
+	}
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	createdCount := 0
+	for _, e := range s.GetPublishedWebhooks() {
+		if e.EventName == types.WebhookEventSubscriptionLineItemCreated {
+			createdCount++
+		}
+	}
+	s.Require().Equal(2, createdCount,
+		"expected line_item.created for both the plan-derived line item and the extra req.LineItems entry")
+}
+
 // TestCreateSubscriptionWithLineItems_ValidationErrors asserts that CreateSubscription fails when LineItems
 // have invalid or out-of-bound values (e.g. start_date before subscription start, end_date after subscription end).
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_ValidationErrors() {
