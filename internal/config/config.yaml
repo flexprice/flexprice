@@ -7,6 +7,18 @@ server:
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
   secret: "super_secret"
+  # SAML single sign-on. Enterprise builds only; inert in a community build.
+  # Per-tenant identity provider details live in the tenant's saml_config
+  # setting, not here.
+  saml:
+    # Externally reachable origin of this deployment. Builds the SP entity ID
+    # and ACS URL published in our metadata, so it must match what the identity
+    # provider is configured to call back.
+    base_url: "http://localhost:8080"
+    # Where the browser lands after a successful assertion, carrying the token.
+    dashboard_url: "http://localhost:3000/auth/callback"
+    # Refuse password login deployment-wide.
+    enforce_sso: false
   supabase:
     base_url: "http://localhost:54321"
     service_key: "<supabase service key>"
