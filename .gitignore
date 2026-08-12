@@ -12,7 +12,9 @@
 *.test
 *.out
 build/
-server
+# Anchored to the repo root so it matches the compiled binary only. A bare
+# "server" also matched the cmd/server/ directory, silently excluding source.
+/server
 
 # =============================================================================
 # Dependencies
