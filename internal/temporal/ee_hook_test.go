@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -45,8 +46,16 @@ func TestApplyEEContributionsIsAdditive(t *testing.T) {
 	if len(got.Workflows) != 2 {
 		t.Fatalf("ee build: got %d workflows, want 2 (1 core + 1 ee)", len(got.Workflows))
 	}
-	if len(got.Activities) != 1 {
-		t.Fatalf("ee build dropped a core activity: got %d, want 1", len(got.Activities))
+	// Identity and order, not just count: a contributor that prepends, or that
+	// overwrites the core entry with its own, would satisfy a length check.
+	if !sameFunc(got.Workflows[0], coreWorkflow) {
+		t.Error("core workflow is no longer first — ee contribution must append, not prepend or replace")
+	}
+	if !sameFunc(got.Workflows[1], eeWorkflow) {
+		t.Error("ee workflow is not the appended entry")
+	}
+	if len(got.Activities) != 1 || !sameFunc(got.Activities[0], coreActivity) {
+		t.Errorf("core activity was disturbed: got %d entries", len(got.Activities))
 	}
 
 	// A contributor scoped to another queue must contribute nothing here.
@@ -54,4 +63,10 @@ func TestApplyEEContributionsIsAdditive(t *testing.T) {
 	if len(got.Workflows) != 1 {
 		t.Fatalf("contributor leaked across queues: got %d workflows, want 1", len(got.Workflows))
 	}
+}
+
+// sameFunc reports whether two func values are the same function. Funcs are not
+// comparable with ==, so identity is checked by code pointer.
+func sameFunc(a, b interface{}) bool {
+	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
 }

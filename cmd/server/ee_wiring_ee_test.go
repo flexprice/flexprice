@@ -27,12 +27,16 @@ func TestEERegistriesPopulated(t *testing.T) {
 		t.Fatalf("eeOptions() returned %d options, want 1 — is ee_enabled.go compiled?", got)
 	}
 
+	// Counts, not payloads. During the copy phase ee/alerts registers an empty
+	// contribution on purpose — the community build still owns the workflow, and
+	// the Temporal SDK panics on a duplicate name. A registered-but-empty
+	// contributor still proves the import chain reached init().
 	checks := []struct {
 		registry string
 		count    int
 		feature  string
 	}{
-		{"temporal contributors", temporal.EEContributorCount(), "ee/alerts UsageAlertWorkflow"},
+		{"temporal contributors", temporal.EEContributorCount(), "ee/alerts"},
 		{"auth providers", auth.EEProviderCount(), "ee/auth/saml"},
 		{"api route registrars", api.EERouteRegistrarCount(), "ee/auth/saml routes"},
 	}

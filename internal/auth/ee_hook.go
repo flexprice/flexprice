@@ -19,6 +19,11 @@ var eeProviders = map[types.AuthProvider]ProviderFactory{}
 // value. Registering a name the community build already owns is a programming
 // error and panics at startup rather than silently shadowing it.
 func RegisterEEProvider(name types.AuthProvider, factory ProviderFactory) {
+	// An empty name would be selected whenever auth.provider is unset, silently
+	// replacing the documented flexprice fallback.
+	if name == "" {
+		panic("ee auth provider must have a non-empty name")
+	}
 	if name == types.AuthProviderFlexprice || name == types.AuthProviderSupabase {
 		panic("ee auth provider may not override the built-in provider: " + string(name))
 	}
