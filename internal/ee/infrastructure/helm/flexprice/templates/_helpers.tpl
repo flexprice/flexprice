@@ -225,10 +225,27 @@ Backwards-compatible with the old hardcoded refs when the values block is unset.
 
 {{/*
 Resolve the PostgreSQL host.
-Uses the bitnami/postgresql subchart service name when internal, or the user-supplied host when external.
+Uses the bitnami/postgresql subchart service name when internal, or the
+user-supplied host when external.
+
+Under the config-autobind shape (.Values.env set), the address is declared as
+env.FLEXPRICE_POSTGRES_HOST and that is what the application reads. Templates
+that cannot go through the env block — the migration Job's init containers and
+the legacy ConfigMap — resolve the address through this helper instead, so
+prefer the autobind value when it is present and fall back to postgres.host.
+
+Without this, the address has to be declared TWICE in every values file and the
+two copies silently disagree the moment one is updated: the app connects fine
+while the migration Job loops "[n/60] Not ready yet..." against a dead IP. Every
+region currently mirrors the value by hand; asia-south1 even carries a comment
+telling the next person to keep them in sync. This makes the mirror unnecessary
+— a values file may still set postgres.host, and it is used only when the
+autobind key is absent, so existing regions render unchanged.
 */}}
 {{- define "flexprice.postgresHost" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_HOST") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_HOST" -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.host }}
 {{- else -}}
 {{- printf "%s-postgresql" .Release.Name }}
@@ -236,10 +253,12 @@ Uses the bitnami/postgresql subchart service name when internal, or the user-sup
 {{- end }}
 
 {{/*
-Resolve the PostgreSQL port.
+Resolve the PostgreSQL port. Same autobind precedence as the host above.
 */}}
 {{- define "flexprice.postgresPort" -}}
-{{- if .Values.postgres.external.enabled -}}
+{{- if and .Values.env (index .Values.env "FLEXPRICE_POSTGRES_PORT") -}}
+{{- index .Values.env "FLEXPRICE_POSTGRES_PORT" | toString -}}
+{{- else if .Values.postgres.external.enabled -}}
 {{- .Values.postgres.port | toString }}
 {{- else -}}
 5432
