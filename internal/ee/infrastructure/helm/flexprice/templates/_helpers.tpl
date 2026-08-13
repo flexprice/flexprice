@@ -310,7 +310,18 @@ Resolve the ClickHouse address (host:port) based on clickhouse.mode.
 {{- if eq .Values.clickhouse.mode "external" -}}
 {{- .Values.clickhouse.address }}
 {{- else if eq .Values.clickhouse.mode "altinity" -}}
-{{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
+{{- /* Namespace-qualified when clickhouse.namespace is set, matching what the
+       standalone branch below already does via flexprice.clickhouseServiceHost.
+       The operator's Service lives in the ClickHouse namespace, so the bare
+       name only resolves for consumers in that same namespace — the migration
+       Job runs in the release namespace and failed with
+       "nc: bad address 'chi-flexprice-flexprice-0-0'". */ -}}
+{{- $chSvc := printf "chi-%s-flexprice-0-0" (include "flexprice.fullname" .) -}}
+{{- if .Values.clickhouse.namespace -}}
+{{- printf "%s.%s.svc.cluster.local:9000" $chSvc .Values.clickhouse.namespace }}
+{{- else -}}
+{{- printf "%s:9000" $chSvc }}
+{{- end -}}
 {{- else -}}
 {{- printf "%s:9000" (include "flexprice.clickhouseServiceHost" .) }}
 {{- end -}}
