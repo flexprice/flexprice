@@ -67,6 +67,20 @@ spec:
           volumeMounts:
             - name: nginx-conf
               mountPath: /etc/nginx/conf.d
+            {{- /*
+              nginx runs as non-root under the chart's podSecurityContext
+              (runAsNonRoot, runAsUser 1000), so every path it writes to must be
+              a writable volume. proxy_cache_path makes it create a cache
+              directory at startup, which otherwise fails hard:
+                [emerg] mkdir() "/var/cache/nginx/gcs" failed (13: Permission denied)
+              and the container CrashLoopBackOffs while gcsproxy beside it stays
+              healthy. The raw region manifests this mode replaces ran without
+              any securityContext, so they never hit it.
+            */}}
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
           readinessProbe:
             httpGet:
               path: /healthz
@@ -124,6 +138,13 @@ spec:
             items:
               - key: default.conf
                 path: default.conf
+        # Writable scratch for a non-root nginx: the proxy cache and the pid
+        # file. Both are ephemeral by nature — the cache is a performance aid
+        # over immutable hashed assets, never a source of truth.
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
       {{- end }}
       {{- with (default .Values.nodeSelector .Values.frontend.nodeSelector) }}
       nodeSelector:
