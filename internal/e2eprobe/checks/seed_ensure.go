@@ -127,7 +127,7 @@ func (s *SeedEnsure) Run(ctx context.Context) error {
 	// tenant. See the "no ephemeral customers on staging" report.
 	if err := s.ensureEntitlementGrants(ctx, &seeds); err != nil {
 		if s.logger != nil {
-			s.logger.Warn(ctx, "seed-ensure: grant provisioning failed; continuing without grant coverage",
+			s.logger.Info(ctx, "seed-ensure: grant provisioning failed; continuing without grant coverage",
 				"error", err.Error(),
 			)
 		}
