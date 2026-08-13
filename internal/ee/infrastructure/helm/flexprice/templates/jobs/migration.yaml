@@ -3,7 +3,26 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "flexprice.fullname" . }}-migration-{{ include "flexprice/templates/app/configmap.yaml" . | sha256sum | trunc 8 }}
+  {{- /*
+    Name suffix hashes the RENDERED ENVIRONMENT, not templates/app/configmap.yaml.
+
+    That template renders nothing under the config-autobind shape (.Values.env
+    set) — and, as it turns out, nothing for the legacy shape either, since the
+    app config moved out of a ConfigMap. Hashing it therefore produced a
+    CONSTANT suffix for every release in every region.
+
+    A constant name is fatal under ArgoCD: it records the hook as completed for
+    the revision and never recreates it, so the migration silently never runs
+    while the app Deployments roll out normally. The pods come up Running
+    against an unmigrated database, and /health does not touch Postgres so
+    nothing surfaces the problem. Any Job created by hand with the same name is
+    pruned as a duplicate of that already-completed hook.
+
+    flexprice.env is the actual config surface (74 vars in a production region),
+    so hashing it gives a suffix that is stable when config is unchanged and
+    changes whenever it is — which is what the checksum was always meant to do.
+  */}}
+  name: {{ include "flexprice.fullname" . }}-migration-{{ include "flexprice.env" . | sha256sum | trunc 8 }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
