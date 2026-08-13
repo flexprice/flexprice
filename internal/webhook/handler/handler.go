@@ -108,6 +108,24 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 			Mark(ierr.ErrValidation)
 	}
 
+	if types.IsInternalOnlyWebhookEvent(event.EventName) {
+		h.logger.Debug(ctx, "skipping delivery for internal-only event",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		if h.systemEventRepo != nil && event.ID != "" {
+			if err := h.systemEventRepo.OnDelivered(ctx, event.ID, nil); err != nil {
+				h.logger.Info(ctx, "system_events OnDelivered failed for internal-only event",
+					"error", err,
+					"event_id", event.ID,
+					"event_name", event.EventName,
+				)
+				return err
+			}
+		}
+		return nil
+	}
+
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
@@ -212,6 +230,22 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 			}
 		}
 		return nil // Don't retry on unmarshal errors
+	}
+
+	if types.IsInternalOnlyWebhookEvent(event.EventName) {
+		if h.systemEventRepo != nil && msg.UUID != "" {
+			if err := h.systemEventRepo.OnDelivered(ctx, msg.UUID, nil); err != nil {
+				// Swallow, don't propagate: an error here would let Watermill nack and
+				// redeliver the Kafka message, reintroducing the exact retry churn this
+				// skip exists to close. Matches the unmarshal-error branch above.
+				h.logger.Info(ctx, "system_events OnDelivered failed for internal-only event",
+					"error", err,
+					"message_uuid", msg.UUID,
+					"event_name", event.EventName,
+				)
+			}
+		}
+		return nil
 	}
 
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)

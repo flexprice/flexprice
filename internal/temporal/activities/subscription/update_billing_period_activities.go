@@ -305,6 +305,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
 		subscriptionService := service.NewSubscriptionService(s.serviceParams)
+		var terminatedLineItemsForCancellation []*subscription.SubscriptionLineItem
 
 		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Update subscription
@@ -319,13 +320,15 @@ func (s *BillingActivities) CheckCancellationActivity(
 			// internal/ee/service/subscription.go — never fires for a bare EndDate set through
 			// some other path that never had termination deferred in the first place.
 			if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-				if err := subscriptionService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+				terminated, err := subscriptionService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 					SubscriptionID:     sub.ID,
 					EffectiveDate:      *sub.CancelAt,
 					CancellationReason: sub.Metadata["cancellation_reason"],
-				}); err != nil {
+				})
+				if err != nil {
 					return err
 				}
+				terminatedLineItemsForCancellation = terminated
 			}
 
 			// Update the cancellation schedule status to executed
@@ -350,7 +353,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 			return nil, err
 		}
 
-		subscriptionService.PublishCancellationEvents(ctx, sub)
+		subscriptionService.PublishCancellationEvents(ctx, sub, terminatedLineItemsForCancellation)
 
 		s.logger.Info(ctx, "subscription cancelled successfully",
 			"subscription_id", sub.ID,
