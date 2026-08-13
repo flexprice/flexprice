@@ -31,14 +31,31 @@ metadata:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-10"
     {{- /*
-      hook-succeeded ONLY — see the matching note in jobs/migration.yaml.
-      before-hook-creation makes ArgoCD delete the hook and then fail
-      reconciling against the resource it just removed, which stalls PreSync
-      before the migration Job is ever created.
+      NO hook-delete-policy on purpose. This is what makes the migration run
+      under ArgoCD at all.
 
-      This ServiceAccount is not checksum-named, so re-applying it is an
-      ordinary update rather than a conflict; helm/ArgoCD both patch the
-      existing object in place. hook-succeeded still cleans it up after the
-      migration Job completes, so it does not linger between releases.
+      ArgoCD executes PreSync hooks in weight order and waits for each one to
+      reach a TERMINAL state before starting the next. A ServiceAccount has no
+      status and no completion condition, so with a delete policy attached
+      ArgoCD parks it at hookPhase: Running forever and never applies the
+      weight -5 migration Job. The controller log shows the symptom exactly:
+
+        PreSync/-10 hook /ServiceAccount:flexprice/flexprice-migration obj->obj
+        PreSync/-5  hook batch/Job:flexprice/.../flexprice-migration-<sum> nil->obj
+        Applying resource ServiceAccount/flexprice-migration ...
+        <no "Applying resource Job/..." line, ever>
+
+      The overall sync still reports Succeeded and the app Deployments roll out,
+      so the failure is silent: pods come up Running against an unmigrated
+      database. This cost the northamerica-northeast2 bring-up several hours.
+
+      Without a delete policy ArgoCD treats the object as applied-and-done and
+      moves on to the Job. Helm keeps working as before — it only waits on hook
+      resources that have a completion concept (Jobs, Pods), never on a
+      ServiceAccount.
+
+      The trade-off is that this ServiceAccount now persists between releases
+      instead of being cleaned up after the Job. That is harmless: it holds no
+      credentials of its own, only Workload-Identity / IRSA annotations
+      mirroring the app SA, and re-applying it is an ordinary in-place update.
     */}}
-    "helm.sh/hook-delete-policy": hook-succeeded
