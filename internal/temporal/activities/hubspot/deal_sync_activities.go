@@ -131,3 +131,120 @@ func (a *DealSyncActivities) UpdateDealAmount(
 
 	return nil
 }
+
+// CreateLineItem creates a single HubSpot line item for one subscription line item,
+// as part of the per-line-item sync path (HubSpotDealLineItemSyncWorkflow) — distinct
+// from the old bulk CreateLineItems, which remains unmodified for any in-flight
+// execution of the old HubSpotDealSyncWorkflow.
+func (a *DealSyncActivities) CreateLineItem(
+	ctx context.Context,
+	input models.HubSpotDealLineItemSyncWorkflowInput,
+) error {
+	a.logger.Info(ctx, "creating HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID,
+		"tenant_id", input.TenantID,
+		"environment_id", input.EnvironmentID)
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
+		a.logger.Error(ctx, "failed to get HubSpot integration",
+			"error", err, "subscription_id", input.SubscriptionID)
+		return err
+	}
+
+	if err := hubspotIntegration.DealSyncSvc.SyncLineItemCreated(ctx, input.SubscriptionID, input.LineItemID, input.DealID); err != nil {
+		a.logger.Error(ctx, "failed to create line item",
+			"error", err, "subscription_id", input.SubscriptionID, "line_item_id", input.LineItemID)
+		return err
+	}
+
+	return nil
+}
+
+// DeleteLineItem deletes a single HubSpot line item, as part of the per-line-item
+// sync path.
+func (a *DealSyncActivities) DeleteLineItem(
+	ctx context.Context,
+	input models.HubSpotDealLineItemSyncWorkflowInput,
+) error {
+	a.logger.Info(ctx, "deleting HubSpot line item",
+		"subscription_id", input.SubscriptionID,
+		"line_item_id", input.LineItemID,
+		"tenant_id", input.TenantID,
+		"environment_id", input.EnvironmentID)
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
+		a.logger.Error(ctx, "failed to get HubSpot integration",
+			"error", err, "subscription_id", input.SubscriptionID)
+		return err
+	}
+
+	if err := hubspotIntegration.DealSyncSvc.SyncLineItemDeleted(ctx, input.LineItemID); err != nil {
+		a.logger.Error(ctx, "failed to delete line item",
+			"error", err, "subscription_id", input.SubscriptionID, "line_item_id", input.LineItemID)
+		return err
+	}
+
+	return nil
+}
+
+// UpdateDealAmountForLineItem recalculates the deal's amount from HubSpot's ACV, for
+// the per-line-item sync path — a distinctly-named sibling of the old bulk
+// UpdateDealAmount so the two workflow types share zero activity registrations.
+func (a *DealSyncActivities) UpdateDealAmountForLineItem(
+	ctx context.Context,
+	input models.HubSpotDealLineItemSyncWorkflowInput,
+) error {
+	a.logger.Info(ctx, "updating HubSpot deal amount",
+		"customer_id", input.CustomerID,
+		"deal_id", input.DealID,
+		"tenant_id", input.TenantID,
+		"environment_id", input.EnvironmentID)
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
+		a.logger.Error(ctx, "failed to get HubSpot integration",
+			"error", err, "customer_id", input.CustomerID, "deal_id", input.DealID)
+		return err
+	}
+
+	if err := hubspotIntegration.DealSyncSvc.UpdateDealAmountFromACV(ctx, input.CustomerID, input.DealID); err != nil {
+		a.logger.Error(ctx, "failed to update deal amount",
+			"error", err, "customer_id", input.CustomerID, "deal_id", input.DealID)
+		return err
+	}
+
+	return nil
+}
