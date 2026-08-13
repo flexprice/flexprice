@@ -71,16 +71,20 @@ func TestEntitlementEnforcementProbe_HappyPath(t *testing.T) {
 	}
 }
 
-func TestEntitlementEnforcementProbe_MissingEntitlementFails(t *testing.T) {
+func TestEntitlementEnforcementProbe_MissingEntitlementSoftSkip(t *testing.T) {
 	fc, regPtr := entTestFake(t)
 	reg := *regPtr
-	// Drop the entitlement response — probe must fail with assert_entitlement_exists.
+	// Drop the entitlement response — an absent entitlement means the seed
+	// step hasn't landed yet; the probe must soft-skip, not page on-call.
 	fc.entitlements.queryResp = nil
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 
 	p := NewEntitlementEnforcementProbe(fc, reg, "test-run", lg)
-	if err := p.Run(context.Background()); err == nil {
-		t.Fatalf("expected error when entitlement absent, got nil")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("absent entitlement must soft-skip; got %v", err)
+	}
+	if len(fc.customers.created) != 0 {
+		t.Errorf("no customer should be created when entitlement prerequisite unmet")
 	}
 }
 

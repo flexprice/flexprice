@@ -18,7 +18,8 @@ func TestCommitmentTrueUpProbe_UnderLeg(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	total := "5.00"
+	// commitment ($5) + base fee ($19.99) = $24.99 minimum.
+	total := "24.99"
 	displayName := "Commitment True-Up"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{
@@ -46,7 +47,8 @@ func TestCommitmentTrueUpProbe_OverLeg(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	total := "8.00"
+	// commitment ($5) + overage ($2 × 1.5) + base fee ($19.99) = $27.99.
+	total := "27.99"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{Total: &total},
 	}
@@ -67,8 +69,9 @@ func TestCommitmentTrueUpProbe_UnderLegMissingTrueUpLineFails(t *testing.T) {
 	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
 	reg.LoadSeeds(e2eprobe.Seeds{PlanIDs: []string{"plan_1"}})
 
-	// Preview has correct total but no true-up marker on any line item.
-	total := "5.00"
+	// Preview has correct total ($24.99 = commitment + base) but no true-up
+	// marker on any line item.
+	total := "24.99"
 	unrelated := "Base Fee"
 	fc.invoices.previewResp = &sdkdtos.GetInvoicePreviewResponse{
 		InvoiceResponse: &sdktypes.InvoiceResponse{

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
@@ -324,7 +325,12 @@ func (f *fakeSubscriptions) GetEntitlements(_ context.Context, _ string, _ []str
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
 }
 func (f *fakeSubscriptions) GetUsage(_ context.Context, _ types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return &dtos.GetSubscriptionUsageResponse{}, nil
+	// Return a large enough Amount that probe usage-threshold gates always
+	// pass in unit tests — the polling loop is exercised in staging.
+	amt := 1e12
+	return &dtos.GetSubscriptionUsageResponse{
+		GetUsageBySubscriptionResponse: &types.GetUsageBySubscriptionResponse{Amount: &amt},
+	}, nil
 }
 func (f *fakeSubscriptions) CreateLineItem(_ context.Context, _ string, _ types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil
@@ -685,6 +691,11 @@ type fakeCoupons struct {
 	byCode    map[string]string // code -> id
 }
 
+// normalizeCouponCode mirrors internal/repository/ent/coupon.go: the real
+// repo lowercases/trims coupon codes on INSERT and stores the normalized
+// form, so the fake must do the same for the CouponCodes filter to hit.
+func normalizeCouponCode(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
 func (f *fakeCoupons) Create(_ context.Context, req types.CreateCouponRequest) (*dtos.CreateCouponResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -697,7 +708,7 @@ func (f *fakeCoupons) Create(_ context.Context, req types.CreateCouponRequest) (
 		if f.byCode == nil {
 			f.byCode = map[string]string{}
 		}
-		f.byCode[*req.CouponCode] = id
+		f.byCode[normalizeCouponCode(*req.CouponCode)] = id
 	}
 	return &dtos.CreateCouponResponse{
 		CouponResponse: &types.CouponResponse{ID: &id, CouponCode: req.CouponCode, Name: &req.Name},
@@ -708,8 +719,9 @@ func (f *fakeCoupons) Query(_ context.Context, filter types.CouponFilter) (*dtos
 	defer f.mu.Unlock()
 	var items []types.CouponResponse
 	for _, code := range filter.CouponCodes {
-		if id, ok := f.byCode[code]; ok {
-			c := code
+		norm := normalizeCouponCode(code)
+		if id, ok := f.byCode[norm]; ok {
+			c := norm
 			i := id
 			items = append(items, types.CouponResponse{ID: &i, CouponCode: &c})
 		}

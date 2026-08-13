@@ -38,7 +38,10 @@ func (p *CouponApplicationProbe) Kind() e2eprobe.Kind { return e2eprobe.KindScen
 
 func (p *CouponApplicationProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
-	if len(seeds.PlanIDs) == 0 || seeds.SharedCouponCode == "" {
+	// SharedCouponID is required — the assertion at the end matches coupon
+	// applications by ID, so a missing ID is an unmet prerequisite (not a
+	// failure worth paging on-call for).
+	if len(seeds.PlanIDs) == 0 || seeds.SharedCouponCode == "" || seeds.SharedCouponID == "" {
 		return nil
 	}
 	planID := seeds.PlanIDs[0]

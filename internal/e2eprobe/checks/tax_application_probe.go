@@ -157,12 +157,16 @@ func (p *TaxApplicationProbe) Run(ctx context.Context) error {
 		// nested TaxRate.Code == SharedTaxRateCode. Seeds.SharedTaxRateID is
 		// empty when the SDK's broken GetTaxRates list + our create-only
 		// idempotency workaround couldn't recover the ID.
-		if tx.TaxRateID != nil && seeds.SharedTaxRateID != "" && *tx.TaxRateID == seeds.SharedTaxRateID {
-			found = true
+		matches := tx.TaxRateID != nil && seeds.SharedTaxRateID != "" && *tx.TaxRateID == seeds.SharedTaxRateID
+		if !matches && tx.TaxRate != nil && tx.TaxRate.Code != nil && *tx.TaxRate.Code == seeds.SharedTaxRateCode {
+			matches = true
 		}
-		if !found && tx.TaxRate != nil && tx.TaxRate.Code != nil && *tx.TaxRate.Code == seeds.SharedTaxRateCode {
-			found = true
+		if !matches {
+			// A different tax entry — e.g. a rate applied through a customer-level
+			// association. Not ours to assert 10% math on.
+			continue
 		}
+		found = true
 		if tx.TaxableAmount != nil && tx.TaxAmount != nil {
 			taxable, err1 := decimal.NewFromString(*tx.TaxableAmount)
 			amt, err2 := decimal.NewFromString(*tx.TaxAmount)

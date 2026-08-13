@@ -16,14 +16,17 @@ import (
 // CommitmentTrueUpProbe creates a fresh ephemeral customer + sub with a
 // $5/mo commitment (1.5× overage), ingests a deterministic amount of usage
 // on e2eprobe_sum ($0.01/unit), then calls GetInvoicePreview and asserts
-// the resulting math.
+// the resulting math. The plan carries a $19.99 monthly fixed base fee
+// (`e2eprobe_base_price` in seed_ensure.go); expected preview totals below
+// bake that in.
 //
 // Alternates legs per run:
 //   - Odd runs (cursor%2 == 1): under-commitment (100 events × $0.01 = $1.00).
-//     Preview total must be at least the commitment ($5.00) — true-up bumps up.
+//     Preview total must be at least commitment + base ($5 + $19.99 = $24.99).
+//     True-up bumps usage up to the commitment.
 //   - Even runs (cursor%2 == 0): over-commitment (700 events × $0.01 = $7.00).
-//     Preview total must equal commitment + (usage - commitment) × 1.5
-//     = $5 + $2 × 1.5 = $8.00 (epsilon $0.01).
+//     Preview total must equal commitment + (usage - commitment) × 1.5 + base
+//     = $5 + $2 × 1.5 + $19.99 = $27.99 (epsilon $0.01).
 type CommitmentTrueUpProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
@@ -98,8 +101,10 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 
 	// Ingest e2eprobe_sum events (priced at $0.01/unit); amount=1 per event.
 	n := 100
+	expectedUsage := 1.00
 	if overLeg {
 		n = 700
+		expectedUsage = 7.00
 	}
 	for i := 0; i < n; i++ {
 		if _, err := p.client.Events().Ingest(ctx, types.IngestEventRequest{
@@ -115,8 +120,9 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 		}
 	}
 
-	// Poll GetUsage until aggregation catches up. Success signal: no error.
-	if err := p.pollSubUsage(ctx, subID, ext); err != nil {
+	// Poll GetUsage until aggregation reflects the ingested amount. A successful
+	// response can still report zero usage while the pipeline catches up.
+	if err := p.pollSubUsage(ctx, subID, ext, expectedUsage); err != nil {
 		return err
 	}
 
@@ -130,15 +136,33 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 	return p.assertPreview(previewResp.InvoiceResponse, overLeg, ext, subID)
 }
 
-func (p *CommitmentTrueUpProbe) pollSubUsage(ctx context.Context, subID, ext string) error {
+func (p *CommitmentTrueUpProbe) pollSubUsage(ctx context.Context, subID, ext string, expectedAmount float64) error {
 	deadline := time.Now().Add(90 * time.Second)
+	usageEpsilon := 0.005
+	var lastErr error
+	var lastAmount float64
 	for {
-		_, err := p.client.Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: subID})
-		if err == nil {
-			return nil
+		resp, err := p.client.Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: subID})
+		if err == nil && resp != nil && resp.GetUsageBySubscriptionResponse != nil && resp.GetUsageBySubscriptionResponse.Amount != nil {
+			lastAmount = *resp.GetUsageBySubscriptionResponse.Amount
+			if lastAmount+usageEpsilon >= expectedAmount {
+				return nil
+			}
+		} else if err != nil {
+			lastErr = err
 		}
 		if time.Now().After(deadline) {
-			return e2eprobe.Errorf(map[string]string{"step": "poll_sub_usage", "external_customer_id": ext, "subscription_id": subID}, "sub usage poll: %w", err)
+			fields := map[string]string{
+				"step":                 "poll_sub_usage",
+				"external_customer_id": ext,
+				"subscription_id":      subID,
+				"expected_amount":      fmt.Sprintf("%.2f", expectedAmount),
+				"last_amount":          fmt.Sprintf("%.2f", lastAmount),
+			}
+			if lastErr != nil {
+				return e2eprobe.Errorf(fields, "sub usage did not reach expected amount %.2f (last=%.2f): %w", expectedAmount, lastAmount, lastErr)
+			}
+			return e2eprobe.Errorf(fields, "sub usage did not reach expected amount %.2f (last=%.2f)", expectedAmount, lastAmount)
 		}
 		select {
 		case <-ctx.Done():
@@ -150,17 +174,21 @@ func (p *CommitmentTrueUpProbe) pollSubUsage(ctx context.Context, subID, ext str
 
 func (p *CommitmentTrueUpProbe) assertPreview(inv *types.InvoiceResponse, overLeg bool, ext, subID string) error {
 	commitment := decimal.NewFromFloat(5.00)
+	// e2eprobe_base_price ($19.99 monthly fixed) is on seeds.PlanIDs[0] and
+	// always appears on the preview, so bake it into the expected totals.
+	baseFee := decimal.NewFromFloat(19.99)
 	epsilon := decimal.NewFromFloat(0.01)
 
 	total := invoiceTotal(inv)
 
 	if !overLeg {
-		// Under leg: total must be at least the commitment (true-up bumps up).
-		if total.LessThan(commitment.Sub(epsilon)) {
+		// Under leg: total must be at least commitment + base fee (true-up bumps up).
+		expectedMin := commitment.Add(baseFee)
+		if total.LessThan(expectedMin.Sub(epsilon)) {
 			return e2eprobe.Errorf(map[string]string{
 				"step": "assert_commitment_under", "external_customer_id": ext, "subscription_id": subID,
-				"preview_total": total.String(),
-			}, "under-leg preview total %s < commitment %s; expected true-up to bring total to at least %s", total, commitment, commitment)
+				"preview_total": total.String(), "expected_min": expectedMin.String(),
+			}, "under-leg preview total %s < commitment+base %s; expected true-up to bring total to at least %s", total, expectedMin, expectedMin)
 		}
 		if !hasCommitmentTrueUpLine(inv) {
 			return e2eprobe.Errorf(map[string]string{
@@ -171,12 +199,13 @@ func (p *CommitmentTrueUpProbe) assertPreview(inv *types.InvoiceResponse, overLe
 		return nil
 	}
 
-	// Over leg: total ≈ commitment + (usage_past_commitment × 1.5) = $5 + $2×1.5 = $8.
-	expected := decimal.NewFromFloat(8.00)
+	// Over leg: total ≈ commitment + (usage_past_commitment × 1.5) + base
+	//         = $5 + $2×1.5 + $19.99 = $27.99.
+	expected := decimal.NewFromFloat(8.00).Add(baseFee)
 	if total.Sub(expected).Abs().GreaterThan(epsilon) {
 		return e2eprobe.Errorf(map[string]string{
 			"step": "assert_commitment_over", "external_customer_id": ext, "subscription_id": subID,
-			"preview_total": total.String(),
+			"preview_total": total.String(), "expected": expected.String(),
 		}, "over-leg preview total %s differs from expected %s by more than %s", total, expected, epsilon)
 	}
 	return nil

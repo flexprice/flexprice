@@ -151,11 +151,16 @@ func (p *EntitlementGrantAdditiveProbe) pollSubEntitlementPresent(ctx context.Co
 
 func (p *EntitlementGrantAdditiveProbe) pollRawEvents(ctx context.Context, ext, subID, featID string) error {
 	eventName := "e2eprobe_sum_multiplier"
+	// POST /events/query defaults PageSize=50, but the probe ingests 200
+	// events and asserts len(...) >= 200 — request 200 in a single page so
+	// the assertion can succeed without paginating.
+	pageSize := int64(200)
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		resp, err := p.client.Events().ListRaw(ctx, types.GetEventsRequest{
 			ExternalCustomerID: &ext,
 			EventName:          &eventName,
+			PageSize:           &pageSize,
 		})
 		if err == nil && resp.GetEventsResponse != nil && len(resp.GetEventsResponse.Events) >= 200 {
 			return nil

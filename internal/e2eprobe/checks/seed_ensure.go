@@ -332,8 +332,14 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 // persistent cust #1. Lookup is by CouponCode (the SDK's canonical id for
 // coupons — CreateCouponRequest has no lookup_key field).
 func (s *SeedEnsure) ensureCoupons(ctx context.Context, out *e2eprobe.Seeds) error {
+	// The coupon repo lowercases coupon_code on INSERT (see
+	// internal/repository/ent/coupon.go:80), so the stored code differs from
+	// SharedCouponCode's on-the-wire casing. Query with the same
+	// normalization so idempotency works — otherwise the existence check
+	// misses and CREATE returns 409 on the next run.
+	normalizedCode := strings.ToLower(strings.TrimSpace(SharedCouponCode))
 	existResp, err := s.client.Coupons().Query(ctx, types.CouponFilter{
-		CouponCodes: []string{SharedCouponCode},
+		CouponCodes: []string{normalizedCode},
 	})
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "query_coupons"}, "query coupons: %w", err)
@@ -361,6 +367,22 @@ func (s *SeedEnsure) ensureCoupons(ctx context.Context, out *e2eprobe.Seeds) err
 		},
 	})
 	if err != nil {
+		// A concurrent seed run (or a manual create) can win the race between
+		// the query above and this create; re-query to recover the ID so the
+		// caller still has SharedCouponID populated.
+		if isAlreadyExists(err) {
+			retryResp, retryErr := s.client.Coupons().Query(ctx, types.CouponFilter{
+				CouponCodes: []string{normalizedCode},
+			})
+			if retryErr == nil && retryResp.ListCouponsResponse != nil && len(retryResp.ListCouponsResponse.Items) > 0 {
+				c := retryResp.ListCouponsResponse.Items[0]
+				if c.ID != nil {
+					out.SharedCouponID = *c.ID
+				}
+				out.SharedCouponCode = SharedCouponCode
+				return nil
+			}
+		}
 		return e2eprobe.Errorf(map[string]string{"coupon_code": SharedCouponCode}, "create coupon: %w", err)
 	}
 	if createResp.CouponResponse != nil && createResp.CouponResponse.ID != nil {
@@ -451,13 +473,19 @@ func isAlreadyExists(err error) bool {
 
 // bucketedFeatureLookupKeys is the set of lookup keys whose features are
 // bucketed meters — plan-level entitlements are NOT provisioned for these
-// to keep entitlement enforcement scoped to the 8 non-bucketed metered
-// features. entitlement-enforcement-probe asserts against e2eprobe_count.
-var bucketedFeatureLookupKeys = map[string]bool{
-	"e2eprobe_max_15min_feature": true,
-	"e2eprobe_sum_hour_feature":  true,
-	"e2eprobe_max_day_feature":   true,
-}
+// because the server rejects entitlements on bucketed max meters
+// ("Bucketed max meters process each bucket independently and cannot
+// have entitlements"). Derived from seedFeatureSpecs (bucketSize != nil)
+// so a new bucketed spec is auto-skipped without touching this file.
+var bucketedFeatureLookupKeys = func() map[string]bool {
+	m := map[string]bool{}
+	for _, spec := range seedFeatureSpecs {
+		if spec.bucketSize != nil {
+			m[spec.lookupKey] = true
+		}
+	}
+	return m
+}()
 
 // grantOnlyFeatures is the set of feature lookup keys reserved for
 // grant entitlements. ensurePlanEntitlements skips these; the grant
@@ -808,9 +836,17 @@ func (s *SeedEnsure) ensureEntitlementGrants(ctx context.Context, out *e2eprobe.
 			// grant entitlement, its absence a legacy soft-limit one.
 			raw, rawErr := s.client.Entitlements().GetRaw(ctx, *e.ID)
 			if rawErr != nil {
-				// Best-effort: treat unreadable as legacy for cleanup safety.
-				legacySoftLimitID = *e.ID
-				continue
+				// Never classify on a failed read: a transient 5xx / timeout
+				// would otherwise mark a healthy grant entitlement as legacy
+				// and delete it below. Bubble the error up — the caller
+				// (ensureEntitlementGrants) is non-fatal, so on-call gets one
+				// log line and the next tick retries without destroying state.
+				return e2eprobe.Errorf(map[string]string{
+					"step":           "classify_existing_entitlement",
+					"plan_id":        planID,
+					"feature_id":     featID,
+					"entitlement_id": *e.ID,
+				}, "read existing entitlement for classification: %w", rawErr)
 			}
 			if raw.GrantMeasure != "" {
 				existingGrantID = *e.ID

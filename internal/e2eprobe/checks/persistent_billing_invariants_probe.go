@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// PersistentBillingInvariantsProbe queries the latest cycle invoice for
+// persistentBillingInvariantsProbe queries the latest cycle invoice for
 // persistent cust #0 (tax-attached) and cust #1 (coupon-attached), asserting
 // that each invoice contains the seeded tax rate / coupon association.
 //
@@ -18,21 +18,21 @@ import (
 //
 // Soft-skips when the seed hasn't run, when persistent customers haven't
 // been provisioned, or when no invoice exists yet for the customer.
-type PersistentBillingInvariantsProbe struct {
+type persistentBillingInvariantsProbe struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
 	runID  string
 	lg     *logger.Logger
 }
 
-func NewPersistentBillingInvariantsProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) *PersistentBillingInvariantsProbe {
-	return &PersistentBillingInvariantsProbe{client: c, reg: r, runID: runID, lg: lg}
+func NewPersistentBillingInvariantsProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) e2eprobe.Check {
+	return &persistentBillingInvariantsProbe{client: c, reg: r, runID: runID, lg: lg}
 }
 
-func (p *PersistentBillingInvariantsProbe) Name() string        { return "persistent-billing-invariants-probe" }
-func (p *PersistentBillingInvariantsProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
+func (p *persistentBillingInvariantsProbe) Name() string        { return "persistent-billing-invariants-probe" }
+func (p *persistentBillingInvariantsProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
-func (p *PersistentBillingInvariantsProbe) Run(ctx context.Context) error {
+func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	seeds := p.reg.Seeds()
 	if len(seeds.PersistentCustomerIDs) < 2 {
 		return nil
@@ -70,7 +70,7 @@ func (p *PersistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-func (p *PersistentBillingInvariantsProbe) latestInvoice(ctx context.Context, extID string) (*types.InvoiceResponse, error) {
+func (p *persistentBillingInvariantsProbe) latestInvoice(ctx context.Context, extID string) (*types.InvoiceResponse, error) {
 	limit := int64(1)
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,

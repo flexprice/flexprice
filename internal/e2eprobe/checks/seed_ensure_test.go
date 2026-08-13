@@ -319,14 +319,15 @@ func TestSeedEnsure_PlanEntitlementsProvisioned(t *testing.T) {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 	seeds := reg.Seeds()
-	// 8 non-bucketed metered features get plan-level entitlements.
-	if len(seeds.PlanEntitlementIDs) != 7 {
-		t.Errorf("PlanEntitlementIDs = %d, want 7 (one per non-bucketed feature MINUS the reserved additive-grant feature); got %v", len(seeds.PlanEntitlementIDs), seeds.PlanEntitlementIDs)
+	// 11 total specs − 4 bucketed (e2eprobe_max/max_15min/sum_hour/max_day)
+	// − 1 grant-only (e2eprobe_sum_multiplier) = 6 soft-limit entitlements.
+	if len(seeds.PlanEntitlementIDs) != 6 {
+		t.Errorf("PlanEntitlementIDs = %d, want 6 (non-bucketed features MINUS the reserved additive-grant feature); got %v", len(seeds.PlanEntitlementIDs), seeds.PlanEntitlementIDs)
 	}
 	// Every created entitlement carries usage_limit=100, is_soft_limit=true,
 	// reset_period=MONTHLY, is_enabled=true.
-	if len(fc.entitlements.created) != 7 {
-		t.Errorf("entitlements Create called %d times, want 7 (grant-only feature excluded from soft-limit seeding)", len(fc.entitlements.created))
+	if len(fc.entitlements.created) != 6 {
+		t.Errorf("entitlements Create called %d times, want 6 (grant-only feature excluded from soft-limit seeding)", len(fc.entitlements.created))
 	}
 	for i, req := range fc.entitlements.created {
 		if req.UsageLimit == nil || *req.UsageLimit != 100 {
@@ -462,14 +463,14 @@ func TestSeedEnsure_PlanEntitlements_SkipsGrantFeature(t *testing.T) {
 		t.Fatalf("Run() unexpected error: %v", err)
 	}
 	// The additive-grant feature must NOT get a soft-limit entitlement.
-	// Before this change, all 8 non-bucketed features were entitled;
-	// now it's 7. The SDK typed Create is invoked once per soft-limit
+	// 11 total specs − 4 bucketed features − 1 grant-only = 6 soft-limit
+	// entitlements. The SDK typed Create is invoked once per soft-limit
 	// entitlement, so a strict count check is sufficient — the seed
 	// queries features by lookup key and skips the grant feature at
 	// that lookup step, so no create call for the grant feature ever
 	// reaches the fake.
-	if len(fc.entitlements.created) != 7 {
-		t.Errorf("plan-level soft-limit entitlements created = %d, want 7 (8 non-bucketed features minus the reserved grant feature)", len(fc.entitlements.created))
+	if len(fc.entitlements.created) != 6 {
+		t.Errorf("plan-level soft-limit entitlements created = %d, want 6 (non-bucketed features minus the reserved grant feature)", len(fc.entitlements.created))
 	}
 }
 
