@@ -30,4 +30,15 @@ metadata:
     {{- end }}
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-10"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- /*
+      hook-succeeded ONLY — see the matching note in jobs/migration.yaml.
+      before-hook-creation makes ArgoCD delete the hook and then fail
+      reconciling against the resource it just removed, which stalls PreSync
+      before the migration Job is ever created.
+
+      This ServiceAccount is not checksum-named, so re-applying it is an
+      ordinary update rather than a conflict; helm/ArgoCD both patch the
+      existing object in place. hook-succeeded still cleans it up after the
+      migration Job completes, so it does not linger between releases.
+    */}}
+    "helm.sh/hook-delete-policy": hook-succeeded

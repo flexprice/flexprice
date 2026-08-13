@@ -12,7 +12,23 @@ metadata:
     checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
     "helm.sh/hook": pre-upgrade,pre-install
     "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- /*
+      hook-succeeded ONLY — deliberately NOT before-hook-creation.
+
+      ArgoCD implements before-hook-creation by deleting the existing hook
+      resource and then immediately reconciling against it, which races itself:
+      the Job is removed and the very next read fails with
+        Resource batch/Job/<name> is missing, it might have been deleted
+      so the PreSync phase never advances past the ServiceAccount and the
+      migration never runs. The sync reports failure while the app Deployments
+      still roll out, leaving pods running against an unmigrated database.
+
+      Nothing is lost by dropping it: the Job name already embeds a checksum of
+      the rendered ConfigMap (see metadata.name above), so a changed config
+      produces a differently-named Job and there is no same-named predecessor
+      to clear. hook-succeeded still removes the Job once it completes.
+    */}}
+    "helm.sh/hook-delete-policy": hook-succeeded
 spec:
   backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
   {{- if .Values.migration.activeDeadlineSeconds }}
