@@ -243,119 +243,51 @@ spec:
 
         {{- if .Values.migration.steps.clickhouse }}
         # ── 5. Copy ClickHouse migrations from app image ──────────────────────
-        - name: copy-clickhouse-migrations
+        # ── 5. Run ClickHouse migrations ──────────────────────────────────────
+        # Uses the migrate binary from the flexprice image, the same way the Ent
+        # step below does, rather than copying *.sql out of the image and
+        # replaying them through clickhouse-client.
+        #
+        # The Go path is what the application actually tests: it globs the same
+        # migrations/clickhouse/*.sql, but it also CREATEs the database if it is
+        # missing (connecting to `default` first, then reconnecting scoped), and
+        # it handles statement splitting and errors in code rather than a shell
+        # loop. The shell path had no database creation at all, so a freshly
+        # provisioned ClickHouse failed on the first statement with
+        #   Code: 81. DB::Exception: Database flexprice does not exist.
+        #
+        # --clickhouse-dir defaults to migrations/clickhouse, relative to the
+        # image WORKDIR /app, so no flag is needed.
+        - name: run-clickhouse-migrations
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - sh
+            - /bin/sh
             - -c
             - |
-              echo "Copying ClickHouse migrations to shared volume..."
-              if [ -d /app/migrations/clickhouse ]; then
-                mkdir -p /migrations/clickhouse
-                cp -r /app/migrations/clickhouse/* /migrations/clickhouse/ 2>/dev/null || true
-                echo "✅ ClickHouse migrations copied"
-                ls -la /migrations/clickhouse/
+              set -e
+              echo "Running ClickHouse migrations..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
               else
-                echo "⚠️  No ClickHouse migrations found at /app/migrations/clickhouse"
-              fi
-          volumeMounts:
-            - name: migrations
-              mountPath: /migrations
-          resources:
-            limits:
-              cpu: "100m"
-              memory: "64Mi"
-            requests:
-              cpu: "50m"
-              memory: "32Mi"
-
-        # ── 6. Run ClickHouse migrations ──────────────────────────────────────
-        - name: run-clickhouse-migrations
-          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "clickhouse") }}"
-          command:
-            - sh
-            - -c
-            - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ if .Values.clickhouse.namespace }}.{{ .Values.clickhouse.namespace }}.svc.cluster.local{{ end }}{{ else }}{{ include "flexprice.clickhouseServiceHost" . }}{{ end }}"
-              CLICKHOUSE_PORT="{{ if eq .Values.clickhouse.mode "external" }}9000{{ else }}{{ .Values.clickhouse.standalone.service.nativePort | default 9000 }}{{ end }}"
-              CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
-              CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"
-              echo "Running ClickHouse migrations at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}..."
-              RETRIES=60
-              i=1
-              while [ $i -le ${RETRIES} ]; do
-                if clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
-                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
-                    --query="SELECT 1" >/dev/null 2>&1; then
-                  echo "✅ ClickHouse ready!"
-                  break
-                fi
-                echo "[$i/${RETRIES}] Waiting..."
-                sleep 2
-                i=$((i + 1))
-              done
-              if [ $i -gt ${RETRIES} ]; then
-                echo "❌ ClickHouse failed to become ready"
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
                 exit 1
               fi
-              # Create the target database if absent. The migration SQL below
-              # runs with --database=${CLICKHOUSE_DB}, so on a freshly
-              # provisioned ClickHouse the first statement fails with
-              #   Code: 81. DB::Exception: Database flexprice does not exist.
-              # Nothing else creates it: the Altinity CHI provisions the server,
-              # not the application database. Idempotent, so existing regions
-              # are unaffected.
-              clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
-                --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
-                --query="CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DB}" || exit 1
-              echo "✅ ClickHouse database ${CLICKHOUSE_DB} ready"
-              if [ -d /migrations/clickhouse ]; then
-                for file in /migrations/clickhouse/*.sql; do
-                  [ -f "$file" ] || continue
-                  # skip verification scripts — not migrations
-                  case "$(basename $file)" in verify_*) continue ;; esac
-                  echo "Running: $file"
-                  TEMP_OUTPUT="$(mktemp)"
-                  EXIT_CODE=0
-                  clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
-                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
-                    --database=${CLICKHOUSE_DB} --multiquery < "$file" > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
-                  OUTPUT="$(cat "$TEMP_OUTPUT")"; rm -f "$TEMP_OUTPUT"
-                  if [ $EXIT_CODE -eq 0 ]; then
-                    echo "✅ Done"
-                  else
-                    OUTPUT_NORMALIZED="$(echo "$OUTPUT" | tr '\n' ' ')"
-                    if echo "$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44|Code: 47|Missing columns"; then
-                      echo "⚠️  Skipped (already exists): $(echo "$OUTPUT" | head -2)"
-                    else
-                      echo "❌ Failed: $OUTPUT"
-                      exit 1
-                    fi
-                  fi
-                done
-                echo "✅ ClickHouse migrations complete"
-              else
-                echo "⚠️  No /migrations/clickhouse directory found"
-                exit 1
-              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              ${MIGRATE_BINARY} clickhouse || exit 1
+              echo "✅ ClickHouse migrations complete"
           env:
-            - name: FLEXPRICE_CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "flexprice.secretName" . }}
-                  key: clickhouse-password
-          volumeMounts:
-            - name: migrations
-              mountPath: /migrations
-              readOnly: true
+            {{- include "flexprice.env" . | nindent 12 }}
           resources:
             limits:
-              cpu: "100m"
-              memory: "64Mi"
+              cpu: "500m"
+              memory: "512Mi"
             requests:
-              cpu: "50m"
-              memory: "32Mi"
+              cpu: "100m"
+              memory: "128Mi"
         {{- end }}
 
         {{- if .Values.migration.steps.ent }}
@@ -559,10 +491,10 @@ spec:
         - name: tools
           emptyDir: {}
         {{- include "flexprice.kafkaTLSVolume" . | nindent 8 }}
-        {{- if .Values.migration.steps.clickhouse }}
-        - name: migrations
-          emptyDir: {}
-        {{- end }}
+        {{- /* The `migrations` emptyDir is gone: it existed only to hand *.sql
+               files from a copy container to a clickhouse-client container.
+               The ClickHouse step now runs the migrate binary from the
+               flexprice image, which reads them from /app directly. */}}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
