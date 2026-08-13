@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -26,6 +27,7 @@ type Handler interface {
 // Deps holds the external dependencies injected into the handler.
 type Deps struct {
 	ConnectionRepo connection.Repository
+	CustomerRepo   customer.Repository
 	EIMRepo        entityintegrationmapping.Repository
 	Logger         *logger.Logger
 	Config         *config.Configuration
@@ -98,6 +100,32 @@ func NewHandler(deps Deps) Handler {
 				h.deps.Logger,
 				event,
 				msg.UUID,
+			)
+		},
+		types.WebhookEventSubscriptionLineItemCreated: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchHubSpotDealLineItemSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.CustomerRepo,
+				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+				event.EventName,
+			)
+		},
+		types.WebhookEventSubscriptionLineItemDeleted: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchHubSpotDealLineItemSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.CustomerRepo,
+				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+				event.EventName,
 			)
 		},
 	}
