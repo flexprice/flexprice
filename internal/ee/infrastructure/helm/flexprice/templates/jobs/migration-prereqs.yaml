@@ -10,10 +10,14 @@
   Rather than convert the PRIMARY ServiceAccount into a hook (which would orphan it
   on `helm uninstall` and delete it on a failed upgrade — see CodeRabbit review on
   PR #2321), render a dedicated `-migration` ServiceAccount here at weight -10
-  (ahead of the Job). hook-delete-policy before-hook-creation,hook-succeeded cleans
-  it up after the Job completes so it never lingers. It carries the same
-  Workload-Identity / IRSA annotations as the app SA so the migration can reach
-  cloud dependencies (e.g. GMK via OAUTHBEARER).
+  (ahead of the Job). It carries the same Workload-Identity / IRSA annotations as
+  the app SA so the migration can reach cloud dependencies (e.g. GMK via
+  OAUTHBEARER).
+
+  This SA deliberately has NO hook-delete-policy at all — see the note on the
+  annotations below. It therefore persists between releases rather than being
+  cleaned up after the Job, which is harmless: it holds no credentials of its
+  own and re-applying it is an in-place update.
 */}}
 apiVersion: v1
 kind: ServiceAccount

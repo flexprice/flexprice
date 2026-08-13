@@ -47,7 +47,21 @@ metadata:
       produces a differently-named Job and there is no same-named predecessor
       to clear. hook-succeeded still removes the Job once it completes.
     */}}
-    "helm.sh/hook-delete-policy": hook-succeeded
+    {{- /*
+      hook-failed is paired with hook-succeeded so the Job is removed whichever
+      way it ends. Without it a FAILED Job lingers under a name derived from the
+      config checksum, and retrying with unchanged config collides with it:
+      ArgoCD reports the hook as already-completed and never re-runs it, or the
+      apply fails on an immutable Job spec. That is precisely what stalled the
+      northamerica-northeast2 bring-up — the migration had failed once, and
+      every later sync silently declined to try again.
+
+      ttlSecondsAfterFinished still bounds the window, but only after an hour;
+      this makes the retry immediate. Logs are lost on failure, which is the
+      accepted trade — the Job is re-runnable and the pod logs are the place to
+      look while it is still running.
+    */}}
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
 spec:
   backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
   {{- if .Values.migration.activeDeadlineSeconds }}

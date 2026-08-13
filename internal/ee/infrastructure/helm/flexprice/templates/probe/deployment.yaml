@@ -35,6 +35,20 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- /*
+        Dedicated ServiceAccount with NO API token.
+
+        Without this the pod runs as the namespace `default` ServiceAccount and
+        Kubernetes mounts its token, so a compromised probe image could reach
+        the Kubernetes API with whatever the default SA is granted — on top of
+        the probe's own API key and Slack webhook, which are mounted as env.
+
+        The probe talks only to the flexprice API over HTTPS. It needs no
+        cluster access at all, so the token is switched off on both the
+        ServiceAccount and the pod.
+      */}}
+      serviceAccountName: {{ include "flexprice.fullname" . }}-e2eprobe
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
