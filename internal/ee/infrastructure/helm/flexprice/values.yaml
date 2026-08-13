@@ -373,6 +373,15 @@ ingress:
 # Frontend deployment configuration
 frontend:
   enabled: false
+  # How the UI is served.
+  #   image    — a self-contained frontend image listening on service.port.
+  #              Default; existing regions render exactly as before.
+  #   gcsproxy — static SPA assets published to a GCS bucket and served by a
+  #              gcsproxy sidecar behind nginx. This is what the GCP production
+  #              regions actually run (previously as raw manifests in each
+  #              region's ui/ directory). Requires frontend.gcs.bucket and a
+  #              ServiceAccount bound to a GSA with objectViewer on it.
+  mode: image
   replicaCount: 1
   # Extra labels for this component's Kubernetes objects (Deployment, Service,
   # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
@@ -385,6 +394,34 @@ frontend:
     repository: flexprice-frontend
     tag: "local"
     pullPolicy: IfNotPresent
+  # ── mode: gcsproxy ───────────────────────────────────────────────────────────
+  # Only read when mode is "gcsproxy".
+  gcs:
+    # GCS bucket holding the built SPA. Required in this mode.
+    bucket: ""
+    # Object served for / and for SPA deep links.
+    indexObject: index.html
+    # Public upstream image, pinned by digest. Deliberately not mirrored into
+    # Artifact Registry: it is tiny, pulled once per pod start, and a per-region
+    # AR copy would need cross-region reader grants on the node SA.
+    image: ghcr.io/daichirata/gcsproxy@sha256:462591f5990b0c1578a848095fc0fd40e01a0ec08321e00f5b85bd4a9492cf5c
+    # Loopback port the sidecar listens on; nginx proxies to it. Never exposed.
+    port: 8080
+    resources:
+      requests: {cpu: "50m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+  # nginx sidecar that fronts gcsproxy and terminates the Service port.
+  nginx:
+    image: nginx:1.27-alpine
+    resources:
+      requests: {cpu: "50m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+  # ServiceAccount for the UI pod. In gcsproxy mode this must be annotated for
+  # Workload Identity so gcsproxy can read the bucket.
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
   env:
     apiUrl: "http://api.flexprice.example.com/v1"
     environment: "self-hosted"

@@ -20,9 +20,62 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if eq .Values.frontend.mode "gcsproxy" }}
+      serviceAccountName: {{ .Values.frontend.serviceAccount.name | default (printf "%s-ui" (include "flexprice.fullname" .)) }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
+        {{- if eq .Values.frontend.mode "gcsproxy" }}
+        {{- /*
+          Static SPA served straight from GCS. gcsproxy holds the bucket
+          credential (Workload Identity via the pod's ServiceAccount) and
+          listens on loopback only; nginx is the sole listener on the Service
+          port and adds gzip, asset caching and SPA fallback.
+
+          Deploying a new UI build is a bucket sync — no pod restart. Hashed
+          /assets/* are immutable so nginx caches them hard, while the app shell
+          is never cached, which is why a sync is visible immediately.
+        */}}
+        - name: gcsproxy
+          {{- if not .Values.frontend.gcs.bucket }}
+          {{- fail "frontend.mode=gcsproxy requires frontend.gcs.bucket" }}
+          {{- end }}
+          image: {{ .Values.frontend.gcs.image | quote }}
+          args:
+            - "-bucket"
+            - {{ .Values.frontend.gcs.bucket | quote }}
+            - "-b"
+            - "127.0.0.1:{{ .Values.frontend.gcs.port }}"
+            - "-i"
+            - {{ .Values.frontend.gcs.indexObject | quote }}
+            - "-spa"
+            - "-log-format"
+            - "json"
+          ports:
+            - name: gcsproxy
+              containerPort: {{ .Values.frontend.gcs.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.frontend.gcs.resources | nindent 12 }}
+        - name: nginx
+          image: {{ .Values.frontend.nginx.image | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.frontend.nginx.resources | nindent 12 }}
+        {{- else }}
         - name: frontend
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -62,6 +115,16 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+        {{- end }}
+      {{- if eq .Values.frontend.mode "gcsproxy" }}
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-ui-nginx
+            items:
+              - key: default.conf
+                path: default.conf
+      {{- end }}
       {{- with (default .Values.nodeSelector .Values.frontend.nodeSelector) }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
