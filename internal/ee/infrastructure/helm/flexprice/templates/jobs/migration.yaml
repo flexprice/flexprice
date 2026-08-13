@@ -196,6 +196,30 @@ spec:
               POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
               POSTGRES_USER="{{ .Values.postgres.user }}"
               POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              # Create the target database if it does not exist.
+              #
+              # CloudSQL regions get this from Terraform, but the AlloyDB module
+              # cannot: there is no google_alloydb_database resource in the
+              # provider and no gcloud equivalent, so its README says to create
+              # databases over SQL after apply. Nothing automated that, and every
+              # step below connects with -d ${POSTGRES_DB}, so a fresh AlloyDB
+              # region failed here with
+              #   FATAL: database "flexprice" does not exist
+              # after the operator had already assumed the region was built.
+              #
+              # Postgres has no CREATE DATABASE IF NOT EXISTS, so this checks
+              # pg_database first and connects to the always-present `postgres`
+              # database to issue the CREATE. Idempotent: a no-op everywhere the
+              # database already exists, including every current region.
+              if ! psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d postgres \
+                   -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'" | grep -q 1; then
+                echo "Database ${POSTGRES_DB} not found, creating..."
+                psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d postgres \
+                  -c "CREATE DATABASE \"${POSTGRES_DB}\"" || exit 1
+                echo "✅ Created database ${POSTGRES_DB}"
+              else
+                echo "Database ${POSTGRES_DB} already exists"
+              fi
               echo "Setting up PostgreSQL schema and extensions at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
               psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
                 -c "CREATE SCHEMA IF NOT EXISTS extensions;" || exit 1
@@ -275,6 +299,17 @@ spec:
                 echo "❌ ClickHouse failed to become ready"
                 exit 1
               fi
+              # Create the target database if absent. The migration SQL below
+              # runs with --database=${CLICKHOUSE_DB}, so on a freshly
+              # provisioned ClickHouse the first statement fails with
+              #   Code: 81. DB::Exception: Database flexprice does not exist.
+              # Nothing else creates it: the Altinity CHI provisions the server,
+              # not the application database. Idempotent, so existing regions
+              # are unaffected.
+              clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
+                --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
+                --query="CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DB}" || exit 1
+              echo "✅ ClickHouse database ${CLICKHOUSE_DB} ready"
               if [ -d /migrations/clickhouse ]; then
                 for file in /migrations/clickhouse/*.sql; do
                   [ -f "$file" ] || continue
