@@ -420,9 +420,15 @@ e2eprobe:
   # SEPARATE GHCR repo from the app image — the probe ships its own artifact.
   image:
     repository: ghcr.io/flexprice/e2eprobe
-    tag: "develop"
-    pullPolicy: Always
-  replicaCount: 1         # see deployment.yaml — 1 is a correctness constraint, not a default
+    # Pin an explicit tag or digest per region. Left empty on purpose: the
+    # template falls back to the chart appVersion rather than a mutable
+    # floating tag, so enabling the probe cannot silently pull whatever was
+    # last pushed to `develop` into a production cluster.
+    tag: ""
+    pullPolicy: IfNotPresent
+  # NOTE: replica count is NOT configurable. The Deployment hardcodes 1 because
+  # concurrent probes race on shared seeded fixtures and produce false
+  # failures. See templates/probe/deployment.yaml.
   existingSecret: e2eprobe-secrets
   secretKeys:
     apiKey: api-key

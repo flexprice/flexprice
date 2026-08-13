@@ -13,7 +13,10 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
 spec:
-  replicas: {{ .Values.e2eprobe.replicaCount }}
+  # Hardcoded, NOT configurable. The checks mutate shared seeded fixtures under
+  # a single tenant, so a second replica races the first into false failures.
+  # This is a correctness constraint, so the chart does not expose it as a knob.
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -38,14 +41,41 @@ spec:
         - name: e2eprobe
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.e2eprobe.image.repository }}:{{ .Values.e2eprobe.image.tag }}"
-          imagePullPolicy: {{ .Values.e2eprobe.image.pullPolicy }}
+          {{- /*
+            Tag falls back to the chart's appVersion rather than a mutable
+            floating tag, and pullPolicy defaults to IfNotPresent. A default of
+            `develop` + `Always` means every enabling operator continuously
+            re-pulls a mutable reference into production, so a compromised push
+            to that tag reaches the cluster with access to the mounted probe
+            secrets and the pod's ServiceAccount token. Pin a tag or digest per
+            region instead.
+          */}}
+          image: "{{ .Values.e2eprobe.image.repository }}:{{ .Values.e2eprobe.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.e2eprobe.image.pullPolicy | default "IfNotPresent" }}
           workingDir: /app
           ports:
             - name: webhook
               containerPort: {{ .Values.e2eprobe.service.port }}
               protocol: TCP
           env:
+            {{- /*
+              Custom env is rendered FIRST so the reserved names below always
+              win. Kubernetes resolves a duplicated env name to the LAST
+              occurrence, so rendering .Values.e2eprobe.env after these would
+              let a values entry named E2EPROBE_API_KEY silently replace the
+              secret-backed credential with a plaintext literal — the probe
+              would keep running, authenticating with the wrong key.
+              Reserved: E2EPROBE_API_KEY, E2EPROBE_SLACK_WEBHOOK_URL,
+              E2EPROBE_LISTENER_PORT, TMPDIR.
+            */}}
+            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" }}
+            {{- range $k, $v := .Values.e2eprobe.env }}
+            {{- if has $k $reserved }}
+            {{- fail (printf "e2eprobe.env may not set %s — it is managed by the chart (reserved: %s)" $k (join ", " $reserved)) }}
+            {{- end }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
             - name: E2EPROBE_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -58,10 +88,6 @@ spec:
                   key: {{ .Values.e2eprobe.secretKeys.slackWebhookUrl }}
             - name: E2EPROBE_LISTENER_PORT
               value: {{ .Values.e2eprobe.service.port | quote }}
-            {{- range $k, $v := .Values.e2eprobe.env }}
-            - name: {{ $k }}
-              value: {{ $v | quote }}
-            {{- end }}
             - name: TMPDIR
               value: "/tmp"
           # No HTTP liveness/readiness probe: the probe serves only /webhook, and
