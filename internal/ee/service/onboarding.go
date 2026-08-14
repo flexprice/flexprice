@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -193,8 +194,9 @@ func createMeterInfoFromMeter(m *dto.MeterResponse) types.MeterInfo {
 		ID:        m.ID,
 		EventName: m.EventName,
 		Aggregation: types.AggregationInfo{
-			Type:  m.Aggregation.Type,
-			Field: m.Aggregation.Field,
+			Type:    m.Aggregation.Type,
+			Field:   m.Aggregation.Field,
+			GroupBy: m.Aggregation.GroupBy,
 		},
 		Filters: filterInfos,
 	}
@@ -386,7 +388,6 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 
 	for _, filter := range meter.Filters {
 		if len(filter.Values) > 0 {
-			// Select a random value from the filter values
 			properties[filter.Key] = filter.Values[rand.Intn(len(filter.Values))]
 		}
 	}
@@ -396,10 +397,14 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 		meter.Aggregation.Type == types.AggregationAvg ||
 		meter.Aggregation.Type == types.AggregationMax {
 		// Generate a value for aggregation types that use the aggregation field.
-		if meter.Aggregation.Field != "" {
+		if meter.Aggregation.Field != "" && properties[meter.Aggregation.Field] == nil {
 			// Generate a random value between 1 and 100
 			properties[meter.Aggregation.Field] = rand.Int63n(100) + 1
 		}
+	}
+
+	if meter.Aggregation.Type == types.AggregationMax && meter.Aggregation.GroupBy != "" && properties[meter.Aggregation.GroupBy] == nil {
+		properties[meter.Aggregation.GroupBy] = fmt.Sprintf("group-%d", rand.Int63n(100)+1)
 	}
 
 	return dto.IngestEventRequest{

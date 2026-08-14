@@ -30,8 +30,9 @@ type MeterInfo struct {
 
 // AggregationInfo contains aggregation configuration
 type AggregationInfo struct {
-	Type  AggregationType `json:"type"`
-	Field string          `json:"field"`
+	Type    AggregationType `json:"type"`
+	Field   string          `json:"field"`
+	GroupBy string          `json:"group_by"`
 }
 
 // FilterInfo contains filter configuration
