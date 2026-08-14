@@ -15,10 +15,6 @@ func TestDummyEventGeneratorsPopulateMaxAggregationField(t *testing.T) {
 			Type:  types.AggregationMax,
 			Field: "storage_gb",
 		},
-		Filters: []meter.Filter{{
-			Key:    "storage_gb",
-			Values: []string{"not-a-number"},
-		}},
 	}
 
 	tests := []struct {
@@ -56,6 +52,76 @@ func TestDummyEventGeneratorsPopulateMaxAggregationField(t *testing.T) {
 			}
 			if intValue < 1 || intValue > 1000 {
 				t.Fatalf("MAX aggregation value %v is outside the dummy-data range", intValue)
+			}
+		})
+	}
+}
+
+func TestDummyEventGeneratorsPopulateMaxGroupByProperty(t *testing.T) {
+	testMeter := &meter.Meter{
+		EventName: "storage.usage",
+		Aggregation: meter.Aggregation{
+			Type:    types.AggregationMax,
+			Field:   "storage_gb",
+			GroupBy: "region",
+		},
+	}
+
+	for _, tt := range []struct {
+		name       string
+		properties func() map[string]interface{}
+	}{
+		{
+			name: "seed events by meters",
+			properties: func() map[string]interface{} {
+				generator := NewEventGenerator([]*meter.Meter{testMeter}, []*customer.Customer{{ExternalID: "customer-1"}}, nil)
+				return generator.generateEvent(0).Properties
+			},
+		},
+		{
+			name: "setup dummy billing customer",
+			properties: func() map[string]interface{} {
+				return eventPropertiesForMeter(testMeter)
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			value, ok := tt.properties()[testMeter.Aggregation.GroupBy]
+			if !ok || value == "" {
+				t.Fatalf("grouped MAX event is missing a value for %q", testMeter.Aggregation.GroupBy)
+			}
+		})
+	}
+}
+
+func TestDummyEventGeneratorsKeepFilterValueOnAggregationFieldCollision(t *testing.T) {
+	testMeter := &meter.Meter{
+		EventName:   "storage.usage",
+		Aggregation: meter.Aggregation{Type: types.AggregationMax, Field: "storage_gb"},
+		Filters:     []meter.Filter{{Key: "storage_gb", Values: []string{"10"}}},
+	}
+
+	for _, tt := range []struct {
+		name       string
+		properties func() map[string]interface{}
+	}{
+		{
+			name: "seed events by meters",
+			properties: func() map[string]interface{} {
+				generator := NewEventGenerator([]*meter.Meter{testMeter}, []*customer.Customer{{ExternalID: "customer-1"}}, nil)
+				return generator.generateEvent(0).Properties
+			},
+		},
+		{
+			name: "setup dummy billing customer",
+			properties: func() map[string]interface{} {
+				return eventPropertiesForMeter(testMeter)
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if value := tt.properties()[testMeter.Aggregation.Field]; value != "10" {
+				t.Fatalf("filter value %q was overwritten with %v", "10", value)
 			}
 		})
 	}

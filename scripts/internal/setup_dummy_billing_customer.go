@@ -402,9 +402,12 @@ func eventPropertiesForMeter(m *meter.Meter) map[string]interface{} {
 	if m.Aggregation.Type == types.AggregationSum ||
 		m.Aggregation.Type == types.AggregationAvg ||
 		m.Aggregation.Type == types.AggregationMax {
-		if m.Aggregation.Field != "" {
+		if m.Aggregation.Field != "" && properties[m.Aggregation.Field] == nil {
 			properties[m.Aggregation.Field] = rand.Int63n(1000) + 1
 		}
+	}
+	if m.Aggregation.Type == types.AggregationMax && m.Aggregation.GroupBy != "" && properties[m.Aggregation.GroupBy] == nil {
+		properties[m.Aggregation.GroupBy] = fmt.Sprintf("group-%d", rand.Int63n(100)+1)
 	}
 	return properties
 }
