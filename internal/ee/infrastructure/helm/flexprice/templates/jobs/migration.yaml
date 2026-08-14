@@ -21,8 +21,22 @@ metadata:
     flexprice.env is the actual config surface (74 vars in a production region),
     so hashing it gives a suffix that is stable when config is unchanged and
     changes whenever it is — which is what the checksum was always meant to do.
+
+    The resolved image reference is hashed ALONGSIDE the environment, because
+    the environment alone is not enough. New migrations ship inside the app
+    image, not in the config: a deploy that only bumps image.tag (the normal
+    case — image-updater writes the tag back and nothing else changes) leaves
+    flexprice.env byte-identical, so the Job name is unchanged, so ArgoCD sees
+    a hook already completed for that name and skips it. The new image's
+    migrations never run and the pods roll out against a database one schema
+    version behind.
+
+    Including the image means every image change produces a new Job name and
+    therefore a run. Migrations are idempotent (Ent/Atlas no-op when the schema
+    already matches, the ClickHouse and seed steps are IF NOT EXISTS /
+    ON CONFLICT DO NOTHING), so an extra run on an unchanged schema is cheap.
   */}}
-  name: {{ include "flexprice.fullname" . }}-migration-{{ include "flexprice.env" . | sha256sum | trunc 8 }}
+  name: {{ include "flexprice.fullname" . }}-migration-{{ printf "%s|%s:%s" (include "flexprice.env" .) .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) | sha256sum | trunc 8 }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
@@ -32,7 +46,8 @@ metadata:
     "helm.sh/hook": pre-upgrade,pre-install
     "helm.sh/hook-weight": "-5"
     {{- /*
-      hook-succeeded ONLY — deliberately NOT before-hook-creation.
+      hook-succeeded and hook-failed only — deliberately NOT
+      before-hook-creation.
 
       ArgoCD implements before-hook-creation by deleting the existing hook
       resource and then immediately reconciling against it, which races itself:
@@ -43,14 +58,16 @@ metadata:
       still roll out, leaving pods running against an unmigrated database.
 
       Nothing is lost by dropping it: the Job name already embeds a checksum of
-      the rendered ConfigMap (see metadata.name above), so a changed config
-      produces a differently-named Job and there is no same-named predecessor
-      to clear. hook-succeeded still removes the Job once it completes.
+      the rendered environment and the resolved image reference (see
+      metadata.name above), so a changed config or image produces a
+      differently-named Job and there is no same-named predecessor to clear.
+      hook-succeeded still removes the Job once it completes.
     */}}
     {{- /*
       hook-failed is paired with hook-succeeded so the Job is removed whichever
       way it ends. Without it a FAILED Job lingers under a name derived from the
-      config checksum, and retrying with unchanged config collides with it:
+      environment and image checksum, and retrying with an unchanged config and
+      image collides with it:
       ArgoCD reports the hook as already-completed and never re-runs it, or the
       apply fails on an immutable Job spec. That is precisely what stalled the
       northamerica-northeast2 bring-up — the migration had failed once, and
