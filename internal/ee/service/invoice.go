@@ -84,6 +84,16 @@ type InvoiceService interface {
 	// RecalculateTaxesOnInvoice applies subscription auto-apply taxes and updates
 	// total_tax / total / amount_due. Idempotent via tax-applied records.
 	RecalculateTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error)
+
+	// UpdateLineItem archives the existing line item and creates its replacement with
+	// display_name/quantity/amount updated. Draft-only.
+	UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error)
+
+	// AddLineItem creates a brand-new line item on a draft invoice. Draft-only.
+	AddLineItem(ctx context.Context, invoiceID string, req dto.AddLineItemRequest) (*dto.InvoiceResponse, error)
+
+	// RemoveLineItem soft-deletes a line item on a draft invoice. Draft-only.
+	RemoveLineItem(ctx context.Context, invoiceID, lineItemID string) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {
@@ -511,6 +521,14 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			return nil
 		}
 		computed = true
+
+		// Manually edited invoices are locked from automatic recompute; reset computed
+		// so this no-op doesn't fire the "invoice updated" system event below.
+		if inv.IsManuallyEdited {
+			s.Logger.Info(txCtx, "skipping compute: invoice has manual line-item edits", "invoice_id", inv.ID)
+			computed = false
+			return nil
+		}
 
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {

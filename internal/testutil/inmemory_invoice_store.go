@@ -82,6 +82,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
+			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
 		})
@@ -114,6 +115,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		PaidAt:                     inv.PaidAt,
 		VoidedAt:                   inv.VoidedAt,
 		FinalizedAt:                inv.FinalizedAt,
+		IssueDate:                  inv.IssueDate,
 		BillingPeriod:              inv.BillingPeriod,
 		PeriodStart:                inv.PeriodStart,
 		PeriodEnd:                  inv.PeriodEnd,
@@ -125,6 +127,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		LastComputedAt:             inv.LastComputedAt,
+		IsManuallyEdited:           inv.IsManuallyEdited,
 		BaseModel:                  inv.BaseModel,
 	}
 }
